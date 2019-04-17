@@ -31,5 +31,4 @@ clean:
 	rm -f $(TARGETS)
 
 cov: 
-	gocov test -timeout=20m -tags nolic -race -v `$(GO) list ./... |egrep -v "app"` 
-	@cat coverage.html |grep "<code>Report Total</code>" | perl -nle 'print  "Total Coverage: $$1" if /([0-9.]+%)/g'
+	gocov test -timeout=20m -race -v `$(GO) list ./... |egrep -v "app"` 
