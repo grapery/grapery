@@ -9,7 +9,7 @@ LDFLAGS += -X "$(project)/version.BuildTS=$(shell date -u '+%Y-%m-%d %I:%M:%S')"
 LDFLAGS += -X "$(project)/version.GitHash=$(shell git rev-parse HEAD)"
 LDFLAGS += -X "$(project)/version.Version=$(VERSION)"
 LDFLAGS += -X "$(project)/version.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
-project=$(GOPATH)/src/github.com/grapery/grapery
+project=$(PWD)
 
 
 $(TARGETS): 
