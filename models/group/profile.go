@@ -19,3 +19,14 @@ type GroupMemberShip struct {
 	UpdateAt time.Time `json:"update_at,omitempty"`
 	Deleted  bool      `json:"deleted,omitempty"`
 }
+
+type GroupProject struct {
+	GroupID   int64 `json:"group_id,omitempty"`
+	ProjectID int64 `json:"project_id,omitempty"`
+
+	IsPrivate bool `json:"is_private,omitempty"`
+
+	CreateAt time.Time `json:"create_at,omitempty"`
+	UpdateAt time.Time `json:"update_at,omitempty"`
+	Deleted  bool      `json:"deleted,omitempty"`
+}
