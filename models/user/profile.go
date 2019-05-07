@@ -7,6 +7,10 @@ type Profile struct {
 	UserID    int64
 	Followers int64
 	Following int64
+	//
+	Emotion   int
+	ShortDesc string
+	//
 
 	CreateAt time.Time
 	UpdateAt time.Time

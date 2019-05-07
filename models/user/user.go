@@ -15,7 +15,6 @@ type User struct {
 	Bio      string
 	Location string
 
-	//
 	AvatarURL string
 	URL       string
 	CreateAt  time.Time
