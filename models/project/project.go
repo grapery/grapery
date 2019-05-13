@@ -10,7 +10,7 @@ const (
 )
 
 type Project struct {
-	ProjectID   int64  `json:"project_id,omitempty"`
+	ID          int64  `json:"project_id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Tilte       string `json:"tilte,omitempty"`
 	Description string `json:"description,omitempty"`

@@ -4,7 +4,7 @@ import "time"
 
 // Group ...
 type Group struct {
-	GroupID        int64     `json:"group_id,omitempty"`
+	ID             int64     `json:"group_id,omitempty"`
 	GroupName      string    `json:"group_name,omitempty"`
 	GroupTitle     string    `json:"group_title,omitempty"`
 	GroupShortDesc string    `json:"group_short_desc,omitempty"`
