@@ -1,0 +1,13 @@
+{
+  "sql_db": {
+    "database": "",
+    "username": "",
+    "password": ""
+  },
+  "redis": {
+    "database": "",
+    "ping_interval": ""
+  },
+  "log_level": "info",
+  "port": "12306"
+}

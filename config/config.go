@@ -2,9 +2,9 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
-
+	"fmt"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 )
 
 var GlobalConfig *Config
@@ -22,10 +22,23 @@ type RedisConfig struct {
 
 //Config define common config struct
 type Config struct {
-	DBconfig *DBConfig    `json:"d_bconfig,omitempty"`
+	SqlDB    *DBConfig    `json:"sql_db,omitempty"`
 	Redis    *RedisConfig `json:"redis,omitempty"`
 	LogLevel int          `json:"log_level,omitempty"`
 	Port     string       `json:"port,omitempty"`
+}
+
+func ValiedConfig(cfg *Config) error {
+	if cfg.Port == "" {
+		return fmt.Errorf("server port not set")
+	}
+	if cfg.SqlDB.Database == "" || cfg.SqlDB.Password == "" || cfg.SqlDB.Username == "" {
+		return fmt.Errorf("sql database not set")
+	}
+	if cfg.Redis.Database == "" {
+		return fmt.Errorf("redis cfg not set")
+	}
+	return nil
 }
 
 func LoadConfig(configPath string) error {
