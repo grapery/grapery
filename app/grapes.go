@@ -1,10 +1,15 @@
 package main
 
-import "flag"
-import "github.com/grapery/grapery/version"
-import "github.com/grapery/grapery/config"
-import log "github.com/sirupsen/logrus"
-import "github.com/grapery/grapery/service"
+import (
+	"flag"
+	"github.com/grapery/grapery/config"
+	"github.com/grapery/grapery/service"
+	"github.com/grapery/grapery/version"
+	log "github.com/sirupsen/logrus"
+	"os"
+	"os/signal"
+	"syscall"
+)
 
 var printVersion = flag.Bool("version", false, "app build version")
 var configPath = flag.String("config", "config.json", "config file")
@@ -27,6 +32,16 @@ func main() {
 	err = srv.Run(config.GlobalConfig)
 	if err != nil {
 		log.Fatal("start service failed")
+	}
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	select {
+	case s := <-sc:
+		log.Info("signal : ", s.String())
 	}
 	return
 }
