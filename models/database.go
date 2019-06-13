@@ -10,14 +10,15 @@ import (
 var database *gorm.DB
 
 // Init
-func Init() error {
+func Init(uname, pwd, db string) error {
 	var err error
 	if database != nil {
 		log.Warn("database already init")
 		return nil
 	}
-	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local""mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local""mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
-	database, err = gorm.Open("", "")
+	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
+	sqldbUrl := fmt.Sprintf("%s:%s@/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	database, err = gorm.Open("mysql", sqldbUrl)
 	if err != nil {
 		log.Errorf("create dataabse failed  : [%s]", err.Error())
 		return err

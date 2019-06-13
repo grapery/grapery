@@ -1,12 +1,12 @@
 {
   "sql_db": {
-    "database": "",
-    "username": "",
-    "password": ""
+    "database": "lark",
+    "username": "root",
+    "password": "123456"
   },
   "redis": {
-    "database": "",
-    "ping_interval": ""
+    "database": "0",
+    "ping_interval": 30
   },
   "log_level": "info",
   "port": "12306"

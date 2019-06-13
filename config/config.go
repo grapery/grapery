@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 )
 
-var GlobalConfig *Config
+var GlobalConfig = new(Config)
 
 type DBConfig struct {
 	Database string `json:"database,omitempty"`
@@ -24,7 +24,7 @@ type RedisConfig struct {
 type Config struct {
 	SqlDB    *DBConfig    `json:"sql_db,omitempty"`
 	Redis    *RedisConfig `json:"redis,omitempty"`
-	LogLevel int          `json:"log_level,omitempty"`
+	LogLevel string       `json:"log_level,omitempty"`
 	Port     string       `json:"port,omitempty"`
 }
 
