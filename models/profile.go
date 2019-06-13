@@ -17,23 +17,23 @@ func (p Profile) TableNamse() string {
 }
 
 func (p *Profile) Create() error {
-	if !database.NewRecord(a) {
-		database.Create(a)
+	if !database.NewRecord(p) {
+		database.Create(p)
 	}
 	return nil
 }
 
 func (p *Profile) Update() error {
-	database.Model(a).Update("password", a.Password)
+	database.Model(p).Update("emotion", a.Emotion)
 	return nil
 }
 
 func (p *Profile) Get() error {
-	database.First(a)
+	database.First(p)
 	return nil
 }
 
 func (p *Profile) Delete() error {
-	database.Delete(a)
+	database.Delete(p)
 	return nil
 }

@@ -10,6 +10,7 @@ const (
 )
 
 type Project struct {
+	Base
 	Name        string `json:"name,omitempty"`
 	Tilte       string `json:"tilte,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -24,23 +25,23 @@ func (p Project) TableNamse() string {
 }
 
 func (p *Project) Create() error {
-	if !database.NewRecord(a) {
-		database.Create(a)
+	if !database.NewRecord(p) {
+		database.Create(p)
 	}
 	return nil
 }
 
 func (p *Project) Update() error {
-	database.Model(a).Update("password", a.Password)
+	database.Model(p).Update("Description", p.Description)
 	return nil
 }
 
 func (p *Project) Get() error {
-	database.First(a)
+	database.First(p)
 	return nil
 }
 
 func (p *Project) Delete() error {
-	database.Delete(a)
+	database.Delete(p)
 	return nil
 }

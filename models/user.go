@@ -7,30 +7,40 @@ import (
 )
 
 type User struct {
-	ID       int64
-	Name     string
-	NickName string
-	UserType int
-	Email    string
-	Bio      string
-	Location string
+	Base
+	Name     string `json:"name,omitempty"`
+	NickName string `json:"nick_name,omitempty"`
+	UserType int    `json:"user_type,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Bio      string `json:"bio,omitempty"`
+	Location string `json:"location,omitempty"`
 
-	AvatarURL string
-	URL       string
-	CreateAt  time.Time
-	UpdateAt  time.Time
-	Deleted   bool
+	AvatarURL string `json:"avatar_url,omitempty"`
+	URL       string `json:"url,omitempty"`
 }
 
-func NewUser() *User {
-	return &User{}
+func (u User) TableNamse() string {
+	return "user"
 }
 
-func (u *User) String() string {
-	data, _ := json.Marshal(u)
-	return string(data)
+func (u *User) Create() error {
+	if !database.NewRecord(u) {
+		database.Create(u)
+	}
+	return nil
 }
 
-func GetUser(UID int64) *User {
+func (u *User) Update() error {
+	database.Model(u).Update("nick_name", u.NickName)
+	return nil
+}
+
+func (u *User) Get() error {
+	database.First(u)
+	return nil
+}
+
+func (u *User) Delete() error {
+	database.Delete(u)
 	return nil
 }

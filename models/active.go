@@ -6,9 +6,8 @@ import (
 
 type Active struct {
 	Base
-	CreatedAt time.Time
-	DeletedAt time.Time
-	Deleted   bool
+	Name string
+	Tags string
 }
 
 func (a Active) TableNamse() string {
@@ -23,7 +22,7 @@ func (a *Active) Create() error {
 }
 
 func (a *Active) Update() error {
-	database.Model(a).Update("password", a.Password)
+	database.Model(a).Update("name", a.Name)
 	return nil
 }
 
