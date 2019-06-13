@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "giewB2MsF6+uckDdN/x39zdnJZI=",
+			"path": "github.com/gin-gonic/gin",
+			"revision": "75b9d2bed75a2d96198738ac3974211924dbde6c",
+			"revisionTime": "2019-06-12T13:07:15Z"
+		},
+		{
 			"checksumSHA1": "zGYOyUB58GVhLkrwhG1ut66SPec=",
 			"path": "github.com/go-sql-driver/mysql",
 			"revision": "877a9775f06853f611fb2d4e817d92479242d1cd",

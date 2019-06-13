@@ -1,10 +1,10 @@
 package main
 
-import "fmt"
 import "flag"
 import "github.com/grapery/grapery/version"
 import "github.com/grapery/grapery/config"
 import log "github.com/sirupsen/logrus"
+import "github.com/grapery/grapery/service"
 
 var printVersion = flag.Bool("version", false, "app build version")
 var configPath = flag.String("config", "config.json", "config file")
@@ -23,4 +23,10 @@ func main() {
 	if err != nil {
 		log.Fatal("Valied config failed : ", err)
 	}
+	srv := service.NewService()
+	err = srv.Run(config.GlobalConfig)
+	if err != nil {
+		log.Fatal("start service failed")
+	}
+	return
 }
