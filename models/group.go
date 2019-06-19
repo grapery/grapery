@@ -24,7 +24,7 @@ func (g *Group) Create() error {
 }
 
 func (g *Group) Update() error {
-	database.Model(g).Update("short_desc", a.ShortDesc)
+	database.Model(g).Update("short_desc", g.ShortDesc)
 	return nil
 }
 

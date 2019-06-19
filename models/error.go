@@ -2,7 +2,7 @@ package models
 
 import (
 	"encoding/json"
-	"fmt"
+	_ "fmt"
 )
 
 type Err struct {

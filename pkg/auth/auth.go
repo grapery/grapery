@@ -1,9 +1,12 @@
 package auth
 
 import (
+	_ "github.com/gin-contrib/sessions"
+	_ "github.com/gin-contrib/sessions/redis"
 	gin "github.com/gin-gonic/gin"
 	models "github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 )
 
 func ParseSession(ctx *gin.Context) {
@@ -18,6 +21,8 @@ const (
 	RegisterWithEmail    = "email"
 	RegisterWithNickname = "nickname"
 )
+
+var AuthSrv = new(AuthService)
 
 // auth service
 type AuthService struct {
@@ -66,6 +71,7 @@ func (auth *AuthService) Login(ctx *gin.Context) {
 	if sessionID == "" {
 		log.Info("session is empty")
 	}
+	var uAccount, uPassword string
 	uAccount = ctx.Request.FormValue("account")
 	uPassword = ctx.Request.FormValue("password")
 	//TODO : more detail info for login error
@@ -73,11 +79,16 @@ func (auth *AuthService) Login(ctx *gin.Context) {
 		log.Errorf("invalied input params")
 		ctx.Abort()
 	}
-	userAuth :=&models.Auth(
-		Email:    uAccount, 
+	userAuth := &models.Auth{
+		Email:    uAccount,
 		Password: uPassword,
-	)
-	err :=userAuth.Get()
+	}
+	err := userAuth.Get()
+	if err != nil {
+		log.Errorf("get user info failed : [%s]", err)
+		ctx.Abort()
+	}
+
 }
 
 func (auth *AuthService) Logout(ctx *gin.Context) {

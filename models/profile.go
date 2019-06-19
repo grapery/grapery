@@ -24,7 +24,7 @@ func (p *Profile) Create() error {
 }
 
 func (p *Profile) Update() error {
-	database.Model(p).Update("emotion", a.Emotion)
+	database.Model(p).Update("emotion", p.Emotion)
 	return nil
 }
 

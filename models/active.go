@@ -1,7 +1,7 @@
 package models
 
 import (
-	"time"
+	_ "time"
 )
 
 type Active struct {

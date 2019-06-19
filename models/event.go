@@ -1,6 +1,8 @@
 package models
 
-import "time"
+import (
+	_ "time"
+)
 
 type Event struct {
 	Base
@@ -20,7 +22,7 @@ func (e *Event) Create() error {
 }
 
 func (e *Event) Update() error {
-	database.Model(e).Update("etype", a.Etype)
+	database.Model(e).Update("etype", e.Etype)
 	return nil
 }
 

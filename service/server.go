@@ -5,6 +5,7 @@ import (
 	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/grapery/grapery/config"
+	"github.com/grapery/grapery/pkg/auth"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,12 +20,17 @@ func NewService() *Service {
 }
 
 func (s *Service) Run(cfg *config.Config) error {
-	sessionStore, err := redis.Newstore()
+	sessionStore, err := redis.NewStore(10, "tcp", "localhost:6379", "", []byte("secret"))
+	if err != nil {
+		log.Errorf("use redis session failed : ", err.Error())
+	}
 	app := gin.Default()
+	app.Use(sessions.Sessions("grapestree", sessionStore))
 	v1Route := app.Group("/v1")
-	v1Route.POST("/login", nil)
-	v1Route.POST("/logout", nil)
-	v1Route.POST("/register", nil)
+	v1Route.POST("/login", auth.AuthSrv.Login)
+	v1Route.POST("/logout", auth.AuthSrv.Logout)
+	v1Route.POST("/register", auth.AuthSrv.Register)
+	v1Route.POST("/reset/pwd", auth.AuthSrv.ResetPassword)
 	userRoute := v1Route.Group("/user")
 	userRoute.Any("", func(ctx *gin.Context) {
 		ctx.Writer.WriteString("not useable")

@@ -2,8 +2,8 @@ package models
 
 import (
 	_ "database/sql"
-	"encoding/json"
-	"time"
+	_ "encoding/json"
+	_ "time"
 )
 
 type User struct {
