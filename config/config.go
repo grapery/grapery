@@ -16,6 +16,8 @@ type DBConfig struct {
 }
 
 type RedisConfig struct {
+	Address      string `json:"address,omitempty"`
+	Password     string `json:"password,omitempty"`
 	Database     string `json:"database,omitempty"`
 	PingInterval int    `json:"ping_interval,omitempty"`
 }

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/grapery/grapery/config"
 	log "github.com/sirupsen/logrus"
@@ -17,6 +19,7 @@ func NewService() *Service {
 }
 
 func (s *Service) Run(cfg *config.Config) error {
+	sessionStore, err := redis.Newstore()
 	app := gin.Default()
 	v1Route := app.Group("/v1")
 	v1Route.POST("/login", nil)
