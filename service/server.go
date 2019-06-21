@@ -5,8 +5,11 @@ import (
 	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/grapery/grapery/config"
+	models "github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/auth"
+	cache "github.com/grapery/grapery/pkg/redis"
 	log "github.com/sirupsen/logrus"
+	"os"
 )
 
 type Service struct {
@@ -23,6 +26,12 @@ func (s *Service) Run(cfg *config.Config) error {
 	sessionStore, err := redis.NewStore(10, "tcp", "localhost:6379", "", []byte("secret"))
 	if err != nil {
 		log.Errorf("use redis session failed : ", err.Error())
+	}
+	cache.RedisCache = cache.NewRedisClient(cfg)
+	err = models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
+	if err != nil {
+		log.Errorf("init sql database failed : [%s]", err.Error())
+		os.Exit(-1)
 	}
 	app := gin.Default()
 	app.Use(sessions.Sessions("grapestree", sessionStore))

@@ -6,16 +6,17 @@ import (
 	"strconv"
 )
 
+var RedisCache *RedisClient
+
 type RedisClient struct {
-	client *redis.Client
-	DB     int
+	*redis.Client
+	DB int
 }
 
-func NewREdisClient(cfg *config.Config) *RedisClient {
+func NewRedisClient(cfg *config.Config) *RedisClient {
 	dbid, _ := strconv.Atoi(cfg.Redis.Database)
-client:
-	&RedisClient{
-		client: redis.NewClient(
+	client := &RedisClient{
+		redis.NewClient(
 			&redis.Options{
 				Addr:        cfg.Redis.Address,
 				Password:    cfg.Redis.Password,
@@ -24,6 +25,7 @@ client:
 				DialTimeout: 10,
 				PoolSize:    20,
 			}),
+		dbid,
 	}
-	return nil
+	return client
 }

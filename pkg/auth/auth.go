@@ -5,6 +5,7 @@ import (
 	_ "github.com/gin-contrib/sessions/redis"
 	gin "github.com/gin-gonic/gin"
 	models "github.com/grapery/grapery/models"
+	//cache "github.com/grapery/grapery/pkg/redis"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 )
@@ -14,6 +15,7 @@ func ParseSession(ctx *gin.Context) {
 	if sessionID == "" {
 		log.Info("session is empty")
 	}
+	//cache.RedisCache
 }
 
 const (
@@ -92,9 +94,27 @@ func (auth *AuthService) Login(ctx *gin.Context) {
 }
 
 func (auth *AuthService) Logout(ctx *gin.Context) {
-
+	sessionID := ctx.Request.Header.Get("session_id")
+	if sessionID == "" {
+		log.Errorf("session is empty")
+		ctx.Abort()
+	}
+	var uAccount string
+	uAccount = ctx.Request.FormValue("account")
+	//TODO : more detail info for login error
+	if uAccount == "" {
+		log.Errorf("invalied input params")
+		ctx.Abort()
+	}
+	log.Info("session_id ", sessionID)
+	ctx.Writer.WriteString(sessionID)
 }
 
 func (auth *AuthService) ResetPassword(ctx *gin.Context) {
-
+	sessionID := ctx.Request.Header.Get("session_id")
+	if sessionID == "" {
+		log.Errorf("session is empty")
+		ctx.Abort()
+	}
+	ctx.Writer.WriteString(sessionID)
 }
