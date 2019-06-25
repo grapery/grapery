@@ -28,6 +28,7 @@ func (e *Event) Update() error {
 
 func (e *Event) Get() error {
 	database.First(e)
+
 	return nil
 }
 

@@ -13,7 +13,7 @@ project=$(PWD)
 
 
 $(TARGETS): 
-	$(GO) build -o grapes-app -ldflags  '$(LDFLAGS)' $(project)/app/grapes.go
+	$(GO) build -o grapes-app -ldflags  '$(LDFLAGS)' -gcflags "-l" $(project)/app/grapes.go
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)

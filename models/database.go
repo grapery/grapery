@@ -44,9 +44,13 @@ func Close() error {
 }
 
 type Base struct {
-	ID        uint      `gorm:"primary_key" json:"id,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	Deleted   bool
-	DeletedAt *time.Time `sql:"index"`
+	CreatedAt time.Time  `json:"created_at,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at,omitempty"`
+	Deleted   bool       `gorm:"index" json:"deleted,omitempty"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+type IDBase struct {
+	ID uint `gorm:"primary_key" json:"id,omitempty"`
+	Base
 }

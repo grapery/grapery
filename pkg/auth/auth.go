@@ -7,7 +7,7 @@ import (
 	models "github.com/grapery/grapery/models"
 	//cache "github.com/grapery/grapery/pkg/redis"
 	log "github.com/sirupsen/logrus"
-	"net/http"
+	// "net/http"
 )
 
 func ParseSession(ctx *gin.Context) {
@@ -36,6 +36,7 @@ func (auth *AuthService) Register(ctx *gin.Context) {
 		log.Info("session is empty")
 	}
 	registerType := ctx.Request.FormValue("account_type")
+	log.Info("register type : ", registerType)
 	var uAccount, uPassword string
 	if registerType == RegisterWithPhone {
 		// TODO :
@@ -65,7 +66,8 @@ func (auth *AuthService) Register(ctx *gin.Context) {
 		ctx.Abort()
 	}
 	log.Infof("user [%s] register success ", uAccount)
-	ctx.Redirect(http.StatusPermanentRedirect, "/v1/login")
+	ctx.Writer.WriteString("register success")
+	//ctx.Redirect(http.StatusPermanentRedirect, "/v1/login")
 }
 
 func (auth *AuthService) Login(ctx *gin.Context) {
