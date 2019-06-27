@@ -5,6 +5,7 @@ import (
 	_ "github.com/gin-contrib/sessions/redis"
 	gin "github.com/gin-gonic/gin"
 	models "github.com/grapery/grapery/models"
+
 	//cache "github.com/grapery/grapery/pkg/redis"
 	log "github.com/sirupsen/logrus"
 	// "net/http"
@@ -84,10 +85,10 @@ func (auth *AuthService) Login(ctx *gin.Context) {
 		ctx.Abort()
 	}
 	userAuth := &models.Auth{
-		Email:    uAccount,
+		Phone:    uAccount,
 		Password: uPassword,
 	}
-	err := userAuth.Get()
+	err := userAuth.GetByPhone()
 	if err != nil {
 		log.Errorf("get user info failed : [%s]", err)
 		ctx.Abort()

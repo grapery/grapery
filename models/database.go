@@ -2,10 +2,11 @@ package models
 
 import (
 	"fmt"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
 var database *gorm.DB
@@ -27,11 +28,9 @@ func Init(uname, pwd, db string) error {
 	database.AutoMigrate(&User{})
 	database.AutoMigrate(&Auth{})
 	database.AutoMigrate(&Active{})
-	database.AutoMigrate(&Event{})
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&Profile{})
 	database.AutoMigrate(&Project{})
-	//database.AutoMigrate(&U)
 	return nil
 }
 
@@ -44,10 +43,9 @@ func Close() error {
 }
 
 type Base struct {
-	CreatedAt time.Time  `json:"created_at,omitempty"`
-	UpdatedAt time.Time  `json:"updated_at,omitempty"`
-	Deleted   bool       `gorm:"index" json:"deleted,omitempty"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	Deleted   bool      `json:"deleted,omitempty" gorm:"index"`
 }
 
 type IDBase struct {

@@ -12,13 +12,16 @@ const (
 )
 
 type Project struct {
-	Base
+	IDBase
 	Name        string `json:"name,omitempty"`
 	Tilte       string `json:"tilte,omitempty"`
-	Description string `json:"description,omitempty"`
 	ShortDesc   string `json:"short_desc,omitempty"`
 	ProjectType int    `json:"project_type,omitempty"`
+	CreatorID   uint64 `json:"creator_id,omitempty"`
+	GroupID     uint64 `json:"group_id,omitempty"`
 	// 图片，文字,事件．．．．
+	IsAchieve bool `json:"is_achieve,omitempty"`
+	IsClose   bool `json:"is_close,omitempty"`
 	IsPrivate bool `json:"is_private,omitempty"`
 }
 
@@ -34,7 +37,7 @@ func (p *Project) Create() error {
 }
 
 func (p *Project) Update() error {
-	database.Model(p).Update("Description", p.Description)
+	database.Model(p).Update("short_desc", p.ShortDesc)
 	return nil
 }
 
