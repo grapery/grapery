@@ -68,7 +68,6 @@ func (auth *AuthService) Register(ctx *gin.Context) {
 	}
 	log.Infof("user [%s] register success ", uAccount)
 	ctx.Writer.WriteString("register success")
-	//ctx.Redirect(http.StatusPermanentRedirect, "/v1/login")
 }
 
 func (auth *AuthService) Login(ctx *gin.Context) {
