@@ -1,6 +1,20 @@
 
 syntax = "proto3";
 
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-swagger/options/annotations.proto";
+
+option go_package="grapery/grapery/api/service";
+package grapery.service;
+
+option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
+  info: {
+    title: "grapery";
+    version: "v0.1.0";
+  };
+};
+
 package service;
 
 service Grapery {
