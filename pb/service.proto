@@ -5,8 +5,8 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-swagger/options/annotations.proto";
 
-option go_package="grapery/grapery/api/service";
-package grapery.service;
+option go_package="github.com/grapery/grapery/api/service";
+package grapery.api;
 
 option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
   info: {
@@ -15,7 +15,6 @@ option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
   };
 };
 
-package service;
 
 service Grapery {
     
