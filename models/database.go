@@ -29,7 +29,7 @@ func Init(uname, pwd, db string) error {
 	database.AutoMigrate(&Auth{})
 	database.AutoMigrate(&Active{})
 	database.AutoMigrate(&Group{})
-	database.AutoMigrate(&Profile{})
+	database.AutoMigrate(&UserProfile{})
 	database.AutoMigrate(&Project{})
 	return nil
 }

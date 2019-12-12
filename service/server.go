@@ -7,7 +7,7 @@ import (
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/auth"
-	cache "github.com/grapery/grapery/pkg/redis"
+	cache "github.com/grapery/grapery/utils/redis"
 	log "github.com/sirupsen/logrus"
 	"os"
 )

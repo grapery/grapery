@@ -30,5 +30,8 @@ test:
 clean:
 	rm -f $(TARGETS)
 
-cov: 
-	gocov test -timeout=20m -race -v `$(GO) list ./... |egrep -v "app"` 
+cov:
+	gocov test -timeout=20m -race -v `$(GO) list ./... |egrep -v "app"`
+
+cert:
+	sh ./certs/gen.sh

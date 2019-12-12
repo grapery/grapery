@@ -77,16 +77,16 @@ func (g *GroupProfile) Create() error {
 }
 
 func (g *GroupProfile) Update() error {
-	database.Model(p).Update("emotion", p.Emotion)
+	database.Model(g).Update("emotion", g.Name)
 	return nil
 }
 
 func (g *GroupProfile) Get() error {
-	database.First(p)
+	database.First(g)
 	return nil
 }
 
 func (g *GroupProfile) Delete() error {
-	database.Delete(p)
+	database.Delete(g)
 	return nil
 }

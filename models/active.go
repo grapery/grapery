@@ -8,12 +8,13 @@ import (
 )
 
 const (
-	ActiveType_ShortWord = iota
-	ActiveType_LongWord
-	ActiveType_Picture
-	ActiveType_Video
+	ActiveTypeShortWord = iota
+	ActiveTypeLongWord
+	ActiveTypePicture
+	ActiveTypeVideo
 )
 
+// Active。。。
 type Active struct {
 	IDBase
 	CreatorID  uint64
@@ -96,7 +97,7 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]Active, er
 }
 
 func (a *Active) Delete() error {
-	if err := database.Model(u).Update("deleted", 1); err != nil {
+	if err := database.Model(a).Update("deleted", 1); err != nil {
 		log.Errorf("update active [%d] deleted failed ", a.IDBase.ID)
 		return fmt.Errorf("deleted active [%d] failed ", a.IDBase.ID)
 	}
