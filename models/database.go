@@ -11,6 +11,14 @@ import (
 
 var database *gorm.DB
 
+func DataBase() *gorm.DB{
+	if database == nil{
+		log.Warn("database connector not init")
+		return  nil
+	}
+	return database
+}
+
 // Init
 func Init(uname, pwd, db string) error {
 	var err error

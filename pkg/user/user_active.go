@@ -1,8 +1,6 @@
 package user
 
-type UserService struct {
+type UserActiveService struct {
 }
 
-func (u *UserService) GetUser() {
 
-}
