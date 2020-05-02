@@ -13,7 +13,7 @@ type Auth struct {
 	Email    string `json:"email,omitempty" gorm:"unique_index"`
 	Phone    string `json:"phone,omitempty" gorm:"unique_index"`
 	Password string `json:"-"`
-	Salt     string `json:"salt,omitempty"`
+	Salt     string `json:"-"`
 	AuthType string `json:"auth_type,omitempty"`
 }
 

@@ -4,10 +4,6 @@
     "title": "grapery",
     "version": "v0.1.0"
   },
-  "schemes": [
-    "http",
-    "https"
-  ],
   "consumes": [
     "application/json"
   ],

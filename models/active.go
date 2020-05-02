@@ -78,7 +78,7 @@ func GetActiveList(name string) (*[]Active, error) {
 	return ret, nil
 }
 
-func GetActiveListByTimeRange(start, end time.Time) (*[]Active, error) {
+func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]Active, error) {
 	var ret = new([]Active)
 	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Find(ret).Error; err != nil {
 		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
