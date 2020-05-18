@@ -3,7 +3,7 @@ GO=go
 VERSION := 0.0.1
 BUILD := `git rev-parse --short HEAD`
 IMAGE := grapery-app:$(VERSION)-$(BUILD)
-TARGETS := grapes-app
+TARGETS := grapes
 
 LDFLAGS += -X "$(project)/version.BuildTS=$(shell date -u '+%Y-%m-%d %I:%M:%S')"
 LDFLAGS += -X "$(project)/version.GitHash=$(shell git rev-parse HEAD)"
@@ -13,7 +13,7 @@ project=github.com/grapery/grapery
 
 
 $(TARGETS): 
-	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/grapes/main.go
+	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/$@
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)
