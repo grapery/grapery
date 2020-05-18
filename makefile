@@ -9,11 +9,11 @@ LDFLAGS += -X "$(project)/version.BuildTS=$(shell date -u '+%Y-%m-%d %I:%M:%S')"
 LDFLAGS += -X "$(project)/version.GitHash=$(shell git rev-parse HEAD)"
 LDFLAGS += -X "$(project)/version.Version=$(VERSION)"
 LDFLAGS += -X "$(project)/version.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
-project=$(PWD)
+project=github.com/grapery/grapery
 
 
 $(TARGETS): 
-	$(GO) build -o grapes-app -ldflags  '$(LDFLAGS)' -gcflags "-l" $(project)/app/grapes.go
+	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/grapes/main.go
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)
