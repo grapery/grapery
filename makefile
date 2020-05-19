@@ -16,7 +16,7 @@ $(TARGETS):
 	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/$@
 
 image: $(TARGETS)
-	tar cvf build.tar $(TARGETS)
+	tar cvf build.tar $(TARGETS)-app
 	docker build -f dockerfiles/Dockerfile -t $(IMAGE) .
 	rm -f build.tar 
 	@echo "image: $(IMAGE)"
