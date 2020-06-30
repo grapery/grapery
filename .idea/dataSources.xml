@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="grapery@localhost" uuid="24200954-bb5e-4227-ad7e-3c4cd72f6dec">
+    <data-source source="LOCAL" name="root@localhost" uuid="0058d517-a2d5-4adc-ab20-826a80e537c0">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
+      <remarks>lark</remarks>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://localhost:3306/grapery</jdbc-url>
+      <jdbc-url>jdbc:mysql://localhost:3306/lark</jdbc-url>
     </data-source>
   </component>
 </project>
