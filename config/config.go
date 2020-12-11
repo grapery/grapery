@@ -3,8 +3,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var GlobalConfig = new(Config)

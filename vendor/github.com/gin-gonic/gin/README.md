@@ -119,6 +119,10 @@ $ curl https://raw.githubusercontent.com/gin-gonic/examples/master/basic/main.go
 $ go run main.go
 ```
 
+## Prerequisite
+
+Now Gin requires Go 1.6 or later and Go 1.7 will be required soon.
+
 ## Quick start
  
 ```sh
@@ -250,11 +254,6 @@ func main() {
 		action := c.Param("action")
 		message := name + " is " + action
 		c.String(http.StatusOK, message)
-	})
-
-	// For each matched request Context will hold the route definition
-	router.POST("/user/:name/*action", func(c *gin.Context) {
-		c.FullPath() == "/user/:name/*action" // true
 	})
 
 	router.Run(":8080")
@@ -1699,7 +1698,7 @@ func main() {
 	quit := make(chan os.Signal)
 	// kill (no param) default send syscall.SIGTERM
 	// kill -2 is syscall.SIGINT
-	// kill -9 is syscall.SIGKILL but can't be catch, so don't need add it
+	// kill -9 is syscall.SIGKILL but can"t be catch, so don't need add it
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutdown Server ...")
