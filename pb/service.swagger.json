@@ -36,9 +36,47 @@
           "Grapery"
         ]
       }
+    },
+    "/v1/login": {
+      "post": {
+        "operationId": "Logout",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apiLogoutResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/apiLogoutRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Grapery"
+        ]
+      }
     }
   },
   "definitions": {
+    "apiLoginRequest": {
+      "type": "object"
+    },
+    "apiLoginResponse": {
+      "type": "object"
+    },
+    "apiLogoutRequest": {
+      "type": "object"
+    },
+    "apiLogoutResponse": {
+      "type": "object"
+    },
     "apiPing": {
       "type": "object",
       "properties": {

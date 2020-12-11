@@ -20,10 +20,27 @@ message Ping { string ping = 1; }
 
 message Pong { string pong = 1; }
 
-message UserInfo { UserID uint64 = 1; }
+message UserInfo {
+  uint64 UserID = 1;
+  string userName = 2;
+}
+
+message LoginResponse {}
+
+message LoginRequest {}
+
+message LogoutResponse {}
+
+message LogoutRequest {}
 
 service Grapery {
   rpc PingPong(Ping) returns(Pong) {
     option(google.api.http) = {post : "/v1/example/ping" body : "*"};
+  }
+  rpc Login(LoginRequest) returns(LoginResponse) {
+    option(google.api.http) = {post : "/v1/login" body : "*"};
+  }
+  rpc Logout(LogoutRequest) returns(LogoutResponse) {
+    option(google.api.http) = {post : "/v1/login" body : "*"};
   }
 }
