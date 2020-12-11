@@ -5,30 +5,25 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-swagger/options/annotations.proto";
 
-option go_package="github.com/grapery/grapery/api/service";
+option go_package = "github.com/grapery/grapery/api/service";
 package grapery.api;
 
-option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
-  info: {
-    title: "grapery";
-    version: "v0.1.0";
-  };
-};
-
-
-message Ping{
-  string ping=1;
+option(grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
+  info : {title : "grapery";
+version : "v0.1.0";
 }
-
-message Pong{
-  string pong=1;
+;
 }
+;
+
+message Ping { string ping = 1; }
+
+message Pong { string pong = 1; }
+
+message UserInfo { UserID uint64 = 1; }
 
 service Grapery {
-    rpc PingPong(Ping) returns (Pong){
-      option (google.api.http) = {
-             post: "/v1/example/ping"
-             body: "*"
-      };
-    }
+  rpc PingPong(Ping) returns(Pong) {
+    option(google.api.http) = {post : "/v1/example/ping" body : "*"};
+  }
 }
