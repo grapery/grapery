@@ -3,18 +3,13 @@ syntax = "proto3";
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "protoc-gen-swagger/options/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "protoc-gen-openapiv2/options/openapiv2.proto";
 
 option go_package = "github.com/grapery/grapery/api/service";
 package grapery.api;
 
-option(grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
-  info : {title : "grapery";
-version : "v0.1.0";
-}
-;
-}
-;
+
 
 message Ping { string ping = 1; }
 
@@ -27,7 +22,9 @@ message UserInfo {
 
 message LoginResponse {}
 
-message LoginRequest {}
+message LoginRequest {
+  string value = 1;
+}
 
 message LogoutResponse {}
 
