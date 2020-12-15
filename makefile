@@ -35,3 +35,6 @@ cov:
 
 cert:
 	sh ./certs/gen.sh
+
+regen:
+	sh ./regen.sh

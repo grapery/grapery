@@ -16,12 +16,12 @@ const (
 
 // Active。。。
 type Active struct {
-	IDBase
-	CreatorID  uint64
-	ActiveType int
-	Content    []byte
-	Name       string
-	Tags       string
+	IDBase     `json:"id_base,omitempty"`
+	CreatorID  uint64 `json:"creator_id,omitempty"`
+	ActiveType int    `json:"active_type,omitempty"`
+	Content    []byte `json:"content,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Tags       string `json:"tags,omitempty"`
 }
 
 func (a Active) TableNamse() string {
