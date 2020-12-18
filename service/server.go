@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
@@ -9,7 +11,6 @@ import (
 	"github.com/grapery/grapery/pkg/auth"
 	cache "github.com/grapery/grapery/utils/redis"
 	log "github.com/sirupsen/logrus"
-	"os"
 )
 
 type Service struct {
@@ -40,7 +41,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	v1Route.POST("/logout", auth.AuthSrv.Logout)
 	v1Route.POST("/register", auth.AuthSrv.Register)
 	v1Route.POST("/reset/pwd", auth.AuthSrv.ResetPassword)
-	v1Route.DELETE(auth.RegisterWithEmai)
 	userRoute := v1Route.Group("/user")
 	userRoute.Any("", func(ctx *gin.Context) {
 		ctx.Writer.WriteString("not useable")
