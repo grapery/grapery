@@ -40,6 +40,7 @@ func (s *Service) Run(cfg *config.Config) error {
 	v1Route.POST("/logout", auth.AuthSrv.Logout)
 	v1Route.POST("/register", auth.AuthSrv.Register)
 	v1Route.POST("/reset/pwd", auth.AuthSrv.ResetPassword)
+	v1Route.DELETE(auth.RegisterWithEmai)
 	userRoute := v1Route.Group("/user")
 	userRoute.Any("", func(ctx *gin.Context) {
 		ctx.Writer.WriteString("not useable")
