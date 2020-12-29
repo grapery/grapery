@@ -1,12 +1,13 @@
 #!/bin/bash
 
 go env -w GO111MODULE=on
-export PATH="/home/ubuntu/work/bin":$PATH
 
+export PATH="/home/ubuntu/work/bin":$PATH
 IncludePath=/snap/protobuf/current/include
 GPATH=/home/ubuntu/work
+
+
 basepath=$PWD
-project_dir=github.com/grapery/grapery
 pb_dir=common-protoc
 proto_install="$PROTOC_INSTALL"
 go_package=api
