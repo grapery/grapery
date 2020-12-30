@@ -2,12 +2,13 @@
 
 go env -w GO111MODULE=on
 
-# export PATH="/home/ubuntu/work/bin":$PATH
-# IncludePath=/snap/protobuf/current/include
-# GPATH=/home/ubuntu/work
+export PATH="/home/ubuntu/work/bin":$PATH
+IncludePath=/snap/protobuf/current/include
+GPATH=/home/ubuntu/work
 
-GPATH=$GOPATH
-IncludePath="$PROTOC_INSTALL"
+# GPATH=$GOPATH
+# IncludePath="$PROTOC_INSTALL"
+
 basepath=$PWD
 
 pb_dir=common-protoc
