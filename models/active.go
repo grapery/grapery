@@ -104,7 +104,3 @@ func (a *Active) Delete() error {
 	log.Infof("delete active [%d] success", a.IDBase.ID)
 	return nil
 }
-
-func ()  {
-	
-}
