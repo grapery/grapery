@@ -1,6 +1,6 @@
 {
   "sql_db": {
-    "database": "lark",
+    "database": "grapery",
     "username": "root",
     "password": "123456789"
   },

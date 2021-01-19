@@ -3,17 +3,20 @@ module github.com/grapery/grapery
 go 1.12
 
 require (
+	github.com/apache/thrift v0.12.0 // indirect
 	github.com/dgraph-io/dgo/v200 v200.0.0-20201023081658-a9ad93fe6ebd
 	github.com/gin-contrib/sessions v0.0.1
 	github.com/gin-gonic/gin v1.4.0
 	github.com/go-redis/redis v6.15.6+incompatible
-	github.com/go-sql-driver/mysql v1.4.1
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.0.1
-	github.com/jinzhu/gorm v1.9.8
+	github.com/jinzhu/gorm v1.9.16
 	github.com/kr/pretty v0.2.1 // indirect
+	github.com/openzipkin/zipkin-go v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b // indirect
 	golang.org/x/sys v0.0.0-20201223074533-0d417f636930 // indirect

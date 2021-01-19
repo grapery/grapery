@@ -11,10 +11,10 @@ import (
 
 var database *gorm.DB
 
-func DataBase() *gorm.DB{
-	if database == nil{
+func DataBase() *gorm.DB {
+	if database == nil {
 		log.Warn("database connector not init")
-		return  nil
+		return nil
 	}
 	return database
 }
@@ -28,6 +28,7 @@ func Init(uname, pwd, db string) error {
 	}
 	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
 	sqldbUrl := fmt.Sprintf("%s:%s@/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	println("mysql :", sqldbUrl)
 	database, err = gorm.Open("mysql", sqldbUrl)
 	if err != nil {
 		log.Errorf("create dataabse failed  : [%s]", err.Error())
