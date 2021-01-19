@@ -1,14 +1,15 @@
 package auth
 
 import (
+	// "net/http"
+
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 	gin "github.com/gin-gonic/gin"
-	models "github.com/grapery/grapery/models"
-
-	//cache "github.com/grapery/grapery/pkg/redis"
 	log "github.com/sirupsen/logrus"
-	// "net/http"
+
+	models "github.com/grapery/grapery/models"
+	//cache "github.com/grapery/grapery/pkg/redis"
 )
 
 func ParseSession(ctx *gin.Context) {
@@ -19,12 +20,6 @@ func ParseSession(ctx *gin.Context) {
 	//cache.RedisCache
 }
 
-const (
-	RegisterWithPhone    = "phone"
-	RegisterWithEmail    = "email"
-	RegisterWithNickname = "nickname"
-)
-
 var AuthSrv = new(AuthService)
 
 // auth service
@@ -32,30 +27,7 @@ type AuthService struct {
 }
 
 func (auth *AuthService) Register(ctx *gin.Context) {
-	sessionID := ctx.Request.Header.Get("session_id")
-	if sessionID == "" {
-		log.Info("session is empty")
-	}
-	registerType := ctx.Request.FormValue("account_type")
-	log.Info("register type : ", registerType)
-	var uAccount, uPassword string
-	if registerType == RegisterWithPhone {
-		// TODO :
-		log.Infof("register type : [%s]", registerType)
-	} else if registerType == RegisterWithEmail {
-		log.Infof("register type : [%s]", registerType)
-	} else if registerType == RegisterWithNickname {
-		log.Infof("register type : [%s]", registerType)
-	} else {
-		log.Errorf("error register type")
-		ctx.Abort()
-	}
-	uAccount = ctx.Request.FormValue("account")
-	uPassword = ctx.Request.FormValue("password")
-	if uAccount == "" || uPassword == "" {
-		log.Errorf("invalied input params")
-		ctx.Abort()
-	}
+	req := ctx.Request.Body()
 	authRecord := &models.Auth{
 		Email:    uAccount,
 		Password: uPassword,
@@ -65,6 +37,7 @@ func (auth *AuthService) Register(ctx *gin.Context) {
 	if err != nil {
 		log.Errorf("create new user failed : ", err.Error())
 		ctx.Abort()
+		return
 	}
 	log.Infof("user [%s] register success ", uAccount)
 	ctx.Writer.WriteString("register success")

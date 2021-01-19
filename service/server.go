@@ -1,14 +1,18 @@
 package service
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/auth"
 	cache "github.com/grapery/grapery/utils/redis"
-	log "github.com/sirupsen/logrus"
 )
 
 type Service struct {
@@ -35,32 +39,52 @@ func (s *Service) Run(cfg *config.Config) error {
 	}
 	app := gin.Default()
 	app.Use(sessions.Sessions("grapestree", sessionStore))
-	v1Route := app.Group("/v1")
+	app.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
+			param.ClientIP,
+			param.TimeStamp.Format(time.RFC1123),
+			param.Method,
+			param.Path,
+			param.Request.Proto,
+			param.StatusCode,
+			param.Latency,
+			param.Request.UserAgent(),
+			param.ErrorMessage,
+		)
+	}))
+	app.Use(gin.Recovery())
+	v1Route := app.Group("/api/v1")
 	// login about and something
 	v1Route.POST("/login", auth.AuthSrv.Login)
 	v1Route.POST("/logout", auth.AuthSrv.Logout)
 	v1Route.POST("/register", auth.AuthSrv.Register)
 	v1Route.POST("/reset/pwd", auth.AuthSrv.ResetPassword)
 	userRoute := v1Route.Group("/user")
-	userRoute.Any("", func(ctx *gin.Context) {
-		ctx.Writer.WriteString("not useable")
-	})
+	{
+		userRoute.GET("/:id", auth.AuthSrv.Login)
+	}
+
 	groupRoute := v1Route.Group("/group")
-	groupRoute.Any("", func(ctx *gin.Context) {
-		ctx.Writer.WriteString("not useable")
-	})
+	{
+		groupRoute.GET("/:id", auth.AuthSrv.Login)
+	}
 	activeGroup := v1Route.Group("/active")
-	activeGroup.Any("", func(ctx *gin.Context) {
-		ctx.Writer.WriteString("not useable")
-	})
+	{
+		activeGroup.GET("/:id", auth.AuthSrv.Login)
+	}
 	projectGroup := v1Route.Group("/project")
-	projectGroup.Any("", func(ctx *gin.Context) {
-		ctx.Writer.WriteString("not useable")
-	})
+	{
+		projectGroup.GET("/:id", auth.AuthSrv.Login)
+	}
 	eventGroup := v1Route.Group("/event")
-	eventGroup.Any("", func(ctx *gin.Context) {
-		ctx.Writer.WriteString("not useable")
-	})
+	{
+		eventGroup.GET("/:id", auth.AuthSrv.Login)
+	}
+	utilsGroup := v1Route.Group("/help")
+	{
+		utilsGroup.GET("/:id", auth.AuthSrv.Login)
+	}
+
 	err = app.Run(":" + cfg.Port)
 	if err != nil {
 		log.Errorf("start server is failed : %s", err.Error())

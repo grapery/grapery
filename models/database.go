@@ -11,6 +11,7 @@ import (
 
 var database *gorm.DB
 
+// DataBase ...
 func DataBase() *gorm.DB {
 	if database == nil {
 		log.Warn("database connector not init")
@@ -19,7 +20,7 @@ func DataBase() *gorm.DB {
 	return database
 }
 
-// Init
+// Init ...
 func Init(uname, pwd, db string) error {
 	var err error
 	if database != nil {
@@ -43,7 +44,7 @@ func Init(uname, pwd, db string) error {
 	return nil
 }
 
-// Close
+// Close ...
 func Close() error {
 	if database == nil {
 		log.Info("database is close")

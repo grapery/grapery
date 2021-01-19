@@ -7,14 +7,33 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type RegisterType uint32
+
+const (
+	_                 RegisterType = iota
+	RegisterWithPhone RegisterType = 1
+	RegisterWithEmail RegisterType = 2
+)
+
+func RegisterTypeName(rtype RegisterType) string {
+	switch rtype {
+	case RegisterWithPhone:
+		return "phone"
+	case RegisterWithEmail:
+		return "email"
+	}
+	return "unknown"
+
+}
+
 type Auth struct {
 	IDBase
-	UID      uint64 `json:"uid,omitempty" gorm:"unique_index"`
-	Email    string `json:"email,omitempty" gorm:"unique_index"`
-	Phone    string `json:"phone,omitempty" gorm:"unique_index"`
-	Password string `json:"-"`
-	Salt     string `json:"-"`
-	AuthType string `json:"auth_type,omitempty"`
+	UID      uint64       `json:"uid,omitempty" gorm:"unique_index"`
+	Email    string       `json:"email,omitempty" gorm:"unique_index"`
+	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
+	Password string       `json:"-" gorm:"password"`
+	Salt     string       `json:"-" gorm:"salt"`
+	AuthType RegisterType `json:"auth_type,omitempty" gorm:"authtype"`
 }
 
 func (a Auth) TableNamse() string {
