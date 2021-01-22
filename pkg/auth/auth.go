@@ -27,20 +27,20 @@ type AuthService struct {
 }
 
 func (auth *AuthService) Register(ctx *gin.Context) {
-	req := ctx.Request.Body()
-	authRecord := &models.Auth{
-		Email:    uAccount,
-		Password: uPassword,
-		AuthType: registerType,
-	}
-	err := authRecord.Create()
-	if err != nil {
-		log.Errorf("create new user failed : ", err.Error())
-		ctx.Abort()
-		return
-	}
-	log.Infof("user [%s] register success ", uAccount)
-	ctx.Writer.WriteString("register success")
+	// req := ctx.Request.Body()
+	// authRecord := &models.Auth{
+	// 	Email:    uAccount,
+	// 	Password: uPassword,
+	// 	AuthType: registerType,
+	// }
+	// err := authRecord.Create()
+	// if err != nil {
+	// 	log.Errorf("create new user failed : ", err.Error())
+	// 	ctx.Abort()
+	// 	return
+	// }
+	// log.Infof("user [%s] register success ", uAccount)
+	// ctx.Writer.WriteString("register success")
 }
 
 func (auth *AuthService) Login(ctx *gin.Context) {
