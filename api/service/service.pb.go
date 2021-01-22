@@ -27,6 +27,61 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
+type UserInfo struct {
+	UserID               uint64   `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Avator               string   `protobuf:"bytes,3,opt,name=avator,proto3" json:"avator,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *UserInfo) Reset()         { *m = UserInfo{} }
+func (m *UserInfo) String() string { return proto.CompactTextString(m) }
+func (*UserInfo) ProtoMessage()    {}
+func (*UserInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{0}
+}
+
+func (m *UserInfo) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UserInfo.Unmarshal(m, b)
+}
+func (m *UserInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UserInfo.Marshal(b, m, deterministic)
+}
+func (m *UserInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserInfo.Merge(m, src)
+}
+func (m *UserInfo) XXX_Size() int {
+	return xxx_messageInfo_UserInfo.Size(m)
+}
+func (m *UserInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UserInfo proto.InternalMessageInfo
+
+func (m *UserInfo) GetUserID() uint64 {
+	if m != nil {
+		return m.UserID
+	}
+	return 0
+}
+
+func (m *UserInfo) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *UserInfo) GetAvator() string {
+	if m != nil {
+		return m.Avator
+	}
+	return ""
+}
+
 type LoginResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -37,7 +92,7 @@ func (m *LoginResponse) Reset()         { *m = LoginResponse{} }
 func (m *LoginResponse) String() string { return proto.CompactTextString(m) }
 func (*LoginResponse) ProtoMessage()    {}
 func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{0}
+	return fileDescriptor_a02bfa0a96da7679, []int{1}
 }
 
 func (m *LoginResponse) XXX_Unmarshal(b []byte) error {
@@ -69,7 +124,7 @@ func (m *LoginRequest) Reset()         { *m = LoginRequest{} }
 func (m *LoginRequest) String() string { return proto.CompactTextString(m) }
 func (*LoginRequest) ProtoMessage()    {}
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{1}
+	return fileDescriptor_a02bfa0a96da7679, []int{2}
 }
 
 func (m *LoginRequest) XXX_Unmarshal(b []byte) error {
@@ -108,7 +163,7 @@ func (m *LogoutResponse) Reset()         { *m = LogoutResponse{} }
 func (m *LogoutResponse) String() string { return proto.CompactTextString(m) }
 func (*LogoutResponse) ProtoMessage()    {}
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{2}
+	return fileDescriptor_a02bfa0a96da7679, []int{3}
 }
 
 func (m *LogoutResponse) XXX_Unmarshal(b []byte) error {
@@ -146,7 +201,7 @@ func (m *LogoutRequest) Reset()         { *m = LogoutRequest{} }
 func (m *LogoutRequest) String() string { return proto.CompactTextString(m) }
 func (*LogoutRequest) ProtoMessage()    {}
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{3}
+	return fileDescriptor_a02bfa0a96da7679, []int{4}
 }
 
 func (m *LogoutRequest) XXX_Unmarshal(b []byte) error {
@@ -177,7 +232,7 @@ func (m *AboutRequest) Reset()         { *m = AboutRequest{} }
 func (m *AboutRequest) String() string { return proto.CompactTextString(m) }
 func (*AboutRequest) ProtoMessage()    {}
 func (*AboutRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{4}
+	return fileDescriptor_a02bfa0a96da7679, []int{5}
 }
 
 func (m *AboutRequest) XXX_Unmarshal(b []byte) error {
@@ -208,7 +263,7 @@ func (m *AboutResponse) Reset()         { *m = AboutResponse{} }
 func (m *AboutResponse) String() string { return proto.CompactTextString(m) }
 func (*AboutResponse) ProtoMessage()    {}
 func (*AboutResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{5}
+	return fileDescriptor_a02bfa0a96da7679, []int{6}
 }
 
 func (m *AboutResponse) XXX_Unmarshal(b []byte) error {
@@ -229,6 +284,68 @@ func (m *AboutResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AboutResponse proto.InternalMessageInfo
 
+type HelpRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *HelpRequest) Reset()         { *m = HelpRequest{} }
+func (m *HelpRequest) String() string { return proto.CompactTextString(m) }
+func (*HelpRequest) ProtoMessage()    {}
+func (*HelpRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{7}
+}
+
+func (m *HelpRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_HelpRequest.Unmarshal(m, b)
+}
+func (m *HelpRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_HelpRequest.Marshal(b, m, deterministic)
+}
+func (m *HelpRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HelpRequest.Merge(m, src)
+}
+func (m *HelpRequest) XXX_Size() int {
+	return xxx_messageInfo_HelpRequest.Size(m)
+}
+func (m *HelpRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_HelpRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_HelpRequest proto.InternalMessageInfo
+
+type HelpResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *HelpResponse) Reset()         { *m = HelpResponse{} }
+func (m *HelpResponse) String() string { return proto.CompactTextString(m) }
+func (*HelpResponse) ProtoMessage()    {}
+func (*HelpResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{8}
+}
+
+func (m *HelpResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_HelpResponse.Unmarshal(m, b)
+}
+func (m *HelpResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_HelpResponse.Marshal(b, m, deterministic)
+}
+func (m *HelpResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HelpResponse.Merge(m, src)
+}
+func (m *HelpResponse) XXX_Size() int {
+	return xxx_messageInfo_HelpResponse.Size(m)
+}
+func (m *HelpResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_HelpResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_HelpResponse proto.InternalMessageInfo
+
 type UserInfoRequest struct {
 	UserID               uint64   `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -240,7 +357,7 @@ func (m *UserInfoRequest) Reset()         { *m = UserInfoRequest{} }
 func (m *UserInfoRequest) String() string { return proto.CompactTextString(m) }
 func (*UserInfoRequest) ProtoMessage()    {}
 func (*UserInfoRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{6}
+	return fileDescriptor_a02bfa0a96da7679, []int{9}
 }
 
 func (m *UserInfoRequest) XXX_Unmarshal(b []byte) error {
@@ -269,18 +386,17 @@ func (m *UserInfoRequest) GetUserID() uint64 {
 }
 
 type UserInfoResponse struct {
-	UserID               uint64   `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
-	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Info                 *UserInfo `protobuf:"bytes,1,opt,name=info,proto3" json:"info,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
 func (m *UserInfoResponse) Reset()         { *m = UserInfoResponse{} }
 func (m *UserInfoResponse) String() string { return proto.CompactTextString(m) }
 func (*UserInfoResponse) ProtoMessage()    {}
 func (*UserInfoResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a02bfa0a96da7679, []int{7}
+	return fileDescriptor_a02bfa0a96da7679, []int{10}
 }
 
 func (m *UserInfoResponse) XXX_Unmarshal(b []byte) error {
@@ -301,29 +417,169 @@ func (m *UserInfoResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_UserInfoResponse proto.InternalMessageInfo
 
-func (m *UserInfoResponse) GetUserID() uint64 {
+func (m *UserInfoResponse) GetInfo() *UserInfo {
+	if m != nil {
+		return m.Info
+	}
+	return nil
+}
+
+type UserFollowingRequest struct {
+	UserID               uint64   `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *UserFollowingRequest) Reset()         { *m = UserFollowingRequest{} }
+func (m *UserFollowingRequest) String() string { return proto.CompactTextString(m) }
+func (*UserFollowingRequest) ProtoMessage()    {}
+func (*UserFollowingRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{11}
+}
+
+func (m *UserFollowingRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UserFollowingRequest.Unmarshal(m, b)
+}
+func (m *UserFollowingRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UserFollowingRequest.Marshal(b, m, deterministic)
+}
+func (m *UserFollowingRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserFollowingRequest.Merge(m, src)
+}
+func (m *UserFollowingRequest) XXX_Size() int {
+	return xxx_messageInfo_UserFollowingRequest.Size(m)
+}
+func (m *UserFollowingRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserFollowingRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UserFollowingRequest proto.InternalMessageInfo
+
+func (m *UserFollowingRequest) GetUserID() uint64 {
 	if m != nil {
 		return m.UserID
 	}
 	return 0
 }
 
-func (m *UserInfoResponse) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
+type UserFollowingResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
+func (m *UserFollowingResponse) Reset()         { *m = UserFollowingResponse{} }
+func (m *UserFollowingResponse) String() string { return proto.CompactTextString(m) }
+func (*UserFollowingResponse) ProtoMessage()    {}
+func (*UserFollowingResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{12}
+}
+
+func (m *UserFollowingResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UserFollowingResponse.Unmarshal(m, b)
+}
+func (m *UserFollowingResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UserFollowingResponse.Marshal(b, m, deterministic)
+}
+func (m *UserFollowingResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserFollowingResponse.Merge(m, src)
+}
+func (m *UserFollowingResponse) XXX_Size() int {
+	return xxx_messageInfo_UserFollowingResponse.Size(m)
+}
+func (m *UserFollowingResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserFollowingResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UserFollowingResponse proto.InternalMessageInfo
+
+type UserFollowerRequest struct {
+	UserID               uint64   `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *UserFollowerRequest) Reset()         { *m = UserFollowerRequest{} }
+func (m *UserFollowerRequest) String() string { return proto.CompactTextString(m) }
+func (*UserFollowerRequest) ProtoMessage()    {}
+func (*UserFollowerRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{13}
+}
+
+func (m *UserFollowerRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UserFollowerRequest.Unmarshal(m, b)
+}
+func (m *UserFollowerRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UserFollowerRequest.Marshal(b, m, deterministic)
+}
+func (m *UserFollowerRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserFollowerRequest.Merge(m, src)
+}
+func (m *UserFollowerRequest) XXX_Size() int {
+	return xxx_messageInfo_UserFollowerRequest.Size(m)
+}
+func (m *UserFollowerRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserFollowerRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UserFollowerRequest proto.InternalMessageInfo
+
+func (m *UserFollowerRequest) GetUserID() uint64 {
+	if m != nil {
+		return m.UserID
+	}
+	return 0
+}
+
+type UserFollowerResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *UserFollowerResponse) Reset()         { *m = UserFollowerResponse{} }
+func (m *UserFollowerResponse) String() string { return proto.CompactTextString(m) }
+func (*UserFollowerResponse) ProtoMessage()    {}
+func (*UserFollowerResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_a02bfa0a96da7679, []int{14}
+}
+
+func (m *UserFollowerResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UserFollowerResponse.Unmarshal(m, b)
+}
+func (m *UserFollowerResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UserFollowerResponse.Marshal(b, m, deterministic)
+}
+func (m *UserFollowerResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserFollowerResponse.Merge(m, src)
+}
+func (m *UserFollowerResponse) XXX_Size() int {
+	return xxx_messageInfo_UserFollowerResponse.Size(m)
+}
+func (m *UserFollowerResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserFollowerResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UserFollowerResponse proto.InternalMessageInfo
+
 func init() {
+	proto.RegisterType((*UserInfo)(nil), "grapery.api.UserInfo")
 	proto.RegisterType((*LoginResponse)(nil), "grapery.api.LoginResponse")
 	proto.RegisterType((*LoginRequest)(nil), "grapery.api.LoginRequest")
 	proto.RegisterType((*LogoutResponse)(nil), "grapery.api.LogoutResponse")
 	proto.RegisterType((*LogoutRequest)(nil), "grapery.api.LogoutRequest")
-	proto.RegisterType((*AboutRequest)(nil), "grapery.api.aboutRequest")
-	proto.RegisterType((*AboutResponse)(nil), "grapery.api.aboutResponse")
+	proto.RegisterType((*AboutRequest)(nil), "grapery.api.AboutRequest")
+	proto.RegisterType((*AboutResponse)(nil), "grapery.api.AboutResponse")
+	proto.RegisterType((*HelpRequest)(nil), "grapery.api.HelpRequest")
+	proto.RegisterType((*HelpResponse)(nil), "grapery.api.HelpResponse")
 	proto.RegisterType((*UserInfoRequest)(nil), "grapery.api.UserInfoRequest")
 	proto.RegisterType((*UserInfoResponse)(nil), "grapery.api.UserInfoResponse")
+	proto.RegisterType((*UserFollowingRequest)(nil), "grapery.api.UserFollowingRequest")
+	proto.RegisterType((*UserFollowingResponse)(nil), "grapery.api.UserFollowingResponse")
+	proto.RegisterType((*UserFollowerRequest)(nil), "grapery.api.UserFollowerRequest")
+	proto.RegisterType((*UserFollowerResponse)(nil), "grapery.api.UserFollowerResponse")
 }
 
 func init() {
@@ -331,31 +587,43 @@ func init() {
 }
 
 var fileDescriptor_a02bfa0a96da7679 = []byte{
-	// 376 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x7c, 0x52, 0xcd, 0x4a, 0xf3, 0x40,
-	0x14, 0xa5, 0xa5, 0xed, 0xf7, 0xf5, 0xf6, 0x4f, 0x87, 0x52, 0x6a, 0x5a, 0x51, 0x82, 0x8b, 0x2a,
-	0x36, 0x83, 0x75, 0xe7, 0xc2, 0x85, 0x08, 0x22, 0xb8, 0x2a, 0x8a, 0xe0, 0x6e, 0x1a, 0xa6, 0x21,
-	0xd0, 0xcc, 0x8d, 0xf9, 0x03, 0x11, 0x37, 0xbe, 0x82, 0x0f, 0xe0, 0x43, 0xf9, 0x0a, 0x3e, 0x88,
-	0x93, 0x99, 0xa9, 0xad, 0xda, 0x76, 0x95, 0x9c, 0x39, 0xe7, 0x9e, 0xb9, 0xf7, 0xcc, 0x85, 0x9e,
-	0x8b, 0x41, 0x80, 0x62, 0x18, 0x46, 0x98, 0xa0, 0x4b, 0x63, 0x1e, 0x65, 0xbe, 0xcb, 0x1d, 0x05,
-	0x49, 0xcd, 0x8b, 0x58, 0xc8, 0xa3, 0x27, 0x87, 0x85, 0xbe, 0xd5, 0xf7, 0x10, 0xbd, 0x19, 0xa7,
-	0xf2, 0x9f, 0x32, 0x21, 0x30, 0x61, 0x89, 0x8f, 0x22, 0xd6, 0x52, 0x6b, 0xcf, 0xb0, 0x0a, 0x4d,
-	0xd2, 0x29, 0x4d, 0xfc, 0x80, 0xc7, 0x09, 0x0b, 0x42, 0x23, 0xd0, 0x1f, 0x77, 0xe8, 0x71, 0x31,
-	0xc4, 0x90, 0x0b, 0x69, 0x93, 0x8d, 0x28, 0x86, 0xca, 0x64, 0x85, 0xe1, 0xf1, 0x46, 0xfd, 0xf7,
-	0x89, 0x56, 0xdb, 0x2d, 0x68, 0xdc, 0xa0, 0xe7, 0x8b, 0x31, 0x8f, 0x43, 0xc9, 0x73, 0xfb, 0x00,
-	0xea, 0xe6, 0xe0, 0x31, 0x95, 0x7d, 0x90, 0x36, 0x94, 0x33, 0x36, 0x4b, 0x79, 0xb7, 0xb0, 0x5f,
-	0x18, 0x54, 0xc7, 0x1a, 0xd8, 0x03, 0x68, 0x4a, 0x15, 0xa6, 0xc9, 0xbc, 0x8e, 0x74, 0xa0, 0x92,
-	0xca, 0x10, 0xae, 0x2f, 0x95, 0xb0, 0x34, 0x36, 0xc8, 0x5c, 0xa0, 0x94, 0xca, 0xd0, 0x6e, 0x42,
-	0x9d, 0x4d, 0x96, 0xb0, 0x14, 0x18, 0x6c, 0x3a, 0x38, 0x84, 0xd6, 0x5d, 0x5e, 0x2b, 0xa6, 0x38,
-	0x6f, 0x62, 0x9d, 0xf9, 0x39, 0x6c, 0x2d, 0xa4, 0x9b, 0x1b, 0x21, 0x04, 0x4a, 0x82, 0x05, 0xbc,
-	0x5b, 0x54, 0x73, 0xa8, 0xff, 0xd1, 0x7b, 0x11, 0xfe, 0x5d, 0xe9, 0xa7, 0x22, 0xb7, 0x50, 0x56,
-	0x83, 0x93, 0x1d, 0x67, 0xe9, 0xf5, 0x9c, 0xe5, 0x30, 0x2c, 0x6b, 0x15, 0x65, 0xda, 0x6e, 0xbf,
-	0x7e, 0x7c, 0xbe, 0x15, 0x9b, 0x76, 0x95, 0x66, 0x27, 0x74, 0x96, 0x53, 0x67, 0x85, 0x23, 0x72,
-	0x0f, 0x15, 0x3d, 0x3e, 0xf9, 0x53, 0xbb, 0xc8, 0xc0, 0xea, 0xad, 0xe4, 0x36, 0x1a, 0x73, 0xf8,
-	0x3f, 0x1f, 0x9d, 0xf4, 0x7f, 0x94, 0xff, 0x0a, 0xcf, 0xda, 0x5d, 0xc3, 0x1a, 0xfb, 0xbe, 0xb2,
-	0xef, 0xd8, 0xdb, 0xb9, 0x7d, 0x9e, 0x15, 0x7d, 0xd6, 0x89, 0xbd, 0xc8, 0x6b, 0x2e, 0x1a, 0x0f,
-	0xb5, 0x7c, 0x6f, 0xcd, 0x7a, 0x4f, 0x2a, 0x6a, 0x6b, 0x4e, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff,
-	0x53, 0x9a, 0x0b, 0x86, 0xfe, 0x02, 0x00, 0x00,
+	// 561 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x94, 0xdf, 0x8e, 0xd2, 0x40,
+	0x14, 0xc6, 0xc3, 0x0a, 0xb8, 0x1c, 0x28, 0xab, 0xb3, 0x2c, 0xb2, 0x05, 0xb3, 0xec, 0x44, 0xcd,
+	0xae, 0x91, 0x36, 0xe2, 0x9d, 0x89, 0x17, 0x1a, 0xe3, 0x9f, 0xc4, 0x18, 0x43, 0x34, 0x26, 0xde,
+	0x0d, 0x64, 0xa8, 0x4d, 0xda, 0x99, 0x5a, 0xda, 0x1a, 0x35, 0x7a, 0xe1, 0x2b, 0xf8, 0x48, 0x3e,
+	0x82, 0xaf, 0xe0, 0x83, 0xec, 0xcc, 0x74, 0x60, 0x07, 0x68, 0xd9, 0x2b, 0x7a, 0xce, 0xf9, 0xfa,
+	0xfb, 0xce, 0xf4, 0x1c, 0x06, 0xfa, 0x33, 0x1e, 0x86, 0x9c, 0x8d, 0xa2, 0x98, 0x27, 0x7c, 0xe6,
+	0x2e, 0x68, 0x9c, 0xf9, 0x33, 0xea, 0xa8, 0x10, 0x35, 0xbd, 0x98, 0x44, 0x34, 0xfe, 0xe6, 0x90,
+	0xc8, 0xb7, 0x07, 0x1e, 0xe7, 0x5e, 0x40, 0x5d, 0xf1, 0xec, 0x12, 0xc6, 0x78, 0x42, 0x12, 0x9f,
+	0xb3, 0x45, 0x2e, 0xb5, 0x4f, 0x74, 0x55, 0x45, 0xd3, 0x74, 0xee, 0x26, 0x7e, 0x48, 0x17, 0x09,
+	0x09, 0x23, 0x2d, 0xc8, 0x7f, 0x66, 0x23, 0x8f, 0xb2, 0x11, 0x8f, 0x28, 0x13, 0x98, 0x6c, 0xec,
+	0xf2, 0x48, 0x41, 0x0a, 0x80, 0x0f, 0x76, 0xea, 0x57, 0x99, 0x5c, 0x8d, 0xdf, 0xc2, 0xfe, 0x07,
+	0xd1, 0xfb, 0x6b, 0x36, 0xe7, 0xa8, 0x0b, 0xf5, 0x54, 0x3e, 0x3f, 0xef, 0x55, 0x86, 0x95, 0xb3,
+	0xea, 0x44, 0x47, 0x08, 0x41, 0x95, 0x91, 0x90, 0xf6, 0xf6, 0x44, 0xb6, 0x31, 0x51, 0xcf, 0x52,
+	0x4b, 0x32, 0x92, 0xf0, 0xb8, 0x77, 0x4d, 0x65, 0x75, 0x84, 0x0f, 0xc0, 0x7a, 0xc3, 0x3d, 0x9f,
+	0x4d, 0xe8, 0x22, 0x12, 0x7e, 0x14, 0xdf, 0x81, 0x96, 0x4e, 0x7c, 0x49, 0xc5, 0xb9, 0x50, 0x07,
+	0x6a, 0x19, 0x09, 0x52, 0xaa, 0x3c, 0x1a, 0x93, 0x3c, 0xc0, 0x67, 0xd0, 0x16, 0x2a, 0x9e, 0x26,
+	0xcb, 0xf7, 0xca, 0x9a, 0xd1, 0x06, 0x4a, 0xa9, 0x80, 0xb8, 0x0d, 0xad, 0xa7, 0x53, 0x23, 0x16,
+	0x02, 0x1d, 0xeb, 0x0e, 0x2c, 0x68, 0xbe, 0xa2, 0x41, 0x64, 0xe8, 0xf3, 0x50, 0x97, 0xcf, 0xe1,
+	0x60, 0xf9, 0x05, 0x96, 0x3d, 0x96, 0x79, 0x3f, 0x81, 0x1b, 0x97, 0x52, 0xdd, 0xe7, 0x39, 0x54,
+	0x7d, 0x11, 0x2b, 0x65, 0x73, 0x7c, 0xe4, 0x18, 0x93, 0x77, 0x56, 0x62, 0x25, 0xc1, 0x0e, 0x74,
+	0x64, 0xe6, 0x05, 0x0f, 0x02, 0xfe, 0xd5, 0x67, 0xde, 0x55, 0x76, 0xb7, 0xe0, 0x68, 0x43, 0xaf,
+	0x5b, 0x1e, 0xc1, 0xe1, 0x65, 0x81, 0xc6, 0x57, 0x71, 0xba, 0xa6, 0xaf, 0x94, 0xe7, 0x98, 0xf1,
+	0xdf, 0x1a, 0x5c, 0x7f, 0x99, 0xb7, 0x8b, 0xde, 0x43, 0x4d, 0x8d, 0x09, 0x1d, 0xaf, 0x9d, 0xc0,
+	0x1c, 0x9d, 0x6d, 0x17, 0x95, 0x74, 0x4b, 0x9d, 0xdf, 0xff, 0xfe, 0xff, 0xd9, 0x6b, 0xe3, 0x86,
+	0x9b, 0x3d, 0x74, 0x03, 0x59, 0x7a, 0x5c, 0xb9, 0x2f, 0xa9, 0x6a, 0x16, 0x1b, 0x54, 0x73, 0x5e,
+	0x1b, 0xd4, 0xf5, 0xd1, 0xad, 0x51, 0x89, 0x2c, 0x49, 0xea, 0x3b, 0xa8, 0xca, 0x09, 0xa2, 0xde,
+	0xda, 0x9b, 0xc6, 0x8c, 0xed, 0xe3, 0x82, 0x8a, 0x46, 0x1e, 0x2a, 0xa4, 0x85, 0xf7, 0x25, 0xf2,
+	0xb3, 0xa8, 0x48, 0xe2, 0x47, 0xa8, 0xe7, 0x4b, 0x85, 0xb6, 0xce, 0x68, 0x74, 0xda, 0x2f, 0xac,
+	0xed, 0xfc, 0x00, 0xd4, 0xf8, 0x7b, 0x0d, 0x8a, 0x77, 0x43, 0xc3, 0x6f, 0x97, 0x54, 0x35, 0x7e,
+	0xa0, 0xf0, 0x5d, 0x7c, 0x53, 0xe2, 0xe5, 0x5c, 0xdd, 0x1f, 0xf9, 0x74, 0x7f, 0x4a, 0x9b, 0x5f,
+	0x60, 0xa5, 0xe6, 0xa6, 0xa0, 0xd3, 0x2d, 0xda, 0xe6, 0xd6, 0xd9, 0x78, 0x97, 0x44, 0xbb, 0xde,
+	0x53, 0xae, 0x43, 0xdc, 0xdf, 0x72, 0x75, 0xe7, 0x4b, 0xb1, 0xf4, 0xff, 0x0e, 0x2d, 0x73, 0xc3,
+	0xd0, 0xb0, 0x84, 0xbd, 0xda, 0x55, 0xfb, 0x74, 0x87, 0x42, 0x9b, 0xdf, 0x55, 0xe6, 0x27, 0xd8,
+	0x2e, 0x33, 0xa7, 0xb1, 0xf0, 0x7e, 0x66, 0x7d, 0x6a, 0xca, 0x9b, 0x55, 0x5f, 0xc0, 0xd3, 0xba,
+	0xba, 0xd7, 0x1e, 0x5d, 0x04, 0x00, 0x00, 0xff, 0xff, 0xa4, 0x61, 0xa2, 0xc3, 0xa0, 0x05, 0x00,
+	0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -371,8 +639,12 @@ const _ = grpc.SupportPackageIsVersion6
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type GraperyClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	About(ctx context.Context, in *AboutRequest, opts ...grpc.CallOption) (*AboutResponse, error)
+	Help(ctx context.Context, in *HelpRequest, opts ...grpc.CallOption) (*HelpResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	UserInfo(ctx context.Context, in *UserInfoRequest, opts ...grpc.CallOption) (*UserInfoResponse, error)
+	UserFollowing(ctx context.Context, in *UserFollowingRequest, opts ...grpc.CallOption) (*UserFollowingResponse, error)
+	UserFollower(ctx context.Context, in *UserFollowerRequest, opts ...grpc.CallOption) (*UserFollowerResponse, error)
 }
 
 type graperyClient struct {
@@ -386,6 +658,24 @@ func NewGraperyClient(cc grpc.ClientConnInterface) GraperyClient {
 func (c *graperyClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
 	out := new(LoginResponse)
 	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/Login", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *graperyClient) About(ctx context.Context, in *AboutRequest, opts ...grpc.CallOption) (*AboutResponse, error) {
+	out := new(AboutResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/About", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *graperyClient) Help(ctx context.Context, in *HelpRequest, opts ...grpc.CallOption) (*HelpResponse, error) {
+	out := new(HelpResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/Help", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -410,11 +700,33 @@ func (c *graperyClient) UserInfo(ctx context.Context, in *UserInfoRequest, opts 
 	return out, nil
 }
 
+func (c *graperyClient) UserFollowing(ctx context.Context, in *UserFollowingRequest, opts ...grpc.CallOption) (*UserFollowingResponse, error) {
+	out := new(UserFollowingResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/userFollowing", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *graperyClient) UserFollower(ctx context.Context, in *UserFollowerRequest, opts ...grpc.CallOption) (*UserFollowerResponse, error) {
+	out := new(UserFollowerResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/UserFollower", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GraperyServer is the server API for Grapery service.
 type GraperyServer interface {
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	About(context.Context, *AboutRequest) (*AboutResponse, error)
+	Help(context.Context, *HelpRequest) (*HelpResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	UserInfo(context.Context, *UserInfoRequest) (*UserInfoResponse, error)
+	UserFollowing(context.Context, *UserFollowingRequest) (*UserFollowingResponse, error)
+	UserFollower(context.Context, *UserFollowerRequest) (*UserFollowerResponse, error)
 }
 
 // UnimplementedGraperyServer can be embedded to have forward compatible implementations.
@@ -424,11 +736,23 @@ type UnimplementedGraperyServer struct {
 func (*UnimplementedGraperyServer) Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
+func (*UnimplementedGraperyServer) About(ctx context.Context, req *AboutRequest) (*AboutResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method About not implemented")
+}
+func (*UnimplementedGraperyServer) Help(ctx context.Context, req *HelpRequest) (*HelpResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Help not implemented")
+}
 func (*UnimplementedGraperyServer) Logout(ctx context.Context, req *LogoutRequest) (*LogoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
 }
 func (*UnimplementedGraperyServer) UserInfo(ctx context.Context, req *UserInfoRequest) (*UserInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UserInfo not implemented")
+}
+func (*UnimplementedGraperyServer) UserFollowing(ctx context.Context, req *UserFollowingRequest) (*UserFollowingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserFollowing not implemented")
+}
+func (*UnimplementedGraperyServer) UserFollower(ctx context.Context, req *UserFollowerRequest) (*UserFollowerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserFollower not implemented")
 }
 
 func RegisterGraperyServer(s *grpc.Server, srv GraperyServer) {
@@ -449,6 +773,42 @@ func _Grapery_Login_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GraperyServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Grapery_About_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AboutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).About(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/About",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).About(ctx, req.(*AboutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Grapery_Help_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HelpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).Help(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/Help",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).Help(ctx, req.(*HelpRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -489,6 +849,42 @@ func _Grapery_UserInfo_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Grapery_UserFollowing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserFollowingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).UserFollowing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/UserFollowing",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).UserFollowing(ctx, req.(*UserFollowingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Grapery_UserFollower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserFollowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).UserFollower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/UserFollower",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).UserFollower(ctx, req.(*UserFollowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Grapery_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "grapery.api.Grapery",
 	HandlerType: (*GraperyServer)(nil),
@@ -498,12 +894,28 @@ var _Grapery_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Grapery_Login_Handler,
 		},
 		{
+			MethodName: "About",
+			Handler:    _Grapery_About_Handler,
+		},
+		{
+			MethodName: "Help",
+			Handler:    _Grapery_Help_Handler,
+		},
+		{
 			MethodName: "Logout",
 			Handler:    _Grapery_Logout_Handler,
 		},
 		{
 			MethodName: "UserInfo",
 			Handler:    _Grapery_UserInfo_Handler,
+		},
+		{
+			MethodName: "userFollowing",
+			Handler:    _Grapery_UserFollowing_Handler,
+		},
+		{
+			MethodName: "UserFollower",
+			Handler:    _Grapery_UserFollower_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
