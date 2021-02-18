@@ -2,13 +2,16 @@ package auth
 
 import (
 	// "net/http"
+	"net/http"
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 	gin "github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/grapery/grapery/api"
 	models "github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/utils"
 	//cache "github.com/grapery/grapery/pkg/redis"
 )
 
@@ -27,20 +30,25 @@ type AuthService struct {
 }
 
 func (auth *AuthService) Register(ctx *gin.Context) {
-	// req := ctx.Request.Body()
-	// authRecord := &models.Auth{
-	// 	Email:    uAccount,
-	// 	Password: uPassword,
-	// 	AuthType: registerType,
-	// }
-	// err := authRecord.Create()
-	// if err != nil {
-	// 	log.Errorf("create new user failed : ", err.Error())
-	// 	ctx.Abort()
-	// 	return
-	// }
-	// log.Infof("user [%s] register success ", uAccount)
-	// ctx.Writer.WriteString("register success")
+	var ret = new(utils.Result)
+	login := new(api.LoginRequest)
+	err := ctx.BindJSON(login)
+	if err != nil {
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusBadRequest, ret)
+		return
+	}
+	var authRecord = new(models.Auth)
+	err = authRecord.Create()
+	if err != nil {
+		log.Errorf("create new user failed : ", err.Error())
+		ctx.Abort()
+		return
+	}
+	ret.Code = 0
+	ret.Message = "ok"
+	ret.Data = api.LoginResponse{UserID: authRecord.UserID}
+	ctx.JSON(http.StatusOK, ret)
 }
 
 func (auth *AuthService) Login(ctx *gin.Context) {
