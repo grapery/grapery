@@ -1,4 +1,23 @@
 package user
 
+import (
+	"github.com/grapery/grapery/models"
+	log "github.com/sirupsen/logrus"
+)
+
 type UserProfileSerivce struct {
+}
+
+func (up *UserProfileSerivce) CreateProfile(uid int64) error {
+	return nil
+}
+
+func (up *UserProfileSerivce) GetUserProfile(uid int64) (*models.UserProfile, error) {
+	var err error
+	log.Errorf("get user profile failed : %s", err.Error())
+	return nil, nil
+}
+
+func (up *UserProfileSerivce) UpdateUserProfile(uid int64) error {
+	return nil
 }

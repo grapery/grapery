@@ -11,7 +11,7 @@ import (
 
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
-	"github.com/grapery/grapery/pkg/auth"
+	"github.com/grapery/grapery/service/auth"
 	cache "github.com/grapery/grapery/utils/redis"
 )
 
@@ -28,7 +28,7 @@ func NewService() *Service {
 func (s *Service) Run(cfg *config.Config) error {
 	sessionStore, err := redis.NewStore(10, "tcp", "localhost:6379", "", nil)
 	if err != nil {
-		log.Errorf("use redis session failed : ", err.Error())
+		log.Errorf("use redis session failed : %s", err.Error())
 		return err
 	}
 	cache.RedisCache = cache.NewRedisClient(cfg)
@@ -54,35 +54,32 @@ func (s *Service) Run(cfg *config.Config) error {
 	}))
 	app.Use(gin.Recovery())
 	v1Route := app.Group("/api/v1")
-	// login about and something
-	v1Route.POST("/login", auth.AuthSrv.Login)
-	v1Route.POST("/logout", auth.AuthSrv.Logout)
-	v1Route.POST("/register", auth.AuthSrv.Register)
-	v1Route.POST("/reset/pwd", auth.AuthSrv.ResetPassword)
+	// about and something
+	v1Route.POST("/login", auth.Login)
+	v1Route.POST("/logout", auth.Logout)
+	v1Route.POST("/register", auth.Register)
+	v1Route.POST("/reset/pwd", auth.ResetPassword)
 	userRoute := v1Route.Group("/user")
 	{
-		userRoute.GET("/:id", auth.AuthSrv.Login)
+		userRoute.GET("/:id", auth.Login)
+		userRoute.GET("/:id/info", auth.Login)
 	}
 
 	groupRoute := v1Route.Group("/group")
 	{
-		groupRoute.GET("/:id", auth.AuthSrv.Login)
+		groupRoute.GET("/:id", auth.Login)
 	}
 	activeGroup := v1Route.Group("/active")
 	{
-		activeGroup.GET("/:id", auth.AuthSrv.Login)
-	}
-	projectGroup := v1Route.Group("/project")
-	{
-		projectGroup.GET("/:id", auth.AuthSrv.Login)
+		activeGroup.GET("/:id", auth.Login)
 	}
 	eventGroup := v1Route.Group("/event")
 	{
-		eventGroup.GET("/:id", auth.AuthSrv.Login)
+		eventGroup.GET("/:id", auth.Login)
 	}
 	utilsGroup := v1Route.Group("/help")
 	{
-		utilsGroup.GET("/:id", auth.AuthSrv.Login)
+		utilsGroup.GET("/:id", auth.Login)
 	}
 
 	err = app.Run(":" + cfg.Port)
