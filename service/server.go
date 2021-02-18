@@ -12,6 +12,9 @@ import (
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/service/auth"
+	"github.com/grapery/grapery/service/common"
+	"github.com/grapery/grapery/service/user"
+	"github.com/grapery/grapery/service/group"
 	cache "github.com/grapery/grapery/utils/redis"
 )
 
@@ -54,21 +57,32 @@ func (s *Service) Run(cfg *config.Config) error {
 	}))
 	app.Use(gin.Recovery())
 	v1Route := app.Group("/api/v1")
-	// about and something
 	v1Route.POST("/login", auth.Login)
 	v1Route.POST("/logout", auth.Logout)
 	v1Route.POST("/register", auth.Register)
 	v1Route.POST("/reset/pwd", auth.ResetPassword)
+	v1Route.GET("/help", common.Help)
+	v1Route.GET("/about", common.About)
+	v1Route.GET("/version", common.Version)
+
 	userRoute := v1Route.Group("/user")
 	{
-		userRoute.GET("/:id", auth.Login)
-		userRoute.GET("/:id/info", auth.Login)
+		userRoute.GET("/:id", user.GetUser)
+		userRoute.GET("/:id/info", user.GetUserProfile)
+		userRoute.GET("/:id/follower", user.GetUserProfile)
+		userRoute.GET("/:id/following", user.GetUserProfile)
+		userRoute.GET("/:id/groups", user.GetUserGroup)
+		userRoute.GET("/:id/following/group", user.GetUserProfile)
+		userRoute.DELETE("/:id", user.DeleteUser)
+		userRoute.PUT("/:id", user.UpdateUser)
+		userRoute.GET("/:id/active", user.GetUserActive)
 	}
-
+	v1Route.GET("/users/search", user.SearchUser)
 	groupRoute := v1Route.Group("/group")
 	{
 		groupRoute.GET("/:id", auth.Login)
 	}
+	groupRoute.GET("/groups/search",group.SearchGroup)
 	activeGroup := v1Route.Group("/active")
 	{
 		activeGroup.GET("/:id", auth.Login)
@@ -76,10 +90,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	eventGroup := v1Route.Group("/event")
 	{
 		eventGroup.GET("/:id", auth.Login)
-	}
-	utilsGroup := v1Route.Group("/help")
-	{
-		utilsGroup.GET("/:id", auth.Login)
 	}
 
 	err = app.Run(":" + cfg.Port)

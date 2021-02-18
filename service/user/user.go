@@ -16,6 +16,10 @@ func GetUser(ctx *gin.Context) {
 
 }
 
+func GetUserProfile(ctx *gin.Context) {
+
+}
+
 func GetUserGroup(ctx *gin.Context) {
 
 }
