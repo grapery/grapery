@@ -6,7 +6,7 @@ if [ -z "$PROTOC_INSTALL" ]; then
 fi
 
 basepath=$GOPATH/src
-pb_package=github.com/grapery/grapery/pb
+pb_package=github.com/grapery/grapery/common-protoc
 proto_install="$PROTOC_INSTALL"
 go_package=api
 rm -rf $go_package

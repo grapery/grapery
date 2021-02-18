@@ -4,13 +4,6 @@ import (
 	_ "time"
 )
 
-const (
-	ProjectTypePicture = iota
-	ProjectTypeText
-	ProjectTypeEvent
-	ProjectTypeRecord
-)
-
 type Project struct {
 	IDBase
 	Name        string `json:"name,omitempty"`
