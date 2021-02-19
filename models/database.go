@@ -28,7 +28,7 @@ func Init(uname, pwd, db string) error {
 		return nil
 	}
 	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
-	sqldbUrl := fmt.Sprintf("%s:%s@/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
 	println("mysql :", sqldbUrl)
 	database, err = gorm.Open("mysql", sqldbUrl)
 	if err != nil {
