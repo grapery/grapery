@@ -13,8 +13,8 @@ import (
 	models "github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/service/auth"
 	"github.com/grapery/grapery/service/common"
-	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/service/group"
+	"github.com/grapery/grapery/service/user"
 	cache "github.com/grapery/grapery/utils/redis"
 )
 
@@ -82,7 +82,7 @@ func (s *Service) Run(cfg *config.Config) error {
 	{
 		groupRoute.GET("/:id", auth.Login)
 	}
-	groupRoute.GET("/groups/search",group.SearchGroup)
+	v1Route.GET("/groups/search", group.SearchGroup)
 	activeGroup := v1Route.Group("/active")
 	{
 		activeGroup.GET("/:id", auth.Login)
