@@ -25,3 +25,27 @@ func DeleteGroup(ctx *gin.Context) {
 
 func CreateGroup(ctx *gin.Context) {
 }
+
+func GetGroupActives(ctx *gin.Context) {
+
+}
+
+func GetGroupMembers(ctx *gin.Context) {
+
+}
+
+func GetGroupProject(ctx *gin.Context) {
+
+}
+
+func CreateGroupProject(ctx *gin.Context) {
+
+}
+
+func UpdateGroupProject(ctx *gin.Context) {
+
+}
+
+func LeaveGroup(ctx *gin.Context) {
+
+}

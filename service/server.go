@@ -65,6 +65,8 @@ func (s *Service) Run(cfg *config.Config) error {
 	v1Route.GET("/about", common.About)
 	v1Route.GET("/version", common.Version)
 
+	// user 除了基础的用户的信息和关注列表功能，还有一个默认的group的功能，
+	// 用户在自己的空间内创建的都是default的空间
 	userRoute := v1Route.Group("/user")
 	{
 		userRoute.GET("/:id", user.GetUser)
@@ -72,25 +74,38 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.GET("/:id/follower", user.GetUserProfile)
 		userRoute.GET("/:id/following", user.GetUserProfile)
 		userRoute.GET("/:id/groups", user.GetUserGroup)
-		userRoute.GET("/:id/following/group", user.GetUserProfile)
+		userRoute.GET("/:id/following/groups", user.GetUserProfile)
 		userRoute.DELETE("/:id", user.DeleteUser)
 		userRoute.PUT("/:id", user.UpdateUser)
-		userRoute.GET("/:id/active", user.GetUserActive)
+		userRoute.GET("/:id/actives", user.GetUserActive)
+		activeGroup := userRoute.Group("/active")
+		{
+			activeGroup.GET("/:id", auth.Login)
+		}
+		thingsGroup := userRoute.Group("/project")
+		{
+			thingsGroup.GET("/:id", auth.Login)
+		}
 	}
 	v1Route.GET("/users/search", user.SearchUser)
 	groupRoute := v1Route.Group("/group")
 	{
-		groupRoute.GET("/:id", auth.Login)
+		groupRoute.POST("", group.CreateGroup)
+		groupRoute.GET("/:id", group.GetGroup)
+		groupRoute.GET("/:id/actives", group.GetGroupActives)
+		groupRoute.PUT("/:id", group.UpdateGroup)
+		groupRoute.DELETE("/:id", group.DeleteGroup)
+		groupRoute.GET("/:id/members", group.GetGroupMembers)
+		thingsGroup := groupRoute.Group("/project")
+		{
+			thingsGroup.GET("/:id", auth.Login)
+		}
+		activeGroup := groupRoute.Group("/active")
+		{
+			activeGroup.GET("/:id", auth.Login)
+		}
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
-	activeGroup := v1Route.Group("/active")
-	{
-		activeGroup.GET("/:id", auth.Login)
-	}
-	eventGroup := v1Route.Group("/event")
-	{
-		eventGroup.GET("/:id", auth.Login)
-	}
 
 	err = app.Run(":" + cfg.Port)
 	if err != nil {
