@@ -77,17 +77,19 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.GET("/:id/following/groups", user.GetUserProfile)
 		userRoute.DELETE("/:id", user.DeleteUser)
 		userRoute.PUT("/:id", user.UpdateUser)
+		userRoute.POST("/:target_id", user.FollowUser)
+		userRoute.PUT("/:target_id", user.UnFollowUser)
+
+		userRoute.POST("/:target_id", user.FollowUser)
+		userRoute.PUT("/:target_id", user.UnFollowUser)
+
 		userRoute.GET("/:id/actives", user.GetUserActive)
-		activeGroup := userRoute.Group("/active")
-		{
-			activeGroup.GET("/:id", auth.Login)
-		}
-		thingsGroup := userRoute.Group("/project")
-		{
-			thingsGroup.GET("/:id", auth.Login)
-		}
 	}
 	v1Route.GET("/users/search", user.SearchUser)
+	// group 为基础的资源持有结构，project为group中的人员建立的实际包含内容的东西
+	// 类似于进程和线程的关系，每个project里面包含例如active的小项，就类似于协程一样的东西
+	// 可以让组内的多个人员分别运行（或者说处理）不同的任务
+	// 要方便用户参与大量的小组协作，这样多个小组就可以对抗大型组织例如公司或者非法组织
 	groupRoute := v1Route.Group("/group")
 	{
 		groupRoute.POST("", group.CreateGroup)
@@ -96,13 +98,17 @@ func (s *Service) Run(cfg *config.Config) error {
 		groupRoute.PUT("/:id", group.UpdateGroup)
 		groupRoute.DELETE("/:id", group.DeleteGroup)
 		groupRoute.GET("/:id/members", group.GetGroupMembers)
-		thingsGroup := groupRoute.Group("/project")
+		groupRoute.POST("/:id/attention", group.AttentionProject)
+		thingsGroup := groupRoute.Group("/:id/project")
 		{
-			thingsGroup.GET("/:id", auth.Login)
+			thingsGroup.GET("/:project_id", group.GetGroupProject)
+			thingsGroup.POST("", group.CreateGroupProject)
+			thingsGroup.PUT("/:project_id", group.CreateGroupProject)
+			thingsGroup.DELETE("/:project_id", group.DeleteGroupProject)
 		}
-		activeGroup := groupRoute.Group("/active")
+		activeGroup := groupRoute.Group("/:id/active")
 		{
-			activeGroup.GET("/:id", auth.Login)
+			activeGroup.GET("/:active_id", auth.Login)
 		}
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)

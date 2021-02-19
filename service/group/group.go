@@ -30,6 +30,10 @@ func GetGroupActives(ctx *gin.Context) {
 
 }
 
+func GetGroupActive(ctx *gin.Context) {
+
+}
+
 func GetGroupMembers(ctx *gin.Context) {
 
 }
@@ -46,6 +50,18 @@ func UpdateGroupProject(ctx *gin.Context) {
 
 }
 
+func DeleteGroupProject(ctx *gin.Context) {
+
+}
+
 func LeaveGroup(ctx *gin.Context) {
+
+}
+
+func AttentionProject(ctx *gin.Context) {
+
+}
+
+func UnAttentionProject(ctx *gin.Context) {
 
 }

@@ -51,3 +51,11 @@ func UpdateUser(ctx *gin.Context) {
 func DeleteUser(ctx *gin.Context) {
 
 }
+
+func FollowUser(ctx *gin.Context) {
+
+}
+
+func UnFollowUser(ctx *gin.Context) {
+
+}
