@@ -73,13 +73,13 @@ func (s *Service) Run(cfg *config.Config) error {
 	userRoute := v1Route.Group("/user")
 	{
 		userRoute.GET("/:id", user.GetUser)
+		userRoute.DELETE("/:id", user.DeleteUser)
+		userRoute.PUT("/:id", user.UpdateUser)
 		userRoute.GET("/:id/info", user.GetUserProfile)
 		userRoute.GET("/:id/follower", user.GetUserProfile)
 		userRoute.GET("/:id/following", user.GetUserProfile)
 		userRoute.GET("/:id/groups", user.GetUserGroup)
 		userRoute.GET("/:id/following/groups", user.GetUserProfile)
-		userRoute.DELETE("/:id", user.DeleteUser)
-		userRoute.PUT("/:id", user.UpdateUser)
 
 		userRoute.POST("/:id/follow", user.FollowUser)
 		userRoute.PUT("/:id/follow", user.UnFollowUser)
