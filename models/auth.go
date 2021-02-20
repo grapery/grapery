@@ -6,7 +6,7 @@ import (
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/grapery/grapery/api"
+	api "github.com/grapery/grapery/api/service"
 )
 
 type Auth struct {
@@ -16,7 +16,7 @@ type Auth struct {
 	Phone    string           `json:"phone,omitempty" gorm:"unique_index"`
 	Password string           `json:"-" gorm:"password"`
 	Salt     string           `json:"-" gorm:"salt"`
-	AuthType api.RegisterType `json:"auth_type,omitempty" gorm:"authtype"`
+	AuthType api.LoginType `json:"auth_type,omitempty" gorm:"authtype"`
 }
 
 func (a Auth) TableNamse() string {
