@@ -6,16 +6,16 @@ import (
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/grapery/grapery/api/service"
+	api "github.com/grapery/grapery/api"
 )
 
 type Auth struct {
 	IDBase
-	UID      uint64           `json:"uid,omitempty" gorm:"unique_index"`
-	Email    string           `json:"email,omitempty" gorm:"unique_index"`
-	Phone    string           `json:"phone,omitempty" gorm:"unique_index"`
-	Password string           `json:"-" gorm:"password"`
-	Salt     string           `json:"-" gorm:"salt"`
+	UID      uint64        `json:"uid,omitempty" gorm:"unique_index"`
+	Email    string        `json:"email,omitempty" gorm:"unique_index"`
+	Phone    string        `json:"phone,omitempty" gorm:"unique_index"`
+	Password string        `json:"-" gorm:"password"`
+	Salt     string        `json:"-" gorm:"salt"`
 	AuthType api.LoginType `json:"auth_type,omitempty" gorm:"authtype"`
 }
 
