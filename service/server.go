@@ -40,6 +40,7 @@ func (s *Service) Run(cfg *config.Config) error {
 		log.Errorf("init sql database failed : [%s]", err.Error())
 		return err
 	}
+	common.Init()
 	app := gin.Default()
 	app.Use(sessions.Sessions("grapestree", sessionStore))
 	app.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
@@ -55,8 +56,10 @@ func (s *Service) Run(cfg *config.Config) error {
 			param.ErrorMessage,
 		)
 	}))
+	app.LoadHTMLGlob("templates/*")
 	app.Use(gin.Recovery())
 	v1Route := app.Group("/api/v1")
+	v1Route.GET("/login", auth.Login)
 	v1Route.POST("/login", auth.Login)
 	v1Route.POST("/logout", auth.Logout)
 	v1Route.POST("/register", auth.Register)
@@ -77,12 +80,10 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.GET("/:id/following/groups", user.GetUserProfile)
 		userRoute.DELETE("/:id", user.DeleteUser)
 		userRoute.PUT("/:id", user.UpdateUser)
-		userRoute.POST("/:target_id", user.FollowUser)
-		userRoute.PUT("/:target_id", user.UnFollowUser)
 
-		userRoute.POST("/:target_id", user.FollowUser)
-		userRoute.PUT("/:target_id", user.UnFollowUser)
-
+		userRoute.POST("/:id/follow", user.FollowUser)
+		userRoute.PUT("/:id/follow", user.UnFollowUser)
+		// 用户个人的active
 		userRoute.GET("/:id/actives", user.GetUserActive)
 	}
 	v1Route.GET("/users/search", user.SearchUser)
@@ -92,6 +93,7 @@ func (s *Service) Run(cfg *config.Config) error {
 	// 要方便用户参与大量的小组协作，这样多个小组就可以对抗大型组织例如公司或者非法组织
 	groupRoute := v1Route.Group("/group")
 	{
+		groupRoute.GET("", group.CreateGroup)
 		groupRoute.POST("", group.CreateGroup)
 		groupRoute.GET("/:id", group.GetGroup)
 		groupRoute.GET("/:id/actives", group.GetGroupActives)
@@ -99,17 +101,35 @@ func (s *Service) Run(cfg *config.Config) error {
 		groupRoute.DELETE("/:id", group.DeleteGroup)
 		groupRoute.GET("/:id/members", group.GetGroupMembers)
 		groupRoute.POST("/:id/attention", group.AttentionProject)
+		groupRoute.PUT("/:id/attention", group.UnAttentionProject)
 		thingsGroup := groupRoute.Group("/:id/project")
 		{
-			thingsGroup.GET("/:project_id", group.GetGroupProject)
-			thingsGroup.POST("", group.CreateGroupProject)
-			thingsGroup.PUT("/:project_id", group.CreateGroupProject)
-			thingsGroup.DELETE("/:project_id", group.DeleteGroupProject)
+
+			thingsGroup.GET("", group.GetGroupProjects)
+			thingsGroup.GET("/:project_id", group.GetProject)
+			thingsGroup.POST("", group.CreateProject)
+			thingsGroup.PUT("/:project_id", group.CreateProject)
+			thingsGroup.DELETE("/:project_id", group.DeleteProject)
+
+			thingsGroup.GET("/:project_id/profile", group.GetProject)
+			thingsGroup.PUT("/:project_id/profile", group.CreateProject)
+			thingsGroup.GET("/:project_id/star", group.StarProject)
+			thingsGroup.PUT("/:project_id/star", group.UnStarProject)
+
+			thingsGroup.PUT("/:project_id/watch", group.WatchProject)
+
+			itemGroup := thingsGroup.Group("/:project_id/item")
+			{
+				itemGroup.GET("/:item_id", group.GetProjectItem)
+				itemGroup.POST("/:item_id", group.CreateProjectItem)
+				itemGroup.PUT("/:item_id", group.UpdateProjectItem)
+				itemGroup.DELETE("/:item_id", group.DeleteProjectItem)
+				itemGroup.PUT("/:item_id/like", group.LikeItem)
+			}
+			thingsGroup.GET("/:project_id/items", group.GetProjectItems)
+
 		}
-		activeGroup := groupRoute.Group("/:id/active")
-		{
-			activeGroup.GET("/:active_id", auth.Login)
-		}
+		groupRoute.GET("/:id/projects/search", group.SearchProject)
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
 

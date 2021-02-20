@@ -12,10 +12,9 @@ type Project struct {
 	ProjectType int    `json:"project_type,omitempty"`
 	CreatorID   uint64 `json:"creator_id,omitempty"`
 	GroupID     uint64 `json:"group_id,omitempty"`
-	// 图片，文字,事件．．．．
-	IsAchieve bool `json:"is_achieve,omitempty"`
-	IsClose   bool `json:"is_close,omitempty"`
-	IsPrivate bool `json:"is_private,omitempty"`
+	IsAchieve   bool   `json:"is_achieve,omitempty"`
+	IsClose     bool   `json:"is_close,omitempty"`
+	IsPrivate   bool   `json:"is_private,omitempty"`
 }
 
 func (p Project) TableNamse() string {
