@@ -35,31 +35,31 @@ const _ = proto.ProtoPackageIsVersion4
 type ActiveType int32
 
 const (
-	ActiveType_ActiveTypeUnknown   ActiveType = 0
-	ActiveType_ActiveTypeShortWord ActiveType = 1
-	ActiveType_ActiveTypeLongWord  ActiveType = 2
-	ActiveType_ActiveTypePicture   ActiveType = 3
-	ActiveType_ActiveTypeVideo     ActiveType = 4
-	ActiveType_ActiveTypeMusic     ActiveType = 5
+	ActiveType_NotSupport ActiveType = 0
+	ActiveType_ShortWord  ActiveType = 1
+	ActiveType_LongWord   ActiveType = 2
+	ActiveType_Picture    ActiveType = 3
+	ActiveType_Video      ActiveType = 4
+	ActiveType_Music      ActiveType = 5
 )
 
 // Enum value maps for ActiveType.
 var (
 	ActiveType_name = map[int32]string{
-		0: "ActiveTypeUnknown",
-		1: "ActiveTypeShortWord",
-		2: "ActiveTypeLongWord",
-		3: "ActiveTypePicture",
-		4: "ActiveTypeVideo",
-		5: "ActiveTypeMusic",
+		0: "NotSupport",
+		1: "ShortWord",
+		2: "LongWord",
+		3: "Picture",
+		4: "Video",
+		5: "Music",
 	}
 	ActiveType_value = map[string]int32{
-		"ActiveTypeUnknown":   0,
-		"ActiveTypeShortWord": 1,
-		"ActiveTypeLongWord":  2,
-		"ActiveTypePicture":   3,
-		"ActiveTypeVideo":     4,
-		"ActiveTypeMusic":     5,
+		"NotSupport": 0,
+		"ShortWord":  1,
+		"LongWord":   2,
+		"Picture":    3,
+		"Video":      4,
+		"Music":      5,
 	}
 )
 
@@ -90,294 +90,102 @@ func (ActiveType) EnumDescriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{0}
 }
 
-type RegisterType int32
+type AuthType int32
 
 const (
-	RegisterType_ResigterUnknown   RegisterType = 0
-	RegisterType_RegisterWithPhone RegisterType = 1
-	RegisterType_RegisterWithEmail RegisterType = 2
+	AuthType_NotAuth   AuthType = 0
+	AuthType_WithPhone AuthType = 1
+	AuthType_WithEmail AuthType = 2
 )
 
-// Enum value maps for RegisterType.
+// Enum value maps for AuthType.
 var (
-	RegisterType_name = map[int32]string{
-		0: "ResigterUnknown",
-		1: "RegisterWithPhone",
-		2: "RegisterWithEmail",
+	AuthType_name = map[int32]string{
+		0: "NotAuth",
+		1: "WithPhone",
+		2: "WithEmail",
 	}
-	RegisterType_value = map[string]int32{
-		"ResigterUnknown":   0,
-		"RegisterWithPhone": 1,
-		"RegisterWithEmail": 2,
+	AuthType_value = map[string]int32{
+		"NotAuth":   0,
+		"WithPhone": 1,
+		"WithEmail": 2,
 	}
 )
 
-func (x RegisterType) Enum() *RegisterType {
-	p := new(RegisterType)
+func (x AuthType) Enum() *AuthType {
+	p := new(AuthType)
 	*p = x
 	return p
 }
 
-func (x RegisterType) String() string {
+func (x AuthType) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (RegisterType) Descriptor() protoreflect.EnumDescriptor {
+func (AuthType) Descriptor() protoreflect.EnumDescriptor {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1].Descriptor()
 }
 
-func (RegisterType) Type() protoreflect.EnumType {
+func (AuthType) Type() protoreflect.EnumType {
 	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1]
 }
 
-func (x RegisterType) Number() protoreflect.EnumNumber {
+func (x AuthType) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use RegisterType.Descriptor instead.
-func (RegisterType) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use AuthType.Descriptor instead.
+func (AuthType) EnumDescriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{1}
 }
 
-type LoginType int32
+type VisibleType int32
 
 const (
-	LoginType_LoginUnknown   LoginType = 0
-	LoginType_LoginWithPhone LoginType = 1
-	LoginType_LoginWithEmail LoginType = 2
+	VisibleType_Normal  VisibleType = 0
+	VisibleType_Public  VisibleType = 1
+	VisibleType_Private VisibleType = 2
 )
 
-// Enum value maps for LoginType.
+// Enum value maps for VisibleType.
 var (
-	LoginType_name = map[int32]string{
-		0: "LoginUnknown",
-		1: "LoginWithPhone",
-		2: "LoginWithEmail",
+	VisibleType_name = map[int32]string{
+		0: "Normal",
+		1: "Public",
+		2: "Private",
 	}
-	LoginType_value = map[string]int32{
-		"LoginUnknown":   0,
-		"LoginWithPhone": 1,
-		"LoginWithEmail": 2,
+	VisibleType_value = map[string]int32{
+		"Normal":  0,
+		"Public":  1,
+		"Private": 2,
 	}
 )
 
-func (x LoginType) Enum() *LoginType {
-	p := new(LoginType)
+func (x VisibleType) Enum() *VisibleType {
+	p := new(VisibleType)
 	*p = x
 	return p
 }
 
-func (x LoginType) String() string {
+func (x VisibleType) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (LoginType) Descriptor() protoreflect.EnumDescriptor {
+func (VisibleType) Descriptor() protoreflect.EnumDescriptor {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2].Descriptor()
 }
 
-func (LoginType) Type() protoreflect.EnumType {
+func (VisibleType) Type() protoreflect.EnumType {
 	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2]
 }
 
-func (x LoginType) Number() protoreflect.EnumNumber {
+func (x VisibleType) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use LoginType.Descriptor instead.
-func (LoginType) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use VisibleType.Descriptor instead.
+func (VisibleType) EnumDescriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{2}
-}
-
-type GroupType int32
-
-const (
-	GroupType_GroupUnknown GroupType = 0
-	GroupType_PublicGroup  GroupType = 1
-	GroupType_PrivateGroup GroupType = 2
-)
-
-// Enum value maps for GroupType.
-var (
-	GroupType_name = map[int32]string{
-		0: "GroupUnknown",
-		1: "PublicGroup",
-		2: "PrivateGroup",
-	}
-	GroupType_value = map[string]int32{
-		"GroupUnknown": 0,
-		"PublicGroup":  1,
-		"PrivateGroup": 2,
-	}
-)
-
-func (x GroupType) Enum() *GroupType {
-	p := new(GroupType)
-	*p = x
-	return p
-}
-
-func (x GroupType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (GroupType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3].Descriptor()
-}
-
-func (GroupType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3]
-}
-
-func (x GroupType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use GroupType.Descriptor instead.
-func (GroupType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{3}
-}
-
-type ProjectType int32
-
-const (
-	ProjectType_ProjectUnknown ProjectType = 0
-	ProjectType_PublicProject  ProjectType = 1
-	ProjectType_PrivateProject ProjectType = 2
-)
-
-// Enum value maps for ProjectType.
-var (
-	ProjectType_name = map[int32]string{
-		0: "ProjectUnknown",
-		1: "PublicProject",
-		2: "PrivateProject",
-	}
-	ProjectType_value = map[string]int32{
-		"ProjectUnknown": 0,
-		"PublicProject":  1,
-		"PrivateProject": 2,
-	}
-)
-
-func (x ProjectType) Enum() *ProjectType {
-	p := new(ProjectType)
-	*p = x
-	return p
-}
-
-func (x ProjectType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ProjectType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[4].Descriptor()
-}
-
-func (ProjectType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[4]
-}
-
-func (x ProjectType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ProjectType.Descriptor instead.
-func (ProjectType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{4}
-}
-
-type Ping struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Ping string `protobuf:"bytes,1,opt,name=ping,proto3" json:"ping,omitempty"`
-}
-
-func (x *Ping) Reset() {
-	*x = Ping{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Ping) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Ping) ProtoMessage() {}
-
-func (x *Ping) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Ping.ProtoReflect.Descriptor instead.
-func (*Ping) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Ping) GetPing() string {
-	if x != nil {
-		return x.Ping
-	}
-	return ""
-}
-
-type Pong struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Pong string `protobuf:"bytes,1,opt,name=pong,proto3" json:"pong,omitempty"`
-}
-
-func (x *Pong) Reset() {
-	*x = Pong{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Pong) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Pong) ProtoMessage() {}
-
-func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Pong.ProtoReflect.Descriptor instead.
-func (*Pong) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Pong) GetPong() string {
-	if x != nil {
-		return x.Pong
-	}
-	return ""
 }
 
 type UserInfo struct {
@@ -385,14 +193,18 @@ type UserInfo struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	UserID   uint64 `protobuf:"varint,1,opt,name=UserID,proto3" json:"UserID,omitempty"`
-	UserName string `protobuf:"bytes,2,opt,name=userName,proto3" json:"userName,omitempty"`
+	UserID    uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	Nickname  string `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	AvatorUrl string `protobuf:"bytes,3,opt,name=avatorUrl,proto3" json:"avatorUrl,omitempty"`
+	Email     string `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	Location  string `protobuf:"bytes,5,opt,name=location,proto3" json:"location,omitempty"`
+	Desc      string `protobuf:"bytes,6,opt,name=desc,proto3" json:"desc,omitempty"`
 }
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2]
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -405,7 +217,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2]
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -418,7 +230,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{2}
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *UserInfo) GetUserID() uint64 {
@@ -428,26 +240,125 @@ func (x *UserInfo) GetUserID() uint64 {
 	return 0
 }
 
-func (x *UserInfo) GetUserName() string {
+func (x *UserInfo) GetNickname() string {
 	if x != nil {
-		return x.UserName
+		return x.Nickname
 	}
 	return ""
 }
 
-type RegsiterReq struct {
+func (x *UserInfo) GetAvatorUrl() string {
+	if x != nil {
+		return x.AvatorUrl
+	}
+	return ""
+}
+
+func (x *UserInfo) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserInfo) GetLocation() string {
+	if x != nil {
+		return x.Location
+	}
+	return ""
+}
+
+func (x *UserInfo) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
+type GroupInfo struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	Email    string       `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Phone    string       `protobuf:"bytes,2,opt,name=phone,proto3" json:"phone,omitempty"`
-	Password string       `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
-	Rtype    RegisterType `protobuf:"varint,4,opt,name=rtype,proto3,enum=grapery.api.RegisterType" json:"rtype,omitempty"`
 }
 
-func (x *RegsiterReq) Reset() {
-	*x = RegsiterReq{}
+func (x *GroupInfo) Reset() {
+	*x = GroupInfo{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GroupInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupInfo) ProtoMessage() {}
+
+func (x *GroupInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupInfo.ProtoReflect.Descriptor instead.
+func (*GroupInfo) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{1}
+}
+
+type ProjectInfo struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ProjectInfo) Reset() {
+	*x = ProjectInfo{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ProjectInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectInfo) ProtoMessage() {}
+
+func (x *ProjectInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectInfo.ProtoReflect.Descriptor instead.
+func (*ProjectInfo) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{2}
+}
+
+type ItemInfo struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ItemInfo) Reset() {
+	*x = ItemInfo{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -455,13 +366,13 @@ func (x *RegsiterReq) Reset() {
 	}
 }
 
-func (x *RegsiterReq) String() string {
+func (x *ItemInfo) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RegsiterReq) ProtoMessage() {}
+func (*ItemInfo) ProtoMessage() {}
 
-func (x *RegsiterReq) ProtoReflect() protoreflect.Message {
+func (x *ItemInfo) ProtoReflect() protoreflect.Message {
 	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -473,50 +384,23 @@ func (x *RegsiterReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegsiterReq.ProtoReflect.Descriptor instead.
-func (*RegsiterReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use ItemInfo.ProtoReflect.Descriptor instead.
+func (*ItemInfo) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *RegsiterReq) GetEmail() string {
-	if x != nil {
-		return x.Email
-	}
-	return ""
-}
-
-func (x *RegsiterReq) GetPhone() string {
-	if x != nil {
-		return x.Phone
-	}
-	return ""
-}
-
-func (x *RegsiterReq) GetPassword() string {
-	if x != nil {
-		return x.Password
-	}
-	return ""
-}
-
-func (x *RegsiterReq) GetRtype() RegisterType {
-	if x != nil {
-		return x.Rtype
-	}
-	return RegisterType_ResigterUnknown
-}
-
-type RegisterResp struct {
+type LoginRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Status int64 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	UserID int64 `protobuf:"varint,2,opt,name=userID,proto3" json:"userID,omitempty"`
+	LoginType AuthType `protobuf:"varint,1,opt,name=loginType,proto3,enum=grapery.api.AuthType" json:"loginType,omitempty"`
+	Account   string   `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	Password  string   `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
 }
 
-func (x *RegisterResp) Reset() {
-	*x = RegisterResp{}
+func (x *LoginRequest) Reset() {
+	*x = LoginRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -524,13 +408,13 @@ func (x *RegisterResp) Reset() {
 	}
 }
 
-func (x *RegisterResp) String() string {
+func (x *LoginRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RegisterResp) ProtoMessage() {}
+func (*LoginRequest) ProtoMessage() {}
 
-func (x *RegisterResp) ProtoReflect() protoreflect.Message {
+func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -542,23 +426,30 @@ func (x *RegisterResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegisterResp.ProtoReflect.Descriptor instead.
-func (*RegisterResp) Descriptor() ([]byte, []int) {
+// Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
+func (*LoginRequest) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *RegisterResp) GetStatus() int64 {
+func (x *LoginRequest) GetLoginType() AuthType {
 	if x != nil {
-		return x.Status
+		return x.LoginType
 	}
-	return 0
+	return AuthType_NotAuth
 }
 
-func (x *RegisterResp) GetUserID() int64 {
+func (x *LoginRequest) GetAccount() string {
 	if x != nil {
-		return x.UserID
+		return x.Account
 	}
-	return 0
+	return ""
+}
+
+func (x *LoginRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
 }
 
 type LoginResponse struct {
@@ -566,8 +457,7 @@ type LoginResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Status int64 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	UserID int64 `protobuf:"varint,2,opt,name=userID,proto3" json:"userID,omitempty"`
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
 }
 
 func (x *LoginResponse) Reset() {
@@ -602,33 +492,23 @@ func (*LoginResponse) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *LoginResponse) GetStatus() int64 {
-	if x != nil {
-		return x.Status
-	}
-	return 0
-}
-
-func (x *LoginResponse) GetUserID() int64 {
+func (x *LoginResponse) GetUserID() uint64 {
 	if x != nil {
 		return x.UserID
 	}
 	return 0
 }
 
-type LoginRequest struct {
+type LogoutRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Email    string    `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Phone    string    `protobuf:"bytes,2,opt,name=phone,proto3" json:"phone,omitempty"`
-	Password string    `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
-	Ltype    LoginType `protobuf:"varint,4,opt,name=ltype,proto3,enum=grapery.api.LoginType" json:"ltype,omitempty"`
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
 }
 
-func (x *LoginRequest) Reset() {
-	*x = LoginRequest{}
+func (x *LogoutRequest) Reset() {
+	*x = LogoutRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -636,13 +516,13 @@ func (x *LoginRequest) Reset() {
 	}
 }
 
-func (x *LoginRequest) String() string {
+func (x *LogoutRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*LoginRequest) ProtoMessage() {}
+func (*LogoutRequest) ProtoMessage() {}
 
-func (x *LoginRequest) ProtoReflect() protoreflect.Message {
+func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -654,37 +534,16 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
-func (*LoginRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
+func (*LogoutRequest) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *LoginRequest) GetEmail() string {
+func (x *LogoutRequest) GetUserID() uint64 {
 	if x != nil {
-		return x.Email
+		return x.UserID
 	}
-	return ""
-}
-
-func (x *LoginRequest) GetPhone() string {
-	if x != nil {
-		return x.Phone
-	}
-	return ""
-}
-
-func (x *LoginRequest) GetPassword() string {
-	if x != nil {
-		return x.Password
-	}
-	return ""
-}
-
-func (x *LoginRequest) GetLtype() LoginType {
-	if x != nil {
-		return x.Ltype
-	}
-	return LoginType_LoginUnknown
+	return 0
 }
 
 type LogoutResponse struct {
@@ -725,14 +584,14 @@ func (*LogoutResponse) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{7}
 }
 
-type LogoutRequest struct {
+type LogtouResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 }
 
-func (x *LogoutRequest) Reset() {
-	*x = LogoutRequest{}
+func (x *LogtouResponse) Reset() {
+	*x = LogtouResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -740,13 +599,13 @@ func (x *LogoutRequest) Reset() {
 	}
 }
 
-func (x *LogoutRequest) String() string {
+func (x *LogtouResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*LogoutRequest) ProtoMessage() {}
+func (*LogtouResponse) ProtoMessage() {}
 
-func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
+func (x *LogtouResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -758,9 +617,807 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
-func (*LogoutRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use LogtouResponse.ProtoReflect.Descriptor instead.
+func (*LogtouResponse) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{8}
+}
+
+type RegisterRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	LoginType AuthType `protobuf:"varint,1,opt,name=loginType,proto3,enum=grapery.api.AuthType" json:"loginType,omitempty"`
+	Account   string   `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	Password  string   `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+}
+
+func (x *RegisterRequest) Reset() {
+	*x = RegisterRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RegisterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterRequest) ProtoMessage() {}
+
+func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RegisterRequest) GetLoginType() AuthType {
+	if x != nil {
+		return x.LoginType
+	}
+	return AuthType_NotAuth
+}
+
+func (x *RegisterRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+type RegisterResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *RegisterResponse) Reset() {
+	*x = RegisterResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RegisterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterResponse) ProtoMessage() {}
+
+func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
+func (*RegisterResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{10}
+}
+
+type ResetPasswordRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	LoginType AuthType `protobuf:"varint,1,opt,name=loginType,proto3,enum=grapery.api.AuthType" json:"loginType,omitempty"`
+	Account   string   `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	OldPwd    string   `protobuf:"bytes,3,opt,name=oldPwd,proto3" json:"oldPwd,omitempty"`
+	NewPwd    string   `protobuf:"bytes,4,opt,name=newPwd,proto3" json:"newPwd,omitempty"`
+}
+
+func (x *ResetPasswordRequest) Reset() {
+	*x = ResetPasswordRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ResetPasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetPasswordRequest) ProtoMessage() {}
+
+func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
+func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ResetPasswordRequest) GetLoginType() AuthType {
+	if x != nil {
+		return x.LoginType
+	}
+	return AuthType_NotAuth
+}
+
+func (x *ResetPasswordRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *ResetPasswordRequest) GetOldPwd() string {
+	if x != nil {
+		return x.OldPwd
+	}
+	return ""
+}
+
+func (x *ResetPasswordRequest) GetNewPwd() string {
+	if x != nil {
+		return x.NewPwd
+	}
+	return ""
+}
+
+type ResetPasswordResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *ResetPasswordResponse) Reset() {
+	*x = ResetPasswordResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ResetPasswordResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetPasswordResponse) ProtoMessage() {}
+
+func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetPasswordResponse.ProtoReflect.Descriptor instead.
+func (*ResetPasswordResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ResetPasswordResponse) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserInfoRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *UserInfoRequest) Reset() {
+	*x = UserInfoRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserInfoRequest) ProtoMessage() {}
+
+func (x *UserInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserInfoRequest.ProtoReflect.Descriptor instead.
+func (*UserInfoRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UserInfoRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserInfoResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Info *UserInfo `protobuf:"bytes,1,opt,name=info,proto3" json:"info,omitempty"`
+}
+
+func (x *UserInfoResponse) Reset() {
+	*x = UserInfoResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserInfoResponse) ProtoMessage() {}
+
+func (x *UserInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserInfoResponse.ProtoReflect.Descriptor instead.
+func (*UserInfoResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UserInfoResponse) GetInfo() *UserInfo {
+	if x != nil {
+		return x.Info
+	}
+	return nil
+}
+
+type UserFollowingRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *UserFollowingRequest) Reset() {
+	*x = UserFollowingRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowingRequest) ProtoMessage() {}
+
+func (x *UserFollowingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowingRequest.ProtoReflect.Descriptor instead.
+func (*UserFollowingRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UserFollowingRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserFollowingResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	List []*UserInfo `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
+}
+
+func (x *UserFollowingResponse) Reset() {
+	*x = UserFollowingResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowingResponse) ProtoMessage() {}
+
+func (x *UserFollowingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowingResponse.ProtoReflect.Descriptor instead.
+func (*UserFollowingResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *UserFollowingResponse) GetList() []*UserInfo {
+	if x != nil {
+		return x.List
+	}
+	return nil
+}
+
+type UserFollowerRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *UserFollowerRequest) Reset() {
+	*x = UserFollowerRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowerRequest) ProtoMessage() {}
+
+func (x *UserFollowerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowerRequest.ProtoReflect.Descriptor instead.
+func (*UserFollowerRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *UserFollowerRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserFollowerResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	List []*UserInfo `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
+}
+
+func (x *UserFollowerResponse) Reset() {
+	*x = UserFollowerResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowerResponse) ProtoMessage() {}
+
+func (x *UserFollowerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowerResponse.ProtoReflect.Descriptor instead.
+func (*UserFollowerResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *UserFollowerResponse) GetList() []*UserInfo {
+	if x != nil {
+		return x.List
+	}
+	return nil
+}
+
+type UserGroupRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *UserGroupRequest) Reset() {
+	*x = UserGroupRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserGroupRequest) ProtoMessage() {}
+
+func (x *UserGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserGroupRequest.ProtoReflect.Descriptor instead.
+func (*UserGroupRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *UserGroupRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserGroupResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	List []*GroupInfo `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
+}
+
+func (x *UserGroupResponse) Reset() {
+	*x = UserGroupResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserGroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserGroupResponse) ProtoMessage() {}
+
+func (x *UserGroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserGroupResponse.ProtoReflect.Descriptor instead.
+func (*UserGroupResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *UserGroupResponse) GetList() []*GroupInfo {
+	if x != nil {
+		return x.List
+	}
+	return nil
+}
+
+type UserFollowingGroupRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+}
+
+func (x *UserFollowingGroupRequest) Reset() {
+	*x = UserFollowingGroupRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowingGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowingGroupRequest) ProtoMessage() {}
+
+func (x *UserFollowingGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowingGroupRequest.ProtoReflect.Descriptor instead.
+func (*UserFollowingGroupRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *UserFollowingGroupRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+type UserFollowingGroupResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	List []*GroupInfo `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
+}
+
+func (x *UserFollowingGroupResponse) Reset() {
+	*x = UserFollowingGroupResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserFollowingGroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserFollowingGroupResponse) ProtoMessage() {}
+
+func (x *UserFollowingGroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserFollowingGroupResponse.ProtoReflect.Descriptor instead.
+func (*UserFollowingGroupResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *UserFollowingGroupResponse) GetList() []*GroupInfo {
+	if x != nil {
+		return x.List
+	}
+	return nil
+}
+
+type UserUpdateRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	UserID    uint64 `protobuf:"varint,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	Nickname  string `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	AvatorUrl string `protobuf:"bytes,3,opt,name=avatorUrl,proto3" json:"avatorUrl,omitempty"`
+	Desc      string `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
+}
+
+func (x *UserUpdateRequest) Reset() {
+	*x = UserUpdateRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[23]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserUpdateRequest) ProtoMessage() {}
+
+func (x *UserUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[23]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserUpdateRequest.ProtoReflect.Descriptor instead.
+func (*UserUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *UserUpdateRequest) GetUserID() uint64 {
+	if x != nil {
+		return x.UserID
+	}
+	return 0
+}
+
+func (x *UserUpdateRequest) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UserUpdateRequest) GetAvatorUrl() string {
+	if x != nil {
+		return x.AvatorUrl
+	}
+	return ""
+}
+
+func (x *UserUpdateRequest) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
+type UserUpdateResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *UserUpdateResponse) Reset() {
+	*x = UserUpdateResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[24]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UserUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserUpdateResponse) ProtoMessage() {}
+
+func (x *UserUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[24]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserUpdateResponse.ProtoReflect.Descriptor instead.
+func (*UserUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{24}
 }
 
 var File_github_com_grapery_grapery_common_protoc_service_proto protoreflect.FileDescriptor
@@ -780,88 +1437,150 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc = []byte
 	0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x2c, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x2d, 0x67, 0x65, 0x6e,
 	0x2d, 0x6f, 0x70, 0x65, 0x6e, 0x61, 0x70, 0x69, 0x76, 0x32, 0x2f, 0x6f, 0x70, 0x74, 0x69, 0x6f,
 	0x6e, 0x73, 0x2f, 0x6f, 0x70, 0x65, 0x6e, 0x61, 0x70, 0x69, 0x76, 0x32, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x22, 0x1a, 0x0a, 0x04, 0x50, 0x69, 0x6e, 0x67, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x69,
-	0x6e, 0x67, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x22, 0x1a,
-	0x0a, 0x04, 0x50, 0x6f, 0x6e, 0x67, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x6f, 0x6e, 0x67, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x6f, 0x6e, 0x67, 0x22, 0x3e, 0x0a, 0x08, 0x55, 0x73,
-	0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x16, 0x0a, 0x06, 0x55, 0x73, 0x65, 0x72, 0x49, 0x44,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x55, 0x73, 0x65, 0x72, 0x49, 0x44, 0x12, 0x1a,
-	0x0a, 0x08, 0x75, 0x73, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x75, 0x73, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x86, 0x01, 0x0a, 0x0b, 0x52,
-	0x65, 0x67, 0x73, 0x69, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x6d,
-	0x61, 0x69, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x6d, 0x61, 0x69, 0x6c,
-	0x12, 0x14, 0x0a, 0x05, 0x70, 0x68, 0x6f, 0x6e, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x05, 0x70, 0x68, 0x6f, 0x6e, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f,
-	0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f,
-	0x72, 0x64, 0x12, 0x2f, 0x0a, 0x05, 0x72, 0x74, 0x79, 0x70, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x0e, 0x32, 0x19, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e,
-	0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x52, 0x05, 0x72, 0x74,
-	0x79, 0x70, 0x65, 0x22, 0x3e, 0x0a, 0x0c, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x52,
-	0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x03, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x75,
-	0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x75, 0x73, 0x65,
-	0x72, 0x49, 0x44, 0x22, 0x3f, 0x0a, 0x0d, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x16, 0x0a, 0x06,
-	0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x75, 0x73,
-	0x65, 0x72, 0x49, 0x44, 0x22, 0x84, 0x01, 0x0a, 0x0c, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x6d, 0x61, 0x69, 0x6c, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x6d, 0x61, 0x69, 0x6c, 0x12, 0x14, 0x0a, 0x05, 0x70,
-	0x68, 0x6f, 0x6e, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x70, 0x68, 0x6f, 0x6e,
-	0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x12, 0x2c, 0x0a,
-	0x05, 0x6c, 0x74, 0x79, 0x70, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x16, 0x2e, 0x67,
-	0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e,
-	0x54, 0x79, 0x70, 0x65, 0x52, 0x05, 0x6c, 0x74, 0x79, 0x70, 0x65, 0x22, 0x10, 0x0a, 0x0e, 0x4c,
-	0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x0f, 0x0a,
-	0x0d, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2a, 0x95,
-	0x01, 0x0a, 0x0a, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x15, 0x0a,
-	0x11, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x55, 0x6e, 0x6b, 0x6e, 0x6f,
-	0x77, 0x6e, 0x10, 0x00, 0x12, 0x17, 0x0a, 0x13, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79,
-	0x70, 0x65, 0x53, 0x68, 0x6f, 0x72, 0x74, 0x57, 0x6f, 0x72, 0x64, 0x10, 0x01, 0x12, 0x16, 0x0a,
-	0x12, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x4c, 0x6f, 0x6e, 0x67, 0x57,
-	0x6f, 0x72, 0x64, 0x10, 0x02, 0x12, 0x15, 0x0a, 0x11, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54,
-	0x79, 0x70, 0x65, 0x50, 0x69, 0x63, 0x74, 0x75, 0x72, 0x65, 0x10, 0x03, 0x12, 0x13, 0x0a, 0x0f,
-	0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x10,
-	0x04, 0x12, 0x13, 0x0a, 0x0f, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x4d,
-	0x75, 0x73, 0x69, 0x63, 0x10, 0x05, 0x2a, 0x51, 0x0a, 0x0c, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74,
-	0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x13, 0x0a, 0x0f, 0x52, 0x65, 0x73, 0x69, 0x67, 0x74,
-	0x65, 0x72, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x00, 0x12, 0x15, 0x0a, 0x11, 0x52,
-	0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x57, 0x69, 0x74, 0x68, 0x50, 0x68, 0x6f, 0x6e, 0x65,
-	0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x57, 0x69,
-	0x74, 0x68, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x10, 0x02, 0x2a, 0x45, 0x0a, 0x09, 0x4c, 0x6f, 0x67,
-	0x69, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x12, 0x10, 0x0a, 0x0c, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x55,
-	0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x00, 0x12, 0x12, 0x0a, 0x0e, 0x4c, 0x6f, 0x67, 0x69,
-	0x6e, 0x57, 0x69, 0x74, 0x68, 0x50, 0x68, 0x6f, 0x6e, 0x65, 0x10, 0x01, 0x12, 0x12, 0x0a, 0x0e,
-	0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x57, 0x69, 0x74, 0x68, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x10, 0x02,
-	0x2a, 0x40, 0x0a, 0x09, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x54, 0x79, 0x70, 0x65, 0x12, 0x10, 0x0a,
-	0x0c, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x00, 0x12,
-	0x0f, 0x0a, 0x0b, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x10, 0x01,
-	0x12, 0x10, 0x0a, 0x0c, 0x50, 0x72, 0x69, 0x76, 0x61, 0x74, 0x65, 0x47, 0x72, 0x6f, 0x75, 0x70,
-	0x10, 0x02, 0x2a, 0x48, 0x0a, 0x0b, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x54, 0x79, 0x70,
-	0x65, 0x12, 0x12, 0x0a, 0x0e, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x55, 0x6e, 0x6b, 0x6e,
-	0x6f, 0x77, 0x6e, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x50,
-	0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x10, 0x01, 0x12, 0x12, 0x0a, 0x0e, 0x50, 0x72, 0x69, 0x76,
-	0x61, 0x74, 0x65, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x10, 0x02, 0x32, 0x87, 0x02, 0x0a,
-	0x07, 0x47, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x12, 0x4d, 0x0a, 0x08, 0x50, 0x69, 0x6e, 0x67,
-	0x50, 0x6f, 0x6e, 0x67, 0x12, 0x11, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61,
-	0x70, 0x69, 0x2e, 0x50, 0x69, 0x6e, 0x67, 0x1a, 0x11, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
-	0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x50, 0x6f, 0x6e, 0x67, 0x22, 0x1b, 0x82, 0xd3, 0xe4, 0x93,
-	0x02, 0x15, 0x22, 0x10, 0x2f, 0x76, 0x31, 0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2f,
-	0x70, 0x69, 0x6e, 0x67, 0x3a, 0x01, 0x2a, 0x12, 0x54, 0x0a, 0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e,
-	0x12, 0x19, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c,
-	0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x67, 0x72,
-	0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x14, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x0e, 0x22,
-	0x09, 0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x3a, 0x01, 0x2a, 0x12, 0x57, 0x0a,
-	0x06, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x12, 0x1a, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
-	0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70,
-	0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x22, 0x14, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x0e, 0x22, 0x09, 0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f,
-	0x67, 0x69, 0x6e, 0x3a, 0x01, 0x2a, 0x42, 0x20, 0x5a, 0x1e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
-	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61,
-	0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x74, 0x6f, 0x22, 0xa2, 0x01, 0x0a, 0x08, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12,
+	0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x12, 0x1a, 0x0a, 0x08, 0x6e, 0x69, 0x63, 0x6b, 0x6e,
+	0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6e, 0x69, 0x63, 0x6b, 0x6e,
+	0x61, 0x6d, 0x65, 0x12, 0x1c, 0x0a, 0x09, 0x61, 0x76, 0x61, 0x74, 0x6f, 0x72, 0x55, 0x72, 0x6c,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x76, 0x61, 0x74, 0x6f, 0x72, 0x55, 0x72,
+	0x6c, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x6d, 0x61, 0x69, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x05, 0x65, 0x6d, 0x61, 0x69, 0x6c, 0x12, 0x1a, 0x0a, 0x08, 0x6c, 0x6f, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x6f, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x65, 0x73, 0x63, 0x18, 0x06, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x64, 0x65, 0x73, 0x63, 0x22, 0x0b, 0x0a, 0x09, 0x47, 0x72, 0x6f, 0x75, 0x70,
+	0x49, 0x6e, 0x66, 0x6f, 0x22, 0x0d, 0x0a, 0x0b, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x49,
+	0x6e, 0x66, 0x6f, 0x22, 0x0a, 0x0a, 0x08, 0x49, 0x74, 0x65, 0x6d, 0x49, 0x6e, 0x66, 0x6f, 0x22,
+	0x79, 0x0a, 0x0c, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x33, 0x0a, 0x09, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0e, 0x32, 0x15, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69,
+	0x2e, 0x41, 0x75, 0x74, 0x68, 0x54, 0x79, 0x70, 0x65, 0x52, 0x09, 0x6c, 0x6f, 0x67, 0x69, 0x6e,
+	0x54, 0x79, 0x70, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x1a,
+	0x0a, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x22, 0x27, 0x0a, 0x0d, 0x4c, 0x6f,
+	0x67, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x75,
+	0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73, 0x65,
+	0x72, 0x49, 0x44, 0x22, 0x27, 0x0a, 0x0d, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x10, 0x0a, 0x0e,
+	0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x10,
+	0x0a, 0x0e, 0x4c, 0x6f, 0x67, 0x74, 0x6f, 0x75, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x7c, 0x0a, 0x0f, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x33, 0x0a, 0x09, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x54, 0x79, 0x70, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x15, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79,
+	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x75, 0x74, 0x68, 0x54, 0x79, 0x70, 0x65, 0x52, 0x09, 0x6c,
+	0x6f, 0x67, 0x69, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x63, 0x63, 0x6f,
+	0x75, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x63, 0x63, 0x6f, 0x75,
+	0x6e, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x22, 0x12,
+	0x0a, 0x10, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x22, 0x95, 0x01, 0x0a, 0x14, 0x52, 0x65, 0x73, 0x65, 0x74, 0x50, 0x61, 0x73, 0x73,
+	0x77, 0x6f, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x33, 0x0a, 0x09, 0x6c,
+	0x6f, 0x67, 0x69, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x15,
+	0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x75, 0x74,
+	0x68, 0x54, 0x79, 0x70, 0x65, 0x52, 0x09, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x54, 0x79, 0x70, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x6c,
+	0x64, 0x50, 0x77, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x6f, 0x6c, 0x64, 0x50,
+	0x77, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x6e, 0x65, 0x77, 0x50, 0x77, 0x64, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x06, 0x6e, 0x65, 0x77, 0x50, 0x77, 0x64, 0x22, 0x2f, 0x0a, 0x15, 0x52, 0x65,
+	0x73, 0x65, 0x74, 0x50, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x29, 0x0a, 0x0f, 0x55,
+	0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16,
+	0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06,
+	0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x3d, 0x0a, 0x10, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e,
+	0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x29, 0x0a, 0x04, 0x69, 0x6e,
+	0x66, 0x6f, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65,
+	0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52,
+	0x04, 0x69, 0x6e, 0x66, 0x6f, 0x22, 0x2e, 0x0a, 0x14, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c,
+	0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a,
+	0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75,
+	0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x42, 0x0a, 0x15, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c,
+	0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x29,
+	0x0a, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x67,
+	0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49,
+	0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x22, 0x2d, 0x0a, 0x13, 0x55, 0x73, 0x65,
+	0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04,
+	0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x41, 0x0a, 0x14, 0x55, 0x73, 0x65, 0x72,
+	0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x29, 0x0a, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15,
+	0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65,
+	0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x22, 0x2a, 0x0a, 0x10, 0x55,
+	0x73, 0x65, 0x72, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x3f, 0x0a, 0x11, 0x55, 0x73, 0x65, 0x72, 0x47,
+	0x72, 0x6f, 0x75, 0x70, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2a, 0x0a, 0x04,
+	0x6c, 0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x16, 0x2e, 0x67, 0x72, 0x61,
+	0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x49, 0x6e,
+	0x66, 0x6f, 0x52, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x22, 0x33, 0x0a, 0x19, 0x55, 0x73, 0x65, 0x72,
+	0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x22, 0x48, 0x0a,
+	0x1a, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x47, 0x72,
+	0x6f, 0x75, 0x70, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2a, 0x0a, 0x04, 0x6c,
+	0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x16, 0x2e, 0x67, 0x72, 0x61, 0x70,
+	0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x49, 0x6e, 0x66,
+	0x6f, 0x52, 0x04, 0x6c, 0x69, 0x73, 0x74, 0x22, 0x79, 0x0a, 0x11, 0x55, 0x73, 0x65, 0x72, 0x55,
+	0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06,
+	0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73,
+	0x65, 0x72, 0x49, 0x44, 0x12, 0x1a, 0x0a, 0x08, 0x6e, 0x69, 0x63, 0x6b, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6e, 0x69, 0x63, 0x6b, 0x6e, 0x61, 0x6d, 0x65,
+	0x12, 0x1c, 0x0a, 0x09, 0x61, 0x76, 0x61, 0x74, 0x6f, 0x72, 0x55, 0x72, 0x6c, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x76, 0x61, 0x74, 0x6f, 0x72, 0x55, 0x72, 0x6c, 0x12, 0x12,
+	0x0a, 0x04, 0x64, 0x65, 0x73, 0x63, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x65,
+	0x73, 0x63, 0x22, 0x14, 0x0a, 0x12, 0x55, 0x73, 0x65, 0x72, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x5c, 0x0a, 0x0a, 0x41, 0x63, 0x74, 0x69,
+	0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0e, 0x0a, 0x0a, 0x4e, 0x6f, 0x74, 0x53, 0x75, 0x70,
+	0x70, 0x6f, 0x72, 0x74, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x53, 0x68, 0x6f, 0x72, 0x74, 0x57,
+	0x6f, 0x72, 0x64, 0x10, 0x01, 0x12, 0x0c, 0x0a, 0x08, 0x4c, 0x6f, 0x6e, 0x67, 0x57, 0x6f, 0x72,
+	0x64, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x69, 0x63, 0x74, 0x75, 0x72, 0x65, 0x10, 0x03,
+	0x12, 0x09, 0x0a, 0x05, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x10, 0x04, 0x12, 0x09, 0x0a, 0x05, 0x4d,
+	0x75, 0x73, 0x69, 0x63, 0x10, 0x05, 0x2a, 0x35, 0x0a, 0x08, 0x41, 0x75, 0x74, 0x68, 0x54, 0x79,
+	0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x4e, 0x6f, 0x74, 0x41, 0x75, 0x74, 0x68, 0x10, 0x00, 0x12,
+	0x0d, 0x0a, 0x09, 0x57, 0x69, 0x74, 0x68, 0x50, 0x68, 0x6f, 0x6e, 0x65, 0x10, 0x01, 0x12, 0x0d,
+	0x0a, 0x09, 0x57, 0x69, 0x74, 0x68, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x10, 0x02, 0x2a, 0x32, 0x0a,
+	0x0b, 0x56, 0x69, 0x73, 0x69, 0x62, 0x6c, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0a, 0x0a, 0x06,
+	0x4e, 0x6f, 0x72, 0x6d, 0x61, 0x6c, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x50, 0x75, 0x62, 0x6c,
+	0x69, 0x63, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x72, 0x69, 0x76, 0x61, 0x74, 0x65, 0x10,
+	0x02, 0x32, 0x9c, 0x04, 0x0a, 0x07, 0x47, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x12, 0x54, 0x0a,
+	0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79,
+	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x1a, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e,
+	0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x14, 0x82,
+	0xd3, 0xe4, 0x93, 0x02, 0x0e, 0x22, 0x09, 0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f, 0x67, 0x69, 0x6e,
+	0x3a, 0x01, 0x2a, 0x12, 0x58, 0x0a, 0x06, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x12, 0x1a, 0x2e,
+	0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f,
+	0x75, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x67, 0x72, 0x61, 0x70,
+	0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x15, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x0f, 0x22, 0x0a,
+	0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x3a, 0x01, 0x2a, 0x12, 0x65, 0x0a,
+	0x08, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x1c, 0x2e, 0x67, 0x72, 0x61, 0x70,
+	0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
+	0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x1c, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x16, 0x22, 0x11,
+	0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44,
+	0x7d, 0x3a, 0x01, 0x2a, 0x12, 0x7e, 0x0a, 0x0d, 0x75, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c,
+	0x6f, 0x77, 0x69, 0x6e, 0x67, 0x12, 0x21, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e,
+	0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e,
+	0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x22, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65,
+	0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f,
+	0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x26, 0x82, 0xd3,
+	0xe4, 0x93, 0x02, 0x20, 0x22, 0x1b, 0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b,
+	0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d, 0x2f, 0x66, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e,
+	0x67, 0x3a, 0x01, 0x2a, 0x12, 0x7a, 0x0a, 0x0c, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c,
+	0x6f, 0x77, 0x65, 0x72, 0x12, 0x20, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61,
+	0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79,
+	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65,
+	0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x25, 0x82, 0xd3, 0xe4, 0x93, 0x02,
+	0x1f, 0x22, 0x1a, 0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65,
+	0x72, 0x49, 0x44, 0x7d, 0x2f, 0x66, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x3a, 0x01, 0x2a,
+	0x42, 0x20, 0x5a, 0x1e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67,
+	0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61,
+	0x70, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -876,38 +1595,62 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP() [
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescData
 }
 
-var file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_github_com_grapery_grapery_common_protoc_service_proto_goTypes = []interface{}{
-	(ActiveType)(0),        // 0: grapery.api.ActiveType
-	(RegisterType)(0),      // 1: grapery.api.RegisterType
-	(LoginType)(0),         // 2: grapery.api.LoginType
-	(GroupType)(0),         // 3: grapery.api.GroupType
-	(ProjectType)(0),       // 4: grapery.api.ProjectType
-	(*Ping)(nil),           // 5: grapery.api.Ping
-	(*Pong)(nil),           // 6: grapery.api.Pong
-	(*UserInfo)(nil),       // 7: grapery.api.UserInfo
-	(*RegsiterReq)(nil),    // 8: grapery.api.RegsiterReq
-	(*RegisterResp)(nil),   // 9: grapery.api.RegisterResp
-	(*LoginResponse)(nil),  // 10: grapery.api.LoginResponse
-	(*LoginRequest)(nil),   // 11: grapery.api.LoginRequest
-	(*LogoutResponse)(nil), // 12: grapery.api.LogoutResponse
-	(*LogoutRequest)(nil),  // 13: grapery.api.LogoutRequest
+	(ActiveType)(0),                    // 0: grapery.api.ActiveType
+	(AuthType)(0),                      // 1: grapery.api.AuthType
+	(VisibleType)(0),                   // 2: grapery.api.VisibleType
+	(*UserInfo)(nil),                   // 3: grapery.api.UserInfo
+	(*GroupInfo)(nil),                  // 4: grapery.api.GroupInfo
+	(*ProjectInfo)(nil),                // 5: grapery.api.ProjectInfo
+	(*ItemInfo)(nil),                   // 6: grapery.api.ItemInfo
+	(*LoginRequest)(nil),               // 7: grapery.api.LoginRequest
+	(*LoginResponse)(nil),              // 8: grapery.api.LoginResponse
+	(*LogoutRequest)(nil),              // 9: grapery.api.LogoutRequest
+	(*LogoutResponse)(nil),             // 10: grapery.api.LogoutResponse
+	(*LogtouResponse)(nil),             // 11: grapery.api.LogtouResponse
+	(*RegisterRequest)(nil),            // 12: grapery.api.RegisterRequest
+	(*RegisterResponse)(nil),           // 13: grapery.api.RegisterResponse
+	(*ResetPasswordRequest)(nil),       // 14: grapery.api.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil),      // 15: grapery.api.ResetPasswordResponse
+	(*UserInfoRequest)(nil),            // 16: grapery.api.UserInfoRequest
+	(*UserInfoResponse)(nil),           // 17: grapery.api.UserInfoResponse
+	(*UserFollowingRequest)(nil),       // 18: grapery.api.UserFollowingRequest
+	(*UserFollowingResponse)(nil),      // 19: grapery.api.UserFollowingResponse
+	(*UserFollowerRequest)(nil),        // 20: grapery.api.UserFollowerRequest
+	(*UserFollowerResponse)(nil),       // 21: grapery.api.UserFollowerResponse
+	(*UserGroupRequest)(nil),           // 22: grapery.api.UserGroupRequest
+	(*UserGroupResponse)(nil),          // 23: grapery.api.UserGroupResponse
+	(*UserFollowingGroupRequest)(nil),  // 24: grapery.api.UserFollowingGroupRequest
+	(*UserFollowingGroupResponse)(nil), // 25: grapery.api.UserFollowingGroupResponse
+	(*UserUpdateRequest)(nil),          // 26: grapery.api.UserUpdateRequest
+	(*UserUpdateResponse)(nil),         // 27: grapery.api.UserUpdateResponse
 }
 var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int32{
-	1,  // 0: grapery.api.RegsiterReq.rtype:type_name -> grapery.api.RegisterType
-	2,  // 1: grapery.api.LoginRequest.ltype:type_name -> grapery.api.LoginType
-	5,  // 2: grapery.api.Grapery.PingPong:input_type -> grapery.api.Ping
-	11, // 3: grapery.api.Grapery.Login:input_type -> grapery.api.LoginRequest
-	13, // 4: grapery.api.Grapery.Logout:input_type -> grapery.api.LogoutRequest
-	6,  // 5: grapery.api.Grapery.PingPong:output_type -> grapery.api.Pong
-	10, // 6: grapery.api.Grapery.Login:output_type -> grapery.api.LoginResponse
-	12, // 7: grapery.api.Grapery.Logout:output_type -> grapery.api.LogoutResponse
-	5,  // [5:8] is the sub-list for method output_type
-	2,  // [2:5] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	1,  // 0: grapery.api.LoginRequest.loginType:type_name -> grapery.api.AuthType
+	1,  // 1: grapery.api.RegisterRequest.loginType:type_name -> grapery.api.AuthType
+	1,  // 2: grapery.api.ResetPasswordRequest.loginType:type_name -> grapery.api.AuthType
+	3,  // 3: grapery.api.UserInfoResponse.info:type_name -> grapery.api.UserInfo
+	3,  // 4: grapery.api.UserFollowingResponse.list:type_name -> grapery.api.UserInfo
+	3,  // 5: grapery.api.UserFollowerResponse.list:type_name -> grapery.api.UserInfo
+	4,  // 6: grapery.api.UserGroupResponse.list:type_name -> grapery.api.GroupInfo
+	4,  // 7: grapery.api.UserFollowingGroupResponse.list:type_name -> grapery.api.GroupInfo
+	7,  // 8: grapery.api.Grapery.Login:input_type -> grapery.api.LoginRequest
+	9,  // 9: grapery.api.Grapery.Logout:input_type -> grapery.api.LogoutRequest
+	16, // 10: grapery.api.Grapery.UserInfo:input_type -> grapery.api.UserInfoRequest
+	18, // 11: grapery.api.Grapery.userFollowing:input_type -> grapery.api.UserFollowingRequest
+	20, // 12: grapery.api.Grapery.UserFollower:input_type -> grapery.api.UserFollowerRequest
+	8,  // 13: grapery.api.Grapery.Login:output_type -> grapery.api.LoginResponse
+	10, // 14: grapery.api.Grapery.Logout:output_type -> grapery.api.LogoutResponse
+	17, // 15: grapery.api.Grapery.UserInfo:output_type -> grapery.api.UserInfoResponse
+	19, // 16: grapery.api.Grapery.userFollowing:output_type -> grapery.api.UserFollowingResponse
+	21, // 17: grapery.api.Grapery.UserFollower:output_type -> grapery.api.UserFollowerResponse
+	13, // [13:18] is the sub-list for method output_type
+	8,  // [8:13] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_github_com_grapery_grapery_common_protoc_service_proto_init() }
@@ -917,30 +1660,6 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Ping); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Pong); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UserInfo); i {
 			case 0:
 				return &v.state
@@ -952,8 +1671,32 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 				return nil
 			}
 		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GroupInfo); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ProjectInfo); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RegsiterReq); i {
+			switch v := v.(*ItemInfo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -965,7 +1708,7 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RegisterResp); i {
+			switch v := v.(*LoginRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -989,7 +1732,7 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LoginRequest); i {
+			switch v := v.(*LogoutRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1013,7 +1756,199 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LogoutRequest); i {
+			switch v := v.(*LogtouResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RegisterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RegisterResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ResetPasswordRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ResetPasswordResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserInfoRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserInfoResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowingRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowingResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowerRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowerResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserGroupRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserGroupResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowingGroupRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserFollowingGroupResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserUpdateRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UserUpdateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1030,8 +1965,8 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc,
-			NumEnums:      5,
-			NumMessages:   9,
+			NumEnums:      3,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
@@ -1058,9 +1993,11 @@ const _ = grpc.SupportPackageIsVersion6
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type GraperyClient interface {
-	PingPong(ctx context.Context, in *Ping, opts ...grpc.CallOption) (*Pong, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
+	UserInfo(ctx context.Context, in *UserInfoRequest, opts ...grpc.CallOption) (*UserInfoResponse, error)
+	UserFollowing(ctx context.Context, in *UserFollowingRequest, opts ...grpc.CallOption) (*UserFollowingResponse, error)
+	UserFollower(ctx context.Context, in *UserFollowerRequest, opts ...grpc.CallOption) (*UserFollowerResponse, error)
 }
 
 type graperyClient struct {
@@ -1069,15 +2006,6 @@ type graperyClient struct {
 
 func NewGraperyClient(cc grpc.ClientConnInterface) GraperyClient {
 	return &graperyClient{cc}
-}
-
-func (c *graperyClient) PingPong(ctx context.Context, in *Ping, opts ...grpc.CallOption) (*Pong, error) {
-	out := new(Pong)
-	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/PingPong", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *graperyClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
@@ -1098,47 +2026,64 @@ func (c *graperyClient) Logout(ctx context.Context, in *LogoutRequest, opts ...g
 	return out, nil
 }
 
+func (c *graperyClient) UserInfo(ctx context.Context, in *UserInfoRequest, opts ...grpc.CallOption) (*UserInfoResponse, error) {
+	out := new(UserInfoResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/UserInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *graperyClient) UserFollowing(ctx context.Context, in *UserFollowingRequest, opts ...grpc.CallOption) (*UserFollowingResponse, error) {
+	out := new(UserFollowingResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/userFollowing", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *graperyClient) UserFollower(ctx context.Context, in *UserFollowerRequest, opts ...grpc.CallOption) (*UserFollowerResponse, error) {
+	out := new(UserFollowerResponse)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/UserFollower", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GraperyServer is the server API for Grapery service.
 type GraperyServer interface {
-	PingPong(context.Context, *Ping) (*Pong, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	UserInfo(context.Context, *UserInfoRequest) (*UserInfoResponse, error)
+	UserFollowing(context.Context, *UserFollowingRequest) (*UserFollowingResponse, error)
+	UserFollower(context.Context, *UserFollowerRequest) (*UserFollowerResponse, error)
 }
 
 // UnimplementedGraperyServer can be embedded to have forward compatible implementations.
 type UnimplementedGraperyServer struct {
 }
 
-func (*UnimplementedGraperyServer) PingPong(context.Context, *Ping) (*Pong, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PingPong not implemented")
-}
 func (*UnimplementedGraperyServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
 func (*UnimplementedGraperyServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
 }
+func (*UnimplementedGraperyServer) UserInfo(context.Context, *UserInfoRequest) (*UserInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserInfo not implemented")
+}
+func (*UnimplementedGraperyServer) UserFollowing(context.Context, *UserFollowingRequest) (*UserFollowingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserFollowing not implemented")
+}
+func (*UnimplementedGraperyServer) UserFollower(context.Context, *UserFollowerRequest) (*UserFollowerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserFollower not implemented")
+}
 
 func RegisterGraperyServer(s *grpc.Server, srv GraperyServer) {
 	s.RegisterService(&_Grapery_serviceDesc, srv)
-}
-
-func _Grapery_PingPong_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Ping)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GraperyServer).PingPong(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grapery.api.Grapery/PingPong",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GraperyServer).PingPong(ctx, req.(*Ping))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _Grapery_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1177,14 +2122,64 @@ func _Grapery_Logout_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Grapery_UserInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).UserInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/UserInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).UserInfo(ctx, req.(*UserInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Grapery_UserFollowing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserFollowingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).UserFollowing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/UserFollowing",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).UserFollowing(ctx, req.(*UserFollowingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Grapery_UserFollower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserFollowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GraperyServer).UserFollower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grapery.api.Grapery/UserFollower",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GraperyServer).UserFollower(ctx, req.(*UserFollowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Grapery_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "grapery.api.Grapery",
 	HandlerType: (*GraperyServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "PingPong",
-			Handler:    _Grapery_PingPong_Handler,
-		},
 		{
 			MethodName: "Login",
 			Handler:    _Grapery_Login_Handler,
@@ -1192,6 +2187,18 @@ var _Grapery_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Logout",
 			Handler:    _Grapery_Logout_Handler,
+		},
+		{
+			MethodName: "UserInfo",
+			Handler:    _Grapery_UserInfo_Handler,
+		},
+		{
+			MethodName: "userFollowing",
+			Handler:    _Grapery_UserFollowing_Handler,
+		},
+		{
+			MethodName: "UserFollower",
+			Handler:    _Grapery_UserFollower_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
