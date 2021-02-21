@@ -93,7 +93,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	// 要方便用户参与大量的小组协作，这样多个小组就可以对抗大型组织例如公司或者非法组织
 	groupRoute := v1Route.Group("/group")
 	{
-		groupRoute.GET("", group.CreateGroup)
 		groupRoute.POST("", group.CreateGroup)
 		groupRoute.GET("/:id", group.GetGroup)
 		groupRoute.GET("/:id/actives", group.GetGroupActives)
@@ -108,7 +107,7 @@ func (s *Service) Run(cfg *config.Config) error {
 			thingsGroup.GET("", group.GetGroupProjects)
 			thingsGroup.GET("/:project_id", group.GetProject)
 			thingsGroup.POST("", group.CreateProject)
-			thingsGroup.PUT("/:project_id", group.CreateProject)
+			thingsGroup.PUT("/:project_id", group.UpdateGroup)
 			thingsGroup.DELETE("/:project_id", group.DeleteProject)
 
 			thingsGroup.GET("/:project_id/profile", group.GetProject)
