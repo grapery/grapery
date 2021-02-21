@@ -117,6 +117,7 @@ func (s *Service) Run(cfg *config.Config) error {
 
 			thingsGroup.PUT("/:project_id/watch", group.WatchProject)
 
+			thingsGroup.GET("/:project_id/items", group.GetProjectItems)
 			itemGroup := thingsGroup.Group("/:project_id/item")
 			{
 				itemGroup.GET("/:item_id", group.GetProjectItem)
@@ -125,7 +126,6 @@ func (s *Service) Run(cfg *config.Config) error {
 				itemGroup.DELETE("/:item_id", group.DeleteProjectItem)
 				itemGroup.PUT("/:item_id/like", group.LikeItem)
 			}
-			thingsGroup.GET("/:project_id/items", group.GetProjectItems)
 
 		}
 		groupRoute.GET("/:id/projects/search", group.SearchProject)
