@@ -9,12 +9,12 @@ import (
 
 // Comment ...
 type Comment struct {
-	IDBase     `json:"id_base,omitempty"`
-	CreatorID  uint64 `json:"creator_id,omitempty"`
-	ActiveType int    `json:"active_type,omitempty"`
-	Content    []byte `json:"content,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Tags       string `json:"tags,omitempty"`
+	IDBase    `json:"id_base,omitempty"`
+	CreatorID uint64 `json:"creator_id,omitempty"`
+	ItemID    int    `json:"item_id,omitempty"`
+	Content   []byte `json:"content,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Tags      string `json:"tags,omitempty"`
 }
 
 func (c Comment) TableNamse() string {
