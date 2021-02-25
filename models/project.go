@@ -11,6 +11,7 @@ type Project struct {
 	ShortDesc   string `json:"short_desc,omitempty"`
 	ProjectType int    `json:"project_type,omitempty"`
 	CreatorID   uint64 `json:"creator_id,omitempty"`
+	OwnerID     uint64 `json:"owner_id,omitempty"`
 	GroupID     uint64 `json:"group_id,omitempty"`
 	IsAchieve   bool   `json:"is_achieve,omitempty"`
 	IsClose     bool   `json:"is_close,omitempty"`

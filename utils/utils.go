@@ -10,5 +10,7 @@ type Context struct {
 }
 
 func WrapHandler(h gin.HandlerFunc) gin.HandlerFunc {
-	return nil
+	return func(c *gin.Context) {
+
+	}
 }

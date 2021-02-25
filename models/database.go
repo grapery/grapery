@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,15 +11,6 @@ import (
 )
 
 var database *gorm.DB
-
-// DataBase ...
-func DataBase() *gorm.DB {
-	if database == nil {
-		log.Warn("database connector not init")
-		return nil
-	}
-	return database
-}
 
 // Init ...
 func Init(uname, pwd, db string) error {
@@ -61,4 +53,30 @@ type Base struct {
 type IDBase struct {
 	ID uint `gorm:"primary_key" json:"id,omitempty"`
 	Base
+}
+
+type Repository struct {
+	Ctx    context.Context
+	UserID uint64
+	db     *gorm.DB
+}
+
+func (r *Repository) DB() *gorm.DB {
+	return r.db
+}
+
+func NewRepository(ctx context.Context, userID uint64) *Repository {
+	return &Repository{
+		Ctx:    ctx,
+		UserID: userID,
+		db:     database,
+	}
+}
+
+func DataBase() *gorm.DB {
+	if database == nil {
+		log.Warn("database connector not init")
+		return nil
+	}
+	return database
 }
