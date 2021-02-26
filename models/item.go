@@ -55,6 +55,15 @@ func GetItemByTitle(repo *Repository, title string) (*Item, error) {
 	return item, nil
 }
 
+func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
+	items := new([]*Item)
+	err := repo.DB().First(items).Where("item_type = ?", itemType).Error
+	if err != nil {
+		return nil, err
+	}
+	return *items, nil
+}
+
 func GetItemByProject(repo *Repository, projectID uint64) ([]*Item, error) {
 	items := new([]*Item)
 	err := repo.DB().Find(items).Where("project_id = ?", projectID).Error
