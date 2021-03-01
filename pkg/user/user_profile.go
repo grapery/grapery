@@ -5,6 +5,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type UserProfileSerivcer interface {
+	CreateProfile(uid int64) error
+	GetUserProfile(uid int64) (*models.UserProfile, error)
+	UpdateUserProfile(uid int64) error
+}
+
 type UserProfileSerivce struct {
 }
 

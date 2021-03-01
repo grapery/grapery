@@ -4,6 +4,13 @@ import (
 	"github.com/grapery/grapery/models"
 )
 
+type GroupServicer interface {
+	Get(groupID uint64) (*models.Group, error)
+	GetByName(name string) ([]*models.Group, error)
+	CreateGroup(name string, uid int64) error
+	DeleteGroup(name string, uid int64) error
+}
+
 type GroupService struct {
 }
 

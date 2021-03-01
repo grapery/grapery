@@ -5,6 +5,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type UserGroupServicer interface {
+	GetGroups(uid int64) ([]*models.Group, error)
+	JoinGroup(uid, groupID int64) error
+	LeaveGroup(uid, groupID int64) error
+	GetGroupByName(uid int64, name string) ([]*models.Group, error)
+}
+
 type UserGroupService struct {
 }
 
