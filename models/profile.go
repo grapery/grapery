@@ -90,3 +90,6 @@ func (g *GroupProfile) Delete() error {
 	database.Delete(g)
 	return nil
 }
+
+type ProjectFile struct {
+}

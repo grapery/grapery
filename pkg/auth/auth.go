@@ -5,6 +5,20 @@ import (
 	_ "github.com/gin-contrib/sessions/redis"
 )
 
+var servicer AuthServicer
+
+func init() {
+	servicer = NewAuthService()
+}
+
+func GetAuthService() AuthServicer {
+	return servicer
+}
+
+func NewAuthService() *AuthService {
+	return &AuthService{}
+}
+
 type AuthServicer interface {
 	Register(uid uint64) error
 	Login(uid uint64) error
