@@ -4,6 +4,20 @@ import (
 	"github.com/grapery/grapery/models"
 )
 
+var groupServicer GroupServicer
+
+func init() {
+	groupServicer = NewGroupService()
+}
+
+func GetGroupServicer() GroupServicer {
+	return groupServicer
+}
+
+func NewGroupService() *GroupService {
+	return &GroupService{}
+}
+
 type GroupServicer interface {
 	Get(groupID uint64) (*models.Group, error)
 	GetByName(name string) ([]*models.Group, error)

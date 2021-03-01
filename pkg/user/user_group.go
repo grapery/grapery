@@ -5,6 +5,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var userGroupServicer UserGroupServicer
+
+func init() {
+	userActiveServicer = NewUserActiveService()
+}
+
+func GetUserGroupServicer() UserGroupServicer {
+	return userGroupServicer
+}
+
+func NewUserGroupService() *UserGroupService {
+	return &UserGroupService{}
+}
+
 type UserGroupServicer interface {
 	GetGroups(uid int64) ([]*models.Group, error)
 	JoinGroup(uid, groupID int64) error

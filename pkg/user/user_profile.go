@@ -5,6 +5,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var userProfileSerivcer UserProfileSerivcer
+
+func init() {
+	userProfileSerivcer = NewUserProfileSerivce()
+}
+
+func GetUserProfileServicer() UserGroupServicer {
+	return userGroupServicer
+}
+
+func NewUserProfileSerivce() *UserProfileSerivce {
+	return &UserProfileSerivce{}
+}
+
 type UserProfileSerivcer interface {
 	CreateProfile(uid int64) error
 	GetUserProfile(uid int64) (*models.UserProfile, error)

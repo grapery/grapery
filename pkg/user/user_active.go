@@ -5,6 +5,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var userActiveServicer UserActiveServicer
+
+func init() {
+	userActiveServicer = NewUserActiveService()
+}
+
+func GetUserActiveServicer() UserActiveServicer {
+	return userActiveServicer
+}
+
+func NewUserActiveService() *UserActiveService {
+	return &UserActiveService{}
+}
+
 type UserActiveServicer interface {
 	GetUserActiveByGroupAndAvtiveType(uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
 	GetUserAllActive(uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
