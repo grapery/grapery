@@ -865,7 +865,7 @@ type SockaddrTIPC struct {
 	// Addr is the type of address used to manipulate a socket. Addr must be
 	// one of:
 	//  - *TIPCSocketAddr: "id" variant in the C addr union
-	//  - *TIPCServiceRange: "nameseq" variant in the C addr union
+	//  - *TIPCServerange: "nameseq" variant in the C addr union
 	//  - *TIPCServiceName: "name" variant in the C addr union
 	//
 	// If nil, EINVAL will be returned when the structure is used.
@@ -875,7 +875,7 @@ type SockaddrTIPC struct {
 }
 
 // TIPCAddr is implemented by types that can be used as an address for
-// SockaddrTIPC. It is only implemented by *TIPCSocketAddr, *TIPCServiceRange,
+// SockaddrTIPC. It is only implemented by *TIPCSocketAddr, *TIPCServerange,
 // and *TIPCServiceName.
 type TIPCAddr interface {
 	tipcAddrtype() uint8
@@ -890,13 +890,13 @@ func (sa *TIPCSocketAddr) tipcAddr() [12]byte {
 
 func (sa *TIPCSocketAddr) tipcAddrtype() uint8 { return TIPC_SOCKET_ADDR }
 
-func (sa *TIPCServiceRange) tipcAddr() [12]byte {
+func (sa *TIPCServerange) tipcAddr() [12]byte {
 	var out [12]byte
-	copy(out[:], (*(*[unsafe.Sizeof(TIPCServiceRange{})]byte)(unsafe.Pointer(sa)))[:])
+	copy(out[:], (*(*[unsafe.Sizeof(TIPCServerange{})]byte)(unsafe.Pointer(sa)))[:])
 	return out
 }
 
-func (sa *TIPCServiceRange) tipcAddrtype() uint8 { return TIPC_SERVICE_RANGE }
+func (sa *TIPCServerange) tipcAddrtype() uint8 { return TIPC_SERVICE_RANGE }
 
 func (sa *TIPCServiceName) tipcAddr() [12]byte {
 	var out [12]byte
@@ -1156,7 +1156,7 @@ func anyToSockaddr(fd int, rsa *RawSockaddrAny) (Sockaddr, error) {
 		// pp.Addrtype.
 		switch pp.Addrtype {
 		case TIPC_SERVICE_RANGE:
-			sa.Addr = (*TIPCServiceRange)(unsafe.Pointer(&pp.Addr))
+			sa.Addr = (*TIPCServerange)(unsafe.Pointer(&pp.Addr))
 		case TIPC_SERVICE_ADDR:
 			sa.Addr = (*TIPCServiceName)(unsafe.Pointer(&pp.Addr))
 		case TIPC_SOCKET_ADDR:

@@ -5,21 +5,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var userServicer UserServicer
+var userServer UserServer
 
 func init() {
-	userServicer = NewUserSerivce()
+	userServer = NewUserSerivce()
 }
 
-func GetUserServicer() UserServicer {
-	return userServicer
+func GetUserServer() UserServer {
+	return userServer
 }
 
 func NewUserSerivce() *UserService {
 	return &UserService{}
 }
 
-type UserServicer interface {
+type UserServer interface {
 	Get(uid int64) error
 	UpdateAvator(uid int64, avator string) error
 	Delete(uid int64) error

@@ -5,21 +5,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var userGroupServicer UserGroupServicer
+var userGroupServer UserGroupServer
 
 func init() {
-	userActiveServicer = NewUserActiveService()
+	userActiveServer = NewUserActiveService()
 }
 
-func GetUserGroupServicer() UserGroupServicer {
-	return userGroupServicer
+func GetUserGroupServer() UserGroupServer {
+	return userGroupServer
 }
 
 func NewUserGroupService() *UserGroupService {
 	return &UserGroupService{}
 }
 
-type UserGroupServicer interface {
+type UserGroupServer interface {
 	GetGroups(uid int64) ([]*models.Group, error)
 	JoinGroup(uid, groupID int64) error
 	LeaveGroup(uid, groupID int64) error

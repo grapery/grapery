@@ -4,21 +4,21 @@ import (
 	"github.com/grapery/grapery/models"
 )
 
-var groupServicer GroupServicer
+var server GroupServer
 
 func init() {
-	groupServicer = NewGroupService()
+	server = NewGroupService()
 }
 
-func GetGroupServicer() GroupServicer {
-	return groupServicer
+func GetGroupServer() GroupServer {
+	return server
 }
 
 func NewGroupService() *GroupService {
 	return &GroupService{}
 }
 
-type GroupServicer interface {
+type GroupServer interface {
 	Get(groupID uint64) (*models.Group, error)
 	GetByName(name string) ([]*models.Group, error)
 	CreateGroup(name string, uid int64) error

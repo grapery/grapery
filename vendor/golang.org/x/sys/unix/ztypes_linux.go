@@ -2728,7 +2728,7 @@ type TIPCSocketAddr struct {
 	Node uint32
 }
 
-type TIPCServiceRange struct {
+type TIPCServerange struct {
 	Type  uint32
 	Lower uint32
 	Upper uint32

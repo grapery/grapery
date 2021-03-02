@@ -592,7 +592,7 @@ type LoopInfo struct {
 }
 
 type TIPCSubscr struct {
-	Seq     TIPCServiceRange
+	Seq     TIPCServerange
 	Timeout uint32
 	Filter  uint32
 	Handle  [8]uint8

@@ -5,21 +5,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var userActiveServicer UserActiveServicer
+var userActiveServer UserActiveServer
 
 func init() {
-	userActiveServicer = NewUserActiveService()
+	userActiveServer = NewUserActiveService()
 }
 
-func GetUserActiveServicer() UserActiveServicer {
-	return userActiveServicer
+func GetUserActiveServer() UserActiveServer {
+	return userActiveServer
 }
 
 func NewUserActiveService() *UserActiveService {
 	return &UserActiveService{}
 }
 
-type UserActiveServicer interface {
+type UserActiveServer interface {
 	GetUserActiveByGroupAndAvtiveType(uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
 	GetUserAllActive(uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
 	CreateNewActive(uid uint64, groupID uint64, activeType int) error

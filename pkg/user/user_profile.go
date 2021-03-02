@@ -11,8 +11,8 @@ func init() {
 	userProfileSerivcer = NewUserProfileSerivce()
 }
 
-func GetUserProfileServicer() UserGroupServicer {
-	return userGroupServicer
+func GetUserProfileServer() UserGroupServer {
+	return userGroupServer
 }
 
 func NewUserProfileSerivce() *UserProfileSerivce {

@@ -5,21 +5,21 @@ import (
 	_ "github.com/gin-contrib/sessions/redis"
 )
 
-var servicer AuthServicer
+var server AuthServer
 
 func init() {
-	servicer = NewAuthService()
+	server = NewAuthService()
 }
 
-func GetAuthService() AuthServicer {
-	return servicer
+func GetAuthService() AuthServer {
+	return server
 }
 
 func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
-type AuthServicer interface {
+type AuthServer interface {
 	Register(uid uint64) error
 	Login(uid uint64) error
 	Logout(uid uint64) error
