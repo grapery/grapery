@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -11,15 +12,7 @@ import (
 
 var database *gorm.DB
 
-func DataBase() *gorm.DB{
-	if database == nil{
-		log.Warn("database connector not init")
-		return  nil
-	}
-	return database
-}
-
-// Init
+// Init ...
 func Init(uname, pwd, db string) error {
 	var err error
 	if database != nil {
@@ -27,7 +20,8 @@ func Init(uname, pwd, db string) error {
 		return nil
 	}
 	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
-	sqldbUrl := fmt.Sprintf("%s:%s@/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	println("mysql :", sqldbUrl)
 	database, err = gorm.Open("mysql", sqldbUrl)
 	if err != nil {
 		log.Errorf("create dataabse failed  : [%s]", err.Error())
@@ -42,7 +36,7 @@ func Init(uname, pwd, db string) error {
 	return nil
 }
 
-// Close
+// Close ...
 func Close() error {
 	if database == nil {
 		log.Info("database is close")
@@ -59,4 +53,30 @@ type Base struct {
 type IDBase struct {
 	ID uint `gorm:"primary_key" json:"id,omitempty"`
 	Base
+}
+
+type Repository struct {
+	Ctx    context.Context
+	UserID uint64
+	db     *gorm.DB
+}
+
+func (r *Repository) DB() *gorm.DB {
+	return r.db
+}
+
+func NewRepository(ctx context.Context, userID uint64) *Repository {
+	return &Repository{
+		Ctx:    ctx,
+		UserID: userID,
+		db:     database,
+	}
+}
+
+func DataBase() *gorm.DB {
+	if database == nil {
+		log.Warn("database connector not init")
+		return nil
+	}
+	return database
 }

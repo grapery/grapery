@@ -22,7 +22,7 @@ for i in $(ls $basepath/$pb_dir/*.proto); do
 		-I$GPATH/src \
 		-I$GPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
 		-I$GPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--go_out=plugins=grpc:. "$fn"
+		--go_out=. --go_opt=paths=source_relative "$fn"
 	protoc -I$IncludePath -I. \
 		-I$GPATH/src \
 		-I$GPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
@@ -37,3 +37,5 @@ for i in $(ls $basepath/$pb_dir/*.proto); do
         --openapiv2_opt use_go_templates=true \
 		"$fn" 
 done
+
+cp common-protoc/*.go api/service

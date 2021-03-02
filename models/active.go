@@ -7,13 +7,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	ActiveTypeShortWord = iota
-	ActiveTypeLongWord
-	ActiveTypePicture
-	ActiveTypeVideo
-)
-
 // Active。。。
 type Active struct {
 	IDBase     `json:"id_base,omitempty"`

@@ -4,13 +4,6 @@ import (
 	_ "time"
 )
 
-const (
-	ProjectTypePicture = iota
-	ProjectTypeText
-	ProjectTypeEvent
-	ProjectTypeRecord
-)
-
 type Project struct {
 	IDBase
 	Name        string `json:"name,omitempty"`
@@ -18,11 +11,11 @@ type Project struct {
 	ShortDesc   string `json:"short_desc,omitempty"`
 	ProjectType int    `json:"project_type,omitempty"`
 	CreatorID   uint64 `json:"creator_id,omitempty"`
+	OwnerID     uint64 `json:"owner_id,omitempty"`
 	GroupID     uint64 `json:"group_id,omitempty"`
-	// 图片，文字,事件．．．．
-	IsAchieve bool `json:"is_achieve,omitempty"`
-	IsClose   bool `json:"is_close,omitempty"`
-	IsPrivate bool `json:"is_private,omitempty"`
+	IsAchieve   bool   `json:"is_achieve,omitempty"`
+	IsClose     bool   `json:"is_close,omitempty"`
+	IsPrivate   bool   `json:"is_private,omitempty"`
 }
 
 func (p Project) TableNamse() string {

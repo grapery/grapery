@@ -79,7 +79,7 @@ func (u *User) GetById() error {
 	ret = database.First(u)
 	if ret.Error != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, ret.Error.Error())
-		return fmt.Errorf("get user [%d] info failed ")
+		return fmt.Errorf("get user [%d] info failed ", u.ID)
 	}
 	return nil
 }
@@ -88,8 +88,8 @@ func (u *User) GetByName() error {
 	var ret *gorm.DB
 	ret = database.Where("name = ? and deleted = ? ", u.Name, 0).Find(u)
 	if ret.Error != nil {
-		log.Errorf("get user [%d] info failed : [%s]", u.ID, ret.Error.Error())
-		return fmt.Errorf("get user [%d] info failed ")
+		log.Errorf("get user [%s] info failed : [%s]", u.Name, ret.Error.Error())
+		return fmt.Errorf("get user [%s] info failed ", u.Name)
 	}
 	return nil
 }
@@ -99,7 +99,7 @@ func (u *User) GetByPhone() error {
 	ret = database.Where("phone = ? and deleted = ?", u.Phone, 0).Find(u)
 	if ret.Error != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, ret.Error.Error())
-		return fmt.Errorf("get user [%d] info failed ")
+		return fmt.Errorf("get user [%s] info failed ", u.Phone)
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func (u *User) GetByEmail() error {
 	ret = database.Where("email = ? and deleted = ?", u.Email, 0).Find(u)
 	if ret.Error != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, ret.Error.Error())
-		return fmt.Errorf("get user [%d] info failed ")
+		return fmt.Errorf("get user [%s] info failed ", u.Email)
 	}
 	return nil
 }

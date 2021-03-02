@@ -67,7 +67,7 @@ func (g *GroupProfile) Create() error {
 		ret = database.Create(g)
 	} else {
 		log.Errorf("group [%s] profile is exist : ", g.ID)
-		return fmt.Errorf("group [%s] profile is exist : ", g.ID)
+		return fmt.Errorf("group [%d] profile is exist : ", g.ID)
 	}
 	if ret.Error != nil {
 		log.Errorf("create group [%s] profile failed : [%s]", g.Name, ret.Error.Error())
@@ -89,4 +89,7 @@ func (g *GroupProfile) Get() error {
 func (g *GroupProfile) Delete() error {
 	database.Delete(g)
 	return nil
+}
+
+type ProjectFile struct {
 }
