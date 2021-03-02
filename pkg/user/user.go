@@ -5,6 +5,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var userServicer UserServicer
+
+func init() {
+	userServicer = NewUserSerivce()
+}
+
+func GetUserServicer() UserServicer {
+	return userServicer
+}
+
+func NewUserSerivce() *UserService {
+	return &UserService{}
+}
+
+type UserServicer interface {
+	Get(uid int64) error
+	UpdateAvator(uid int64, avator string) error
+	Delete(uid int64) error
+}
+
 type UserService struct {
 }
 
