@@ -1,6 +1,8 @@
 package user
 
 import (
+	"context"
+
 	"github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -20,15 +22,15 @@ func NewUserSerivce() *UserService {
 }
 
 type UserServer interface {
-	Get(uid int64) error
-	UpdateAvator(uid int64, avator string) error
-	Delete(uid int64) error
+	Get(ctx context.Context, uid int64) error
+	UpdateAvator(ctx context.Context, uid int64, avator string) error
+	Delete(ctx context.Context, uid int64) error
 }
 
 type UserService struct {
 }
 
-func (user *UserService) Get(uid int64) error {
+func (user *UserService) Get(ctx context.Context, uid int64) error {
 	var u = new(models.User)
 	u.ID = uint(uid)
 	err := u.GetById()
@@ -39,11 +41,11 @@ func (user *UserService) Get(uid int64) error {
 	return nil
 }
 
-func (u *UserService) Update(uid int64) error {
+func (u *UserService) Update(ctx context.Context, uid int64) error {
 	return nil
 }
 
-func (user *UserService) UpdateAvator(uid int64, avator string) error {
+func (user *UserService) UpdateAvator(ctx context.Context, uid int64, avator string) error {
 	var u = new(models.User)
 	u.ID = uint(uid)
 	u.Avatar = avator
@@ -55,7 +57,7 @@ func (user *UserService) UpdateAvator(uid int64, avator string) error {
 	return nil
 }
 
-func (user *UserService) Delete(uid int64) error {
+func (user *UserService) Delete(ctx context.Context, uid int64) error {
 	var u = new(models.User)
 	u.ID = uint(uid)
 	err := u.Delete()
