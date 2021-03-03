@@ -27,3 +27,5 @@ func Logout(ctx *gin.Context) {
 
 func ResetPassword(ctx *gin.Context) {
 }
+
+func CheckSession(ctx *gin.Context) {}

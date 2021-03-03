@@ -1,12 +1,15 @@
 package redis
 
 import (
+	"context"
+	"strconv"
+	"time"
+
 	"github.com/go-redis/redis"
 	"github.com/grapery/grapery/config"
-	"strconv"
 )
 
-var RedisCache *RedisClient
+var redisCache *RedisClient
 
 type RedisClient struct {
 	*redis.Client
@@ -28,4 +31,52 @@ func NewRedisClient(cfg *config.Config) *RedisClient {
 		dbid,
 	}
 	return client
+}
+
+func GetCacheClient() *RedisClient {
+	return redisCache
+}
+
+func GetInt(ctx context.Context, key string) (val int, err error) {
+	v := redisCache.Get(key)
+	return v.Int()
+}
+
+func GetString(ctx context.Context, key string) (val string, err error) {
+	v := redisCache.Get(key)
+	return v.String(), nil
+}
+
+func GetBytes(ctx context.Context, key string) (val []byte, err error) {
+	v := redisCache.Get(key)
+	return v.Bytes()
+}
+
+func SetInt(ctx context.Context, key string, val int, ttl int64) error {
+	cmd := redisCache.Set(key, val, time.Second*time.Duration(ttl))
+	err := cmd.Err()
+	return err
+}
+
+func SetString(ctx context.Context, key string, val string, ttl int64) error {
+	cmd := redisCache.Set(key, val, time.Second*time.Duration(ttl))
+	err := cmd.Err()
+	return err
+}
+
+func SetBytes(ctx context.Context, key string, val []byte, ttl int64) error {
+	cmd := redisCache.Set(key, val, time.Second*time.Duration(ttl))
+	err := cmd.Err()
+	return err
+}
+
+func SetObject(ctx context.Context, key string, val interface{}, ttl int64) error {
+	cmd := redisCache.Set(key, val, time.Second*time.Duration(ttl))
+	err := cmd.Err()
+	return err
+}
+
+func GetObject(ctx context.Context, key string) (val interface{}, err error) {
+	v := redisCache.Get(key)
+	return v.Bytes()
 }
