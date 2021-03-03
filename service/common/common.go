@@ -41,7 +41,6 @@ func Init() {
 }
 
 func About(ctx *gin.Context) {
-
 	ctx.HTML(http.StatusOK, "readme.html", nil)
 }
 
