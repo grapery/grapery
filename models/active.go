@@ -7,7 +7,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Active。。。
+/* Active
+加载用户自己的活动记录
+加载一个project的用户活动记录
+加载用户的开放project的活动记录
+加载一个group内的public project的活动记录
+*/
 type Active struct {
 	IDBase     `json:"id_base,omitempty"`
 	CreatorID  uint64 `json:"creator_id,omitempty"`

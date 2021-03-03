@@ -7,6 +7,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+/*
+用户的profile文件
+*/
 type UserProfile struct {
 	Base
 	UserID    int64 `json:"user_id,omitempty"`
@@ -44,6 +47,9 @@ func (p *UserProfile) Delete() error {
 	return nil
 }
 
+/*
+组织的profile文件
+*/
 type GroupProfile struct {
 	IDBase
 	CreatorID   uint64
@@ -91,5 +97,8 @@ func (g *GroupProfile) Delete() error {
 	return nil
 }
 
+/*
+项目中的组织的profile文件
+*/
 type ProjectFile struct {
 }

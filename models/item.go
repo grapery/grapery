@@ -6,8 +6,10 @@ import (
 	api "github.com/grapery/grapery/api"
 )
 
-// 图片，文字,事件．．．．
-
+/*
+内容承载的item:
+图片，文字,视频，音乐
+*/
 type Item struct {
 	IDBase
 	GroupID     uint64

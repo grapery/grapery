@@ -7,7 +7,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Comment ...
+/* Comment
+用户的评论，如果用户的活动是评论的话，评论会被加载
+评论可以针对：
+视频，图片，短说，长文，音乐，项目，问题（？暂时可以不做）
+*/
 type Comment struct {
 	IDBase    `json:"id_base,omitempty"`
 	CreatorID uint64 `json:"creator_id,omitempty"`

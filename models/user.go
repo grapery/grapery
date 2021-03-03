@@ -9,7 +9,10 @@ import (
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 )
-
+/*
+普通用户：
+机器人用户：
+*/
 type User struct {
 	IDBase
 	Name     string `json:"name,omitempty" gorm:"index"`

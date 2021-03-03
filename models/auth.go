@@ -18,6 +18,11 @@ var (
 	ErrDeleteUserAuthInfo    = errors.New("delete uaer auth info failed")
 )
 
+/*
+授权/注册/登陆记录表
+用做登陆
+用做用户注册，注册成功才生成新的用户信息
+*/
 type Auth struct {
 	IDBase
 	UID      uint64       `json:"uid,omitempty" gorm:"unique_index"`

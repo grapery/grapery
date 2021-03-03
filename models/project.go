@@ -4,6 +4,11 @@ import (
 	_ "time"
 )
 
+/*
+项目，或者说事件流；
+1.包含多种内容
+2.项目里可以开放问题(暂时可以不做)
+*/
 type Project struct {
 	IDBase
 	Name        string `json:"name,omitempty"`
