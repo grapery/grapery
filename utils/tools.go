@@ -1,4 +1,4 @@
-package tools
+package utils
 
 import (
 	_ "github.com/Salvatore-Giordano/gin-redis-ip-limiter"

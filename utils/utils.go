@@ -19,16 +19,24 @@ const (
 
 func WrapHandler(h gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var ret = new(Result)
 		cookie, err := c.Cookie(CookieName)
 		if err != nil {
-
-		}
-		log.Info("cookie name: ", cookie)
-		h(c)
-		if c.Keys[ErrKey] != nil {
-			c.JSON(http.StatusOK, c.Keys[ErrKey])
+			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
 			return
 		}
-		c.JSON(http.StatusOK, c.Keys[RespKey])
+		log.Info("cookie val: ", cookie)
+		h(c)
+		if c.Keys[ErrKey] != nil {
+			ret.Code = http.StatusOK
+			ret.Message = c.Keys[ErrKey].(error).Error()
+			ret.Data = nil
+			c.JSON(http.StatusOK, ret)
+			return
+		}
+		ret.Message = "ok"
+		ret.Code = http.StatusOK
+		ret.Data = c.Keys[RespKey]
+		c.JSON(http.StatusOK, ret)
 	}
 }

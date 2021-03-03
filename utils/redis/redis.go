@@ -37,6 +37,14 @@ func GetCacheClient() *RedisClient {
 	return redisCache
 }
 
+func SetCookie(ctx context.Context, key string, val string, ttl int64) error {
+	return SetString(ctx, key, val, ttl)
+}
+
+func GetCookie(ctx context.Context, key string) (val string, err error) {
+	return GetString(ctx, key)
+}
+
 func GetInt(ctx context.Context, key string) (val int, err error) {
 	v := redisCache.Get(key)
 	return v.Int()
