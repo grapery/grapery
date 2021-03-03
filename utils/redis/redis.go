@@ -30,6 +30,7 @@ func NewRedisClient(cfg *config.Config) *RedisClient {
 			}),
 		dbid,
 	}
+	redisCache = client
 	return client
 }
 

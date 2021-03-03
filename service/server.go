@@ -15,6 +15,7 @@ import (
 	"github.com/grapery/grapery/service/common"
 	"github.com/grapery/grapery/service/group"
 	"github.com/grapery/grapery/service/user"
+	"github.com/grapery/grapery/utils"
 	cache "github.com/grapery/grapery/utils/redis"
 )
 
@@ -34,7 +35,7 @@ func (s *Service) Run(cfg *config.Config) error {
 		log.Errorf("use redis session failed : %s", err.Error())
 		return err
 	}
-	cache.RedisCache = cache.NewRedisClient(cfg)
+	cache.NewRedisClient(cfg)
 	err = models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
 	if err != nil {
 		log.Errorf("init sql database failed : [%s]", err.Error())
@@ -63,7 +64,7 @@ func (s *Service) Run(cfg *config.Config) error {
 	v1Route.POST("/login", auth.Login)
 	v1Route.POST("/logout", auth.Logout)
 	v1Route.POST("/register", auth.Register)
-	v1Route.POST("/reset/pwd", auth.ResetPassword)
+	v1Route.POST("/reset/pwd", utils.WrapHandler(auth.ResetPassword))
 	v1Route.GET("/help", common.Help)
 	v1Route.GET("/about", common.About)
 	v1Route.GET("/version", common.Version)
@@ -72,63 +73,63 @@ func (s *Service) Run(cfg *config.Config) error {
 	// 用户在自己的空间内创建的都是default的空间
 	userRoute := v1Route.Group("/user")
 	{
-		userRoute.GET("/:id", user.GetUser)
-		userRoute.DELETE("/:id", user.DeleteUser)
-		userRoute.PUT("/:id", user.UpdateUser)
-		userRoute.GET("/:id/info", user.GetUserProfile)
-		userRoute.GET("/:id/follower", user.GetUserProfile)
-		userRoute.GET("/:id/following", user.GetUserProfile)
-		userRoute.GET("/:id/groups", user.GetUserGroup)
-		userRoute.GET("/:id/following/groups", user.GetUserProfile)
+		userRoute.GET("/:id", utils.WrapHandler(user.GetUser))
+		userRoute.DELETE("/:id", utils.WrapHandler(user.DeleteUser))
+		userRoute.PUT("/:id", utils.WrapHandler(user.UpdateUser))
+		userRoute.GET("/:id/info", utils.WrapHandler(user.GetUserProfile))
+		userRoute.GET("/:id/follower", utils.WrapHandler(user.GetUserProfile))
+		userRoute.GET("/:id/following", utils.WrapHandler(user.GetUserProfile))
+		userRoute.GET("/:id/groups", utils.WrapHandler(user.GetUserGroup))
+		userRoute.GET("/:id/following/groups", utils.WrapHandler(user.GetUserProfile))
 
-		userRoute.POST("/:id/follow", user.FollowUser)
-		userRoute.PUT("/:id/follow", user.UnFollowUser)
+		userRoute.POST("/:id/follow", utils.WrapHandler(user.FollowUser))
+		userRoute.PUT("/:id/follow", utils.WrapHandler(user.UnFollowUser))
 		// 用户个人的active
-		userRoute.GET("/:id/actives", user.GetUserActive)
+		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
 	}
-	v1Route.GET("/users/search", user.SearchUser)
+	v1Route.GET("/users/search", utils.WrapHandler(user.SearchUser))
 	// group 为基础的资源持有结构，project为group中的人员建立的实际包含内容的东西
 	// 类似于进程和线程的关系，每个project里面包含例如active的小项，就类似于协程一样的东西
 	// 可以让组内的多个人员分别运行（或者说处理）不同的任务
 	// 要方便用户参与大量的小组协作，这样多个小组就可以对抗大型组织例如公司或者非法组织
 	groupRoute := v1Route.Group("/group")
 	{
-		groupRoute.POST("", group.CreateGroup)
-		groupRoute.GET("/:id", group.GetGroup)
-		groupRoute.GET("/:id/actives", group.GetGroupActives)
-		groupRoute.PUT("/:id", group.UpdateGroup)
-		groupRoute.DELETE("/:id", group.DeleteGroup)
-		groupRoute.GET("/:id/members", group.GetGroupMembers)
-		groupRoute.POST("/:id/attention", group.AttentionProject)
-		groupRoute.PUT("/:id/attention", group.UnAttentionProject)
+		groupRoute.POST("", utils.WrapHandler(group.CreateGroup))
+		groupRoute.GET("/:id", utils.WrapHandler(group.GetGroup))
+		groupRoute.GET("/:id/actives", utils.WrapHandler(group.GetGroupActives))
+		groupRoute.PUT("/:id", utils.WrapHandler(group.UpdateGroup))
+		groupRoute.DELETE("/:id", utils.WrapHandler(group.DeleteGroup))
+		groupRoute.GET("/:id/members", utils.WrapHandler(group.GetGroupMembers))
+		groupRoute.POST("/:id/attention", utils.WrapHandler(group.AttentionProject))
+		groupRoute.PUT("/:id/attention", utils.WrapHandler(group.UnAttentionProject))
 		thingsGroup := groupRoute.Group("/:id/project")
 		{
 
-			thingsGroup.GET("", group.GetGroupProjects)
-			thingsGroup.GET("/:project_id", group.GetProject)
-			thingsGroup.POST("", group.CreateProject)
-			thingsGroup.PUT("/:project_id", group.UpdateGroup)
-			thingsGroup.DELETE("/:project_id", group.DeleteProject)
+			thingsGroup.GET("", utils.WrapHandler(group.GetGroupProjects))
+			thingsGroup.GET("/:project_id", utils.WrapHandler(group.GetProject))
+			thingsGroup.POST("", utils.WrapHandler(group.CreateProject))
+			thingsGroup.PUT("/:project_id", utils.WrapHandler(group.UpdateGroup))
+			thingsGroup.DELETE("/:project_id", utils.WrapHandler(group.DeleteProject))
 
-			thingsGroup.GET("/:project_id/profile", group.GetProject)
-			thingsGroup.PUT("/:project_id/profile", group.CreateProject)
-			thingsGroup.GET("/:project_id/star", group.StarProject)
-			thingsGroup.PUT("/:project_id/star", group.UnStarProject)
+			thingsGroup.GET("/:project_id/profile", utils.WrapHandler(group.GetProject))
+			thingsGroup.PUT("/:project_id/profile", utils.WrapHandler(group.CreateProject))
+			thingsGroup.GET("/:project_id/star", utils.WrapHandler(group.StarProject))
+			thingsGroup.PUT("/:project_id/star", utils.WrapHandler(group.UnStarProject))
 
-			thingsGroup.PUT("/:project_id/watch", group.WatchProject)
+			thingsGroup.PUT("/:project_id/watch", utils.WrapHandler(group.WatchProject))
 
-			thingsGroup.GET("/:project_id/items", group.GetProjectItems)
+			thingsGroup.GET("/:project_id/items", utils.WrapHandler(group.GetProjectItems))
 			itemGroup := thingsGroup.Group("/:project_id/item")
 			{
-				itemGroup.GET("/:item_id", group.GetProjectItem)
-				itemGroup.POST("/:item_id", group.CreateProjectItem)
-				itemGroup.PUT("/:item_id", group.UpdateProjectItem)
-				itemGroup.DELETE("/:item_id", group.DeleteProjectItem)
-				itemGroup.PUT("/:item_id/like", group.LikeItem)
+				itemGroup.GET("/:item_id", utils.WrapHandler(group.GetProjectItem))
+				itemGroup.POST("/:item_id", utils.WrapHandler(group.CreateProjectItem))
+				itemGroup.PUT("/:item_id", utils.WrapHandler(group.UpdateProjectItem))
+				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
+				itemGroup.PUT("/:item_id/like", utils.WrapHandler(group.LikeItem))
 			}
 
 		}
-		groupRoute.GET("/:id/projects/search", group.SearchProject)
+		groupRoute.GET("/:id/projects/search", utils.WrapHandler(group.SearchProject))
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
 
