@@ -2,7 +2,6 @@ package common
 
 import (
 	// "net/http"
-
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
+
 	"github.com/grapery/grapery/version"
 )
 
@@ -41,6 +41,7 @@ func Init() {
 }
 
 func About(ctx *gin.Context) {
+
 	ctx.HTML(http.StatusOK, "readme.html", nil)
 }
 

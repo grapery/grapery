@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -20,13 +21,14 @@ import (
 )
 
 type Service struct {
-	Stop chan struct{}
+	Ctx    context.Context
+	Cancel context.CancelFunc
 }
 
 func NewService() *Service {
-	return &Service{
-		Stop: make(chan struct{}),
-	}
+	s := &Service{}
+	s.Ctx, s.Cancel = context.WithCancel(context.Background())
+	return s
 }
 
 func (s *Service) Run(cfg *config.Config) error {
