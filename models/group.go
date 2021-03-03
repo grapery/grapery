@@ -69,7 +69,7 @@ func (g *Group) UpdateAvatar() error {
 func (g *Group) GetByName() error {
 	if err := database.Where("name = ? and creator_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
-		return fmt.Errorf("get group [%d] info failed ", g.Name)
+		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (g *Group) GetByName() error {
 func (g *Group) GetByID() error {
 	if err := database.Where("id = ? ", g.ID).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
-		return fmt.Errorf("get group [%d] info failed ", g.Name)
+		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
 	return nil
 }

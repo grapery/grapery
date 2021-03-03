@@ -35,10 +35,10 @@ func (u *User) Create() error {
 		ret = database.Create(u)
 	} else {
 		log.Errorf("user [%s] is exist : ", u.IDBase.ID)
-		return fmt.Errorf("user [%s] is exist", u.Phone)
+		return fmt.Errorf("user [%s/%s] is exist", u.Phone, u.Email)
 	}
 	if ret.Error != nil {
-		log.Errorf("create user [%s] failed [%s] ", u.Phone, ret.Error)
+		log.Errorf("create user [%s/%s] failed [%s] ", u.Phone, u.Email, ret.Error)
 		return fmt.Errorf("create user failed")
 	}
 	return nil
