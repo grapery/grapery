@@ -5,6 +5,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
 )
 
 /* Active
@@ -14,12 +16,13 @@ import (
 加载一个group内的public project的活动记录
 */
 type Active struct {
-	IDBase     `json:"id_base,omitempty"`
-	CreatorID  uint64 `json:"creator_id,omitempty"`
-	ActiveType int    `json:"active_type,omitempty"`
-	Content    []byte `json:"content,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Tags       string `json:"tags,omitempty"`
+	IDBase
+	UserId     uint64         `json:"user_id,omitempty"`
+	ActiveType api.ActiveType `json:"active_type,omitempty"`
+	ItemID     uint64         `json:"item_id,omitempty"`
+	ProjectID  uint64         `json:"project_id,omitempty"`
+	GroupID    uint64         `json:"group_id,omitempty"`
+	UID        uint64         `json:"uid,omitempty"`
 }
 
 func (a Active) TableNamse() string {
