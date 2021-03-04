@@ -4,14 +4,15 @@ import (
 	// "net/http"
 
 	"context"
+	"fmt"
 	"net/http"
 
-	_ "github.com/gin-contrib/sessions"
-	_ "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/pkg/auth"
 	"github.com/grapery/grapery/utils"
+	"github.com/grapery/grapery/utils/sessions"
+	"google.golang.org/protobuf/proto"
 )
 
 func Register(ctx *gin.Context) {
@@ -57,6 +58,15 @@ func Login(ctx *gin.Context) {
 	ret.Code = 0
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{UserID: info.UserID}
+	ctx.SetCookie(
+		utils.CookieName,
+		"",
+		utils.CookieMaxAge,
+		utils.CookiePath,
+		utils.Domain, false, false)
+	se := sessions.Default(ctx)
+	seData, _ := proto.Marshal(info)
+	se.Set(fmt.Sprintf("%d", info.GetUserID()), seData)
 	ctx.JSON(http.StatusOK, ret)
 }
 

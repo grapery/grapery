@@ -8,14 +8,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	CookieName = "grapery"
-
-	UserKey    = "_userid"
-	GroupKey   = "_groupid"
-	ProjectKey = "_projectid"
-	ErrKey     = "_err"
-	RespKey    = "_resp"
+var (
+	CookieName   = "grapery"
+	Domain       = ""
+	CookieMaxAge = 86400
+	CookiePath   = ""
 )
 
 type Context struct {

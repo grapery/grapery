@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/utils/sessions"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/config"
@@ -32,20 +31,16 @@ func NewService() *Service {
 }
 
 func (s *Service) Run(cfg *config.Config) error {
-	sessionStore, err := redis.NewStore(10, "tcp", "localhost:6379", "", nil)
-	if err != nil {
-		log.Errorf("use redis session failed : %s", err.Error())
-		return err
-	}
+	sessions.InitSession(cfg)
 	cache.NewRedisClient(cfg)
-	err = models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
+	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
 	if err != nil {
 		log.Errorf("init sql database failed : [%s]", err.Error())
 		return err
 	}
 	common.Init()
 	app := gin.Default()
-	app.Use(sessions.Sessions("grapestree", sessionStore))
+	app.Use(sessions.UseSession("grapestree"))
 	app.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
 			param.ClientIP,
