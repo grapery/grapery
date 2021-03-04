@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,17 @@ const (
 	RespKey    = "_resp"
 )
 
-func WrapHandler(h gin.HandlerFunc) gin.HandlerFunc {
+type Context struct {
+	C      *gin.Context
+	Ctx    context.Context
+	UserID int64
+	Err    error
+	Resp   interface{}
+}
+
+type HandlerFunc func(c *Context)
+
+func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ret = new(Result)
 		cookie, err := c.Cookie(CookieName)
@@ -25,18 +36,23 @@ func WrapHandler(h gin.HandlerFunc) gin.HandlerFunc {
 			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
 			return
 		}
-		log.Info("cookie val: ", cookie)
-		h(c)
-		if c.Keys[ErrKey] != nil {
+		log.Info("cookie :", cookie)
+		ctx := &Context{
+			C:      c,
+			Ctx:    context.Background(),
+			UserID: 0,
+		}
+		h(ctx)
+		if ctx.Err != nil {
 			ret.Code = http.StatusOK
-			ret.Message = c.Keys[ErrKey].(error).Error()
+			ret.Message = ctx.Err.Error()
 			ret.Data = nil
 			c.JSON(http.StatusOK, ret)
 			return
 		}
 		ret.Message = "ok"
 		ret.Code = http.StatusOK
-		ret.Data = c.Keys[RespKey]
+		ret.Data = ctx.Resp
 		c.JSON(http.StatusOK, ret)
 	}
 }

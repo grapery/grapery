@@ -5,27 +5,39 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/pkg/auth"
+	"github.com/grapery/grapery/utils"
 )
 
-func Register(ctx *gin.Context) {
-
+func Register(ctx *utils.Context) {
+	req := &api.RegisterRequest{}
+	err := ctx.C.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	err = auth.GetAuthService().Register(ctx.C, req.GetAccount(), req.GetPassword(), req.GetLoginType())
+	if err != nil {
+		ctx.Err = err
+		return
+	}
 }
 
-func Login(ctx *gin.Context) {
+func Login(ctx *utils.Context) {
 
 }
 
 // just for wechat,not support weibo and QQ
-func LoginWithThirdPart(ctx *gin.Context) {
+func LoginWithThirdPart(ctx *utils.Context) {
 
 }
 
-func Logout(ctx *gin.Context) {
+func Logout(ctx *utils.Context) {
 
 }
 
-func ResetPassword(ctx *gin.Context) {
+func ResetPassword(ctx *utils.Context) {
 }
 
-func CheckSession(ctx *gin.Context) {}
+func CheckSession(ctx *utils.Context) {}

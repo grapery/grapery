@@ -1,57 +1,53 @@
 package group
 
 import (
-	// "net/http"
-
-	_ "github.com/gin-contrib/sessions"
-	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/utils"
 )
 
-func SearchProject(ctx *gin.Context) {
+func SearchProject(ctx *utils.Context) {
 
 }
 
-func StarProject(ctx *gin.Context) {
+func StarProject(ctx *utils.Context) {
 
 }
 
-func WatchProject(ctx * gin.Context){
-	
-}
-
-func GetProject(ctx *gin.Context) {
+func WatchProject(ctx *utils.Context) {
 
 }
 
-func UnStarProject(ctx *gin.Context) {
+func GetProject(ctx *utils.Context) {
 
 }
 
-func CreateProject(ctx *gin.Context) {
+func UnStarProject(ctx *utils.Context) {
 
 }
 
-func UpdateProject(ctx *gin.Context) {
+func CreateProject(ctx *utils.Context) {
 
 }
 
-func DeleteProject(ctx *gin.Context) {
+func UpdateProject(ctx *utils.Context) {
 
 }
 
-func AttentionProject(ctx *gin.Context) {
+func DeleteProject(ctx *utils.Context) {
 
 }
 
-func UnAttentionProject(ctx *gin.Context) {
+func AttentionProject(ctx *utils.Context) {
 
 }
 
-func GetProjectProfile(ctx *gin.Context) {
+func UnAttentionProject(ctx *utils.Context) {
 
 }
 
-func UpdateProjectProfile(ctx *gin.Context) {
+func GetProjectProfile(ctx *utils.Context) {
+
+}
+
+func UpdateProjectProfile(ctx *utils.Context) {
 
 }
