@@ -70,11 +70,6 @@ func Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ret)
 }
 
-// just for wechat,not support weibo and QQ
-func LoginWithThirdPart(ctx *gin.Context) {
-
-}
-
 func Logout(ctx *gin.Context) {
 
 }

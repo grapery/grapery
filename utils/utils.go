@@ -5,7 +5,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/utils/sessions"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -34,12 +37,21 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 			return
 		}
 		log.Info("cookie :", cookie)
+		infoData := sessions.Default(c).Get(cookie).([]byte)
+		var info = new(api.UserInfo)
+		err = proto.Unmarshal(infoData, info)
 		ctx := &Context{
 			C:      c,
 			Ctx:    context.Background(),
 			UserID: 0,
 		}
-		h(ctx)
+		if err != nil {
+			ctx.Err = err
+			ctx.Resp = nil
+		} else {
+			h(ctx)
+		}
+
 		if ctx.Err != nil {
 			ret.Code = http.StatusOK
 			ret.Message = ctx.Err.Error()

@@ -10,13 +10,14 @@ import (
 
 var sessionStore redis.Store
 
-func InitSession(cfg *config.Config) {
+func InitSession(cfg *config.Config) error {
 	var err error
 	sessionStore, err = redis.NewStore(10, "tcp", cfg.Redis.Address, cfg.Redis.Password, nil)
 	if err != nil {
 		log.Errorf("use redis session failed : %s", err.Error())
-		return
+		return err
 	}
+	return nil
 }
 
 func UseSession(sessionName string) gin.HandlerFunc {

@@ -5,7 +5,7 @@
     "password": "123456789"
   },
   "redis": {
-    "address": "127.0.0.1:6739",
+    "address": "127.0.0.1:6379",
     "password": "",
     "database": "0",
     "ping_interval": 30
