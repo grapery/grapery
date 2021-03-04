@@ -26,3 +26,6 @@ free man should be always a real exist
     - 每年春节的重逢，通过图片或者视频记录，可以在以后回味
     - 家族大事的记录，例如红白喜事或者老人祝寿
     - 夫妻家庭内部的一些日常，例如todo,例如日常送礼，例如家庭长期计划，例如孩子的日常成长，例如孩子的玩闹嬉戏的瞬间
+
+
+sudo docker run -i -t -e MYSQL_PASSWORD=123456789 -uroot -e MYSQL_ROOT_PASSWORD=123456789  -p 3306:3306  mysql:latest

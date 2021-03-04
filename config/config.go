@@ -48,9 +48,9 @@ func ValiedConfig(cfg *Config) error {
 		return fmt.Errorf("redis cfg not set")
 	}
 
-	if cfg.GraphDB.Address == "" || cfg.GraphDB.Database == "" {
-		log.Errorf("graph database not init")
-	}
+	// if cfg.GraphDB.Address == "" || cfg.GraphDB.Database == "" {
+	// 	log.Info("graph database not init")
+	// }
 	return nil
 }
 
