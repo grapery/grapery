@@ -5,10 +5,11 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
+	"github.com/gin-gonic/gin"
 	"github.com/grapery/grapery/utils"
 )
 
-func SearchGroup(ctx *utils.Context) {
+func SearchGroup(ctx *gin.Context) {
 
 }
 
