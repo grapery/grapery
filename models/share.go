@@ -18,3 +18,19 @@ type ShareItem struct {
 func (s ShareItem) TableName() string {
 	return "share"
 }
+
+func CreateShareItem(){
+
+}
+
+func GetShareItemByID(){
+	
+}
+
+func UpdateShareItemVisable(){
+
+}
+
+func DeleteShareItem(){
+
+}

@@ -23,9 +23,8 @@ type User struct {
 	Gender   int    `json:"gender,omitempty"`
 	BioID    uint   `json:"bio,omitempty"`
 	Location string `json:"location,omitempty"`
-
-	Avatar string `json:"avatar,omitempty"`
-	URL    string `json:"url,omitempty"`
+	Avatar   string `json:"avatar,omitempty"`
+	URL      string `json:"url,omitempty"`
 }
 
 func (u User) TableName() string {
