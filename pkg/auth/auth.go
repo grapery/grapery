@@ -35,6 +35,7 @@ type AuthService struct {
 }
 
 func (auth *AuthService) Register(ctx context.Context, account string, pwd string, authType api.AuthType) error {
+	
 	return nil
 }
 

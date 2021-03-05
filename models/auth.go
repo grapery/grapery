@@ -1,21 +1,14 @@
 package models
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/grapery/grapery/utils/errors"
 
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/grapery/grapery/api"
-)
-
-var (
-	ErrUserIsExist           = errors.New("user is exist")
-	ErrCreateAuthFailed      = errors.New("create auth info failed")
-	ErrResetPasswordFailed   = errors.New("reset password failed")
-	ErrGetUserAuthInfoFailed = errors.New("get user auth info failed")
-	ErrDeleteUserAuthInfo    = errors.New("delete uaer auth info failed")
 )
 
 /*
@@ -25,7 +18,7 @@ var (
 */
 type Auth struct {
 	IDBase
-	UID      uint64       `json:"uid,omitempty" gorm:"unique_index"`
+	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:"`
 	Email    string       `json:"email,omitempty" gorm:"unique_index"`
 	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
 	Password string       `json:"-" gorm:"password"`
@@ -38,18 +31,34 @@ func (a Auth) TableName() string {
 	return "auth"
 }
 
-func (a *Auth) Create() error {
+func (a *Auth) CreateUsePhone() error {
 	database.Table(a.TableName()).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Find(a)
 	var ret *gorm.DB
 	if a.IDBase.ID == 0 {
 		ret = database.Create(a)
 	} else {
 		log.Errorf("auth [%s] is exist : ", a.IDBase.ID)
-		return ErrUserIsExist
+		return errors.ErrUserIsExist
 	}
 	if ret.Error != nil {
 		log.Errorf("create auth [%s] failed [%s] ", a.Phone, ret.Error)
-		return ErrCreateAuthFailed
+		return errors.ErrCreateAuthFailed
+	}
+	return nil
+}
+
+func (a *Auth) CreateUseEmail() error {
+	database.Table(a.TableName()).Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Find(a)
+	var ret *gorm.DB
+	if a.IDBase.ID == 0 {
+		ret = database.Create(a)
+	} else {
+		log.Errorf("auth [%s] is exist : ", a.IDBase.ID)
+		return errors.ErrUserIsExist
+	}
+	if ret.Error != nil {
+		log.Errorf("create auth [%s] failed [%s] ", a.Phone, ret.Error)
+		return errors.ErrCreateAuthFailed
 	}
 	return nil
 }
