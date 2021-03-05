@@ -19,7 +19,6 @@ func Init(uname, pwd, db string) error {
 		log.Warn("database already init")
 		return nil
 	}
-	//gorm.Open("mysql", "user:password@/dbname?charset=utf8&parseTime=True&loc=Local")
 	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
 	println("mysql :", sqldbUrl)
 	database, err = gorm.Open("mysql", sqldbUrl)
@@ -69,7 +68,7 @@ func NewRepository(ctx context.Context, userID uint64) *Repository {
 	return &Repository{
 		Ctx:    ctx,
 		UserID: userID,
-		db:     database,
+		db:     DataBase(),
 	}
 }
 

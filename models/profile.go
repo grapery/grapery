@@ -3,7 +3,7 @@ package models
 import (
 	"fmt"
 
-	"github.com/jinzhu/gorm"
+	"github.com/grapery/grapery/api"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,11 +52,11 @@ func (p *UserProfile) Delete() error {
 */
 type GroupProfile struct {
 	IDBase
-	CreatorID   uint64
-	Name        string
-	Description string
-	Avatar      string
-	Tags        []string
+	GroupID     uint64          `json:"group_id,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
 }
 
 func (g GroupProfile) TableName() string {
@@ -64,20 +64,20 @@ func (g GroupProfile) TableName() string {
 }
 
 func (g *GroupProfile) Create() error {
-	if err := database.Where("creatot_id = ? and deleted = ?", g.CreatorID, 0).Find(g).Error; err != nil {
-		log.Errorf("create group [%s] profile failed : ", g.Name)
+	if err := database.Where("group_id = ? and deleted = ?", g.GroupID, 0).Find(g).Error; err != nil {
+		log.Errorf("create group [%d] profile failed : %s", g.GroupID, err.Error())
 		return err
 	}
-	var ret *gorm.DB
+	var err error
 	if g.IDBase.ID != 0 {
-		ret = database.Create(g)
+		err = database.Create(g).Error
 	} else {
 		log.Errorf("group [%s] profile is exist : ", g.ID)
 		return fmt.Errorf("group [%d] profile is exist : ", g.ID)
 	}
-	if ret.Error != nil {
-		log.Errorf("create group [%s] profile failed : [%s]", g.Name, ret.Error.Error())
-		return fmt.Errorf("create group [%s] profile failed : ", g.Name)
+	if err != nil {
+		log.Errorf("create group [%d] profile failed : [%s]", g.GroupID, err.Error())
+		return fmt.Errorf("create group [%d] profile failed : %s", g.GroupID, err.Error())
 	}
 	return nil
 }
@@ -101,4 +101,15 @@ func (g *GroupProfile) Delete() error {
 项目中的组织的profile文件
 */
 type ProjectFile struct {
+	IDBase
+	GroupID     uint64          `json:"group_id,omitempty"`
+	ProjectID   uint64          `json:"project_id,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
+}
+
+func (p ProjectFile) TableName() string {
+	return "project_profile"
 }
