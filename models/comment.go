@@ -14,14 +14,16 @@ import (
 */
 type Comment struct {
 	IDBase
-	UserID  uint64 `json:"user_id,omitempty"`
-	GroupID uint64 `json:"group_id,omitempty"`
-	ItemID  int    `json:"item_id,omitempty"`
-	Content []byte `json:"content,omitempty"`
-	Tags    string `json:"tags,omitempty"`
+	UserID    uint64 `json:"user_id,omitempty"`
+	GroupID   uint64 `json:"group_id,omitempty"`
+	ProjectID uint64 `json:"project_id,omitempty"`
+	ItemID    int    `json:"item_id,omitempty"`
+	PreID     uint64 `json:"pre_id,omitempty"`
+	Content   []byte `json:"content,omitempty"`
+	Tags      string `json:"tags,omitempty"`
 }
 
-func (c Comment) TableNamse() string {
+func (c Comment) TableName() string {
 	return "comment"
 }
 
@@ -48,9 +50,9 @@ func (a *Comment) GetComment() error {
 	return nil
 }
 
-func GetCommentByCreatorID(userID uint64) (*[]Comment, error) {
+func GetCommentByUserID(userID uint64) (*[]Comment, error) {
 	var ret = new([]Comment)
-	if err := database.Where("creator_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
+	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
 		log.Errorf("get user [%d] active failed: %s ", userID, err.Error())
 		return nil, err
 	}

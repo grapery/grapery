@@ -12,13 +12,14 @@ import (
 */
 type Item struct {
 	IDBase
-	GroupID     uint64
-	ProjectID   uint64
-	UserID      uint64
-	Visable     bool
-	Title       string
-	Description string
-	ItemType    api.ItemType
+	GroupID     uint64          `json:"group_id,omitempty"`
+	ProjectID   uint64          `json:"project_id,omitempty"`
+	UserID      uint64          `json:"user_id,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
+	Title       string          `json:"title,omitempty"`
+	Description string          `json:"description,omitempty"`
+	ItemType    api.ItemType    `json:"item_type,omitempty"`
+	Tags        string          `json:"tags,omitempty"`
 }
 
 func (it Item) TableName() string {

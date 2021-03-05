@@ -25,30 +25,14 @@ type Active struct {
 	UID        uint64         `json:"uid,omitempty"`
 }
 
-func (a Active) TableNamse() string {
+func (a Active) TableName() string {
 	return "active"
 }
 
 func (a *Active) Create() error {
 	if err := database.Create(a).Error; err != nil {
-		log.Errorf("create new active [%s] failed : [%s]", a.Name, err.Error())
-		return fmt.Errorf("create new active [%s] failed ", a.Name)
-	}
-	return nil
-}
-
-func (a *Active) UpdateName() error {
-	if err := database.Model(a).Update("name", a.Name).Error; err != nil {
-		log.Errorf("update active [%d] failed : [%s]", a.ID, err.Error())
-		return fmt.Errorf("update active failed [%s]", err.Error())
-	}
-	return nil
-}
-
-func (a *Active) UpdateContent() error {
-	if err := database.Model(a).Update("content", a.Content).Error; err != nil {
-		log.Errorf("update active [%d] failed : [%s]", a.ID, err.Error())
-		return fmt.Errorf("update active failed [%s]", err.Error())
+		log.Errorf("create new active [%d] failed : [%s]", a.ID, err.Error())
+		return fmt.Errorf("create new active [%d] failed: %s", a.ID, err.Error())
 	}
 	return nil
 }
@@ -60,22 +44,13 @@ func (a *Active) Get() error {
 	return nil
 }
 
-func GetAcviteByCreatorID(creatorId uint64) (*[]Active, error) {
+func GetAcviteByUserID(userID uint64) (*[]Active, error) {
 	var ret = new([]Active)
-	if err := database.Where("creator_id = ? and delete = 0", creatorId).Find(ret).Error; err != nil {
-		log.Errorf("get user [%d] active failed ", creatorId)
+	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
+		log.Errorf("get user [%d] active failed ", userID)
 		return nil, err
 	}
 
-	return ret, nil
-}
-
-func GetActiveList(name string) (*[]Active, error) {
-	var ret = new([]Active)
-	if err := database.Where("name like %?% and delete = 0", name).Find(ret).Error; err != nil {
-		log.Errorf("get active like [%s] failed ", name)
-		return nil, err
-	}
 	return ret, nil
 }
 

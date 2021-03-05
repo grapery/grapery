@@ -23,7 +23,7 @@ type Project struct {
 	IsPrivate   bool   `json:"is_private,omitempty"`
 }
 
-func (p Project) TableNamse() string {
+func (p Project) TableName() string {
 	return "project"
 }
 

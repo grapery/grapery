@@ -9,6 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 )
+
 /*
 普通用户：
 机器人用户：
@@ -27,7 +28,7 @@ type User struct {
 	URL    string `json:"url,omitempty"`
 }
 
-func (u User) TableNamse() string {
+func (u User) TableName() string {
 	return "users"
 }
 

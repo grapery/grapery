@@ -23,17 +23,17 @@ type Group struct {
 	ShortDesc string `json:"short_desc,omitempty"`
 	Avatar    string `son:"avatar,omitempty"`
 	Gtype     string `json:"gtype,omitempty"`
-	CreatorID int64  `json:"creator_id,omitempty"`
+	UserID    int64  `json:"user_id,omitempty"`
 	IsPrivate bool   `json:"is_private,omitempty"`
 }
 
-func (g Group) TableNamse() string {
+func (g Group) TableName() string {
 	return "group"
 }
 
 func (g *Group) Create() error {
 	database.Begin()
-	database.Where("name = ? and  creator_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g)
+	database.Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.UserID, 0).Find(g)
 	var ret *gorm.DB
 	if g.IDBase.ID != 0 {
 		ret = database.Create(g)
@@ -76,7 +76,7 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := database.Where("name = ? and creator_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g).Error; err != nil {
+	if err := database.Where("name = ? and user_id = ? and deleted = ?", g.Name, g.UserID, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}

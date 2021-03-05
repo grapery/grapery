@@ -21,7 +21,7 @@ type UserProfile struct {
 	//
 }
 
-func (p UserProfile) TableNamse() string {
+func (p UserProfile) TableName() string {
 	return "user_profile"
 }
 
@@ -59,7 +59,7 @@ type GroupProfile struct {
 	Tags        []string
 }
 
-func (g GroupProfile) TableNamse() string {
+func (g GroupProfile) TableName() string {
 	return "group_profile"
 }
 
