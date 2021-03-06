@@ -8,6 +8,8 @@ import (
 
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
 )
 
 /*
@@ -16,16 +18,15 @@ import (
 */
 type User struct {
 	IDBase
-	Name     string `json:"name,omitempty" gorm:"index"`
-	UserType int    `json:"user_type,omitempty"`
-	Email    string `json:"email,omitempty" gorm:"index"`
-	Phone    string `json:"phone,omitempty" gorm:"index"`
-	Gender   int    `json:"gender,omitempty"`
-	BioID    uint   `json:"bio,omitempty"`
-	Location string `json:"location,omitempty"`
-	Status   uint
-	Avatar   string `json:"avatar,omitempty"`
-	URL      string `json:"url,omitempty"`
+	Name     string         `json:"name,omitempty" gorm:"index"`
+	Email    string         `json:"email,omitempty" gorm:"index"`
+	Phone    string         `json:"phone,omitempty" gorm:"index"`
+	Gender   int            `json:"gender,omitempty"`
+	BioID    string         `json:"bio,omitempty"`
+	Location string         `json:"location,omitempty"`
+	Status   api.UserStatus `json:"status,omitempty"`
+	Avatar   string         `json:"avatar,omitempty"`
+	URL      string         `json:"url,omitempty"`
 }
 
 func (u User) TableName() string {

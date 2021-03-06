@@ -48,7 +48,12 @@ func Init(uname, pwd, db string) error {
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&UserProfile{})
 	database.AutoMigrate(&Project{})
-
+	database.AutoMigrate(&GroupProfile{})
+	database.AutoMigrate(&Item{})
+	database.AutoMigrate(&ShareItem{})
+	database.AutoMigrate(&LikeItem{})
+	database.AutoMigrate(&Comment{})
+	//database.AutoMigrate(&Question{})
 	//database.SetLogger(log.New())
 	return nil
 }

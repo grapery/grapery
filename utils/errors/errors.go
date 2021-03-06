@@ -26,9 +26,21 @@ var (
 )
 
 var (
-	ErrUserIsExist           = NewSysError(2001, "user is exist")
+	ErrUserIsExist           = NewSysError(2001, "user is not exist")
 	ErrCreateAuthFailed      = NewSysError(2002, "create auth info failed")
 	ErrResetPasswordFailed   = NewSysError(2003, "reset password failed")
 	ErrGetUserAuthInfoFailed = NewSysError(2004, "get user auth info failed")
 	ErrDeleteUserAuthInfo    = NewSysError(2005, "delete uaer auth info failed")
+)
+
+var (
+	ErrGroupIsNotExist = NewSysError(3001, "group is not exist")
+)
+
+var (
+	ErrProjectIsNotExist = NewSysError(4001, "project is not exist")
+)
+
+var (
+	ErrItemIsNotExist = NewSysError(4001, "Item is not exist")
 )
