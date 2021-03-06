@@ -5,6 +5,7 @@ go 1.12
 require (
 	github.com/Salvatore-Giordano/gin-redis-ip-limiter v0.0.0-20180421093006-409a923d7aa8
 	github.com/apache/thrift v0.12.0 // indirect
+	github.com/astaxie/beego v1.12.3 // indirect
 	github.com/dgraph-io/dgo/v200 v200.0.0-20201023081658-a9ad93fe6ebd
 	github.com/gin-contrib/sessions v0.0.1
 	github.com/gin-gonic/contrib v0.0.0-20201101042839-6a891bf89f19 // indirect
@@ -19,7 +20,6 @@ require (
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/openzipkin/zipkin-go v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b // indirect

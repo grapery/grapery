@@ -32,6 +32,58 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+type GroupStatus int32
+
+const (
+	GroupStatus_NotReady GroupStatus = 0
+	GroupStatus_Normal   GroupStatus = 1
+	GroupStatus_ViewOnly GroupStatus = 2
+	GroupStatus_Abandon  GroupStatus = 3
+)
+
+// Enum value maps for GroupStatus.
+var (
+	GroupStatus_name = map[int32]string{
+		0: "NotReady",
+		1: "Normal",
+		2: "ViewOnly",
+		3: "Abandon",
+	}
+	GroupStatus_value = map[string]int32{
+		"NotReady": 0,
+		"Normal":   1,
+		"ViewOnly": 2,
+		"Abandon":  3,
+	}
+)
+
+func (x GroupStatus) Enum() *GroupStatus {
+	p := new(GroupStatus)
+	*p = x
+	return p
+}
+
+func (x GroupStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GroupStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[0].Descriptor()
+}
+
+func (GroupStatus) Type() protoreflect.EnumType {
+	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[0]
+}
+
+func (x GroupStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GroupStatus.Descriptor instead.
+func (GroupStatus) EnumDescriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{0}
+}
+
 type ActiveType int32
 
 const (
@@ -74,11 +126,11 @@ func (x ActiveType) String() string {
 }
 
 func (ActiveType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[0].Descriptor()
+	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1].Descriptor()
 }
 
 func (ActiveType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[0]
+	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1]
 }
 
 func (x ActiveType) Number() protoreflect.EnumNumber {
@@ -87,7 +139,7 @@ func (x ActiveType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ActiveType.Descriptor instead.
 func (ActiveType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{0}
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{1}
 }
 
 type ItemType int32
@@ -138,11 +190,11 @@ func (x ItemType) String() string {
 }
 
 func (ItemType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1].Descriptor()
+	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2].Descriptor()
 }
 
 func (ItemType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[1]
+	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2]
 }
 
 func (x ItemType) Number() protoreflect.EnumNumber {
@@ -151,7 +203,7 @@ func (x ItemType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ItemType.Descriptor instead.
 func (ItemType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{1}
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{2}
 }
 
 type AuthType int32
@@ -187,11 +239,11 @@ func (x AuthType) String() string {
 }
 
 func (AuthType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2].Descriptor()
+	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3].Descriptor()
 }
 
 func (AuthType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[2]
+	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3]
 }
 
 func (x AuthType) Number() protoreflect.EnumNumber {
@@ -200,31 +252,31 @@ func (x AuthType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AuthType.Descriptor instead.
 func (AuthType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{2}
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{3}
 }
 
 type VisibleType int32
 
 const (
-	VisibleType_Normal  VisibleType = 0
-	VisibleType_Public  VisibleType = 1
-	VisibleType_Private VisibleType = 2
-	VisibleType_Someone VisibleType = 3
+	VisibleType_NotAllow VisibleType = 0
+	VisibleType_Public   VisibleType = 1
+	VisibleType_Private  VisibleType = 2
+	VisibleType_Someone  VisibleType = 3
 )
 
 // Enum value maps for VisibleType.
 var (
 	VisibleType_name = map[int32]string{
-		0: "Normal",
+		0: "NotAllow",
 		1: "Public",
 		2: "Private",
 		3: "Someone",
 	}
 	VisibleType_value = map[string]int32{
-		"Normal":  0,
-		"Public":  1,
-		"Private": 2,
-		"Someone": 3,
+		"NotAllow": 0,
+		"Public":   1,
+		"Private":  2,
+		"Someone":  3,
 	}
 )
 
@@ -239,11 +291,11 @@ func (x VisibleType) String() string {
 }
 
 func (VisibleType) Descriptor() protoreflect.EnumDescriptor {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3].Descriptor()
+	return file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[4].Descriptor()
 }
 
 func (VisibleType) Type() protoreflect.EnumType {
-	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[3]
+	return &file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes[4]
 }
 
 func (x VisibleType) Number() protoreflect.EnumNumber {
@@ -252,7 +304,7 @@ func (x VisibleType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VisibleType.Descriptor instead.
 func (VisibleType) EnumDescriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{3}
+	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP(), []int{4}
 }
 
 type UserInfo struct {
@@ -4828,63 +4880,68 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc = []byte
 	0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x12, 0x16,
 	0x0a, 0x06, 0x69, 0x73, 0x6c, 0x69, 0x6b, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06,
 	0x69, 0x73, 0x6c, 0x69, 0x6b, 0x65, 0x22, 0x12, 0x0a, 0x10, 0x4c, 0x69, 0x6b, 0x65, 0x49, 0x74,
-	0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x56, 0x0a, 0x0a, 0x41, 0x63,
-	0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x4e, 0x6f, 0x74, 0x68,
-	0x69, 0x6e, 0x67, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x4c, 0x69, 0x6b, 0x65, 0x10, 0x01, 0x12,
-	0x09, 0x0a, 0x05, 0x53, 0x68, 0x61, 0x72, 0x65, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x43, 0x6f,
-	0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x43, 0x6f, 0x6c, 0x6c, 0x65,
-	0x63, 0x74, 0x10, 0x04, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x69, 0x73, 0x41, 0x67, 0x72, 0x65, 0x65,
-	0x10, 0x05, 0x2a, 0x68, 0x0a, 0x08, 0x49, 0x74, 0x65, 0x6d, 0x54, 0x79, 0x70, 0x65, 0x12, 0x07,
-	0x0a, 0x03, 0x41, 0x6c, 0x6c, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x53, 0x68, 0x6f, 0x72, 0x74,
-	0x57, 0x6f, 0x72, 0x64, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x50, 0x61, 0x70, 0x65, 0x72, 0x10,
-	0x02, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x69, 0x63, 0x74, 0x75, 0x72, 0x65, 0x10, 0x03, 0x12, 0x09,
-	0x0a, 0x05, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x10, 0x04, 0x12, 0x09, 0x0a, 0x05, 0x4d, 0x75, 0x73,
-	0x69, 0x63, 0x10, 0x05, 0x12, 0x08, 0x0a, 0x04, 0x4c, 0x69, 0x6e, 0x6b, 0x10, 0x06, 0x12, 0x0c,
-	0x0a, 0x08, 0x4c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x10, 0x07, 0x2a, 0x38, 0x0a, 0x08,
-	0x41, 0x75, 0x74, 0x68, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0e, 0x0a, 0x0a, 0x4e, 0x6f, 0x74, 0x53,
-	0x75, 0x70, 0x70, 0x6f, 0x72, 0x74, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x57, 0x69, 0x74, 0x68,
-	0x50, 0x68, 0x6f, 0x6e, 0x65, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x57, 0x69, 0x74, 0x68, 0x45,
-	0x6d, 0x61, 0x69, 0x6c, 0x10, 0x02, 0x2a, 0x3f, 0x0a, 0x0b, 0x56, 0x69, 0x73, 0x69, 0x62, 0x6c,
-	0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0a, 0x0a, 0x06, 0x4e, 0x6f, 0x72, 0x6d, 0x61, 0x6c, 0x10,
-	0x00, 0x12, 0x0a, 0x0a, 0x06, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x10, 0x01, 0x12, 0x0b, 0x0a,
-	0x07, 0x50, 0x72, 0x69, 0x76, 0x61, 0x74, 0x65, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x53, 0x6f,
-	0x6d, 0x65, 0x6f, 0x6e, 0x65, 0x10, 0x03, 0x32, 0x9c, 0x04, 0x0a, 0x07, 0x47, 0x72, 0x61, 0x70,
-	0x65, 0x72, 0x79, 0x12, 0x54, 0x0a, 0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x19, 0x2e, 0x67,
-	0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
-	0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x22, 0x14, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x0e, 0x22, 0x09, 0x2f, 0x76, 0x31,
-	0x2f, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x3a, 0x01, 0x2a, 0x12, 0x58, 0x0a, 0x06, 0x4c, 0x6f, 0x67,
-	0x6f, 0x75, 0x74, 0x12, 0x1a, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70,
-	0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x1b, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f,
-	0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x15, 0x82, 0xd3,
-	0xe4, 0x93, 0x02, 0x0f, 0x22, 0x0a, 0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f, 0x67, 0x6f, 0x75, 0x74,
-	0x3a, 0x01, 0x2a, 0x12, 0x65, 0x0a, 0x08, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12,
-	0x1c, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73,
-	0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e,
-	0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72,
-	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x1c, 0x82, 0xd3,
-	0xe4, 0x93, 0x02, 0x16, 0x22, 0x11, 0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b,
-	0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d, 0x3a, 0x01, 0x2a, 0x12, 0x7e, 0x0a, 0x0d, 0x75, 0x73,
-	0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x12, 0x21, 0x2e, 0x67, 0x72,
-	0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f,
-	0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x22,
-	0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65,
-	0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x26, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x20, 0x22, 0x1b, 0x2f, 0x76, 0x31, 0x2f,
-	0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d, 0x2f, 0x66, 0x6f,
-	0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x3a, 0x01, 0x2a, 0x12, 0x7a, 0x0a, 0x0c, 0x55, 0x73,
-	0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x12, 0x20, 0x2e, 0x67, 0x72, 0x61,
-	0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c,
-	0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e, 0x67,
-	0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46,
-	0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
-	0x25, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x1f, 0x22, 0x1a, 0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65,
-	0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d, 0x2f, 0x66, 0x6f, 0x6c, 0x6c, 0x6f,
-	0x77, 0x65, 0x72, 0x3a, 0x01, 0x2a, 0x42, 0x20, 0x5a, 0x1e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
-	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61,
-	0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x42, 0x0a, 0x0b, 0x47, 0x72,
+	0x6f, 0x75, 0x70, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x0c, 0x0a, 0x08, 0x4e, 0x6f, 0x74,
+	0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x4e, 0x6f, 0x72, 0x6d, 0x61,
+	0x6c, 0x10, 0x01, 0x12, 0x0c, 0x0a, 0x08, 0x56, 0x69, 0x65, 0x77, 0x4f, 0x6e, 0x6c, 0x79, 0x10,
+	0x02, 0x12, 0x0b, 0x0a, 0x07, 0x41, 0x62, 0x61, 0x6e, 0x64, 0x6f, 0x6e, 0x10, 0x03, 0x2a, 0x56,
+	0x0a, 0x0a, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07,
+	0x4e, 0x6f, 0x74, 0x68, 0x69, 0x6e, 0x67, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x4c, 0x69, 0x6b,
+	0x65, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x53, 0x68, 0x61, 0x72, 0x65, 0x10, 0x02, 0x12, 0x0b,
+	0x0a, 0x07, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x43,
+	0x6f, 0x6c, 0x6c, 0x65, 0x63, 0x74, 0x10, 0x04, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x69, 0x73, 0x41,
+	0x67, 0x72, 0x65, 0x65, 0x10, 0x05, 0x2a, 0x68, 0x0a, 0x08, 0x49, 0x74, 0x65, 0x6d, 0x54, 0x79,
+	0x70, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x41, 0x6c, 0x6c, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x53,
+	0x68, 0x6f, 0x72, 0x74, 0x57, 0x6f, 0x72, 0x64, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x50, 0x61,
+	0x70, 0x65, 0x72, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x69, 0x63, 0x74, 0x75, 0x72, 0x65,
+	0x10, 0x03, 0x12, 0x09, 0x0a, 0x05, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x10, 0x04, 0x12, 0x09, 0x0a,
+	0x05, 0x4d, 0x75, 0x73, 0x69, 0x63, 0x10, 0x05, 0x12, 0x08, 0x0a, 0x04, 0x4c, 0x69, 0x6e, 0x6b,
+	0x10, 0x06, 0x12, 0x0c, 0x0a, 0x08, 0x4c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x10, 0x07,
+	0x2a, 0x38, 0x0a, 0x08, 0x41, 0x75, 0x74, 0x68, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0e, 0x0a, 0x0a,
+	0x4e, 0x6f, 0x74, 0x53, 0x75, 0x70, 0x70, 0x6f, 0x72, 0x74, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09,
+	0x57, 0x69, 0x74, 0x68, 0x50, 0x68, 0x6f, 0x6e, 0x65, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x57,
+	0x69, 0x74, 0x68, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x10, 0x02, 0x2a, 0x41, 0x0a, 0x0b, 0x56, 0x69,
+	0x73, 0x69, 0x62, 0x6c, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x4e, 0x6f, 0x74,
+	0x41, 0x6c, 0x6c, 0x6f, 0x77, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x50, 0x75, 0x62, 0x6c, 0x69,
+	0x63, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x72, 0x69, 0x76, 0x61, 0x74, 0x65, 0x10, 0x02,
+	0x12, 0x0b, 0x0a, 0x07, 0x53, 0x6f, 0x6d, 0x65, 0x6f, 0x6e, 0x65, 0x10, 0x03, 0x32, 0x9c, 0x04,
+	0x0a, 0x07, 0x47, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x12, 0x54, 0x0a, 0x05, 0x4c, 0x6f, 0x67,
+	0x69, 0x6e, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69,
+	0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e,
+	0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x69,
+	0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x14, 0x82, 0xd3, 0xe4, 0x93, 0x02,
+	0x0e, 0x22, 0x09, 0x2f, 0x76, 0x31, 0x2f, 0x6c, 0x6f, 0x67, 0x69, 0x6e, 0x3a, 0x01, 0x2a, 0x12,
+	0x58, 0x0a, 0x06, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x12, 0x1a, 0x2e, 0x67, 0x72, 0x61, 0x70,
+	0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e,
+	0x61, 0x70, 0x69, 0x2e, 0x4c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x22, 0x15, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x0f, 0x22, 0x0a, 0x2f, 0x76, 0x31, 0x2f,
+	0x6c, 0x6f, 0x67, 0x6f, 0x75, 0x74, 0x3a, 0x01, 0x2a, 0x12, 0x65, 0x0a, 0x08, 0x55, 0x73, 0x65,
+	0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x1c, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e,
+	0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70,
+	0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x22, 0x1c, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x16, 0x22, 0x11, 0x2f, 0x76, 0x31, 0x2f,
+	0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d, 0x3a, 0x01, 0x2a,
+	0x12, 0x7e, 0x0a, 0x0d, 0x75, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e,
+	0x67, 0x12, 0x21, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e,
+	0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x22, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61,
+	0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x26, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x20,
+	0x22, 0x1b, 0x2f, 0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72,
+	0x49, 0x44, 0x7d, 0x2f, 0x66, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x3a, 0x01, 0x2a,
+	0x12, 0x7a, 0x0a, 0x0c, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72,
+	0x12, 0x20, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55,
+	0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x21, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69,
+	0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x25, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x1f, 0x22, 0x1a, 0x2f,
+	0x76, 0x31, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2f, 0x7b, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x7d,
+	0x2f, 0x66, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x3a, 0x01, 0x2a, 0x42, 0x20, 0x5a, 0x1e,
+	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65,
+	0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -4899,140 +4956,141 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_rawDescGZIP() [
 	return file_github_com_grapery_grapery_common_protoc_service_proto_rawDescData
 }
 
-var file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_github_com_grapery_grapery_common_protoc_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_github_com_grapery_grapery_common_protoc_service_proto_msgTypes = make([]protoimpl.MessageInfo, 84)
 var file_github_com_grapery_grapery_common_protoc_service_proto_goTypes = []interface{}{
-	(ActiveType)(0),                      // 0: grapery.api.ActiveType
-	(ItemType)(0),                        // 1: grapery.api.ItemType
-	(AuthType)(0),                        // 2: grapery.api.AuthType
-	(VisibleType)(0),                     // 3: grapery.api.VisibleType
-	(*UserInfo)(nil),                     // 4: grapery.api.UserInfo
-	(*GroupInfo)(nil),                    // 5: grapery.api.GroupInfo
-	(*ProjectInfo)(nil),                  // 6: grapery.api.ProjectInfo
-	(*ActiveInfo)(nil),                   // 7: grapery.api.ActiveInfo
-	(*ItemInfo)(nil),                     // 8: grapery.api.ItemInfo
-	(*UserProfileInfo)(nil),              // 9: grapery.api.UserProfileInfo
-	(*GroupProfileInfo)(nil),             // 10: grapery.api.GroupProfileInfo
-	(*ProjectProfileInfo)(nil),           // 11: grapery.api.ProjectProfileInfo
-	(*LoginRequest)(nil),                 // 12: grapery.api.LoginRequest
-	(*LoginResponse)(nil),                // 13: grapery.api.LoginResponse
-	(*LogoutRequest)(nil),                // 14: grapery.api.LogoutRequest
-	(*LogoutResponse)(nil),               // 15: grapery.api.LogoutResponse
-	(*LogtouResponse)(nil),               // 16: grapery.api.LogtouResponse
-	(*RegisterRequest)(nil),              // 17: grapery.api.RegisterRequest
-	(*RegisterResponse)(nil),             // 18: grapery.api.RegisterResponse
-	(*ResetPasswordRequest)(nil),         // 19: grapery.api.ResetPasswordRequest
-	(*ResetPasswordResponse)(nil),        // 20: grapery.api.ResetPasswordResponse
-	(*UserInfoRequest)(nil),              // 21: grapery.api.UserInfoRequest
-	(*UserInfoResponse)(nil),             // 22: grapery.api.UserInfoResponse
-	(*UserFollowingRequest)(nil),         // 23: grapery.api.UserFollowingRequest
-	(*UserFollowingResponse)(nil),        // 24: grapery.api.UserFollowingResponse
-	(*UserFollowerRequest)(nil),          // 25: grapery.api.UserFollowerRequest
-	(*UserFollowerResponse)(nil),         // 26: grapery.api.UserFollowerResponse
-	(*UserGroupRequest)(nil),             // 27: grapery.api.UserGroupRequest
-	(*UserGroupResponse)(nil),            // 28: grapery.api.UserGroupResponse
-	(*UserFollowingGroupRequest)(nil),    // 29: grapery.api.UserFollowingGroupRequest
-	(*UserFollowingGroupResponse)(nil),   // 30: grapery.api.UserFollowingGroupResponse
-	(*UserUpdateRequest)(nil),            // 31: grapery.api.UserUpdateRequest
-	(*UserUpdateResponse)(nil),           // 32: grapery.api.UserUpdateResponse
-	(*StartFollowUserRequest)(nil),       // 33: grapery.api.StartFollowUserRequest
-	(*StartFollowUserResponse)(nil),      // 34: grapery.api.StartFollowUserResponse
-	(*StopFollowUserRequest)(nil),        // 35: grapery.api.StopFollowUserRequest
-	(*StopFollowUserResponse)(nil),       // 36: grapery.api.StopFollowUserResponse
-	(*FetchUserActivesRequest)(nil),      // 37: grapery.api.FetchUserActivesRequest
-	(*FetchUserActivesResponse)(nil),     // 38: grapery.api.FetchUserActivesResponse
-	(*SearchUserRequest)(nil),            // 39: grapery.api.SearchUserRequest
-	(*SearchUserResponse)(nil),           // 40: grapery.api.SearchUserResponse
-	(*CreateGroupReqeust)(nil),           // 41: grapery.api.CreateGroupReqeust
-	(*CreateGroupResponse)(nil),          // 42: grapery.api.CreateGroupResponse
-	(*GetGroupReqeust)(nil),              // 43: grapery.api.GetGroupReqeust
-	(*GetGroupResponse)(nil),             // 44: grapery.api.GetGroupResponse
-	(*GetGroupActivesRequest)(nil),       // 45: grapery.api.GetGroupActivesRequest
-	(*GetGroupActivesResponse)(nil),      // 46: grapery.api.GetGroupActivesResponse
-	(*UpdateGroupInfoRequest)(nil),       // 47: grapery.api.UpdateGroupInfoRequest
-	(*UpdateGroupInfoResponse)(nil),      // 48: grapery.api.UpdateGroupInfoResponse
-	(*DeleteGroupRequest)(nil),           // 49: grapery.api.DeleteGroupRequest
-	(*DeleteGroupResponse)(nil),          // 50: grapery.api.DeleteGroupResponse
-	(*FetchGroupMembersRequest)(nil),     // 51: grapery.api.FetchGroupMembersRequest
-	(*FetchGroupMembersResponse)(nil),    // 52: grapery.api.FetchGroupMembersResponse
-	(*SearchGroupReqeust)(nil),           // 53: grapery.api.SearchGroupReqeust
-	(*SearchGroupResponse)(nil),          // 54: grapery.api.SearchGroupResponse
-	(*FetchGroupProjectsReqeust)(nil),    // 55: grapery.api.FetchGroupProjectsReqeust
-	(*GetProjectRequest)(nil),            // 56: grapery.api.GetProjectRequest
-	(*GetProjectResponse)(nil),           // 57: grapery.api.GetProjectResponse
-	(*CreateProjectRequest)(nil),         // 58: grapery.api.CreateProjectRequest
-	(*CreateProjectResponse)(nil),        // 59: grapery.api.CreateProjectResponse
-	(*UpdateProjectRequest)(nil),         // 60: grapery.api.UpdateProjectRequest
-	(*UpdateProjectResponse)(nil),        // 61: grapery.api.UpdateProjectResponse
-	(*DeleteProjectRequest)(nil),         // 62: grapery.api.DeleteProjectRequest
-	(*DeleteProjectResponse)(nil),        // 63: grapery.api.DeleteProjectResponse
-	(*GetProjectProfileRequest)(nil),     // 64: grapery.api.GetProjectProfileRequest
-	(*GetProjectProfileResponse)(nil),    // 65: grapery.api.GetProjectProfileResponse
-	(*UpdateProjectProfileReqeust)(nil),  // 66: grapery.api.UpdateProjectProfileReqeust
-	(*UpdateProjectProfileResponse)(nil), // 67: grapery.api.UpdateProjectProfileResponse
-	(*StarProjectRequest)(nil),           // 68: grapery.api.StarProjectRequest
-	(*StarProjectResponse)(nil),          // 69: grapery.api.StarProjectResponse
-	(*UnStarProjectRequest)(nil),         // 70: grapery.api.UnStarProjectRequest
-	(*UnStarProjectResponse)(nil),        // 71: grapery.api.UnStarProjectResponse
-	(*WatchProjectReqeust)(nil),          // 72: grapery.api.WatchProjectReqeust
-	(*SearchProjectRequest)(nil),         // 73: grapery.api.SearchProjectRequest
-	(*SearchProjectResponse)(nil),        // 74: grapery.api.SearchProjectResponse
-	(*WatchProjectResponse)(nil),         // 75: grapery.api.WatchProjectResponse
-	(*GetItemsRequest)(nil),              // 76: grapery.api.GetItemsRequest
-	(*GetItemsResponse)(nil),             // 77: grapery.api.GetItemsResponse
-	(*GetItemRequest)(nil),               // 78: grapery.api.GetItemRequest
-	(*GetItemResponse)(nil),              // 79: grapery.api.GetItemResponse
-	(*CreateItemRequest)(nil),            // 80: grapery.api.CreateItemRequest
-	(*CreateItemResponse)(nil),           // 81: grapery.api.CreateItemResponse
-	(*UpdateItemRequest)(nil),            // 82: grapery.api.UpdateItemRequest
-	(*UpdateItemResponse)(nil),           // 83: grapery.api.UpdateItemResponse
-	(*DeleteItemRequest)(nil),            // 84: grapery.api.DeleteItemRequest
-	(*DeleteItemResponse)(nil),           // 85: grapery.api.DeleteItemResponse
-	(*LikeItemRequest)(nil),              // 86: grapery.api.LikeItemRequest
-	(*LikeItemResponse)(nil),             // 87: grapery.api.LikeItemResponse
+	(GroupStatus)(0),                     // 0: grapery.api.GroupStatus
+	(ActiveType)(0),                      // 1: grapery.api.ActiveType
+	(ItemType)(0),                        // 2: grapery.api.ItemType
+	(AuthType)(0),                        // 3: grapery.api.AuthType
+	(VisibleType)(0),                     // 4: grapery.api.VisibleType
+	(*UserInfo)(nil),                     // 5: grapery.api.UserInfo
+	(*GroupInfo)(nil),                    // 6: grapery.api.GroupInfo
+	(*ProjectInfo)(nil),                  // 7: grapery.api.ProjectInfo
+	(*ActiveInfo)(nil),                   // 8: grapery.api.ActiveInfo
+	(*ItemInfo)(nil),                     // 9: grapery.api.ItemInfo
+	(*UserProfileInfo)(nil),              // 10: grapery.api.UserProfileInfo
+	(*GroupProfileInfo)(nil),             // 11: grapery.api.GroupProfileInfo
+	(*ProjectProfileInfo)(nil),           // 12: grapery.api.ProjectProfileInfo
+	(*LoginRequest)(nil),                 // 13: grapery.api.LoginRequest
+	(*LoginResponse)(nil),                // 14: grapery.api.LoginResponse
+	(*LogoutRequest)(nil),                // 15: grapery.api.LogoutRequest
+	(*LogoutResponse)(nil),               // 16: grapery.api.LogoutResponse
+	(*LogtouResponse)(nil),               // 17: grapery.api.LogtouResponse
+	(*RegisterRequest)(nil),              // 18: grapery.api.RegisterRequest
+	(*RegisterResponse)(nil),             // 19: grapery.api.RegisterResponse
+	(*ResetPasswordRequest)(nil),         // 20: grapery.api.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil),        // 21: grapery.api.ResetPasswordResponse
+	(*UserInfoRequest)(nil),              // 22: grapery.api.UserInfoRequest
+	(*UserInfoResponse)(nil),             // 23: grapery.api.UserInfoResponse
+	(*UserFollowingRequest)(nil),         // 24: grapery.api.UserFollowingRequest
+	(*UserFollowingResponse)(nil),        // 25: grapery.api.UserFollowingResponse
+	(*UserFollowerRequest)(nil),          // 26: grapery.api.UserFollowerRequest
+	(*UserFollowerResponse)(nil),         // 27: grapery.api.UserFollowerResponse
+	(*UserGroupRequest)(nil),             // 28: grapery.api.UserGroupRequest
+	(*UserGroupResponse)(nil),            // 29: grapery.api.UserGroupResponse
+	(*UserFollowingGroupRequest)(nil),    // 30: grapery.api.UserFollowingGroupRequest
+	(*UserFollowingGroupResponse)(nil),   // 31: grapery.api.UserFollowingGroupResponse
+	(*UserUpdateRequest)(nil),            // 32: grapery.api.UserUpdateRequest
+	(*UserUpdateResponse)(nil),           // 33: grapery.api.UserUpdateResponse
+	(*StartFollowUserRequest)(nil),       // 34: grapery.api.StartFollowUserRequest
+	(*StartFollowUserResponse)(nil),      // 35: grapery.api.StartFollowUserResponse
+	(*StopFollowUserRequest)(nil),        // 36: grapery.api.StopFollowUserRequest
+	(*StopFollowUserResponse)(nil),       // 37: grapery.api.StopFollowUserResponse
+	(*FetchUserActivesRequest)(nil),      // 38: grapery.api.FetchUserActivesRequest
+	(*FetchUserActivesResponse)(nil),     // 39: grapery.api.FetchUserActivesResponse
+	(*SearchUserRequest)(nil),            // 40: grapery.api.SearchUserRequest
+	(*SearchUserResponse)(nil),           // 41: grapery.api.SearchUserResponse
+	(*CreateGroupReqeust)(nil),           // 42: grapery.api.CreateGroupReqeust
+	(*CreateGroupResponse)(nil),          // 43: grapery.api.CreateGroupResponse
+	(*GetGroupReqeust)(nil),              // 44: grapery.api.GetGroupReqeust
+	(*GetGroupResponse)(nil),             // 45: grapery.api.GetGroupResponse
+	(*GetGroupActivesRequest)(nil),       // 46: grapery.api.GetGroupActivesRequest
+	(*GetGroupActivesResponse)(nil),      // 47: grapery.api.GetGroupActivesResponse
+	(*UpdateGroupInfoRequest)(nil),       // 48: grapery.api.UpdateGroupInfoRequest
+	(*UpdateGroupInfoResponse)(nil),      // 49: grapery.api.UpdateGroupInfoResponse
+	(*DeleteGroupRequest)(nil),           // 50: grapery.api.DeleteGroupRequest
+	(*DeleteGroupResponse)(nil),          // 51: grapery.api.DeleteGroupResponse
+	(*FetchGroupMembersRequest)(nil),     // 52: grapery.api.FetchGroupMembersRequest
+	(*FetchGroupMembersResponse)(nil),    // 53: grapery.api.FetchGroupMembersResponse
+	(*SearchGroupReqeust)(nil),           // 54: grapery.api.SearchGroupReqeust
+	(*SearchGroupResponse)(nil),          // 55: grapery.api.SearchGroupResponse
+	(*FetchGroupProjectsReqeust)(nil),    // 56: grapery.api.FetchGroupProjectsReqeust
+	(*GetProjectRequest)(nil),            // 57: grapery.api.GetProjectRequest
+	(*GetProjectResponse)(nil),           // 58: grapery.api.GetProjectResponse
+	(*CreateProjectRequest)(nil),         // 59: grapery.api.CreateProjectRequest
+	(*CreateProjectResponse)(nil),        // 60: grapery.api.CreateProjectResponse
+	(*UpdateProjectRequest)(nil),         // 61: grapery.api.UpdateProjectRequest
+	(*UpdateProjectResponse)(nil),        // 62: grapery.api.UpdateProjectResponse
+	(*DeleteProjectRequest)(nil),         // 63: grapery.api.DeleteProjectRequest
+	(*DeleteProjectResponse)(nil),        // 64: grapery.api.DeleteProjectResponse
+	(*GetProjectProfileRequest)(nil),     // 65: grapery.api.GetProjectProfileRequest
+	(*GetProjectProfileResponse)(nil),    // 66: grapery.api.GetProjectProfileResponse
+	(*UpdateProjectProfileReqeust)(nil),  // 67: grapery.api.UpdateProjectProfileReqeust
+	(*UpdateProjectProfileResponse)(nil), // 68: grapery.api.UpdateProjectProfileResponse
+	(*StarProjectRequest)(nil),           // 69: grapery.api.StarProjectRequest
+	(*StarProjectResponse)(nil),          // 70: grapery.api.StarProjectResponse
+	(*UnStarProjectRequest)(nil),         // 71: grapery.api.UnStarProjectRequest
+	(*UnStarProjectResponse)(nil),        // 72: grapery.api.UnStarProjectResponse
+	(*WatchProjectReqeust)(nil),          // 73: grapery.api.WatchProjectReqeust
+	(*SearchProjectRequest)(nil),         // 74: grapery.api.SearchProjectRequest
+	(*SearchProjectResponse)(nil),        // 75: grapery.api.SearchProjectResponse
+	(*WatchProjectResponse)(nil),         // 76: grapery.api.WatchProjectResponse
+	(*GetItemsRequest)(nil),              // 77: grapery.api.GetItemsRequest
+	(*GetItemsResponse)(nil),             // 78: grapery.api.GetItemsResponse
+	(*GetItemRequest)(nil),               // 79: grapery.api.GetItemRequest
+	(*GetItemResponse)(nil),              // 80: grapery.api.GetItemResponse
+	(*CreateItemRequest)(nil),            // 81: grapery.api.CreateItemRequest
+	(*CreateItemResponse)(nil),           // 82: grapery.api.CreateItemResponse
+	(*UpdateItemRequest)(nil),            // 83: grapery.api.UpdateItemRequest
+	(*UpdateItemResponse)(nil),           // 84: grapery.api.UpdateItemResponse
+	(*DeleteItemRequest)(nil),            // 85: grapery.api.DeleteItemRequest
+	(*DeleteItemResponse)(nil),           // 86: grapery.api.DeleteItemResponse
+	(*LikeItemRequest)(nil),              // 87: grapery.api.LikeItemRequest
+	(*LikeItemResponse)(nil),             // 88: grapery.api.LikeItemResponse
 }
 var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int32{
-	2,  // 0: grapery.api.LoginRequest.loginType:type_name -> grapery.api.AuthType
-	2,  // 1: grapery.api.RegisterRequest.loginType:type_name -> grapery.api.AuthType
-	2,  // 2: grapery.api.ResetPasswordRequest.loginType:type_name -> grapery.api.AuthType
-	4,  // 3: grapery.api.UserInfoResponse.info:type_name -> grapery.api.UserInfo
-	4,  // 4: grapery.api.UserFollowingResponse.list:type_name -> grapery.api.UserInfo
-	4,  // 5: grapery.api.UserFollowerResponse.list:type_name -> grapery.api.UserInfo
-	5,  // 6: grapery.api.UserGroupResponse.list:type_name -> grapery.api.GroupInfo
-	5,  // 7: grapery.api.UserFollowingGroupResponse.list:type_name -> grapery.api.GroupInfo
-	0,  // 8: grapery.api.FetchUserActivesRequest.atype:type_name -> grapery.api.ActiveType
-	7,  // 9: grapery.api.FetchUserActivesResponse.list:type_name -> grapery.api.ActiveInfo
-	4,  // 10: grapery.api.SearchUserResponse.list:type_name -> grapery.api.UserInfo
-	5,  // 11: grapery.api.GetGroupResponse.info:type_name -> grapery.api.GroupInfo
-	0,  // 12: grapery.api.GetGroupActivesRequest.atype:type_name -> grapery.api.ActiveType
-	7,  // 13: grapery.api.GetGroupActivesResponse.list:type_name -> grapery.api.ActiveInfo
-	5,  // 14: grapery.api.UpdateGroupInfoRequest.info:type_name -> grapery.api.GroupInfo
-	4,  // 15: grapery.api.FetchGroupMembersResponse.list:type_name -> grapery.api.UserInfo
-	5,  // 16: grapery.api.SearchGroupResponse.list:type_name -> grapery.api.GroupInfo
-	6,  // 17: grapery.api.GetProjectResponse.info:type_name -> grapery.api.ProjectInfo
-	6,  // 18: grapery.api.CreateProjectResponse.info:type_name -> grapery.api.ProjectInfo
-	6,  // 19: grapery.api.UpdateProjectRequest.info:type_name -> grapery.api.ProjectInfo
-	6,  // 20: grapery.api.UpdateProjectResponse.info:type_name -> grapery.api.ProjectInfo
-	11, // 21: grapery.api.GetProjectProfileResponse.info:type_name -> grapery.api.ProjectProfileInfo
-	11, // 22: grapery.api.UpdateProjectProfileReqeust.info:type_name -> grapery.api.ProjectProfileInfo
-	11, // 23: grapery.api.UpdateProjectProfileResponse.info:type_name -> grapery.api.ProjectProfileInfo
-	6,  // 24: grapery.api.SearchProjectResponse.list:type_name -> grapery.api.ProjectInfo
-	8,  // 25: grapery.api.GetItemsResponse.list:type_name -> grapery.api.ItemInfo
-	8,  // 26: grapery.api.GetItemResponse.info:type_name -> grapery.api.ItemInfo
-	0,  // 27: grapery.api.CreateItemRequest.atype:type_name -> grapery.api.ActiveType
-	8,  // 28: grapery.api.CreateItemResponse.info:type_name -> grapery.api.ItemInfo
-	8,  // 29: grapery.api.UpdateItemRequest.info:type_name -> grapery.api.ItemInfo
-	8,  // 30: grapery.api.UpdateItemResponse.info:type_name -> grapery.api.ItemInfo
-	12, // 31: grapery.api.Grapery.Login:input_type -> grapery.api.LoginRequest
-	14, // 32: grapery.api.Grapery.Logout:input_type -> grapery.api.LogoutRequest
-	21, // 33: grapery.api.Grapery.UserInfo:input_type -> grapery.api.UserInfoRequest
-	23, // 34: grapery.api.Grapery.userFollowing:input_type -> grapery.api.UserFollowingRequest
-	25, // 35: grapery.api.Grapery.UserFollower:input_type -> grapery.api.UserFollowerRequest
-	13, // 36: grapery.api.Grapery.Login:output_type -> grapery.api.LoginResponse
-	15, // 37: grapery.api.Grapery.Logout:output_type -> grapery.api.LogoutResponse
-	22, // 38: grapery.api.Grapery.UserInfo:output_type -> grapery.api.UserInfoResponse
-	24, // 39: grapery.api.Grapery.userFollowing:output_type -> grapery.api.UserFollowingResponse
-	26, // 40: grapery.api.Grapery.UserFollower:output_type -> grapery.api.UserFollowerResponse
+	3,  // 0: grapery.api.LoginRequest.loginType:type_name -> grapery.api.AuthType
+	3,  // 1: grapery.api.RegisterRequest.loginType:type_name -> grapery.api.AuthType
+	3,  // 2: grapery.api.ResetPasswordRequest.loginType:type_name -> grapery.api.AuthType
+	5,  // 3: grapery.api.UserInfoResponse.info:type_name -> grapery.api.UserInfo
+	5,  // 4: grapery.api.UserFollowingResponse.list:type_name -> grapery.api.UserInfo
+	5,  // 5: grapery.api.UserFollowerResponse.list:type_name -> grapery.api.UserInfo
+	6,  // 6: grapery.api.UserGroupResponse.list:type_name -> grapery.api.GroupInfo
+	6,  // 7: grapery.api.UserFollowingGroupResponse.list:type_name -> grapery.api.GroupInfo
+	1,  // 8: grapery.api.FetchUserActivesRequest.atype:type_name -> grapery.api.ActiveType
+	8,  // 9: grapery.api.FetchUserActivesResponse.list:type_name -> grapery.api.ActiveInfo
+	5,  // 10: grapery.api.SearchUserResponse.list:type_name -> grapery.api.UserInfo
+	6,  // 11: grapery.api.GetGroupResponse.info:type_name -> grapery.api.GroupInfo
+	1,  // 12: grapery.api.GetGroupActivesRequest.atype:type_name -> grapery.api.ActiveType
+	8,  // 13: grapery.api.GetGroupActivesResponse.list:type_name -> grapery.api.ActiveInfo
+	6,  // 14: grapery.api.UpdateGroupInfoRequest.info:type_name -> grapery.api.GroupInfo
+	5,  // 15: grapery.api.FetchGroupMembersResponse.list:type_name -> grapery.api.UserInfo
+	6,  // 16: grapery.api.SearchGroupResponse.list:type_name -> grapery.api.GroupInfo
+	7,  // 17: grapery.api.GetProjectResponse.info:type_name -> grapery.api.ProjectInfo
+	7,  // 18: grapery.api.CreateProjectResponse.info:type_name -> grapery.api.ProjectInfo
+	7,  // 19: grapery.api.UpdateProjectRequest.info:type_name -> grapery.api.ProjectInfo
+	7,  // 20: grapery.api.UpdateProjectResponse.info:type_name -> grapery.api.ProjectInfo
+	12, // 21: grapery.api.GetProjectProfileResponse.info:type_name -> grapery.api.ProjectProfileInfo
+	12, // 22: grapery.api.UpdateProjectProfileReqeust.info:type_name -> grapery.api.ProjectProfileInfo
+	12, // 23: grapery.api.UpdateProjectProfileResponse.info:type_name -> grapery.api.ProjectProfileInfo
+	7,  // 24: grapery.api.SearchProjectResponse.list:type_name -> grapery.api.ProjectInfo
+	9,  // 25: grapery.api.GetItemsResponse.list:type_name -> grapery.api.ItemInfo
+	9,  // 26: grapery.api.GetItemResponse.info:type_name -> grapery.api.ItemInfo
+	1,  // 27: grapery.api.CreateItemRequest.atype:type_name -> grapery.api.ActiveType
+	9,  // 28: grapery.api.CreateItemResponse.info:type_name -> grapery.api.ItemInfo
+	9,  // 29: grapery.api.UpdateItemRequest.info:type_name -> grapery.api.ItemInfo
+	9,  // 30: grapery.api.UpdateItemResponse.info:type_name -> grapery.api.ItemInfo
+	13, // 31: grapery.api.Grapery.Login:input_type -> grapery.api.LoginRequest
+	15, // 32: grapery.api.Grapery.Logout:input_type -> grapery.api.LogoutRequest
+	22, // 33: grapery.api.Grapery.UserInfo:input_type -> grapery.api.UserInfoRequest
+	24, // 34: grapery.api.Grapery.userFollowing:input_type -> grapery.api.UserFollowingRequest
+	26, // 35: grapery.api.Grapery.UserFollower:input_type -> grapery.api.UserFollowerRequest
+	14, // 36: grapery.api.Grapery.Login:output_type -> grapery.api.LoginResponse
+	16, // 37: grapery.api.Grapery.Logout:output_type -> grapery.api.LogoutResponse
+	23, // 38: grapery.api.Grapery.UserInfo:output_type -> grapery.api.UserInfoResponse
+	25, // 39: grapery.api.Grapery.userFollowing:output_type -> grapery.api.UserFollowingResponse
+	27, // 40: grapery.api.Grapery.UserFollower:output_type -> grapery.api.UserFollowerResponse
 	36, // [36:41] is the sub-list for method output_type
 	31, // [31:36] is the sub-list for method input_type
 	31, // [31:31] is the sub-list for extension type_name
@@ -6060,7 +6118,7 @@ func file_github_com_grapery_grapery_common_protoc_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc,
-			NumEnums:      4,
+			NumEnums:      5,
 			NumMessages:   84,
 			NumExtensions: 0,
 			NumServices:   1,

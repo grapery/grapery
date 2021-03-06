@@ -1,11 +1,34 @@
 package errors
 
-import "errors"
+import (
+	"fmt"
+)
+
+type SysError struct {
+	Code        int
+	Description string
+}
+
+func NewSysError(code int, desc string) *SysError {
+	return &SysError{
+		Code:        code,
+		Description: desc,
+	}
+}
+
+func (e SysError) Error() string {
+	return fmt.Sprintf("error: code %d description %s", e.Code, e.Description)
+}
 
 var (
-	ErrUserIsExist           = errors.New("user is exist")
-	ErrCreateAuthFailed      = errors.New("create auth info failed")
-	ErrResetPasswordFailed   = errors.New("reset password failed")
-	ErrGetUserAuthInfoFailed = errors.New("get user auth info failed")
-	ErrDeleteUserAuthInfo    = errors.New("delete uaer auth info failed")
+	ErrAuthNotFound = NewSysError(1001, "auth info is not exist")
+	ErrAuthExpired  = NewSysError(1002, "auth info is expired")
+)
+
+var (
+	ErrUserIsExist           = NewSysError(2001, "user is exist")
+	ErrCreateAuthFailed      = NewSysError(2002, "create auth info failed")
+	ErrResetPasswordFailed   = NewSysError(2003, "reset password failed")
+	ErrGetUserAuthInfoFailed = NewSysError(2004, "get user auth info failed")
+	ErrDeleteUserAuthInfo    = NewSysError(2005, "delete uaer auth info failed")
 )

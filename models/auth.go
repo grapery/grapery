@@ -3,12 +3,11 @@ package models
 import (
 	"fmt"
 
-	"github.com/grapery/grapery/utils/errors"
-
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/utils/errors"
 )
 
 /*
@@ -32,7 +31,10 @@ func (a Auth) TableName() string {
 }
 
 func (a *Auth) CreateUsePhone() error {
-	database.Table(a.TableName()).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Find(a)
+	err := database.Table(a.TableName()).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Find(a).Error
+	if err != nil {
+		return err
+	}
 	var ret *gorm.DB
 	if a.IDBase.ID == 0 {
 		ret = database.Create(a)
@@ -48,7 +50,10 @@ func (a *Auth) CreateUsePhone() error {
 }
 
 func (a *Auth) CreateUseEmail() error {
-	database.Table(a.TableName()).Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Find(a)
+	err := database.Table(a.TableName()).Where("email = ? and is_valid in (?)", a.Email, 0, true).Find(a).Error
+	if err != nil {
+		return err
+	}
 	var ret *gorm.DB
 	if a.IDBase.ID == 0 {
 		ret = database.Create(a)
@@ -72,7 +77,10 @@ func (a *Auth) UpdatePwd() error {
 }
 
 func (a *Auth) GetByEmail() error {
-	if err := database.Table(a.TableName()).Where("phone = ? and deleted = ?", a.Email, 0).Find(a).Where("is_valid = ? ", true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrAuthNotFound
+		}
 		log.Errorf("get auth [%s] info failed : [%s]", a.Email, err)
 		return fmt.Errorf("get auth [%s] info failed ", a.Email)
 	}
@@ -80,7 +88,7 @@ func (a *Auth) GetByEmail() error {
 }
 
 func (a *Auth) GetByPhone() error {
-	if err := database.Table(a.TableName()).Where("phone = ? and deleted = ?", a.Phone, 0).Find(a).Where("is_valid = ? ", true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Error; err != nil {
 		log.Errorf("get auth [%s] info failed : [%s]", a.Phone, err)
 		return fmt.Errorf("get auth [%s] info failed ", a.Phone)
 	}
@@ -88,7 +96,7 @@ func (a *Auth) GetByPhone() error {
 }
 
 func (a *Auth) GetByUID() error {
-	if err := database.Table(a.TableName()).Where("uid = ? and deleted = ?", a.UID, 0).Find(a).Where("is_valid = ? ", true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).Error; err != nil {
 		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
 	}

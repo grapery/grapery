@@ -23,6 +23,7 @@ type User struct {
 	Gender   int    `json:"gender,omitempty"`
 	BioID    uint   `json:"bio,omitempty"`
 	Location string `json:"location,omitempty"`
+	Status   uint
 	Avatar   string `json:"avatar,omitempty"`
 	URL      string `json:"url,omitempty"`
 }
