@@ -50,6 +50,14 @@ func (auth *AuthService) Register(ctx context.Context, account string, pwd strin
 		info.AuthType = authType
 		err = info.CreateUsePhone()
 	}
+
+	user := new(models.User)
+	if authType == api.AuthType_WithEmail{
+		user.Email = account
+		user.Auth
+	}else {
+		user.Phone = account
+	}
 	return
 }
 
