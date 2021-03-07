@@ -17,7 +17,7 @@ import (
 */
 type Auth struct {
 	IDBase
-	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:"`
+	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
 	Email    string       `json:"email,omitempty" gorm:"unique_index"`
 	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
 	Password string       `json:"-" gorm:"password"`
@@ -30,39 +30,32 @@ func (a Auth) TableName() string {
 	return "auth"
 }
 
-func (a *Auth) CreateUsePhone() error {
-	err := database.Table(a.TableName()).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Find(a).Error
+func (a *Auth) CreateWithPhone() error {
+	err := database.Create(a).Error
 	if err != nil {
-		return err
-	}
-	var ret *gorm.DB
-	if a.IDBase.ID == 0 {
-		ret = database.Create(a)
-	} else {
-		log.Errorf("auth [%s] is exist : ", a.IDBase.ID)
-		return errors.ErrUserIsExist
-	}
-	if ret.Error != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Phone, ret.Error)
+		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
 		return errors.ErrCreateAuthFailed
 	}
 	return nil
 }
 
-func (a *Auth) CreateUseEmail() error {
-	err := database.Table(a.TableName()).Where("email = ? and is_valid in (?)", a.Email, 0, true).Find(a).Error
+func IsUserAuthExist(account string) bool {
+	var count int
+	err := database.Table(Auth{}.TableName()).Where("email = ? or phone = ?", account, account).Count(&count).Error
+	if err != gorm.ErrRecordNotFound {
+		return false
+	}
+	if count == 0 {
+		return false
+	}
+	return true
+}
+
+func (a *Auth) CreateWithEmail() error {
+
+	err := database.Create(a).Error
 	if err != nil {
-		return err
-	}
-	var ret *gorm.DB
-	if a.IDBase.ID == 0 {
-		ret = database.Create(a)
-	} else {
-		log.Errorf("auth [%s] is exist : ", a.IDBase.ID)
-		return errors.ErrUserIsExist
-	}
-	if ret.Error != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Phone, ret.Error)
+		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
 		return errors.ErrCreateAuthFailed
 	}
 	return nil

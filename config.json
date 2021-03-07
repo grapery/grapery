@@ -5,14 +5,14 @@
     "password": "123456789"
   },
   "redis": {
-    "address": "127.0.0.1:6379",
+    "address": "localhost:6379",
     "password": "",
     "database": "0",
     "ping_interval": 30
   },
-  "graphdb":{
+  "graphdb": {
     "address": "127.0.0.1:8088",
-    "schema" : "explore"
+    "schema": "explore"
   },
   "log_level": "info",
   "port": "12306"

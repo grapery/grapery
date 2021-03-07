@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grapery/grapery/utils/sessions"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/config"
@@ -16,7 +15,7 @@ import (
 	"github.com/grapery/grapery/service/group"
 	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/utils"
-	cache "github.com/grapery/grapery/utils/redis"
+	"github.com/grapery/grapery/utils/cache"
 )
 
 type Service struct {
@@ -31,7 +30,6 @@ func NewService() *Service {
 }
 
 func (s *Service) Run(cfg *config.Config) error {
-	sessions.InitSession(cfg)
 	cache.NewRedisClient(cfg)
 	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
 	if err != nil {
@@ -40,7 +38,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	}
 	common.Init()
 	app := gin.Default()
-	app.Use(sessions.UseSession("grapestree"))
 	app.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
 			param.ClientIP,

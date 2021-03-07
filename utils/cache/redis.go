@@ -1,4 +1,4 @@
-package redis
+package cache
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/grapery/grapery/config"
 )
 
@@ -17,6 +19,7 @@ type RedisClient struct {
 }
 
 func NewRedisClient(cfg *config.Config) *RedisClient {
+	log.Infof("address %s , passwrod %s ", cfg.Redis.Address, cfg.Redis.Password)
 	dbid, _ := strconv.Atoi(cfg.Redis.Database)
 	client := &RedisClient{
 		redis.NewClient(
@@ -25,12 +28,16 @@ func NewRedisClient(cfg *config.Config) *RedisClient {
 				Password:    cfg.Redis.Password,
 				DB:          dbid,
 				MaxRetries:  5,
-				DialTimeout: 10,
+				DialTimeout: time.Second * 120,
 				PoolSize:    20,
 			}),
 		dbid,
 	}
 	redisCache = client
+	err := client.Ping().Err()
+	if err != nil {
+		panic(err)
+	}
 	return client
 }
 
@@ -88,4 +95,8 @@ func SetObject(ctx context.Context, key string, val interface{}, ttl int64) erro
 func GetObject(ctx context.Context, key string) (val interface{}, err error) {
 	v := redisCache.Get(key)
 	return v.Bytes()
+}
+
+func DelCache(ctx context.Context, key string) error {
+	return redisCache.Del(key).Err()
 }

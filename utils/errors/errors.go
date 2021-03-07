@@ -23,6 +23,7 @@ func (e SysError) Error() string {
 var (
 	ErrAuthNotFound = NewSysError(1001, "auth info is not exist")
 	ErrAuthExpired  = NewSysError(1002, "auth info is expired")
+	ErrAuthIsExist  = NewSysError(1003, "auth info is exist")
 )
 
 var (

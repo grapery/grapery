@@ -3,16 +3,16 @@ package auth
 import (
 	// "net/http"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/pkg/auth"
 	"github.com/grapery/grapery/utils"
-	"github.com/grapery/grapery/utils/sessions"
+	"github.com/grapery/grapery/utils/cache"
 )
 
 func Register(ctx *gin.Context) {
@@ -48,7 +48,8 @@ func Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ret)
 		return
 	}
-	info, err := auth.GetAuthService().Login(context.Background(), req.GetAccount(), req.GetPassword(), req.GetLoginType())
+	c := context.Background()
+	info, err := auth.GetAuthService().Login(c, req.GetAccount(), req.GetPassword(), req.GetLoginType())
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
@@ -58,15 +59,15 @@ func Login(ctx *gin.Context) {
 	ret.Code = 0
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{UserID: info.UserID}
+	infoData, _ := json.Marshal(info)
+	cache.SetString(c, fmt.Sprintf("%d", info.GetUserID()), string(infoData), 86400)
 	ctx.SetCookie(
 		utils.CookieName,
-		"",
+		fmt.Sprintf("%d", info.GetUserID()),
 		utils.CookieMaxAge,
 		utils.CookiePath,
 		utils.Domain, false, false)
-	se := sessions.Default(ctx)
-	seData, _ := proto.Marshal(info)
-	se.Set(fmt.Sprintf("%d", info.GetUserID()), seData)
+
 	ctx.JSON(http.StatusOK, ret)
 }
 
@@ -80,20 +81,21 @@ func Logout(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ret)
 		return
 	}
-	err = auth.GetAuthService().Logout(context.Background(), req.GetUserID())
+	c := context.Background()
+	err = auth.GetAuthService().Logout(c, req.GetUserID())
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
 		ctx.JSON(http.StatusOK, ret)
 		return
 	}
-	se := sessions.Default(ctx)
-	se.Delete(fmt.Sprintf("%d", req.GetUserID()))
+	cookie, _ := ctx.Cookie(utils.CookieName)
+	cache.DelCache(c, cookie)
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{}
 	return
 }
 
 func ResetPassword(ctx *utils.Context) {
-	req := %api.ResetPwd()
+	_ = &api.ResetPasswordRequest{}
 }

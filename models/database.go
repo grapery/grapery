@@ -36,6 +36,7 @@ func Init(uname, pwd, db string) error {
 	database.DB().SetMaxIdleConns(maxIdleConns)
 	database.DB().SetMaxOpenConns(maxOpenConns)
 	database.DB().SetConnMaxLifetime(connMaxLifetime)
+	database.Debug()
 	/*callback: https://github.com/go-gorm/gorm/blob/master/callbacks/callbacks.go*/
 	database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createCallback)
 	database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateCallback)

@@ -2,13 +2,13 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/grapery/grapery/api"
-	"github.com/grapery/grapery/utils/sessions"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
+	"github.com/grapery/grapery/utils/cache"
 )
 
 var (
@@ -31,27 +31,34 @@ type HandlerFunc func(c *Context)
 func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ret = new(Result)
+		Ctx := context.Background()
 		cookie, err := c.Cookie(CookieName)
 		if err != nil {
 			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
 			return
 		}
-		log.Info("cookie :", cookie)
-		infoData := sessions.Default(c).Get(cookie).([]byte)
-		var info = new(api.UserInfo)
-		err = proto.Unmarshal(infoData, info)
+
+		// parse cookie
+		infoData, err := cache.GetString(Ctx, cookie)
+		if err != nil {
+			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
+			return
+		}
 		ctx := &Context{
 			C:      c,
-			Ctx:    context.Background(),
+			Ctx:    Ctx,
 			UserID: 0,
 		}
+		var info = new(api.UserInfo)
+		err = json.Unmarshal([]byte(infoData), info)
+
 		if err != nil {
 			ctx.Err = err
 			ctx.Resp = nil
 		} else {
 			h(ctx)
 		}
-
+		// err handle
 		if ctx.Err != nil {
 			ret.Code = http.StatusOK
 			ret.Message = ctx.Err.Error()
