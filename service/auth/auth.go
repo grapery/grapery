@@ -60,7 +60,7 @@ func Login(ctx *gin.Context) {
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{UserID: info.UserID}
 	infoData, _ := json.Marshal(info)
-	cache.SetString(c, fmt.Sprintf("%d", info.GetUserID()), string(infoData), 86400)
+	cache.SetBytes(c, fmt.Sprintf("%d", info.GetUserID()), infoData, 86400)
 	ctx.SetCookie(
 		utils.CookieName,
 		fmt.Sprintf("%d", info.GetUserID()),

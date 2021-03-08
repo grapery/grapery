@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/cache"
@@ -39,7 +40,7 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 		}
 
 		// parse cookie
-		infoData, err := cache.GetString(Ctx, cookie)
+		infoData, err := cache.GetBytes(Ctx, cookie)
 		if err != nil {
 			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
 			return
@@ -50,6 +51,7 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 			UserID: 0,
 		}
 		var info = new(api.UserInfo)
+		log.Info("infoData: ", string(infoData))
 		err = json.Unmarshal([]byte(infoData), info)
 
 		if err != nil {
