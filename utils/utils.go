@@ -20,7 +20,7 @@ var (
 )
 
 type Context struct {
-	C      *gin.Context
+	GinC   *gin.Context
 	Ctx    context.Context
 	UserID int64
 	Err    error
@@ -32,7 +32,7 @@ type HandlerFunc func(c *Context)
 func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ret = new(Result)
-		Ctx := context.Background()
+		Ctx, _ := context.WithCancel(c.Request.Context())
 		cookie, err := c.Cookie(CookieName)
 		if err != nil {
 			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
@@ -46,7 +46,7 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 			return
 		}
 		ctx := &Context{
-			C:      c,
+			GinC:   c,
 			Ctx:    Ctx,
 			UserID: 0,
 		}
