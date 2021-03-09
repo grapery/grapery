@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/cache"
+)
+
+var (
+	EmailRegexp       = regexp.MustCompile(`^(\w+\.?)*\w+@(?:\w+\.)\w+$`)
+	PhoneNumberRegexp = regexp.MustCompile(`^[0-9\-\+]+$`)
 )
 
 var (
@@ -22,7 +28,7 @@ var (
 type Context struct {
 	GinC   *gin.Context
 	Ctx    context.Context
-	UserID int64
+	UserID uint64
 	Err    error
 	Resp   interface{}
 }
@@ -53,11 +59,11 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 		var info = new(api.UserInfo)
 		log.Info("infoData: ", string(infoData))
 		err = json.Unmarshal([]byte(infoData), info)
-
 		if err != nil {
 			ctx.Err = err
 			ctx.Resp = nil
 		} else {
+			ctx.UserID = info.GetUserID()
 			h(ctx)
 		}
 		// err handle

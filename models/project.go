@@ -28,6 +28,7 @@ func (p Project) TableName() string {
 }
 
 func (p *Project) Create() error {
+	p ,err:=database.Table(p.TableName()).
 	if !database.NewRecord(p) {
 		database.Create(p)
 	}
@@ -47,4 +48,36 @@ func (p *Project) Get() error {
 func (p *Project) Delete() error {
 	database.Delete(p)
 	return nil
+}
+
+func GetProjectListByName(name string, offset, number int) (list []*Project, err error) {
+	return nil, nil
+}
+
+func GetProjectListByTag(tags string, offset, number int) ([]*Project, error) {
+	return nil, nil
+}
+
+func GetProjectListByCreator(creatorID int, offset, number int) ([]*Project, error) {
+	return nil, nil
+}
+
+func GetProjectListByOwner(ownerID int, offset, number int) ([]*Project, error) {
+	return nil, nil
+}
+
+func GetGroupProjectListByName(groupID int, name string, offset, number int) (list []*Project, err error) {
+	return nil, nil
+}
+
+func GetGroupProjectListByTag(groupID int, tags string, offset, number int) ([]*Project, error) {
+	return nil, nil
+}
+
+func GeGrouptProjectListByCreator(groupID int, creatorID int, offset, number int) ([]*Project, error) {
+	return nil, nil
+}
+
+func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) ([]*Project, error) {
+	return nil, nil
 }
