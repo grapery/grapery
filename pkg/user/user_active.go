@@ -3,8 +3,9 @@ package user
 import (
 	"context"
 
-	"github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/models"
 )
 
 var userActiveServer UserActiveServer
@@ -24,7 +25,7 @@ func NewUserActiveService() *UserActiveService {
 type UserActiveServer interface {
 	GetUserActiveByGroupAndAvtiveType(ctx context.Context, uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
 	GetUserAllActive(ctx context.Context, uid uint64, offset int, number int, groupID int64, activeType int) ([]*models.Active, error)
-	CreateNewActive(uid uint64, groupID uint64, activeType int) error
+	CreateNewActive(ctx context.Context, uid uint64, groupID uint64, activeType int) error
 	UpdateActive(ctx context.Context, uid uint64, groupID uint64, activeID uint64) error
 	DeleteActive(ctx context.Context, uid uint64, groupID uint64, activeID uint64) error
 }

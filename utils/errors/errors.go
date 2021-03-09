@@ -35,7 +35,8 @@ var (
 )
 
 var (
-	ErrGroupIsNotExist = NewSysError(3001, "group is not exist")
+	ErrGroupIsNotExist     = NewSysError(3001, "group is not exist")
+	ErrGroupIsAlreadyExist = NewSysError(3001, "group is already exist")
 )
 
 var (

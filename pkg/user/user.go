@@ -3,8 +3,10 @@ package user
 import (
 	"context"
 
-	"github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/models"
 )
 
 var userServer UserServer
@@ -22,48 +24,53 @@ func NewUserSerivce() *UserService {
 }
 
 type UserServer interface {
-	Get(ctx context.Context, uid int64) error
-	UpdateAvator(ctx context.Context, uid int64, avator string) error
-	Delete(ctx context.Context, uid int64) error
+	Get(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error)
+	UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error)
 }
 
 type UserService struct {
 }
 
-func (user *UserService) Get(ctx context.Context, uid int64) error {
+func (user *UserService) Get(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(uid)
+	u.ID = uint(req.GetUserID())
 	err := u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
-		return err
+		return nil, err
 	}
-	return nil
+	return &api.UserInfoResponse{
+		Info: &api.UserInfo{
+			UserID:    uint64(u.ID),
+			Nickname:  u.Name,
+			AvatorUrl: u.Avatar,
+			Email:     u.Email,
+			Location:  u.Location,
+		},
+	}, err
 }
 
-func (u *UserService) Update(ctx context.Context, uid int64) error {
-	return nil
-}
-
-func (user *UserService) UpdateAvator(ctx context.Context, uid int64, avator string) error {
+func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(uid)
-	u.Avatar = avator
+	u.ID = uint(req.GetUserID())
 	err := u.UpdateAvatar()
 	if err != nil {
-		log.Errorf("delete user failed : %s", err.Error())
-		return err
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
 	}
-	return nil
-}
-
-func (user *UserService) Delete(ctx context.Context, uid int64) error {
-	var u = new(models.User)
-	u.ID = uint(uid)
-	err := u.Delete()
+	u.ID = uint(req.GetUserID())
+	err = u.GetById()
 	if err != nil {
-		log.Errorf("delete user failed : %s", err.Error())
-		return err
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
 	}
-	return nil
+	return &api.UpdateUserAvatorResponse{
+		Info: &api.UserInfo{
+			UserID:    uint64(u.ID),
+			Nickname:  u.Name,
+			AvatorUrl: u.Avatar,
+			Email:     u.Email,
+			Location:  u.Location,
+		},
+	}, err
 }

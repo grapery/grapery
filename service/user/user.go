@@ -1,6 +1,8 @@
 package user
 
 import (
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/pkg/user"
 	"github.com/grapery/grapery/utils"
 )
 
@@ -9,7 +11,20 @@ func SearchUser(ctx *utils.Context) {
 }
 
 func GetUser(ctx *utils.Context) {
-
+	req := &api.UserInfoRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().Get(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
 }
 
 func GetUserProfile(ctx *utils.Context) {

@@ -5,6 +5,9 @@ import (
 
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/utils/errors"
 )
 
 /*
@@ -19,12 +22,13 @@ Group
 */
 type Group struct {
 	IDBase
-	Name      string `json:"name,omitempty"`
-	ShortDesc string `json:"short_desc,omitempty"`
-	Avatar    string `son:"avatar,omitempty"`
-	Gtype     string `json:"gtype,omitempty"`
-	UserID    int64  `json:"user_id,omitempty"`
-	IsPrivate bool   `json:"is_private,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	ShortDesc   string          `json:"short_desc,omitempty"`
+	Avatar      string          `son:"avatar,omitempty"`
+	Gtype       string          `json:"gtype,omitempty"`
+	CreatorID   uint64          `json:"creator_id,omitempty"`
+	OwnerID     uint64          `json:"owner_id,omitempty"`
+	VisableType api.VisibleType `json:"visable_type,omitempty"`
 }
 
 func (g Group) TableName() string {
@@ -32,22 +36,21 @@ func (g Group) TableName() string {
 }
 
 func (g *Group) Create() error {
-	database.Begin()
-	database.Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.UserID, 0).Find(g)
-	var ret *gorm.DB
-	if g.IDBase.ID != 0 {
-		ret = database.Create(g)
+	err := database.Model(g).Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g).Error
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			log.Errorf("query group failed: %s", err.Error())
+			return err
+		}
+		err = database.Model(g).Create(g).Error
+		if err != nil {
+			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
+			return errors.ErrGroupIsAlreadyExist
+		}
 	} else {
-		database.Rollback()
 		log.Errorf("group [%s] is exist : ", g.IDBase.ID)
-		return fmt.Errorf("group [%s] is exist", g.Name)
+		return errors.ErrGroupIsAlreadyExist
 	}
-	if ret.Error != nil {
-		database.Rollback()
-		log.Errorf("create group [%s] failed [%s] ", g.Name, ret.Error)
-		return fmt.Errorf("create group failed")
-	}
-	database.Commit()
 	return nil
 }
 
@@ -60,7 +63,7 @@ func (g *Group) UpdateDesc() error {
 }
 
 func (g *Group) UpdateGroupType() error {
-	if err := database.Model(g).Update("short_desc", g.ShortDesc).Error; err != nil {
+	if err := database.Model(g).Update("gtype", g.Gtype).Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 	}
@@ -68,7 +71,7 @@ func (g *Group) UpdateGroupType() error {
 }
 
 func (g *Group) UpdateAvatar() error {
-	if err := database.Model(g).Update("avatar", g.ShortDesc).Error; err != nil {
+	if err := database.Model(g).Update("avatar", g.Avatar).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 	}
@@ -76,7 +79,8 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := database.Where("name = ? and user_id = ? and deleted = ?", g.Name, g.UserID, 0).Find(g).Error; err != nil {
+	if err := database.Model(g).Where("name = ? and owner_id = ? and deleted = ?",
+		g.Name, g.OwnerID, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
@@ -84,7 +88,7 @@ func (g *Group) GetByName() error {
 }
 
 func (g *Group) GetByID() error {
-	if err := database.Where("id = ? ", g.ID).Error; err != nil {
+	if err := database.Model(g).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
@@ -92,9 +96,9 @@ func (g *Group) GetByID() error {
 }
 
 func (g *Group) Delete() error {
-	if err := database.Model(g).Update("deleted", 1); err != nil {
-		log.Errorf("update group [%d] deleted failed ", g.IDBase.ID)
-		return fmt.Errorf("deleted group [%d] failed ", g.IDBase.ID)
+	if err := database.Model(g).Update("deleted", 1).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
+		log.Errorf("update group [%s] deleted failed ", g.Name)
+		return fmt.Errorf("deleted group [%s] failed ", g.Name)
 	}
 	return nil
 }

@@ -48,7 +48,7 @@ func Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ret)
 		return
 	}
-	c := context.Background()
+	c := ctx.Request.Context()
 	info, err := auth.GetAuthService().Login(c, req.GetAccount(), req.GetPassword(), req.GetLoginType())
 	if err != nil {
 		ret.Code = -1

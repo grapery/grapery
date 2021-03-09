@@ -3,14 +3,15 @@ package user
 import (
 	"context"
 
-	"github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/models"
 )
 
 var userGroupServer UserGroupServer
 
 func init() {
-	userActiveServer = NewUserGroupService()
+	userGroupServer = NewUserGroupService()
 }
 
 func GetUserGroupServer() UserGroupServer {
