@@ -97,5 +97,20 @@ func (auth *AuthService) Logout(ctx context.Context, uid uint64) error {
 }
 
 func (auth *AuthService) ResetPassword(ctx context.Context, uid uint64, newPwd, oldPwd string) error {
+	info := new(models.Auth)
+	info.ID = uint(uid)
+	err := info.GetByUID()
+	if err != nil {
+		return err
+	}
+	if info.Password == oldPwd {
+		info.Password = newPwd
+	} else {
+		return errors.ErrAuthPasswordIsWrong
+	}
+	err = info.UpdatePwd()
+	if err != nil {
+		return err
+	}
 	return nil
 }
