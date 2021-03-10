@@ -28,56 +28,150 @@ func (p Project) TableName() string {
 }
 
 func (p *Project) Create() error {
-	err := database.Table(p.TableName()).Create(p).Error
+	err := database.Model(p).Create(p).Error
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (p *Project) Update() error {
-	database.Model(p).Update("short_desc", p.ShortDesc)
+func (p *Project) UpdateDesc() error {
+	err := database.Model(p).Update("short_desc", p.ShortDesc).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateTitle() error {
+	err := database.Model(p).Update("title", p.ShortDesc).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateAchieve() error {
+	err := database.Model(p).Update("is_achieve", p.ShortDesc).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateIsClose() error {
+	err := database.Model(p).Update("is_close", p.ShortDesc).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateIsPrivate() error {
+	err := database.Model(p).Update("is_private", p.ShortDesc).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (p *Project) Get() error {
-	database.First(p)
+	err := database.First(p).Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (p *Project) Delete() error {
-	database.Delete(p)
+	err := database.Model(p).Update("deleted", p.Deleted).
+		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func GetProjectListByName(name string, offset, number int) (list []*Project, err error) {
-	return nil, nil
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("name like %?% and deleted = ?", name, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
-func GetProjectListByTag(tags string, offset, number int) ([]*Project, error) {
-	return nil, nil
+// func GetProjectListByTag(tags string, offset, number int) (list []*Project, err error) {
+// 	list = make([]*Project, 0)
+// 	err = database.Model(&Project{}).Where("name like %?%", tags).Offset(offset).Limit(number).Scan(&list).Error
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return list, nil
+// }
+
+func GetProjectListByCreator(creatorID int, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("creator_id = ? and deleted = ?", creatorID, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
-func GetProjectListByCreator(creatorID int, offset, number int) ([]*Project, error) {
-	return nil, nil
-}
-
-func GetProjectListByOwner(ownerID int, offset, number int) ([]*Project, error) {
-	return nil, nil
+func GetProjectListByOwner(ownerID int, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("owner_id = ? and deleted = ?", ownerID, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func GetGroupProjectListByName(groupID int, name string, offset, number int) (list []*Project, err error) {
-	return nil, nil
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("group_id = ? and name = ? and deleted = ?", groupID, name, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
-func GetGroupProjectListByTag(groupID int, tags string, offset, number int) ([]*Project, error) {
-	return nil, nil
+// func GetGroupProjectListByTag(groupID int, tags string, offset, number int) (list []*Project, err error) {
+// 	list = make([]*Project, 0)
+// 	err = database.Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).
+// 		Offset(offset).Limit(number).Scan(&list).Error
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return list, nil
+// }
+
+func GeGrouptProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
-func GeGrouptProjectListByCreator(groupID int, creatorID int, offset, number int) ([]*Project, error) {
-	return nil, nil
-}
-
-func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) ([]*Project, error) {
-	return nil, nil
+func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("group_id = ? and owner_id = ? and deleted = ?", groupID, ownerID, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }

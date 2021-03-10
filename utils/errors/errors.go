@@ -47,3 +47,8 @@ var (
 var (
 	ErrItemIsNotExist = NewSysError(4001, "Item is not exist")
 )
+
+var (
+	ErrLikeItemIsNotExist = NewSysError(5001, "LikeItem is not exist")
+	ErrLikeItemIsExist    = NewSysError(5002, "LikeItem is exist")
+)

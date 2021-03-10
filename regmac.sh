@@ -24,7 +24,8 @@ for i in $(ls $basepath/$pb_package/*.proto); do
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--grpc-gateway_out=logtostderr=true:. "$fn"
+		--grpc-gateway_out=logtostderr=true:. \
+		--govalidators_out=. "$fn"
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\

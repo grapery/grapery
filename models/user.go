@@ -78,7 +78,7 @@ func (u *User) GetById() error {
 }
 
 func (u *User) GetByName() error {
-	err := database.Where("name = ? and deleted = ? ", u.Name, 0).Find(u).Error
+	err := database.Where("name = ? and deleted = ? ", u.Name, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", u.Name, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Name)
@@ -87,7 +87,7 @@ func (u *User) GetByName() error {
 }
 
 func (u *User) GetByPhone() error {
-	err := database.Where("phone = ? and deleted = ?", u.Phone, 0).Find(u).Error
+	err := database.Where("phone = ? and deleted = ?", u.Phone, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Phone)
@@ -96,7 +96,7 @@ func (u *User) GetByPhone() error {
 }
 
 func (u *User) GetByEmail() error {
-	err := database.Where("email = ? and deleted = ?", u.Email, 0).Find(u).Error
+	err := database.Where("email = ? and deleted = ?", u.Email, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Email)
