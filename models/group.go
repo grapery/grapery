@@ -48,7 +48,7 @@ func (g *Group) Create() error {
 			return errors.ErrGroupIsAlreadyExist
 		}
 	} else {
-		log.Errorf("group [%s] is exist : ", g.IDBase.ID)
+		log.Errorf("group [%s] is exist : ", g.ID)
 		return errors.ErrGroupIsAlreadyExist
 	}
 	return nil

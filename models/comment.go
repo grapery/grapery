@@ -56,8 +56,8 @@ func (c *Comment) Delete() error {
 	if err := database.Model(c).Update("deleted", 1).
 		Where("group_id = ? and project_id = ? and item_id = ? and pre_id = ? and id = ? ",
 			c.GroupID, c.ProjectID, c.ItemID, c.PreID, c.ID); err != nil {
-		log.Errorf("update active [%d] deleted failed ", c.IDBase.ID)
-		return fmt.Errorf("deleted active [%d] failed ", c.IDBase.ID)
+		log.Errorf("update active [%d] deleted failed ", c.ID)
+		return fmt.Errorf("deleted active [%d] failed ", c.ID)
 	}
 	return nil
 }

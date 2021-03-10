@@ -46,10 +46,10 @@ func (a *Active) Get() error {
 
 func (a *Active) Delete() error {
 	if err := database.Model(a).Update("deleted", 1); err != nil {
-		log.Errorf("update active [%d] deleted failed ", a.IDBase.ID)
-		return fmt.Errorf("deleted active [%d] failed ", a.IDBase.ID)
+		log.Errorf("update active [%d] deleted failed ", a.ID)
+		return fmt.Errorf("deleted active [%d] failed ", a.ID)
 	}
-	log.Infof("delete active [%d] success", a.IDBase.ID)
+	log.Infof("delete active [%d] success", a.ID)
 	return nil
 }
 

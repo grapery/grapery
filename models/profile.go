@@ -69,7 +69,7 @@ func (g *GroupProfile) Create() error {
 		return err
 	}
 	var err error
-	if g.IDBase.ID != 0 {
+	if g.ID != 0 {
 		err = database.Create(g).Error
 	} else {
 		log.Errorf("group [%s] profile is exist : ", g.ID)

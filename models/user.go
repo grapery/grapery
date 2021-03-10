@@ -44,8 +44,8 @@ func (u *User) Create() error {
 func (u *User) UpdateName() error {
 	err := database.Model(u).Update("name", u.Name).Where("id = ?", u.ID).Error
 	if err != nil {
-		log.Errorf("update user [%d] name failed ", u.IDBase.ID)
-		return fmt.Errorf("update user [%d] name failed ", u.IDBase.ID)
+		log.Errorf("update user [%d] name failed ", u.ID)
+		return fmt.Errorf("update user [%d] name failed ", u.ID)
 	}
 	return nil
 }
@@ -53,8 +53,8 @@ func (u *User) UpdateName() error {
 func (u *User) UpdateBio() error {
 	err := database.Model(u).Update("bio", u.BioID).Where("id = ?", u.ID).Error
 	if err != nil {
-		log.Errorf("update user [%d] bio [%d] failed ", u.IDBase.ID, u.BioID)
-		return fmt.Errorf("update user [%d] bio failed ", u.IDBase.ID)
+		log.Errorf("update user [%d] bio [%d] failed ", u.ID, u.BioID)
+		return fmt.Errorf("update user [%d] bio failed ", u.ID)
 	}
 	return nil
 }
@@ -62,8 +62,8 @@ func (u *User) UpdateBio() error {
 func (u *User) UpdateAvatar() error {
 	err := database.Model(u).Update("avatar", u.Avatar).Where("id = ?", u.ID).Error
 	if err != nil {
-		log.Errorf("update user [%d] avatar [%s] failed ", u.IDBase.ID, u.Avatar)
-		return fmt.Errorf("update user [%d] avatar failed ", u.IDBase.ID)
+		log.Errorf("update user [%d] avatar [%s] failed ", u.ID, u.Avatar)
+		return fmt.Errorf("update user [%d] avatar failed ", u.ID)
 	}
 	return nil
 }
@@ -107,8 +107,8 @@ func (u *User) GetByEmail() error {
 func (u *User) Delete() error {
 	err := database.Model(u).Update("deleted", 1).Where("id = ? ", u.ID).Error
 	if err != nil {
-		log.Errorf("update user [%d] deleted failed ", u.IDBase.ID)
-		return fmt.Errorf("deleted user [%d] failed ", u.IDBase.ID)
+		log.Errorf("update user [%d] deleted failed ", u.ID)
+		return fmt.Errorf("deleted user [%d] failed ", u.ID)
 	}
 	return nil
 }
