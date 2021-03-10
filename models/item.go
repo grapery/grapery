@@ -107,7 +107,7 @@ func UpdateItemVisable(repo *Repository, itemID uint64, vtype api.VisibleType) e
 	return nil
 }
 
-func UpdateItemTags(repo *Repository, itemID uint64, tags string) {
+func UpdateItemTags(repo *Repository, itemID uint64, tags string) error {
 	err := repo.DB().Model(&Item{}).Update("tags", tags).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
@@ -116,7 +116,7 @@ func UpdateItemTags(repo *Repository, itemID uint64, tags string) {
 	return nil
 }
 
-func UpdateItemTitle(repo *Repository, itemID uint64, title string) {
+func UpdateItemTitle(repo *Repository, itemID uint64, title string) error {
 	err := repo.DB().Model(&Item{}).Update("title", title).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {

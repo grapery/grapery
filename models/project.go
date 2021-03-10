@@ -28,9 +28,9 @@ func (p Project) TableName() string {
 }
 
 func (p *Project) Create() error {
-	p ,err:=database.Table(p.TableName()).
-	if !database.NewRecord(p) {
-		database.Create(p)
+	err := database.Table(p.TableName()).Create(p).Error
+	if err != nil {
+		return err
 	}
 	return nil
 }
