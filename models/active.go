@@ -44,6 +44,15 @@ func (a *Active) Get() error {
 	return nil
 }
 
+func (a *Active) Delete() error {
+	if err := database.Model(a).Update("deleted", 1); err != nil {
+		log.Errorf("update active [%d] deleted failed ", a.IDBase.ID)
+		return fmt.Errorf("deleted active [%d] failed ", a.IDBase.ID)
+	}
+	log.Infof("delete active [%d] success", a.IDBase.ID)
+	return nil
+}
+
 func GetAcviteByUserID(userID uint64) (*[]Active, error) {
 	var ret = new([]Active)
 	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
@@ -70,13 +79,4 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]Active, er
 		return nil, err
 	}
 	return ret, nil
-}
-
-func (a *Active) Delete() error {
-	if err := database.Model(a).Update("deleted", 1); err != nil {
-		log.Errorf("update active [%d] deleted failed ", a.IDBase.ID)
-		return fmt.Errorf("deleted active [%d] failed ", a.IDBase.ID)
-	}
-	log.Infof("delete active [%d] success", a.IDBase.ID)
-	return nil
 }

@@ -28,7 +28,7 @@ func (c Comment) TableName() string {
 }
 
 func (c *Comment) Create() error {
-	if err := database.Create(c).Error; err != nil {
+	if err := database.Model(c).Create(c).Error; err != nil {
 		log.Errorf("create new active [%d] failed : [%s]", c.ID, err.Error())
 		return fmt.Errorf("create new active [%d] failed ", c.ID)
 	}
@@ -36,23 +36,35 @@ func (c *Comment) Create() error {
 }
 
 func (c *Comment) UpdateContent() error {
-	if err := database.Model(c).Update("content", c.Content).Error; err != nil {
+	if err := database.Model(c).Update("content", c.Content).
+		Where("group_id = ? and project_id = ? and item_id = ? and pre_id = ? and id = ? ",
+			c.GroupID, c.ProjectID, c.ItemID, c.PreID, c.ID).Error; err != nil {
 		log.Errorf("update active [%d] failed : [%s]", c.ID, err.Error())
 		return fmt.Errorf("update active failed [%s]", err.Error())
 	}
 	return nil
 }
 
-func (a *Comment) GetComment() error {
-	if err := database.First(a).Error; err != nil {
+func (c *Comment) GetComment() error {
+	if err := database.Model(c).First(c).Error; err != nil {
 		return err
+	}
+	return nil
+}
+
+func (c *Comment) Delete() error {
+	if err := database.Model(c).Update("deleted", 1).
+		Where("group_id = ? and project_id = ? and item_id = ? and pre_id = ? and id = ? ",
+			c.GroupID, c.ProjectID, c.ItemID, c.PreID, c.ID); err != nil {
+		log.Errorf("update active [%d] deleted failed ", c.IDBase.ID)
+		return fmt.Errorf("deleted active [%d] failed ", c.IDBase.ID)
 	}
 	return nil
 }
 
 func GetCommentByUserID(userID uint64) (*[]Comment, error) {
 	var ret = new([]Comment)
-	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
+	if err := database.Model(&Comment{}).Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
 		log.Errorf("get user [%d] active failed: %s ", userID, err.Error())
 		return nil, err
 	}
@@ -76,12 +88,4 @@ func GetCommentListByItem(userID uint64, activeType uint) (*[]Comment, error) {
 		return nil, err
 	}
 	return ret, nil
-}
-
-func (c *Comment) Delete() error {
-	if err := database.Model(c).Update("deleted", 1); err != nil {
-		log.Errorf("update active [%d] deleted failed ", c.IDBase.ID)
-		return fmt.Errorf("deleted active [%d] failed ", c.IDBase.ID)
-	}
-	return nil
 }
