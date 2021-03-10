@@ -98,8 +98,8 @@ func (a *Auth) GetByUID() error {
 
 func (a *Auth) Delete() error {
 	if err := database.Table(a.TableName()).Update("deleted", 1).Where("is_valid = ? ", true); err != nil {
-		log.Errorf("update auth [%d] deleted failed ", a.IDBase.ID)
-		return fmt.Errorf("deleted auth [%d] failed ", a.IDBase.ID)
+		log.Errorf("update auth [%d] deleted failed ", a.ID)
+		return fmt.Errorf("deleted auth [%d] failed ", a.ID)
 	}
 	return nil
 }
