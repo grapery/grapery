@@ -11,6 +11,7 @@ import (
 )
 
 /*
+用户有默认的自己的一个group,叫做场地或者空间
 Group
 用户参与的组织：
 1.类似于一个大家庭，一个小家庭，情侣的二人世界
@@ -99,6 +100,41 @@ func (g *Group) Delete() error {
 	if err := database.Model(g).Update("deleted", 1).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("update group [%s] deleted failed ", g.Name)
 		return fmt.Errorf("deleted group [%s] failed ", g.Name)
+	}
+	return nil
+}
+
+type GroupMember struct {
+	IDBase
+	GroupID uint64 `json:"group_id,omitempty"`
+	UserID  uint64 `json:"user_id,omitempty"`
+}
+
+func (g GroupMember) TableName() string {
+	return "group_member"
+}
+
+func (g *GroupMember) Create() error {
+	err := database.Model(g).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			log.Errorf("query group member failed: %s", err.Error())
+			return err
+		}
+		err = database.Model(g).Create(g).Error
+		if err != nil {
+			return errors.ErrGroupIsAlreadyExist
+		}
+	} else {
+		log.Errorf("group [%d] member [%d] is exist : ", g.GroupID, g.UserID)
+		return errors.ErrGroupIsAlreadyExist
+	}
+	return nil
+}
+
+func (g *GroupMember) Delete() error {
+	if err := database.Model(g).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
+		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
 	}
 	return nil
 }
