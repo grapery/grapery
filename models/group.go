@@ -132,6 +132,38 @@ func (g *GroupMember) Create() error {
 	return nil
 }
 
+func (g *GroupMember) IsInOneGroup() (bool, error) {
+	err := database.Model(g).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log.Errorf("query group member failed: %s", err.Error())
+			return false, nil
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err error) {
+	list = make([]*GroupMember, 0)
+	err = database.Model(&GroupMember{}).Where("group_id = ? and deleted = 0", groupID).
+		Scan(list).Offset(offset).Limit(number).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetUserGroups(userID int, offset, number int) (list []*GroupMember, err error) {
+	list = make([]*GroupMember, 0)
+	err = database.Model(&GroupMember{}).Where("user_id = ? and deleted = 0", userID).
+		Scan(list).Offset(offset).Limit(number).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (g *GroupMember) Delete() error {
 	if err := database.Model(g).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
 		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
