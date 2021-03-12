@@ -26,6 +26,8 @@ func NewUserSerivce() *UserService {
 type UserServer interface {
 	Get(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error)
 	UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error)
+	GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error)
+	GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error)
 }
 
 type UserService struct {

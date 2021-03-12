@@ -28,10 +28,28 @@ func GetUser(ctx *utils.Context) {
 }
 
 func GetUserProfile(ctx *utils.Context) {
-
+	req := &api.UserInfoRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().Get(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
 }
 
 func GetUserGroup(ctx *utils.Context) {
+	req := &api.UserGroupRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+
+	}
 
 }
 
