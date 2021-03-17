@@ -36,6 +36,11 @@ for i in $(ls $basepath/$pb_dir/*.proto); do
         --openapiv2_opt logtostderr=true \
         --openapiv2_opt use_go_templates=true \
 		"$fn" 
+	protoc -I$proto_install/include -I. \
+		-I$GOPATH/src \
+		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
+		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
+		--validate_out="lang=go:". "$fn"
 done
 
 cp common-protoc/*.go api/service
