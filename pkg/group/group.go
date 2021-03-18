@@ -3,7 +3,7 @@ package group
 import (
 	"context"
 
-	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/api"
 )
 
 var server GroupServer
@@ -21,27 +21,27 @@ func NewGroupService() *GroupService {
 }
 
 type GroupServer interface {
-	Get(ctx context.Context, groupID uint64) (*models.Group, error)
-	GetByName(ctx context.Context, name string) ([]*models.Group, error)
-	CreateGroup(ctx context.Context, name string, uid int64) error
-	DeleteGroup(ctx context.Context, name string, uid int64) error
+	GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
+	GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
+	CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error)
+	DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error)
 }
 
 type GroupService struct {
 }
 
-func (g *GroupService) Get(ctx context.Context, groupID uint64) (*models.Group, error) {
+func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
 	return nil, nil
 }
 
-func (g *GroupService) GetByName(ctx context.Context, name string) ([]*models.Group, error) {
+func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
 	return nil, nil
 }
 
-func (g *GroupService) CreateGroup(ctx context.Context, name string, uid int64) error {
-	return nil
+func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error) {
+	return nil, nil
 }
 
-func (g *GroupService) DeleteGroup(ctx context.Context, name string, uid int64) error {
-	return nil
+func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error) {
+	return nil, nil
 }

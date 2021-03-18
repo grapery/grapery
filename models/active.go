@@ -55,7 +55,7 @@ func (a *Active) Delete() error {
 
 func GetAcviteByUserID(userID uint64) (*[]Active, error) {
 	var ret = new([]Active)
-	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
+	if err := database.Where("user_id = ? and delete = 0", userID).Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] active failed ", userID)
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func GetAcviteByUserID(userID uint64) (*[]Active, error) {
 
 func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]Active, error) {
 	var ret = new([]Active)
-	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Find(ret).Error; err != nil {
+	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Scan(ret).Error; err != nil {
 		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]Active, error)
 
 func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]Active, error) {
 	var ret = new([]Active)
-	if err := database.Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).Find(ret).Error; err != nil {
+	if err := database.Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] active type [%d] failed ", creatorID, activeType)
 		return nil, err
 	}

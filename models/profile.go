@@ -12,38 +12,63 @@ import (
 */
 type UserProfile struct {
 	Base
-	UserID    int64 `json:"user_id,omitempty"`
-	Followers int64 `json:"followers,omitempty"`
-	Following int64 `json:"following,omitempty"`
-	//
+	UserID    int64  `json:"user_id,omitempty"`
+	Followers int64  `json:"followers,omitempty"`
+	Following int64  `json:"following,omitempty"`
 	Emotion   int    `json:"emotion,omitempty"`
 	ShortDesc string `json:"short_desc,omitempty"`
-	//
 }
 
 func (p UserProfile) TableName() string {
 	return "user_profile"
 }
 
-func (p *UserProfile) Create() error {
-	if !database.NewRecord(p) {
-		database.Create(p)
+func CreateUserProfile(repo *Repository, profile *UserProfile) error {
+	err := repo.DB().Model(profile).Create(profile).Error
+	if err != nil {
+		log.Error("create profile failed: %s", err.Error())
+		return err
+	}
+	log.Info("create profile : ", profile.UserID)
+	return nil
+}
+
+func UpdateUserProfile(repo *Repository, profile *UserProfile) error {
+	err := repo.DB().Model(profile).Update(profile).
+		Where("user_id = ? and deleted = ?", profile.UserID, 0).Error
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func (p *UserProfile) Update() error {
-	database.Model(p).Update("emotion", p.Emotion)
-	return nil
+func GetUserProfile(repo *Repository, profileID uint64) (*UserProfile, error) {
+	profile := new(UserProfile)
+	err := repo.DB().Model(profile).First(profile).
+		Where("id = ?", profileID).Error
+	if err != nil {
+		return nil, err
+	}
+	return profile, nil
 }
 
-func (p *UserProfile) Get() error {
-	database.First(p)
-	return nil
+func GetUserProfileByUserID(repo *Repository, userID uint64) (*UserProfile, error) {
+	profile := new(UserProfile)
+	err := repo.DB().Model(profile).First(profile).
+		Where("user_id = ?", userID).Error
+	if err != nil {
+		return nil, err
+	}
+	return profile, nil
 }
 
-func (p *UserProfile) Delete() error {
-	database.Delete(p)
+func DeleteUserProfile(repo *Repository, profileID uint64) error {
+	err := repo.DB().Model(&UserProfile{}).Update("delete = ? ", true).
+		Where("id = ?", profileID).Error
+	if err != nil {
+		log.Error("update profile failed: ", err)
+		return err
+	}
 	return nil
 }
 
