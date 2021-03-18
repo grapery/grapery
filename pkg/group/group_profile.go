@@ -1,19 +1,19 @@
 package group
 
-var profileServicer GroupProfileServicer
+var profileServer GroupProfileServer
 
 func init() {
-	profileServicer = NewGroupProfileService()
+	profileServer = NewGroupProfileService()
 }
 
-func GetGroupProfileService() GroupProfileServicer {
-	return profileServicer
+func GetGroupProfileService() GroupProfileServer {
+	return profileServer
 }
 
 func NewGroupProfileService() *GroupProfileService {
 	return &GroupProfileService{}
 }
 
-type GroupProfileServicer interface{}
+type GroupProfileServer interface{}
 
 type GroupProfileService struct{}

@@ -1,45 +1,47 @@
 package group
 
 import (
+	"context"
+
 	"github.com/grapery/grapery/models"
 )
 
-var groupServicer GroupServicer
+var server GroupServer
 
 func init() {
-	groupServicer = NewGroupService()
+	server = NewGroupService()
 }
 
-func GetGroupServicer() GroupServicer {
-	return groupServicer
+func GetGroupServer() GroupServer {
+	return server
 }
 
 func NewGroupService() *GroupService {
 	return &GroupService{}
 }
 
-type GroupServicer interface {
-	Get(groupID uint64) (*models.Group, error)
-	GetByName(name string) ([]*models.Group, error)
-	CreateGroup(name string, uid int64) error
-	DeleteGroup(name string, uid int64) error
+type GroupServer interface {
+	Get(ctx context.Context, groupID uint64) (*models.Group, error)
+	GetByName(ctx context.Context, name string) ([]*models.Group, error)
+	CreateGroup(ctx context.Context, name string, uid int64) error
+	DeleteGroup(ctx context.Context, name string, uid int64) error
 }
 
 type GroupService struct {
 }
 
-func (g *GroupService) Get(groupID uint64) (*models.Group, error) {
+func (g *GroupService) Get(ctx context.Context, groupID uint64) (*models.Group, error) {
 	return nil, nil
 }
 
-func (g *GroupService) GetByName(name string) ([]*models.Group, error) {
+func (g *GroupService) GetByName(ctx context.Context, name string) ([]*models.Group, error) {
 	return nil, nil
 }
 
-func (g *GroupService) CreateGroup(name string, uid int64) error {
+func (g *GroupService) CreateGroup(ctx context.Context, name string, uid int64) error {
 	return nil
 }
 
-func (g *GroupService) DeleteGroup(name string, uid int64) error {
+func (g *GroupService) DeleteGroup(ctx context.Context, name string, uid int64) error {
 	return nil
 }

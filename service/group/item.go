@@ -1,30 +1,29 @@
 package group
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/utils"
 )
 
-func GetProjectItems(ctx *gin.Context) {
+func GetProjectItems(ctx *utils.Context) {
 
 }
 
-func GetProjectItem(ctx *gin.Context) {
+func GetProjectItem(ctx *utils.Context) {
 
 }
 
-func UpdateProjectItem(ctx *gin.Context) {
+func UpdateProjectItem(ctx *utils.Context) {
 
 }
 
-func CreateProjectItem(ctx *gin.Context) {
+func CreateProjectItem(ctx *utils.Context) {
 
 }
 
-func DeleteProjectItem(ctx *gin.Context) {
+func DeleteProjectItem(ctx *utils.Context) {
 
 }
 
-func LikeItem(ctx *gin.Context) {
+func LikeItem(ctx *utils.Context) {
 
 }
-

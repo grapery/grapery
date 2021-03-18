@@ -1,61 +1,99 @@
 package user
 
 import (
-	// "net/http"
-
-	_ "github.com/gin-contrib/sessions"
-	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/pkg/user"
+	"github.com/grapery/grapery/utils"
 )
 
-func SearchUser(ctx *gin.Context) {
+func SearchUser(ctx *utils.Context) {
 
 }
 
-func GetUser(ctx *gin.Context) {
+func GetUser(ctx *utils.Context) {
+	req := &api.UserInfoRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().GetUserInfo(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func GetUserProfile(ctx *utils.Context) {
+	req := &api.UserInfoRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().GetUserInfo(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func GetUserGroup(ctx *utils.Context) {
+	req := &api.UserGroupRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().GetUserGroup(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
 
 }
 
-func GetUserProfile(ctx *gin.Context) {
+func GetUserActive(ctx *utils.Context) {
 
 }
 
-func GetUserGroup(ctx *gin.Context) {
+func GetWatching(ctx *utils.Context) {
 
 }
 
-func GetUserActive(ctx *gin.Context) {
+func GetFollowingUser(ctx *utils.Context) {
 
 }
 
-func GetWatching(ctx *gin.Context) {
+func GetFollowerUser(ctx *utils.Context) {
 
 }
 
-func GetFollowingUser(ctx *gin.Context) {
+func GetFollowingGroup(ctx *utils.Context) {
 
 }
 
-func GetFollowerUser(ctx *gin.Context) {
+func UpdateUser(ctx *utils.Context) {
 
 }
 
-func GetFollowingGroup(ctx *gin.Context) {
+func DeleteUser(ctx *utils.Context) {
 
 }
 
-func UpdateUser(ctx *gin.Context) {
+func FollowUser(ctx *utils.Context) {
 
 }
 
-func DeleteUser(ctx *gin.Context) {
-
-}
-
-func FollowUser(ctx *gin.Context) {
-
-}
-
-func UnFollowUser(ctx *gin.Context) {
+func UnFollowUser(ctx *utils.Context) {
 
 }

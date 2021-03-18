@@ -1,6 +1,8 @@
 package user
 
 import (
+	"context"
+
 	"github.com/grapery/grapery/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -11,8 +13,8 @@ func init() {
 	userProfileSerivcer = NewUserProfileSerivce()
 }
 
-func GetUserProfileServicer() UserGroupServicer {
-	return userGroupServicer
+func GetUserProfileServer() UserGroupServer {
+	return userGroupServer
 }
 
 func NewUserProfileSerivce() *UserProfileSerivce {
@@ -20,24 +22,24 @@ func NewUserProfileSerivce() *UserProfileSerivce {
 }
 
 type UserProfileSerivcer interface {
-	CreateProfile(uid int64) error
-	GetUserProfile(uid int64) (*models.UserProfile, error)
-	UpdateUserProfile(uid int64) error
+	CreateProfile(ctx context.Context, uid int64) error
+	GetUserProfile(ctx context.Context, uid int64) (*models.UserProfile, error)
+	UpdateUserProfile(ctx context.Context, uid int64) error
 }
 
 type UserProfileSerivce struct {
 }
 
-func (up *UserProfileSerivce) CreateProfile(uid int64) error {
+func (up *UserProfileSerivce) CreateProfile(ctx context.Context, uid int64) error {
 	return nil
 }
 
-func (up *UserProfileSerivce) GetUserProfile(uid int64) (*models.UserProfile, error) {
+func (up *UserProfileSerivce) GetUserProfile(ctx context.Context, uid int64) (*models.UserProfile, error) {
 	var err error
 	log.Errorf("get user profile failed : %s", err.Error())
 	return nil, nil
 }
 
-func (up *UserProfileSerivce) UpdateUserProfile(uid int64) error {
+func (up *UserProfileSerivce) UpdateUserProfile(ctx context.Context, uid int64) error {
 	return nil
 }

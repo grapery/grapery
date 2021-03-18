@@ -20,3 +20,7 @@ func (e *Result) Byte() []byte {
 	data, _ := json.Marshal(e)
 	return data
 }
+
+func NewResult() *Result {
+	return &Result{}
+}

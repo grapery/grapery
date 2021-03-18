@@ -1,53 +1,56 @@
 package user
 
 import (
-	"github.com/grapery/grapery/models"
+	"context"
+
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/models"
 )
 
-var userGroupServicer UserGroupServicer
+var userGroupServer UserGroupServer
 
 func init() {
-	userActiveServicer = NewUserActiveService()
+	userGroupServer = NewUserGroupService()
 }
 
-func GetUserGroupServicer() UserGroupServicer {
-	return userGroupServicer
+func GetUserGroupServer() UserGroupServer {
+	return userGroupServer
 }
 
 func NewUserGroupService() *UserGroupService {
 	return &UserGroupService{}
 }
 
-type UserGroupServicer interface {
-	GetGroups(uid int64) ([]*models.Group, error)
-	JoinGroup(uid, groupID int64) error
-	LeaveGroup(uid, groupID int64) error
-	GetGroupByName(uid int64, name string) ([]*models.Group, error)
+type UserGroupServer interface {
+	GetGroups(ctx context.Context, uid int64) ([]*models.Group, error)
+	JoinGroup(ctx context.Context, uid, groupID int64) error
+	LeaveGroup(ctx context.Context, uid, groupID int64) error
+	GetGroupByName(ctx context.Context, uid int64, name string) ([]*models.Group, error)
 }
 
 type UserGroupService struct {
 }
 
-func (ug *UserGroupService) GetGroups(uid int64) ([]*models.Group, error) {
+func (ug *UserGroupService) GetGroups(ctx context.Context, uid int64) ([]*models.Group, error) {
 	var err error
 	log.Errorf("get user group failed :%s", err)
 	return nil, nil
 }
 
-func (ug *UserGroupService) JoinGroup(uid, groupID int64) error {
+func (ug *UserGroupService) JoinGroup(ctx context.Context, uid, groupID int64) error {
 	var err error
 	log.Errorf("user join group failed :%s", err)
 	return nil
 }
 
-func (ug *UserGroupService) LeaveGroup(uid, groupID int64) error {
+func (ug *UserGroupService) LeaveGroup(ctx context.Context, uid, groupID int64) error {
 	var err error
 	log.Errorf("user leave group failed :%s", err)
 	return nil
 }
 
-func (ug *UserGroupService) GetGroupByName(uid int64, name string) ([]*models.Group, error) {
+func (ug *UserGroupService) GetGroupByName(ctx context.Context, uid int64, name string) ([]*models.Group, error) {
 	var err error
 	log.Errorf("get user group failed :%s", err)
 	return nil, nil

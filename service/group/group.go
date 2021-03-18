@@ -5,39 +5,40 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/utils"
 )
 
 func SearchGroup(ctx *gin.Context) {
 
 }
 
-func GetGroup(ctx *gin.Context) {
+func GetGroup(ctx *utils.Context) {
 
 }
 
-func UpdateGroup(ctx *gin.Context) {
+func UpdateGroup(ctx *utils.Context) {
 
 }
 
-func DeleteGroup(ctx *gin.Context) {
+func DeleteGroup(ctx *utils.Context) {
 }
 
-func CreateGroup(ctx *gin.Context) {
+func CreateGroup(ctx *utils.Context) {
 }
 
-func GetGroupActives(ctx *gin.Context) {
-
-}
-
-func GetGroupMembers(ctx *gin.Context) {
+func GetGroupActives(ctx *utils.Context) {
 
 }
 
-func LeaveGroup(ctx *gin.Context) {
+func GetGroupMembers(ctx *utils.Context) {
 
 }
 
-func GetGroupProjects(ctx *gin.Context) {
+func LeaveGroup(ctx *utils.Context) {
+
+}
+
+func GetGroupProjects(ctx *utils.Context) {
 
 }

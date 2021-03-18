@@ -5,42 +5,34 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
 )
 
-// Active。。。
+/* Active
+加载用户自己的活动记录
+加载一个project的用户活动记录
+加载用户的开放project的活动记录
+加载一个group内的public project的活动记录
+*/
 type Active struct {
-	IDBase     `json:"id_base,omitempty"`
-	CreatorID  uint64 `json:"creator_id,omitempty"`
-	ActiveType int    `json:"active_type,omitempty"`
-	Content    []byte `json:"content,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Tags       string `json:"tags,omitempty"`
+	IDBase
+	UserId     uint64         `json:"user_id,omitempty"`
+	ActiveType api.ActiveType `json:"active_type,omitempty"`
+	ItemID     uint64         `json:"item_id,omitempty"`
+	ProjectID  uint64         `json:"project_id,omitempty"`
+	GroupID    uint64         `json:"group_id,omitempty"`
+	UID        uint64         `json:"uid,omitempty"`
 }
 
-func (a Active) TableNamse() string {
+func (a Active) TableName() string {
 	return "active"
 }
 
 func (a *Active) Create() error {
 	if err := database.Create(a).Error; err != nil {
-		log.Errorf("create new active [%s] failed : [%s]", a.Name, err.Error())
-		return fmt.Errorf("create new active [%s] failed ", a.Name)
-	}
-	return nil
-}
-
-func (a *Active) UpdateName() error {
-	if err := database.Model(a).Update("name", a.Name).Error; err != nil {
-		log.Errorf("update active [%d] failed : [%s]", a.ID, err.Error())
-		return fmt.Errorf("update active failed [%s]", err.Error())
-	}
-	return nil
-}
-
-func (a *Active) UpdateContent() error {
-	if err := database.Model(a).Update("content", a.Content).Error; err != nil {
-		log.Errorf("update active [%d] failed : [%s]", a.ID, err.Error())
-		return fmt.Errorf("update active failed [%s]", err.Error())
+		log.Errorf("create new active [%d] failed : [%s]", a.ID, err.Error())
+		return fmt.Errorf("create new active [%d] failed: %s", a.ID, err.Error())
 	}
 	return nil
 }
@@ -52,22 +44,22 @@ func (a *Active) Get() error {
 	return nil
 }
 
-func GetAcviteByCreatorID(creatorId uint64) (*[]Active, error) {
-	var ret = new([]Active)
-	if err := database.Where("creator_id = ? and delete = 0", creatorId).Find(ret).Error; err != nil {
-		log.Errorf("get user [%d] active failed ", creatorId)
-		return nil, err
+func (a *Active) Delete() error {
+	if err := database.Model(a).Update("deleted", 1); err != nil {
+		log.Errorf("update active [%d] deleted failed ", a.ID)
+		return fmt.Errorf("deleted active [%d] failed ", a.ID)
 	}
-
-	return ret, nil
+	log.Infof("delete active [%d] success", a.ID)
+	return nil
 }
 
-func GetActiveList(name string) (*[]Active, error) {
+func GetAcviteByUserID(userID uint64) (*[]Active, error) {
 	var ret = new([]Active)
-	if err := database.Where("name like %?% and delete = 0", name).Find(ret).Error; err != nil {
-		log.Errorf("get active like [%s] failed ", name)
+	if err := database.Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
+		log.Errorf("get user [%d] active failed ", userID)
 		return nil, err
 	}
+
 	return ret, nil
 }
 
@@ -87,13 +79,4 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]Active, er
 		return nil, err
 	}
 	return ret, nil
-}
-
-func (a *Active) Delete() error {
-	if err := database.Model(a).Update("deleted", 1); err != nil {
-		log.Errorf("update active [%d] deleted failed ", a.IDBase.ID)
-		return fmt.Errorf("deleted active [%d] failed ", a.IDBase.ID)
-	}
-	log.Infof("delete active [%d] success", a.IDBase.ID)
-	return nil
 }

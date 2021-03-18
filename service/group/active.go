@@ -5,10 +5,10 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
+	"github.com/grapery/grapery/utils"
 )
 
 // star,unstar,share,watch,unwatch,join,leave,following,unfollowing,
-func GetActives(ctx *gin.Context) {
+func GetActives(ctx *utils.Context) {
 
 }

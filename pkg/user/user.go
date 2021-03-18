@@ -1,67 +1,128 @@
 package user
 
 import (
-	"github.com/grapery/grapery/models"
+	"context"
+
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/models"
 )
 
-var userServicer UserServicer
+var userServer UserServer
 
 func init() {
-	userServicer = NewUserSerivce()
+	userServer = NewUserSerivce()
 }
 
-func GetUserServicer() UserServicer {
-	return userServicer
+func GetUserServer() UserServer {
+	return userServer
 }
 
 func NewUserSerivce() *UserService {
 	return &UserService{}
 }
 
-type UserServicer interface {
-	Get(uid int64) error
-	UpdateAvator(uid int64, avator string) error
-	Delete(uid int64) error
+type UserServer interface {
+	GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error)
+	UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error)
+	GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error)
+	GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error)
+	UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error)
+	StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (*api.StartFollowUserResponse, error)
+	StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (*api.StopFollowUserResponse, error)
+	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
+	UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (*api.UserFollowingResponse, error)
+	UserFollower(ctx context.Context, req *api.UserFollowerRequest) (*api.UserFollowerResponse, error)
 }
 
 type UserService struct {
 }
 
-func (user *UserService) Get(uid int64) error {
+func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(uid)
+	u.ID = uint(req.GetUserID())
 	err := u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
-		return err
+		return nil, err
 	}
-	return nil
+	return &api.UserInfoResponse{
+		Info: &api.UserInfo{
+			UserID:    uint64(u.ID),
+			Nickname:  u.Name,
+			AvatorUrl: u.Avatar,
+			Email:     u.Email,
+			Location:  u.Location,
+		},
+	}, err
 }
 
-func (u *UserService) Update(uid int64) error {
-	return nil
-}
-
-func (user *UserService) UpdateAvator(uid int64, avator string) error {
+func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (
+	*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(uid)
-	u.Avatar = avator
+	u.ID = uint(req.GetUserID())
 	err := u.UpdateAvatar()
 	if err != nil {
-		log.Errorf("delete user failed : %s", err.Error())
-		return err
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
 	}
-	return nil
+	u.ID = uint(req.GetUserID())
+	err = u.GetById()
+	if err != nil {
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
+	}
+	return &api.UpdateUserAvatorResponse{
+		Info: &api.UserInfo{
+			UserID:    uint64(u.ID),
+			Nickname:  u.Name,
+			AvatorUrl: u.Avatar,
+			Email:     u.Email,
+			Location:  u.Location,
+		},
+	}, err
 }
 
-func (user *UserService) Delete(uid int64) error {
-	var u = new(models.User)
-	u.ID = uint(uid)
-	err := u.Delete()
-	if err != nil {
-		log.Errorf("delete user failed : %s", err.Error())
-		return err
-	}
-	return nil
+func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
+	return &api.UserGroupResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
+	*api.UserFollowingGroupResponse, error) {
+	return &api.UserFollowingGroupResponse{
+		List: nil,
+	}, nil
+}
+
+func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (
+	*api.UserUpdateResponse, error) {
+	return &api.UserUpdateResponse{}, nil
+}
+func (user *UserService) StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (
+	*api.StartFollowUserResponse, error) {
+	return &api.StartFollowUserResponse{}, nil
+}
+func (user *UserService) StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (
+	*api.StopFollowUserResponse, error) {
+	return &api.StopFollowUserResponse{}, nil
+}
+func (user *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (
+	*api.FetchUserActivesResponse, error) {
+	return &api.FetchUserActivesResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (
+	*api.UserFollowingResponse, error) {
+	return &api.UserFollowingResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollowerRequest) (
+	*api.UserFollowerResponse, error) {
+	return &api.UserFollowerResponse{
+		List: nil,
+	}, nil
 }

@@ -3,10 +3,13 @@ package models
 import (
 	"fmt"
 
-	"github.com/jinzhu/gorm"
+	"github.com/grapery/grapery/api"
 	log "github.com/sirupsen/logrus"
 )
 
+/*
+用户的profile文件
+*/
 type UserProfile struct {
 	Base
 	UserID    int64 `json:"user_id,omitempty"`
@@ -18,7 +21,7 @@ type UserProfile struct {
 	//
 }
 
-func (p UserProfile) TableNamse() string {
+func (p UserProfile) TableName() string {
 	return "user_profile"
 }
 
@@ -44,34 +47,37 @@ func (p *UserProfile) Delete() error {
 	return nil
 }
 
+/*
+组织的profile文件
+*/
 type GroupProfile struct {
 	IDBase
-	CreatorID   uint64
-	Name        string
-	Description string
-	Avatar      string
-	Tags        []string
+	GroupID     uint64          `json:"group_id,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
 }
 
-func (g GroupProfile) TableNamse() string {
+func (g GroupProfile) TableName() string {
 	return "group_profile"
 }
 
 func (g *GroupProfile) Create() error {
-	if err := database.Where("creatot_id = ? and deleted = ?", g.CreatorID, 0).Find(g).Error; err != nil {
-		log.Errorf("create group [%s] profile failed : ", g.Name)
+	if err := database.Where("group_id = ? and deleted = ?", g.GroupID, 0).Find(g).Error; err != nil {
+		log.Errorf("create group [%d] profile failed : %s", g.GroupID, err.Error())
 		return err
 	}
-	var ret *gorm.DB
-	if g.IDBase.ID != 0 {
-		ret = database.Create(g)
+	var err error
+	if g.ID != 0 {
+		err = database.Create(g).Error
 	} else {
 		log.Errorf("group [%s] profile is exist : ", g.ID)
 		return fmt.Errorf("group [%d] profile is exist : ", g.ID)
 	}
-	if ret.Error != nil {
-		log.Errorf("create group [%s] profile failed : [%s]", g.Name, ret.Error.Error())
-		return fmt.Errorf("create group [%s] profile failed : ", g.Name)
+	if err != nil {
+		log.Errorf("create group [%d] profile failed : [%s]", g.GroupID, err.Error())
+		return fmt.Errorf("create group [%d] profile failed : %s", g.GroupID, err.Error())
 	}
 	return nil
 }
@@ -91,5 +97,19 @@ func (g *GroupProfile) Delete() error {
 	return nil
 }
 
+/*
+项目中的组织的profile文件
+*/
 type ProjectFile struct {
+	IDBase
+	GroupID     uint64          `json:"group_id,omitempty"`
+	ProjectID   uint64          `json:"project_id,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
+}
+
+func (p ProjectFile) TableName() string {
+	return "project_profile"
 }

@@ -1,19 +1,19 @@
 package item
 
-var itemServicer ItemServicer
+var itemServer ItemServer
 
 func init() {
-	itemServicer = NewItemService()
+	itemServer = NewItemService()
 }
 
-func GetItemServicer() ItemServicer {
-	return itemServicer
+func GetItemServer() ItemServer {
+	return itemServer
 }
 
 func NewItemService() *ItemService {
 	return &ItemService{}
 }
 
-type ItemServicer interface{}
+type ItemServer interface{}
 
 type ItemService struct{}

@@ -1,19 +1,19 @@
 package project
 
-var projectServicer ProjectServicer
+var projectServer ProjectServer
 
 func init() {
-	projectServicer = NewProjectService()
+	projectServer = NewProjectService()
 }
 
-func GetProjectServicer() ProjectServicer {
-	return projectServicer
+func GetProjectServer() ProjectServer {
+	return projectServer
 }
 
 func NewProjectService() *ProjectService {
 	return &ProjectService{}
 }
 
-type ProjectServicer interface{}
+type ProjectServer interface{}
 
 type ProjectService struct{}
