@@ -5291,7 +5291,7 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc = []byte
 	0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x52, 0x65, 0x73, 0x65, 0x74, 0x50, 0x61, 0x73, 0x73, 0x77,
 	0x6f, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x18, 0x82, 0xd3, 0xe4,
 	0x93, 0x02, 0x12, 0x22, 0x0d, 0x2f, 0x76, 0x31, 0x2f, 0x72, 0x65, 0x73, 0x65, 0x74, 0x2f, 0x70,
-	0x77, 0x64, 0x3a, 0x01, 0x2a, 0x12, 0x7e, 0x0a, 0x0d, 0x75, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c,
+	0x77, 0x64, 0x3a, 0x01, 0x2a, 0x12, 0x7e, 0x0a, 0x0d, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c,
 	0x6c, 0x6f, 0x77, 0x69, 0x6e, 0x67, 0x12, 0x21, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79,
 	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x69,
 	0x6e, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x22, 0x2e, 0x67, 0x72, 0x61, 0x70,
@@ -5714,7 +5714,7 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int3
 	26, // 36: grapery.api.Grapery.UpdateUserAvator:input_type -> grapery.api.UpdateUserAvatorRequest
 	20, // 37: grapery.api.Grapery.Register:input_type -> grapery.api.RegisterRequest
 	22, // 38: grapery.api.Grapery.ResetPwd:input_type -> grapery.api.ResetPasswordRequest
-	28, // 39: grapery.api.Grapery.userFollowing:input_type -> grapery.api.UserFollowingRequest
+	28, // 39: grapery.api.Grapery.UserFollowing:input_type -> grapery.api.UserFollowingRequest
 	30, // 40: grapery.api.Grapery.UserFollower:input_type -> grapery.api.UserFollowerRequest
 	32, // 41: grapery.api.Grapery.UserGroup:input_type -> grapery.api.UserGroupRequest
 	34, // 42: grapery.api.Grapery.UserFollowingGroup:input_type -> grapery.api.UserFollowingGroupRequest
@@ -5752,7 +5752,7 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int3
 	27, // 74: grapery.api.Grapery.UpdateUserAvator:output_type -> grapery.api.UpdateUserAvatorResponse
 	21, // 75: grapery.api.Grapery.Register:output_type -> grapery.api.RegisterResponse
 	23, // 76: grapery.api.Grapery.ResetPwd:output_type -> grapery.api.ResetPasswordResponse
-	29, // 77: grapery.api.Grapery.userFollowing:output_type -> grapery.api.UserFollowingResponse
+	29, // 77: grapery.api.Grapery.UserFollowing:output_type -> grapery.api.UserFollowingResponse
 	31, // 78: grapery.api.Grapery.UserFollower:output_type -> grapery.api.UserFollowerResponse
 	33, // 79: grapery.api.Grapery.UserGroup:output_type -> grapery.api.UserGroupResponse
 	35, // 80: grapery.api.Grapery.UserFollowingGroup:output_type -> grapery.api.UserFollowingGroupResponse
@@ -6979,7 +6979,7 @@ func (c *graperyClient) ResetPwd(ctx context.Context, in *ResetPasswordRequest, 
 
 func (c *graperyClient) UserFollowing(ctx context.Context, in *UserFollowingRequest, opts ...grpc.CallOption) (*UserFollowingResponse, error) {
 	out := new(UserFollowingResponse)
-	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/userFollowing", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grapery.api.Grapery/UserFollowing", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -8143,7 +8143,7 @@ var _Grapery_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Grapery_ResetPwd_Handler,
 		},
 		{
-			MethodName: "userFollowing",
+			MethodName: "UserFollowing",
 			Handler:    _Grapery_UserFollowing_Handler,
 		},
 		{

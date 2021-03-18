@@ -24,16 +24,22 @@ func NewUserSerivce() *UserService {
 }
 
 type UserServer interface {
-	Get(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error)
+	GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error)
 	UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error)
 	GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error)
 	GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error)
+	UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error)
+	StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (*api.StartFollowUserResponse, error)
+	StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (*api.StopFollowUserResponse, error)
+	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
+	UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (*api.UserFollowingResponse, error)
+	UserFollower(ctx context.Context, req *api.UserFollowerRequest) (*api.UserFollowerResponse, error)
 }
 
 type UserService struct {
 }
 
-func (user *UserService) Get(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
+func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
 	var u = new(models.User)
 	u.ID = uint(req.GetUserID())
 	err := u.GetById()
@@ -52,7 +58,8 @@ func (user *UserService) Get(ctx context.Context, req *api.UserInfoRequest) (*ap
 	}, err
 }
 
-func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error) {
+func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (
+	*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
 	u.ID = uint(req.GetUserID())
 	err := u.UpdateAvatar()
@@ -75,4 +82,47 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 			Location:  u.Location,
 		},
 	}, err
+}
+
+func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
+	return &api.UserGroupResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
+	*api.UserFollowingGroupResponse, error) {
+	return &api.UserFollowingGroupResponse{
+		List: nil,
+	}, nil
+}
+
+func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (
+	*api.UserUpdateResponse, error) {
+	return &api.UserUpdateResponse{}, nil
+}
+func (user *UserService) StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (
+	*api.StartFollowUserResponse, error) {
+	return &api.StartFollowUserResponse{}, nil
+}
+func (user *UserService) StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (
+	*api.StopFollowUserResponse, error) {
+	return &api.StopFollowUserResponse{}, nil
+}
+func (user *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (
+	*api.FetchUserActivesResponse, error) {
+	return &api.FetchUserActivesResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (
+	*api.UserFollowingResponse, error) {
+	return &api.UserFollowingResponse{
+		List: nil,
+	}, nil
+}
+func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollowerRequest) (
+	*api.UserFollowerResponse, error) {
+	return &api.UserFollowerResponse{
+		List: nil,
+	}, nil
 }

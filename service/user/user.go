@@ -34,7 +34,7 @@ func GetUserProfile(ctx *utils.Context) {
 		ctx.Err = err
 		return
 	}
-	info, err := user.GetUserServer().Get(ctx.Ctx, req)
+	info, err := user.GetUserServer().GetUserInfo(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return
@@ -48,8 +48,10 @@ func GetUserGroup(ctx *utils.Context) {
 	req := &api.UserGroupRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
-
+		ctx.Err = err 
+		return
 	}
+	info,err := user.GetUserServer().
 
 }
 
