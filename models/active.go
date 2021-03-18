@@ -6,7 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/grapery/api"
 )
 
 /* Active
