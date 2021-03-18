@@ -20,6 +20,7 @@ func NewGroupService() *GroupService {
 	return &GroupService{}
 }
 
+// need do some log
 type GroupServer interface {
 	GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
 	GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
