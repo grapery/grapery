@@ -80,3 +80,23 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]Active, er
 	}
 	return ret, nil
 }
+
+func GetAcviteByProjectID(projectID uint64) (*[]Active, error) {
+	var ret = new([]Active)
+	if err := database.Where("project_id = ? and delete = 0", projectID).Scan(ret).Error; err != nil {
+		log.Errorf("get project [%d] active failed ", projectID)
+		return nil, err
+	}
+
+	return ret, nil
+}
+
+func GetAcviteByGroupID(groupID uint64) (*[]Active, error) {
+	var ret = new([]Active)
+	if err := database.Where("group_id = ? and delete = 0", groupID).Scan(ret).Error; err != nil {
+		log.Errorf("get group [%d] active failed ", groupID)
+		return nil, err
+	}
+
+	return ret, nil
+}

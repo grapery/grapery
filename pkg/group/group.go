@@ -3,7 +3,10 @@ package group
 import (
 	"context"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/models"
 )
 
 var server GroupServer
@@ -37,23 +40,60 @@ type GroupService struct {
 }
 
 func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
-	return nil, nil
+	group := &models.Group{}
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	}
+	return &api.GetGroupResponse{
+		Info: &api.GroupInfo{},
+	}, nil
 }
 
 func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
-	return nil, nil
+	group := &models.Group{}
+	err = group.GetByName()
+	if err != nil {
+		return nil, err
+	}
+	return &api.GetGroupResponse{
+		Info: &api.GroupInfo{},
+	}, nil
 }
 
 func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error) {
-	return nil, nil
+	group := &models.Group{}
+	group.Name = req.Name
+	err = group.Create()
+	if err != nil {
+		return nil, err
+	}
+	return &api.CreateGroupResponse{}, nil
 }
 
 func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error) {
-	return nil, nil
+	group := &models.Group{}
+	group.ID = uint(req.GetGroupID())
+	err = group.Create()
+	if err != nil {
+		return nil, err
+	}
+	return &api.DeleteGroupResponse{}, nil
 }
 
 func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error) {
-	return nil, nil
+	actives, err := models.GetAcviteByGroupID(req.GetGroupID())
+	if err != nil {
+		return nil, err
+	}
+	var list = make([]*api.ActiveInfo, len(*actives), len(*actives))
+	for idx, _ := range *actives {
+		log.Info((*actives)[idx])
+		//list[idx]....
+	}
+	return &api.GetGroupActivesResponse{
+		List: list,
+	}, nil
 }
 
 func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (resp *api.UpdateGroupInfoResponse, err error) {

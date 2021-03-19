@@ -80,8 +80,8 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := database.Model(g).Where("name = ? and owner_id = ? and deleted = ?",
-		g.Name, g.OwnerID, 0).Find(g).Error; err != nil {
+	if err := database.Model(g).Where("name = ? and deleted = ?",
+		g.Name, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
