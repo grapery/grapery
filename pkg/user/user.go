@@ -51,7 +51,7 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	return &api.UserInfoResponse{
 		Info: &api.UserInfo{
 			UserID:    uint64(u.ID),
-			Nickname:  u.Name,
+			Name:      u.Name,
 			AvatorUrl: u.Avatar,
 			Email:     u.Email,
 			Location:  u.Location,
@@ -77,7 +77,7 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	return &api.UpdateUserAvatorResponse{
 		Info: &api.UserInfo{
 			UserID:    uint64(u.ID),
-			Nickname:  u.Name,
+			Name:      u.Name,
 			AvatorUrl: u.Avatar,
 			Email:     u.Email,
 			Location:  u.Location,
