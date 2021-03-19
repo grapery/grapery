@@ -31,7 +31,6 @@ type Group struct {
 	VisableType api.VisibleType `json:"visable_type,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Avatar      string          `json:"avatar,omitempty"`
-	Visable     api.VisibleType `json:"visable,omitempty"`
 }
 
 func (g Group) TableName() string {

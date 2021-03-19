@@ -33,6 +33,76 @@ var (
 	_ = ptypes.DynamicAny{}
 )
 
+// Validate checks the field values on Tags with the rules defined in the proto
+// definition for this message. If any rules are violated, an error is returned.
+func (m *Tags) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for CreatorID
+
+	// no validation rules for Name
+
+	return nil
+}
+
+// TagsValidationError is the validation error returned by Tags.Validate if the
+// designated constraints aren't met.
+type TagsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TagsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TagsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TagsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TagsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TagsValidationError) ErrorName() string { return "TagsValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TagsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTags.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TagsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TagsValidationError{}
+
 // Validate checks the field values on UserInfo with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *UserInfo) Validate() error {
@@ -42,7 +112,7 @@ func (m *UserInfo) Validate() error {
 
 	// no validation rules for UserID
 
-	// no validation rules for Nickname
+	// no validation rules for Name
 
 	// no validation rules for AvatorUrl
 
@@ -116,6 +186,49 @@ func (m *GroupInfo) Validate() error {
 		return nil
 	}
 
+	// no validation rules for GroupID
+
+	// no validation rules for Name
+
+	// no validation rules for AvatorUrl
+
+	// no validation rules for Desc
+
+	if v, ok := interface{}(m.GetCreator()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return GroupInfoValidationError{
+				field:  "Creator",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetOwner()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return GroupInfoValidationError{
+				field:  "Owner",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	for idx, item := range m.GetTags() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GroupInfoValidationError{
+					field:  fmt.Sprintf("Tags[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	return nil
 }
 
@@ -181,6 +294,55 @@ func (m *ProjectInfo) Validate() error {
 		return nil
 	}
 
+	// no validation rules for ProjectID
+
+	// no validation rules for GroupID
+
+	// no validation rules for Name
+
+	// no validation rules for AvatorUrl
+
+	if v, ok := interface{}(m.GetCreator()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ProjectInfoValidationError{
+				field:  "Creator",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetOwner()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ProjectInfoValidationError{
+				field:  "Owner",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	for idx, item := range m.GetTags() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ProjectInfoValidationError{
+					field:  fmt.Sprintf("Tags[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Visable
+
+	// no validation rules for IsAchieve
+
+	// no validation rules for IsClose
+
 	return nil
 }
 
@@ -243,6 +405,48 @@ var _ interface {
 func (m *ActiveInfo) Validate() error {
 	if m == nil {
 		return nil
+	}
+
+	if v, ok := interface{}(m.GetUser()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ActiveInfoValidationError{
+				field:  "User",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for ActiveType
+
+	if v, ok := interface{}(m.GetItemInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ActiveInfoValidationError{
+				field:  "ItemInfo",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetProjectInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ActiveInfoValidationError{
+				field:  "ProjectInfo",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if v, ok := interface{}(m.GetGroupInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ActiveInfoValidationError{
+				field:  "GroupInfo",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	return nil
@@ -308,6 +512,12 @@ func (m *ItemInfo) Validate() error {
 	if m == nil {
 		return nil
 	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for ProjectID
+
+	// no validation rules for UserID
 
 	return nil
 }
