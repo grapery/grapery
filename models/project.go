@@ -2,6 +2,8 @@ package models
 
 import (
 	_ "time"
+
+	api "github.com/grapery/grapery/api"
 )
 
 /*
@@ -11,16 +13,20 @@ import (
 */
 type Project struct {
 	IDBase
-	Name        string `json:"name,omitempty"`
-	Tilte       string `json:"tilte,omitempty"`
-	ShortDesc   string `json:"short_desc,omitempty"`
-	ProjectType int    `json:"project_type,omitempty"`
-	CreatorID   uint64 `json:"creator_id,omitempty"`
-	OwnerID     uint64 `json:"owner_id,omitempty"`
-	GroupID     uint64 `json:"group_id,omitempty"`
-	IsAchieve   bool   `json:"is_achieve,omitempty"`
-	IsClose     bool   `json:"is_close,omitempty"`
-	IsPrivate   bool   `json:"is_private,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Tilte       string          `json:"tilte,omitempty"`
+	ShortDesc   string          `json:"short_desc,omitempty"`
+	ProjectType int             `json:"project_type,omitempty"`
+	CreatorID   uint64          `json:"creator_id,omitempty"`
+	OwnerID     uint64          `json:"owner_id,omitempty"`
+	GroupID     uint64          `json:"group_id,omitempty"`
+	ProjectID   uint64          `json:"project_id,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
+	IsAchieve   bool            `json:"is_achieve,omitempty"`
+	IsClose     bool            `json:"is_close,omitempty"`
+	IsPrivate   bool            `json:"is_private,omitempty"`
 }
 
 func (p Project) TableName() string {

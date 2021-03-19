@@ -5,12 +5,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// LikeType: left orange jijin zantong,middle blue haihao wusuowei,right green baoshou fandui
 type LikeItem struct {
 	IDBase
 	UserID    uint64 `json:"user_id,omitempty"`
 	GroupID   uint64 `json:"group_id,omitempty"`
 	ProjectID uint64 `json:"project_id,omitempty"`
 	ItemID    uint64 `json:"item_id,omitempty"`
+	LikeType  uint64 `json:"like_type,omitempty"`
 }
 
 func (l LikeItem) TableName() string {

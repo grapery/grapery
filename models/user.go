@@ -17,15 +17,23 @@ import (
 */
 type User struct {
 	IDBase
-	Name     string         `json:"name,omitempty" gorm:"index"`
-	Email    string         `json:"email,omitempty" gorm:"index"`
-	Phone    string         `json:"phone,omitempty" gorm:"index"`
-	Gender   int            `json:"gender,omitempty"`
-	BioID    string         `json:"bio,omitempty"`
-	Location string         `json:"location,omitempty"`
-	Status   api.UserStatus `json:"status,omitempty"`
-	Avatar   string         `json:"avatar,omitempty"`
-	URL      string         `json:"url,omitempty"`
+	Name         string         `json:"name,omitempty" gorm:"index"`
+	Email        string         `json:"email,omitempty" gorm:"index"`
+	Phone        string         `json:"phone,omitempty" gorm:"index"`
+	Gender       int            `json:"gender,omitempty"`
+	BioID        string         `json:"bio,omitempty"`
+	Status       api.UserStatus `json:"status,omitempty"`
+	Location     string         `json:"location,omitempty"`
+	Emotion      int            `json:"emotion,omitempty"`
+	Avatar       string         `json:"avatar,omitempty"`
+	URL          string         `json:"url,omitempty"`
+	NumFollowers int            `json:"num_followers,omitempty"`
+	NumFollowing int            `json:"num_following,omitempty"`
+	NumStars     int            `json:"num_stars,omitempty"`
+	NumProjects  int            `json:"num_projects,omitempty"`
+	NumGroup     int            `json:"num_group,omitempty"`
+	NumTeams     int            `json:"num_teams,omitempty"`
+	ShortDesc    string         `json:"short_desc,omitempty"`
 }
 
 func (u User) TableName() string {
