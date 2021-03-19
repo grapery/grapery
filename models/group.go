@@ -25,11 +25,13 @@ type Group struct {
 	IDBase
 	Name        string          `json:"name,omitempty"`
 	ShortDesc   string          `json:"short_desc,omitempty"`
-	Avatar      string          `son:"avatar,omitempty"`
 	Gtype       string          `json:"gtype,omitempty"`
 	CreatorID   uint64          `json:"creator_id,omitempty"`
 	OwnerID     uint64          `json:"owner_id,omitempty"`
 	VisableType api.VisibleType `json:"visable_type,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Avatar      string          `json:"avatar,omitempty"`
+	Visable     api.VisibleType `json:"visable,omitempty"`
 }
 
 func (g Group) TableName() string {
@@ -80,8 +82,8 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := database.Model(g).Where("name = ? and owner_id = ? and deleted = ?",
-		g.Name, g.OwnerID, 0).Find(g).Error; err != nil {
+	if err := database.Model(g).Where("name = ? and deleted = ?",
+		g.Name, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
@@ -144,6 +146,13 @@ func (g *GroupMember) IsInOneGroup() (bool, error) {
 	return true, nil
 }
 
+func (g *GroupMember) Delete() error {
+	if err := database.Model(g).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
+		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
+	}
+	return nil
+}
+
 func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err error) {
 	list = make([]*GroupMember, 0)
 	err = database.Model(&GroupMember{}).Where("group_id = ? and deleted = 0", groupID).
@@ -162,11 +171,4 @@ func GetUserGroups(userID int, offset, number int) (list []*GroupMember, err err
 		return nil, err
 	}
 	return list, nil
-}
-
-func (g *GroupMember) Delete() error {
-	if err := database.Model(g).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
-		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
-	}
-	return nil
 }
