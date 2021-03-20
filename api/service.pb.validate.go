@@ -506,6 +506,535 @@ var _ interface {
 	ErrorName() string
 } = ActiveInfoValidationError{}
 
+// Validate checks the field values on WordDetail with the rules defined in the
+// proto definition for this message. If any rules are violated, an error is returned.
+func (m *WordDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// WordDetailValidationError is the validation error returned by
+// WordDetail.Validate if the designated constraints aren't met.
+type WordDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e WordDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e WordDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e WordDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e WordDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e WordDetailValidationError) ErrorName() string { return "WordDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e WordDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sWordDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = WordDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = WordDetailValidationError{}
+
+// Validate checks the field values on PictureDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *PictureDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// PictureDetailValidationError is the validation error returned by
+// PictureDetail.Validate if the designated constraints aren't met.
+type PictureDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e PictureDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e PictureDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e PictureDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e PictureDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e PictureDetailValidationError) ErrorName() string { return "PictureDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e PictureDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sPictureDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = PictureDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = PictureDetailValidationError{}
+
+// Validate checks the field values on VideoDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *VideoDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// VideoDetailValidationError is the validation error returned by
+// VideoDetail.Validate if the designated constraints aren't met.
+type VideoDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VideoDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VideoDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VideoDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VideoDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VideoDetailValidationError) ErrorName() string { return "VideoDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VideoDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVideoDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VideoDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VideoDetailValidationError{}
+
+// Validate checks the field values on MusicDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *MusicDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// MusicDetailValidationError is the validation error returned by
+// MusicDetail.Validate if the designated constraints aren't met.
+type MusicDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e MusicDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e MusicDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e MusicDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e MusicDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e MusicDetailValidationError) ErrorName() string { return "MusicDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e MusicDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMusicDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = MusicDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = MusicDetailValidationError{}
+
+// Validate checks the field values on VoiceDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *VoiceDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// VoiceDetailValidationError is the validation error returned by
+// VoiceDetail.Validate if the designated constraints aren't met.
+type VoiceDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VoiceDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VoiceDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VoiceDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VoiceDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VoiceDetailValidationError) ErrorName() string { return "VoiceDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VoiceDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVoiceDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VoiceDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VoiceDetailValidationError{}
+
+// Validate checks the field values on ShareDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *ShareDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// ShareDetailValidationError is the validation error returned by
+// ShareDetail.Validate if the designated constraints aren't met.
+type ShareDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ShareDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ShareDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ShareDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ShareDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ShareDetailValidationError) ErrorName() string { return "ShareDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ShareDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sShareDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ShareDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ShareDetailValidationError{}
+
+// Validate checks the field values on ItemDetail with the rules defined in the
+// proto definition for this message. If any rules are violated, an error is returned.
+func (m *ItemDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	switch m.Detail.(type) {
+
+	case *ItemDetail_Word:
+
+		if v, ok := interface{}(m.GetWord()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Word",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ItemDetail_Pictures:
+
+		if v, ok := interface{}(m.GetPictures()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Pictures",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ItemDetail_Video:
+
+		if v, ok := interface{}(m.GetVideo()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Video",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ItemDetail_Music:
+
+		if v, ok := interface{}(m.GetMusic()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Music",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ItemDetail_Voice:
+
+		if v, ok := interface{}(m.GetVoice()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Voice",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *ItemDetail_Share:
+
+		if v, ok := interface{}(m.GetShare()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ItemDetailValidationError{
+					field:  "Share",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// ItemDetailValidationError is the validation error returned by
+// ItemDetail.Validate if the designated constraints aren't met.
+type ItemDetailValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ItemDetailValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ItemDetailValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ItemDetailValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ItemDetailValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ItemDetailValidationError) ErrorName() string { return "ItemDetailValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ItemDetailValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sItemDetail.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ItemDetailValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ItemDetailValidationError{}
+
 // Validate checks the field values on ItemInfo with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *ItemInfo) Validate() error {
@@ -518,6 +1047,18 @@ func (m *ItemInfo) Validate() error {
 	// no validation rules for ProjectID
 
 	// no validation rules for UserID
+
+	// no validation rules for Title
+
+	if v, ok := interface{}(m.GetContent()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ItemInfoValidationError{
+				field:  "Content",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
 
 	return nil
 }
