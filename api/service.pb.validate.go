@@ -1060,6 +1060,8 @@ func (m *ItemInfo) Validate() error {
 		}
 	}
 
+	// no validation rules for Itype
+
 	return nil
 }
 
@@ -4517,6 +4519,10 @@ func (m *SearchGroupResponse) Validate() error {
 
 	}
 
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
 	return nil
 }
 
@@ -6061,6 +6067,10 @@ func (m *SearchProjectRequest) Validate() error {
 
 	// no validation rules for Name
 
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
 	return nil
 }
 
@@ -6145,6 +6155,10 @@ func (m *SearchProjectResponse) Validate() error {
 
 	}
 
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
 	return nil
 }
 
@@ -6215,6 +6229,10 @@ func (m *GetItemsRequest) Validate() error {
 	// no validation rules for GroupID
 
 	// no validation rules for ProjectID
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
 
 	return nil
 }
@@ -6295,6 +6313,10 @@ func (m *GetItemsResponse) Validate() error {
 		}
 
 	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
 
 	return nil
 }
