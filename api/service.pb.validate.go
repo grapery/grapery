@@ -4928,6 +4928,280 @@ var _ interface {
 	ErrorName() string
 } = FetchGroupProjectsResponseValidationError{}
 
+// Validate checks the field values on JoinGroupRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *JoinGroupRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for UserId
+
+	return nil
+}
+
+// JoinGroupRequestValidationError is the validation error returned by
+// JoinGroupRequest.Validate if the designated constraints aren't met.
+type JoinGroupRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JoinGroupRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JoinGroupRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JoinGroupRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JoinGroupRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JoinGroupRequestValidationError) ErrorName() string { return "JoinGroupRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e JoinGroupRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJoinGroupRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JoinGroupRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JoinGroupRequestValidationError{}
+
+// Validate checks the field values on JoinGroupResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *JoinGroupResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// JoinGroupResponseValidationError is the validation error returned by
+// JoinGroupResponse.Validate if the designated constraints aren't met.
+type JoinGroupResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JoinGroupResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JoinGroupResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JoinGroupResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JoinGroupResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JoinGroupResponseValidationError) ErrorName() string {
+	return "JoinGroupResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e JoinGroupResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJoinGroupResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JoinGroupResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JoinGroupResponseValidationError{}
+
+// Validate checks the field values on LeaveGroupRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *LeaveGroupRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for UserId
+
+	return nil
+}
+
+// LeaveGroupRequestValidationError is the validation error returned by
+// LeaveGroupRequest.Validate if the designated constraints aren't met.
+type LeaveGroupRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LeaveGroupRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LeaveGroupRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LeaveGroupRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LeaveGroupRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LeaveGroupRequestValidationError) ErrorName() string {
+	return "LeaveGroupRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e LeaveGroupRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLeaveGroupRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LeaveGroupRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LeaveGroupRequestValidationError{}
+
+// Validate checks the field values on LeaveGroupResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *LeaveGroupResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// LeaveGroupResponseValidationError is the validation error returned by
+// LeaveGroupResponse.Validate if the designated constraints aren't met.
+type LeaveGroupResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LeaveGroupResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LeaveGroupResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LeaveGroupResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LeaveGroupResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LeaveGroupResponseValidationError) ErrorName() string {
+	return "LeaveGroupResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e LeaveGroupResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLeaveGroupResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LeaveGroupResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LeaveGroupResponseValidationError{}
+
 // Validate checks the field values on GetProjectRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, an
 // error is returned.

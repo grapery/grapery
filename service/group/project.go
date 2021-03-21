@@ -12,15 +12,19 @@ func StarProject(ctx *utils.Context) {
 
 }
 
+func UnStarProject(ctx *utils.Context) {
+
+}
+
 func WatchProject(ctx *utils.Context) {
 
 }
 
-func GetProject(ctx *utils.Context) {
+func UnWatchProject(ctx *utils.Context) {
 
 }
 
-func UnStarProject(ctx *utils.Context) {
+func GetProject(ctx *utils.Context) {
 
 }
 
@@ -33,14 +37,6 @@ func UpdateProject(ctx *utils.Context) {
 }
 
 func DeleteProject(ctx *utils.Context) {
-
-}
-
-func AttentionProject(ctx *utils.Context) {
-
-}
-
-func UnAttentionProject(ctx *utils.Context) {
 
 }
 
