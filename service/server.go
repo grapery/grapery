@@ -94,14 +94,11 @@ func (s *Service) Run(cfg *config.Config) error {
 		groupRoute.PUT("/:id", utils.WrapHandler(group.UpdateGroup))
 		groupRoute.DELETE("/:id", utils.WrapHandler(group.DeleteGroup))
 		groupRoute.GET("/:id/members", utils.WrapHandler(group.GetGroupMembers))
-		groupRoute.POST("/:id/watch", utils.WrapHandler(group.WatchProject))
-		groupRoute.PUT("/:id/watch", utils.WrapHandler(group.UnWatchProject))
-		groupRoute.POST("/:id/join", utils.WrapHandler(group.WatchProject))
-		groupRoute.PUT("/:id/leave", utils.WrapHandler(group.UnWatchProject))
+		groupRoute.POST("/:id/join", utils.WrapHandler(group.JoinGroup))
+		groupRoute.PUT("/:id/leave", utils.WrapHandler(group.LeaveGroup))
+		groupRoute.GET("/:id/projects", utils.WrapHandler(group.GetGroupProjects))
 		thingsGroup := groupRoute.Group("/:id/project")
 		{
-
-			thingsGroup.GET("", utils.WrapHandler(group.GetGroupProjects))
 			thingsGroup.GET("/:project_id", utils.WrapHandler(group.GetProject))
 			thingsGroup.POST("", utils.WrapHandler(group.CreateProject))
 			thingsGroup.PUT("/:project_id", utils.WrapHandler(group.UpdateGroup))
