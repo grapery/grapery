@@ -3563,6 +3563,8 @@ func (m *CreateGroupReqeust) Validate() error {
 		return nil
 	}
 
+	// no validation rules for UserID
+
 	// no validation rules for Name
 
 	return nil
@@ -3630,6 +3632,16 @@ var _ interface {
 func (m *CreateGroupResponse) Validate() error {
 	if m == nil {
 		return nil
+	}
+
+	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CreateGroupResponseValidationError{
+				field:  "Info",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	return nil
@@ -3700,6 +3712,10 @@ func (m *GetGroupReqeust) Validate() error {
 	}
 
 	// no validation rules for GroupID
+
+	// no validation rules for UserID
+
+	// no validation rules for Name
 
 	return nil
 }
@@ -3845,6 +3861,10 @@ func (m *GetGroupActivesRequest) Validate() error {
 
 	// no validation rules for Atype
 
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
 	return nil
 }
 
@@ -3926,6 +3946,10 @@ func (m *GetGroupActivesResponse) Validate() error {
 		}
 
 	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
 
 	return nil
 }
@@ -4073,6 +4097,16 @@ func (m *UpdateGroupInfoResponse) Validate() error {
 		return nil
 	}
 
+	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UpdateGroupInfoResponseValidationError{
+				field:  "Info",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -4141,6 +4175,8 @@ func (m *DeleteGroupRequest) Validate() error {
 	}
 
 	// no validation rules for GroupID
+
+	// no validation rules for UserID
 
 	return nil
 }

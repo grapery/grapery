@@ -45,8 +45,35 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 	if err != nil {
 		return nil, err
 	}
+	creator := &models.User{}
+	creator.ID = uint(group.CreatorID)
+	err = creator.GetById()
+	if err != nil {
+		return nil, err
+	}
 	return &api.GetGroupResponse{
-		Info: &api.GroupInfo{},
+		Info: &api.GroupInfo{
+			GroupID:   uint64(group.ID),
+			Name:      group.Name,
+			AvatorUrl: group.Avatar,
+			Desc:      group.ShortDesc,
+			Creator: &api.UserInfo{
+				UserID:    uint64(creator.ID),
+				Name:      creator.Name,
+				AvatorUrl: creator.Avatar,
+				Email:     creator.Email,
+				Location:  creator.Location,
+				Desc:      creator.ShortDesc,
+			},
+			Owner: &api.UserInfo{
+				UserID:    uint64(creator.ID),
+				Name:      creator.Name,
+				AvatorUrl: creator.Avatar,
+				Email:     creator.Email,
+				Location:  creator.Location,
+				Desc:      creator.ShortDesc,
+			},
+		},
 	}, nil
 }
 
@@ -56,8 +83,35 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 	if err != nil {
 		return nil, err
 	}
+	creator := &models.User{}
+	creator.ID = uint(group.CreatorID)
+	err = creator.GetById()
+	if err != nil {
+		return nil, err
+	}
 	return &api.GetGroupResponse{
-		Info: &api.GroupInfo{},
+		Info: &api.GroupInfo{
+			GroupID:   uint64(group.ID),
+			Name:      group.Name,
+			AvatorUrl: group.Avatar,
+			Desc:      group.ShortDesc,
+			Creator: &api.UserInfo{
+				UserID:    uint64(creator.ID),
+				Name:      creator.Name,
+				AvatorUrl: creator.Avatar,
+				Email:     creator.Email,
+				Location:  creator.Location,
+				Desc:      creator.ShortDesc,
+			},
+			Owner: &api.UserInfo{
+				UserID:    uint64(creator.ID),
+				Name:      creator.Name,
+				AvatorUrl: creator.Avatar,
+				Email:     creator.Email,
+				Location:  creator.Location,
+				Desc:      creator.ShortDesc,
+			},
+		},
 	}, nil
 }
 
