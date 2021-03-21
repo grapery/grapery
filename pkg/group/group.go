@@ -127,13 +127,42 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqe
 	if err != nil {
 		return nil, err
 	}
-	return &api.CreateGroupResponse{}, nil
+	creator := &models.User{}
+	creator.ID = uint(group.CreatorID)
+	err = creator.GetById()
+	if err != nil {
+		return nil, err
+	}
+	return &api.CreateGroupResponse{
+		Info: &api.GroupInfo{
+			GroupId: uint64(group.ID),
+			Name:    group.Name,
+			Avatar:  group.Avatar,
+			Desc:    group.ShortDesc,
+			Creator: &api.UserInfo{
+				UserId:   uint64(creator.ID),
+				Name:     creator.Name,
+				Avatar:   creator.Avatar,
+				Email:    creator.Email,
+				Location: creator.Location,
+				Desc:     creator.ShortDesc,
+			},
+			Owner: &api.UserInfo{
+				UserId:   uint64(creator.ID),
+				Name:     creator.Name,
+				Avatar:   creator.Avatar,
+				Email:    creator.Email,
+				Location: creator.Location,
+				Desc:     creator.ShortDesc,
+			},
+		},
+	}, nil
 }
 
 func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error) {
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
-	err = group.Create()
+	err = group.Delete()
 	if err != nil {
 		return nil, err
 	}
