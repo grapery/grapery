@@ -40,7 +40,7 @@ func (m *Tags) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for CreatorID
 
@@ -110,11 +110,11 @@ func (m *UserInfo) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Name
 
-	// no validation rules for AvatorUrl
+	// no validation rules for Avatar
 
 	// no validation rules for Email
 
@@ -186,11 +186,11 @@ func (m *GroupInfo) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Name
 
-	// no validation rules for AvatorUrl
+	// no validation rules for Avatar
 
 	// no validation rules for Desc
 
@@ -294,13 +294,13 @@ func (m *ProjectInfo) Validate() error {
 		return nil
 	}
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Name
 
-	// no validation rules for AvatorUrl
+	// no validation rules for Avatar
 
 	if v, ok := interface{}(m.GetCreator()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -1042,11 +1042,11 @@ func (m *ItemInfo) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Title
 
@@ -1395,7 +1395,7 @@ func (m *LoginResponse) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -1462,7 +1462,7 @@ func (m *LogoutRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -1870,7 +1870,7 @@ func (m *ResetPasswordResponse) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -1939,7 +1939,7 @@ func (m *UserInfoRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -2081,9 +2081,9 @@ func (m *UpdateUserAvatorRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
-	// no validation rules for AvatorUrl
+	// no validation rules for Avatar
 
 	return nil
 }
@@ -2229,7 +2229,7 @@ func (m *UserFollowingRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -2380,7 +2380,7 @@ func (m *UserFollowerRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -2531,7 +2531,7 @@ func (m *UserGroupRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -2680,7 +2680,7 @@ func (m *UserFollowingGroupRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -2831,11 +2831,11 @@ func (m *UserUpdateRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Nickname
 
-	// no validation rules for AvatorUrl
+	// no validation rules for Avatar
 
 	// no validation rules for Desc
 
@@ -2973,7 +2973,7 @@ func (m *StartFollowUserRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for TargetID
 
@@ -3111,7 +3111,7 @@ func (m *StopFollowUserRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for TargetID
 
@@ -3249,7 +3249,7 @@ func (m *FetchUserActivesRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Atype
 
@@ -3404,7 +3404,7 @@ func (m *SearchUserRequest) Validate() error {
 
 	// no validation rules for Name
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Offset
 
@@ -3563,7 +3563,7 @@ func (m *CreateGroupReqeust) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Name
 
@@ -3711,9 +3711,9 @@ func (m *GetGroupReqeust) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Name
 
@@ -3857,7 +3857,7 @@ func (m *GetGroupActivesRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Atype
 
@@ -4018,7 +4018,7 @@ func (m *UpdateGroupInfoRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -4174,9 +4174,9 @@ func (m *DeleteGroupRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	return nil
 }
@@ -4312,7 +4312,7 @@ func (m *FetchGroupMembersRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Offset
 
@@ -4626,7 +4626,7 @@ func (m *FetchGroupProjectsReqeust) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Offset
 
@@ -4785,9 +4785,9 @@ func (m *GetProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -4933,7 +4933,7 @@ func (m *CreateProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Name
 
@@ -5081,9 +5081,9 @@ func (m *UpdateProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -5239,9 +5239,9 @@ func (m *DeleteProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -5377,9 +5377,9 @@ func (m *GetProjectProfileRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -5525,9 +5525,9 @@ func (m *UpdateProjectProfileRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -5685,9 +5685,9 @@ func (m *StarProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -5823,9 +5823,9 @@ func (m *UnStarProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -5961,9 +5961,9 @@ func (m *WatchProjectReqeust) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	return nil
 }
@@ -6099,7 +6099,7 @@ func (m *SearchProjectRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	// no validation rules for Name
 
@@ -6174,7 +6174,7 @@ func (m *SearchProjectResponse) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
 	for idx, item := range m.GetList() {
 		_, _ = idx, item
@@ -6262,9 +6262,9 @@ func (m *GetItemsRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for Offset
 
@@ -6419,9 +6419,9 @@ func (m *GetItemRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for ItemID
 
@@ -6573,9 +6573,9 @@ func (m *CreateItemRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for Name
 
@@ -6725,9 +6725,9 @@ func (m *UpdateItemRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for ItemID
 
@@ -6885,9 +6885,9 @@ func (m *DeleteItemRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for ItemID
 
@@ -7025,13 +7025,13 @@ func (m *LikeItemRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for GroupID
+	// no validation rules for GroupId
 
-	// no validation rules for ProjectID
+	// no validation rules for ProjectId
 
 	// no validation rules for ItemID
 
-	// no validation rules for UserID
+	// no validation rules for UserId
 
 	// no validation rules for Islike
 

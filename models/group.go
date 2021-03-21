@@ -44,7 +44,7 @@ func (g *Group) Create() error {
 			log.Errorf("query group failed: %s", err.Error())
 			return err
 		}
-		err = database.Model(g).Create(g).Error
+		err = database.Model(g).Create(g).First(g).Error
 		if err != nil {
 			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
 			return errors.ErrGroupIsAlreadyExist

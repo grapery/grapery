@@ -42,7 +42,7 @@ type UserService struct {
 
 func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err := u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
@@ -50,11 +50,11 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	}
 	return &api.UserInfoResponse{
 		Info: &api.UserInfo{
-			UserID:    uint64(u.ID),
-			Name:      u.Name,
-			AvatorUrl: u.Avatar,
-			Email:     u.Email,
-			Location:  u.Location,
+			UserId:   uint64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
 		},
 	}, err
 }
@@ -62,13 +62,13 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (
 	*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err := u.UpdateAvatar()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
 		return nil, err
 	}
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err = u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
@@ -76,11 +76,11 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	}
 	return &api.UpdateUserAvatorResponse{
 		Info: &api.UserInfo{
-			UserID:    uint64(u.ID),
-			Name:      u.Name,
-			AvatorUrl: u.Avatar,
-			Email:     u.Email,
-			Location:  u.Location,
+			UserId:   uint64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
 		},
 	}, err
 }

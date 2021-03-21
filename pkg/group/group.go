@@ -41,6 +41,7 @@ type GroupService struct {
 
 func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
 	group := &models.Group{}
+	group.ID = uint(req.GetGroupID())
 	err = group.GetByID()
 	if err != nil {
 		return nil, err
@@ -79,6 +80,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 
 func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
 	group := &models.Group{}
+	group.Name = req.GetName()
 	err = group.GetByName()
 	if err != nil {
 		return nil, err
@@ -118,6 +120,7 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error) {
 	group := &models.Group{}
 	group.Name = req.Name
+	group.CreatorID = req.GetUserID()
 	err = group.Create()
 	if err != nil {
 		return nil, err

@@ -1,11 +1,11 @@
 package models
 
 import (
-	"github.com/grapery/grapery/utils/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/utils/errors"
 )
 
-// LikeType: left orange jijin zantong,middle blue haihao wusuowei,right green baoshou fandui
 type LikeItem struct {
 	IDBase
 	UserID    uint64 `json:"user_id,omitempty"`
