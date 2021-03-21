@@ -6988,10 +6988,6 @@ func (m *GetItemRequest) Validate() error {
 
 	// no validation rules for ItemId
 
-	// no validation rules for Offset
-
-	// no validation rules for Number
-
 	return nil
 }
 
@@ -7066,10 +7062,6 @@ func (m *GetItemResponse) Validate() error {
 			}
 		}
 	}
-
-	// no validation rules for Offset
-
-	// no validation rules for Number
 
 	return nil
 }

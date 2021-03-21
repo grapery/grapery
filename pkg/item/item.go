@@ -21,7 +21,8 @@ func NewItemService() *ItemService {
 }
 
 type ItemServer interface {
-	GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemResponse, err error)
+	GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemsResponse, err error)
+	GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error)
 	UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error)
 	CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error)
 	DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error)
@@ -30,9 +31,14 @@ type ItemServer interface {
 
 type ItemService struct{}
 
-func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemResponse, err error) {
+func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemsResponse, err error) {
 	return nil, nil
 }
+
+func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error) {
+	return nil, nil
+}
+
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
 	return nil, nil
 }
