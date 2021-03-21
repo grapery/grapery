@@ -35,6 +35,7 @@ type UserServer interface {
 	UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (*api.UserFollowingResponse, error)
 	UserFollower(ctx context.Context, req *api.UserFollowerRequest) (*api.UserFollowerResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
 }
 
 type UserService struct {
@@ -130,5 +131,10 @@ func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollower
 
 func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (
 	*api.SearchUserResponse, error) {
+	return nil, nil
+}
+
+func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
+	*api.UserWatchingResponse, error) {
 	return nil, nil
 }

@@ -63,7 +63,7 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 			ctx.Err = err
 			ctx.Resp = nil
 		} else {
-			ctx.UserID = info.GetUserID()
+			ctx.UserID = info.GetUserId()
 			h(ctx)
 		}
 		// err handle

@@ -1797,7 +1797,7 @@ func (m *ResetPasswordRequest) Validate() error {
 
 	// no validation rules for LoginType
 
-	// no validation rules for Account
+	// no validation rules for UserId
 
 	// no validation rules for OldPwd
 
@@ -2523,6 +2523,157 @@ var _ interface {
 	ErrorName() string
 } = UserFollowerResponseValidationError{}
 
+// Validate checks the field values on UserWatchingRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *UserWatchingRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	return nil
+}
+
+// UserWatchingRequestValidationError is the validation error returned by
+// UserWatchingRequest.Validate if the designated constraints aren't met.
+type UserWatchingRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UserWatchingRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UserWatchingRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UserWatchingRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UserWatchingRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UserWatchingRequestValidationError) ErrorName() string {
+	return "UserWatchingRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UserWatchingRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUserWatchingRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UserWatchingRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UserWatchingRequestValidationError{}
+
+// Validate checks the field values on UserWatchingResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *UserWatchingResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return UserWatchingResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// UserWatchingResponseValidationError is the validation error returned by
+// UserWatchingResponse.Validate if the designated constraints aren't met.
+type UserWatchingResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UserWatchingResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UserWatchingResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UserWatchingResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UserWatchingResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UserWatchingResponseValidationError) ErrorName() string {
+	return "UserWatchingResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UserWatchingResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUserWatchingResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UserWatchingResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UserWatchingResponseValidationError{}
+
 // Validate checks the field values on UserGroupRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, an
 // error is returned.
@@ -2975,7 +3126,7 @@ func (m *StartFollowUserRequest) Validate() error {
 
 	// no validation rules for UserId
 
-	// no validation rules for TargetID
+	// no validation rules for TargetId
 
 	return nil
 }
@@ -3113,7 +3264,7 @@ func (m *StopFollowUserRequest) Validate() error {
 
 	// no validation rules for UserId
 
-	// no validation rules for TargetID
+	// no validation rules for TargetId
 
 	return nil
 }
@@ -6423,7 +6574,7 @@ func (m *GetItemRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
-	// no validation rules for ItemID
+	// no validation rules for ItemId
 
 	// no validation rules for Offset
 
@@ -6729,7 +6880,7 @@ func (m *UpdateItemRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
-	// no validation rules for ItemID
+	// no validation rules for ItemId
 
 	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
@@ -6889,7 +7040,7 @@ func (m *DeleteItemRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
-	// no validation rules for ItemID
+	// no validation rules for ItemId
 
 	return nil
 }
@@ -7029,7 +7180,7 @@ func (m *LikeItemRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
-	// no validation rules for ItemID
+	// no validation rules for ItemId
 
 	// no validation rules for UserId
 

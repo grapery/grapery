@@ -88,7 +88,7 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string, 
 		return nil, err
 	}
 	return &api.UserInfo{
-		UserID: uint64(info.ID),
+		UserId: uint64(info.ID),
 	}, nil
 }
 
