@@ -22,7 +22,6 @@ type Active struct {
 	ItemID     uint64         `json:"item_id,omitempty"`
 	ProjectID  uint64         `json:"project_id,omitempty"`
 	GroupID    uint64         `json:"group_id,omitempty"`
-	UID        uint64         `json:"uid,omitempty"`
 }
 
 func (a Active) TableName() string {

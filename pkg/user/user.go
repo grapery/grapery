@@ -35,6 +35,7 @@ type UserServer interface {
 	UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (*api.UserFollowingResponse, error)
 	UserFollower(ctx context.Context, req *api.UserFollowerRequest) (*api.UserFollowerResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
 }
 
 type UserService struct {
@@ -42,7 +43,7 @@ type UserService struct {
 
 func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err := u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
@@ -50,11 +51,11 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	}
 	return &api.UserInfoResponse{
 		Info: &api.UserInfo{
-			UserID:    uint64(u.ID),
-			Nickname:  u.Name,
-			AvatorUrl: u.Avatar,
-			Email:     u.Email,
-			Location:  u.Location,
+			UserId:   uint64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
 		},
 	}, err
 }
@@ -62,13 +63,13 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (
 	*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err := u.UpdateAvatar()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
 		return nil, err
 	}
-	u.ID = uint(req.GetUserID())
+	u.ID = uint(req.GetUserId())
 	err = u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
@@ -76,11 +77,11 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	}
 	return &api.UpdateUserAvatorResponse{
 		Info: &api.UserInfo{
-			UserID:    uint64(u.ID),
-			Nickname:  u.Name,
-			AvatorUrl: u.Avatar,
-			Email:     u.Email,
-			Location:  u.Location,
+			UserId:   uint64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
 		},
 	}, err
 }
@@ -130,5 +131,10 @@ func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollower
 
 func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (
 	*api.SearchUserResponse, error) {
+	return nil, nil
+}
+
+func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
+	*api.UserWatchingResponse, error) {
 	return nil, nil
 }

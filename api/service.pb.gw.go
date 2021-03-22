@@ -186,15 +186,15 @@ func request_User_UserInfo_0(ctx context.Context, marshaler runtime.Marshaler, c
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -221,15 +221,15 @@ func local_request_User_UserInfo_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserInfo(ctx, &protoReq)
@@ -256,15 +256,15 @@ func request_User_UpdateUserAvator_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UpdateUserAvator(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -291,15 +291,15 @@ func local_request_User_UpdateUserAvator_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UpdateUserAvator(ctx, &protoReq)
@@ -326,15 +326,15 @@ func request_User_UserFollowing_0(ctx context.Context, marshaler runtime.Marshal
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserFollowing(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -361,18 +361,88 @@ func local_request_User_UserFollowing_0(ctx context.Context, marshaler runtime.M
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserFollowing(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_User_UserWatching_0(ctx context.Context, marshaler runtime.Marshaler, client UserClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq UserWatchingRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+
+	protoReq.UserId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
+	}
+
+	msg, err := client.UserWatching(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_User_UserWatching_0(ctx context.Context, marshaler runtime.Marshaler, server UserServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq UserWatchingRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+
+	protoReq.UserId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
+	}
+
+	msg, err := server.UserWatching(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -396,15 +466,15 @@ func request_User_UserFollower_0(ctx context.Context, marshaler runtime.Marshale
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserFollower(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -431,15 +501,15 @@ func local_request_User_UserFollower_0(ctx context.Context, marshaler runtime.Ma
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserFollower(ctx, &protoReq)
@@ -466,15 +536,15 @@ func request_User_UserGroup_0(ctx context.Context, marshaler runtime.Marshaler, 
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -501,15 +571,15 @@ func local_request_User_UserGroup_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserGroup(ctx, &protoReq)
@@ -536,15 +606,15 @@ func request_User_UserFollowingGroup_0(ctx context.Context, marshaler runtime.Ma
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserFollowingGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -571,15 +641,15 @@ func local_request_User_UserFollowingGroup_0(ctx context.Context, marshaler runt
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserFollowingGroup(ctx, &protoReq)
@@ -606,15 +676,15 @@ func request_User_UserUpdate_0(ctx context.Context, marshaler runtime.Marshaler,
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.UserUpdate(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -641,15 +711,15 @@ func local_request_User_UserUpdate_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.UserUpdate(ctx, &protoReq)
@@ -676,26 +746,26 @@ func request_User_StartFollowUser_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
-	val, ok = pathParams["targetID"]
+	val, ok = pathParams["target_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "targetID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "target_id")
 	}
 
-	protoReq.TargetID, err = runtime.Uint64(val)
+	protoReq.TargetId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "targetID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "target_id", err)
 	}
 
 	msg, err := client.StartFollowUser(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -722,26 +792,26 @@ func local_request_User_StartFollowUser_0(ctx context.Context, marshaler runtime
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
-	val, ok = pathParams["targetID"]
+	val, ok = pathParams["target_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "targetID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "target_id")
 	}
 
-	protoReq.TargetID, err = runtime.Uint64(val)
+	protoReq.TargetId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "targetID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "target_id", err)
 	}
 
 	msg, err := server.StartFollowUser(ctx, &protoReq)
@@ -768,26 +838,26 @@ func request_User_StopFollowUser_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
-	val, ok = pathParams["targetID"]
+	val, ok = pathParams["target_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "targetID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "target_id")
 	}
 
-	protoReq.TargetID, err = runtime.Uint64(val)
+	protoReq.TargetId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "targetID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "target_id", err)
 	}
 
 	msg, err := client.StopFollowUser(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -814,26 +884,26 @@ func local_request_User_StopFollowUser_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
-	val, ok = pathParams["targetID"]
+	val, ok = pathParams["target_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "targetID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "target_id")
 	}
 
-	protoReq.TargetID, err = runtime.Uint64(val)
+	protoReq.TargetId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "targetID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "target_id", err)
 	}
 
 	msg, err := server.StopFollowUser(ctx, &protoReq)
@@ -860,15 +930,15 @@ func request_User_FetchUserActives_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := client.FetchUserActives(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -895,15 +965,15 @@ func local_request_User_FetchUserActives_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["userID"]
+	val, ok = pathParams["user_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "userID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
 	}
 
-	protoReq.UserID, err = runtime.Uint64(val)
+	protoReq.UserId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "userID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 
 	msg, err := server.FetchUserActives(ctx, &protoReq)
@@ -998,15 +1068,15 @@ func request_Org_GetGroup_0(ctx context.Context, marshaler runtime.Marshaler, cl
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.GetGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1033,15 +1103,15 @@ func local_request_Org_GetGroup_0(ctx context.Context, marshaler runtime.Marshal
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.GetGroup(ctx, &protoReq)
@@ -1068,15 +1138,15 @@ func request_Org_GetGroupActives_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.GetGroupActives(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1103,15 +1173,15 @@ func local_request_Org_GetGroupActives_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.GetGroupActives(ctx, &protoReq)
@@ -1138,15 +1208,15 @@ func request_Org_UpdateGroupInfo_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.UpdateGroupInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1173,15 +1243,15 @@ func local_request_Org_UpdateGroupInfo_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.UpdateGroupInfo(ctx, &protoReq)
@@ -1208,15 +1278,15 @@ func request_Org_DeleteGroup_0(ctx context.Context, marshaler runtime.Marshaler,
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.DeleteGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1243,15 +1313,15 @@ func local_request_Org_DeleteGroup_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.DeleteGroup(ctx, &protoReq)
@@ -1278,15 +1348,15 @@ func request_Org_FetchGroupMembers_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.FetchGroupMembers(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1313,15 +1383,15 @@ func local_request_Org_FetchGroupMembers_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.FetchGroupMembers(ctx, &protoReq)
@@ -1382,15 +1452,15 @@ func request_Org_FetchGroupProjects_0(ctx context.Context, marshaler runtime.Mar
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.FetchGroupProjects(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1417,18 +1487,158 @@ func local_request_Org_FetchGroupProjects_0(ctx context.Context, marshaler runti
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.FetchGroupProjects(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Org_JoinGroup_0(ctx context.Context, marshaler runtime.Marshaler, client OrgClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq JoinGroupRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	msg, err := client.JoinGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Org_JoinGroup_0(ctx context.Context, marshaler runtime.Marshaler, server OrgServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq JoinGroupRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	msg, err := server.JoinGroup(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Org_LeaveGroup_0(ctx context.Context, marshaler runtime.Marshaler, client OrgClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq LeaveGroupRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	msg, err := client.LeaveGroup(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Org_LeaveGroup_0(ctx context.Context, marshaler runtime.Marshaler, server OrgServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq LeaveGroupRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	msg, err := server.LeaveGroup(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -1452,26 +1662,26 @@ func request_Project_GetProject_0(ctx context.Context, marshaler runtime.Marshal
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.GetProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1498,26 +1708,26 @@ func local_request_Project_GetProject_0(ctx context.Context, marshaler runtime.M
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.GetProject(ctx, &protoReq)
@@ -1544,15 +1754,15 @@ func request_Project_CreateProject_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.CreateProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1579,15 +1789,15 @@ func local_request_Project_CreateProject_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.CreateProject(ctx, &protoReq)
@@ -1614,26 +1824,26 @@ func request_Project_UpdateProject_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.UpdateProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1660,26 +1870,26 @@ func local_request_Project_UpdateProject_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.UpdateProject(ctx, &protoReq)
@@ -1706,26 +1916,26 @@ func request_Project_DeleteProject_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.DeleteProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1752,26 +1962,26 @@ func local_request_Project_DeleteProject_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.DeleteProject(ctx, &protoReq)
@@ -1798,26 +2008,26 @@ func request_Project_GetProjectProfile_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.GetProjectProfile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1844,26 +2054,26 @@ func local_request_Project_GetProjectProfile_0(ctx context.Context, marshaler ru
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.GetProjectProfile(ctx, &protoReq)
@@ -1890,26 +2100,26 @@ func request_Project_UpdateProjectProfile_0(ctx context.Context, marshaler runti
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.UpdateProjectProfile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1936,26 +2146,26 @@ func local_request_Project_UpdateProjectProfile_0(ctx context.Context, marshaler
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.UpdateProjectProfile(ctx, &protoReq)
@@ -1982,26 +2192,26 @@ func request_Project_StarProject_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.StarProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2028,26 +2238,26 @@ func local_request_Project_StarProject_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.StarProject(ctx, &protoReq)
@@ -2074,26 +2284,26 @@ func request_Project_UnStarProject_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.UnStarProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2120,26 +2330,26 @@ func local_request_Project_UnStarProject_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.UnStarProject(ctx, &protoReq)
@@ -2166,26 +2376,26 @@ func request_Project_WatchProject_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.WatchProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2212,29 +2422,121 @@ func local_request_Project_WatchProject_0(ctx context.Context, marshaler runtime
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["projectID"]
+	val, ok = pathParams["project_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "projectID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
 	}
 
-	protoReq.ProjectID, err = runtime.Uint64(val)
+	protoReq.ProjectId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "projectID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.WatchProject(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Project_UnWatchProject_0(ctx context.Context, marshaler runtime.Marshaler, client ProjectClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq UnWatchProjectReqeust
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+
+	protoReq.ProjectId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
+	}
+
+	msg, err := client.UnWatchProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Project_UnWatchProject_0(ctx context.Context, marshaler runtime.Marshaler, server ProjectServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq UnWatchProjectReqeust
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+
+	protoReq.ProjectId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
+	}
+
+	msg, err := server.UnWatchProject(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -2258,15 +2560,15 @@ func request_Project_SearchProject_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.SearchProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2293,15 +2595,15 @@ func local_request_Project_SearchProject_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.SearchProject(ctx, &protoReq)
@@ -2328,15 +2630,26 @@ func request_Item_GetItems_0(ctx context.Context, marshaler runtime.Marshaler, c
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+
+	protoReq.ProjectId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := client.GetItems(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2363,18 +2676,121 @@ func local_request_Item_GetItems_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+
+	protoReq.ProjectId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
 	msg, err := server.GetItems(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Item_GetItem_0(ctx context.Context, marshaler runtime.Marshaler, client ItemClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetItemRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["item_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
+	}
+
+	protoReq.ItemId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
+	}
+
+	msg, err := client.GetItem(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Item_GetItem_0(ctx context.Context, marshaler runtime.Marshaler, server ItemServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetItemRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["group_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
+	}
+
+	protoReq.GroupId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
+	}
+
+	val, ok = pathParams["item_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
+	}
+
+	protoReq.ItemId, err = runtime.Uint64(val)
+
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
+	}
+
+	msg, err := server.GetItem(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -2398,15 +2814,15 @@ func request_Item_CreateItem_0(ctx context.Context, marshaler runtime.Marshaler,
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := client.CreateItem(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2433,15 +2849,15 @@ func local_request_Item_CreateItem_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
 	msg, err := server.CreateItem(ctx, &protoReq)
@@ -2468,26 +2884,26 @@ func request_Item_UpdateItem_0(ctx context.Context, marshaler runtime.Marshaler,
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := client.UpdateItem(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2514,26 +2930,26 @@ func local_request_Item_UpdateItem_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := server.UpdateItem(ctx, &protoReq)
@@ -2560,26 +2976,26 @@ func request_Item_DeleteItem_0(ctx context.Context, marshaler runtime.Marshaler,
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := client.DeleteItem(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2606,26 +3022,26 @@ func local_request_Item_DeleteItem_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := server.DeleteItem(ctx, &protoReq)
@@ -2652,26 +3068,26 @@ func request_Item_LikeItem_0(ctx context.Context, marshaler runtime.Marshaler, c
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := client.LikeItem(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -2698,26 +3114,26 @@ func local_request_Item_LikeItem_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["groupID"]
+	val, ok = pathParams["group_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "groupID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "group_id")
 	}
 
-	protoReq.GroupID, err = runtime.Uint64(val)
+	protoReq.GroupId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "groupID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "group_id", err)
 	}
 
-	val, ok = pathParams["itemID"]
+	val, ok = pathParams["item_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "itemID")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "item_id")
 	}
 
-	protoReq.ItemID, err = runtime.Uint64(val)
+	protoReq.ItemId, err = runtime.Uint64(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "itemID", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "item_id", err)
 	}
 
 	msg, err := server.LikeItem(ctx, &protoReq)
@@ -2875,6 +3291,26 @@ func RegisterUserHandlerServer(ctx context.Context, mux *runtime.ServeMux, serve
 		}
 
 		forward_User_UserFollowing_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_User_UserWatching_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_User_UserWatching_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_User_UserWatching_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -3206,6 +3642,46 @@ func RegisterOrgHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 
 	})
 
+	mux.Handle("POST", pattern_Org_JoinGroup_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Org_JoinGroup_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Org_JoinGroup_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Org_LeaveGroup_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Org_LeaveGroup_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Org_LeaveGroup_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -3394,6 +3870,26 @@ func RegisterProjectHandlerServer(ctx context.Context, mux *runtime.ServeMux, se
 
 	})
 
+	mux.Handle("POST", pattern_Project_UnWatchProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Project_UnWatchProject_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Project_UnWatchProject_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_Project_SearchProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -3439,6 +3935,26 @@ func RegisterItemHandlerServer(ctx context.Context, mux *runtime.ServeMux, serve
 		}
 
 		forward_Item_GetItems_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Item_GetItem_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Item_GetItem_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Item_GetItem_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -3764,6 +4280,26 @@ func RegisterUserHandlerClient(ctx context.Context, mux *runtime.ServeMux, clien
 
 	})
 
+	mux.Handle("POST", pattern_User_UserWatching_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_User_UserWatching_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_User_UserWatching_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_User_UserFollower_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -3928,25 +4464,27 @@ func RegisterUserHandlerClient(ctx context.Context, mux *runtime.ServeMux, clien
 }
 
 var (
-	pattern_User_UserInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "user", "userID"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "user", "user_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UpdateUserAvator_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "avator"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UpdateUserAvator_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "avator"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UserFollowing_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "following"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserFollowing_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "following"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UserFollower_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "follower"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserWatching_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "watching"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UserGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "groups"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserFollower_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "follower"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UserFollowingGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "user", "userID", "groups", "following"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "groups"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_UserUpdate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserFollowingGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "user", "user_id", "groups", "following"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_StartFollowUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "user", "userID", "following", "add", "targetID"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_UserUpdate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_StopFollowUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "user", "userID", "following", "remove", "targetID"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_StartFollowUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "user", "user_id", "following", "add", "target_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_User_FetchUserActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "userID", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_User_StopFollowUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "user", "user_id", "following", "remove", "target_id"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_User_FetchUserActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "user", "user_id", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_User_SearchUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "users", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 )
@@ -3957,6 +4495,8 @@ var (
 	forward_User_UpdateUserAvator_0 = runtime.ForwardResponseMessage
 
 	forward_User_UserFollowing_0 = runtime.ForwardResponseMessage
+
+	forward_User_UserWatching_0 = runtime.ForwardResponseMessage
 
 	forward_User_UserFollower_0 = runtime.ForwardResponseMessage
 
@@ -4173,25 +4713,69 @@ func RegisterOrgHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 
 	})
 
+	mux.Handle("POST", pattern_Org_JoinGroup_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Org_JoinGroup_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Org_JoinGroup_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Org_LeaveGroup_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Org_LeaveGroup_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Org_LeaveGroup_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
 var (
 	pattern_Org_CreateGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "group"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_GetGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "group", "groupID"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_GetGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "group", "group_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_GetGroupActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_GetGroupActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_UpdateGroupInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_UpdateGroupInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_DeleteGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_DeleteGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_FetchGroupMembers_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "members"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_FetchGroupMembers_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "members"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_Org_SearchGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Org_FetchGroupProjects_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "projects"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Org_FetchGroupProjects_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "projects"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_Org_JoinGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "join"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_Org_LeaveGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "leave"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -4210,6 +4794,10 @@ var (
 	forward_Org_SearchGroup_0 = runtime.ForwardResponseMessage
 
 	forward_Org_FetchGroupProjects_0 = runtime.ForwardResponseMessage
+
+	forward_Org_JoinGroup_0 = runtime.ForwardResponseMessage
+
+	forward_Org_LeaveGroup_0 = runtime.ForwardResponseMessage
 )
 
 // RegisterProjectHandlerFromEndpoint is same as RegisterProjectHandler but
@@ -4430,6 +5018,26 @@ func RegisterProjectHandlerClient(ctx context.Context, mux *runtime.ServeMux, cl
 
 	})
 
+	mux.Handle("POST", pattern_Project_UnWatchProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Project_UnWatchProject_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Project_UnWatchProject_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_Project_SearchProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -4454,25 +5062,27 @@ func RegisterProjectHandlerClient(ctx context.Context, mux *runtime.ServeMux, cl
 }
 
 var (
-	pattern_Project_GetProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "group", "groupID", "project", "projectID"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_GetProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "group", "group_id", "project", "project_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "groupID", "project"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "group", "group_id", "project"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_UpdateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_UpdateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_DeleteProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_DeleteProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_GetProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "profile"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_GetProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "profile"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_UpdateProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_UpdateProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_StarProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "star"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_StarProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "star"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_UnStarProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "unstar"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_UnStarProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "unstar"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_WatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "groupID", "project", "projectID", "watch"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_WatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "watch"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Project_SearchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "group", "groupID", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Project_UnWatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "unwatch"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_Project_SearchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "group", "group_id", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -4493,6 +5103,8 @@ var (
 	forward_Project_UnStarProject_0 = runtime.ForwardResponseMessage
 
 	forward_Project_WatchProject_0 = runtime.ForwardResponseMessage
+
+	forward_Project_UnWatchProject_0 = runtime.ForwardResponseMessage
 
 	forward_Project_SearchProject_0 = runtime.ForwardResponseMessage
 )
@@ -4552,6 +5164,26 @@ func RegisterItemHandlerClient(ctx context.Context, mux *runtime.ServeMux, clien
 		}
 
 		forward_Item_GetItems_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Item_GetItem_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Item_GetItem_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Item_GetItem_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -4639,19 +5271,23 @@ func RegisterItemHandlerClient(ctx context.Context, mux *runtime.ServeMux, clien
 }
 
 var (
-	pattern_Item_GetItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "group", "groupID", "projects", "items"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Item_GetItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "group", "group_id", "project", "project_id", "items"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Item_CreateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "group", "groupID", "projects", "item"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Item_GetItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"v1", "group", "group_id", "project", "item", "item_id"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Item_UpdateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "groupID", "projects", "item", "itemID", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Item_CreateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4}, []string{"v1", "group", "group_id", "project", "item"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Item_DeleteItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "groupID", "projects", "item", "itemID", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Item_UpdateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "group_id", "project", "item", "item_id", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Item_LikeItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "groupID", "projects", "item", "itemID", "like"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Item_DeleteItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "group_id", "project", "item", "item_id", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_Item_LikeItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"v1", "group", "group_id", "project", "item", "item_id", "like"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
 	forward_Item_GetItems_0 = runtime.ForwardResponseMessage
+
+	forward_Item_GetItem_0 = runtime.ForwardResponseMessage
 
 	forward_Item_CreateItem_0 = runtime.ForwardResponseMessage
 

@@ -58,12 +58,12 @@ func Login(ctx *gin.Context) {
 	}
 	ret.Code = 0
 	ret.Message = "ok"
-	ret.Data = api.LoginResponse{UserID: info.UserID}
+	ret.Data = api.LoginResponse{UserId: info.GetUserId()}
 	infoData, _ := json.Marshal(info)
-	cache.SetBytes(c, fmt.Sprintf("%d", info.GetUserID()), infoData, 86400)
+	cache.SetBytes(c, fmt.Sprintf("%d", info.GetUserId()), infoData, 86400)
 	ctx.SetCookie(
 		utils.CookieName,
-		fmt.Sprintf("%d", info.GetUserID()),
+		fmt.Sprintf("%d", info.GetUserId()),
 		utils.CookieMaxAge,
 		utils.CookiePath,
 		utils.Domain, false, false)
@@ -82,7 +82,7 @@ func Logout(ctx *gin.Context) {
 		return
 	}
 	c := context.Background()
-	err = auth.GetAuthService().Logout(c, req.GetUserID())
+	err = auth.GetAuthService().Logout(c, req.GetUserId())
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
@@ -97,5 +97,27 @@ func Logout(ctx *gin.Context) {
 }
 
 func ResetPassword(ctx *utils.Context) {
-	_ = &api.ResetPasswordRequest{}
+	req := &api.ResetPasswordRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	ret := utils.NewResult()
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.GinC.JSON(http.StatusOK, ret)
+		return
+	}
+	err = auth.GetAuthService().ResetPassword(ctx.Ctx, req.GetUserId(), req.GetNewPwd(), req.GetOldPwd())
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.GinC.JSON(http.StatusOK, ret)
+		return
+	}
+	cookie, _ := ctx.GinC.Cookie(utils.CookieName)
+	cache.DelCache(ctx.Ctx, cookie)
+	ret.Message = "ok"
+	ret.Data = api.LoginResponse{
+		UserId: req.GetUserId(),
+	}
+	return
 }

@@ -30,6 +30,7 @@ type ProjectServer interface {
 	StarProject(ctx context.Context, req *api.StarProjectRequest) (resp *api.StarProjectResponse, err error)
 	UnStarProject(ctx context.Context, req *api.UnStarProjectRequest) (resp *api.UnStarProjectResponse, err error)
 	WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error)
+	UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error)
 	SearchProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
 }
 
@@ -63,6 +64,11 @@ func (p *ProjectService) UnStarProject(ctx context.Context, req *api.UnStarProje
 func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error) {
 	return nil, nil
 }
+
+func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error) {
+	return nil, nil
+}
+
 func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
 	return nil, nil
 }
