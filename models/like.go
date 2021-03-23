@@ -20,9 +20,9 @@ func (l LikeItem) TableName() string {
 }
 
 func CreateLikeItem(repo *Repository, item *LikeItem) error {
-	num := 0
+	var num int64
 	err := repo.DB().Model(&LikeItem{}).Where("user_id = ? and group_id = ? and project_id = ? and item_id = ?",
-		item.UserID, item.GroupID, item.ProjectID, item.ItemID).Count(num).Error
+		item.UserID, item.GroupID, item.ProjectID, item.ItemID).Count(&num).Error
 	if err != nil {
 		return err
 	}

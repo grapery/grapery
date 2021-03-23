@@ -2,15 +2,19 @@ package models
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	logger "gorm.io/gorm/logger"
 )
 
 var database *gorm.DB
+var sqlDB *sql.DB
 
 const (
 	maxIdleConns    = 10
@@ -19,29 +23,44 @@ const (
 )
 
 // Init ...
-func Init(uname, pwd, db string) error {
+func Init(uname, pwd, dbname string) error {
 	var err error
 	if database != nil {
 		log.Warn("database already init")
 		return nil
 	}
-	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, db)
+	newLogger := logger.New(
+		log.StandardLogger(), // io writer
+		logger.Config{
+			SlowThreshold: time.Second, // 慢 SQL 阈值
+			LogLevel:      logger.Info, // Log level
+			Colorful:      true,        // 禁用彩色打印
+		},
+	)
+	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, dbname)
 	println("mysql :", sqldbUrl)
 
-	database, err = gorm.Open("mysql", sqldbUrl)
+	sqlDB, err := sql.Open("mysql", sqldbUrl)
+
 	if err != nil {
-		log.Errorf("create dataabse failed  : [%s]", err.Error())
+		log.Errorf("connect database failed  : [%s]", err.Error())
 		return err
 	}
-	database.DB().SetMaxIdleConns(maxIdleConns)
-	database.DB().SetMaxOpenConns(maxOpenConns)
-	database.DB().SetConnMaxLifetime(connMaxLifetime)
-	database.Debug()
+	sqlDB.SetMaxIdleConns(maxIdleConns)
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	database, err = gorm.Open(mysql.New(mysql.Config{
+		Conn: sqlDB,
+	}), &gorm.Config{Logger: newLogger})
+	if err != nil {
+		log.Errorf("create orm failed  : [%s]", err.Error())
+		return err
+	}
 	/*callback: https://github.com/go-gorm/gorm/blob/master/callbacks/callbacks.go*/
-	database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createCallback)
-	database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateCallback)
-	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", ignoreSoftDeleteItems)
-	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", ignoreSoftDeleteItems)
+	database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createOp)
+	database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateOp)
+	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
+	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
 	database.AutoMigrate(&User{})
 	database.AutoMigrate(&Auth{})
@@ -52,7 +71,8 @@ func Init(uname, pwd, db string) error {
 	database.AutoMigrate(&ShareItem{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
-	//database.AutoMigrate(&Question{})
+	database.AutoMigrate(&Question{})
+	//database = database.Scopes(createOp, updateOp, deleteFilter)
 	//database.SetLogger(log.New())
 	return nil
 }
@@ -62,7 +82,12 @@ func Close() error {
 	if database == nil {
 		log.Info("database is close")
 	}
-	return database.Close()
+	db, err := database.DB()
+	if err != nil {
+		return err
+	}
+	db.Close()
+	return nil
 }
 
 type Base struct {
@@ -102,40 +127,16 @@ func DataBase() *gorm.DB {
 	return database
 }
 
-func createCallback(scope *gorm.Scope) {
-	if !scope.HasError() {
-		now := time.Now().Unix()
-
-		if createdAtField, ok := scope.FieldByName("create_at"); ok {
-			if createdAtField.IsBlank {
-				_ = createdAtField.Set(now)
-			}
-		}
-		if updatedAtField, ok := scope.FieldByName("update_at"); ok {
-			if updatedAtField.IsBlank {
-				_ = updatedAtField.Set(now)
-			}
-		}
-	}
+func createOp(db *gorm.DB) {
+	now := time.Now().Unix()
+	db.Update("create_at = ?", now).Update("update_at = ?", now)
 }
 
-func updateCallback(scope *gorm.Scope) {
-	if !scope.HasError() {
-		now := time.Now().Unix()
-		if updatedAtField, ok := scope.FieldByName("update_at"); ok {
-			if updatedAtField.IsBlank {
-				_ = updatedAtField.Set(now)
-				_ = scope.SetColumn("update_at", now)
-			}
-		}
-	}
+func updateOp(db *gorm.DB) {
+	now := time.Now().Unix()
+	db.Update("update_at = ?", now)
 }
 
-func ignoreSoftDeleteItems(scope *gorm.Scope) {
-	if !scope.HasError() {
-		deletedTimeField, hasDeletedTimeField := scope.FieldByName("deleted")
-		if !scope.Search.Unscoped && hasDeletedTimeField {
-			scope.Search.Where(fmt.Sprintf("%s = ?", scope.Quote(deletedTimeField.DBName)), 0)
-		}
-	}
+func deleteFilter(db *gorm.DB) {
+	db.Where("deleted = ?", 0)
 }

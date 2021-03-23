@@ -3,8 +3,8 @@ package models
 import (
 	"fmt"
 
-	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/errors"
