@@ -52,10 +52,9 @@ func IsUserAuthExist(account string) bool {
 }
 
 func (a *Auth) CreateWithEmail() error {
-
 	err := database.Create(a).Error
 	if err != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
+		log.Errorf("create auth [%s] failed [%s] ", a.Email, err.Error())
 		return errors.ErrCreateAuthFailed
 	}
 	return nil

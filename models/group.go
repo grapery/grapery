@@ -39,13 +39,13 @@ func (g Group) TableName() string {
 }
 
 func (g *Group) Create() error {
-	err := database.Model(g).Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g).Error
+	err := database.Table(g.TableName()).Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.CreatorID, 0).Find(g).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
 			log.Errorf("query group failed: %s", err.Error())
 			return err
 		}
-		err = database.Model(g).Create(g).First(g).Error
+		err = database.Table(g.TableName()).Create(g).First(g).Error
 		if err != nil {
 			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
 			return errors.ErrGroupIsAlreadyExist
@@ -58,7 +58,7 @@ func (g *Group) Create() error {
 }
 
 func (g *Group) UpdateDesc() error {
-	if err := database.Model(g).Update("short_desc", g.ShortDesc).Error; err != nil {
+	if err := database.Table(g.TableName()).Update("short_desc", g.ShortDesc).Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 	}
@@ -66,7 +66,7 @@ func (g *Group) UpdateDesc() error {
 }
 
 func (g *Group) UpdateGroupType() error {
-	if err := database.Model(g).Update("gtype", g.Gtype).Error; err != nil {
+	if err := database.Table(g.TableName()).Update("gtype", g.Gtype).Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 	}
@@ -74,7 +74,7 @@ func (g *Group) UpdateGroupType() error {
 }
 
 func (g *Group) UpdateAvatar() error {
-	if err := database.Model(g).Update("avatar", g.Avatar).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
+	if err := database.Table(g.TableName()).Update("avatar", g.Avatar).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 	}
@@ -82,7 +82,7 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := database.Model(g).Where("name = ? and deleted = ?",
+	if err := database.Table(g.TableName()).Where("name = ? and deleted = ?",
 		g.Name, 0).Find(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
@@ -91,7 +91,7 @@ func (g *Group) GetByName() error {
 }
 
 func (g *Group) GetByID() error {
-	if err := database.Model(g).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
+	if err := database.Table(g.TableName()).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
@@ -99,7 +99,7 @@ func (g *Group) GetByID() error {
 }
 
 func (g *Group) Delete() error {
-	if err := database.Model(g).Update("deleted", 1).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
+	if err := database.Table(g.TableName()).Update("deleted", 1).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
 		log.Errorf("update group [%s] deleted failed ", g.Name)
 		return fmt.Errorf("deleted group [%s] failed ", g.Name)
 	}
@@ -117,13 +117,13 @@ func (g GroupMember) TableName() string {
 }
 
 func (g *GroupMember) Create() error {
-	err := database.Model(g).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
+	err := database.Table(g.TableName()).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
 			log.Errorf("query group member failed: %s", err.Error())
 			return err
 		}
-		err = database.Model(g).Create(g).Error
+		err = database.Table(g.TableName()).Create(g).Error
 		if err != nil {
 			return errors.ErrGroupIsAlreadyExist
 		}
@@ -135,7 +135,7 @@ func (g *GroupMember) Create() error {
 }
 
 func (g *GroupMember) IsInOneGroup() (bool, error) {
-	err := database.Model(g).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
+	err := database.Table(g.TableName()).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			log.Errorf("query group member failed: %s", err.Error())
@@ -147,7 +147,7 @@ func (g *GroupMember) IsInOneGroup() (bool, error) {
 }
 
 func (g *GroupMember) Delete() error {
-	if err := database.Model(g).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
+	if err := database.Table(g.TableName()).Update("deleted", 1).Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).Error; err != nil {
 		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
 	}
 	return nil
@@ -155,7 +155,7 @@ func (g *GroupMember) Delete() error {
 
 func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err error) {
 	list = make([]*GroupMember, 0)
-	err = database.Model(&GroupMember{}).Where("group_id = ? and deleted = 0", groupID).
+	err = database.Table(GroupMember{}.TableName()).Where("group_id = ? and deleted = 0", groupID).
 		Scan(list).Offset(offset).Limit(number).Error
 	if err != nil {
 		return nil, err
@@ -165,8 +165,8 @@ func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err 
 
 func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 	list = make([]*Group, 0)
-	err = database.Model(&Group{}).Where("user_id = ? and deleted = 0", userID).
-		Scan(list).Offset(offset).Limit(number).Error
+	err = database.Model(Group{}).Where("creator_id = ? and deleted = 0", userID).
+		Scan(&list).Offset(offset).Limit(number).Error
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err error) {
 	groupIds := make([]int, 0)
 	err = database.Model(&GroupMember{}).Select("group_id").Where("user_id = ? and deleted = 0", userID).
-		Scan(groupIds).Order("create_at").Offset(offset).Limit(number).Error
+		Scan(groupIds).Offset(offset).Limit(number).Error
 	if err != nil {
 		return nil, err
 	}

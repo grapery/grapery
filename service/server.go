@@ -69,17 +69,17 @@ func (s *Service) Run(cfg *config.Config) error {
 	{
 		userRoute.GET("/:id", utils.WrapHandler(user.GetUser))
 		userRoute.DELETE("/:id", utils.WrapHandler(user.DeleteUser))
-		userRoute.PUT("/:id", utils.WrapHandler(user.UpdateUser))
 		userRoute.GET("/:id/info", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/follower", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/following", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/groups", utils.WrapHandler(user.GetUserGroup))
-		userRoute.GET("/:id/following/groups", utils.WrapHandler(user.GetUserProfile))
 
 		userRoute.POST("/:id/follow", utils.WrapHandler(user.FollowUser))
 		userRoute.PUT("/:id/follow", utils.WrapHandler(user.UnFollowUser))
 		// 用户个人的active
 		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
+		userRoute.GET("/:id/setting", utils.WrapHandler(user.GetUserSetting))
+		userRoute.PUT("/:id/setting", utils.WrapHandler(user.UpdateUserSetting))
 	}
 	v1Route.GET("/users/search", utils.WrapHandler(user.SearchUser))
 	// group 为基础的资源持有结构，project为group中的人员建立的实际包含内容的东西

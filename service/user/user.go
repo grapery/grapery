@@ -161,7 +161,24 @@ func GetFollowingGroup(ctx *utils.Context) {
 	return
 }
 
-func UpdateUser(ctx *utils.Context) {
+func GetUserSetting(ctx *utils.Context) {
+	req := &api.UserUpdateRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := user.GetUserServer().UpdateUser(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func UpdateUserSetting(ctx *utils.Context) {
 	req := &api.UserUpdateRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {

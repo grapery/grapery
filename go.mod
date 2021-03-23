@@ -22,7 +22,7 @@ require (
 	github.com/mwitkow/go-proto-validators v0.3.2 // indirect
 	github.com/openzipkin/zipkin-go v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/prometheus/common v0.10.0 // indirect
+	github.com/prometheus/common v0.10.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/zsais/go-gin-prometheus v0.1.0 // indirect
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b // indirect

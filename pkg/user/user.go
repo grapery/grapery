@@ -86,7 +86,10 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 	if err != nil {
 		return nil, err
 	}
-	var groups = make([]*api.GroupInfo, 0, len(list))
+	if len(list) == 0 {
+		return &api.UserGroupResponse{}, nil
+	}
+	var groups = make([]*api.GroupInfo, len(list), len(list))
 	var u = new(models.User)
 	u.ID = uint(req.GetUserId())
 	err = u.GetById()
@@ -102,6 +105,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		Location: u.Location,
 	}
 	for idx, _ := range list {
+		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
 		groups[idx].Name = list[idx].Name
 		groups[idx].GroupId = uint64(list[idx].ID)
@@ -135,6 +139,7 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		Location: u.Location,
 	}
 	for idx, _ := range list {
+		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
 		groups[idx].Name = list[idx].Name
 		groups[idx].GroupId = uint64(list[idx].ID)

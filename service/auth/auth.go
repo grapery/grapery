@@ -3,12 +3,13 @@ package auth
 import (
 	// "net/http"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"encoding/base64"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/pkg/auth"
@@ -61,8 +62,17 @@ func Login(ctx *gin.Context) {
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{UserId: info.GetUserId()}
 	infoData, _ := json.Marshal(info)
-	b64Info := base64.StdEncoding.EncodeToString(infoData)
-	_ = cache.SetObject(c, b64Info, info, 86400)
+
+	cookieKey := fmt.Sprintf("grapery_%d_%d", info.GetUserId(), time.Now().Unix())
+	err = cache.SetBytes(c, cookieKey, infoData, 86400)
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ret.Data = nil
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	b64Info := base64.StdEncoding.EncodeToString([]byte(cookieKey))
 	ctx.SetCookie(
 		utils.CookieName,
 		b64Info,
