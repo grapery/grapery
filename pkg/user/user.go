@@ -64,13 +64,8 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	*api.UpdateUserAvatorResponse, error) {
 	var u = new(models.User)
 	u.ID = uint(req.GetUserId())
+	u.Avatar = req.GetAvatar()
 	err := u.UpdateAvatar()
-	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
-		return nil, err
-	}
-	u.ID = uint(req.GetUserId())
-	err = u.GetById()
 	if err != nil {
 		log.Errorf("get user failed : %s", err.Error())
 		return nil, err
@@ -87,14 +82,68 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 }
 
 func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
+	list, err := models.GetUserGroups(int(req.GetUserId()), 0, 10)
+	if err != nil {
+		return nil, err
+	}
+	var groups = make([]*api.GroupInfo, 0, len(list))
+	var u = new(models.User)
+	u.ID = uint(req.GetUserId())
+	err = u.GetById()
+	if err != nil {
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
+	}
+	info := &api.UserInfo{
+		UserId:   uint64(u.ID),
+		Name:     u.Name,
+		Avatar:   u.Avatar,
+		Email:    u.Email,
+		Location: u.Location,
+	}
+	for idx, _ := range list {
+		groups[idx].Avatar = list[idx].Avatar
+		groups[idx].Name = list[idx].Name
+		groups[idx].GroupId = uint64(list[idx].ID)
+		groups[idx].Desc = list[idx].ShortDesc
+		groups[idx].Owner = info
+		groups[idx].Creator = info
+	}
 	return &api.UserGroupResponse{
-		List: nil,
+		List: groups,
 	}, nil
 }
 func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
 	*api.UserFollowingGroupResponse, error) {
+	list, err := (int(req.GetUserId()), 0, 10)
+	if err != nil {
+		return nil, err
+	}
+	var groups = make([]*api.GroupInfo, 0, len(list))
+	var u = new(models.User)
+	u.ID = uint(req.GetUserId())
+	err = u.GetById()
+	if err != nil {
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
+	}
+	info := &api.UserInfo{
+		UserId:   uint64(u.ID),
+		Name:     u.Name,
+		Avatar:   u.Avatar,
+		Email:    u.Email,
+		Location: u.Location,
+	}
+	for idx, _ := range list {
+		groups[idx].Avatar = list[idx].Avatar
+		groups[idx].Name = list[idx].Name
+		groups[idx].GroupId = uint64(list[idx].ID)
+		groups[idx].Desc = list[idx].ShortDesc
+		groups[idx].Owner = info
+		groups[idx].Creator = info
+	}
 	return &api.UserFollowingGroupResponse{
-		List: nil,
+		List: list,
 	}, nil
 }
 

@@ -92,10 +92,9 @@ func Logout(ctx *gin.Context) {
 		return
 	}
 	cookie, _ := ctx.Cookie(utils.CookieName)
-	cache.DelCache(c, cookie)
+	_ = cache.DelCache(c, cookie)
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{}
-	return
 }
 
 func ResetPassword(ctx *utils.Context) {

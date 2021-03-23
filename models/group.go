@@ -162,8 +162,8 @@ func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err 
 	return list, nil
 }
 
-func GetUserGroups(userID int, offset, number int) (list []*GroupMember, err error) {
-	list = make([]*GroupMember, 0)
+func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
+	list = make([]*Group, 0)
 	err = database.Model(&GroupMember{}).Where("user_id = ? and deleted = 0", userID).
 		Scan(list).Offset(offset).Limit(number).Error
 	if err != nil {
