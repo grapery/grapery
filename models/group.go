@@ -28,6 +28,7 @@ type Group struct {
 	Gtype       string          `json:"gtype,omitempty"`
 	CreatorID   uint64          `json:"creator_id,omitempty"`
 	OwnerID     uint64          `json:"owner_id,omitempty"`
+	Members     uint64          `json:"members,omitempty"`
 	VisableType api.VisibleType `json:"visable_type,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Avatar      string          `json:"avatar,omitempty"`
@@ -164,8 +165,24 @@ func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err 
 
 func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 	list = make([]*Group, 0)
-	err = database.Model(&GroupMember{}).Where("user_id = ? and deleted = 0", userID).
+	err = database.Model(&Group{}).Where("user_id = ? and deleted = 0", userID).
 		Scan(list).Offset(offset).Limit(number).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// GetUserFollowedGroups
+func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err error) {
+	groupIds := make([]int, 0)
+	err = database.Model(&GroupMember{}).Select("group_id").Where("user_id = ? and deleted = 0", userID).
+		Scan(groupIds).Order("create_at").Offset(offset).Limit(number).Error
+	if err != nil {
+		return nil, err
+	}
+	list = make([]*Group, 0)
+	err = database.Model(&Group{}).Select("*").Where(" group_id in (?)", groupIds).Error
 	if err != nil {
 		return nil, err
 	}

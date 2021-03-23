@@ -115,7 +115,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 }
 func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
 	*api.UserFollowingGroupResponse, error) {
-	list, err := (int(req.GetUserId()), 0, 10)
+	list, err := models.GetUserJoinedGroups(int(req.GetUserId()), 0, 10)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		groups[idx].Creator = info
 	}
 	return &api.UserFollowingGroupResponse{
-		List: list,
+		List: groups,
 	}, nil
 }
 
