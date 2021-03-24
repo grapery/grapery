@@ -28,4 +28,7 @@ free man should be always a real exist
     - 夫妻家庭内部的一些日常，例如todo,例如日常送礼，例如家庭长期计划，例如孩子的日常成长，例如孩子的玩闹嬉戏的瞬间
 
 
+新增功能：
+订阅的项目或者topic，或者tag可以转发为邮件，设置最高上线不超过10暂时，防止  打爆用户邮箱
+
 sudo docker run -i -t -e MYSQL_PASSWORD=123456789 -uroot -e MYSQL_ROOT_PASSWORD=123456789  -p 3306:3306  mysql:latest
