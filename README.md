@@ -1,15 +1,10 @@
 ## grapery
-期望
-```
-buttom up to build  a group to fight back company , org,country;
-free man should be always a real exist 
-```
-#### 一些开发规范
-```shell
-视图层返回全部使用proto,以方便后期使用grpc-gateway
-请求数据全部使用post或者put方法，将数据放在body json中，get和delete也可以使用，只限于数据的获取或者删除
+#### 期望
+- ```
+    buttom up to build a group to fight back company,org·country.Free man should be always a real exist.
+ 
 
-```
+
 
 #### 面向使用场景：（优先级从高到低）
 ##### 让用户可以长时间的做一件事情
@@ -40,4 +35,11 @@ free man should be always a real exist
 - 用户也有自己的黑名单，不过黑名单仅限于过滤用户自己的资源，不影响组织和项目内的东西
   
 
+#### 一些开发规范
+```shell
+视图层返回全部使用proto,以方便后期使用grpc-gateway
+请求数据全部使用post或者put方法，将数据放在body json中，get和delete也可以使用，只限于数据的获取或者删除
+```
+
+#### 常用命令
 sudo docker run -i -t -e MYSQL_PASSWORD=123456789 -uroot -e MYSQL_ROOT_PASSWORD=123456789  -p 3306:3306  mysql:latest
