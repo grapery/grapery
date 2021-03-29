@@ -120,11 +120,12 @@ func (s *Service) Run(cfg *config.Config) error {
 				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
 				itemGroup.PUT("/:item_id/like", utils.WrapHandler(group.LikeItem))
 			}
-
 		}
 		groupRoute.GET("/:id/projects/search", utils.WrapHandler(group.SearchProject))
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
+	v1Route.GET("/explore", common.Explore)
+	v1Route.GET("/trending", common.Explore)
 
 	err = app.Run(":" + cfg.Port)
 	if err != nil {

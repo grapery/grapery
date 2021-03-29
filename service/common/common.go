@@ -52,3 +52,11 @@ func Version(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "version branch %s ,version %s , build time %s",
 		version.GitBranch, version.GitHash, version.BuildTS)
 }
+
+func Explore(ctx *gin.Context) {
+
+}
+
+func Trending(ctx *gin.Context) {
+
+}
