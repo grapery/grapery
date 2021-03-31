@@ -19,3 +19,27 @@ func (q Question) TableName() string {
 func GetProjectQuestions(projectID int) (list []*Question, err error) {
 	return nil, nil
 }
+
+func GetQuestion() (err error) {
+	return nil
+}
+
+func GetQuestionByTags() (err error) {
+	return nil
+}
+
+func GetQuestionByTitle() (err error) {
+	return nil
+}
+
+func CreateQuestion() (err error) {
+	return nil
+}
+
+func EditQuestion() (err error) {
+	return nil
+}
+
+func DeleteQuestion() (err error) {
+	return nil
+}
