@@ -120,3 +120,4 @@ func (u *User) Delete() error {
 	}
 	return nil
 }
+

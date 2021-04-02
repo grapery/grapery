@@ -190,5 +190,35 @@ func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequ
 
 func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
 	*api.UserWatchingResponse, error) {
-	return nil, nil
+		list, err := models.GetUserGroups(int(req.GetUserId()), 0, 10)
+	if err != nil {
+		return nil, err
+	}
+	var groups = make([]*api.GroupInfo, 0, len(list))
+	var u = new(models.User)
+	u.ID = uint(req.GetUserId())
+	err = u.GetById()
+	if err != nil {
+		log.Errorf("get user failed : %s", err.Error())
+		return nil, err
+	}
+	info := &api.UserInfo{
+		UserId:   uint64(u.ID),
+		Name:     u.Name,
+		Avatar:   u.Avatar,
+		Email:    u.Email,
+		Location: u.Location,
+	}
+	for idx, _ := range list {
+		groups[idx] = &api.GroupInfo{}
+		groups[idx].Avatar = list[idx].Avatar
+		groups[idx].Name = list[idx].Name
+		groups[idx].GroupId = uint64(list[idx].ID)
+		groups[idx].Desc = list[idx].ShortDesc
+		groups[idx].Owner = info
+		groups[idx].Creator = info
+	}
+	return &api.UserWatchingResponse{
+		List: groups,
+	}, nil
 }

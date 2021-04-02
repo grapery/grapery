@@ -7,6 +7,7 @@ import (
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/utils"
 )
 
 var server GroupServer
@@ -123,6 +124,7 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqe
 	group := &models.Group{}
 	group.Name = req.Name
 	group.CreatorID = req.GetUserId()
+	group.Avatar = utils.DefaultGroupAvatorUrl
 	err = group.Create()
 	if err != nil {
 		return nil, err
