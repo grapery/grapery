@@ -125,7 +125,7 @@ func (s *Service) Run(cfg *config.Config) error {
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
 	v1Route.GET("/explore", common.Explore)
-	v1Route.GET("/trending", common.Explore)
+	v1Route.GET("/trending", common.Trending)
 
 	err = app.Run(":" + cfg.Port)
 	if err != nil {
