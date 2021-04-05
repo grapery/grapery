@@ -20,7 +20,6 @@ type Project struct {
 	CreatorID     uint64          `json:"creator_id,omitempty"`
 	OwnerID       uint64          `json:"owner_id,omitempty"`
 	GroupID       uint64          `json:"group_id,omitempty"`
-	ProjectID     uint64          `json:"project_id,omitempty"`
 	Description   string          `json:"description,omitempty"`
 	Avatar        string          `json:"avatar,omitempty"`
 	WatchingCount uint64          `json:"watching_count,omitempty"`
@@ -225,10 +224,28 @@ func StartWatchingProject(userID, groupID, projectId uint64) error {
 	if err != nil {
 		return err
 	}
-	err = database.Model(Project{}).UpdateColumn()
+	err = database.Model(Project{}).Update("watching_count = ?", "watching_count + 1").
+		Where("id = ?", projectId).Where("group_id", groupID).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func StopWatchingProject() {
-
+func StopWatchingProject(userID, groupID, projectId uint64) error {
+	p := &ProjectWatcher{
+		UserID:    userID,
+		GroupID:   groupID,
+		ProjectID: projectId,
+	}
+	err := database.Model(p).Delete(p).Error
+	if err != nil {
+		return err
+	}
+	err = database.Model(Project{}).Update("watching_count = ?", "watching_count - 1").
+		Where("id = ?", projectId).Where("group_id", groupID).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }

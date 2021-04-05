@@ -190,11 +190,11 @@ func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequ
 
 func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
 	*api.UserWatchingResponse, error) {
-		list, err := models.GetUserGroups(int(req.GetUserId()), 0, 10)
+	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), 0, 10)
 	if err != nil {
 		return nil, err
 	}
-	var groups = make([]*api.GroupInfo, 0, len(list))
+	var projects = make([]*api.ProjectInfo, 0, len(list))
 	var u = new(models.User)
 	u.ID = uint(req.GetUserId())
 	err = u.GetById()
@@ -210,15 +210,14 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		Location: u.Location,
 	}
 	for idx, _ := range list {
-		groups[idx] = &api.GroupInfo{}
-		groups[idx].Avatar = list[idx].Avatar
-		groups[idx].Name = list[idx].Name
-		groups[idx].GroupId = uint64(list[idx].ID)
-		groups[idx].Desc = list[idx].ShortDesc
-		groups[idx].Owner = info
-		groups[idx].Creator = info
+		projects[idx] = &api.ProjectInfo{}
+		projects[idx].Avatar = list[idx].Avatar
+		projects[idx].Name = list[idx].Name
+		projects[idx].ProjectId = uint64(list[idx].ID)
+		projects[idx].Owner = info
+		projects[idx].Creator = info
 	}
 	return &api.UserWatchingResponse{
-		List: groups,
+		List: projects,
 	}, nil
 }
