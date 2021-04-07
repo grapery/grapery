@@ -111,11 +111,10 @@ func (r *Repository) DB() *gorm.DB {
 	return r.db
 }
 
-func NewRepository(ctx context.Context, userID uint64) *Repository {
+func NewRepository(ctx context.Context) *Repository {
 	return &Repository{
-		Ctx:    ctx,
-		UserID: userID,
-		db:     DataBase(),
+		Ctx: ctx,
+		db:  DataBase(),
 	}
 }
 

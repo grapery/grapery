@@ -32,6 +32,7 @@ type Group struct {
 	VisableType api.VisibleType `json:"visable_type,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Avatar      string          `json:"avatar,omitempty"`
+	IsDefault   bool            `json:"is_default,omitempty"`
 }
 
 func (g Group) TableName() string {
@@ -171,6 +172,16 @@ func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 		return nil, err
 	}
 	return list, nil
+}
+
+func GetUserDefaultGroup(userID int) (g *Group, err error) {
+	g = new(Group)
+	err = database.Model(Group{}).Where("creator_id = ? and is_default = ?  and deleted = 0", true, userID).
+		Scan(g).Error
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 // GetUserFollowedGroups

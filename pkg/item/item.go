@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/models"
 )
 
 var itemServer ItemServer
@@ -32,7 +33,30 @@ type ItemServer interface {
 type ItemService struct{}
 
 func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemsResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	list, err := models.GetItemByProject(repo, req.GetProjectId(), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	if len(list) != 0 {
+		return &api.GetItemsResponse{
+			List:   nil,
+			Number: 0,
+			Offset: req.GetOffset(),
+		}, nil
+	}
+	result := make([]*api.ItemInfo, 0, len(list))
+	for idx := range list {
+		item := new(api.ItemInfo)
+		item.UserId = list[idx].UserID
+		item.Content = list[idx].Title
+		result = append(result, item)
+	}
+	return &api.GetItemsResponse{
+		List:   result,
+		Number: 0,
+		Offset: req.GetOffset(),
+	}, nil
 }
 
 func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error) {
