@@ -49,18 +49,29 @@ func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (
 	for idx := range list {
 		item := new(api.ItemInfo)
 		item.UserId = list[idx].UserID
-		item.Content = list[idx].Title
+		item.Content = nil
+		item.GroupId = list[idx].GroupID
+		item.ProjectId = list[idx].ProjectID
+		item.Itype = list[idx].ItemType
+		item.Title = list[idx].Description
 		result = append(result, item)
 	}
 	return &api.GetItemsResponse{
 		List:   result,
-		Number: 0,
-		Offset: req.GetOffset(),
+		Number: uint64(len(result)),
+		Offset: req.GetOffset() + uint64(len(result)),
 	}, nil
 }
 
 func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	item, err := models.GetItem(repo, req.GetItemId())
+	if err != nil {
+		return nil, err
+	}
+	return &api.GetItemResponse{
+		Info: ConvertItemToInfo(item),
+	}, nil
 }
 
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
@@ -74,4 +85,25 @@ func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemReques
 }
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
 	return nil, nil
+}
+
+func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
+	info := new(api.ItemInfo)
+	info.UserId = item.UserID
+	info.Content = nil
+	info.GroupId = item.GroupID
+	info.ProjectId = item.ProjectID
+	info.Itype = item.ItemType
+	info.Title = item.Description
+	return info
+}
+
+func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
+	item := new(models.Item)
+	item.UserID = info.UserId
+	item.Description = info.Title
+	item.GroupID = info.GroupId
+	item.ProjectID = info.ProjectId
+	item.ItemType = info.Itype
+	return item
 }
