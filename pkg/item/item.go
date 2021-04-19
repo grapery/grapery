@@ -28,6 +28,7 @@ type ItemServer interface {
 	CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error)
 	DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error)
 	LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error)
+	UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error)
 }
 
 type ItemService struct{}
@@ -81,9 +82,18 @@ func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemReques
 	return nil, nil
 }
 func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	err = models.DeleteItem(repo, req.GetItemId())
+	if err != nil {
+		return nil, err
+	}
+	return &api.DeleteItemResponse{}, nil
 }
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
+	return nil, nil
+}
+
+func (it *ItemService) UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
 	return nil, nil
 }
 
