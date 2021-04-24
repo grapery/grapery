@@ -90,7 +90,13 @@ func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemReques
 	return &api.DeleteItemResponse{}, nil
 }
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	item := &models.Item{}
+	err = models.CreateItem(repo, item)
+	if err != nil {
+		return nil, err
+	}
+	return &api.LikeItemResponse{}, nil
 }
 
 func (it *ItemService) UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
