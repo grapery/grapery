@@ -203,6 +203,7 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 }
 
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
+	// group 包含 资源（project），处理组（teams）,退出组的话，teams也会同时停止使用
 	return nil, nil
 }
 
