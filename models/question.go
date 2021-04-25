@@ -40,6 +40,10 @@ func EditQuestion() (err error) {
 	return nil
 }
 
+func CloseQuestion() (err error) {
+	return nil
+}
+
 func DeleteQuestion() (err error) {
 	return nil
 }

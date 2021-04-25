@@ -72,6 +72,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
 	database.AutoMigrate(&Question{})
+	database.AutoMigrate(&Team{})
 	//database = database.Scopes(createOp, updateOp, deleteFilter)
 	//database.SetLogger(log.New())
 	return nil
