@@ -94,7 +94,7 @@ func Logout(ctx *gin.Context) {
 		return
 	}
 	c := context.Background()
-	err = auth.GetAuthService().Logout(c, req.GetUserId())
+	_, err = auth.GetAuthService().Logout(c, req)
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
@@ -117,7 +117,7 @@ func ResetPassword(ctx *utils.Context) {
 		ctx.GinC.JSON(http.StatusOK, ret)
 		return
 	}
-	err = auth.GetAuthService().ResetPassword(ctx.Ctx, req.GetUserId(), req.GetNewPwd(), req.GetOldPwd())
+	_, err = auth.GetAuthService().ResetPassword(ctx.Ctx, req)
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()

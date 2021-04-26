@@ -120,9 +120,11 @@ func (s *Service) Run(cfg *config.Config) error {
 				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
 				itemGroup.POST("/:item_id/like", utils.WrapHandler(group.LikeItem))
 				itemGroup.DELETE("/:item_id/like", utils.WrapHandler(group.LikeItem))
-				itemGroup.POST("/:item_id", utils.WrapHandler(group.CreateProjectItem))
-				itemGroup.PUT("/:item_id", utils.WrapHandler(group.UpdateProjectItem))
-				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
+				itemGroup.POST("/:item_id/comment", utils.WrapHandler(group.CreateProjectItem))
+				itemGroup.PUT("/:item_id/comment/:comment_id", utils.WrapHandler(group.UpdateProjectItem))
+				itemGroup.DELETE("/:item_id/comment/:comment_id", utils.WrapHandler(group.DeleteProjectItem))
+				itemGroup.POST("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
+				itemGroup.DELETE("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
 
 			}
 		}
