@@ -187,11 +187,47 @@ func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupAct
 }
 
 func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (resp *api.UpdateGroupInfoResponse, err error) {
-	return nil, nil
+	group := new(models.Group)
+	group.ID = uint(req.GetGroupId())
+	err = group.GetByID()
+	if err != nil {
+		return &api.UpdateGroupInfoResponse{}, err
+	}
+	group.Avatar = req.GetInfo().GetAvatar()
+	group.Name = req.GetInfo().GetName()
+	group.Description = req.GetInfo().GetDesc()
+	group.UpdateAll()
+	return &api.UpdateGroupInfoResponse{
+		Info: req.GetInfo(),
+	}, nil
+}
+
+func ConvertUserToApiUser(user *models.User) *api.UserInfo {
+	return &api.UserInfo{
+		UserId:   uint64(user.ID),
+		Name:     user.Name,
+		Avatar:   user.Avatar,
+		Email:    user.Email,
+		Location: user.Location,
+		Desc:     user.ShortDesc,
+	}
 }
 
 func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error) {
-	return nil, nil
+	users, err := models.GetGroupMemberInfoList(int(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	usersInfo := make([]*api.UserInfo, len(users), len(users))
+	for idx := range users {
+		usersInfo[idx] = ConvertUserToApiUser(users[idx])
+	}
+
+	return &api.FetchGroupMembersResponse{
+		List:   usersInfo,
+		Offset: req.GetOffset() + uint64(len(usersInfo)),
+		Total:  uint64(len(usersInfo)),
+	}, nil
 }
 
 func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (resp *api.FetchGroupProjectsResponse, err error) {

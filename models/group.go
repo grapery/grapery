@@ -58,6 +58,19 @@ func (g *Group) Create() error {
 	return nil
 }
 
+func (g *Group) UpdateAll() error {
+	if err := database.Table(g.TableName()).
+		Update("short_desc", g.ShortDesc).
+		Update("gtype", g.Gtype).
+		Update("avatar", g.Avatar).
+		Update("name", g.Name).
+		Error; err != nil {
+		log.Errorf("update group [%d] all failed : [%s]", g.ID, err)
+		return fmt.Errorf("update group [%d] all failed : [%s]", g.ID, err)
+	}
+	return nil
+}
+
 func (g *Group) UpdateDesc() error {
 	if err := database.Table(g.TableName()).Update("short_desc", g.ShortDesc).Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
@@ -198,4 +211,18 @@ func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err err
 		return nil, err
 	}
 	return list, nil
+}
+
+func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err error) {
+	list := make([]int, 0, number)
+	err = database.Table(GroupMember{}.TableName()).Select("user_id").Where("group_id = ? and deleted = 0", groupID).
+		Scan(&list).Offset(offset).Limit(number).Error
+	if err != nil {
+		return nil, err
+	}
+	users, err = GetUsersByIds(list)
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }
