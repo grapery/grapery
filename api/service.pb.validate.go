@@ -1787,6 +1787,140 @@ var _ interface {
 	ErrorName() string
 } = RegisterResponseValidationError{}
 
+// Validate checks the field values on ConfirmRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *ConfirmRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for LoginType
+
+	// no validation rules for Account
+
+	return nil
+}
+
+// ConfirmRequestValidationError is the validation error returned by
+// ConfirmRequest.Validate if the designated constraints aren't met.
+type ConfirmRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ConfirmRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ConfirmRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ConfirmRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ConfirmRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ConfirmRequestValidationError) ErrorName() string { return "ConfirmRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ConfirmRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sConfirmRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ConfirmRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ConfirmRequestValidationError{}
+
+// Validate checks the field values on ConfirmResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *ConfirmResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// ConfirmResponseValidationError is the validation error returned by
+// ConfirmResponse.Validate if the designated constraints aren't met.
+type ConfirmResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ConfirmResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ConfirmResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ConfirmResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ConfirmResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ConfirmResponseValidationError) ErrorName() string { return "ConfirmResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ConfirmResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sConfirmResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ConfirmResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ConfirmResponseValidationError{}
+
 // Validate checks the field values on ResetPasswordRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.

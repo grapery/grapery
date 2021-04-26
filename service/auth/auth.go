@@ -40,6 +40,29 @@ func Register(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ret)
 }
 
+func Confirm(ctx *gin.Context) {
+	req := &api.RegisterRequest{}
+	err := ctx.ShouldBindJSON(req)
+	ret := utils.NewResult()
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	err = auth.GetAuthService().Register(context.Background(), req.GetAccount(), req.GetPassword(), req.GetLoginType())
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	ret.Code = 0
+	ret.Message = "ok"
+	ret.Data = &api.RegisterResponse{}
+	ctx.JSON(http.StatusOK, ret)
+}
+
 func Login(ctx *gin.Context) {
 	req := &api.LoginRequest{}
 	err := ctx.ShouldBindJSON(req)

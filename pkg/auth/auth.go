@@ -5,10 +5,11 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 //https://blog.gokit.info/post/understand-golang-with-pic/
@@ -31,6 +32,7 @@ type AuthServer interface {
 	Login(ctx context.Context, account string, pwd string, authType api.AuthType) (*api.UserInfo, error)
 	Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error)
 	ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error)
+	Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error)
 }
 
 // auth service
@@ -116,4 +118,8 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	return &api.ResetPasswordResponse{
 		UserId: req.GetUserId(),
 	}, nil
+}
+
+func (auth *AuthService) Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error) {
+	return nil, nil
 }
