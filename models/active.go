@@ -63,7 +63,7 @@ func GetAcviteByUserID(userID uint64) (*[]*Active, error) {
 }
 
 func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error) {
-	var ret = new([]Active)
+	var ret = new([]*Active)
 	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Scan(ret).Error; err != nil {
 		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
@@ -81,7 +81,7 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, e
 }
 
 func GetAcviteByProjectID(projectID uint64) (*[]*Active, error) {
-	var ret = new([]Active)
+	var ret = new([]*Active)
 	if err := database.Where("project_id = ? and delete = 0", projectID).Scan(ret).Error; err != nil {
 		log.Errorf("get project [%d] active failed ", projectID)
 		return nil, err
