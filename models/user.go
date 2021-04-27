@@ -76,6 +76,19 @@ func (u *User) UpdateAvatar() error {
 	return nil
 }
 
+func (u *User) UpdateAll() error {
+	err := database.Model(u).
+		Update("avatar", u.Avatar).
+		Update("short_desc", u.ShortDesc).
+		Update("name", u.Name).
+		Where("id = ?", u.ID).Error
+	if err != nil {
+		log.Errorf("update user [%d] all [%s] failed ", u.ID, u.Avatar)
+		return fmt.Errorf("update user [%d] all failed ", u.ID)
+	}
+	return nil
+}
+
 func (u *User) GetById() error {
 	err := database.Model(u).Where("id = ? and deleted = ?", u.ID, 0).First(u).Error
 	if err != nil {

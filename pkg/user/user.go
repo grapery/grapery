@@ -154,6 +154,15 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 
 func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (
 	*api.UserUpdateResponse, error) {
+	u := &models.User{
+		Avatar:    req.GetAvatar(),
+		Name:      req.GetNickname(),
+		ShortDesc: req.GetDesc(),
+	}
+	err := u.UpdateAvatar()
+	if err != nil {
+		return nil, err
+	}
 	return &api.UserUpdateResponse{}, nil
 }
 func (user *UserService) StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (
