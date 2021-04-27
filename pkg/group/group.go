@@ -8,6 +8,7 @@ import (
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils"
+	"github.com/grapery/grapery/utils/convert"
 )
 
 var server GroupServer
@@ -202,17 +203,6 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 	}, nil
 }
 
-func ConvertUserToApiUser(user *models.User) *api.UserInfo {
-	return &api.UserInfo{
-		UserId:   uint64(user.ID),
-		Name:     user.Name,
-		Avatar:   user.Avatar,
-		Email:    user.Email,
-		Location: user.Location,
-		Desc:     user.ShortDesc,
-	}
-}
-
 func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error) {
 	users, err := models.GetGroupMemberInfoList(int(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
 	if err != nil {
@@ -220,7 +210,7 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 	}
 	usersInfo := make([]*api.UserInfo, len(users), len(users))
 	for idx := range users {
-		usersInfo[idx] = ConvertUserToApiUser(users[idx])
+		usersInfo[idx] = convert.ConvertUserToApiUser(users[idx])
 	}
 
 	return &api.FetchGroupMembersResponse{
