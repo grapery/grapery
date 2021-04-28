@@ -4,6 +4,7 @@ import (
 	"context"
 
 	api "github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/models"
 )
 
 var projectServer ProjectServer
@@ -38,6 +39,9 @@ type ProjectService struct {
 }
 
 func (p *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error) {
+	project := &models.Project{
+		ID: req.GetProjectId(),
+	}
 	return nil, nil
 }
 func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (resp *api.CreateGroupResponse, err error) {
