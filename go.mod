@@ -19,7 +19,9 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.0.1
 	github.com/jinzhu/now v1.1.2 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mwitkow/go-proto-validators v0.3.2 // indirect
+	github.com/olivere/elastic v6.2.35+incompatible // indirect
 	github.com/openzipkin/zipkin-go v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/common v0.10.0

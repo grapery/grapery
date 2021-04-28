@@ -153,6 +153,20 @@ func GetGroupProjectListByName(groupID int, name string, offset, number int) (li
 	return list, nil
 }
 
+func GetGroupProjects(groupID int64, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).
+		Where("group_id = ?  and deleted = ?", groupID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // func GetGroupProjectListByTag(groupID int, tags string, offset, number int) (list []*Project, err error) {
 // 	list = make([]*Project, 0)
 // 	err = database.Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).
@@ -163,7 +177,7 @@ func GetGroupProjectListByName(groupID int, name string, offset, number int) (li
 // 	return list, nil
 // }
 
-func GeGrouptProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
+func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
 	err = database.Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error

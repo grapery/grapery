@@ -155,7 +155,7 @@ func (g *GroupMember) IsInOneGroup() (bool, error) {
 			log.Errorf("query group member failed: %s", err.Error())
 			return false, nil
 		}
-		return false, nil
+		return false, err
 	}
 	return true, nil
 }

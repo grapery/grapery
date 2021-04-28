@@ -197,7 +197,10 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 	group.Avatar = req.GetInfo().GetAvatar()
 	group.Name = req.GetInfo().GetName()
 	group.Description = req.GetInfo().GetDesc()
-	group.UpdateAll()
+	err = group.UpdateAll()
+	if err != nil {
+		return nil, err
+	}
 	return &api.UpdateGroupInfoResponse{
 		Info: req.GetInfo(),
 	}, nil
@@ -221,18 +224,61 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 }
 
 func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (resp *api.FetchGroupProjectsResponse, err error) {
-	return nil, nil
+	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	list := make([]*api.ProjectInfo, len(projects), len(projects))
+	for idx, val := range projects {
+		list[idx] = convert.ConvertProjectToApiProjectInfo(val)
+	}
+	return &api.FetchGroupProjectsResponse{
+		List:   list,
+		Offset: req.GetOffset() + uint64(len(list)),
+		Number: uint64(len(list)),
+	}, nil
 }
 
 func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error) {
-	return nil, nil
+	groupMember := &models.GroupMember{
+		GroupID: req.GetGroupId(),
+		UserID:  req.GetUserId(),
+	}
+	isIn, err := groupMember.IsInOneGroup()
+	if err != nil {
+		return nil, err
+	}
+	if isIn {
+		return &api.JoinGroupResponse{}, nil
+	}
+	err = groupMember.Create()
+	if err != nil {
+		return nil, err
+	}
+	return &api.JoinGroupResponse{}, nil
 }
 
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
 	// group 包含 资源（project），处理组（teams）,退出组的话，teams也会同时停止使用
+	groupMember := &models.GroupMember{
+		GroupID: req.GetGroupId(),
+		UserID:  req.GetUserId(),
+	}
+	isIn, err := groupMember.IsInOneGroup()
+	if err != nil {
+		return nil, err
+	}
+	if isIn {
+		return &api.LeaveGroupResponse{}, nil
+	}
+	err = groupMember.Delete()
+	if err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
+	// check elastic,then search database
 	return nil, nil
 }
