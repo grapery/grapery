@@ -192,6 +192,7 @@ func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollower
 	}, nil
 }
 
+// 组织内搜索指定用户
 func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (
 	*api.SearchUserResponse, error) {
 	return nil, nil

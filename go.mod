@@ -21,9 +21,9 @@ require (
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mwitkow/go-proto-validators v0.3.2 // indirect
-	github.com/olivere/elastic v6.2.35+incompatible // indirect
+	github.com/olivere/elastic v6.2.35+incompatible
 	github.com/openzipkin/zipkin-go v0.1.6 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.10.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/zsais/go-gin-prometheus v0.1.0 // indirect
