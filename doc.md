@@ -1,6 +1,14 @@
 ## interview
 
-I graduated from SCUT university with a Bachelor's degree in computer software in 2012
+I graduated from SCUT university with a Bachelor's degree in computer software in 2012。
+Since then, I have been working in software development and have experienced four different companies。
+At the beginning, I was doing C++ development. Later, because I wanted to do some web service development, and I learned the go language in 2010, I switched to go language development two years later, and it has been up to now. Using go language to develop single services and distributed systems makes me enjoy programming
+
+In addition to these：
+
+I like Playing football, hiking, and reading history and economics, but also interested in cutting-edge physics.
+Since I am doing information system development, I sometimes try to interpret history from the perspective of a distributed information processing system. 
+This is very interesting and it is easy to help myself understand some things in history.
 
 ---
 
