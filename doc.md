@@ -97,3 +97,10 @@ that's the reason
 thank you for your time,and I realy interested in this positiong, Have a good day!
 
 ---
+
+- Ask questions
+- Talk through a brute-force solution
+- Talk through an optimized solution
+- Write code
+
+---
