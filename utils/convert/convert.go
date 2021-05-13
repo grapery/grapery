@@ -38,8 +38,6 @@ func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
 	return &api.ItemInfo{}
 }
 
-func ConvertTeamToApiTeamInfo()(t *models.Team) *api.TeamInfo{
-	return &api.TeamInfo{
-
-	}
-}
+// func ConvertTeamToApiTeamInfo(t *models.Team) *api.TeamInfo {
+// 	return &api.TeamInfo{}
+// }
