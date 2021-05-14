@@ -5,6 +5,7 @@ import (
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/utils/convert"
 )
 
 var itemServer ItemServer
@@ -71,7 +72,7 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 		return nil, err
 	}
 	return &api.GetItemResponse{
-		Info: ConvertItemToInfo(item),
+		Info: convert.ConvertItemToInfo(item),
 	}, nil
 }
 
@@ -101,25 +102,4 @@ func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (
 
 func (it *ItemService) UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
 	return nil, nil
-}
-
-func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
-	info := new(api.ItemInfo)
-	info.UserId = item.UserID
-	info.Content = nil
-	info.GroupId = item.GroupID
-	info.ProjectId = item.ProjectID
-	info.Itype = item.ItemType
-	info.Title = item.Description
-	return info
-}
-
-func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
-	item := new(models.Item)
-	item.UserID = info.UserId
-	item.Description = info.Title
-	item.GroupID = info.GroupId
-	item.ProjectID = info.ProjectId
-	item.ItemType = info.Itype
-	return item
 }

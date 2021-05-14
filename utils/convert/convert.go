@@ -26,6 +26,27 @@ func ConvertUserToApiUser(user *models.User) *api.UserInfo {
 	}
 }
 
+func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
+	info := new(api.ItemInfo)
+	info.UserId = item.UserID
+	info.Content = nil
+	info.GroupId = item.GroupID
+	info.ProjectId = item.ProjectID
+	info.Itype = item.ItemType
+	info.Title = item.Description
+	return info
+}
+
+func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
+	item := new(models.Item)
+	item.UserID = info.UserId
+	item.Description = info.Title
+	item.GroupID = info.GroupId
+	item.ProjectID = info.ProjectId
+	item.ItemType = info.Itype
+	return item
+}
+
 func ConvertGroupToApiGroupInfo(g *models.Group) *api.GroupInfo {
 	return &api.GroupInfo{}
 }
