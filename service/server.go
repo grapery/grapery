@@ -107,8 +107,7 @@ func (s *Service) Run(cfg *config.Config) error {
 
 			thingsGroup.GET("/:project_id/profile", utils.WrapHandler(group.GetProject))
 			thingsGroup.PUT("/:project_id/profile", utils.WrapHandler(group.CreateProject))
-			thingsGroup.GET("/:project_id/star", utils.WrapHandler(group.StarProject))
-			thingsGroup.PUT("/:project_id/star", utils.WrapHandler(group.UnStarProject))
+			thingsGroup.GET("/:project_id/explore", utils.WrapHandler(group.ExploreProjects))
 
 			thingsGroup.PUT("/:project_id/watch", utils.WrapHandler(group.WatchProject))
 
