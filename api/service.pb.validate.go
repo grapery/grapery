@@ -5348,6 +5348,8 @@ func (m *GetProjectRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
+	// no validation rules for UserId
+
 	return nil
 }
 
@@ -5644,6 +5646,8 @@ func (m *UpdateProjectRequest) Validate() error {
 
 	// no validation rules for ProjectId
 
+	// no validation rules for UserId
+
 	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return UpdateProjectRequestValidationError{
@@ -5801,6 +5805,8 @@ func (m *DeleteProjectRequest) Validate() error {
 	// no validation rules for GroupId
 
 	// no validation rules for ProjectId
+
+	// no validation rules for UserId
 
 	return nil
 }
@@ -6236,24 +6242,26 @@ var _ interface {
 	ErrorName() string
 } = UpdateProjectProfileResponseValidationError{}
 
-// Validate checks the field values on StarProjectRequest with the rules
+// Validate checks the field values on GetWatchingProjectRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
-func (m *StarProjectRequest) Validate() error {
+func (m *GetWatchingProjectRequest) Validate() error {
 	if m == nil {
 		return nil
 	}
 
-	// no validation rules for GroupId
+	// no validation rules for UserId
 
-	// no validation rules for ProjectId
+	// no validation rules for Offset
+
+	// no validation rules for Number
 
 	return nil
 }
 
-// StarProjectRequestValidationError is the validation error returned by
-// StarProjectRequest.Validate if the designated constraints aren't met.
-type StarProjectRequestValidationError struct {
+// GetWatchingProjectRequestValidationError is the validation error returned by
+// GetWatchingProjectRequest.Validate if the designated constraints aren't met.
+type GetWatchingProjectRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6261,24 +6269,24 @@ type StarProjectRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e StarProjectRequestValidationError) Field() string { return e.field }
+func (e GetWatchingProjectRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e StarProjectRequestValidationError) Reason() string { return e.reason }
+func (e GetWatchingProjectRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e StarProjectRequestValidationError) Cause() error { return e.cause }
+func (e GetWatchingProjectRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e StarProjectRequestValidationError) Key() bool { return e.key }
+func (e GetWatchingProjectRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e StarProjectRequestValidationError) ErrorName() string {
-	return "StarProjectRequestValidationError"
+func (e GetWatchingProjectRequestValidationError) ErrorName() string {
+	return "GetWatchingProjectRequestValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e StarProjectRequestValidationError) Error() string {
+func (e GetWatchingProjectRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6290,14 +6298,14 @@ func (e StarProjectRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sStarProjectRequest.%s: %s%s",
+		"invalid %sGetWatchingProjectRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = StarProjectRequestValidationError{}
+var _ error = GetWatchingProjectRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -6305,22 +6313,43 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = StarProjectRequestValidationError{}
+} = GetWatchingProjectRequestValidationError{}
 
-// Validate checks the field values on StarProjectResponse with the rules
-// defined in the proto definition for this message. If any rules are
+// Validate checks the field values on GetWatchingProjectResponse with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
-func (m *StarProjectResponse) Validate() error {
+func (m *GetWatchingProjectResponse) Validate() error {
 	if m == nil {
 		return nil
 	}
 
+	// no validation rules for UserId
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GetWatchingProjectResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
 	return nil
 }
 
-// StarProjectResponseValidationError is the validation error returned by
-// StarProjectResponse.Validate if the designated constraints aren't met.
-type StarProjectResponseValidationError struct {
+// GetWatchingProjectResponseValidationError is the validation error returned
+// by GetWatchingProjectResponse.Validate if the designated constraints aren't met.
+type GetWatchingProjectResponseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6328,24 +6357,24 @@ type StarProjectResponseValidationError struct {
 }
 
 // Field function returns field value.
-func (e StarProjectResponseValidationError) Field() string { return e.field }
+func (e GetWatchingProjectResponseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e StarProjectResponseValidationError) Reason() string { return e.reason }
+func (e GetWatchingProjectResponseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e StarProjectResponseValidationError) Cause() error { return e.cause }
+func (e GetWatchingProjectResponseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e StarProjectResponseValidationError) Key() bool { return e.key }
+func (e GetWatchingProjectResponseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e StarProjectResponseValidationError) ErrorName() string {
-	return "StarProjectResponseValidationError"
+func (e GetWatchingProjectResponseValidationError) ErrorName() string {
+	return "GetWatchingProjectResponseValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e StarProjectResponseValidationError) Error() string {
+func (e GetWatchingProjectResponseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6357,14 +6386,14 @@ func (e StarProjectResponseValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sStarProjectResponse.%s: %s%s",
+		"invalid %sGetWatchingProjectResponse.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = StarProjectResponseValidationError{}
+var _ error = GetWatchingProjectResponseValidationError{}
 
 var _ interface {
 	Field() string
@@ -6372,145 +6401,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = StarProjectResponseValidationError{}
-
-// Validate checks the field values on UnStarProjectRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UnStarProjectRequest) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	// no validation rules for GroupId
-
-	// no validation rules for ProjectId
-
-	return nil
-}
-
-// UnStarProjectRequestValidationError is the validation error returned by
-// UnStarProjectRequest.Validate if the designated constraints aren't met.
-type UnStarProjectRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UnStarProjectRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UnStarProjectRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UnStarProjectRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UnStarProjectRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UnStarProjectRequestValidationError) ErrorName() string {
-	return "UnStarProjectRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UnStarProjectRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUnStarProjectRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UnStarProjectRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UnStarProjectRequestValidationError{}
-
-// Validate checks the field values on UnStarProjectResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UnStarProjectResponse) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	return nil
-}
-
-// UnStarProjectResponseValidationError is the validation error returned by
-// UnStarProjectResponse.Validate if the designated constraints aren't met.
-type UnStarProjectResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UnStarProjectResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UnStarProjectResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UnStarProjectResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UnStarProjectResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UnStarProjectResponseValidationError) ErrorName() string {
-	return "UnStarProjectResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UnStarProjectResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUnStarProjectResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UnStarProjectResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UnStarProjectResponseValidationError{}
+} = GetWatchingProjectResponseValidationError{}
 
 // Validate checks the field values on WatchProjectReqeust with the rules
 // defined in the proto definition for this message. If any rules are
@@ -6523,6 +6414,8 @@ func (m *WatchProjectReqeust) Validate() error {
 	// no validation rules for GroupId
 
 	// no validation rules for ProjectId
+
+	// no validation rules for UserId
 
 	return nil
 }
@@ -6661,6 +6554,8 @@ func (m *UnWatchProjectReqeust) Validate() error {
 	// no validation rules for GroupId
 
 	// no validation rules for ProjectId
+
+	// no validation rules for UserId
 
 	return nil
 }

@@ -29,8 +29,6 @@ type ProjectServer interface {
 	DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (resp *api.DeleteProjectResponse, err error)
 	GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (resp *api.GetProjectProfileResponse, err error)
 	UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error)
-	StarProject(ctx context.Context, req *api.StarProjectRequest) (resp *api.StarProjectResponse, err error)
-	UnStarProject(ctx context.Context, req *api.UnStarProjectRequest) (resp *api.UnStarProjectResponse, err error)
 	WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error)
 	UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error)
 	SearchProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
@@ -92,22 +90,28 @@ func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProj
 func (p *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error) {
 	return nil, nil
 }
-func (p *ProjectService) StarProject(ctx context.Context, req *api.StarProjectRequest) (resp *api.StarProjectResponse, err error) {
-	return nil, nil
-}
-func (p *ProjectService) UnStarProject(ctx context.Context, req *api.UnStarProjectRequest) (resp *api.UnStarProjectResponse, err error) {
-	return nil, nil
-}
 func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error) {
-	return nil, nil
+	err = models.StartWatchingProject(
+		req.GetUserId(),
+		req.GetGroupId(),
+		req.GetProjectId(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &api.WatchProjectResponse{}, nil
 }
 
 func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error) {
-	return nil, nil
-}
-
-func (p *ProjectService) GetUserWatchingProjects(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
-	return nil, nil
+	err = models.StopWatchingProject(
+		req.GetUserId(),
+		req.GetGroupId(),
+		req.GetProjectId(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &api.UnWatchProjectResponse{}, nil
 }
 
 func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
