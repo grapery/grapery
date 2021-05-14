@@ -5,11 +5,11 @@ package models
 type Team struct {
 	IDBase
 	UserId  uint64 `json:"user_id,omitempty"`
-	ItemID  uint64 `json:"item_id,omitempty"`
 	GroupID uint64 `json:"group_id,omitempty"`
 	Title   string `json:"title,omitempty"`
 	Desc    string `json:"desc,omitempty"`
 	DisAble bool   `json:"disable,omitempty"`
+	Expired int64  `json:"expired,omitempty"`
 }
 
 func (t Team) TableName() string {
