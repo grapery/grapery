@@ -2355,308 +2355,6 @@ var _ interface {
 	ErrorName() string
 } = UpdateUserAvatorResponseValidationError{}
 
-// Validate checks the field values on UserFollowingRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UserFollowingRequest) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	// no validation rules for UserId
-
-	return nil
-}
-
-// UserFollowingRequestValidationError is the validation error returned by
-// UserFollowingRequest.Validate if the designated constraints aren't met.
-type UserFollowingRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UserFollowingRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UserFollowingRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UserFollowingRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UserFollowingRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UserFollowingRequestValidationError) ErrorName() string {
-	return "UserFollowingRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UserFollowingRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUserFollowingRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UserFollowingRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UserFollowingRequestValidationError{}
-
-// Validate checks the field values on UserFollowingResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UserFollowingResponse) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	for idx, item := range m.GetList() {
-		_, _ = idx, item
-
-		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return UserFollowingResponseValidationError{
-					field:  fmt.Sprintf("List[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// UserFollowingResponseValidationError is the validation error returned by
-// UserFollowingResponse.Validate if the designated constraints aren't met.
-type UserFollowingResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UserFollowingResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UserFollowingResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UserFollowingResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UserFollowingResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UserFollowingResponseValidationError) ErrorName() string {
-	return "UserFollowingResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UserFollowingResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUserFollowingResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UserFollowingResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UserFollowingResponseValidationError{}
-
-// Validate checks the field values on UserFollowerRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UserFollowerRequest) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	// no validation rules for UserId
-
-	return nil
-}
-
-// UserFollowerRequestValidationError is the validation error returned by
-// UserFollowerRequest.Validate if the designated constraints aren't met.
-type UserFollowerRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UserFollowerRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UserFollowerRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UserFollowerRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UserFollowerRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UserFollowerRequestValidationError) ErrorName() string {
-	return "UserFollowerRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UserFollowerRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUserFollowerRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UserFollowerRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UserFollowerRequestValidationError{}
-
-// Validate checks the field values on UserFollowerResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UserFollowerResponse) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	for idx, item := range m.GetList() {
-		_, _ = idx, item
-
-		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return UserFollowerResponseValidationError{
-					field:  fmt.Sprintf("List[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// UserFollowerResponseValidationError is the validation error returned by
-// UserFollowerResponse.Validate if the designated constraints aren't met.
-type UserFollowerResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UserFollowerResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UserFollowerResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UserFollowerResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UserFollowerResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UserFollowerResponseValidationError) ErrorName() string {
-	return "UserFollowerResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UserFollowerResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUserFollowerResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UserFollowerResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UserFollowerResponseValidationError{}
-
 // Validate checks the field values on UserWatchingRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -6683,6 +6381,167 @@ var _ interface {
 	ErrorName() string
 } = UnWatchProjectResponseValidationError{}
 
+// Validate checks the field values on ExploreProjectsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *ExploreProjectsRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// ExploreProjectsRequestValidationError is the validation error returned by
+// ExploreProjectsRequest.Validate if the designated constraints aren't met.
+type ExploreProjectsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ExploreProjectsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ExploreProjectsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ExploreProjectsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ExploreProjectsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ExploreProjectsRequestValidationError) ErrorName() string {
+	return "ExploreProjectsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ExploreProjectsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sExploreProjectsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ExploreProjectsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ExploreProjectsRequestValidationError{}
+
+// Validate checks the field values on ExploreProjectsResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *ExploreProjectsResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ExploreProjectsResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// ExploreProjectsResponseValidationError is the validation error returned by
+// ExploreProjectsResponse.Validate if the designated constraints aren't met.
+type ExploreProjectsResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ExploreProjectsResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ExploreProjectsResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ExploreProjectsResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ExploreProjectsResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ExploreProjectsResponseValidationError) ErrorName() string {
+	return "ExploreProjectsResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ExploreProjectsResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sExploreProjectsResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ExploreProjectsResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ExploreProjectsResponseValidationError{}
+
 // Validate checks the field values on SearchProjectRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -6845,6 +6704,169 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SearchProjectResponseValidationError{}
+
+// Validate checks the field values on SearchAllProjectRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *SearchAllProjectRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	// no validation rules for Name
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// SearchAllProjectRequestValidationError is the validation error returned by
+// SearchAllProjectRequest.Validate if the designated constraints aren't met.
+type SearchAllProjectRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SearchAllProjectRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SearchAllProjectRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SearchAllProjectRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SearchAllProjectRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SearchAllProjectRequestValidationError) ErrorName() string {
+	return "SearchAllProjectRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SearchAllProjectRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSearchAllProjectRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SearchAllProjectRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SearchAllProjectRequestValidationError{}
+
+// Validate checks the field values on SearchAllProjectResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *SearchAllProjectResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SearchAllProjectResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// SearchAllProjectResponseValidationError is the validation error returned by
+// SearchAllProjectResponse.Validate if the designated constraints aren't met.
+type SearchAllProjectResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SearchAllProjectResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SearchAllProjectResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SearchAllProjectResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SearchAllProjectResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SearchAllProjectResponseValidationError) ErrorName() string {
+	return "SearchAllProjectResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SearchAllProjectResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSearchAllProjectResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SearchAllProjectResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SearchAllProjectResponseValidationError{}
 
 // Validate checks the field values on GetItemsRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, an

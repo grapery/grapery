@@ -13,7 +13,7 @@ func SearchProject(ctx *utils.Context) {
 		ctx.Err = err
 		return
 	}
-	info, err := project.GetProjectServer().SearchProject(ctx.Ctx, req)
+	info, err := project.GetProjectServer().SearchGroupProject(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return

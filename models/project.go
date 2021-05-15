@@ -167,6 +167,21 @@ func GetGroupProjects(groupID int64, offset, number int) (list []*Project, err e
 	return list, nil
 }
 
+func GetAllProjects(offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).
+		Where("deleted = ?", 0).
+		Offset(offset).
+		Limit(number).
+		Order("update_at").
+		Scan(&list).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // func GetGroupProjectListByTag(groupID int, tags string, offset, number int) (list []*Project, err error) {
 // 	list = make([]*Project, 0)
 // 	err = database.Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).

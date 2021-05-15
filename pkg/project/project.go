@@ -31,7 +31,9 @@ type ProjectServer interface {
 	UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error)
 	WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error)
 	UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error)
-	SearchProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
+	SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
+	SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (resp *api.SearchAllProjectResponse, err error)
+	ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error)
 }
 
 type ProjectService struct {
@@ -114,10 +116,40 @@ func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchPro
 	return &api.UnWatchProjectResponse{}, nil
 }
 
-func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
+func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error) {
+
 	return nil, nil
 }
 
-func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
-	return nil, nil
+func (p *ProjectService) SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
+	list, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	infoList := make([]*api.ProjectInfo, 0, len(list))
+	for _, val := range list {
+		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
+	}
+	return &api.SearchProjectResponse{
+		GroupId: req.GetGroupId(),
+		List:    infoList,
+		Number:  uint64(len(infoList)),
+		Offset:  uint64(len(infoList)),
+	}, nil
+}
+
+func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (resp *api.SearchAllProjectResponse, err error) {
+	list, err := models.GetAllProjects(int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	infoList := make([]*api.ProjectInfo, 0, len(list))
+	for _, val := range list {
+		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
+	}
+	return &api.SearchAllProjectResponse{
+		List:   infoList,
+		Number: uint64(len(infoList)),
+		Offset: uint64(len(infoList)),
+	}, nil
 }

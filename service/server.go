@@ -70,12 +70,7 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.GET("/:id", utils.WrapHandler(user.GetUser))
 		userRoute.DELETE("/:id", utils.WrapHandler(user.DeleteUser))
 		userRoute.GET("/:id/info", utils.WrapHandler(user.GetUserProfile))
-		userRoute.GET("/:id/follower", utils.WrapHandler(user.GetUserProfile))
-		userRoute.GET("/:id/following", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/groups", utils.WrapHandler(user.GetUserGroup))
-
-		userRoute.POST("/:id/follow", utils.WrapHandler(user.FollowUser))
-		userRoute.PUT("/:id/follow", utils.WrapHandler(user.UnFollowUser))
 		// 用户个人的active
 		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
 		userRoute.GET("/:id/setting", utils.WrapHandler(user.GetUserSetting))

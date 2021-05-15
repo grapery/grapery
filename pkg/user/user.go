@@ -32,8 +32,6 @@ type UserServer interface {
 	StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (*api.StartFollowUserResponse, error)
 	StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (*api.StopFollowUserResponse, error)
 	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
-	UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (*api.UserFollowingResponse, error)
-	UserFollower(ctx context.Context, req *api.UserFollowerRequest) (*api.UserFollowerResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
 }
@@ -176,18 +174,6 @@ func (user *UserService) StopFollowUser(ctx context.Context, req *api.StopFollow
 func (user *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (
 	*api.FetchUserActivesResponse, error) {
 	return &api.FetchUserActivesResponse{
-		List: nil,
-	}, nil
-}
-func (user *UserService) UserFollowing(ctx context.Context, req *api.UserFollowingRequest) (
-	*api.UserFollowingResponse, error) {
-	return &api.UserFollowingResponse{
-		List: nil,
-	}, nil
-}
-func (user *UserService) UserFollower(ctx context.Context, req *api.UserFollowerRequest) (
-	*api.UserFollowerResponse, error) {
-	return &api.UserFollowerResponse{
 		List: nil,
 	}, nil
 }

@@ -110,40 +110,6 @@ func GetWatching(ctx *utils.Context) {
 	return
 }
 
-func GetFollowingUser(ctx *utils.Context) {
-	req := &api.UserFollowingRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().UserFollowing(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetFollowerUser(ctx *utils.Context) {
-	req := &api.UserFollowerRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().UserFollower(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
 func GetFollowingGroup(ctx *utils.Context) {
 	req := &api.UserFollowingGroupRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
@@ -201,7 +167,7 @@ func DeleteUser(ctx *utils.Context) {
 	return
 }
 
-func FollowUser(ctx *utils.Context) {
+func FollowGroup(ctx *utils.Context) {
 	req := &api.StartFollowUserRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -218,7 +184,7 @@ func FollowUser(ctx *utils.Context) {
 	return
 }
 
-func UnFollowUser(ctx *utils.Context) {
+func UnFollowGroup(ctx *utils.Context) {
 	req := &api.StopFollowUserRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
