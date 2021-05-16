@@ -3,6 +3,8 @@ package models
 import (
 	_ "time"
 
+	"gorm.io/gorm"
+
 	api "github.com/grapery/grapery/api"
 )
 
@@ -13,13 +15,17 @@ import (
 */
 type Project struct {
 	IDBase
-	Name          string          `json:"name,omitempty"`
-	Tilte         string          `json:"tilte,omitempty"`
-	ShortDesc     string          `json:"short_desc,omitempty"`
-	ProjectType   int             `json:"project_type,omitempty"`
-	CreatorID     uint64          `json:"creator_id,omitempty"`
-	OwnerID       uint64          `json:"owner_id,omitempty"`
-	GroupID       uint64          `json:"group_id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Tilte       string `json:"tilte,omitempty"`
+	ShortDesc   string `json:"short_desc,omitempty"`
+	ProjectType int    `json:"project_type,omitempty"`
+	CreatorID   uint64 `json:"creator_id,omitempty"`
+	OwnerID     uint64 `json:"owner_id,omitempty"`
+	GroupID     uint64 `json:"group_id,omitempty"`
+	ProjectProfile
+}
+
+type ProjectProfile struct {
 	Description   string          `json:"description,omitempty"`
 	Avatar        string          `json:"avatar,omitempty"`
 	WatchingCount uint64          `json:"watching_count,omitempty"`
@@ -89,6 +95,61 @@ func (p *Project) UpdateIsPrivate() error {
 
 func (p *Project) Get() error {
 	err := database.First(p).Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) GetProfile() error {
+	err := database.First(p).
+		Select(
+			"description",
+			"avatar",
+			"watching_count",
+			"involved_count",
+			"visable",
+			"is_achieve",
+			"is_close",
+			"is_private").
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateProfile() error {
+	err := database.Model(p).
+		Update("description", p.Description).
+		Update("avatar", p.Avatar).
+		Update("watching_count", p.WatchingCount).
+		Update("involved_count", p.InvolvedCount).
+		Update("visable", p.Visable).
+		Update("is_achieve", p.IsAchieve).
+		Update("is_close", p.IsClose).
+		Update("is_private", p.IsPrivate).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) IncreaseWatcher() error {
+	err := database.Model(p).
+		UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) DecreaseWatcher() error {
+	err := database.Model(p).
+		UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
 		return err
 	}
@@ -253,7 +314,7 @@ func StartWatchingProject(userID, groupID, projectId uint64) error {
 	if err != nil {
 		return err
 	}
-	err = database.Model(Project{}).Update("watching_count = ?", "watching_count + 1").
+	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
 		Where("id = ?", projectId).Where("group_id", groupID).Error
 	if err != nil {
 		return err
@@ -271,7 +332,7 @@ func StopWatchingProject(userID, groupID, projectId uint64) error {
 	if err != nil {
 		return err
 	}
-	err = database.Model(Project{}).Update("watching_count = ?", "watching_count - 1").
+	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
 		Where("id = ?", projectId).Where("group_id", groupID).Error
 	if err != nil {
 		return err

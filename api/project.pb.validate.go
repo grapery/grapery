@@ -631,314 +631,6 @@ var _ interface {
 	ErrorName() string
 } = DeleteProjectResponseValidationError{}
 
-// Validate checks the field values on GetProjectProfileRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *GetProjectProfileRequest) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	// no validation rules for GroupId
-
-	// no validation rules for ProjectId
-
-	return nil
-}
-
-// GetProjectProfileRequestValidationError is the validation error returned by
-// GetProjectProfileRequest.Validate if the designated constraints aren't met.
-type GetProjectProfileRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e GetProjectProfileRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e GetProjectProfileRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e GetProjectProfileRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e GetProjectProfileRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e GetProjectProfileRequestValidationError) ErrorName() string {
-	return "GetProjectProfileRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e GetProjectProfileRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sGetProjectProfileRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = GetProjectProfileRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = GetProjectProfileRequestValidationError{}
-
-// Validate checks the field values on GetProjectProfileResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *GetProjectProfileResponse) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return GetProjectProfileResponseValidationError{
-				field:  "Info",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	return nil
-}
-
-// GetProjectProfileResponseValidationError is the validation error returned by
-// GetProjectProfileResponse.Validate if the designated constraints aren't met.
-type GetProjectProfileResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e GetProjectProfileResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e GetProjectProfileResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e GetProjectProfileResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e GetProjectProfileResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e GetProjectProfileResponseValidationError) ErrorName() string {
-	return "GetProjectProfileResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e GetProjectProfileResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sGetProjectProfileResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = GetProjectProfileResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = GetProjectProfileResponseValidationError{}
-
-// Validate checks the field values on UpdateProjectProfileRequest with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UpdateProjectProfileRequest) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	// no validation rules for GroupId
-
-	// no validation rules for ProjectId
-
-	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return UpdateProjectProfileRequestValidationError{
-				field:  "Info",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	return nil
-}
-
-// UpdateProjectProfileRequestValidationError is the validation error returned
-// by UpdateProjectProfileRequest.Validate if the designated constraints
-// aren't met.
-type UpdateProjectProfileRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UpdateProjectProfileRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UpdateProjectProfileRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UpdateProjectProfileRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UpdateProjectProfileRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UpdateProjectProfileRequestValidationError) ErrorName() string {
-	return "UpdateProjectProfileRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UpdateProjectProfileRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUpdateProjectProfileRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UpdateProjectProfileRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UpdateProjectProfileRequestValidationError{}
-
-// Validate checks the field values on UpdateProjectProfileResponse with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *UpdateProjectProfileResponse) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return UpdateProjectProfileResponseValidationError{
-				field:  "Info",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	return nil
-}
-
-// UpdateProjectProfileResponseValidationError is the validation error returned
-// by UpdateProjectProfileResponse.Validate if the designated constraints
-// aren't met.
-type UpdateProjectProfileResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e UpdateProjectProfileResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e UpdateProjectProfileResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e UpdateProjectProfileResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e UpdateProjectProfileResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e UpdateProjectProfileResponseValidationError) ErrorName() string {
-	return "UpdateProjectProfileResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e UpdateProjectProfileResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sUpdateProjectProfileResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = UpdateProjectProfileResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = UpdateProjectProfileResponseValidationError{}
-
 // Validate checks the field values on GetWatchingProjectRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -1389,6 +1081,8 @@ func (m *ExploreProjectsRequest) Validate() error {
 	}
 
 	// no validation rules for UserId
+
+	// no validation rules for GroupId
 
 	// no validation rules for Offset
 
@@ -1866,3 +1560,311 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SearchAllProjectResponseValidationError{}
+
+// Validate checks the field values on GetProjectProfileRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *GetProjectProfileRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for ProjectId
+
+	// no validation rules for UserId
+
+	return nil
+}
+
+// GetProjectProfileRequestValidationError is the validation error returned by
+// GetProjectProfileRequest.Validate if the designated constraints aren't met.
+type GetProjectProfileRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetProjectProfileRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetProjectProfileRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetProjectProfileRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetProjectProfileRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetProjectProfileRequestValidationError) ErrorName() string {
+	return "GetProjectProfileRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetProjectProfileRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetProjectProfileRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetProjectProfileRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetProjectProfileRequestValidationError{}
+
+// Validate checks the field values on GetProjectProfileResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *GetProjectProfileResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for ProjectId
+
+	// no validation rules for UserId
+
+	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return GetProjectProfileResponseValidationError{
+				field:  "Info",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetProjectProfileResponseValidationError is the validation error returned by
+// GetProjectProfileResponse.Validate if the designated constraints aren't met.
+type GetProjectProfileResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetProjectProfileResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetProjectProfileResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetProjectProfileResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetProjectProfileResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetProjectProfileResponseValidationError) ErrorName() string {
+	return "GetProjectProfileResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetProjectProfileResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetProjectProfileResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetProjectProfileResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetProjectProfileResponseValidationError{}
+
+// Validate checks the field values on UpdateProjectProfileRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *UpdateProjectProfileRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for ProjectId
+
+	// no validation rules for UserId
+
+	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UpdateProjectProfileRequestValidationError{
+				field:  "Info",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	return nil
+}
+
+// UpdateProjectProfileRequestValidationError is the validation error returned
+// by UpdateProjectProfileRequest.Validate if the designated constraints
+// aren't met.
+type UpdateProjectProfileRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateProjectProfileRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateProjectProfileRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateProjectProfileRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateProjectProfileRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateProjectProfileRequestValidationError) ErrorName() string {
+	return "UpdateProjectProfileRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateProjectProfileRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateProjectProfileRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateProjectProfileRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateProjectProfileRequestValidationError{}
+
+// Validate checks the field values on UpdateProjectProfileResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *UpdateProjectProfileResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// UpdateProjectProfileResponseValidationError is the validation error returned
+// by UpdateProjectProfileResponse.Validate if the designated constraints
+// aren't met.
+type UpdateProjectProfileResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateProjectProfileResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateProjectProfileResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateProjectProfileResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateProjectProfileResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateProjectProfileResponseValidationError) ErrorName() string {
+	return "UpdateProjectProfileResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateProjectProfileResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateProjectProfileResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateProjectProfileResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateProjectProfileResponseValidationError{}

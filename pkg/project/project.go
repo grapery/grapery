@@ -54,11 +54,8 @@ func (p *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequ
 }
 func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (resp *api.CreateProjectResponse, err error) {
 	project := &models.Project{
-		Name:      req.GetName(),
-		GroupID:   req.GetGroupId(),
-		IsAchieve: false,
-		IsPrivate: false,
-		IsClose:   false,
+		Name:    req.GetName(),
+		GroupID: req.GetGroupId(),
 	}
 	err = project.Create()
 	if err != nil {
@@ -117,8 +114,25 @@ func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchPro
 }
 
 func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error) {
+	var list []*models.Project
+	if req.GetGroupId() != 0 {
+		list, err = models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
 
-	return nil, nil
+	} else {
+		list, err = models.GetAllProjects(int(req.GetOffset()), int(req.GetNumber()))
+	}
+	if err != nil {
+		return nil, err
+	}
+	infoList := make([]*api.ProjectInfo, 0, len(list))
+	for _, val := range list {
+		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
+	}
+	return &api.ExploreProjectsResponse{
+		List:   infoList,
+		Number: uint64(len(infoList)),
+		Offset: uint64(len(infoList)),
+	}, nil
 }
 
 func (p *ProjectService) SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {

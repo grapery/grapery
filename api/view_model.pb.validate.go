@@ -400,6 +400,93 @@ var _ interface {
 	ErrorName() string
 } = ProjectInfoValidationError{}
 
+// Validate checks the field values on ProjectProfileInfo with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *ProjectProfileInfo) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for ProjectId
+
+	// no validation rules for GroupId
+
+	// no validation rules for Description
+
+	// no validation rules for WatchingCount
+
+	// no validation rules for InvolvedCount
+
+	// no validation rules for Avatar
+
+	// no validation rules for Visable
+
+	// no validation rules for IsAchieve
+
+	// no validation rules for IsClose
+
+	// no validation rules for IsPrivate
+
+	return nil
+}
+
+// ProjectProfileInfoValidationError is the validation error returned by
+// ProjectProfileInfo.Validate if the designated constraints aren't met.
+type ProjectProfileInfoValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ProjectProfileInfoValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ProjectProfileInfoValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ProjectProfileInfoValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ProjectProfileInfoValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ProjectProfileInfoValidationError) ErrorName() string {
+	return "ProjectProfileInfoValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ProjectProfileInfoValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sProjectProfileInfo.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ProjectProfileInfoValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ProjectProfileInfoValidationError{}
+
 // Validate checks the field values on ActiveInfo with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *ActiveInfo) Validate() error {
@@ -1248,70 +1335,3 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GroupProfileInfoValidationError{}
-
-// Validate checks the field values on ProjectProfileInfo with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
-func (m *ProjectProfileInfo) Validate() error {
-	if m == nil {
-		return nil
-	}
-
-	return nil
-}
-
-// ProjectProfileInfoValidationError is the validation error returned by
-// ProjectProfileInfo.Validate if the designated constraints aren't met.
-type ProjectProfileInfoValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ProjectProfileInfoValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ProjectProfileInfoValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ProjectProfileInfoValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ProjectProfileInfoValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ProjectProfileInfoValidationError) ErrorName() string {
-	return "ProjectProfileInfoValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ProjectProfileInfoValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sProjectProfileInfo.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ProjectProfileInfoValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ProjectProfileInfoValidationError{}

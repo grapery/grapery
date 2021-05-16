@@ -148,7 +148,7 @@ func (g *GroupMember) Create() error {
 	return nil
 }
 
-func (g *GroupMember) IsInOneGroup() (bool, error) {
+func (g *GroupMember) IsInGroup() (bool, error) {
 	err := database.Table(g.TableName()).Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).Find(g).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

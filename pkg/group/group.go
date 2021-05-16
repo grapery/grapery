@@ -244,7 +244,7 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 		GroupID: req.GetGroupId(),
 		UserID:  req.GetUserId(),
 	}
-	isIn, err := groupMember.IsInOneGroup()
+	isIn, err := groupMember.IsInGroup()
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 		GroupID: req.GetGroupId(),
 		UserID:  req.GetUserId(),
 	}
-	isIn, err := groupMember.IsInOneGroup()
+	isIn, err := groupMember.IsInGroup()
 	if err != nil {
 		return nil, err
 	}
@@ -275,6 +275,16 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 	if err != nil {
 		return nil, err
 	}
+	return nil, nil
+}
+
+func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
+	// check elastic,then search database
+	return nil, nil
+}
+
+func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
+	// check elastic,then search database
 	return nil, nil
 }
 
