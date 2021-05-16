@@ -29,8 +29,6 @@ type UserServer interface {
 	GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error)
 	GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error)
 	UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error)
-	StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (*api.StartFollowUserResponse, error)
-	StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (*api.StopFollowUserResponse, error)
 	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
@@ -162,14 +160,6 @@ func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequ
 		return nil, err
 	}
 	return &api.UserUpdateResponse{}, nil
-}
-func (user *UserService) StartFollowUser(ctx context.Context, req *api.StartFollowUserRequest) (
-	*api.StartFollowUserResponse, error) {
-	return &api.StartFollowUserResponse{}, nil
-}
-func (user *UserService) StopFollowUser(ctx context.Context, req *api.StopFollowUserRequest) (
-	*api.StopFollowUserResponse, error) {
-	return &api.StopFollowUserResponse{}, nil
 }
 func (user *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (
 	*api.FetchUserActivesResponse, error) {

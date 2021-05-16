@@ -168,35 +168,10 @@ func DeleteUser(ctx *utils.Context) {
 }
 
 func FollowGroup(ctx *utils.Context) {
-	req := &api.StartFollowUserRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().StartFollowUser(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
+
 	return
 }
 
 func UnFollowGroup(ctx *utils.Context) {
-	req := &api.StopFollowUserRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().StopFollowUser(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
 	return
 }
