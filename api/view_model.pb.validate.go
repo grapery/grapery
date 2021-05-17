@@ -661,6 +661,75 @@ var _ interface {
 	ErrorName() string
 } = WordDetailValidationError{}
 
+// Validate checks the field values on PictureInfo with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *PictureInfo) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Size
+
+	return nil
+}
+
+// PictureInfoValidationError is the validation error returned by
+// PictureInfo.Validate if the designated constraints aren't met.
+type PictureInfoValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e PictureInfoValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e PictureInfoValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e PictureInfoValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e PictureInfoValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e PictureInfoValidationError) ErrorName() string { return "PictureInfoValidationError" }
+
+// Error satisfies the builtin error interface
+func (e PictureInfoValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sPictureInfo.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = PictureInfoValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = PictureInfoValidationError{}
+
 // Validate checks the field values on PictureDetail with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
 // is returned.
@@ -669,9 +738,22 @@ func (m *PictureDetail) Validate() error {
 		return nil
 	}
 
-	// no validation rules for ResourceUrl
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
 
-	// no validation rules for Size
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return PictureDetailValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Num
 
 	return nil
 }
@@ -730,10 +812,9 @@ var _ interface {
 	ErrorName() string
 } = PictureDetailValidationError{}
 
-// Validate checks the field values on VideoDetail with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
-func (m *VideoDetail) Validate() error {
+// Validate checks the field values on VideoInfo with the rules defined in the
+// proto definition for this message. If any rules are violated, an error is returned.
+func (m *VideoInfo) Validate() error {
 	if m == nil {
 		return nil
 	}
@@ -743,6 +824,88 @@ func (m *VideoDetail) Validate() error {
 	// no validation rules for Size
 
 	// no validation rules for TimeLength
+
+	return nil
+}
+
+// VideoInfoValidationError is the validation error returned by
+// VideoInfo.Validate if the designated constraints aren't met.
+type VideoInfoValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VideoInfoValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VideoInfoValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VideoInfoValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VideoInfoValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VideoInfoValidationError) ErrorName() string { return "VideoInfoValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VideoInfoValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVideoInfo.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VideoInfoValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VideoInfoValidationError{}
+
+// Validate checks the field values on VideoDetail with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *VideoDetail) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return VideoDetailValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Num
 
 	return nil
 }
