@@ -25,6 +25,7 @@ type CommonService struct {
 func (c CommonService) Version() {
 
 }
+
 func (c CommonService) About() {
 
 }
