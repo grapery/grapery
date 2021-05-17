@@ -3,11 +3,10 @@ package models
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
-
 	api "github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/errors"
+	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 /*
@@ -17,13 +16,14 @@ import (
 */
 type Auth struct {
 	IDBase
-	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
-	Email    string       `json:"email,omitempty" gorm:"unique_index"`
-	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
-	Password string       `json:"-" gorm:"password"`
-	Salt     string       `json:"-" gorm:"salt"`
-	IsValid  bool         `json:"is_valid,omitempty"`
-	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
+	UID       uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
+	Email     string       `json:"email,omitempty" gorm:"unique_index"`
+	Phone     string       `json:"phone,omitempty" gorm:"unique_index"`
+	Password  string       `json:"-" gorm:"password"`
+	Salt      string       `json:"-" gorm:"salt"`
+	IsValid   bool         `json:"is_valid,omitempty"`
+	AuthType  api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
+	Confirmed bool         `json:"confirmed,omitempty"`
 }
 
 func (a Auth) TableName() string {
