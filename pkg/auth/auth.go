@@ -5,6 +5,7 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
@@ -29,8 +30,9 @@ func NewAuthService() *AuthService {
 type AuthServer interface {
 	Register(ctx context.Context, account string, pwd string, authType api.AuthType) error
 	Login(ctx context.Context, account string, pwd string, authType api.AuthType) (*api.UserInfo, error)
-	Logout(ctx context.Context, uid uint64) error
-	ResetPassword(ctx context.Context, uid uint64, newPwd, oldPwd string) error
+	Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error)
+	ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error)
+	Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error)
 }
 
 // auth service
@@ -92,25 +94,32 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string, 
 	}, nil
 }
 
-func (auth *AuthService) Logout(ctx context.Context, uid uint64) error {
-	return nil
+func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error) {
+	log.Printf("user %d is logout", req.GetUserId())
+	return &api.LogoutResponse{}, nil
 }
 
-func (auth *AuthService) ResetPassword(ctx context.Context, uid uint64, newPwd, oldPwd string) error {
+func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
 	info := new(models.Auth)
-	info.ID = uint(uid)
+	info.ID = uint(req.GetUserId())
 	err := info.GetByUID()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if info.Password == oldPwd {
-		info.Password = newPwd
+	if info.Password == req.GetOldPwd() {
+		info.Password = req.GetNewPwd()
 	} else {
-		return errors.ErrAuthPasswordIsWrong
+		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	err = info.UpdatePwd()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &api.ResetPasswordResponse{
+		UserId: req.GetUserId(),
+	}, nil
+}
+
+func (auth *AuthService) Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error) {
+	return nil, nil
 }

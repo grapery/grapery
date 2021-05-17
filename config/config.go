@@ -28,11 +28,16 @@ type GraphDBConfig struct {
 	Database string `json:"database,omitempty"`
 }
 
+type ElasticConfig struct {
+	Address []string
+}
+
 //Config define common config struct
 type Config struct {
 	SqlDB    *DBConfig      `json:"sql_db,omitempty"`
 	Redis    *RedisConfig   `json:"redis,omitempty"`
 	GraphDB  *GraphDBConfig `json:"graph,omitempty"`
+	Elastic  *ElasticConfig `json:"elastic,omitempty"`
 	LogLevel string         `json:"log_level,omitempty"`
 	Port     string         `json:"port,omitempty"`
 }
@@ -50,6 +55,10 @@ func ValiedConfig(cfg *Config) error {
 
 	// if cfg.GraphDB.Address == "" || cfg.GraphDB.Database == "" {
 	// 	log.Info("graph database not init")
+	// }
+
+	// if len(cfg.Elastic.Address) == "" {
+	// 	log.Info("elastic not init")
 	// }
 	return nil
 }

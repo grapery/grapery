@@ -107,24 +107,6 @@ func CreateGroup(ctx *utils.Context) {
 	return
 }
 
-func GetGroupActives(ctx *utils.Context) {
-	req := &api.GetGroupActivesRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := group.GetGroupServer().GetGroupActives(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-
-}
-
 func GetGroupMembers(ctx *utils.Context) {
 	req := &api.FetchGroupMembersRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)

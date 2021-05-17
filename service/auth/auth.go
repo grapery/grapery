@@ -3,9 +3,11 @@ package auth
 import (
 	// "net/http"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,6 +18,29 @@ import (
 )
 
 func Register(ctx *gin.Context) {
+	req := &api.RegisterRequest{}
+	err := ctx.ShouldBindJSON(req)
+	ret := utils.NewResult()
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	err = auth.GetAuthService().Register(context.Background(), req.GetAccount(), req.GetPassword(), req.GetLoginType())
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	ret.Code = 0
+	ret.Message = "ok"
+	ret.Data = &api.RegisterResponse{}
+	ctx.JSON(http.StatusOK, ret)
+}
+
+func Confirm(ctx *gin.Context) {
 	req := &api.RegisterRequest{}
 	err := ctx.ShouldBindJSON(req)
 	ret := utils.NewResult()
@@ -60,10 +85,20 @@ func Login(ctx *gin.Context) {
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{UserId: info.GetUserId()}
 	infoData, _ := json.Marshal(info)
-	cache.SetBytes(c, fmt.Sprintf("%d", info.GetUserId()), infoData, 86400)
+
+	cookieKey := fmt.Sprintf("grapery_%d_%d", info.GetUserId(), time.Now().Unix())
+	err = cache.SetBytes(c, cookieKey, infoData, 86400)
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ret.Data = nil
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	b64Info := base64.StdEncoding.EncodeToString([]byte(cookieKey))
 	ctx.SetCookie(
 		utils.CookieName,
-		fmt.Sprintf("%d", info.GetUserId()),
+		b64Info,
 		utils.CookieMaxAge,
 		utils.CookiePath,
 		utils.Domain, false, false)
@@ -82,7 +117,7 @@ func Logout(ctx *gin.Context) {
 		return
 	}
 	c := context.Background()
-	err = auth.GetAuthService().Logout(c, req.GetUserId())
+	_, err = auth.GetAuthService().Logout(c, req)
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
@@ -90,10 +125,9 @@ func Logout(ctx *gin.Context) {
 		return
 	}
 	cookie, _ := ctx.Cookie(utils.CookieName)
-	cache.DelCache(c, cookie)
+	_ = cache.DelCache(c, cookie)
 	ret.Message = "ok"
 	ret.Data = api.LoginResponse{}
-	return
 }
 
 func ResetPassword(ctx *utils.Context) {
@@ -106,7 +140,7 @@ func ResetPassword(ctx *utils.Context) {
 		ctx.GinC.JSON(http.StatusOK, ret)
 		return
 	}
-	err = auth.GetAuthService().ResetPassword(ctx.Ctx, req.GetUserId(), req.GetNewPwd(), req.GetOldPwd())
+	_, err = auth.GetAuthService().ResetPassword(ctx.Ctx, req)
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()

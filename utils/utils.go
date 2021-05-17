@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -41,24 +42,38 @@ func WrapHandler(h HandlerFunc) gin.HandlerFunc {
 		Ctx, _ := context.WithCancel(c.Request.Context())
 		cookie, err := c.Cookie(CookieName)
 		if err != nil {
-			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
+			ret.Code = http.StatusOK
+			ret.Message = "need login"
+			ret.Data = nil
+			c.JSON(http.StatusOK, ret)
 			return
 		}
-
-		// parse cookie
-		infoData, err := cache.GetBytes(Ctx, cookie)
+		log.Info("cookie : ", cookie)
+		cookieKey, err := base64.StdEncoding.DecodeString(cookie)
 		if err != nil {
-			c.Redirect(http.StatusMovedPermanently, "/api/v1/login")
+			ret.Code = http.StatusOK
+			ret.Message = "need login"
+			ret.Data = nil
+			c.JSON(http.StatusOK, ret)
 			return
 		}
+		// parse cookie
+		infoData, err := cache.GetBytes(Ctx, string(cookieKey))
+		if err != nil {
+			ret.Code = http.StatusOK
+			ret.Message = "need login"
+			ret.Data = nil
+			c.JSON(http.StatusOK, ret)
+			return
+		}
+		log.Info(string(infoData))
 		ctx := &Context{
 			GinC:   c,
 			Ctx:    Ctx,
 			UserID: 0,
 		}
 		var info = new(api.UserInfo)
-		log.Info("infoData: ", string(infoData))
-		err = json.Unmarshal([]byte(infoData), info)
+		err = json.Unmarshal(infoData, info)
 		if err != nil {
 			ctx.Err = err
 			ctx.Resp = nil

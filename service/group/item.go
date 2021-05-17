@@ -7,13 +7,47 @@ import (
 )
 
 func GetProjectItems(ctx *utils.Context) {
-	req := &api.GetItemsRequest{}
+	req := &api.GetProjectItemsRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
 		ctx.Err = err
 		return
 	}
-	info, err := item.GetItemServer().GetItems(ctx.Ctx, req)
+	info, err := item.GetItemServer().GetProjectItems(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func GetGroupItems(ctx *utils.Context) {
+	req := &api.GetGroupItemsRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := item.GetItemServer().GetGroupItems(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func GetUserItems(ctx *utils.Context) {
+	req := &api.GetUserItemsRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := item.GetItemServer().GetUserItems(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return
@@ -100,6 +134,23 @@ func LikeItem(ctx *utils.Context) {
 		return
 	}
 	info, err := item.GetItemServer().LikeItem(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
+}
+
+func UnLikeItem(ctx *utils.Context) {
+	req := &api.LikeItemRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := item.GetItemServer().UnLikeItem(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return

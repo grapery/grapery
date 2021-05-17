@@ -69,17 +69,13 @@ func (s *Service) Run(cfg *config.Config) error {
 	{
 		userRoute.GET("/:id", utils.WrapHandler(user.GetUser))
 		userRoute.DELETE("/:id", utils.WrapHandler(user.DeleteUser))
-		userRoute.PUT("/:id", utils.WrapHandler(user.UpdateUser))
 		userRoute.GET("/:id/info", utils.WrapHandler(user.GetUserProfile))
-		userRoute.GET("/:id/follower", utils.WrapHandler(user.GetUserProfile))
-		userRoute.GET("/:id/following", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/groups", utils.WrapHandler(user.GetUserGroup))
-		userRoute.GET("/:id/following/groups", utils.WrapHandler(user.GetUserProfile))
-
-		userRoute.POST("/:id/follow", utils.WrapHandler(user.FollowUser))
-		userRoute.PUT("/:id/follow", utils.WrapHandler(user.UnFollowUser))
 		// 用户个人的active
 		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
+		userRoute.GET("/:id/setting", utils.WrapHandler(user.GetUserSetting))
+		userRoute.PUT("/:id/setting", utils.WrapHandler(user.UpdateUserSetting))
+		//新增加临时会话，可以不用立即添加好友，会话可以设置为多长时间过期，或者会话转为邮件组的形式
 	}
 	v1Route.GET("/users/search", utils.WrapHandler(user.SearchUser))
 	// group 为基础的资源持有结构，project为group中的人员建立的实际包含内容的东西
@@ -106,8 +102,7 @@ func (s *Service) Run(cfg *config.Config) error {
 
 			thingsGroup.GET("/:project_id/profile", utils.WrapHandler(group.GetProject))
 			thingsGroup.PUT("/:project_id/profile", utils.WrapHandler(group.CreateProject))
-			thingsGroup.GET("/:project_id/star", utils.WrapHandler(group.StarProject))
-			thingsGroup.PUT("/:project_id/star", utils.WrapHandler(group.UnStarProject))
+			thingsGroup.GET("/:project_id/explore", utils.WrapHandler(group.ExploreProjects))
 
 			thingsGroup.PUT("/:project_id/watch", utils.WrapHandler(group.WatchProject))
 
@@ -118,13 +113,21 @@ func (s *Service) Run(cfg *config.Config) error {
 				itemGroup.POST("/:item_id", utils.WrapHandler(group.CreateProjectItem))
 				itemGroup.PUT("/:item_id", utils.WrapHandler(group.UpdateProjectItem))
 				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
-				itemGroup.PUT("/:item_id/like", utils.WrapHandler(group.LikeItem))
-			}
+				itemGroup.POST("/:item_id/like", utils.WrapHandler(group.LikeItem))
+				itemGroup.DELETE("/:item_id/like", utils.WrapHandler(group.LikeItem))
+				itemGroup.POST("/:item_id/comment", utils.WrapHandler(group.CreateProjectItem))
+				itemGroup.PUT("/:item_id/comment/:comment_id", utils.WrapHandler(group.UpdateProjectItem))
+				itemGroup.DELETE("/:item_id/comment/:comment_id", utils.WrapHandler(group.DeleteProjectItem))
+				itemGroup.POST("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
+				itemGroup.DELETE("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
 
+			}
 		}
 		groupRoute.GET("/:id/projects/search", utils.WrapHandler(group.SearchProject))
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
+	v1Route.GET("/explore", common.Explore)
+	v1Route.GET("/trending", common.Trending)
 
 	err = app.Run(":" + cfg.Port)
 	if err != nil {

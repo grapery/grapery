@@ -13,41 +13,7 @@ func SearchProject(ctx *utils.Context) {
 		ctx.Err = err
 		return
 	}
-	info, err := project.GetProjectServer().SearchProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func StarProject(ctx *utils.Context) {
-	req := &api.StarProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().StarProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func UnStarProject(ctx *utils.Context) {
-	req := &api.UnStarProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().UnStarProject(ctx.Ctx, req)
+	info, err := project.GetProjectServer().SearchGroupProject(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return
@@ -122,6 +88,10 @@ func CreateProject(ctx *utils.Context) {
 	}
 	ctx.Err = nil
 	ctx.Resp = info
+	return
+}
+
+func ExploreProjects(ctx *utils.Context) {
 	return
 }
 

@@ -3,8 +3,8 @@ package models
 import (
 	"fmt"
 
-	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	api "github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/errors"
@@ -40,7 +40,7 @@ func (a *Auth) CreateWithPhone() error {
 }
 
 func IsUserAuthExist(account string) bool {
-	var count int
+	var count int64
 	err := database.Table(Auth{}.TableName()).Where("email = ? or phone = ?", account, account).Count(&count).Error
 	if err != gorm.ErrRecordNotFound {
 		return false
@@ -52,10 +52,9 @@ func IsUserAuthExist(account string) bool {
 }
 
 func (a *Auth) CreateWithEmail() error {
-
 	err := database.Create(a).Error
 	if err != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
+		log.Errorf("create auth [%s] failed [%s] ", a.Email, err.Error())
 		return errors.ErrCreateAuthFailed
 	}
 	return nil
@@ -81,7 +80,7 @@ func (a *Auth) GetByEmail() error {
 }
 
 func (a *Auth) GetByPhone() error {
-	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%s] info failed : [%s]", a.Phone, err)
 		return fmt.Errorf("get auth [%s] info failed ", a.Phone)
 	}
@@ -89,7 +88,7 @@ func (a *Auth) GetByPhone() error {
 }
 
 func (a *Auth) GetByUID() error {
-	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
 	}

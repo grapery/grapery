@@ -62,8 +62,8 @@ func (c *Comment) Delete() error {
 	return nil
 }
 
-func GetCommentByUserID(userID uint64) (*[]Comment, error) {
-	var ret = new([]Comment)
+func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
+	var ret = new([]*Comment)
 	if err := database.Model(&Comment{}).Where("user_id = ? and delete = 0", userID).Find(ret).Error; err != nil {
 		log.Errorf("get user [%d] active failed: %s ", userID, err.Error())
 		return nil, err
@@ -72,8 +72,8 @@ func GetCommentByUserID(userID uint64) (*[]Comment, error) {
 	return ret, nil
 }
 
-func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]Comment, error) {
-	var ret = new([]Comment)
+func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, error) {
+	var ret = new([]*Comment)
 	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Find(ret).Error; err != nil {
 		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
@@ -81,8 +81,8 @@ func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]Comment, erro
 	return ret, nil
 }
 
-func GetCommentListByItem(userID uint64, activeType uint) (*[]Comment, error) {
-	var ret = new([]Comment)
+func GetCommentListByItem(userID uint64, activeType uint) (*[]*Comment, error) {
+	var ret = new([]*Comment)
 	if err := database.Where("user_id = ? and active_type = ? and delete = 0", userID, activeType).Find(ret).Error; err != nil {
 		log.Errorf("get user [%d] active type [%d] failed ", userID, activeType)
 		return nil, err

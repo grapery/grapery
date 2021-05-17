@@ -41,7 +41,7 @@ func (u User) TableName() string {
 }
 
 func (u *User) Create() error {
-	err := database.Create(u).First(u).Error
+	err := database.Model(u).Create(u).First(u).Error
 	if err != nil {
 		log.Errorf("create user [%s/%s] failed [%s] ", u.Phone, u.Email, err.Error())
 		return fmt.Errorf("create user failed")
@@ -76,6 +76,19 @@ func (u *User) UpdateAvatar() error {
 	return nil
 }
 
+func (u *User) UpdateAll() error {
+	err := database.Model(u).
+		Update("avatar", u.Avatar).
+		Update("short_desc", u.ShortDesc).
+		Update("name", u.Name).
+		Where("id = ?", u.ID).Error
+	if err != nil {
+		log.Errorf("update user [%d] all [%s] failed ", u.ID, u.Avatar)
+		return fmt.Errorf("update user [%d] all failed ", u.ID)
+	}
+	return nil
+}
+
 func (u *User) GetById() error {
 	err := database.Model(u).Where("id = ? and deleted = ?", u.ID, 0).First(u).Error
 	if err != nil {
@@ -86,7 +99,7 @@ func (u *User) GetById() error {
 }
 
 func (u *User) GetByName() error {
-	err := database.Where("name = ? and deleted = ? ", u.Name, 0).First(u).Error
+	err := database.Model(u).Where("name = ? and deleted = ? ", u.Name, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", u.Name, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Name)
@@ -95,7 +108,7 @@ func (u *User) GetByName() error {
 }
 
 func (u *User) GetByPhone() error {
-	err := database.Where("phone = ? and deleted = ?", u.Phone, 0).First(u).Error
+	err := database.Model(u).Where("phone = ? and deleted = ?", u.Phone, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Phone)
@@ -104,7 +117,7 @@ func (u *User) GetByPhone() error {
 }
 
 func (u *User) GetByEmail() error {
-	err := database.Where("email = ? and deleted = ?", u.Email, 0).First(u).Error
+	err := database.Model(u).Where("email = ? and deleted = ?", u.Email, 0).First(u).Error
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Email)
@@ -119,4 +132,15 @@ func (u *User) Delete() error {
 		return fmt.Errorf("deleted user [%d] failed ", u.ID)
 	}
 	return nil
+}
+
+func GetUsersByIds(ids []int) (users []*User, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	err = database.Model(User{}).Where("id in (?)", ids).Scan(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }

@@ -3,6 +3,8 @@ package models
 import (
 	_ "time"
 
+	"gorm.io/gorm"
+
 	api "github.com/grapery/grapery/api"
 )
 
@@ -13,20 +15,25 @@ import (
 */
 type Project struct {
 	IDBase
-	Name        string          `json:"name,omitempty"`
-	Tilte       string          `json:"tilte,omitempty"`
-	ShortDesc   string          `json:"short_desc,omitempty"`
-	ProjectType int             `json:"project_type,omitempty"`
-	CreatorID   uint64          `json:"creator_id,omitempty"`
-	OwnerID     uint64          `json:"owner_id,omitempty"`
-	GroupID     uint64          `json:"group_id,omitempty"`
-	ProjectID   uint64          `json:"project_id,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Avatar      string          `json:"avatar,omitempty"`
-	Visable     api.VisibleType `json:"visable,omitempty"`
-	IsAchieve   bool            `json:"is_achieve,omitempty"`
-	IsClose     bool            `json:"is_close,omitempty"`
-	IsPrivate   bool            `json:"is_private,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Tilte       string `json:"tilte,omitempty"`
+	ShortDesc   string `json:"short_desc,omitempty"`
+	ProjectType int    `json:"project_type,omitempty"`
+	CreatorID   uint64 `json:"creator_id,omitempty"`
+	OwnerID     uint64 `json:"owner_id,omitempty"`
+	GroupID     uint64 `json:"group_id,omitempty"`
+	ProjectProfile
+}
+
+type ProjectProfile struct {
+	Description   string          `json:"description,omitempty"`
+	Avatar        string          `json:"avatar,omitempty"`
+	WatchingCount uint64          `json:"watching_count,omitempty"`
+	InvolvedCount uint64          `json:"involved_count,omitempty"`
+	Visable       api.VisibleType `json:"visable,omitempty"`
+	IsAchieve     bool            `json:"is_achieve,omitempty"`
+	IsClose       bool            `json:"is_close,omitempty"`
+	IsPrivate     bool            `json:"is_private,omitempty"`
 }
 
 func (p Project) TableName() string {
@@ -94,6 +101,61 @@ func (p *Project) Get() error {
 	return nil
 }
 
+func (p *Project) GetProfile() error {
+	err := database.First(p).
+		Select(
+			"description",
+			"avatar",
+			"watching_count",
+			"involved_count",
+			"visable",
+			"is_achieve",
+			"is_close",
+			"is_private").
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) UpdateProfile() error {
+	err := database.Model(p).
+		Update("description", p.Description).
+		Update("avatar", p.Avatar).
+		Update("watching_count", p.WatchingCount).
+		Update("involved_count", p.InvolvedCount).
+		Update("visable", p.Visable).
+		Update("is_achieve", p.IsAchieve).
+		Update("is_close", p.IsClose).
+		Update("is_private", p.IsPrivate).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) IncreaseWatcher() error {
+	err := database.Model(p).
+		UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) DecreaseWatcher() error {
+	err := database.Model(p).
+		UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *Project) Delete() error {
 	err := database.Model(p).Update("deleted", p.Deleted).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
@@ -152,6 +214,35 @@ func GetGroupProjectListByName(groupID int, name string, offset, number int) (li
 	return list, nil
 }
 
+func GetGroupProjects(groupID int64, offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).
+		Where("group_id = ?  and deleted = ?", groupID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetAllProjects(offset, number int) (list []*Project, err error) {
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).
+		Where("deleted = ?", 0).
+		Offset(offset).
+		Limit(number).
+		Order("update_at").
+		Scan(&list).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // func GetGroupProjectListByTag(groupID int, tags string, offset, number int) (list []*Project, err error) {
 // 	list = make([]*Project, 0)
 // 	err = database.Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).
@@ -162,7 +253,7 @@ func GetGroupProjectListByName(groupID int, name string, offset, number int) (li
 // 	return list, nil
 // }
 
-func GeGrouptProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
+func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
 	err = database.Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
@@ -180,4 +271,71 @@ func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) (l
 		return nil, err
 	}
 	return list, nil
+}
+
+type ProjectWatcher struct {
+	IDBase
+	GroupID   uint64 `json:"group_id,omitempty"`
+	ProjectID uint64 `json:"project_id,omitempty"`
+	UserID    uint64 `json:"user_id,omitempty"`
+}
+
+func (p ProjectWatcher) TableName() string {
+	return "project_watcher"
+}
+
+func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project, err error) {
+	plist := make([]*ProjectWatcher, 0)
+	err = database.Model(&ProjectWatcher{}).Where("user_id = ? and deleted = ?", userId, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	var pidList = make([]uint64, len(plist))
+	for _, val := range plist {
+		pidList = append(pidList, val.ProjectID)
+	}
+	list = make([]*Project, 0)
+	err = database.Model(&Project{}).Where("project_id in (?) and deleted = ?", pidList, userId, 0).
+		Offset(offset).Limit(number).Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func StartWatchingProject(userID, groupID, projectId uint64) error {
+	p := &ProjectWatcher{
+		UserID:    userID,
+		GroupID:   groupID,
+		ProjectID: projectId,
+	}
+	err := database.Model(p).Create(p).Error
+	if err != nil {
+		return err
+	}
+	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
+		Where("id = ?", projectId).Where("group_id", groupID).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func StopWatchingProject(userID, groupID, projectId uint64) error {
+	p := &ProjectWatcher{
+		UserID:    userID,
+		GroupID:   groupID,
+		ProjectID: projectId,
+	}
+	err := database.Model(p).Delete(p).Error
+	if err != nil {
+		return err
+	}
+	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
+		Where("id = ?", projectId).Where("group_id", groupID).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }
