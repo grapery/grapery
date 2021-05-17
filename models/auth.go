@@ -9,11 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-/*
-授权/注册/登陆记录表
-用做登陆
-用做用户注册，注册成功才生成新的用户信息
-*/
 type Auth struct {
 	IDBase
 	UID       uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
@@ -91,6 +86,14 @@ func (a *Auth) GetByUID() error {
 	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
+	}
+	return nil
+}
+
+func (a *Auth) ConfirmAuth() error {
+	if err := database.Table(a.TableName()).Update("confirmed", a.Confirmed).Where("uid = ? and deleted = ? ", a.UID, true).Error; err != nil {
+		log.Errorf("update confirmed failed : [%s]", err.Error())
+		return fmt.Errorf("update user [%d] confirmed failed : [%s]", a.UID, err.Error())
 	}
 	return nil
 }
