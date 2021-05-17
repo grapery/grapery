@@ -1,8 +1,11 @@
 package convert
 
 import (
+	"encoding/json"
+
 	api "github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
+	log "github.com/sirupsen/logrus"
 )
 
 func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
@@ -56,7 +59,48 @@ func ConvertProjectToApiProjectInfo(p *models.Project) *api.ProjectInfo {
 }
 
 func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
-	return &api.ItemInfo{}
+	info := &api.ItemInfo{
+		GroupId:   i.GroupID,
+		ProjectId: i.ProjectID,
+		UserId:    i.UserID,
+		Title:     i.Title,
+		Itype:     i.ItemType,
+	}
+	var err error
+	itemDetail := new(api.ItemDetail)
+	switch i.ItemType {
+	case api.ItemType_Link:
+		shareLink := new(api.ShareDetail)
+		err = json.Unmarshal([]byte(i.Content), shareLink)
+		itemDetail.Detail = &api.ItemDetail_Share{
+			Share: shareLink,
+		}
+	case api.ItemType_Location:
+	case api.ItemType_Picture:
+		shareLink := new(api.PictureDetail)
+		err = json.Unmarshal([]byte(i.Content), shareLink)
+		itemDetail.Detail = &api.ItemDetail_Pictures{
+			Pictures: shareLink,
+		}
+	case api.ItemType_ShortWord:
+		shareLink := new(api.WordDetail)
+		err = json.Unmarshal([]byte(i.Content), shareLink)
+		itemDetail.Detail = &api.ItemDetail_Word{
+			Word: shareLink,
+		}
+	case api.ItemType_Video:
+		shareLink := new(api.VideoDetail)
+		err = json.Unmarshal([]byte(i.Content), shareLink)
+		itemDetail.Detail = &api.ItemDetail_Video{
+			Video: shareLink,
+		}
+	}
+	if err != nil {
+		log.Errorf("convert item failed: %v", err)
+		return nil
+	}
+
+	return info
 }
 
 // func ConvertTeamToApiTeamInfo(t *models.Team) *api.TeamInfo {

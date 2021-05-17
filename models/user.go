@@ -6,9 +6,8 @@ import (
 	"fmt"
 	_ "time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/grapery/grapery/api"
+	log "github.com/sirupsen/logrus"
 )
 
 /*
@@ -27,9 +26,7 @@ type User struct {
 	Emotion      int            `json:"emotion,omitempty"`
 	Avatar       string         `json:"avatar,omitempty"`
 	URL          string         `json:"url,omitempty"`
-	NumFollowers int            `json:"num_followers,omitempty"`
 	NumFollowing int            `json:"num_following,omitempty"`
-	NumStars     int            `json:"num_stars,omitempty"`
 	NumProjects  int            `json:"num_projects,omitempty"`
 	NumGroup     int            `json:"num_group,omitempty"`
 	NumTeams     int            `json:"num_teams,omitempty"`

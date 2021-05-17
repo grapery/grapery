@@ -44,9 +44,12 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 	}
 	if len(list) != 0 {
 		return &api.GetProjectItemsResponse{
-			List:   nil,
-			Number: 0,
-			Offset: req.GetOffset(),
+			GroupId:   req.GetGroupId(),
+			ProjectId: req.GetProjectId(),
+			UserId:    req.GetUserId(),
+			List:      nil,
+			Number:    0,
+			Offset:    req.GetOffset(),
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -61,9 +64,12 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 		result = append(result, item)
 	}
 	return &api.GetProjectItemsResponse{
-		List:   result,
-		Number: uint64(len(result)),
-		Offset: req.GetOffset() + uint64(len(result)),
+		GroupId:   req.GetGroupId(),
+		ProjectId: req.GetProjectId(),
+		UserId:    req.GetUserId(),
+		List:      result,
+		Number:    uint64(len(result)),
+		Offset:    req.GetOffset() + uint64(len(result)),
 	}, nil
 }
 
@@ -75,9 +81,11 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 	}
 	if len(list) != 0 {
 		return &api.GetGroupItemsResponse{
-			List:   nil,
-			Number: 0,
-			Offset: req.GetOffset(),
+			GroupId: req.GetGroupId(),
+			UserId:  req.GetUserId(),
+			List:    nil,
+			Number:  0,
+			Offset:  req.GetOffset(),
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -92,9 +100,11 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 		result = append(result, item)
 	}
 	return &api.GetGroupItemsResponse{
-		List:   result,
-		Number: uint64(len(result)),
-		Offset: req.GetOffset() + uint64(len(result)),
+		GroupId: req.GetGroupId(),
+		UserId:  req.GetUserId(),
+		List:    result,
+		Number:  uint64(len(result)),
+		Offset:  req.GetOffset() + uint64(len(result)),
 	}, nil
 }
 
@@ -106,6 +116,7 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 	}
 	if len(list) != 0 {
 		return &api.GetUserItemsResponse{
+			UserId: req.GetUserId(),
 			List:   nil,
 			Number: 0,
 			Offset: req.GetOffset(),
@@ -123,6 +134,7 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 		result = append(result, item)
 	}
 	return &api.GetUserItemsResponse{
+		UserId: req.GetUserId(),
 		List:   result,
 		Number: uint64(len(result)),
 		Offset: req.GetOffset() + uint64(len(result)),
@@ -141,10 +153,40 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 }
 
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	item := &models.Item{
+		GroupID:     req.GetGroupId(),
+		ProjectID:   req.GetProjectId(),
+		UserID:      req.GetUserId(),
+		Title:       "test",
+		Description: "test",
+		ItemType:    api.ItemType_ShortWord,
+	}
+	err = models.UpdateItemVisable(repo, req.GetItemId(), api.VisibleType_Public)
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateItemResponse{
+		Info: convert.ConvertItemToInfo(item),
+	}, nil
 }
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	item := &models.Item{
+		GroupID:     req.GetGroupId(),
+		ProjectID:   req.GetProjectId(),
+		UserID:      req.GetUserId(),
+		Title:       "test",
+		Description: "test",
+		ItemType:    api.ItemType_ShortWord,
+	}
+	err = models.CreateItem(repo, item)
+	if err != nil {
+		return nil, err
+	}
+	return &api.CreateItemResponse{
+		Info: convert.ConvertItemToInfo(item),
+	}, nil
 }
 func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error) {
 	repo := models.NewRepository(ctx)
