@@ -9,11 +9,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ESDoc interface {
+type ElasticDoc interface {
 	Index() string
 	UpdateIndex() string
 	Type() string
-	ESID() string
+	ElasticID() string
 	Template() (string, error)
 	LastUsedTime() uint32
 	SetLastUsedTime(uint32)
@@ -64,7 +64,7 @@ func Init(address []string) {
 	}
 }
 
-func GetMultiDocByIds(ctx context.Context, esDoc ESDoc, IDList []string) (results map[string]ESDoc, err error) {
+func GetMultiDocByIds(ctx context.Context, esDoc ElasticDoc, IDList []string) (results map[string]ElasticDoc, err error) {
 	multiReq := GetClient().MultiGet()
 	for idx := range IDList {
 		multiReq.Add(elastic.NewMultiGetItem().Index(esDoc.Index()).Type(esDoc.Type()).Id(IDList[idx]))
@@ -76,14 +76,14 @@ func GetMultiDocByIds(ctx context.Context, esDoc ESDoc, IDList []string) (result
 	if len(resp.Docs) == 0 {
 		return nil, nil
 	}
-	results = make(map[string]ESDoc, len(resp.Docs))
+	results = make(map[string]ElasticDoc, len(resp.Docs))
 	for _, doc := range resp.Docs {
 		if doc.Source == nil {
 			continue
 		}
 		switch esDoc.(type) {
-		// case *model.Courier, model.Courier:
-		// 	var ret = new(model.Courier)
+		// case some model:
+		// 	var ret = new(model)
 		// 	err = json.Unmarshal(*doc.Source, ret)
 		// 	results[ret.ESID()] = ret
 

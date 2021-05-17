@@ -600,6 +600,10 @@ func (m *WordDetail) Validate() error {
 		return nil
 	}
 
+	// no validation rules for Content
+
+	// no validation rules for Length
+
 	return nil
 }
 
@@ -664,6 +668,10 @@ func (m *PictureDetail) Validate() error {
 	if m == nil {
 		return nil
 	}
+
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Size
 
 	return nil
 }
@@ -730,6 +738,12 @@ func (m *VideoDetail) Validate() error {
 		return nil
 	}
 
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Size
+
+	// no validation rules for TimeLength
+
 	return nil
 }
 
@@ -787,20 +801,24 @@ var _ interface {
 	ErrorName() string
 } = VideoDetailValidationError{}
 
-// Validate checks the field values on MusicDetail with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
-func (m *MusicDetail) Validate() error {
+// Validate checks the field values on MusicShareDetail with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *MusicShareDetail) Validate() error {
 	if m == nil {
 		return nil
 	}
 
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Source
+
 	return nil
 }
 
-// MusicDetailValidationError is the validation error returned by
-// MusicDetail.Validate if the designated constraints aren't met.
-type MusicDetailValidationError struct {
+// MusicShareDetailValidationError is the validation error returned by
+// MusicShareDetail.Validate if the designated constraints aren't met.
+type MusicShareDetailValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -808,22 +826,22 @@ type MusicDetailValidationError struct {
 }
 
 // Field function returns field value.
-func (e MusicDetailValidationError) Field() string { return e.field }
+func (e MusicShareDetailValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e MusicDetailValidationError) Reason() string { return e.reason }
+func (e MusicShareDetailValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e MusicDetailValidationError) Cause() error { return e.cause }
+func (e MusicShareDetailValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e MusicDetailValidationError) Key() bool { return e.key }
+func (e MusicShareDetailValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e MusicDetailValidationError) ErrorName() string { return "MusicDetailValidationError" }
+func (e MusicShareDetailValidationError) ErrorName() string { return "MusicShareDetailValidationError" }
 
 // Error satisfies the builtin error interface
-func (e MusicDetailValidationError) Error() string {
+func (e MusicShareDetailValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -835,14 +853,14 @@ func (e MusicDetailValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sMusicDetail.%s: %s%s",
+		"invalid %sMusicShareDetail.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = MusicDetailValidationError{}
+var _ error = MusicShareDetailValidationError{}
 
 var _ interface {
 	Field() string
@@ -850,7 +868,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = MusicDetailValidationError{}
+} = MusicShareDetailValidationError{}
 
 // Validate checks the field values on VoiceDetail with the rules defined in
 // the proto definition for this message. If any rules are violated, an error
@@ -859,6 +877,12 @@ func (m *VoiceDetail) Validate() error {
 	if m == nil {
 		return nil
 	}
+
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Size
+
+	// no validation rules for TimeLength
 
 	return nil
 }
@@ -924,6 +948,10 @@ func (m *ShareDetail) Validate() error {
 	if m == nil {
 		return nil
 	}
+
+	// no validation rules for ResourceUrl
+
+	// no validation rules for Source
 
 	return nil
 }

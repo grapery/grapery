@@ -23,7 +23,9 @@ func NewItemService() *ItemService {
 }
 
 type ItemServer interface {
-	GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemsResponse, err error)
+	GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error)
+	GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error)
+	GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error)
 	GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error)
 	UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error)
 	CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error)
@@ -34,14 +36,14 @@ type ItemServer interface {
 
 type ItemService struct{}
 
-func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (resp *api.GetItemsResponse, err error) {
+func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
 	list, err := models.GetItemByProject(repo, req.GetProjectId(), int(req.GetOffset()), int(req.GetNumber()))
 	if err != nil {
 		return nil, err
 	}
 	if len(list) != 0 {
-		return &api.GetItemsResponse{
+		return &api.GetProjectItemsResponse{
 			List:   nil,
 			Number: 0,
 			Offset: req.GetOffset(),
@@ -58,7 +60,69 @@ func (it *ItemService) GetItems(ctx context.Context, req *api.GetItemsRequest) (
 		item.Title = list[idx].Description
 		result = append(result, item)
 	}
-	return &api.GetItemsResponse{
+	return &api.GetProjectItemsResponse{
+		List:   result,
+		Number: uint64(len(result)),
+		Offset: req.GetOffset() + uint64(len(result)),
+	}, nil
+}
+
+func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error) {
+	repo := models.NewRepository(ctx)
+	list, err := models.GetItemByGroup(repo, req.GetGroupId(), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	if len(list) != 0 {
+		return &api.GetGroupItemsResponse{
+			List:   nil,
+			Number: 0,
+			Offset: req.GetOffset(),
+		}, nil
+	}
+	result := make([]*api.ItemInfo, 0, len(list))
+	for idx := range list {
+		item := new(api.ItemInfo)
+		item.UserId = list[idx].UserID
+		item.Content = nil
+		item.GroupId = list[idx].GroupID
+		item.ProjectId = list[idx].ProjectID
+		item.Itype = list[idx].ItemType
+		item.Title = list[idx].Description
+		result = append(result, item)
+	}
+	return &api.GetGroupItemsResponse{
+		List:   result,
+		Number: uint64(len(result)),
+		Offset: req.GetOffset() + uint64(len(result)),
+	}, nil
+}
+
+func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error) {
+	repo := models.NewRepository(ctx)
+	list, err := models.GetItemByProject(repo, req.GetUserId(), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	if len(list) != 0 {
+		return &api.GetUserItemsResponse{
+			List:   nil,
+			Number: 0,
+			Offset: req.GetOffset(),
+		}, nil
+	}
+	result := make([]*api.ItemInfo, 0, len(list))
+	for idx := range list {
+		item := new(api.ItemInfo)
+		item.UserId = list[idx].UserID
+		item.Content = nil
+		item.GroupId = list[idx].GroupID
+		item.ProjectId = list[idx].ProjectID
+		item.Itype = list[idx].ItemType
+		item.Title = list[idx].Description
+		result = append(result, item)
+	}
+	return &api.GetUserItemsResponse{
 		List:   result,
 		Number: uint64(len(result)),
 		Offset: req.GetOffset() + uint64(len(result)),
@@ -92,8 +156,7 @@ func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemReques
 }
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
 	repo := models.NewRepository(ctx)
-	item := &models.Item{}
-	err = models.CreateItem(repo, item)
+	err = models.CreateItemLiker(repo, req.GetProjectId(), req.GetItemId(), req.GetUserId())
 	if err != nil {
 		return nil, err
 	}
@@ -101,5 +164,10 @@ func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (
 }
 
 func (it *ItemService) UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
-	return nil, nil
+	repo := models.NewRepository(ctx)
+	err = models.DeleteItemLiker(repo, req.GetProjectId(), req.GetItemId(), req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	return &api.LikeItemResponse{}, nil
 }

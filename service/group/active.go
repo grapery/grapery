@@ -5,10 +5,25 @@ import (
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
+
+	"github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/pkg/group"
 	"github.com/grapery/grapery/utils"
 )
 
-// star,unstar,share,watch,unwatch,join,leave,following,unfollowing,
-func GetActives(ctx *utils.Context) {
-
+func GetGroupActives(ctx *utils.Context) {
+	req := &api.GetGroupActivesRequest{}
+	err := ctx.GinC.ShouldBindJSON(req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	info, err := group.GetGroupServer().GetGroupActives(ctx.Ctx, req)
+	if err != nil {
+		ctx.Err = err
+		return
+	}
+	ctx.Err = nil
+	ctx.Resp = info
+	return
 }
