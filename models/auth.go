@@ -64,7 +64,7 @@ func (a *Auth) UpdatePwd() error {
 }
 
 func (a *Auth) GetByEmail() error {
-	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
+	if err := database.Table(a.TableName()).Find(a).Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return errors.ErrAuthNotFound
 		}
