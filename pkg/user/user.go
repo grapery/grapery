@@ -3,10 +3,9 @@ package user
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
+	log "github.com/sirupsen/logrus"
 )
 
 var userServer UserServer
