@@ -29,7 +29,7 @@ func (a Active) TableName() string {
 }
 
 func (a *Active) Create() error {
-	if err := database.Create(a).Error; err != nil {
+	if err := database.Model(Active{}).Create(a).Error; err != nil {
 		log.Errorf("create new active [%d] failed : [%s]", a.ID, err.Error())
 		return fmt.Errorf("create new active [%d] failed: %s", a.ID, err.Error())
 	}
@@ -37,14 +37,14 @@ func (a *Active) Create() error {
 }
 
 func (a *Active) Get() error {
-	if err := database.First(a).Error; err != nil {
+	if err := database.Model(Active{}).First(a).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (a *Active) Delete() error {
-	if err := database.Model(a).Update("deleted", 1); err != nil {
+	if err := database.Model(Active{}).Update("deleted", 1); err != nil {
 		log.Errorf("update active [%d] deleted failed ", a.ID)
 		return fmt.Errorf("deleted active [%d] failed ", a.ID)
 	}
@@ -54,7 +54,7 @@ func (a *Active) Delete() error {
 
 func GetAcviteByUserID(userID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := database.Where("user_id = ? and delete = 0", userID).Scan(ret).Error; err != nil {
+	if err := database.Model(Active{}).Where("user_id = ? and delete = 0", userID).Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] active failed ", userID)
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func GetAcviteByUserID(userID uint64) (*[]*Active, error) {
 
 func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := database.Where("created_at < ? and  created_at > ? and delete = 0", end, start).Scan(ret).Error; err != nil {
+	if err := database.Model(Active{}).Where("created_at < ? and  created_at > ? and delete = 0", end, start).Scan(ret).Error; err != nil {
 		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error
 
 func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := database.Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).Scan(ret).Error; err != nil {
+	if err := database.Model(Active{}).Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] active type [%d] failed ", creatorID, activeType)
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, e
 
 func GetAcviteByProjectID(projectID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := database.Where("project_id = ? and delete = 0", projectID).Scan(ret).Error; err != nil {
+	if err := database.Model(Active{}).Where("project_id = ? and delete = 0", projectID).Scan(ret).Error; err != nil {
 		log.Errorf("get project [%d] active failed ", projectID)
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func GetAcviteByProjectID(projectID uint64) (*[]*Active, error) {
 
 func GetAcviteByGroupID(groupID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := database.Where("group_id = ? and delete = 0", groupID).Scan(ret).Error; err != nil {
+	if err := database.Model(Active{}).Where("group_id = ? and delete = 0", groupID).Scan(ret).Error; err != nil {
 		log.Errorf("get group [%d] active failed ", groupID)
 		return nil, err
 	}

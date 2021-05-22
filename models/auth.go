@@ -3,10 +3,11 @@ package models
 import (
 	"fmt"
 
-	api "github.com/grapery/grapery/api"
-	"github.com/grapery/grapery/utils/errors"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+
+	api "github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/utils/errors"
 )
 
 type Auth struct {
@@ -26,7 +27,7 @@ func (a Auth) TableName() string {
 }
 
 func (a *Auth) CreateWithPhone() error {
-	err := database.Create(a).Error
+	err := database.Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
 		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
 		return errors.ErrCreateAuthFailed
@@ -47,7 +48,7 @@ func IsUserAuthExist(account string) bool {
 }
 
 func (a *Auth) CreateWithEmail() error {
-	err := database.Create(a).Error
+	err := database.Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
 		log.Errorf("create auth [%s] failed [%s] ", a.Email, err.Error())
 		return errors.ErrCreateAuthFailed
