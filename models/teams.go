@@ -15,3 +15,27 @@ type Team struct {
 func (t Team) TableName() string {
 	return "Team"
 }
+
+func (t *Team) CreateTeam() error {
+	return nil
+}
+
+func (t *Team) UpdateTeam() error {
+	return nil
+}
+
+func (t *Team) DeleteTeam() error {
+	return nil
+}
+
+func (t *Team) GetTeam() error {
+	return nil
+}
+
+func GetTeamsByName(name string) ([]*Team, error) {
+	return nil, nil
+}
+
+func GetTeamsByCreator(userId uint64) ([]*Team, error) {
+	return nil, nil
+}

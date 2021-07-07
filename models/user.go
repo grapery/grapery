@@ -10,12 +10,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type ChatSetting int
+
+const (
+	NoLimit           ChatSetting = 0
+	AtleastOneGroup   ChatSetting = 1
+	AtleastThreeGroup ChatSetting = 2
+	Forbiden          ChatSetting = 4
+)
+
 /*
-普通用户：
-机器人用户：
-*/
+ */
 type User struct {
-	IDBase
+	IDBase       `json:"id_base,omitempty"`
 	Name         string         `json:"name,omitempty" gorm:"index"`
 	Email        string         `json:"email,omitempty" gorm:"index"`
 	Phone        string         `json:"phone,omitempty" gorm:"index"`
