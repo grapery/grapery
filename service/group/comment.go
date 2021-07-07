@@ -9,7 +9,14 @@ import (
 	"github.com/grapery/grapery/utils"
 )
 
-// star,unstar,share,watch,unwatch,join,leave,following,unfollowing,
-func GetComment(ctx *utils.Context) {
+func GetUserAllComments(ctx *utils.Context) {
+
+}
+
+func GetItemAllComments(ctx *utils.Context) {
+
+}
+
+func GetReplyComments(ctx *utils.Context) {
 
 }
