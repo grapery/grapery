@@ -68,7 +68,6 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&Project{})
 	database.AutoMigrate(&Item{})
-	database.AutoMigrate(&ShareItem{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
 	database.AutoMigrate(&Question{})
