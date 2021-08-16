@@ -1,3 +1,4 @@
 grapes-app
 .idea/*
 .DS_Store
+.vscode
