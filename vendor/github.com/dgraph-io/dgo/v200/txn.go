@@ -48,6 +48,9 @@ var (
 type Txn struct {
 	context *api.TxnContext
 
+	keys  map[string]struct{}
+	preds map[string]struct{}
+
 	finished   bool
 	mutated    bool
 	readOnly   bool
@@ -63,6 +66,8 @@ func (d *Dgraph) NewTxn() *Txn {
 		dg:      d,
 		dc:      d.anyClient(),
 		context: &api.TxnContext{},
+		keys:    make(map[string]struct{}),
+		preds:   make(map[string]struct{}),
 	}
 }
 
@@ -168,12 +173,13 @@ func (txn *Txn) Do(ctx context.Context, req *api.Request) (*api.Response, error)
 
 	ctx = txn.dg.getContext(ctx)
 	req.StartTs = txn.context.StartTs
+	req.Hash = txn.context.Hash
 
 	// Append the GRPC Response headers to the responses. Needed for Slash.
 	appendHdr := func(hdrs *metadata.MD, resp *api.Response) {
 		if resp != nil {
 			resp.Hdrs = make(map[string]*api.ListOfString)
-			for k,v := range *hdrs {
+			for k, v := range *hdrs {
 				resp.Hdrs[k] = &api.ListOfString{Value: v}
 			}
 		}
@@ -260,14 +266,21 @@ func (txn *Txn) mergeContext(src *api.TxnContext) error {
 		return nil
 	}
 
+	txn.context.Hash = src.Hash
+
 	if txn.context.StartTs == 0 {
 		txn.context.StartTs = src.StartTs
 	}
 	if txn.context.StartTs != src.StartTs {
 		return errors.New("StartTs mismatch")
 	}
-	txn.context.Keys = append(txn.context.Keys, src.Keys...)
-	txn.context.Preds = append(txn.context.Preds, src.Preds...)
+
+	for _, key := range src.Keys {
+		txn.keys[key] = struct{}{}
+	}
+	for _, pred := range src.Preds {
+		txn.preds[pred] = struct{}{}
+	}
 	return nil
 }
 
@@ -278,6 +291,16 @@ func (txn *Txn) commitOrAbort(ctx context.Context) error {
 	txn.finished = true
 	if !txn.mutated {
 		return nil
+	}
+
+	txn.context.Keys = make([]string, 0, len(txn.keys))
+	for key := range txn.keys {
+		txn.context.Keys = append(txn.context.Keys, key)
+	}
+
+	txn.context.Preds = make([]string, 0, len(txn.preds))
+	for pred := range txn.preds {
+		txn.context.Preds = append(txn.context.Preds, pred)
 	}
 
 	ctx = txn.dg.getContext(ctx)

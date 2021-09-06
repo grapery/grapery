@@ -6,7 +6,6 @@ import (
 	"github.com/boj/redistore"
 	"github.com/gin-contrib/sessions"
 	"github.com/gomodule/redigo/redis"
-	gsessions "github.com/gorilla/sessions"
 )
 
 type Store interface {
@@ -62,12 +61,12 @@ type store struct {
 }
 
 // GetRedisStore get the actual woking store.
-//
 // Ref: https://godoc.org/github.com/boj/redistore#RediStore
 func GetRedisStore(s Store) (err error, rediStore *redistore.RediStore) {
 	realStore, ok := s.(*store)
 	if !ok {
 		err = errors.New("unable to get the redis store: Store isn't *store")
+		return
 	}
 
 	rediStore = realStore.RediStore
@@ -86,11 +85,5 @@ func SetKeyPrefix(s Store, prefix string) error {
 }
 
 func (c *store) Options(options sessions.Options) {
-	c.RediStore.Options = &gsessions.Options{
-		Path:     options.Path,
-		Domain:   options.Domain,
-		MaxAge:   options.MaxAge,
-		Secure:   options.Secure,
-		HttpOnly: options.HttpOnly,
-	}
+	c.RediStore.Options = options.ToGorillaOptions()
 }

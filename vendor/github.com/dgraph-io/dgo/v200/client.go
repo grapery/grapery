@@ -105,16 +105,16 @@ func DialSlashGraphQLEndpoint(endpoint, key string) (*Dgraph, error) {
 	return dg, nil
 }
 
-// Login logs in the current client using the provided credentials.
-// Valid for the duration the client is alive.
-func (d *Dgraph) Login(ctx context.Context, userid string, password string) error {
+func (d *Dgraph) login(ctx context.Context, userid string, password string,
+	namespace uint64) error {
 	d.jwtMutex.Lock()
 	defer d.jwtMutex.Unlock()
 
 	dc := d.anyClient()
 	loginRequest := &api.LoginRequest{
-		Userid:   userid,
-		Password: password,
+		Userid:    userid,
+		Password:  password,
+		Namespace: namespace,
 	}
 	resp, err := dc.Login(ctx, loginRequest)
 	if err != nil {
@@ -122,6 +122,26 @@ func (d *Dgraph) Login(ctx context.Context, userid string, password string) erro
 	}
 
 	return d.jwt.Unmarshal(resp.Json)
+}
+
+// GetJwt returns back the JWT for the dgraph client.
+func (d *Dgraph) GetJwt() api.Jwt {
+	d.jwtMutex.RLock()
+	defer d.jwtMutex.RUnlock()
+	return d.jwt
+}
+
+// Login logs in the current client using the provided credentials into default namespace (0).
+// Valid for the duration the client is alive.
+func (d *Dgraph) Login(ctx context.Context, userid string, password string) error {
+	return d.login(ctx, userid, password, 0)
+}
+
+// LoginIntoNamespace logs in the current client using the provided credentials.
+// Valid for the duration the client is alive.
+func (d *Dgraph) LoginIntoNamespace(ctx context.Context, userid string, password string,
+	namespace uint64) error {
+	return d.login(ctx, userid, password, namespace)
 }
 
 // Alter can be used to do the following by setting various fields of api.Operation:
@@ -145,6 +165,12 @@ func (d *Dgraph) Alter(ctx context.Context, op *api.Operation) error {
 	}
 
 	return err
+}
+
+// Relogin relogin the current client using the refresh token. This can be used when the
+// access-token gets expired.
+func (d *Dgraph) Relogin(ctx context.Context) error {
+	return d.retryLogin(ctx)
 }
 
 func (d *Dgraph) retryLogin(ctx context.Context) error {
@@ -177,11 +203,9 @@ func (d *Dgraph) getContext(ctx context.Context) context.Context {
 			// no metadata key is in the context, add one
 			md = metadata.New(nil)
 		}
-
 		md.Set("accessJwt", d.jwt.AccessJwt)
 		return metadata.NewOutgoingContext(ctx, md)
 	}
-
 	return ctx
 }
 
