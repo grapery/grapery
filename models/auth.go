@@ -26,7 +26,7 @@ func (a Auth) TableName() string {
 }
 
 func (a *Auth) CreateWithPhone() error {
-	err := database.Table(Auth{}.TableName()).Create(a).Error
+	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
 		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
 		return errors.ErrCreateAuthFailed
@@ -36,7 +36,7 @@ func (a *Auth) CreateWithPhone() error {
 
 func IsUserAuthExist(account string) bool {
 	var count int64
-	err := database.Table(Auth{}.TableName()).Where("email = ? or phone = ?", account, account).Count(&count).Error
+	err := DataBase().Table(Auth{}.TableName()).Where("email = ? or phone = ?", account, account).Count(&count).Error
 	if err != gorm.ErrRecordNotFound {
 		return false
 	}
@@ -47,7 +47,7 @@ func IsUserAuthExist(account string) bool {
 }
 
 func (a *Auth) CreateWithEmail() error {
-	err := database.Table(Auth{}.TableName()).Create(a).Error
+	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
 		log.Errorf("create auth [%s] failed [%s] ", a.Email, err.Error())
 		return errors.ErrCreateAuthFailed
@@ -56,7 +56,7 @@ func (a *Auth) CreateWithEmail() error {
 }
 
 func (a *Auth) UpdatePwd() error {
-	if err := database.Table(a.TableName()).Update("password", a.Password).Where("is_valid = ? and uid = ?", true, a.UID).Error; err != nil {
+	if err := DataBase().Table(a.TableName()).Update("password", a.Password).Where("is_valid = ? and uid = ?", true, a.UID).Error; err != nil {
 		log.Errorf("update password failed : [%s]", err.Error())
 		return fmt.Errorf("update user [%d] password failed : [%s]", a.UID, err.Error())
 	}
@@ -64,7 +64,7 @@ func (a *Auth) UpdatePwd() error {
 }
 
 func (a *Auth) GetByEmail() error {
-	if err := database.Table(a.TableName()).Find(a).Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
+	if err := DataBase().Table(a.TableName()).Find(a).Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return errors.ErrAuthNotFound
 		}
@@ -75,7 +75,7 @@ func (a *Auth) GetByEmail() error {
 }
 
 func (a *Auth) GetByPhone() error {
-	if err := database.Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).First(a).Error; err != nil {
+	if err := DataBase().Table(a.TableName()).Find(a).Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%s] info failed : [%s]", a.Phone, err)
 		return fmt.Errorf("get auth [%s] info failed ", a.Phone)
 	}
@@ -83,7 +83,7 @@ func (a *Auth) GetByPhone() error {
 }
 
 func (a *Auth) GetByUID() error {
-	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
+	if err := DataBase().Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
 	}
@@ -91,7 +91,7 @@ func (a *Auth) GetByUID() error {
 }
 
 func (a *Auth) Delete() error {
-	if err := database.Table(a.TableName()).Update("deleted", 1).Where("is_valid = ? ", true); err != nil {
+	if err := DataBase().Table(a.TableName()).Update("deleted", 1).Where("is_valid = ? ", true); err != nil {
 		log.Errorf("update auth [%d] deleted failed ", a.ID)
 		return fmt.Errorf("deleted auth [%d] failed ", a.ID)
 	}

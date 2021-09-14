@@ -41,7 +41,7 @@ func (p Project) TableName() string {
 }
 
 func (p *Project) Create() error {
-	err := database.Model(p).Create(p).Error
+	err := DataBase().Model(p).Create(p).Error
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (p *Project) Create() error {
 }
 
 func (p *Project) UpdateDesc() error {
-	err := database.Model(p).Update("short_desc", p.ShortDesc).
+	err := DataBase().Model(p).Update("short_desc", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func (p *Project) UpdateDesc() error {
 }
 
 func (p *Project) UpdateTitle() error {
-	err := database.Model(p).Update("title", p.ShortDesc).
+	err := DataBase().Model(p).Update("title", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (p *Project) UpdateTitle() error {
 }
 
 func (p *Project) UpdateAchieve() error {
-	err := database.Model(p).Update("is_achieve", p.ShortDesc).
+	err := DataBase().Model(p).Update("is_achieve", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (p *Project) UpdateAchieve() error {
 }
 
 func (p *Project) UpdateIsClose() error {
-	err := database.Model(p).Update("is_close", p.ShortDesc).
+	err := DataBase().Model(p).Update("is_close", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (p *Project) UpdateIsClose() error {
 }
 
 func (p *Project) UpdateIsPrivate() error {
-	err := database.Model(p).Update("is_private", p.ShortDesc).
+	err := DataBase().Model(p).Update("is_private", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func (p *Project) UpdateIsPrivate() error {
 }
 
 func (p *Project) Get() error {
-	err := database.First(p).Where("id = ? and deleted = ?", p.ID, 0).Error
+	err := DataBase().First(p).Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (p *Project) Get() error {
 }
 
 func (p *Project) GetProfile() error {
-	err := database.First(p).
+	err := DataBase().First(p).
 		Select(
 			"description",
 			"avatar",
@@ -120,7 +120,7 @@ func (p *Project) GetProfile() error {
 }
 
 func (p *Project) UpdateProfile() error {
-	err := database.Model(p).
+	err := DataBase().Model(p).
 		Update("description", p.Description).
 		Update("avatar", p.Avatar).
 		Update("watching_count", p.WatchingCount).
@@ -137,7 +137,7 @@ func (p *Project) UpdateProfile() error {
 }
 
 func (p *Project) IncreaseWatcher() error {
-	err := database.Model(p).
+	err := DataBase().Model(p).
 		UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
 		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
@@ -147,7 +147,7 @@ func (p *Project) IncreaseWatcher() error {
 }
 
 func (p *Project) DecreaseWatcher() error {
-	err := database.Model(p).
+	err := DataBase().Model(p).
 		UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
 		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
@@ -157,7 +157,7 @@ func (p *Project) DecreaseWatcher() error {
 }
 
 func (p *Project) Delete() error {
-	err := database.Model(p).Update("deleted", p.Deleted).
+	err := DataBase().Model(p).Update("deleted", p.Deleted).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (p *Project) Delete() error {
 
 func GetProjectListByName(name string, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("name like %?% and deleted = ?", name, 0).
+	err = DataBase().Model(&Project{}).Where("name like %?% and deleted = ?", name, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func GetProjectListByName(name string, offset, number int) (list []*Project, err
 
 // func GetProjectListByTag(tags string, offset, number int) (list []*Project, err error) {
 // 	list = make([]*Project, 0)
-// 	err = database.Model(&Project{}).Where("name like %?%", tags).Offset(offset).Limit(number).Scan(&list).Error
+// 	err = DataBase().Model(&Project{}).Where("name like %?%", tags).Offset(offset).Limit(number).Scan(&list).Error
 // 	if err != nil {
 // 		return nil, err
 // 	}
@@ -186,7 +186,7 @@ func GetProjectListByName(name string, offset, number int) (list []*Project, err
 
 func GetProjectListByCreator(creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("creator_id = ? and deleted = ?", creatorID, 0).
+	err = DataBase().Model(&Project{}).Where("creator_id = ? and deleted = ?", creatorID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func GetProjectListByCreator(creatorID int, offset, number int) (list []*Project
 
 func GetProjectListByOwner(ownerID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("owner_id = ? and deleted = ?", ownerID, 0).
+	err = DataBase().Model(&Project{}).Where("owner_id = ? and deleted = ?", ownerID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func GetProjectListByOwner(ownerID int, offset, number int) (list []*Project, er
 
 func GetGroupProjectListByName(groupID int, name string, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("group_id = ? and name = ? and deleted = ?", groupID, name, 0).
+	err = DataBase().Model(&Project{}).Where("group_id = ? and name = ? and deleted = ?", groupID, name, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func GetGroupProjectListByName(groupID int, name string, offset, number int) (li
 
 func GetGroupProjects(groupID int64, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).
+	err = DataBase().Model(&Project{}).
 		Where("group_id = ?  and deleted = ?", groupID, 0).
 		Offset(offset).
 		Limit(number).
@@ -230,7 +230,7 @@ func GetGroupProjects(groupID int64, offset, number int) (list []*Project, err e
 
 func GetAllProjects(offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).
+	err = DataBase().Model(&Project{}).
 		Where("deleted = ?", 0).
 		Offset(offset).
 		Limit(number).
@@ -245,7 +245,7 @@ func GetAllProjects(offset, number int) (list []*Project, err error) {
 
 // func GetGroupProjectListByTag(groupID int, tags string, offset, number int) (list []*Project, err error) {
 // 	list = make([]*Project, 0)
-// 	err = database.Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).
+// 	err = DataBase().Model(&Project{}).Where("group_id = ? and tags = ? and deleted = ?", groupID, tags, 0).
 // 		Offset(offset).Limit(number).Scan(&list).Error
 // 	if err != nil {
 // 		return nil, err
@@ -255,7 +255,7 @@ func GetAllProjects(offset, number int) (list []*Project, err error) {
 
 func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
+	err = DataBase().Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int)
 
 func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("group_id = ? and owner_id = ? and deleted = ?", groupID, ownerID, 0).
+	err = DataBase().Model(&Project{}).Where("group_id = ? and owner_id = ? and deleted = ?", groupID, ownerID, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -286,7 +286,7 @@ func (p ProjectWatcher) TableName() string {
 
 func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project, err error) {
 	plist := make([]*ProjectWatcher, 0)
-	err = database.Model(&ProjectWatcher{}).Where("user_id = ? and deleted = ?", userId, 0).
+	err = DataBase().Model(&ProjectWatcher{}).Where("user_id = ? and deleted = ?", userId, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -296,7 +296,7 @@ func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project,
 		pidList = append(pidList, val.ProjectID)
 	}
 	list = make([]*Project, 0)
-	err = database.Model(&Project{}).Where("project_id in (?) and deleted = ?", pidList, userId, 0).
+	err = DataBase().Model(&Project{}).Where("project_id in (?) and deleted = ?", pidList, userId, 0).
 		Offset(offset).Limit(number).Scan(&list).Error
 	if err != nil {
 		return nil, err
@@ -310,11 +310,11 @@ func StartWatchingProject(userID, groupID, projectId uint64) error {
 		GroupID:   groupID,
 		ProjectID: projectId,
 	}
-	err := database.Model(p).Create(p).Error
+	err := DataBase().Model(p).Create(p).Error
 	if err != nil {
 		return err
 	}
-	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
+	err = DataBase().Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
 		Where("id = ?", projectId).Where("group_id", groupID).Error
 	if err != nil {
 		return err
@@ -328,11 +328,11 @@ func StopWatchingProject(userID, groupID, projectId uint64) error {
 		GroupID:   groupID,
 		ProjectID: projectId,
 	}
-	err := database.Model(p).Delete(p).Error
+	err := DataBase().Model(p).Delete(p).Error
 	if err != nil {
 		return err
 	}
-	err = database.Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
+	err = DataBase().Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
 		Where("id = ?", projectId).Where("group_id", groupID).Error
 	if err != nil {
 		return err

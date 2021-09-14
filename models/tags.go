@@ -22,7 +22,7 @@ func (t Tags) TableName() string {
 }
 
 func (a *Tags) Create() error {
-	if err := database.Create(a).Error; err != nil {
+	if err := DataBase().Create(a).Error; err != nil {
 		log.Errorf("create new tag [%d] failed : [%s]", a.ID, err.Error())
 		return fmt.Errorf("create new tag [%d] failed: %s", a.ID, err.Error())
 	}
@@ -30,7 +30,7 @@ func (a *Tags) Create() error {
 }
 
 func (a *Tags) Get() error {
-	if err := database.First(a).Error; err != nil {
+	if err := DataBase().First(a).Error; err != nil {
 		return err
 	}
 	return nil
@@ -38,7 +38,7 @@ func (a *Tags) Get() error {
 
 func GetTagsByTitleInProject(projectID uint64, title string) ([]*Tags, error) {
 	var ret = new([]*Tags)
-	if err := database.Where("project_id = ? and delete = 0 and title like %?%", projectID, title).
+	if err := DataBase().Where("project_id = ? and delete = 0 and title like %?%", projectID, title).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] tag failed ", projectID)
 		return nil, err
@@ -49,7 +49,7 @@ func GetTagsByTitleInProject(projectID uint64, title string) ([]*Tags, error) {
 
 func GetTagsByTitleInGroup(groupID uint64, title string) ([]*Tags, error) {
 	var ret = new([]*Tags)
-	if err := database.Where("group_id = ? and delete = 0 and title like %?%", groupID, title).
+	if err := DataBase().Where("group_id = ? and delete = 0 and title like %?%", groupID, title).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] tag failed ", groupID)
 		return nil, err
@@ -60,7 +60,7 @@ func GetTagsByTitleInGroup(groupID uint64, title string) ([]*Tags, error) {
 
 func GetTagsByGroup(groupID uint64) ([]*Tags, error) {
 	var ret = new([]*Tags)
-	if err := database.Where("group_id = ? and delete = 0", groupID).
+	if err := DataBase().Where("group_id = ? and delete = 0", groupID).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] tag failed ", groupID)
 		return nil, err
@@ -71,7 +71,7 @@ func GetTagsByGroup(groupID uint64) ([]*Tags, error) {
 
 func GetTagsByProject(projectID uint64) ([]*Tags, error) {
 	var ret = new([]*Tags)
-	if err := database.Where("project_id = ? and delete = 0", projectID).
+	if err := DataBase().Where("project_id = ? and delete = 0", projectID).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] tag failed ", projectID)
 		return nil, err
@@ -81,7 +81,7 @@ func GetTagsByProject(projectID uint64) ([]*Tags, error) {
 }
 
 func (a *Tags) Delete() error {
-	if err := database.Model(a).Update("deleted", 1); err != nil {
+	if err := DataBase().Model(a).Update("deleted", 1); err != nil {
 		log.Errorf("update tag [%d] deleted failed ", a.ID)
 		return fmt.Errorf("deleted tag [%d] failed ", a.ID)
 	}
