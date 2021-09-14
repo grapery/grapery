@@ -12,14 +12,13 @@ import (
 
 type Auth struct {
 	IDBase
-	UID       uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
-	Email     string       `json:"email,omitempty" gorm:"unique_index"`
-	Phone     string       `json:"phone,omitempty" gorm:"unique_index"`
-	Password  string       `json:"-" gorm:"password"`
-	Salt      string       `json:"-" gorm:"salt"`
-	IsValid   bool         `json:"is_valid,omitempty"`
-	AuthType  api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
-	Confirmed bool         `json:"confirmed,omitempty"`
+	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
+	Email    string       `json:"email,omitempty" gorm:"unique_index"`
+	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
+	Password string       `json:"-" gorm:"password"`
+	Salt     string       `json:"-" gorm:"salt"`
+	IsValid  bool         `json:"is_valid,omitempty"`
+	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
 }
 
 func (a Auth) TableName() string {
@@ -87,14 +86,6 @@ func (a *Auth) GetByUID() error {
 	if err := database.Table(a.TableName()).Find(a).Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
 		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
-	}
-	return nil
-}
-
-func (a *Auth) ConfirmAuth() error {
-	if err := database.Table(a.TableName()).Update("confirmed", a.Confirmed).Where("uid = ? and deleted = ? ", a.UID, true).Error; err != nil {
-		log.Errorf("update confirmed failed : [%s]", err.Error())
-		return fmt.Errorf("update user [%d] confirmed failed : [%s]", a.UID, err.Error())
 	}
 	return nil
 }
