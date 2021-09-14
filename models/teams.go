@@ -39,3 +39,22 @@ func GetTeamsByName(name string) ([]*Team, error) {
 func GetTeamsByCreator(userId uint64) ([]*Team, error) {
 	return nil, nil
 }
+
+type TeamMemeber struct {
+}
+
+func (t TeamMemeber) TableName() string {
+	return "Team"
+}
+
+func (t *TeamMemeber) AddTeamMember() error {
+	return nil
+}
+
+func (t *TeamMemeber) DeleteTeamMember() error {
+	return nil
+}
+
+func (t *TeamMemeber) GetTeamMembers() error {
+	return nil
+}

@@ -67,13 +67,13 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Active{})
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&Project{})
+	database.AutoMigrate(&GroupMember{})
 	database.AutoMigrate(&Item{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
 	database.AutoMigrate(&Question{})
 	database.AutoMigrate(&Team{})
-	//database = database.Scopes(createOp, updateOp, deleteFilter)
-	//database.SetLogger(log.New())
+	database.AutoMigrate(&TeamMemeber{})
 	return nil
 }
 
