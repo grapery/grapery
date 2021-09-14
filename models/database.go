@@ -121,7 +121,7 @@ func NewRepository(ctx context.Context) *Repository {
 
 func DataBase() *gorm.DB {
 	if database == nil {
-		log.Warn("database connector not init")
+		log.Panic("database connector not init")
 		return nil
 	}
 	return database
