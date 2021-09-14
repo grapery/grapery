@@ -44,7 +44,7 @@ type TeamMemeber struct {
 }
 
 func (t TeamMemeber) TableName() string {
-	return "Team"
+	return "team_member"
 }
 
 func (t *TeamMemeber) AddTeamMember() error {
