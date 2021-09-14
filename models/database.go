@@ -74,6 +74,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Question{})
 	database.AutoMigrate(&Team{})
 	database.AutoMigrate(&TeamMemeber{})
+	database.AutoMigrate(&Topic{})
 	return nil
 }
 
