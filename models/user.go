@@ -6,8 +6,9 @@ import (
 	"fmt"
 	_ "time"
 
-	"github.com/grapery/grapery/api"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/api"
 )
 
 type ChatSetting int
@@ -22,22 +23,23 @@ const (
 /*
  */
 type User struct {
-	IDBase       `json:"id_base,omitempty"`
-	Name         string         `json:"name,omitempty" gorm:"index"`
-	Email        string         `json:"email,omitempty" gorm:"index"`
-	Phone        string         `json:"phone,omitempty" gorm:"index"`
-	Gender       int            `json:"gender,omitempty"`
-	BioID        string         `json:"bio,omitempty"`
-	Status       api.UserStatus `json:"status,omitempty"`
-	Location     string         `json:"location,omitempty"`
-	Emotion      int            `json:"emotion,omitempty"`
-	Avatar       string         `json:"avatar,omitempty"`
-	URL          string         `json:"url,omitempty"`
-	NumFollowing int            `json:"num_following,omitempty"`
-	NumProjects  int            `json:"num_projects,omitempty"`
-	NumGroup     int            `json:"num_group,omitempty"`
-	NumTeams     int            `json:"num_teams,omitempty"`
-	ShortDesc    string         `json:"short_desc,omitempty"`
+	IDBase   `json:"id_base,omitempty"`
+	Name     string         `json:"name,omitempty" gorm:"index"`
+	Email    string         `json:"email,omitempty" gorm:"index"`
+	Phone    string         `json:"phone,omitempty" gorm:"index"`
+	Gender   int            `json:"gender,omitempty"`
+	BioID    string         `json:"bio,omitempty"`
+	Status   api.UserStatus `json:"status,omitempty"`
+	Location string         `json:"location,omitempty"`
+	Emotion  int            `json:"emotion,omitempty"`
+	Avatar   string         `json:"avatar,omitempty"`
+
+	URL          string `json:"url,omitempty"`
+	NumFollowing int    `json:"num_following,omitempty"`
+	NumProjects  int    `json:"num_projects,omitempty"`
+	NumGroup     int    `json:"num_group,omitempty"`
+	NumTeams     int    `json:"num_teams,omitempty"`
+	ShortDesc    string `json:"short_desc,omitempty"`
 }
 
 func (u User) TableName() string {
