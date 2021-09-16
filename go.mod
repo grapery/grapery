@@ -25,7 +25,7 @@ require (
 	github.com/olivere/elastic v6.2.35+incompatible
 	github.com/openzipkin/zipkin-go v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.10.0
+	github.com/prometheus/common v0.10.0 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/zsais/go-gin-prometheus v0.1.0 // indirect
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b // indirect
@@ -36,6 +36,7 @@ require (
 	google.golang.org/grpc v1.34.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0 // indirect
 	google.golang.org/protobuf v1.25.0
+	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/driver/mysql v1.0.5
