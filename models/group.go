@@ -122,8 +122,10 @@ func (g *Group) Delete() error {
 
 type GroupMember struct {
 	IDBase
-	GroupID uint64 `json:"group_id,omitempty"`
-	UserID  uint64 `json:"user_id,omitempty"`
+	GroupID  uint64 `json:"group_id,omitempty"`
+	UserID   uint64 `json:"user_id,omitempty"`
+	Nickname string
+	Role     int64
 }
 
 func (g GroupMember) TableName() string {

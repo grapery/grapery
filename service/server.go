@@ -123,6 +123,17 @@ func (s *Service) Run(cfg *config.Config) error {
 
 			}
 		}
+
+		teamsGroup := groupRoute.Group("/:id/team")
+		{
+			teamsGroup.GET("/:team_id", utils.WrapHandler(group.GetProject))
+			teamsGroup.POST("", utils.WrapHandler(group.CreateProject))
+			teamsGroup.PUT("/:team_id", utils.WrapHandler(group.UpdateGroup))
+			teamsGroup.DELETE("/:team_id", utils.WrapHandler(group.DeleteProject))
+
+			teamsGroup.GET("/:team_id/profile", utils.WrapHandler(group.GetProject))
+			teamsGroup.PUT("/:team_id/profile", utils.WrapHandler(group.CreateProject))
+		}
 		groupRoute.GET("/:id/projects/search", utils.WrapHandler(group.SearchProject))
 	}
 	v1Route.GET("/groups/search", group.SearchGroup)
