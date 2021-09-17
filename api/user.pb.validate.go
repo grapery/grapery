@@ -648,7 +648,7 @@ func (m *ResetPasswordRequest) Validate() error {
 
 	// no validation rules for LoginType
 
-	// no validation rules for UserId
+	// no validation rules for Account
 
 	// no validation rules for OldPwd
 
@@ -721,7 +721,9 @@ func (m *ResetPasswordResponse) Validate() error {
 		return nil
 	}
 
-	// no validation rules for UserId
+	// no validation rules for Account
+
+	// no validation rules for Status
 
 	return nil
 }
@@ -791,6 +793,8 @@ func (m *UserInfoRequest) Validate() error {
 	}
 
 	// no validation rules for UserId
+
+	// no validation rules for Account
 
 	return nil
 }

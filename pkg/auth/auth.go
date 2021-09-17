@@ -101,11 +101,19 @@ func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*a
 
 func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
 	info := new(models.Auth)
-	info.ID = uint(req.GetUserId())
-	err := info.GetByUID()
+	var err error
+	if req.GetLoginType() == api.AuthType_WithEmail {
+		info.Email = req.GetAccount()
+		err = info.GetByEmail()
+	} else if req.GetLoginType() == api.AuthType_WithPhone {
+		info.Phone = req.GetAccount()
+		err = info.GetByPhone()
+
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	if info.Password == req.GetOldPwd() {
 		info.Password = req.GetNewPwd()
 	} else {
@@ -113,10 +121,14 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	}
 	err = info.UpdatePwd()
 	if err != nil {
-		return nil, err
+		return &api.ResetPasswordResponse{
+			Account: req.GetAccount(),
+			Status:  -1,
+		}, err
 	}
 	return &api.ResetPasswordResponse{
-		UserId: req.GetUserId(),
+		Account: req.GetAccount(),
+		Status:  0,
 	}, nil
 }
 
