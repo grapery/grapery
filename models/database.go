@@ -140,24 +140,3 @@ func updateOp(db *gorm.DB) {
 func deleteFilter(db *gorm.DB) {
 	db.Where("deleted = ?", 0)
 }
-
-type Status string
-
-const (
-	StatusOnline       Status = "online"
-	StatusIdle         Status = "idle"
-	StatusDoNotDisturb Status = "dnd"
-	StatusInvisible    Status = "invisible"
-	StatusOffline      Status = "offline"
-)
-
-type EmbedType string
-
-const (
-	EmbedTypeRich    EmbedType = "rich"
-	EmbedTypeImage   EmbedType = "image"
-	EmbedTypeVideo   EmbedType = "video"
-	EmbedTypeGifv    EmbedType = "gifv"
-	EmbedTypeArticle EmbedType = "article"
-	EmbedTypeLink    EmbedType = "link"
-)
