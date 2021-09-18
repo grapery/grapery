@@ -30,11 +30,11 @@ func Init(uname, pwd, dbname string) error {
 		return nil
 	}
 	newLogger := logger.New(
-		log.StandardLogger(), // io writer
+		log.StandardLogger(),
 		logger.Config{
-			SlowThreshold: time.Second, // 慢 SQL 阈值
-			LogLevel:      logger.Info, // Log level
-			Colorful:      true,        // 禁用彩色打印
+			SlowThreshold: time.Second,
+			LogLevel:      logger.Info,
+			Colorful:      true,
 		},
 	)
 	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, dbname)

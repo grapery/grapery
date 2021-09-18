@@ -70,6 +70,14 @@ func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProje
 	}, nil
 }
 func (p *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (resp *api.UpdateProjectResponse, err error) {
+	project := &models.Project{
+		GroupID: req.GetGroupId(),
+	}
+	project.ID = uint(req.GetProjectId())
+	err = project.Get()
+	if err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 func (p *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (resp *api.DeleteProjectResponse, err error) {
@@ -84,7 +92,31 @@ func (p *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProje
 	return &api.DeleteProjectResponse{}, nil
 }
 func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (resp *api.GetProjectProfileResponse, err error) {
-	return nil, nil
+	project := &models.Project{
+		GroupID: req.GetGroupId(),
+	}
+	project.ID = uint(req.GetProjectId())
+	err = project.Get()
+	if err != nil {
+		return nil, err
+	}
+	resp = new(api.GetProjectProfileResponse)
+	resp.GroupId = req.GetGroupId()
+	resp.ProjectId = req.GetProjectId()
+	resp.UserId = req.UserId
+	resp.Info = &api.ProjectProfileInfo{
+		ProjectId:     req.GetProjectId(),
+		GroupId:       uint32(req.GetGroupId()),
+		Description:   project.Description,
+		WatchingCount: project.WatchingCount,
+		InvolvedCount: project.InvolvedCount,
+		Avatar:        project.Avatar,
+		Visable:       project.Visable,
+		IsAchieve:     project.IsAchieve,
+		IsClose:       project.IsClose,
+		IsPrivate:     project.IsPrivate,
+	}
+	return resp, nil
 }
 func (p *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error) {
 	return nil, nil
