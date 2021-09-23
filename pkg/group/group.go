@@ -38,6 +38,10 @@ type GroupServer interface {
 	JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error)
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
 	SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error)
+
+	QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 }
 
 type GroupService struct {
@@ -290,5 +294,15 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.SearchGr
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
 	// check elastic,then search database
+	return nil, nil
+}
+
+func (g *GroupService) QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+	return nil, nil
+}
+func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+	return nil, nil
+}
+func (g *GroupService) QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
 	return nil, nil
 }
