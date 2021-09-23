@@ -111,6 +111,18 @@ github.com/pkg/errors
 github.com/sirupsen/logrus
 # github.com/ugorji/go/codec v1.1.7
 github.com/ugorji/go/codec
+# go.uber.org/atomic v1.7.0
+go.uber.org/atomic
+# go.uber.org/multierr v1.6.0
+go.uber.org/multierr
+# go.uber.org/zap v1.19.1
+## explicit
+go.uber.org/zap
+go.uber.org/zap/buffer
+go.uber.org/zap/internal/bufferpool
+go.uber.org/zap/internal/color
+go.uber.org/zap/internal/exit
+go.uber.org/zap/zapcore
 # golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 golang.org/x/crypto/sha3
 # golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
