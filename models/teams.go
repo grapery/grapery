@@ -17,6 +17,10 @@ func (t Team) TableName() string {
 }
 
 func (t *Team) CreateTeam() error {
+	err := DataBase().Model(t).Create(t).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -41,6 +45,10 @@ func GetTeamsByCreator(userId uint64) ([]*Team, error) {
 }
 
 type TeamMemeber struct {
+	IDBase
+	TeamID  uint64 `json:"team_id,omitempty"`
+	UserId  uint64 `json:"user_id,omitempty"`
+	GroupID uint64 `json:"group_id,omitempty"`
 }
 
 func (t TeamMemeber) TableName() string {
@@ -57,4 +65,16 @@ func (t *TeamMemeber) DeleteTeamMember() error {
 
 func (t *TeamMemeber) GetTeamMembers() error {
 	return nil
+}
+
+type ChatRoom struct {
+	IDBase
+	TeamID uint64 `json:"team_id,omitempty"`
+	Avator string `json:"avator,omitempty"`
+}
+
+type ChatContext struct {
+	IDBase
+	TeamID uint64 `json:"team_id,omitempty"`
+	RefID  uint64 `json:"ref_id,omitempty"`
 }
