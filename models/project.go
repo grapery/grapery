@@ -186,8 +186,11 @@ func GetProjectListByName(name string, offset, number int) (list []*Project, err
 
 func GetProjectListByCreator(creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("creator_id = ? and deleted = ?", creatorID, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("creator_id = ? and deleted = ?", creatorID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -196,8 +199,11 @@ func GetProjectListByCreator(creatorID int, offset, number int) (list []*Project
 
 func GetProjectListByOwner(ownerID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("owner_id = ? and deleted = ?", ownerID, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("owner_id = ? and deleted = ?", ownerID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -206,8 +212,11 @@ func GetProjectListByOwner(ownerID int, offset, number int) (list []*Project, er
 
 func GetGroupProjectListByName(groupID int, name string, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("group_id = ? and name = ? and deleted = ?", groupID, name, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("group_id = ? and name = ? and deleted = ?", groupID, name, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +264,11 @@ func GetAllProjects(offset, number int) (list []*Project, err error) {
 
 func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("group_id = ? and creator_id = ? and deleted = ?", groupID, creatorID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -265,8 +277,11 @@ func GeGroupProjectListByCreator(groupID int, creatorID int, offset, number int)
 
 func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) (list []*Project, err error) {
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("group_id = ? and owner_id = ? and deleted = ?", groupID, ownerID, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("group_id = ? and owner_id = ? and deleted = ?", groupID, ownerID, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -286,8 +301,11 @@ func (p ProjectWatcher) TableName() string {
 
 func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project, err error) {
 	plist := make([]*ProjectWatcher, 0)
-	err = DataBase().Model(&ProjectWatcher{}).Where("user_id = ? and deleted = ?", userId, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&ProjectWatcher{}).
+		Where("user_id = ? and deleted = ?", userId, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +314,11 @@ func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project,
 		pidList = append(pidList, val.ProjectID)
 	}
 	list = make([]*Project, 0)
-	err = DataBase().Model(&Project{}).Where("project_id in (?) and deleted = ?", pidList, userId, 0).
-		Offset(offset).Limit(number).Scan(&list).Error
+	err = DataBase().Model(&Project{}).
+		Where("project_id in (?) and deleted = ?", pidList, userId, 0).
+		Offset(offset).
+		Limit(number).
+		Scan(&list).Error
 	if err != nil {
 		return nil, err
 	}
@@ -314,8 +335,10 @@ func StartWatchingProject(userID, groupID, projectId uint64) error {
 	if err != nil {
 		return err
 	}
-	err = DataBase().Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
-		Where("id = ?", projectId).Where("group_id", groupID).Error
+	err = DataBase().Model(Project{}).
+		UpdateColumn("watching_count", gorm.Expr("watching_count + ?", 1)).
+		Where("id = ?", projectId).
+		Where("group_id", groupID).Error
 	if err != nil {
 		return err
 	}
@@ -332,8 +355,10 @@ func StopWatchingProject(userID, groupID, projectId uint64) error {
 	if err != nil {
 		return err
 	}
-	err = DataBase().Model(Project{}).UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
-		Where("id = ?", projectId).Where("group_id", groupID).Error
+	err = DataBase().Model(Project{}).
+		UpdateColumn("watching_count", gorm.Expr("watching_count - ?", 1)).
+		Where("id = ?", projectId).
+		Where("group_id", groupID).Error
 	if err != nil {
 		return err
 	}
