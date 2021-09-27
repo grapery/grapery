@@ -32,3 +32,320 @@ var (
 	_ = (*mail.Address)(nil)
 	_ = ptypes.DynamicAny{}
 )
+
+// Validate checks the field values on GetGroupTeamsReq with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *GetGroupTeamsReq) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for UserID
+
+	// no validation rules for Offset
+
+	// no validation rules for Limit
+
+	return nil
+}
+
+// GetGroupTeamsReqValidationError is the validation error returned by
+// GetGroupTeamsReq.Validate if the designated constraints aren't met.
+type GetGroupTeamsReqValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetGroupTeamsReqValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetGroupTeamsReqValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetGroupTeamsReqValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetGroupTeamsReqValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetGroupTeamsReqValidationError) ErrorName() string { return "GetGroupTeamsReqValidationError" }
+
+// Error satisfies the builtin error interface
+func (e GetGroupTeamsReqValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetGroupTeamsReq.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetGroupTeamsReqValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetGroupTeamsReqValidationError{}
+
+// Validate checks the field values on GetGroupTeamsResp with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *GetGroupTeamsResp) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for UserID
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GetGroupTeamsRespValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Limit
+
+	return nil
+}
+
+// GetGroupTeamsRespValidationError is the validation error returned by
+// GetGroupTeamsResp.Validate if the designated constraints aren't met.
+type GetGroupTeamsRespValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetGroupTeamsRespValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetGroupTeamsRespValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetGroupTeamsRespValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetGroupTeamsRespValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetGroupTeamsRespValidationError) ErrorName() string {
+	return "GetGroupTeamsRespValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetGroupTeamsRespValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetGroupTeamsResp.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetGroupTeamsRespValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetGroupTeamsRespValidationError{}
+
+// Validate checks the field values on CreateGroupTeamsReq with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *CreateGroupTeamsReq) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for UserID
+
+	// no validation rules for Name
+
+	return nil
+}
+
+// CreateGroupTeamsReqValidationError is the validation error returned by
+// CreateGroupTeamsReq.Validate if the designated constraints aren't met.
+type CreateGroupTeamsReqValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateGroupTeamsReqValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateGroupTeamsReqValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateGroupTeamsReqValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateGroupTeamsReqValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateGroupTeamsReqValidationError) ErrorName() string {
+	return "CreateGroupTeamsReqValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateGroupTeamsReqValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateGroupTeamsReq.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateGroupTeamsReqValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateGroupTeamsReqValidationError{}
+
+// Validate checks the field values on CreateGroupTeamsResp with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *CreateGroupTeamsResp) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupID
+
+	// no validation rules for UserID
+
+	if v, ok := interface{}(m.GetInfo()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CreateGroupTeamsRespValidationError{
+				field:  "Info",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	return nil
+}
+
+// CreateGroupTeamsRespValidationError is the validation error returned by
+// CreateGroupTeamsResp.Validate if the designated constraints aren't met.
+type CreateGroupTeamsRespValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateGroupTeamsRespValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateGroupTeamsRespValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateGroupTeamsRespValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateGroupTeamsRespValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateGroupTeamsRespValidationError) ErrorName() string {
+	return "CreateGroupTeamsRespValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateGroupTeamsRespValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateGroupTeamsResp.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateGroupTeamsRespValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateGroupTeamsRespValidationError{}
