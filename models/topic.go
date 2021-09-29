@@ -13,3 +13,19 @@ type Topic struct {
 func (t Topic) TableName() string {
 	return "topic"
 }
+
+func (t *Topic) CreateTopic() error {
+	return nil
+}
+
+func (t *Topic) DisableTopic() error {
+	return nil
+}
+
+func (t *Topic) UpdateTopic() error {
+	return nil
+}
+
+func (t *Topic) DeleteTopic() error {
+	return nil
+}

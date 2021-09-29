@@ -46,9 +46,11 @@ func GetTeamsByCreator(userId uint64) ([]*Team, error) {
 
 type TeamMemeber struct {
 	IDBase
-	TeamID  uint64 `json:"team_id,omitempty"`
-	UserId  uint64 `json:"user_id,omitempty"`
-	GroupID uint64 `json:"group_id,omitempty"`
+	TeamID      uint64 `json:"team_id,omitempty"`
+	UserId      uint64 `json:"user_id,omitempty"`
+	GroupID     uint64 `json:"group_id,omitempty"`
+	NickName    string `json:"nick_name,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 func (t TeamMemeber) TableName() string {
@@ -59,22 +61,14 @@ func (t *TeamMemeber) AddTeamMember() error {
 	return nil
 }
 
+func (t *TeamMemeber) UpdateTeamMemberInfo() error {
+	return nil
+}
+
 func (t *TeamMemeber) DeleteTeamMember() error {
 	return nil
 }
 
 func (t *TeamMemeber) GetTeamMembers() error {
 	return nil
-}
-
-type ChatRoom struct {
-	IDBase
-	TeamID uint64 `json:"team_id,omitempty"`
-	Avator string `json:"avator,omitempty"`
-}
-
-type ChatContext struct {
-	IDBase
-	TeamID uint64 `json:"team_id,omitempty"`
-	RefID  uint64 `json:"ref_id,omitempty"`
 }

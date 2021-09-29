@@ -17,8 +17,8 @@ type Auth struct {
 	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
 	Password string       `json:"-" gorm:"password"`
 	Salt     string       `json:"-" gorm:"salt"`
-	IsValid  bool         `json:"is_valid,omitempty"`
 	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
+	Expired  bool         `json:"expired,omitempty"`
 }
 
 func (a Auth) TableName() string {
