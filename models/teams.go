@@ -9,7 +9,7 @@ type Team struct {
 	Title   string `json:"title,omitempty"`
 	Desc    string `json:"desc,omitempty"`
 	DisAble bool   `json:"disable,omitempty"`
-	Expired int64  `json:"expired,omitempty"`
+	Dismiss bool   `json:"dismiss,omitempty"`
 }
 
 func (t Team) TableName() string {
@@ -25,23 +25,86 @@ func (t *Team) CreateTeam() error {
 }
 
 func (t *Team) UpdateTeam() error {
+	err := DataBase().Model(t).
+		Update("desc", t.Desc).
+		Update("title", t.Title).
+		Where("group_id = ? and id = ? and deleted = ?", t.GroupID, t.ID, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *Team) DismissTeam() error {
+	err := DataBase().Model(t).
+		Update("dismiss", t.Dismiss).
+		Where("group_id = ? and id = ? and deleted = ?", t.GroupID, t.ID, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (t *Team) DeleteTeam() error {
+	err := DataBase().Model(t).
+		Update("deleted", 1).
+		Where("group_id = ? and id = ? and deleted = ?", t.GroupID, t.ID, 1).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (t *Team) GetTeam() error {
+	err := DataBase().First(t).Where("id = ? and deleted = ?", t.ID, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func GetTeamsByName(name string) ([]*Team, error) {
-	return nil, nil
+func GetTeamsByName(title string, groupId int64) (list []*Team, err error) {
+	list = make([]*Team, 0)
+	err = DataBase().Model(&Team{}).
+		Where("name like %?% and group_id = ? and deleted = ?", title, groupId, 0).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
-func GetTeamsByCreator(userId uint64) ([]*Team, error) {
-	return nil, nil
+func GetTeamsByCreator(userId int64) (list []*Team, err error) {
+	list = make([]*Team, 0)
+	err = DataBase().Model(&Team{}).
+		Where("user_id = ? and deleted = ?", userId, 0).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetTeamsByCreatorAndGroup(userId int64, groupId int64) (list []*Team, err error) {
+	list = make([]*Team, 0)
+	err = DataBase().Model(&Team{}).
+		Where("user_id = ? and group_id = ? and deleted = ?", userId, groupId, 0).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetTeamsByGroup(groupId int64) (list []*Team, err error) {
+	list = make([]*Team, 0)
+	err = DataBase().Model(&Team{}).
+		Where("and group_id = ? and deleted = ?", groupId, 0).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 type TeamMemeber struct {
@@ -58,17 +121,51 @@ func (t TeamMemeber) TableName() string {
 }
 
 func (t *TeamMemeber) AddTeamMember() error {
+	err := DataBase().Model(t).Create(t).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (t *TeamMemeber) UpdateTeamMemberInfo() error {
+	err := DataBase().Model(t).
+		Update("nick_name", t.NickName).
+		Update("description", t.Description).
+		Where("group_id = ? and team_id = ? and user_id = ? and deleted = ?",
+			t.GroupID, t.TeamID, t.UserId, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (t *TeamMemeber) DeleteTeamMember() error {
+	err := DataBase().Model(t).
+		Update("deleted", 1).
+		Where("group_id = ? and team_id = ? and user_id = ? and deleted = ?",
+			t.GroupID, t.TeamID, t.UserId, 0).Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (t *TeamMemeber) GetTeamMembers() error {
-	return nil
+func GetTeamMembers(groupID int64, teamID int64) (list []*User, err error) {
+	tlist := make([]*TeamMemeber, 0)
+	err = DataBase().Model(&TeamMemeber{}).
+		Where("group_id = ? and team_id = ? and deleted = ?", groupID, teamID, 0).
+		Scan(&tlist).Error
+	if err != nil {
+		return nil, err
+	}
+	userIds := make([]int64, len(tlist), len(tlist))
+	for idx := range tlist {
+		userIds = append(userIds, int64(tlist[idx].UserId))
+	}
+	list, err = GetUsersByIds(userIds)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }

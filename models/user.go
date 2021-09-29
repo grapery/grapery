@@ -140,7 +140,7 @@ func (u *User) Delete() error {
 	return nil
 }
 
-func GetUsersByIds(ids []int) (users []*User, err error) {
+func GetUsersByIds(ids []int64) (users []*User, err error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}

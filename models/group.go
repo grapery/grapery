@@ -252,7 +252,7 @@ func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err err
 }
 
 func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err error) {
-	list := make([]int, 0, number)
+	list := make([]int64, 0, number)
 	err = DataBase().Table(GroupMember{}.TableName()).
 		Select("user_id").
 		Where("group_id = ? and deleted = 0", groupID).

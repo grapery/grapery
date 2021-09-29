@@ -41,7 +41,8 @@ func (p Project) TableName() string {
 }
 
 func (p *Project) Create() error {
-	err := DataBase().Model(p).Create(p).Error
+	err := DataBase().Model(p).
+		Create(p).Error
 	if err != nil {
 		return err
 	}
@@ -49,7 +50,8 @@ func (p *Project) Create() error {
 }
 
 func (p *Project) UpdateDesc() error {
-	err := DataBase().Model(p).Update("short_desc", p.ShortDesc).
+	err := DataBase().Model(p).
+		Update("short_desc", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -58,7 +60,8 @@ func (p *Project) UpdateDesc() error {
 }
 
 func (p *Project) UpdateTitle() error {
-	err := DataBase().Model(p).Update("title", p.ShortDesc).
+	err := DataBase().Model(p).
+		Update("title", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -67,7 +70,8 @@ func (p *Project) UpdateTitle() error {
 }
 
 func (p *Project) UpdateAchieve() error {
-	err := DataBase().Model(p).Update("is_achieve", p.ShortDesc).
+	err := DataBase().Model(p).
+		Update("is_achieve", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -76,7 +80,8 @@ func (p *Project) UpdateAchieve() error {
 }
 
 func (p *Project) UpdateIsClose() error {
-	err := DataBase().Model(p).Update("is_close", p.ShortDesc).
+	err := DataBase().Model(p).
+		Update("is_close", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -85,7 +90,8 @@ func (p *Project) UpdateIsClose() error {
 }
 
 func (p *Project) UpdateIsPrivate() error {
-	err := DataBase().Model(p).Update("is_private", p.ShortDesc).
+	err := DataBase().Model(p).
+		Update("is_private", p.ShortDesc).
 		Where("group_id = ? and id = ? and deleted = ?", p.GroupID, p.ID, 0).Error
 	if err != nil {
 		return err
@@ -94,7 +100,8 @@ func (p *Project) UpdateIsPrivate() error {
 }
 
 func (p *Project) Get() error {
-	err := DataBase().First(p).Where("id = ? and deleted = ?", p.ID, 0).Error
+	err := DataBase().First(p).
+		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
 		return err
 	}
