@@ -1,5 +1,7 @@
 package models
 
+import "errors"
+
 // team才可以实时聊天，但是team中的人员不可以互相加好友
 // team属于一个group,team就类似于协程池一样的东西，一起协作做一件事情
 type Team struct {
@@ -107,6 +109,17 @@ func GetTeamsByGroup(groupId int64) (list []*Team, err error) {
 	return list, nil
 }
 
+func GetTeamsByMultiIds(teamIDs []int64) (list []*Team, err error) {
+	list = make([]*Team, 0)
+	err = DataBase().Model(&Team{}).
+		Where("and id in (?) and deleted = ?", teamIDs, 0).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 type TeamMemeber struct {
 	IDBase
 	TeamID      uint64 `json:"team_id,omitempty"`
@@ -168,4 +181,45 @@ func GetTeamMembers(groupID int64, teamID int64) (list []*User, err error) {
 		return nil, err
 	}
 	return list, nil
+}
+
+func GetUserJoinedTeamIDInGroup(userId, groupId int64) (ids []int64, err error) {
+	tlist := make([]*TeamMemeber, 0)
+	err = DataBase().Model(&TeamMemeber{}).
+		Where("user_id = ? and group_id = ? and deleted = ?", userId, groupId, 0).
+		Scan(&tlist).Error
+	if err != nil {
+		return nil, err
+	}
+	ids = make([]int64, 0, len(tlist))
+	for idx := range tlist {
+		ids = append(ids, int64(tlist[idx].ID))
+	}
+	return ids, nil
+}
+
+func GetUserJoinedTeamInGroup(userId, groupId int64) (list []*Team, err error) {
+	ids, err := GetUserJoinedTeamIDInGroup(userId, groupId)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, errors.New("not joined any team")
+	}
+	list, err = GetTeamsByMultiIds(ids)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func BatchLeaveTeams(userId int64, ids []int64) error {
+	err := DataBase().Model(&TeamMemeber{}).
+		Update("deleted", 1).
+		Where(" team_id in (?) and user_id = ? and deleted = ?",
+			ids, userId, 0).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }
