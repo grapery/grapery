@@ -49,10 +49,12 @@ func (g *Group) Create() error {
 			log.Errorf("query group failed: %s", err.Error())
 			return err
 		}
-		err = DataBase().Table(g.TableName()).Create(g).First(g).Error
-		if err != nil {
-			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
-			return errors.ErrGroupIsAlreadyExist
+		if err == gorm.ErrRecordNotFound {
+			err = DataBase().Table(g.TableName()).Create(g).First(g).Error
+			if err != nil {
+				log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
+				return errors.ErrGroupIsAlreadyExist
+			}
 		}
 	} else {
 		log.Errorf("group [%s] is exist : ", g.ID)

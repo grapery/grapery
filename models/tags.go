@@ -13,6 +13,8 @@ type Tags struct {
 	ProjectID uint64 `json:"project_id,omitempty"`
 	GroupID   uint64 `json:"group_id,omitempty"`
 	Title     string `json:"title,omitempty"`
+	Avator    string `json:"avator,omitempty"`
+	Animation string `json:"animation,omitempty"`
 	Desc      string `json:"desc,omitempty"`
 	DisAble   bool   `json:"disable,omitempty"`
 }
@@ -86,5 +88,14 @@ func (a *Tags) Delete() error {
 		return fmt.Errorf("deleted tag [%d] failed ", a.ID)
 	}
 	log.Infof("delete active [%d] success", a.ID)
+	return nil
+}
+
+func (a *Tags) Disable() error {
+	if err := DataBase().Model(a).Update("disable", 1); err != nil {
+		log.Errorf("update tag [%d] deleted failed ", a.ID)
+		return fmt.Errorf("deleted tag [%d] failed ", a.ID)
+	}
+	log.Infof("disable active [%d] success", a.ID)
 	return nil
 }

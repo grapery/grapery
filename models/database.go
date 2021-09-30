@@ -8,13 +8,18 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	logger "gorm.io/gorm/logger"
 )
 
-var database *gorm.DB
-var sqlDB *sql.DB
+var (
+	database       *gorm.DB
+	sqlDB          *sql.DB
+	logFieldModels = zap.Fields(
+		zap.String("module", "models"))
+)
 
 const (
 	maxIdleConns    = 10

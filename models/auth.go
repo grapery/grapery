@@ -3,11 +3,11 @@ package models
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	api "github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/utils/errors"
+	"github.com/grapery/grapery/utils/log"
 )
 
 type Auth struct {
@@ -29,7 +29,9 @@ func (a Auth) TableName() string {
 func (a *Auth) CreateWithPhone() error {
 	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Phone, err.Error())
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("create auth [%s] failed [%s] ", a.Phone, err.Error()),
+		)
 		return errors.ErrCreateAuthFailed
 	}
 	return nil
@@ -41,6 +43,9 @@ func IsUserAuthExist(account string) bool {
 		Where("email = ? or phone = ?", account, account).
 		Count(&count).Error
 	if err != gorm.ErrRecordNotFound {
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("check user auth [%s] failed [%s] ", account, err.Error()),
+		)
 		return false
 	}
 	if count == 0 {
@@ -52,7 +57,8 @@ func IsUserAuthExist(account string) bool {
 func (a *Auth) CreateWithEmail() error {
 	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
 	if err != nil {
-		log.Errorf("create auth [%s] failed [%s] ", a.Email, err.Error())
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("create auth [%s] with email failed [%s] ", a.Email, err.Error()))
 		return errors.ErrCreateAuthFailed
 	}
 	return nil
@@ -62,7 +68,7 @@ func (a *Auth) UpdatePwd() error {
 	if err := DataBase().Table(a.TableName()).
 		Update("password", a.Password).
 		Where("is_valid = ? and uid = ?", true, a.UID).Error; err != nil {
-		log.Errorf("update password failed : [%s]", err.Error())
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("update password failed : [%s]", err.Error()))
 		return fmt.Errorf("update user [%d] password failed : [%s]", a.UID, err.Error())
 	}
 	return nil
@@ -74,7 +80,9 @@ func (a *Auth) GetByEmail() error {
 		if err == gorm.ErrRecordNotFound {
 			return errors.ErrAuthNotFound
 		}
-		log.Errorf("get auth [%s] info failed : [%s]", a.Email, err)
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("get auth [%s] info failed : [%s]", a.Email, err),
+		)
 		return fmt.Errorf("get auth [%s] info failed ", a.Email)
 	}
 	return nil
@@ -83,7 +91,9 @@ func (a *Auth) GetByEmail() error {
 func (a *Auth) GetByPhone() error {
 	if err := DataBase().Table(a.TableName()).Find(a).
 		Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).First(a).Error; err != nil {
-		log.Errorf("get auth [%s] info failed : [%s]", a.Phone, err)
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("get auth [%s] info failed : [%s]", a.Phone, err),
+		)
 		return fmt.Errorf("get auth [%s] info failed ", a.Phone)
 	}
 	return nil
@@ -92,7 +102,9 @@ func (a *Auth) GetByPhone() error {
 func (a *Auth) GetByUID() error {
 	if err := DataBase().Table(a.TableName()).Find(a).
 		Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
-		log.Errorf("get auth [%d] info failed : [%s]", a.UID, err)
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("get auth [%d] info failed : [%s]", a.UID, err),
+		)
 		return fmt.Errorf("get auth [%d] info failed ", a.UID)
 	}
 	return nil
@@ -101,7 +113,9 @@ func (a *Auth) GetByUID() error {
 func (a *Auth) Delete() error {
 	if err := DataBase().Table(a.TableName()).Update("deleted", 1).
 		Where("is_valid = ? ", true); err != nil {
-		log.Errorf("update auth [%d] deleted failed ", a.ID)
+		log.Log().WithOptions(logFieldModels).Error(
+			fmt.Sprintf("update auth [%d] deleted failed ", a.ID),
+		)
 		return fmt.Errorf("deleted auth [%d] failed ", a.ID)
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
@@ -11,7 +12,11 @@ import (
 	"github.com/grapery/grapery/utils/convert"
 )
 
-var server GroupServer
+var (
+	server         GroupServer
+	logFieldModels = zap.Fields(
+		zap.String("module", "pkg"))
+)
 
 func init() {
 	server = NewGroupService()
@@ -56,12 +61,14 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	if err != nil {
+		log.Error("get group by id error: ", err.Error())
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
+		log.Error("get user info by id failed:", err.Error())
 		return nil, err
 	}
 	return &api.GetGroupResponse{
@@ -95,12 +102,14 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 	group.Name = req.GetName()
 	err = group.GetByName()
 	if err != nil {
+		log.Error("get group by name error: ", err.Error())
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
+		log.Error("get user info by id failed:", err.Error())
 		return nil, err
 	}
 	return &api.GetGroupResponse{
