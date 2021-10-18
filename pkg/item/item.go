@@ -158,7 +158,7 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		GroupID:     req.GetGroupId(),
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
-		Title:       req.GetName(),
+		Title:       req.GetInfo().Title,
 		Description: "test",
 		ItemType:    api.ItemType_ShortWord,
 	}
