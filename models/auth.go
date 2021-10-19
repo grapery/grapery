@@ -90,7 +90,8 @@ func (a *Auth) GetByEmail() error {
 
 func (a *Auth) GetByPhone() error {
 	if err := DataBase().Table(a.TableName()).Find(a).
-		Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).First(a).Error; err != nil {
+		Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).
+		First(a).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("get auth [%s] info failed : [%s]", a.Phone, err),
 		)
@@ -101,7 +102,8 @@ func (a *Auth) GetByPhone() error {
 
 func (a *Auth) GetByUID() error {
 	if err := DataBase().Table(a.TableName()).Find(a).
-		Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).First(a).Error; err != nil {
+		Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).
+		First(a).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("get auth [%d] info failed : [%s]", a.UID, err),
 		)

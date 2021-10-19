@@ -159,7 +159,7 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
 		Title:       req.GetInfo().Title,
-		Description: "test",
+		Description: req.GetInfo().Title,
 		ItemType:    api.ItemType_ShortWord,
 	}
 	err = models.UpdateItemVisable(repo, req.GetItemId(), api.VisibleType_Public)
