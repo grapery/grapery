@@ -146,7 +146,7 @@ func (g GroupMember) TableName() string {
 
 func (g *GroupMember) Create() error {
 	err := DataBase().Table(g.TableName()).
-		Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).
+		Where("group_id = ? and  user_id = ? and deleted = 0", g.GroupID, g.UserID).
 		Find(g).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
@@ -166,7 +166,7 @@ func (g *GroupMember) Create() error {
 
 func (g *GroupMember) IsInGroup() (bool, error) {
 	err := DataBase().Table(g.TableName()).
-		Where("group_id = ? and  user_id = ? and deleted = ?", g.GroupID, g.UserID, 0).
+		Where("group_id = ? and  user_id = ? and deleted = 0", g.GroupID, g.UserID).
 		Find(g).
 		Error
 	if err != nil {
@@ -182,7 +182,7 @@ func (g *GroupMember) IsInGroup() (bool, error) {
 func (g *GroupMember) Delete() error {
 	if err := DataBase().Table(g.TableName()).
 		Update("deleted", 1).
-		Where("user_id = ? and group_id = ? and deleted = ?", g.UserID, g.GroupID, 1).
+		Where("user_id = ? and group_id = ? and deleted = 0", g.UserID, g.GroupID).
 		Error; err != nil {
 		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
 	}
@@ -220,7 +220,7 @@ func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 func GetUserDefaultGroup(userID int) (g *Group, err error) {
 	g = new(Group)
 	err = DataBase().Model(Group{}).
-		Where("creator_id = ? and is_default = ?  and deleted = 0", true, userID).
+		Where("creator_id = ? and is_default = ?  and deleted = 0", userID, true).
 		Scan(g).
 		Error
 	if err != nil {
