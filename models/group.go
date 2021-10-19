@@ -245,7 +245,7 @@ func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err err
 	list = make([]*Group, 0)
 	err = DataBase().Model(&Group{}).
 		Select("*").
-		Where(" group_id in (?)", groupIds).
+		Where("id in (?)", groupIds).
 		Error
 	if err != nil {
 		return nil, err
