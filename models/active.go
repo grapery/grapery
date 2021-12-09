@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grapery/grapery/utils/log"
-
 	api "github.com/grapery/grapery/api"
+	"github.com/grapery/grapery/utils/log"
 )
 
 /* Active
@@ -78,9 +77,11 @@ func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error
 
 func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, error) {
 	var ret = new([]*Active)
-	if err := DataBase().Model(Active{}).
+	if err := DataBase().
+		Model(Active{}).
 		Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).
-		Scan(ret).Error; err != nil {
+		Scan(ret).
+		Error; err != nil {
 		log.Log().WithOptions(logFieldModels).
 			Error(fmt.Sprintf("get user [%d] active type [%d] failed ", creatorID, activeType))
 		return nil, err
