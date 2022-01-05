@@ -2,6 +2,7 @@ package group
 
 import (
 	// "net/http"
+	"context"
 	"net/http"
 
 	_ "github.com/gin-contrib/sessions"
@@ -24,7 +25,7 @@ func SearchGroup(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ret)
 		return
 	}
-	info, err := group.GetGroupServer().GetGroup(ctx, req)
+	info, err := group.GetGroupServer().GetGroup(context.Background(), req)
 	if err != nil {
 		ret.Message = err.Error()
 		ret.Code = http.StatusOK

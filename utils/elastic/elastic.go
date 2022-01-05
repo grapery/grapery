@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grapery/grapery/utils/log"
 	"github.com/olivere/elastic"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+
+	"github.com/grapery/grapery/utils/log"
 )
 
 type ElasticDoc interface {
@@ -31,7 +32,7 @@ type Logger struct {
 }
 
 func (l *Logger) Printf(format string, v ...interface{}) {
-	l.logger.Info(fmt.Sprintf(format, v...))
+	l.logger.Info(fmt.Sprintf(format, v))
 }
 
 type ErrorLogger struct {
@@ -39,7 +40,7 @@ type ErrorLogger struct {
 }
 
 func (l *ErrorLogger) Printf(format string, v ...interface{}) {
-	l.logger.Error(fmt.Sprintf(format, v...))
+	l.logger.Error(fmt.Sprintf(format, v))
 }
 
 func Init(address []string) {
