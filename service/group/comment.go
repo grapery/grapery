@@ -13,3 +13,7 @@ import (
 func GetComment(ctx *utils.Context) {
 
 }
+
+func GetDisscuss(ctx *utils.Context) {
+
+}
