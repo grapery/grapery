@@ -21,7 +21,10 @@ type ElasticDoc interface {
 	SetLastUsedTime(int64)
 }
 
-var client *elastic.Client
+var (
+	client          *elastic.Client
+	IsEnableElastic bool
+)
 
 func GetClient() *elastic.Client {
 	return client

@@ -11,7 +11,7 @@ type ElasticUser struct {
 }
 
 func (e *ElasticUser) Index() string {
-	return "user_index"
+	return e.TableName()
 }
 
 func (e *ElasticUser) Type() string {
@@ -30,10 +30,11 @@ func (e *ElasticUser) SetLastUsedTime(int64) {
 }
 
 type ElasticGroup struct {
+	*models.Group
 }
 
 func (e *ElasticGroup) Index() string {
-	return "group_index"
+	return e.TableName()
 }
 
 func (e *ElasticGroup) Type() string {
@@ -52,10 +53,11 @@ func (e *ElasticGroup) SetLastUsedTime(int64) {
 }
 
 type ElasticProject struct {
+	*models.Project
 }
 
 func (e *ElasticProject) Index() string {
-	return "project_index"
+	return e.TableName()
 }
 
 func (e *ElasticProject) Type() string {
@@ -74,10 +76,11 @@ func (e *ElasticProject) SetLastUsedTime(int64) {
 }
 
 type ElasticTeam struct {
+	*models.Team
 }
 
 func (e *ElasticTeam) Index() string {
-	return "team_index"
+	return e.TableName()
 }
 
 func (e *ElasticTeam) Type() string {
@@ -96,10 +99,11 @@ func (e *ElasticTeam) SetLastUsedTime(int64) {
 }
 
 type ElasticItem struct {
+	*models.Item
 }
 
 func (e *ElasticItem) Index() string {
-	return "item_index"
+	return e.TableName()
 }
 
 func (e *ElasticItem) Type() string {

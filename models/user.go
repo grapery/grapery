@@ -23,7 +23,7 @@ const (
 /*
  */
 type User struct {
-	IDBase   `json:"id_base,omitempty"`
+	IDBase
 	Name     string         `json:"name,omitempty" gorm:"index"`
 	Email    string         `json:"email,omitempty" gorm:"index"`
 	Phone    string         `json:"phone,omitempty" gorm:"index"`
