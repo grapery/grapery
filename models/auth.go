@@ -26,8 +26,8 @@ func (a Auth) TableName() string {
 	return "auth"
 }
 
-func (a *Auth) CreateWithPhone() error {
-	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
+func CreateWithPhone(a *Auth) error {
+	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("create auth [%s] failed [%s] ", a.Phone, err.Error()),
@@ -39,7 +39,7 @@ func (a *Auth) CreateWithPhone() error {
 
 func IsUserAuthExist(account string) bool {
 	var count int64
-	err := DataBase().Table(Auth{}.TableName()).
+	err := DataBase().Model(Auth{}).
 		Where("email = ? or phone = ?", account, account).
 		Count(&count).Error
 	if err != gorm.ErrRecordNotFound {
@@ -54,8 +54,8 @@ func IsUserAuthExist(account string) bool {
 	return true
 }
 
-func (a *Auth) CreateWithEmail() error {
-	err := DataBase().Table(Auth{}.TableName()).Create(a).Error
+func CreateWithEmail(a *Auth) error {
+	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("create auth [%s] with email failed [%s] ", a.Email, err.Error()))
@@ -64,8 +64,8 @@ func (a *Auth) CreateWithEmail() error {
 	return nil
 }
 
-func (a *Auth) UpdatePwd() error {
-	if err := DataBase().Table(a.TableName()).
+func UpdatePwd(a *Auth) error {
+	if err := DataBase().Model(a).
 		Update("password", a.Password).
 		Where("is_valid = ? and uid = ?", true, a.UID).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("update password failed : [%s]", err.Error()))
@@ -74,18 +74,19 @@ func (a *Auth) UpdatePwd() error {
 	return nil
 }
 
-func (a *Auth) GetByEmail() error {
-	if err := DataBase().Table(a.TableName()).Find(a).
-		Where("email = ? and deleted = ? and is_valid = ?", a.Email, 0, true).Error; err != nil {
+func GetByEmail(email string) (*Auth, error) {
+	var a = new(Auth)
+	if err := DataBase().Model(a).Find(a).
+		Where("email = ? and deleted = ? and is_valid = ?", email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.ErrAuthNotFound
+			return nil, errors.ErrAuthNotFound
 		}
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("get auth [%s] info failed : [%s]", a.Email, err),
 		)
-		return fmt.Errorf("get auth [%s] info failed ", a.Email)
+		return nil, fmt.Errorf("get auth [%s] info failed ", email)
 	}
-	return nil
+	return a, nil
 }
 
 func (a *Auth) GetByPhone() error {
