@@ -7,7 +7,7 @@ import (
 
 // Version information.
 var (
-	BuildTS   = time.Now()
+	BuildTS   = time.Now().String()
 	GitHash   = "None"
 	GitBranch = "None"
 	Version   = "None"

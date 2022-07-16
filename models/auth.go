@@ -76,7 +76,7 @@ func UpdatePwd(a *Auth) error {
 
 func GetByEmail(email string) (*Auth, error) {
 	var a = new(Auth)
-	if err := DataBase().Model(a).Find(a).
+	if err := DataBase().Model(a).Where("email = ?", email).Find(a).
 		Where("email = ? and deleted = ? and is_valid = ?", email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
@@ -89,33 +89,44 @@ func GetByEmail(email string) (*Auth, error) {
 	return a, nil
 }
 
-func (a *Auth) GetByPhone() error {
-	if err := DataBase().Table(a.TableName()).Find(a).
-		Where("phone = ? and deleted = ? and is_valid = ?", a.Phone, 0, true).
-		First(a).Error; err != nil {
+func GetByPhone(phone string) (*Auth, error) {
+	var a = new(Auth)
+	if err := DataBase().Model(a).
+		Where("phone = ?", phone).
+		Where("deleted = ?", 0).
+		Where("is_valid = ?", true).
+		Find(a).
+		Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.ErrAuthNotFound
+		}
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("get auth [%s] info failed : [%s]", a.Phone, err),
 		)
-		return fmt.Errorf("get auth [%s] info failed ", a.Phone)
+		return nil, fmt.Errorf("get auth [%s] info failed ", phone)
 	}
-	return nil
+	return a, nil
 }
 
-func (a *Auth) GetByUID() error {
-	if err := DataBase().Table(a.TableName()).Find(a).
-		Where("uid = ? and deleted = ? and is_valid = ?", a.UID, 0, true).
-		First(a).Error; err != nil {
+func GetByUID(id int) (*Auth, error) {
+	var a = new(Auth)
+	if err := DataBase().Model(a).
+		Where("id = ? and deleted = ? and is_valid = ?", id, 0, true).
+		Find(a).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.ErrAuthNotFound
+		}
 		log.Log().WithOptions(logFieldModels).Error(
-			fmt.Sprintf("get auth [%d] info failed : [%s]", a.UID, err),
+			fmt.Sprintf("get auth [%d] info failed : [%s]", id, err),
 		)
-		return fmt.Errorf("get auth [%d] info failed ", a.UID)
+		return nil, fmt.Errorf("get auth [%d] info failed ", id)
 	}
-	return nil
+	return a, nil
 }
 
 func (a *Auth) Delete() error {
 	if err := DataBase().Table(a.TableName()).Update("deleted", 1).
-		Where("is_valid = ? ", true); err != nil {
+		Where("is_valid = ? ", true).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("update auth [%d] deleted failed ", a.ID),
 		)
