@@ -2,3 +2,5 @@ grapes-app
 .idea/*
 .DS_Store
 .vscode
+dev.session.sql
+.idea/vcs.xml

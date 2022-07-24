@@ -2,8 +2,6 @@ package models
 
 import (
 	log "github.com/sirupsen/logrus"
-
-	"github.com/grapery/grapery/utils/errors"
 )
 
 type LikeItem struct {
@@ -27,7 +25,7 @@ func CreateLikeItem(repo *Repository, item *LikeItem) error {
 		return err
 	}
 	if num > 0 {
-		return errors.ErrLikeItemIsExist
+		return nil
 	}
 	err = repo.DB().Model(&LikeItem{}).Create(item).Error
 	if err != nil {

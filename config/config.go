@@ -40,6 +40,14 @@ type Config struct {
 	Elastic  *ElasticConfig `json:"elastic,omitempty"`
 	LogLevel string         `json:"log_level,omitempty"`
 	Port     string         `json:"port,omitempty"`
+	S3Store  *S3Store       `json:"s3store,omitempty"`
+}
+
+type S3Store struct {
+	Token   string
+	Secret  string
+	Bucket  string
+	Address string
 }
 
 func ValiedConfig(cfg *Config) error {
