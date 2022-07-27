@@ -51,7 +51,7 @@ func (a *Active) Delete() error {
 	return nil
 }
 
-func GetAcviteByUserID(userID uint64) (*[]*Active, error) {
+func GetActiveByUserID(userID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("user_id = ? and delete = 0", userID).
@@ -89,7 +89,7 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, e
 	return ret, nil
 }
 
-func GetAcviteByProjectID(projectID uint64) (*[]*Active, error) {
+func GetActiveByProjectID(projectID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("project_id = ? and delete = 0", projectID).
@@ -102,7 +102,7 @@ func GetAcviteByProjectID(projectID uint64) (*[]*Active, error) {
 	return ret, nil
 }
 
-func GetAcviteByGroupID(groupID uint64) (*[]*Active, error) {
+func GetActiveByGroupID(groupID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("group_id = ? and delete = 0", groupID).

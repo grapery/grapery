@@ -190,7 +190,7 @@ func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequ
 }
 
 func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error) {
-	actives, err := models.GetAcviteByGroupID(req.GetGroupId())
+	actives, err := models.GetActiveByGroupID(req.GetGroupId())
 	if err != nil {
 		return nil, err
 	}
