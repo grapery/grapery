@@ -94,7 +94,7 @@ func GetCommentByProject(projectID uint64) (*[]*Comment, error) {
 func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().
-		Where("created_at < ? and  created_at > ? and delete = 0",
+		Where("created_at < ? and created_at > ? and delete = 0",
 			end,
 			start).
 		Find(ret).Error; err != nil {
