@@ -6,12 +6,13 @@ import "errors"
 // team属于一个group,team就类似于协程池一样的东西，一起协作做一件事情
 type Team struct {
 	IDBase
-	UserId  uint64 `json:"user_id,omitempty"`
-	GroupID uint64 `json:"group_id,omitempty"`
-	Title   string `json:"title,omitempty"`
-	Desc    string `json:"desc,omitempty"`
-	DisAble bool   `json:"disable,omitempty"`
-	Dismiss bool   `json:"dismiss,omitempty"`
+	UserId   uint64 `json:"user_id,omitempty"`
+	GroupID  uint64 `json:"group_id,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Desc     string `json:"desc,omitempty"`
+	DisAble  bool   `json:"disable,omitempty"`
+	IsClosed bool   `json:"is_closed"`
+	Dismiss  bool   `json:"dismiss,omitempty"`
 }
 
 func (t Team) TableName() string {

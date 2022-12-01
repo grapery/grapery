@@ -125,7 +125,8 @@ func GetByUID(id int) (*Auth, error) {
 }
 
 func (a *Auth) Delete() error {
-	if err := DataBase().Table(a.TableName()).Update("deleted", 1).
+	if err := DataBase().Table(a.TableName()).
+		Update("deleted", 1).
 		Where("is_valid = ? ", true).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("update auth [%d] deleted failed ", a.ID),
