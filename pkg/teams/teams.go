@@ -17,8 +17,8 @@ func NewTeamService() *TeamService {
 type TeamServer interface {
 	GetTeamMember()
 	GetTeamProfile()
-	// GetGroupTeams()
-	// GetUserTeams()
+	GetGroupTeams()
+	GetUserTeams()
 	CreateTeam()
 	UpdateTeam()
 	DeleteTeam()

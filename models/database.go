@@ -8,13 +8,18 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	logger "gorm.io/gorm/logger"
 )
 
-var database *gorm.DB
-var sqlDB *sql.DB
+var (
+	database       *gorm.DB
+	sqlDB          *sql.DB
+	logFieldModels = zap.Fields(
+		zap.String("module", "models"))
+)
 
 const (
 	maxIdleConns    = 10
@@ -30,11 +35,11 @@ func Init(uname, pwd, dbname string) error {
 		return nil
 	}
 	newLogger := logger.New(
-		log.StandardLogger(), // io writer
+		log.StandardLogger(),
 		logger.Config{
-			SlowThreshold: time.Second, // 慢 SQL 阈值
-			LogLevel:      logger.Info, // Log level
-			Colorful:      true,        // 禁用彩色打印
+			SlowThreshold: time.Second,
+			LogLevel:      logger.Info,
+			Colorful:      true,
 		},
 	)
 	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, dbname)
@@ -67,14 +72,13 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Active{})
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&Project{})
+	database.AutoMigrate(&GroupMember{})
 	database.AutoMigrate(&Item{})
-	database.AutoMigrate(&ShareItem{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
-	database.AutoMigrate(&Question{})
 	database.AutoMigrate(&Team{})
-	//database = database.Scopes(createOp, updateOp, deleteFilter)
-	//database.SetLogger(log.New())
+	database.AutoMigrate(&TeamMemeber{})
+	database.AutoMigrate(&Topic{})
 	return nil
 }
 
@@ -121,7 +125,7 @@ func NewRepository(ctx context.Context) *Repository {
 
 func DataBase() *gorm.DB {
 	if database == nil {
-		log.Warn("database connector not init")
+		log.Panic("database connector not init")
 		return nil
 	}
 	return database

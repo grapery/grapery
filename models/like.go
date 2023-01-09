@@ -2,8 +2,6 @@ package models
 
 import (
 	log "github.com/sirupsen/logrus"
-
-	"github.com/grapery/grapery/utils/errors"
 )
 
 type LikeItem struct {
@@ -21,13 +19,15 @@ func (l LikeItem) TableName() string {
 
 func CreateLikeItem(repo *Repository, item *LikeItem) error {
 	var num int64
-	err := repo.DB().Model(&LikeItem{}).Where("user_id = ? and group_id = ? and project_id = ? and item_id = ?",
-		item.UserID, item.GroupID, item.ProjectID, item.ItemID).Count(&num).Error
+	err := repo.DB().Model(&LikeItem{}).
+		Where("user_id = ? and group_id = ? and project_id = ? and item_id = ?",
+			item.UserID, item.GroupID, item.ProjectID, item.ItemID).
+		Count(&num).Error
 	if err != nil {
 		return err
 	}
 	if num > 0 {
-		return errors.ErrLikeItemIsExist
+		return nil
 	}
 	err = repo.DB().Model(&LikeItem{}).Create(item).Error
 	if err != nil {
@@ -38,7 +38,8 @@ func CreateLikeItem(repo *Repository, item *LikeItem) error {
 }
 
 func DeleteLikeItem(repo *Repository, itemID uint64) error {
-	err := repo.DB().Model(&LikeItem{}).Update("deleted= ? ", 1).
+	err := repo.DB().Model(&LikeItem{}).
+		Update("deleted= ? ", 1).
 		Where("id = ?", itemID).Error
 	if err != nil {
 		log.Error("update like item failed: ", err)
@@ -59,7 +60,19 @@ func GetLikeItem(repo *Repository, itemID uint64) (*LikeItem, error) {
 
 func GetLiteItemByProjectAndUser(repo *Repository, projectID int, userID int) (list []*LikeItem, err error) {
 	list = make([]*LikeItem, 0)
-	err = repo.DB().Model(&LikeItem{}).Where("project_id = ? and user_id = ?", projectID, userID).
+	err = repo.DB().Model(&LikeItem{}).
+		Where("project_id = ? and user_id = ?", projectID, userID).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetLiteItemByUser(repo *Repository, userID int) (list []*LikeItem, err error) {
+	list = make([]*LikeItem, 0)
+	err = repo.DB().Model(&LikeItem{}).
+		Where("user_id = ?", userID).
 		Scan(&list).Error
 	if err != nil {
 		return nil, err

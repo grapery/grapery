@@ -60,11 +60,11 @@ func (auth *AuthService) Register(ctx context.Context, account string, pwd strin
 	if authType == api.AuthType_WithEmail {
 		info.AuthType = api.AuthType_WithEmail
 		info.Email = account
-		err = info.CreateWithEmail()
+		err = models.CreateWithEmail(info)
 	} else if authType == api.AuthType_WithPhone {
 		info.AuthType = api.AuthType_WithPhone
 		info.Phone = account
-		err = info.CreateWithPhone()
+		err = models.CreateWithPhone(info)
 	}
 	if err != nil {
 		return err
@@ -76,18 +76,15 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string, 
 	info := new(models.Auth)
 	var err error
 	if authType == api.AuthType_WithEmail {
-		info.Email = account
-		info.Password = pwd
-		info.AuthType = authType
-		err = info.GetByEmail()
+		info, err = models.GetByEmail(account)
 	} else if authType == api.AuthType_WithPhone {
-		info.Phone = account
-		info.Password = pwd
-		info.AuthType = authType
-		err = info.GetByPhone()
+		info, err = models.GetByPhone(account)
 	}
 	if err != nil {
 		return nil, err
+	}
+	if info.Password != pwd {
+		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	return &api.UserInfo{
 		UserId: uint64(info.ID),
@@ -101,22 +98,32 @@ func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*a
 
 func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
 	info := new(models.Auth)
-	info.ID = uint(req.GetUserId())
-	err := info.GetByUID()
+	var err error
+	if req.GetLoginType() == api.AuthType_WithEmail {
+		info, err = models.GetByEmail(req.GetAccount())
+	} else if req.GetLoginType() == api.AuthType_WithPhone {
+		info, err = models.GetByPhone(req.GetAccount())
+
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	if info.Password == req.GetOldPwd() {
 		info.Password = req.GetNewPwd()
 	} else {
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
-	err = info.UpdatePwd()
+	err = models.UpdatePwd(info)
 	if err != nil {
-		return nil, err
+		return &api.ResetPasswordResponse{
+			Account: req.GetAccount(),
+			Status:  -1,
+		}, err
 	}
 	return &api.ResetPasswordResponse{
-		UserId: req.GetUserId(),
+		Account: req.GetAccount(),
+		Status:  0,
 	}, nil
 }
 

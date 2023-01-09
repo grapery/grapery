@@ -26,6 +26,17 @@ var (
 	CookiePath   = ""
 )
 
+type EmbedType string
+
+const (
+	EmbedTypeRich    EmbedType = "rich"
+	EmbedTypeImage   EmbedType = "image"
+	EmbedTypeVideo   EmbedType = "video"
+	EmbedTypeGifv    EmbedType = "gifv"
+	EmbedTypeArticle EmbedType = "article"
+	EmbedTypeLink    EmbedType = "link"
+)
+
 type Context struct {
 	GinC   *gin.Context
 	Ctx    context.Context

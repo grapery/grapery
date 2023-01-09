@@ -14,7 +14,7 @@ import (
 	"github.com/grapery/grapery/utils"
 )
 
-func SearchGroup(ctx *gin.Context) {
+func SearchTeamInGroup(ctx *gin.Context) {
 	req := &api.GetGroupReqeust{}
 	err := ctx.ShouldBindJSON(req)
 	var ret = new(utils.Result)
@@ -40,7 +40,7 @@ func SearchGroup(ctx *gin.Context) {
 	return
 }
 
-func GetGroup(ctx *utils.Context) {
+func GetGroupTeams(ctx *utils.Context) {
 	req := &api.GetGroupReqeust{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -57,7 +57,7 @@ func GetGroup(ctx *utils.Context) {
 	return
 }
 
-func UpdateGroup(ctx *utils.Context) {
+func CreateGroupTeam(ctx *utils.Context) {
 	req := &api.UpdateGroupInfoRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -74,7 +74,7 @@ func UpdateGroup(ctx *utils.Context) {
 	return
 }
 
-func DeleteGroup(ctx *utils.Context) {
+func DeleteGroupTeam(ctx *utils.Context) {
 	req := &api.DeleteGroupRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -91,24 +91,7 @@ func DeleteGroup(ctx *utils.Context) {
 	return
 }
 
-func CreateGroup(ctx *utils.Context) {
-	req := &api.CreateGroupReqeust{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := group.GetGroupServer().CreateGroup(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetGroupMembers(ctx *utils.Context) {
+func GetTeamMembers(ctx *utils.Context) {
 	req := &api.FetchGroupMembersRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -126,26 +109,7 @@ func GetGroupMembers(ctx *utils.Context) {
 
 }
 
-// dep es cache
-func GetAtGroupMember(ctx *utils.Context) {
-	req := &api.FetchGroupMembersRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := group.GetGroupServer().FetchGroupMembers(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-
-}
-
-func JoinGroup(ctx *utils.Context) {
+func JoinGroupTeam(ctx *utils.Context) {
 	req := &api.JoinGroupRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -162,7 +126,7 @@ func JoinGroup(ctx *utils.Context) {
 	return
 }
 
-func LeaveGroup(ctx *utils.Context) {
+func LeaveGroupTeam(ctx *utils.Context) {
 	req := &api.LeaveGroupRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	if err != nil {
@@ -170,23 +134,6 @@ func LeaveGroup(ctx *utils.Context) {
 		return
 	}
 	info, err := group.GetGroupServer().LeaveGroup(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetGroupProjects(ctx *utils.Context) {
-	req := &api.FetchGroupProjectsReqeust{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := group.GetGroupServer().FetchGroupProjects(ctx.Ctx, req)
 	if err != nil {
 		ctx.Err = err
 		return

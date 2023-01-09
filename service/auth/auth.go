@@ -140,7 +140,7 @@ func ResetPassword(ctx *utils.Context) {
 		ctx.GinC.JSON(http.StatusOK, ret)
 		return
 	}
-	_, err = auth.GetAuthService().ResetPassword(ctx.Ctx, req)
+	resp, err := auth.GetAuthService().ResetPassword(ctx.Ctx, req)
 	if err != nil {
 		ret.Code = -1
 		ret.Message = err.Error()
@@ -150,8 +150,9 @@ func ResetPassword(ctx *utils.Context) {
 	cookie, _ := ctx.GinC.Cookie(utils.CookieName)
 	cache.DelCache(ctx.Ctx, cookie)
 	ret.Message = "ok"
-	ret.Data = api.LoginResponse{
-		UserId: req.GetUserId(),
+	ret.Data = api.ResetPasswordResponse{
+		Account: req.GetAccount(),
+		Status:  resp.GetStatus(),
 	}
 	return
 }

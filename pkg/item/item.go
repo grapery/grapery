@@ -158,8 +158,8 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		GroupID:     req.GetGroupId(),
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
-		Title:       "test",
-		Description: "test",
+		Title:       req.GetInfo().Title,
+		Description: req.GetInfo().Title,
 		ItemType:    api.ItemType_ShortWord,
 	}
 	err = models.UpdateItemVisable(repo, req.GetItemId(), api.VisibleType_Public)
@@ -173,12 +173,11 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
 	repo := models.NewRepository(ctx)
 	item := &models.Item{
-		GroupID:     req.GetGroupId(),
-		ProjectID:   req.GetProjectId(),
-		UserID:      req.GetUserId(),
-		Title:       "test",
-		Description: "test",
-		ItemType:    api.ItemType_ShortWord,
+		GroupID:   req.GetGroupId(),
+		ProjectID: req.GetProjectId(),
+		UserID:    req.GetUserId(),
+		Title:     req.GetName(),
+		ItemType:  api.ItemType_ShortWord,
 	}
 	err = models.CreateItem(repo, item)
 	if err != nil {

@@ -1405,6 +1405,14 @@ func (m *UserProfileInfo) Validate() error {
 		return nil
 	}
 
+	// no validation rules for UserId
+
+	// no validation rules for Ctime
+
+	// no validation rules for Description
+
+	// no validation rules for Avatar
+
 	return nil
 }
 
@@ -1470,6 +1478,10 @@ func (m *GroupProfileInfo) Validate() error {
 		return nil
 	}
 
+	// no validation rules for GroupId
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -1526,3 +1538,77 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GroupProfileInfoValidationError{}
+
+// Validate checks the field values on TeamInfo with the rules defined in the
+// proto definition for this message. If any rules are violated, an error is returned.
+func (m *TeamInfo) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for Name
+
+	// no validation rules for Description
+
+	// no validation rules for Ctime
+
+	// no validation rules for Count
+
+	return nil
+}
+
+// TeamInfoValidationError is the validation error returned by
+// TeamInfo.Validate if the designated constraints aren't met.
+type TeamInfoValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TeamInfoValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TeamInfoValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TeamInfoValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TeamInfoValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TeamInfoValidationError) ErrorName() string { return "TeamInfoValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TeamInfoValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTeamInfo.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TeamInfoValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TeamInfoValidationError{}

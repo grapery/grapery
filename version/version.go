@@ -1,10 +1,13 @@
 package version
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Version information.
 var (
-	BuildTS   = "None"
+	BuildTS   = time.Now().String()
 	GitHash   = "None"
 	GitBranch = "None"
 	Version   = "None"

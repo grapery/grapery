@@ -20,3 +20,7 @@ func GetItemAllComments(ctx *utils.Context) {
 func GetReplyComments(ctx *utils.Context) {
 
 }
+
+func GetDisscuss(ctx *utils.Context) {
+
+}

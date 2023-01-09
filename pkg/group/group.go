@@ -4,6 +4,7 @@ import (
 	"context"
 
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
@@ -11,7 +12,11 @@ import (
 	"github.com/grapery/grapery/utils/convert"
 )
 
-var server GroupServer
+var (
+	server         GroupServer
+	logFieldModels = zap.Fields(
+		zap.String("module", "pkg"))
+)
 
 func init() {
 	server = NewGroupService()
@@ -23,6 +28,12 @@ func GetGroupServer() GroupServer {
 
 func NewGroupService() *GroupService {
 	return &GroupService{}
+}
+
+type ElasticQuery interface {
+	QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
+	QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 }
 
 // need do some log
@@ -38,6 +49,8 @@ type GroupServer interface {
 	JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error)
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
 	SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error)
+
+	ElasticQuery
 }
 
 type GroupService struct {
@@ -48,12 +61,14 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	if err != nil {
+		log.Error("get group by id error: ", err.Error())
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
+		log.Error("get user info by id failed:", err.Error())
 		return nil, err
 	}
 	return &api.GetGroupResponse{
@@ -87,12 +102,14 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 	group.Name = req.GetName()
 	err = group.GetByName()
 	if err != nil {
+		log.Error("get group by name error: ", err.Error())
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
+		log.Error("get user info by id failed:", err.Error())
 		return nil, err
 	}
 	return &api.GetGroupResponse{
@@ -173,7 +190,7 @@ func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequ
 }
 
 func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error) {
-	actives, err := models.GetAcviteByGroupID(req.GetGroupId())
+	actives, err := models.GetActiveByGroupID(req.GetGroupId())
 	if err != nil {
 		return nil, err
 	}
@@ -268,14 +285,29 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 	if err != nil {
 		return nil, err
 	}
-	if isIn {
+	if !isIn {
 		return &api.LeaveGroupResponse{}, nil
+	}
+	teams, err := models.GetUserJoinedTeamInGroup(int64(req.GetGroupId()), int64(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if len(teams) != 0 {
+		return &api.LeaveGroupResponse{}, nil
+	}
+	ids, err := models.GetUserJoinedTeamIDInGroup(int64(req.GetGroupId()), int64(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	err = models.BatchLeaveTeams(int64(req.GetUserId()), ids)
+	if err != nil {
+		return nil, err
 	}
 	err = groupMember.Delete()
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &api.LeaveGroupResponse{}, nil
 }
 
 func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
@@ -290,5 +322,15 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.SearchGr
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
 	// check elastic,then search database
+	return nil, nil
+}
+
+func (g *GroupService) QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+	return nil, nil
+}
+func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+	return nil, nil
+}
+func (g *GroupService) QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
 	return nil, nil
 }
