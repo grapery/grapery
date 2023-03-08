@@ -8,7 +8,7 @@ from tencentcloud.aiart.v20221229 import aiart_client, models
 
 
 try:
-    cred = credential.Credential("AKIDjJfnY4b2HKAmCcy72iAOPccN6i7HCwTm", "85oJZeOuBF8oGTVJtENUN2TikY7WkofN")
+    cred = credential.Credential("", "")
     httpProfile = HttpProfile()
     httpProfile.endpoint = "aiart.tencentcloudapi.com"
     clientProfile = ClientProfile()
