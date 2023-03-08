@@ -75,29 +75,6 @@ func (e *ElasticProject) SetLastUsedTime(int64) {
 
 }
 
-type ElasticTeam struct {
-	*models.Team
-}
-
-func (e *ElasticTeam) Index() string {
-	return e.TableName()
-}
-
-func (e *ElasticTeam) Type() string {
-	return ""
-}
-func (e *ElasticTeam) ElasticID() string {
-	return ""
-}
-
-func (e *ElasticTeam) LastUsedTime() int64 {
-	return 0
-}
-
-func (e *ElasticTeam) SetLastUsedTime(int64) {
-
-}
-
 type ElasticItem struct {
 	*models.Item
 }

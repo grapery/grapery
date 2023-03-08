@@ -288,21 +288,6 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 	if !isIn {
 		return &api.LeaveGroupResponse{}, nil
 	}
-	teams, err := models.GetUserJoinedTeamInGroup(int64(req.GetGroupId()), int64(req.GetUserId()))
-	if err != nil {
-		return nil, err
-	}
-	if len(teams) != 0 {
-		return &api.LeaveGroupResponse{}, nil
-	}
-	ids, err := models.GetUserJoinedTeamIDInGroup(int64(req.GetGroupId()), int64(req.GetUserId()))
-	if err != nil {
-		return nil, err
-	}
-	err = models.BatchLeaveTeams(int64(req.GetUserId()), ids)
-	if err != nil {
-		return nil, err
-	}
 	err = groupMember.Delete()
 	if err != nil {
 		return nil, err

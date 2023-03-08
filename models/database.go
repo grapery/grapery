@@ -76,9 +76,6 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Item{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
-	database.AutoMigrate(&Team{})
-	database.AutoMigrate(&TeamMemeber{})
-	database.AutoMigrate(&Topic{})
 	return nil
 }
 

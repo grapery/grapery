@@ -114,13 +114,6 @@ func GetMultiDocByIds(ctx context.Context, esDoc ElasticDoc, IDList []string) (r
 				return nil, err
 			}
 			results[ret.ElasticID()] = ret
-		case *ElasticTeam:
-			var ret = new(ElasticTeam)
-			err = json.Unmarshal(*doc.Source, ret)
-			if err != nil {
-				return nil, err
-			}
-			results[ret.ElasticID()] = ret
 		case *ElasticItem:
 			var ret = new(ElasticItem)
 			err = json.Unmarshal(*doc.Source, ret)

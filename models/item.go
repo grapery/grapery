@@ -1,8 +1,9 @@
 package models
 
 import (
-	api "github.com/grapery/grapery/api"
 	log "github.com/sirupsen/logrus"
+
+	api "github.com/grapery/grapery/api"
 )
 
 /*
@@ -19,7 +20,7 @@ type Item struct {
 	Description string          `json:"description,omitempty"`
 	ItemType    api.ItemType    `json:"item_type,omitempty"`
 	Content     string          `json:"content,omitempty"`
-	Tags        string          `json:"tags,omitempty"`
+	Tags        []string        `json:"tags,omitempty"`
 	LikeCount   uint64          `json:"like_count,omitempty"`
 }
 
