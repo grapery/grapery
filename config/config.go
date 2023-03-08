@@ -23,20 +23,14 @@ type RedisConfig struct {
 	PingInterval int    `json:"ping_interval,omitempty"`
 }
 
-type GraphDBConfig struct {
-	Address  string `json:"address,omitempty"`
-	Database string `json:"database,omitempty"`
-}
-
 type ElasticConfig struct {
 	Address []string
 }
 
-//Config define common config struct
+// Config define common config struct
 type Config struct {
 	SqlDB    *DBConfig      `json:"sql_db,omitempty"`
 	Redis    *RedisConfig   `json:"redis,omitempty"`
-	GraphDB  *GraphDBConfig `json:"graph,omitempty"`
 	Elastic  *ElasticConfig `json:"elastic,omitempty"`
 	LogLevel string         `json:"log_level,omitempty"`
 	Port     string         `json:"port,omitempty"`
