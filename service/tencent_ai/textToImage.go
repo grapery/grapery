@@ -1,15 +1,15 @@
 package tencentai
 
 import (
-	aiart "github.com/grapery/grapery/utils/tencentcloud-sdk-go/tencentcloud/aiart"
-	common "github.com/grapery/grapery/utils/tencentcloud-sdk-go/tencentcloud/common"
-	profile "github.com/grapery/grapery/utils/tencentcloud-sdk-go/tencentcloud/common/profile"
+	aiart "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/aiart/v"
+	common "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	profile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 func TextToImage() {
 	cred := common.Credential("AKIDjJfnY4b2HKAmCcy72iAOPccN6i7HCwTm", "85oJZeOuBF8oGTVJtENUN2TikY7WkofN")
 	//"aiart.tencentcloudapi.com"
-	clientProfile := profile.ClientProfile()
+	clientProfile := profile.ClientProfile{}
 	aiClient, err := aiart.NewClient(cred, "ap-shanghai", clientProfile)
 	if err != nil {
 		println("new client error: ", err.Error())
