@@ -14,6 +14,7 @@ var (
 	testBaseUrl = "aiart.tencentcloudapi.com"
 	testRegion  = "ap-shanghai"
 	testPrompt  = "木屋,别墅,小溪,秋千,桃园"
+	testPrompt2 = "田野,农夫,高飞的大雁,晴朗的天空"
 	testStyle   = "101"
 	testStyle2  = "201"
 	testSize    = ResolutionLevel_1024_1024
@@ -78,7 +79,7 @@ func TestTencentAI_ImgToImage(t *testing.T) {
 	imageData, err := testClient.ImgToImage(ctx,
 		&PromptParams{
 			InputImage:     string(imageDataSrc),
-			PosttivePrompt: testPrompt,
+			PosttivePrompt: testPrompt2,
 			Styles:         []*string{&testStyle2},
 		},
 		&OutPutParams{
