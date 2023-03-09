@@ -31,15 +31,11 @@ type User struct {
 	BioID    string         `json:"bio,omitempty"`
 	Status   api.UserStatus `json:"status,omitempty"`
 	Location string         `json:"location,omitempty"`
-	Emotion  int            `json:"emotion,omitempty"`
 	Avatar   string         `json:"avatar,omitempty"`
 
-	URL          string `json:"url,omitempty"`
-	NumFollowing int    `json:"num_following,omitempty"`
-	NumProjects  int    `json:"num_projects,omitempty"`
-	NumGroup     int    `json:"num_group,omitempty"`
-	NumTeams     int    `json:"num_teams,omitempty"`
-	ShortDesc    string `json:"short_desc,omitempty"`
+	NumProjects int    `json:"num_projects,omitempty"`
+	NumGroup    int    `json:"num_group,omitempty"`
+	ShortDesc   string `json:"short_desc,omitempty"`
 }
 
 func (u User) TableName() string {

@@ -13,9 +13,9 @@ import (
 var (
 	testBaseUrl = "aiart.tencentcloudapi.com"
 	testRegion  = "ap-shanghai"
-	testPrompt  = "木屋,别墅,小溪,秋千,桃园"
+	testPrompt  = "史诗风格 烈焰凤凰 浴火凤凰 红色眼睛 高清细节 烈火背景"
 	testPrompt2 = "田野,农夫,晴朗的天空"
-	testStyle   = "101"
+	testStyle   = "110"
 	testStyle2  = "201"
 	testSize    = ResolutionLevel_1024_1024
 	testAppId   = ""
