@@ -8,11 +8,11 @@ package api
 
 import (
 	proto "github.com/golang/protobuf/proto"
-	_ "github.com/golang/protobuf/ptypes/timestamp"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	_ "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -28,6 +28,44 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+type DisscussParams struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *DisscussParams) Reset() {
+	*x = DisscussParams{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[0]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DisscussParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisscussParams) ProtoMessage() {}
+
+func (x *DisscussParams) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[0]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisscussParams.ProtoReflect.Descriptor instead.
+func (*DisscussParams) Descriptor() ([]byte, []int) {
+	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{0}
+}
+
 type CreateDisscussReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -37,7 +75,7 @@ type CreateDisscussReq struct {
 func (x *CreateDisscussReq) Reset() {
 	*x = CreateDisscussReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[0]
+		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -50,7 +88,7 @@ func (x *CreateDisscussReq) String() string {
 func (*CreateDisscussReq) ProtoMessage() {}
 
 func (x *CreateDisscussReq) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[0]
+	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,7 +101,7 @@ func (x *CreateDisscussReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDisscussReq.ProtoReflect.Descriptor instead.
 func (*CreateDisscussReq) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{0}
+	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{1}
 }
 
 type CreateDisscusResp struct {
@@ -75,7 +113,7 @@ type CreateDisscusResp struct {
 func (x *CreateDisscusResp) Reset() {
 	*x = CreateDisscusResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[1]
+		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -88,7 +126,7 @@ func (x *CreateDisscusResp) String() string {
 func (*CreateDisscusResp) ProtoMessage() {}
 
 func (x *CreateDisscusResp) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[1]
+	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -101,7 +139,7 @@ func (x *CreateDisscusResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDisscusResp.ProtoReflect.Descriptor instead.
 func (*CreateDisscusResp) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{1}
+	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{2}
 }
 
 type GetDisscusReq struct {
@@ -113,7 +151,7 @@ type GetDisscusReq struct {
 func (x *GetDisscusReq) Reset() {
 	*x = GetDisscusReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[2]
+		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -126,7 +164,7 @@ func (x *GetDisscusReq) String() string {
 func (*GetDisscusReq) ProtoMessage() {}
 
 func (x *GetDisscusReq) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[2]
+	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -139,7 +177,7 @@ func (x *GetDisscusReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDisscusReq.ProtoReflect.Descriptor instead.
 func (*GetDisscusReq) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{2}
+	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{3}
 }
 
 type GetDisscusResp struct {
@@ -151,7 +189,7 @@ type GetDisscusResp struct {
 func (x *GetDisscusResp) Reset() {
 	*x = GetDisscusResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[3]
+		mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -164,7 +202,7 @@ func (x *GetDisscusResp) String() string {
 func (*GetDisscusResp) ProtoMessage() {}
 
 func (x *GetDisscusResp) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[3]
+	mi := &file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -177,7 +215,7 @@ func (x *GetDisscusResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDisscusResp.ProtoReflect.Descriptor instead.
 func (*GetDisscusResp) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{3}
+	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP(), []int{4}
 }
 
 var File_github_com_grapery_grapery_common_protoc_disscuss_proto protoreflect.FileDescriptor
@@ -200,15 +238,16 @@ var file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDesc = []byt
 	0x6f, 0x74, 0x6f, 0x1a, 0x39, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
 	0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f,
 	0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2d, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x2f, 0x76, 0x69,
-	0x65, 0x77, 0x5f, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x13,
-	0x0a, 0x11, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x44, 0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x73,
-	0x52, 0x65, 0x71, 0x22, 0x13, 0x0a, 0x11, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x44, 0x69, 0x73,
-	0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x22, 0x0f, 0x0a, 0x0d, 0x47, 0x65, 0x74, 0x44,
-	0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x71, 0x22, 0x10, 0x0a, 0x0e, 0x47, 0x65, 0x74,
-	0x44, 0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x42, 0x20, 0x5a, 0x1e, 0x67,
-	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
-	0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x77, 0x5f, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x10,
+	0x0a, 0x0e, 0x44, 0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x73, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73,
+	0x22, 0x13, 0x0a, 0x11, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x44, 0x69, 0x73, 0x73, 0x63, 0x75,
+	0x73, 0x73, 0x52, 0x65, 0x71, 0x22, 0x13, 0x0a, 0x11, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x44,
+	0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x22, 0x0f, 0x0a, 0x0d, 0x47, 0x65,
+	0x74, 0x44, 0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x71, 0x22, 0x10, 0x0a, 0x0e, 0x47,
+	0x65, 0x74, 0x44, 0x69, 0x73, 0x73, 0x63, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x42, 0x20, 0x5a,
+	0x1e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70,
+	0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -223,12 +262,13 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescGZIP() 
 	return file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDescData
 }
 
-var file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_github_com_grapery_grapery_common_protoc_disscuss_proto_goTypes = []interface{}{
-	(*CreateDisscussReq)(nil), // 0: grapery.api.CreateDisscussReq
-	(*CreateDisscusResp)(nil), // 1: grapery.api.CreateDisscusResp
-	(*GetDisscusReq)(nil),     // 2: grapery.api.GetDisscusReq
-	(*GetDisscusResp)(nil),    // 3: grapery.api.GetDisscusResp
+	(*DisscussParams)(nil),    // 0: grapery.api.DisscussParams
+	(*CreateDisscussReq)(nil), // 1: grapery.api.CreateDisscussReq
+	(*CreateDisscusResp)(nil), // 2: grapery.api.CreateDisscusResp
+	(*GetDisscusReq)(nil),     // 3: grapery.api.GetDisscusReq
+	(*GetDisscusResp)(nil),    // 4: grapery.api.GetDisscusResp
 }
 var file_github_com_grapery_grapery_common_protoc_disscuss_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -246,7 +286,7 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_init() {
 	file_github_com_grapery_grapery_common_protoc_view_model_proto_init()
 	if !protoimpl.UnsafeEnabled {
 		file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateDisscussReq); i {
+			switch v := v.(*DisscussParams); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -258,7 +298,7 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CreateDisscusResp); i {
+			switch v := v.(*CreateDisscussReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -270,7 +310,7 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetDisscusReq); i {
+			switch v := v.(*CreateDisscusResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -282,6 +322,18 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetDisscusReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_grapery_grapery_common_protoc_disscuss_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetDisscusResp); i {
 			case 0:
 				return &v.state
@@ -300,7 +352,7 @@ func file_github_com_grapery_grapery_common_protoc_disscuss_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_github_com_grapery_grapery_common_protoc_disscuss_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

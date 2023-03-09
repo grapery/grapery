@@ -7,12 +7,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/* Comment
-用户的评论，如果用户的活动是评论的话，评论会被加载
-评论可以针对：
-视频，图片，短说，长文，音乐，项目，问题
-*/
-
 type Comment struct {
 	IDBase
 	UserID    uint64 `json:"user_id,omitempty"`
@@ -21,7 +15,6 @@ type Comment struct {
 	ItemID    int    `json:"item_id,omitempty"`
 	PreID     uint64 `json:"pre_id,omitempty"`
 	Content   []byte `json:"content,omitempty"`
-	Tags      string `json:"tags,omitempty"`
 }
 
 func (c Comment) TableName() string {
