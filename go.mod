@@ -11,6 +11,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/gomarkdown/markdown v0.0.0-20210820032736-385812cbea76
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -30,4 +31,7 @@ require (
 	gorm.io/gorm v1.21.14
 )
 
-replace github.com/tencentcloud/tencentcloud-sdk-go => /Users/grapestree/go/src/github.com/grapery/grapery/utils/tencentcloud/tencentcloud-sdk-go
+replace (
+	github.com/tencentcloud/tencentcloud-sdk-go => /Users/grapestree/go/src/github.com/grapery/grapery/utils/tencentcloud/tencentcloud-sdk-go
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common => /Users/grapestree/go/src/github.com/grapery/grapery/utils/tencentcloud/tencentcloud-sdk-go/tencentcloud/common
+)

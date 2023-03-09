@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v20221229
+package aiart
 
 import (
-    "encoding/json"
-    tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
-    tchttp "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http"
+	"encoding/json"
+
+	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
+	tchttp "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http"
 )
 
 // Predefined struct for user
@@ -57,7 +58,7 @@ type ImageToImageRequestParams struct {
 
 type ImageToImageRequest struct {
 	*tchttp.BaseRequest
-	
+
 	// 输入图base64
 	InputImage *string `json:"InputImage,omitempty" name:"InputImage"`
 
@@ -92,8 +93,8 @@ type ImageToImageRequest struct {
 }
 
 func (r *ImageToImageRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 // FromJsonString It is highly **NOT** recommended to use this function
@@ -133,8 +134,8 @@ type ImageToImageResponse struct {
 }
 
 func (r *ImageToImageResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 // FromJsonString It is highly **NOT** recommended to use this function
@@ -183,7 +184,7 @@ type ResultConfig struct {
 	// 4:3尺寸支持"704:512"，"1024:768"
 	// 16:9尺寸支持"704:448"
 	// 1:2尺寸支持”512:1024“
-	// 
+	//
 	// 注意：此字段可能返回 null，表示取不到有效值。
 	Resolution *string `json:"Resolution,omitempty" name:"Resolution"`
 }
@@ -218,7 +219,7 @@ type TextToImageRequestParams struct {
 
 type TextToImageRequest struct {
 	*tchttp.BaseRequest
-	
+
 	// 输入描述文本，算法会根据文本生成对应的图片。
 	// 不能为空，推荐使用中文。最多可传512个utf-8字符
 	Prompt *string `json:"Prompt,omitempty" name:"Prompt"`
@@ -246,8 +247,8 @@ type TextToImageRequest struct {
 }
 
 func (r *TextToImageRequest) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 // FromJsonString It is highly **NOT** recommended to use this function
@@ -284,8 +285,8 @@ type TextToImageResponse struct {
 }
 
 func (r *TextToImageResponse) ToJsonString() string {
-    b, _ := json.Marshal(r)
-    return string(b)
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 // FromJsonString It is highly **NOT** recommended to use this function

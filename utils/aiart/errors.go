@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v20221229
+package aiart
 
 const (
 	// 此产品的特有错误码
