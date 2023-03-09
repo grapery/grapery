@@ -51,7 +51,6 @@ func (s *Service) Run(cfg *config.Config) error {
 			param.ErrorMessage,
 		)
 	}))
-	app.LoadHTMLGlob("templates/*")
 	app.Use(gin.Recovery())
 	v1Route := app.Group("/api/v1")
 	v1Route.GET("/login", auth.Login)
@@ -62,9 +61,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	v1Route.GET("/help", common.Help)
 	v1Route.GET("/about", common.About)
 	v1Route.GET("/version", common.Version)
-
-	// user 除了基础的用户的信息和关注列表功能，还有一个默认的group的功能，
-	// 用户在自己的空间内创建的都是default的空间
 	userRoute := v1Route.Group("/user")
 	{
 		userRoute.GET("/:id", utils.WrapHandler(user.GetUser))
@@ -78,10 +74,6 @@ func (s *Service) Run(cfg *config.Config) error {
 		//新增加临时会话，可以不用立即添加好友，会话可以设置为多长时间过期，或者会话转为邮件组的形式
 	}
 	v1Route.GET("/users/search", utils.WrapHandler(user.SearchUser))
-	// group 为基础的资源持有结构，project为group中的人员建立的实际包含内容的东西
-	// 类似于进程和线程的关系，每个project里面包含例如active的小项，就类似于协程一样的东西
-	// 可以让组内的多个人员分别运行（或者说处理）不同的任务
-	// 要方便用户参与大量的小组协作，这样多个小组就可以对抗大型组织例如公司或者非法组织
 	groupRoute := v1Route.Group("/group")
 	{
 		groupRoute.POST("", utils.WrapHandler(group.CreateGroup))
@@ -99,40 +91,9 @@ func (s *Service) Run(cfg *config.Config) error {
 			thingsGroup.POST("", utils.WrapHandler(group.CreateProject))
 			thingsGroup.PUT("/:project_id", utils.WrapHandler(group.UpdateGroup))
 			thingsGroup.DELETE("/:project_id", utils.WrapHandler(group.DeleteProject))
-
 			thingsGroup.GET("/:project_id/profile", utils.WrapHandler(group.GetProject))
 			thingsGroup.PUT("/:project_id/profile", utils.WrapHandler(group.CreateProject))
-			thingsGroup.GET("/:project_id/explore", utils.WrapHandler(group.ExploreProjects))
 
-			thingsGroup.PUT("/:project_id/watch", utils.WrapHandler(group.WatchProject))
-
-			thingsGroup.GET("/:project_id/items", utils.WrapHandler(group.GetProjectItems))
-			itemGroup := thingsGroup.Group("/:project_id/item")
-			{
-				itemGroup.GET("/:item_id", utils.WrapHandler(group.GetProjectItem))
-				itemGroup.POST("/:item_id", utils.WrapHandler(group.CreateProjectItem))
-				itemGroup.PUT("/:item_id", utils.WrapHandler(group.UpdateProjectItem))
-				itemGroup.DELETE("/:item_id", utils.WrapHandler(group.DeleteProjectItem))
-				itemGroup.POST("/:item_id/like", utils.WrapHandler(group.LikeItem))
-				itemGroup.DELETE("/:item_id/like", utils.WrapHandler(group.LikeItem))
-				itemGroup.POST("/:item_id/comment", utils.WrapHandler(group.CreateProjectItem))
-				itemGroup.PUT("/:item_id/comment/:comment_id", utils.WrapHandler(group.UpdateProjectItem))
-				itemGroup.DELETE("/:item_id/comment/:comment_id", utils.WrapHandler(group.DeleteProjectItem))
-				itemGroup.POST("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
-				itemGroup.DELETE("/:item_id/comment/:comment_id/like", utils.WrapHandler(group.LikeItem))
-
-			}
-		}
-
-		teamsGroup := groupRoute.Group("/:id/team")
-		{
-			teamsGroup.GET("/:team_id", utils.WrapHandler(group.GetProject))
-			teamsGroup.POST("", utils.WrapHandler(group.CreateProject))
-			teamsGroup.PUT("/:team_id", utils.WrapHandler(group.UpdateGroup))
-			teamsGroup.DELETE("/:team_id", utils.WrapHandler(group.DeleteProject))
-
-			teamsGroup.GET("/:team_id/profile", utils.WrapHandler(group.GetProject))
-			teamsGroup.PUT("/:team_id/profile", utils.WrapHandler(group.CreateProject))
 		}
 		groupRoute.GET("/:id/projects/search", utils.WrapHandler(group.SearchProject))
 	}
