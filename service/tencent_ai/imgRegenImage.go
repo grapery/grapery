@@ -16,13 +16,17 @@ func (t *TencentAI) ImgToImage(ctx context.Context,
 	markParams *WaterMarkParams) ([]byte, error) {
 	req := aiart.NewImageToImageRequest()
 	if prompt.InputImage != "" && prompt.InputImageUrl == "" {
-		req.InputImage = &prompt.InputImage
+		imageDataSrc := base64.StdEncoding.EncodeToString([]byte(prompt.InputImage))
+		temp := string(imageDataSrc)
+		req.InputImage = &temp
 	} else if prompt.InputImage == "" && prompt.InputImageUrl != "" {
 		req.InputUrl = &prompt.InputImageUrl
 	} else if prompt.InputImage == "" && prompt.InputImageUrl == "" {
 		return nil, errors.New("input image is empty")
 	} else if prompt.InputImage != "" && prompt.InputImageUrl != "" {
-		req.InputImage = &prompt.InputImage
+		imageDataSrc := base64.StdEncoding.EncodeToString([]byte(prompt.InputImage))
+		temp := string(imageDataSrc)
+		req.InputImage = &temp
 	}
 	req.Prompt = &prompt.PosttivePrompt
 	req.NegativePrompt = &prompt.PosttivePrompt
