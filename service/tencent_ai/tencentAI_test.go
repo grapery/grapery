@@ -14,7 +14,7 @@ var (
 	testBaseUrl = "aiart.tencentcloudapi.com"
 	testRegion  = "ap-shanghai"
 	testPrompt  = "木屋,别墅,小溪,秋千,桃园"
-	testPrompt2 = "田野,农夫,高飞的大雁,晴朗的天空"
+	testPrompt2 = "田野,农夫,晴朗的天空"
 	testStyle   = "101"
 	testStyle2  = "201"
 	testSize    = ResolutionLevel_1024_1024
