@@ -10,7 +10,6 @@ import (
 type Comment struct {
 	IDBase
 	UserID    uint64 `json:"user_id,omitempty"`
-	GroupID   uint64 `json:"group_id,omitempty"`
 	ProjectID uint64 `json:"project_id,omitempty"`
 	ItemID    int    `json:"item_id,omitempty"`
 	PreID     uint64 `json:"pre_id,omitempty"`
@@ -31,8 +30,8 @@ func (c *Comment) Create() error {
 
 func (c *Comment) UpdateContent() error {
 	if err := DataBase().Model(c).Update("content", c.Content).
-		Where("group_id = ? and project_id = ? and item_id = ? and pre_id = ? and id = ? ",
-			c.GroupID, c.ProjectID, c.ItemID, c.PreID, c.ID).Error; err != nil {
+		Where("project_id = ? and item_id = ? and pre_id = ? and id = ? ",
+			c.ProjectID, c.ItemID, c.PreID, c.ID).Error; err != nil {
 		log.Errorf("update active [%d] failed : [%s]", c.ID, err.Error())
 		return fmt.Errorf("update active failed [%s]", err.Error())
 	}
@@ -48,8 +47,7 @@ func (c *Comment) GetComment() error {
 
 func (c *Comment) Delete() error {
 	if err := DataBase().Model(c).Update("deleted", 1).
-		Where("group_id = ? and project_id = ? and item_id = ? and pre_id = ? and id = ? ",
-			c.GroupID,
+		Where("project_id = ? and item_id = ? and pre_id = ? and id = ? ",
 			c.ProjectID,
 			c.ItemID,
 			c.PreID,

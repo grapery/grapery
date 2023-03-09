@@ -6,11 +6,9 @@ import (
 
 type LikeItem struct {
 	IDBase
-	UserID    uint64 `json:"user_id,omitempty"`
-	GroupID   uint64 `json:"group_id,omitempty"`
-	ProjectID uint64 `json:"project_id,omitempty"`
-	ItemID    uint64 `json:"item_id,omitempty"`
-	LikeType  uint64 `json:"like_type,omitempty"`
+	UserID   uint64 `json:"user_id,omitempty"`
+	ItemID   uint64 `json:"item_id,omitempty"`
+	LikeType uint64 `json:"like_type,omitempty"`
 }
 
 func (l LikeItem) TableName() string {
@@ -20,8 +18,8 @@ func (l LikeItem) TableName() string {
 func CreateLikeItem(repo *Repository, item *LikeItem) error {
 	var num int64
 	err := repo.DB().Model(&LikeItem{}).
-		Where("user_id = ? and group_id = ? and project_id = ? and item_id = ?",
-			item.UserID, item.GroupID, item.ProjectID, item.ItemID).
+		Where("user_id = ? and item_id = ?",
+			item.UserID, item.ItemID).
 		Count(&num).Error
 	if err != nil {
 		return err

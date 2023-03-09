@@ -3,9 +3,10 @@ package convert
 import (
 	"encoding/json"
 
+	log "github.com/sirupsen/logrus"
+
 	api "github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
-	log "github.com/sirupsen/logrus"
 )
 
 func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
@@ -14,7 +15,6 @@ func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
 		User:        &api.UserInfo{UserId: ac.UserId},
 		ItemInfo:    &api.ItemInfo{},
 		ProjectInfo: &api.ProjectInfo{ProjectId: ac.ProjectID},
-		GroupInfo:   &api.GroupInfo{GroupId: ac.GroupID},
 	}
 }
 
@@ -33,7 +33,6 @@ func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
 	info := new(api.ItemInfo)
 	info.UserId = item.UserID
 	info.Content = nil
-	info.GroupId = item.GroupID
 	info.ProjectId = item.ProjectID
 	info.Itype = item.ItemType
 	info.Title = item.Description
@@ -44,7 +43,6 @@ func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
 	item := new(models.Item)
 	item.UserID = info.UserId
 	item.Description = info.Title
-	item.GroupID = info.GroupId
 	item.ProjectID = info.ProjectId
 	item.ItemType = info.Itype
 	return item
@@ -60,7 +58,6 @@ func ConvertProjectToApiProjectInfo(p *models.Project) *api.ProjectInfo {
 
 func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
 	info := &api.ItemInfo{
-		GroupId:   i.GroupID,
 		ProjectId: i.ProjectID,
 		UserId:    i.UserID,
 		Title:     i.Title,

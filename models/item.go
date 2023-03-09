@@ -12,16 +12,19 @@ import (
 */
 type Item struct {
 	IDBase
-	GroupID     uint64          `json:"group_id,omitempty"`
-	ProjectID   uint64          `json:"project_id,omitempty"`
-	UserID      uint64          `json:"user_id,omitempty"`
-	Visable     api.VisibleType `json:"visable,omitempty"`
-	Title       string          `json:"title,omitempty"`
-	Description string          `json:"description,omitempty"`
-	ItemType    api.ItemType    `json:"item_type,omitempty"`
-	Content     string          `json:"content,omitempty"`
-	Tags        []string        `json:"tags,omitempty"`
-	LikeCount   uint64          `json:"like_count,omitempty"`
+	ProjectID     uint64          `json:"project_id,omitempty"`
+	UserID        uint64          `json:"user_id,omitempty"`
+	Visable       api.VisibleType `json:"visable,omitempty"`
+	Title         string          `json:"title,omitempty"`
+	Description   string          `json:"description,omitempty"`
+	ItemType      api.ItemType    `json:"item_type,omitempty"`
+	Content       string          `json:"content,omitempty"`
+	Url           string          `json:"url,omitempty"`
+	Size          string          `json:"size,omitempty"`
+	Token         []string        `json:"token,omitempty"`
+	IsHiddenToken bool            `json:"is_hidden_token,omitempty"`
+	Tags          []string        `json:"tags,omitempty"`
+	LikeCount     uint64          `json:"like_count,omitempty"`
 }
 
 func (it Item) TableName() string {

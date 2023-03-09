@@ -14,7 +14,6 @@ type Active struct {
 	ActiveType api.ActiveType `json:"active_type,omitempty"`
 	ItemID     uint64         `json:"item_id,omitempty"`
 	ProjectID  uint64         `json:"project_id,omitempty"`
-	GroupID    uint64         `json:"group_id,omitempty"`
 }
 
 func (a Active) TableName() string {

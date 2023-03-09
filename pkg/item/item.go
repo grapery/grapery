@@ -57,7 +57,6 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 		item := new(api.ItemInfo)
 		item.UserId = list[idx].UserID
 		item.Content = nil
-		item.GroupId = list[idx].GroupID
 		item.ProjectId = list[idx].ProjectID
 		item.Itype = list[idx].ItemType
 		item.Title = list[idx].Description
@@ -93,7 +92,6 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 		item := new(api.ItemInfo)
 		item.UserId = list[idx].UserID
 		item.Content = nil
-		item.GroupId = list[idx].GroupID
 		item.ProjectId = list[idx].ProjectID
 		item.Itype = list[idx].ItemType
 		item.Title = list[idx].Description
@@ -127,7 +125,6 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 		item := new(api.ItemInfo)
 		item.UserId = list[idx].UserID
 		item.Content = nil
-		item.GroupId = list[idx].GroupID
 		item.ProjectId = list[idx].ProjectID
 		item.Itype = list[idx].ItemType
 		item.Title = list[idx].Description
@@ -155,7 +152,6 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
 	repo := models.NewRepository(ctx)
 	item := &models.Item{
-		GroupID:     req.GetGroupId(),
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
 		Title:       req.GetInfo().Title,
@@ -173,7 +169,6 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
 	repo := models.NewRepository(ctx)
 	item := &models.Item{
-		GroupID:   req.GetGroupId(),
 		ProjectID: req.GetProjectId(),
 		UserID:    req.GetUserId(),
 		Title:     req.GetName(),
