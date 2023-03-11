@@ -33,9 +33,9 @@ type User struct {
 	Location string         `json:"location,omitempty"`
 	Avatar   string         `json:"avatar,omitempty"`
 
-	NumProjects int    `json:"num_projects,omitempty"`
-	NumGroup    int    `json:"num_group,omitempty"`
-	ShortDesc   string `json:"short_desc,omitempty"`
+	NumProject int    `json:"num_project,omitempty"`
+	NumGroup   int    `json:"num_group,omitempty"`
+	ShortDesc  string `json:"short_desc,omitempty"`
 }
 
 func (u User) TableName() string {

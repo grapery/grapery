@@ -9,11 +9,10 @@ import (
 
 type Comment struct {
 	IDBase
-	UserID    uint64 `json:"user_id,omitempty"`
-	ProjectID uint64 `json:"project_id,omitempty"`
-	ItemID    int    `json:"item_id,omitempty"`
-	PreID     uint64 `json:"pre_id,omitempty"`
-	Content   []byte `json:"content,omitempty"`
+	UserID  uint64 `json:"user_id,omitempty"`
+	ItemID  int    `json:"item_id,omitempty"`
+	PreID   uint64 `json:"pre_id,omitempty"`
+	Content []byte `json:"content,omitempty"`
 }
 
 func (c Comment) TableName() string {
@@ -22,18 +21,18 @@ func (c Comment) TableName() string {
 
 func (c *Comment) Create() error {
 	if err := DataBase().Model(c).Create(c).Error; err != nil {
-		log.Errorf("create new active [%d] failed : [%s]", c.ID, err.Error())
-		return fmt.Errorf("create new active [%d] failed ", c.ID)
+		log.Errorf("create new comment [%d] failed : [%s]", c.ID, err.Error())
+		return fmt.Errorf("create new comment [%d] failed ", c.ID)
 	}
 	return nil
 }
 
 func (c *Comment) UpdateContent() error {
 	if err := DataBase().Model(c).Update("content", c.Content).
-		Where("project_id = ? and item_id = ? and pre_id = ? and id = ? ",
-			c.ProjectID, c.ItemID, c.PreID, c.ID).Error; err != nil {
-		log.Errorf("update active [%d] failed : [%s]", c.ID, err.Error())
-		return fmt.Errorf("update active failed [%s]", err.Error())
+		Where("and item_id = ? and pre_id = ? and id = ? ",
+			c.ItemID, c.PreID, c.ID).Error; err != nil {
+		log.Errorf("update comment [%d] failed : [%s]", c.ID, err.Error())
+		return fmt.Errorf("update comment failed [%s]", err.Error())
 	}
 	return nil
 }
@@ -47,13 +46,12 @@ func (c *Comment) GetComment() error {
 
 func (c *Comment) Delete() error {
 	if err := DataBase().Model(c).Update("deleted", 1).
-		Where("project_id = ? and item_id = ? and pre_id = ? and id = ? ",
-			c.ProjectID,
+		Where("item_id = ? and pre_id = ? and id = ? ",
 			c.ItemID,
 			c.PreID,
 			c.ID); err != nil {
-		log.Errorf("update active [%d] deleted failed ", c.ID)
-		return fmt.Errorf("deleted active [%d] failed ", c.ID)
+		log.Errorf("update comment [%d] deleted failed ", c.ID)
+		return fmt.Errorf("deleted comment [%d] failed ", c.ID)
 	}
 	return nil
 }
@@ -63,7 +61,7 @@ func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
 	if err := DataBase().Model(&Comment{}).
 		Where("user_id = ?", userID).
 		Find(ret).Error; err != nil {
-		log.Errorf("get user [%d] active failed: %s ", userID, err.Error())
+		log.Errorf("get user [%d] comment failed: %s ", userID, err.Error())
 		return nil, err
 	}
 
@@ -75,7 +73,7 @@ func GetCommentByProject(projectID uint64) (*[]*Comment, error) {
 	if err := DataBase().Model(&Comment{}).
 		Where("project_id = ?", projectID).
 		Find(ret).Error; err != nil {
-		log.Errorf("get project [%d] active failed: %s ", projectID, err.Error())
+		log.Errorf("get project [%d] comment failed: %s ", projectID, err.Error())
 		return nil, err
 	}
 
@@ -89,19 +87,19 @@ func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, err
 			end,
 			start).
 		Find(ret).Error; err != nil {
-		log.Errorf("get active in range [%s--%s] failed ", start.String(), end.String())
+		log.Errorf("get comment in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
 	return ret, nil
 }
 
-func GetCommentListByItem(userID uint64, activeType uint) (*[]*Comment, error) {
+func GetCommentListByItem(userID uint64, commentType uint) (*[]*Comment, error) {
 	var ret = new([]*Comment)
-	if err := DataBase().Where("user_id = ? and active_type = ? and delete = 0",
+	if err := DataBase().Where("user_id = ? and comment_type = ? and delete = 0",
 		userID,
-		activeType).
+		commentType).
 		Find(ret).Error; err != nil {
-		log.Errorf("get user [%d] active type [%d] failed ", userID, activeType)
+		log.Errorf("get user [%d] comment type [%d] failed ", userID, commentType)
 		return nil, err
 	}
 	return ret, nil

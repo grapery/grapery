@@ -14,7 +14,7 @@ func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
 		ActiveType:  ac.ActiveType,
 		User:        &api.UserInfo{UserId: ac.UserId},
 		ItemInfo:    &api.ItemInfo{},
-		ProjectInfo: &api.ProjectInfo{ProjectId: ac.ProjectID},
+		ProjectInfo: &api.ProjectInfo{},
 	}
 }
 

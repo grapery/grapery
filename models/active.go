@@ -13,7 +13,6 @@ type Active struct {
 	UserId     uint64         `json:"user_id,omitempty"`
 	ActiveType api.ActiveType `json:"active_type,omitempty"`
 	ItemID     uint64         `json:"item_id,omitempty"`
-	ProjectID  uint64         `json:"project_id,omitempty"`
 }
 
 func (a Active) TableName() string {
