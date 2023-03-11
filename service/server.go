@@ -67,7 +67,6 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.DELETE("/:id", utils.WrapHandler(user.DeleteUser))
 		userRoute.GET("/:id/info", utils.WrapHandler(user.GetUserProfile))
 		userRoute.GET("/:id/groups", utils.WrapHandler(user.GetUserGroup))
-		// 用户个人的active
 		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
 		userRoute.GET("/:id/setting", utils.WrapHandler(user.GetUserSetting))
 		userRoute.PUT("/:id/setting", utils.WrapHandler(user.UpdateUserSetting))
