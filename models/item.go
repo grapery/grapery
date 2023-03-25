@@ -154,17 +154,15 @@ func UpdateItemTitle(repo *Repository, itemID uint64, title string) error {
 
 type ItemLiker struct {
 	IDBase
-	ProjectID uint64 `json:"project_id,omitempty"`
-	ItemID    uint64 `json:"item_id,omitempty"`
-	UserID    uint64 `json:"user_id,omitempty"`
-	Ltype     uint64 `json:"ltype,omitempty"`
+	ItemID uint64 `json:"item_id,omitempty"`
+	UserID uint64 `json:"user_id,omitempty"`
+	Ltype  uint64 `json:"ltype,omitempty"`
 }
 
 func CreateItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
 	item := &ItemLiker{
-		ProjectID: projectId,
-		ItemID:    itemId,
-		UserID:    userId,
+		ItemID: itemId,
+		UserID: userId,
 	}
 	err := repo.DB().Model(item).Create(item).Error
 	if err != nil {
@@ -176,9 +174,8 @@ func CreateItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
 
 func DeleteItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
 	item := &ItemLiker{
-		ProjectID: projectId,
-		ItemID:    itemId,
-		UserID:    userId,
+		ItemID: itemId,
+		UserID: userId,
 	}
 	err := repo.DB().Model(item).Update("delete = ? ", true).
 		Where("item_id = ? and user_id = ?", itemId, userId).Error

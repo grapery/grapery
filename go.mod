@@ -22,6 +22,7 @@ require (
 	github.com/olivere/elastic v6.2.37+incompatible
 	github.com/onsi/gomega v1.16.0 // indirect
 	github.com/pkg/errors v0.9.1
+	github.com/sashabaranov/go-openai v1.5.7 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.611
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.41 // indirect
