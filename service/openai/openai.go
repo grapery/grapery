@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	OpenAI_Token = ""
+	APiKey = ""
 )
 
 type OpenAIClient struct {

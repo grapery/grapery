@@ -161,9 +161,10 @@ func UpdateUserSetting(ctx *utils.Context) {
 	return
 }
 
+// DeleteUser
 func DeleteUser(ctx *utils.Context) {
 	ctx.Err = nil
-	ctx.Resp = nil
+	ctx.Resp = struct{}{}
 	return
 }
 
