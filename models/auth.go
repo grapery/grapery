@@ -15,8 +15,9 @@ type Auth struct {
 	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
 	Email    string       `json:"email,omitempty" gorm:"unique_index"`
 	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
-	Password string       `json:"-" gorm:"password"`
-	Salt     string       `json:"-" gorm:"salt"`
+	Password string       `json:"password,omitempty" gorm:"password"`
+	Token    string       `json:"token,omitempty" gorm:"token"`
+	Salt     string       `json:"salt,omitempty" gorm:"salt"`
 	IsValid  bool         `json:"is_valid,omitempty"`
 	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
 	Expired  bool         `json:"expired,omitempty"`

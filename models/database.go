@@ -37,7 +37,7 @@ func Init(uname, pwd, dbname string) error {
 	newLogger := logger.New(
 		log.StandardLogger(),
 		logger.Config{
-			SlowThreshold: time.Second,
+			SlowThreshold: time.Second * 5,
 			LogLevel:      logger.Info,
 			Colorful:      true,
 		},
