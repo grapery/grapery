@@ -56,7 +56,7 @@ func GetLikeItem(repo *Repository, itemID uint64) (*LikeItem, error) {
 	return item, nil
 }
 
-func GetLiteItemByProjectAndUser(repo *Repository, projectID int, userID int) (list []*LikeItem, err error) {
+func GetLikeItemByProjectAndUser(repo *Repository, projectID int, userID int) (list []*LikeItem, err error) {
 	list = make([]*LikeItem, 0)
 	err = repo.DB().Model(&LikeItem{}).
 		Where("project_id = ? and user_id = ?", projectID, userID).
@@ -67,7 +67,7 @@ func GetLiteItemByProjectAndUser(repo *Repository, projectID int, userID int) (l
 	return list, nil
 }
 
-func GetLiteItemByUser(repo *Repository, userID int) (list []*LikeItem, err error) {
+func GetLikeItemByUser(repo *Repository, userID int) (list []*LikeItem, err error) {
 	list = make([]*LikeItem, 0)
 	err = repo.DB().Model(&LikeItem{}).
 		Where("user_id = ?", userID).

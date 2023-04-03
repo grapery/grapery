@@ -149,7 +149,3 @@ func (c *OpenAIClient) SpeedToText(ctx context.Context) {
 	}
 	fmt.Println(resp.Text)
 }
-
-func (c *OpenAIClient) TrainModel(ctx context.Context) {
-
-}

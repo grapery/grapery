@@ -22,10 +22,10 @@ type Project struct {
 	CreatorID   uint64 `json:"creator_id,omitempty"`
 	OwnerID     uint64 `json:"owner_id,omitempty"`
 	GroupID     uint64 `json:"group_id,omitempty"`
-	ProjectProfile
+	ProjectSetting
 }
 
-type ProjectProfile struct {
+type ProjectSetting struct {
 	Description   string          `json:"description,omitempty"`
 	Avatar        string          `json:"avatar,omitempty"`
 	WatchingCount uint64          `json:"watching_count,omitempty"`
@@ -128,14 +128,16 @@ func (p *Project) GetProfile() error {
 
 func (p *Project) UpdateProfile() error {
 	err := DataBase().Model(p).
-		Update("description", p.Description).
-		Update("avatar", p.Avatar).
-		Update("watching_count", p.WatchingCount).
-		Update("involved_count", p.InvolvedCount).
-		Update("visable", p.Visable).
-		Update("is_achieve", p.IsAchieve).
-		Update("is_close", p.IsClose).
-		Update("is_private", p.IsPrivate).
+		Updates(map[string]interface{}{
+			"description":    p.Description,
+			"avatar":         p.Avatar,
+			"watching_count": p.WatchingCount,
+			"involved_count": p.InvolvedCount,
+			"visable":        p.Visable,
+			"is_achieve":     p.IsAchieve,
+			"is_close":       p.IsClose,
+			"is_private":     p.IsPrivate,
+		}).
 		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
 		return err
