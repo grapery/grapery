@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -20,7 +21,7 @@ type Auth struct {
 	Salt     string       `json:"salt,omitempty" gorm:"salt"`
 	IsValid  bool         `json:"is_valid,omitempty"`
 	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
-	Expired  bool         `json:"expired,omitempty"`
+	Expired  uint64       `json:"expired,omitempty"`
 }
 
 func (a Auth) TableName() string {
@@ -28,6 +29,7 @@ func (a Auth) TableName() string {
 }
 
 func CreateWithPhone(a *Auth) error {
+	a.Expired = 0
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
@@ -39,23 +41,32 @@ func CreateWithPhone(a *Auth) error {
 }
 
 func IsUserAuthExist(account string) bool {
-	var count int64
+	var accountInfo = new(Auth)
 	err := DataBase().Model(Auth{}).
 		Where("email = ? or phone = ?", account, account).
-		Count(&count).Error
+		Order("create_at").
+		Limit(1).
+		First(&accountInfo).Error
 	if err != gorm.ErrRecordNotFound {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("check user auth [%s] failed [%s] ", account, err.Error()),
 		)
 		return false
 	}
-	if count == 0 {
+	if accountInfo.CreatedAt.Unix() == 0 {
+		return false
+	}
+	if accountInfo.Expired == 0 {
+		return true
+	}
+	if accountInfo.Expired < uint64(time.Now().Unix()) {
 		return false
 	}
 	return true
 }
 
 func CreateWithEmail(a *Auth) error {
+	a.Expired = 0
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
@@ -95,7 +106,6 @@ func GetByPhone(phone string) (*Auth, error) {
 	if err := DataBase().Model(a).
 		Where("phone = ?", phone).
 		Where("deleted = ?", 0).
-		Where("is_valid = ?", true).
 		Find(a).
 		Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

@@ -53,7 +53,6 @@ func (s *Service) Run(cfg *config.Config) error {
 	}))
 	app.Use(gin.Recovery())
 	v1Route := app.Group("/api/v1")
-	v1Route.GET("/login", auth.Login)
 	v1Route.POST("/login", auth.Login)
 	v1Route.POST("/logout", auth.Logout)
 	v1Route.POST("/register", auth.Register)
