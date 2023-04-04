@@ -17,7 +17,7 @@ const (
 	DefaultBucket       = "grapery-1301865260"
 	DefaultBucketUrl    = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com"
 	DefaultServiceQuery = "service.cos.myqcloud.com"
-	SECRETID            = ""
+	SecreID             = ""
 	SecretKey           = ""
 )
 
@@ -57,10 +57,8 @@ func NewS3Client() *S3Client {
 	b := &cos.BaseURL{BucketURL: u, ServiceURL: su}
 	client := cos.NewClient(b, &http.Client{
 		Transport: &cos.AuthorizationTransport{
-			SecretID: os.Getenv("SECRETID"),
-			// 用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考 https://cloud.tencent.com/document/product/598/37140
+			SecretID:  os.Getenv("SECRETID"),
 			SecretKey: os.Getenv("SECRETKEY"),
-			// 用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考 https://cloud.tencent.com/document/product/598/37140
 		},
 	})
 	return &S3Client{

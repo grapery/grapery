@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
@@ -36,8 +39,24 @@ func (s *Service) Run(cfg *config.Config) error {
 		log.Errorf("init sql database failed : [%s]", err.Error())
 		return err
 	}
-	common.Init()
+	store, err := redis.NewStore(10, "tcp", cfg.Redis.Address, "", []byte("secret"))
+	if err != nil {
+		log.Errorf("init redis sessions failed : [%s]", err.Error())
+		return err
+	}
 	app := gin.Default()
+	app.Use(sessions.Sessions("grapery_session", store))
+	app.Use(cors.New(cors.Config{
+		// AllowOrigins:     []string{"https://foo.com"},
+		// AllowMethods:     []string{"PUT", "PATCH"},
+		// AllowHeaders:     []string{"Origin"},
+		// ExposeHeaders:    []string{"Content-Length"},
+		// AllowCredentials: true,
+		// AllowOriginFunc: func(origin string) bool {
+		//   return origin == "https://github.com"
+		// },
+		MaxAge: 12 * time.Hour,
+	}))
 	app.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
 			param.ClientIP,
