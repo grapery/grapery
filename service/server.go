@@ -88,9 +88,7 @@ func (s *Service) Run(cfg *config.Config) error {
 		userRoute.GET("/:id/actives", utils.WrapHandler(user.GetUserActive))
 		userRoute.GET("/:id/setting", utils.WrapHandler(user.GetUserSetting))
 		userRoute.PUT("/:id/setting", utils.WrapHandler(user.UpdateUserSetting))
-		//新增加临时会话，可以不用立即添加好友，会话可以设置为多长时间过期，或者会话转为邮件组的形式
 	}
-	v1Route.GET("/users/search", utils.WrapHandler(user.SearchUser))
 	groupRoute := v1Route.Group("/group")
 	{
 		groupRoute.POST("", utils.WrapHandler(group.CreateGroup))
