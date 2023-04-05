@@ -7,7 +7,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/api"
 )
 
 func HashPassword(password string) string {
@@ -34,9 +34,9 @@ type jwtClaims struct {
 	Email string
 }
 
-func (w *JwtWrapper) GenerateToken(user models.Auth) (signedToken string, err error) {
+func (w *JwtWrapper) GenerateToken(user *api.UserInfo) (signedToken string, err error) {
 	claims := &jwtClaims{
-		Id:    int64(user.UID),
+		Id:    int64(user.UserId),
 		Email: user.Email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(w.ExpirationHours)).Unix(),

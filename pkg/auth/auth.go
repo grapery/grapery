@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
@@ -12,7 +13,7 @@ import (
 	"github.com/grapery/grapery/utils/errors"
 )
 
-//https://blog.gokit.info/post/understand-golang-with-pic/
+// https://blog.gokit.info/post/understand-golang-with-pic/
 var server AuthServer
 
 func init() {
@@ -28,8 +29,8 @@ func NewAuthService() *AuthService {
 }
 
 type AuthServer interface {
-	Register(ctx context.Context, account string, pwd string, authType api.AuthType) error
-	Login(ctx context.Context, account string, pwd string, authType api.AuthType) (*api.UserInfo, error)
+	Register(ctx context.Context, account string, pwd string) error
+	Login(ctx context.Context, account string, pwd string) (*api.UserInfo, error)
 	Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error)
 	ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error)
 	Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error)
@@ -39,7 +40,7 @@ type AuthServer interface {
 type AuthService struct {
 }
 
-func (auth *AuthService) Register(ctx context.Context, account string, pwd string, authType api.AuthType) (err error) {
+func (auth *AuthService) Register(ctx context.Context, account string, pwd string) (err error) {
 	info := new(models.Auth)
 
 	info.Password = pwd
@@ -47,7 +48,7 @@ func (auth *AuthService) Register(ctx context.Context, account string, pwd strin
 		return errors.ErrAuthIsExist
 	}
 	user := new(models.User)
-	if authType == api.AuthType_WithEmail {
+	if strings.Contains(account, "@") {
 		user.Email = account
 	} else {
 		user.Phone = account
@@ -57,12 +58,10 @@ func (auth *AuthService) Register(ctx context.Context, account string, pwd strin
 		return nil
 	}
 	info.UID = uint64(user.ID)
-	if authType == api.AuthType_WithEmail {
-		info.AuthType = api.AuthType_WithEmail
+	if strings.Contains(account, "@") {
 		info.Email = account
 		err = models.CreateWithEmail(info)
-	} else if authType == api.AuthType_WithPhone {
-		info.AuthType = api.AuthType_WithPhone
+	} else {
 		info.Phone = account
 		err = models.CreateWithPhone(info)
 	}
@@ -72,12 +71,12 @@ func (auth *AuthService) Register(ctx context.Context, account string, pwd strin
 	return
 }
 
-func (auth *AuthService) Login(ctx context.Context, account string, pwd string, authType api.AuthType) (*api.UserInfo, error) {
+func (auth *AuthService) Login(ctx context.Context, account string, pwd string) (*api.UserInfo, error) {
 	info := new(models.Auth)
 	var err error
-	if authType == api.AuthType_WithEmail {
+	if strings.Contains(account, "@") {
 		info, err = models.GetByEmail(account)
-	} else if authType == api.AuthType_WithPhone {
+	} else {
 		info, err = models.GetByPhone(account)
 	}
 	if err != nil {
@@ -99,9 +98,9 @@ func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*a
 func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
 	info := new(models.Auth)
 	var err error
-	if req.GetLoginType() == api.AuthType_WithEmail {
+	if strings.Contains(req.GetAccount(), "@") {
 		info, err = models.GetByEmail(req.GetAccount())
-	} else if req.GetLoginType() == api.AuthType_WithPhone {
+	} else {
 		info, err = models.GetByPhone(req.GetAccount())
 
 	}

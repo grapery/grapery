@@ -106,6 +106,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		if err != nil {
 			log.Fatal("failed to register: ", err)
 		}
+		http.Handle("/login", http.HandlerFunc(auth.LoginFunc))
 		http.Handle("/", mux)
 		httpServer := http.Server{Addr: fmt.Sprintf("localhost:%s", cfg.HttpPort)}
 		if err := httpServer.ListenAndServe(); err != nil {

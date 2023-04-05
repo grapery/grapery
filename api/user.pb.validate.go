@@ -41,8 +41,6 @@ func (m *LoginRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for LoginType
-
 	// no validation rules for Account
 
 	// no validation rules for Password
@@ -380,8 +378,6 @@ func (m *RegisterRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for LoginType
-
 	// no validation rules for Account
 
 	// no validation rules for Password
@@ -518,8 +514,6 @@ func (m *ConfirmRequest) Validate() error {
 		return nil
 	}
 
-	// no validation rules for LoginType
-
 	// no validation rules for Account
 
 	return nil
@@ -653,8 +647,6 @@ func (m *ResetPasswordRequest) Validate() error {
 	if m == nil {
 		return nil
 	}
-
-	// no validation rules for LoginType
 
 	// no validation rules for Account
 

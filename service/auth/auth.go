@@ -3,6 +3,8 @@ package auth
 import (
 	// "net/http"
 	"context"
+	"encoding/json"
+	"net/http"
 
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -29,17 +31,50 @@ func AuthFunc(ctx context.Context) (context.Context, error) {
 	return newCtx, nil
 }
 
+func LoginFunc(w http.ResponseWriter, r *http.Request) {
+	auth := new(AuthService)
+	query := r.URL.Query()
+	req := &api.LoginRequest{
+		Account:  query.Get("account"),
+		Password: query.Get("password"),
+	}
+
+	type Result struct {
+		Code  int    `json:"code,omitempty"`
+		Token string `json:"token,omitempty"`
+		Error string
+	}
+	ret := new(Result)
+	resp, err := auth.Login(r.Context(), req)
+	if err != nil {
+		ret.Code = -1
+		ret.Error = err.Error()
+		resultData, _ := json.Marshal(ret)
+		w.Write(resultData)
+		return
+	}
+	ret.Code = 1
+	ret.Token = resp.GetToken()
+	resultData, _ := json.Marshal(ret)
+	w.Write(resultData)
+	return
+}
+
 type AuthService struct {
 	Jwt jwt.JwtWrapper
 }
 
 func (ts *AuthService) Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, error) {
-	info, err := auth.GetAuthService().Login(ctx, req.GetAccount(), req.GetPassword(), req.GetLoginType())
+	info, err := auth.GetAuthService().
+		Login(ctx, req.GetAccount(), req.GetPassword())
 	if err != nil {
-
 		return nil, err
 	}
-	ret := &api.LoginResponse{UserId: info.GetUserId()}
+	token, _ := ts.Jwt.GenerateToken(info)
+	ret := &api.LoginResponse{
+		UserId: info.GetUserId(),
+		Token:  token,
+	}
 	return ret, nil
 }
 func (ts *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error) {
@@ -55,7 +90,6 @@ func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (
 		context.Background(),
 		req.GetAccount(),
 		hashpwd,
-		req.GetLoginType(),
 	)
 	if err != nil {
 		return nil, err
