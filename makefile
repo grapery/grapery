@@ -14,6 +14,7 @@ project=github.com/grapery/grapery
 
 $(TARGETS): 
 	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/$@
+	redocly build-docs -o index.html common-protoc/service.swagger.json
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)-app
@@ -38,3 +39,4 @@ cert:
 
 regen:
 	sh ./regen.sh
+	
