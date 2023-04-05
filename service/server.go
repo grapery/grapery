@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 
@@ -63,7 +64,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	api.RegisterTeamsAPIServer(s, ts)
 	// listen grpc
 	go func() {
-		lis, err := net.Listen("tcp", cfg.RpcPort)
+		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", cfg.RpcPort))
 		if err != nil {
 			log.Fatal("failed to listen: ", err)
 		}
@@ -73,7 +74,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	}()
 	// listen http
 	go func() {
-		log.Infof("start http server : [%s]", cfg.HttpPort)
+		log.Infof("start http server port: [%s]", cfg.HttpPort)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		mux := runtime.NewServeMux(runtime.WithMarshalerOption(
@@ -89,14 +90,14 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		err := api.RegisterTeamsAPIHandlerFromEndpoint(
 			ctx,
 			mux,
-			"12346",
+			fmt.Sprintf("localhost:%s", cfg.RpcPort),
 			dialOptions,
 		)
 		if err != nil {
 			log.Fatal("failed to register: ", err)
 		}
 		http.Handle("/", mux)
-		httpServer := http.Server{Addr: cfg.HttpPort}
+		httpServer := http.Server{Addr: fmt.Sprintf("localhost:%s", cfg.HttpPort)}
 		if err := httpServer.ListenAndServe(); err != nil {
 			log.Warn(err)
 		}
