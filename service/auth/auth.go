@@ -42,7 +42,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	type Result struct {
 		Code  int    `json:"code,omitempty"`
 		Token string `json:"token,omitempty"`
-		Error string
+		Error string `json:"error,omitempty"`
 	}
 	ret := new(Result)
 	resp, err := auth.Login(r.Context(), req)
