@@ -7,23 +7,6 @@ import (
 	"github.com/grapery/grapery/utils"
 )
 
-func SearchUser(ctx *utils.Context) {
-	req := &api.SearchUserRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().SearchUser(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
 func GetUser(ctx *utils.Context) {
 	req := &api.UserInfoRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
