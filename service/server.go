@@ -36,6 +36,12 @@ type TeamsService struct {
 // NewTeamsService create a new TeamsService
 func NewTeamsService() *TeamsService {
 	ts := &TeamsService{}
+	ts.AuthService = &auth.AuthService{}
+	ts.UserService = &user.UserService{}
+	ts.GroupService = &group.GroupService{}
+	ts.ProjectService = &group.ProjectService{}
+	ts.ItemService = &group.ItemService{}
+	ts.CommentService = &group.CommentService{}
 	ts.Ctx, ts.Cancel = context.WithCancel(context.Background())
 	return ts
 }
