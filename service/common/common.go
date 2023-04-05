@@ -2,33 +2,18 @@ package common
 
 import (
 	// "net/http"
+	"context"
 
-	"net/http"
-
-	_ "github.com/gin-contrib/sessions"
-	_ "github.com/gin-contrib/sessions/redis"
-	gin "github.com/gin-gonic/gin"
-
-	"github.com/grapery/grapery/version"
+	"github.com/grapery/grapery/api"
 )
 
-func About(ctx *gin.Context) {
-	ctx.HTML(http.StatusOK, "readme.html", nil)
+type CommonService struct {
 }
 
-func Help(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "please press F1")
+func (cs *CommonService) Explore(ctx context.Context, req *api.ExploreRequest) (*api.ExploreResponse, error) {
+	return &api.ExploreResponse{}, nil
 }
 
-func Version(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "version branch %s ,version %s , build time %s",
-		version.GitBranch, version.GitHash, version.BuildTS)
-}
-
-func Explore(ctx *gin.Context) {
-
-}
-
-func Trending(ctx *gin.Context) {
-
+func (cs *CommonService) Trending(ctx context.Context, req *api.TrendingRequest) (*api.TrendingResponse, error) {
+	return &api.TrendingResponse{}, nil
 }

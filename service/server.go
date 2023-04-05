@@ -17,6 +17,7 @@ import (
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
 	auth "github.com/grapery/grapery/service/auth"
+	"github.com/grapery/grapery/service/common"
 	"github.com/grapery/grapery/service/group"
 	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/utils/cache"
@@ -32,6 +33,7 @@ type TeamsService struct {
 	*group.ProjectService
 	*group.ItemService
 	*group.CommentService
+	*common.CommonService
 }
 
 func (ts *TeamsService) Version(ctx context.Context, req *api.VersionRequest) (*api.VersionResponse, error) {
@@ -53,6 +55,7 @@ func NewTeamsService() *TeamsService {
 	ts.ProjectService = &group.ProjectService{}
 	ts.ItemService = &group.ItemService{}
 	ts.CommentService = &group.CommentService{}
+	ts.CommonService = &common.CommonService{}
 	ts.Ctx, ts.Cancel = context.WithCancel(context.Background())
 	return ts
 }
@@ -72,7 +75,6 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	opt1 := grpc.StreamInterceptor(grpc_auth.StreamServerInterceptor(auth.AuthFunc))
 	s := grpc.NewServer(opt, opt1)
 	api.RegisterTeamsAPIServer(s, ts)
-	// listen grpc
 	go func() {
 		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", cfg.RpcPort))
 		if err != nil {
@@ -82,7 +84,6 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 			log.Warn(err)
 		}
 	}()
-	// listen http
 	go func() {
 		log.Infof("start http server port: [%s]", cfg.HttpPort)
 		ctx, cancel := context.WithCancel(context.Background())

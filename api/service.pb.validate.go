@@ -296,3 +296,263 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = AboutResponseValidationError{}
+
+// Validate checks the field values on ExploreRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *ExploreRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// ExploreRequestValidationError is the validation error returned by
+// ExploreRequest.Validate if the designated constraints aren't met.
+type ExploreRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ExploreRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ExploreRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ExploreRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ExploreRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ExploreRequestValidationError) ErrorName() string { return "ExploreRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ExploreRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sExploreRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ExploreRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ExploreRequestValidationError{}
+
+// Validate checks the field values on ExploreResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *ExploreResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// ExploreResponseValidationError is the validation error returned by
+// ExploreResponse.Validate if the designated constraints aren't met.
+type ExploreResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ExploreResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ExploreResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ExploreResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ExploreResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ExploreResponseValidationError) ErrorName() string { return "ExploreResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ExploreResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sExploreResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ExploreResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ExploreResponseValidationError{}
+
+// Validate checks the field values on TrendingRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *TrendingRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// TrendingRequestValidationError is the validation error returned by
+// TrendingRequest.Validate if the designated constraints aren't met.
+type TrendingRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TrendingRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TrendingRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TrendingRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TrendingRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TrendingRequestValidationError) ErrorName() string { return "TrendingRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TrendingRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTrendingRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TrendingRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TrendingRequestValidationError{}
+
+// Validate checks the field values on TrendingResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *TrendingResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// TrendingResponseValidationError is the validation error returned by
+// TrendingResponse.Validate if the designated constraints aren't met.
+type TrendingResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TrendingResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TrendingResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TrendingResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TrendingResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TrendingResponseValidationError) ErrorName() string { return "TrendingResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TrendingResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTrendingResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TrendingResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TrendingResponseValidationError{}
