@@ -31,6 +31,12 @@ func AuthFunc(ctx context.Context) (context.Context, error) {
 	return newCtx, nil
 }
 
+type Result struct {
+	Code  int    `json:"code,omitempty"`
+	Token string `json:"token,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	auth := new(AuthService)
 	query := r.URL.Query()
@@ -38,13 +44,15 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 		Account:  query.Get("account"),
 		Password: query.Get("password"),
 	}
-
-	type Result struct {
-		Code  int    `json:"code,omitempty"`
-		Token string `json:"token,omitempty"`
-		Error string `json:"error,omitempty"`
-	}
 	ret := new(Result)
+	if req.Account == "" || req.Password == "" {
+		ret.Code = -1
+		ret.Error = "params error"
+		resultData, _ := json.Marshal(ret)
+		w.Write(resultData)
+		return
+	}
+
 	resp, err := auth.Login(r.Context(), req)
 	if err != nil {
 		ret.Code = -1
