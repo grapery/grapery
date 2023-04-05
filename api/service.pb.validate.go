@@ -32,3 +32,267 @@ var (
 	_ = (*mail.Address)(nil)
 	_ = ptypes.DynamicAny{}
 )
+
+// Validate checks the field values on VersionRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *VersionRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// VersionRequestValidationError is the validation error returned by
+// VersionRequest.Validate if the designated constraints aren't met.
+type VersionRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VersionRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VersionRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VersionRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VersionRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VersionRequestValidationError) ErrorName() string { return "VersionRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VersionRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVersionRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VersionRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VersionRequestValidationError{}
+
+// Validate checks the field values on VersionResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *VersionResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for Version
+
+	return nil
+}
+
+// VersionResponseValidationError is the validation error returned by
+// VersionResponse.Validate if the designated constraints aren't met.
+type VersionResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VersionResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VersionResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VersionResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VersionResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VersionResponseValidationError) ErrorName() string { return "VersionResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VersionResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVersionResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VersionResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VersionResponseValidationError{}
+
+// Validate checks the field values on AboutRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *AboutRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// AboutRequestValidationError is the validation error returned by
+// AboutRequest.Validate if the designated constraints aren't met.
+type AboutRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e AboutRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e AboutRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e AboutRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e AboutRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e AboutRequestValidationError) ErrorName() string { return "AboutRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e AboutRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sAboutRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = AboutRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = AboutRequestValidationError{}
+
+// Validate checks the field values on AboutResponse with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *AboutResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for Content
+
+	return nil
+}
+
+// AboutResponseValidationError is the validation error returned by
+// AboutResponse.Validate if the designated constraints aren't met.
+type AboutResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e AboutResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e AboutResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e AboutResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e AboutResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e AboutResponseValidationError) ErrorName() string { return "AboutResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e AboutResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sAboutResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = AboutResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = AboutResponseValidationError{}

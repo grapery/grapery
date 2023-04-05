@@ -34,6 +34,16 @@ type TeamsService struct {
 	*group.CommentService
 }
 
+func (ts *TeamsService) Version(ctx context.Context, req *api.VersionRequest) (*api.VersionResponse, error) {
+	return &api.VersionResponse{Version: "0.0.1"}, nil
+}
+
+func (ts *TeamsService) About(ctx context.Context, req *api.AboutRequest) (*api.AboutResponse, error) {
+	return &api.AboutResponse{
+		Content: "Grapery is a project management tool for teams. It is a web application that allows you to manage your projects, tasks, and team members. It is a web application that allows you to manage your projects, tasks, and team members.",
+	}, nil
+}
+
 // NewTeamsService create a new TeamsService
 func NewTeamsService() *TeamsService {
 	ts := &TeamsService{}
