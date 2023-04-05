@@ -2,13 +2,15 @@ package main
 
 import (
 	"flag"
-	"github.com/grapery/grapery/config"
-	"github.com/grapery/grapery/service"
-	"github.com/grapery/grapery/version"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/grapery/grapery/config"
+	"github.com/grapery/grapery/service"
+	"github.com/grapery/grapery/version"
 )
 
 var printVersion = flag.Bool("version", false, "app build version")
@@ -28,8 +30,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Valied config failed : ", err)
 	}
-	srv := service.NewService()
-	err = srv.Run(config.GlobalConfig)
+	srv := service.NewTeamsService()
+	err = service.Run(srv, config.GlobalConfig)
 	if err != nil {
 		log.Fatal("start service failed")
 	}

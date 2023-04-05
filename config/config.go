@@ -33,7 +33,8 @@ type Config struct {
 	Redis    *RedisConfig   `json:"redis,omitempty"`
 	Elastic  *ElasticConfig `json:"elastic,omitempty"`
 	LogLevel string         `json:"log_level,omitempty"`
-	Port     string         `json:"port,omitempty"`
+	RpcPort  string         `json:"rpc_port,omitempty"`
+	HttpPort string         `json:"http_port,omitempty"`
 	S3Store  *S3Store       `json:"s3store,omitempty"`
 }
 
@@ -45,8 +46,11 @@ type S3Store struct {
 }
 
 func ValiedConfig(cfg *Config) error {
-	if cfg.Port == "" {
-		return fmt.Errorf("server port not set")
+	if cfg.RpcPort == "" {
+		return fmt.Errorf("server rpc port not set")
+	}
+	if cfg.HttpPort == "" {
+		return fmt.Errorf("server http port not set")
 	}
 	if cfg.SqlDB.Database == "" || cfg.SqlDB.Password == "" || cfg.SqlDB.Username == "" {
 		return fmt.Errorf("sql database not set")

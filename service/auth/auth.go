@@ -10,6 +10,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/pkg/auth"
@@ -17,7 +21,66 @@ import (
 	"github.com/grapery/grapery/utils/cache"
 )
 
-func Register(ctx *gin.Context) {
+func parseToken(token string) (struct{}, error) {
+	return struct{}{}, nil
+}
+
+func userClaimFromToken(struct{}) string {
+	return "foobar"
+}
+
+// exampleAuthFunc is used by a middleware to authenticate requests
+func ExampleAuthFunc(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
+	if err != nil {
+		return nil, err
+	}
+
+	tokenInfo, err := parseToken(token)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+	}
+
+	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(tokenInfo))
+
+	// WARNING: in production define your own type to avoid context collisions
+	newCtx := context.WithValue(ctx, "tokenInfo", tokenInfo)
+
+	return newCtx, nil
+}
+
+type AuthService struct {
+}
+
+func (a *AuthService) Register(ctx *gin.Context) {
+	req := &api.RegisterRequest{}
+	err := ctx.ShouldBindJSON(req)
+	ret := utils.NewResult()
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	err = auth.GetAuthService().Register(
+		context.Background(),
+		req.GetAccount(),
+		req.GetPassword(),
+		req.GetLoginType(),
+	)
+	if err != nil {
+		ret.Code = -1
+		ret.Message = err.Error()
+		ctx.JSON(http.StatusOK, ret)
+		return
+	}
+	ret.Code = 0
+	ret.Message = "ok"
+	ret.Data = &api.RegisterResponse{}
+	ctx.JSON(http.StatusOK, ret)
+}
+
+func (a *AuthService) Confirm(ctx *gin.Context) {
 	req := &api.RegisterRequest{}
 	err := ctx.ShouldBindJSON(req)
 	ret := utils.NewResult()
@@ -40,30 +103,7 @@ func Register(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ret)
 }
 
-func Confirm(ctx *gin.Context) {
-	req := &api.RegisterRequest{}
-	err := ctx.ShouldBindJSON(req)
-	ret := utils.NewResult()
-	if err != nil {
-		ret.Code = -1
-		ret.Message = err.Error()
-		ctx.JSON(http.StatusOK, ret)
-		return
-	}
-	err = auth.GetAuthService().Register(context.Background(), req.GetAccount(), req.GetPassword(), req.GetLoginType())
-	if err != nil {
-		ret.Code = -1
-		ret.Message = err.Error()
-		ctx.JSON(http.StatusOK, ret)
-		return
-	}
-	ret.Code = 0
-	ret.Message = "ok"
-	ret.Data = &api.RegisterResponse{}
-	ctx.JSON(http.StatusOK, ret)
-}
-
-func Login(ctx *gin.Context) {
+func (a *AuthService) Login(ctx *gin.Context) {
 	req := &api.LoginRequest{}
 	err := ctx.ShouldBindJSON(req)
 	ret := utils.NewResult()
@@ -106,7 +146,7 @@ func Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ret)
 }
 
-func Logout(ctx *gin.Context) {
+func (a *AuthService) Logout(ctx *gin.Context) {
 	req := &api.LogoutRequest{}
 	err := ctx.ShouldBindJSON(req)
 	ret := utils.NewResult()
@@ -130,7 +170,7 @@ func Logout(ctx *gin.Context) {
 	ret.Data = api.LoginResponse{}
 }
 
-func ResetPassword(ctx *utils.Context) {
+func (a *AuthService) ResetPassword(ctx *utils.Context) {
 	req := &api.ResetPasswordRequest{}
 	err := ctx.GinC.ShouldBindJSON(req)
 	ret := utils.NewResult()
