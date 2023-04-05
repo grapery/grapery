@@ -2,25 +2,20 @@ package group
 
 import (
 	// "net/http"
+	"context"
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
-	"github.com/grapery/grapery/utils"
+	"github.com/grapery/grapery/api"
 )
 
-func GetUserAllComments(ctx *utils.Context) {
-
+type CommentService struct {
 }
 
-func GetItemAllComments(ctx *utils.Context) {
-
+func (ts *CommentService) CreateComment(ctx context.Context, req *api.CreateCommentReq) (*api.CreateCommentResp, error) {
+	return nil, nil
 }
-
-func GetReplyComments(ctx *utils.Context) {
-
-}
-
-func GetDisscuss(ctx *utils.Context) {
-
+func (ts *CommentService) GetItemComment(ctx context.Context, req *api.GetItemCommentReq) (*api.GetItemCommentResp, error) {
+	return nil, nil
 }

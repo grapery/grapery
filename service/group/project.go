@@ -1,164 +1,45 @@
 package group
 
 import (
+	"context"
+
 	"github.com/grapery/grapery/api"
-	"github.com/grapery/grapery/pkg/project"
-	"github.com/grapery/grapery/utils"
 )
 
-func SearchProject(ctx *utils.Context) {
-	req := &api.SearchProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().SearchGroupProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+type ProjectService struct {
 }
 
-func WatchProject(ctx *utils.Context) {
-	req := &api.WatchProjectReqeust{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().WatchProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+func (ts *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequest) (*api.GetProjectResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (*api.GetProjectProfileResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (*api.UpdateProjectProfileResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (*api.WatchProjectResponse, error) {
+	return nil, nil
+}
+func (ts *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (*api.UnWatchProjectResponse, error) {
+	return nil, nil
 }
 
-func UnWatchProject(ctx *utils.Context) {
-	req := &api.UnWatchProjectReqeust{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().UnWatchProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+func (ts *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (*api.SearchAllProjectResponse, error) {
+	return nil, nil
 }
-
-func GetProject(ctx *utils.Context) {
-	req := &api.GetProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().GetProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+func (ts *ProjectService) ExploreProject(ctx context.Context, req *api.ExploreProjectsRequest) (*api.ExploreProjectsResponse, error) {
+	return nil, nil
 }
-
-func CreateProject(ctx *utils.Context) {
-	req := &api.CreateProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().CreateProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func ExploreProjects(ctx *utils.Context) {
-	return
-}
-
-func UpdateProject(ctx *utils.Context) {
-	req := &api.UpdateProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().UpdateProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func DeleteProject(ctx *utils.Context) {
-	req := &api.DeleteProjectRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().DeleteProject(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetProjectProfile(ctx *utils.Context) {
-	req := &api.GetProjectProfileRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().GetProjectProfile(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func UpdateProjectProfile(ctx *utils.Context) {
-	req := &api.UpdateProjectProfileRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := project.GetProjectServer().UpdateProjectProfile(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+func (ts *ProjectService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (*api.GetProjectItemsResponse, error) {
+	return nil, nil
 }

@@ -1,161 +1,37 @@
 package user
 
 import (
+	"context"
+
 	"github.com/grapery/grapery/api"
 	_ "github.com/grapery/grapery/pkg/project"
-	"github.com/grapery/grapery/pkg/user"
-	"github.com/grapery/grapery/utils"
 )
 
-func GetUser(ctx *utils.Context) {
-	req := &api.UserInfoRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().GetUserInfo(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+type UserService struct {
 }
 
-func GetUserProfile(ctx *utils.Context) {
-	req := &api.UserInfoRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().GetUserInfo(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
+func (ts *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error) {
+	return nil, nil
+}
+func (ts *UserService) UserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
+	return nil, nil
+}
+func (ts *UserService) UserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error) {
+	return nil, nil
+}
+func (ts *UserService) UserUpdate(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error) {
+	return nil, nil
+}
+func (ts *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error) {
+	return nil, nil
+}
+func (ts *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+	return nil, nil
 }
 
-func GetUserGroup(ctx *utils.Context) {
-	req := &api.UserGroupRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().GetUserGroup(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-
+func (ts *UserService) UpdateUserAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error) {
+	return nil, nil
 }
-
-func GetUserActive(ctx *utils.Context) {
-	req := &api.FetchUserActivesRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().FetchUserActives(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetWatching(ctx *utils.Context) {
-	req := &api.UserWatchingRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().UserWatching(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetFollowingGroup(ctx *utils.Context) {
-	req := &api.UserFollowingGroupRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().GetUserFollowingGroup(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func GetUserSetting(ctx *utils.Context) {
-	req := &api.UserUpdateRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().UpdateUser(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-func UpdateUserSetting(ctx *utils.Context) {
-	req := &api.UserUpdateRequest{}
-	err := ctx.GinC.ShouldBindJSON(req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	info, err := user.GetUserServer().UpdateUser(ctx.Ctx, req)
-	if err != nil {
-		ctx.Err = err
-		return
-	}
-	ctx.Err = nil
-	ctx.Resp = info
-	return
-}
-
-// DeleteUser
-func DeleteUser(ctx *utils.Context) {
-	ctx.Err = nil
-	ctx.Resp = struct{}{}
-	return
-}
-
-func FollowGroup(ctx *utils.Context) {
-
-	return
-}
-
-func UnFollowGroup(ctx *utils.Context) {
-	return
+func (ts *UserService) UserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
+	return nil, nil
 }
