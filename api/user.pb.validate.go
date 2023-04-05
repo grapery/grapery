@@ -114,6 +114,8 @@ func (m *LoginResponse) Validate() error {
 
 	// no validation rules for UserId
 
+	// no validation rules for Token
+
 	return nil
 }
 
@@ -180,6 +182,8 @@ func (m *LogoutRequest) Validate() error {
 	}
 
 	// no validation rules for UserId
+
+	// no validation rules for Token
 
 	return nil
 }
@@ -447,6 +451,8 @@ func (m *RegisterResponse) Validate() error {
 		return nil
 	}
 
+	// no validation rules for Status
+
 	return nil
 }
 
@@ -580,6 +586,8 @@ func (m *ConfirmResponse) Validate() error {
 	if m == nil {
 		return nil
 	}
+
+	// no validation rules for Status
 
 	return nil
 }

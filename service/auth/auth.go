@@ -11,37 +11,26 @@ import (
 
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/pkg/auth"
+	"github.com/grapery/grapery/utils/jwt"
 )
 
-func parseToken(token string) (struct{}, error) {
-	return struct{}{}, nil
-}
-
-func userClaimFromToken(struct{}) string {
-	return "foobar"
-}
-
-// exampleAuthFunc is used by a middleware to authenticate requests
-func ExampleAuthFunc(ctx context.Context) (context.Context, error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
+func AuthFunc(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "token")
 	if err != nil {
 		return nil, err
 	}
-
-	tokenInfo, err := parseToken(token)
+	jwtInfo := jwt.JwtWrapper{}
+	tokenInfo, err := jwtInfo.ValidateToken(token)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
 	}
-
-	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(tokenInfo))
-
-	// WARNING: in production define your own type to avoid context collisions
-	newCtx := context.WithValue(ctx, "tokenInfo", tokenInfo)
-
+	grpc_ctxtags.Extract(ctx).Set("auth.sub", jwtInfo.SecretKey)
+	newCtx := context.WithValue(ctx, "user_id", tokenInfo.Id)
 	return newCtx, nil
 }
 
 type AuthService struct {
+	Jwt jwt.JwtWrapper
 }
 
 func (ts *AuthService) Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, error) {
@@ -61,10 +50,11 @@ func (ts *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api
 	return &api.LogoutResponse{}, nil
 }
 func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (*api.RegisterResponse, error) {
+	hashpwd := jwt.HashPassword(req.GetPassword())
 	err := auth.GetAuthService().Register(
 		context.Background(),
 		req.GetAccount(),
-		req.GetPassword(),
+		hashpwd,
 		req.GetLoginType(),
 	)
 	if err != nil {
@@ -74,6 +64,8 @@ func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (
 }
 
 func (ts *AuthService) ResetPwd(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
+	req.OldPwd = jwt.HashPassword(req.GetOldPwd())
+	req.NewPwd = jwt.HashPassword(req.GetNewPwd())
 	_, err := auth.GetAuthService().ResetPassword(ctx, req)
 	if err != nil {
 		return nil, err

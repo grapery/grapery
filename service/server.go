@@ -67,9 +67,9 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	}
 	opt := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 		grpc_logrus.UnaryServerInterceptor(grpcLog),
-		grpc_auth.UnaryServerInterceptor(auth.ExampleAuthFunc),
+		grpc_auth.UnaryServerInterceptor(auth.AuthFunc),
 	))
-	opt1 := grpc.StreamInterceptor(grpc_auth.StreamServerInterceptor(auth.ExampleAuthFunc))
+	opt1 := grpc.StreamInterceptor(grpc_auth.StreamServerInterceptor(auth.AuthFunc))
 	s := grpc.NewServer(opt, opt1)
 	api.RegisterTeamsAPIServer(s, ts)
 	// listen grpc
@@ -112,6 +112,5 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 			log.Warn(err)
 		}
 	}()
-	log.Infoln("server is going stop")
 	return nil
 }
