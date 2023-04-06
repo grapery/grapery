@@ -30,12 +30,6 @@ func NewGroupService() *GroupService {
 	return &GroupService{}
 }
 
-type ElasticQuery interface {
-	QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
-	QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
-	QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
-}
-
 // need do some log
 type GroupServer interface {
 	GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
@@ -50,7 +44,7 @@ type GroupServer interface {
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
 	SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error)
 
-	ElasticQuery
+	QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error)
 }
 
 type GroupService struct {
@@ -310,12 +304,6 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqe
 	return nil, nil
 }
 
-func (g *GroupService) QueryGroupUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
-	return nil, nil
-}
-func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
-	return nil, nil
-}
-func (g *GroupService) QueryGroupTeam(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
+func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
 	return nil, nil
 }
