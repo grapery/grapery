@@ -290,17 +290,17 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 }
 
 func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
-	// check elastic,then search database
+
 	return nil, nil
 }
 
 func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
-	// check elastic,then search database
+
 	return nil, nil
 }
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
-	// check elastic,then search database
+
 	return nil, nil
 }
 

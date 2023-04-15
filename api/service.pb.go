@@ -400,7 +400,7 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc = []byte
 	0x0a, 0x0f, 0x45, 0x78, 0x70, 0x6c, 0x6f, 0x72, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
 	0x65, 0x22, 0x11, 0x0a, 0x0f, 0x54, 0x72, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71,
 	0x75, 0x65, 0x73, 0x74, 0x22, 0x12, 0x0a, 0x10, 0x54, 0x72, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xd1, 0x2b, 0x0a, 0x08, 0x54, 0x65, 0x61,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xbf, 0x2a, 0x0a, 0x08, 0x54, 0x65, 0x61,
 	0x6d, 0x73, 0x41, 0x50, 0x49, 0x12, 0x59, 0x0a, 0x07, 0x45, 0x78, 0x70, 0x6c, 0x6f, 0x72, 0x65,
 	0x12, 0x1b, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x45,
 	0x78, 0x70, 0x6c, 0x6f, 0x72, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1c, 0x2e,
@@ -740,19 +740,10 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_rawDesc = []byte
 	0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x22, 0x2e, 0x82, 0xd3, 0xe4, 0x93,
 	0x02, 0x28, 0x22, 0x23, 0x2f, 0x76, 0x31, 0x2f, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x2f, 0x70, 0x72,
 	0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x69, 0x74, 0x65, 0x6d, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x65,
-	0x6e, 0x74, 0x2f, 0x6c, 0x69, 0x73, 0x74, 0x3a, 0x01, 0x2a, 0x12, 0x8f, 0x01, 0x0a, 0x13, 0x47,
-	0x65, 0x74, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x49, 0x74, 0x65, 0x6d, 0x43, 0x6f, 0x6d, 0x6d, 0x65,
-	0x6e, 0x74, 0x12, 0x25, 0x2e, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69,
-	0x2e, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x43,
-	0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x1a, 0x26, 0x2e, 0x67, 0x72, 0x61, 0x70,
-	0x65, 0x72, 0x79, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x50,
-	0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73,
-	0x70, 0x22, 0x29, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x23, 0x22, 0x1e, 0x2f, 0x76, 0x31, 0x2f, 0x67,
-	0x72, 0x6f, 0x75, 0x70, 0x2f, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x2f, 0x63, 0x6f, 0x6d,
-	0x6d, 0x65, 0x6e, 0x74, 0x2f, 0x6c, 0x69, 0x73, 0x74, 0x3a, 0x01, 0x2a, 0x42, 0x20, 0x5a, 0x1e,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65,
-	0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x74, 0x2f, 0x6c, 0x69, 0x73, 0x74, 0x3a, 0x01, 0x2a, 0x42, 0x20, 0x5a, 0x1e, 0x67, 0x69,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79,
+	0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -819,50 +810,48 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_goTypes = []inte
 	(*LikeItemRequest)(nil),              // 47: grapery.api.LikeItemRequest
 	(*CreateCommentReq)(nil),             // 48: grapery.api.CreateCommentReq
 	(*GetItemCommentReq)(nil),            // 49: grapery.api.GetItemCommentReq
-	(*GetUserProjectCommentReq)(nil),     // 50: grapery.api.GetUserProjectCommentReq
-	(*LogoutResponse)(nil),               // 51: grapery.api.LogoutResponse
-	(*RegisterResponse)(nil),             // 52: grapery.api.RegisterResponse
-	(*ResetPasswordResponse)(nil),        // 53: grapery.api.ResetPasswordResponse
-	(*UserInfoResponse)(nil),             // 54: grapery.api.UserInfoResponse
-	(*UpdateUserAvatorResponse)(nil),     // 55: grapery.api.UpdateUserAvatorResponse
-	(*UserWatchingResponse)(nil),         // 56: grapery.api.UserWatchingResponse
-	(*UserGroupResponse)(nil),            // 57: grapery.api.UserGroupResponse
-	(*UserFollowingGroupResponse)(nil),   // 58: grapery.api.UserFollowingGroupResponse
-	(*UserUpdateResponse)(nil),           // 59: grapery.api.UserUpdateResponse
-	(*FetchUserActivesResponse)(nil),     // 60: grapery.api.FetchUserActivesResponse
-	(*SearchUserResponse)(nil),           // 61: grapery.api.SearchUserResponse
-	(*CreateGroupResponse)(nil),          // 62: grapery.api.CreateGroupResponse
-	(*GetGroupResponse)(nil),             // 63: grapery.api.GetGroupResponse
-	(*GetGroupActivesResponse)(nil),      // 64: grapery.api.GetGroupActivesResponse
-	(*UpdateGroupInfoResponse)(nil),      // 65: grapery.api.UpdateGroupInfoResponse
-	(*DeleteGroupResponse)(nil),          // 66: grapery.api.DeleteGroupResponse
-	(*FetchGroupMembersResponse)(nil),    // 67: grapery.api.FetchGroupMembersResponse
-	(*SearchGroupResponse)(nil),          // 68: grapery.api.SearchGroupResponse
-	(*FetchGroupProjectsResponse)(nil),   // 69: grapery.api.FetchGroupProjectsResponse
-	(*JoinGroupResponse)(nil),            // 70: grapery.api.JoinGroupResponse
-	(*LeaveGroupResponse)(nil),           // 71: grapery.api.LeaveGroupResponse
-	(*GetProjectResponse)(nil),           // 72: grapery.api.GetProjectResponse
-	(*CreateProjectResponse)(nil),        // 73: grapery.api.CreateProjectResponse
-	(*UpdateProjectResponse)(nil),        // 74: grapery.api.UpdateProjectResponse
-	(*DeleteProjectResponse)(nil),        // 75: grapery.api.DeleteProjectResponse
-	(*GetProjectProfileResponse)(nil),    // 76: grapery.api.GetProjectProfileResponse
-	(*UpdateProjectProfileResponse)(nil), // 77: grapery.api.UpdateProjectProfileResponse
-	(*WatchProjectResponse)(nil),         // 78: grapery.api.WatchProjectResponse
-	(*UnWatchProjectResponse)(nil),       // 79: grapery.api.UnWatchProjectResponse
-	(*SearchProjectResponse)(nil),        // 80: grapery.api.SearchProjectResponse
-	(*SearchAllProjectResponse)(nil),     // 81: grapery.api.SearchAllProjectResponse
-	(*ExploreProjectsResponse)(nil),      // 82: grapery.api.ExploreProjectsResponse
-	(*GetProjectItemsResponse)(nil),      // 83: grapery.api.GetProjectItemsResponse
-	(*GetGroupItemsResponse)(nil),        // 84: grapery.api.GetGroupItemsResponse
-	(*GetUserItemsResponse)(nil),         // 85: grapery.api.GetUserItemsResponse
-	(*GetItemResponse)(nil),              // 86: grapery.api.GetItemResponse
-	(*CreateItemResponse)(nil),           // 87: grapery.api.CreateItemResponse
-	(*UpdateItemResponse)(nil),           // 88: grapery.api.UpdateItemResponse
-	(*DeleteItemResponse)(nil),           // 89: grapery.api.DeleteItemResponse
-	(*LikeItemResponse)(nil),             // 90: grapery.api.LikeItemResponse
-	(*CreateCommentResp)(nil),            // 91: grapery.api.CreateCommentResp
-	(*GetItemCommentResp)(nil),           // 92: grapery.api.GetItemCommentResp
-	(*GetUserProjectCommentResp)(nil),    // 93: grapery.api.GetUserProjectCommentResp
+	(*LogoutResponse)(nil),               // 50: grapery.api.LogoutResponse
+	(*RegisterResponse)(nil),             // 51: grapery.api.RegisterResponse
+	(*ResetPasswordResponse)(nil),        // 52: grapery.api.ResetPasswordResponse
+	(*UserInfoResponse)(nil),             // 53: grapery.api.UserInfoResponse
+	(*UpdateUserAvatorResponse)(nil),     // 54: grapery.api.UpdateUserAvatorResponse
+	(*UserWatchingResponse)(nil),         // 55: grapery.api.UserWatchingResponse
+	(*UserGroupResponse)(nil),            // 56: grapery.api.UserGroupResponse
+	(*UserFollowingGroupResponse)(nil),   // 57: grapery.api.UserFollowingGroupResponse
+	(*UserUpdateResponse)(nil),           // 58: grapery.api.UserUpdateResponse
+	(*FetchUserActivesResponse)(nil),     // 59: grapery.api.FetchUserActivesResponse
+	(*SearchUserResponse)(nil),           // 60: grapery.api.SearchUserResponse
+	(*CreateGroupResponse)(nil),          // 61: grapery.api.CreateGroupResponse
+	(*GetGroupResponse)(nil),             // 62: grapery.api.GetGroupResponse
+	(*GetGroupActivesResponse)(nil),      // 63: grapery.api.GetGroupActivesResponse
+	(*UpdateGroupInfoResponse)(nil),      // 64: grapery.api.UpdateGroupInfoResponse
+	(*DeleteGroupResponse)(nil),          // 65: grapery.api.DeleteGroupResponse
+	(*FetchGroupMembersResponse)(nil),    // 66: grapery.api.FetchGroupMembersResponse
+	(*SearchGroupResponse)(nil),          // 67: grapery.api.SearchGroupResponse
+	(*FetchGroupProjectsResponse)(nil),   // 68: grapery.api.FetchGroupProjectsResponse
+	(*JoinGroupResponse)(nil),            // 69: grapery.api.JoinGroupResponse
+	(*LeaveGroupResponse)(nil),           // 70: grapery.api.LeaveGroupResponse
+	(*GetProjectResponse)(nil),           // 71: grapery.api.GetProjectResponse
+	(*CreateProjectResponse)(nil),        // 72: grapery.api.CreateProjectResponse
+	(*UpdateProjectResponse)(nil),        // 73: grapery.api.UpdateProjectResponse
+	(*DeleteProjectResponse)(nil),        // 74: grapery.api.DeleteProjectResponse
+	(*GetProjectProfileResponse)(nil),    // 75: grapery.api.GetProjectProfileResponse
+	(*UpdateProjectProfileResponse)(nil), // 76: grapery.api.UpdateProjectProfileResponse
+	(*WatchProjectResponse)(nil),         // 77: grapery.api.WatchProjectResponse
+	(*UnWatchProjectResponse)(nil),       // 78: grapery.api.UnWatchProjectResponse
+	(*SearchProjectResponse)(nil),        // 79: grapery.api.SearchProjectResponse
+	(*SearchAllProjectResponse)(nil),     // 80: grapery.api.SearchAllProjectResponse
+	(*ExploreProjectsResponse)(nil),      // 81: grapery.api.ExploreProjectsResponse
+	(*GetProjectItemsResponse)(nil),      // 82: grapery.api.GetProjectItemsResponse
+	(*GetGroupItemsResponse)(nil),        // 83: grapery.api.GetGroupItemsResponse
+	(*GetUserItemsResponse)(nil),         // 84: grapery.api.GetUserItemsResponse
+	(*GetItemResponse)(nil),              // 85: grapery.api.GetItemResponse
+	(*CreateItemResponse)(nil),           // 86: grapery.api.CreateItemResponse
+	(*UpdateItemResponse)(nil),           // 87: grapery.api.UpdateItemResponse
+	(*DeleteItemResponse)(nil),           // 88: grapery.api.DeleteItemResponse
+	(*LikeItemResponse)(nil),             // 89: grapery.api.LikeItemResponse
+	(*CreateCommentResp)(nil),            // 90: grapery.api.CreateCommentResp
+	(*GetItemCommentResp)(nil),           // 91: grapery.api.GetItemCommentResp
 }
 var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int32{
 	4,  // 0: grapery.api.TeamsAPI.Explore:input_type -> grapery.api.ExploreRequest
@@ -911,56 +900,54 @@ var file_github_com_grapery_grapery_common_protoc_service_proto_depIdxs = []int3
 	47, // 43: grapery.api.TeamsAPI.LikeItem:input_type -> grapery.api.LikeItemRequest
 	48, // 44: grapery.api.TeamsAPI.CreateComment:input_type -> grapery.api.CreateCommentReq
 	49, // 45: grapery.api.TeamsAPI.GetItemComment:input_type -> grapery.api.GetItemCommentReq
-	50, // 46: grapery.api.TeamsAPI.GetGroupItemComment:input_type -> grapery.api.GetUserProjectCommentReq
-	5,  // 47: grapery.api.TeamsAPI.Explore:output_type -> grapery.api.ExploreResponse
-	7,  // 48: grapery.api.TeamsAPI.Trending:output_type -> grapery.api.TrendingResponse
-	1,  // 49: grapery.api.TeamsAPI.Version:output_type -> grapery.api.VersionResponse
-	3,  // 50: grapery.api.TeamsAPI.About:output_type -> grapery.api.AboutResponse
-	51, // 51: grapery.api.TeamsAPI.Logout:output_type -> grapery.api.LogoutResponse
-	52, // 52: grapery.api.TeamsAPI.Register:output_type -> grapery.api.RegisterResponse
-	53, // 53: grapery.api.TeamsAPI.ResetPwd:output_type -> grapery.api.ResetPasswordResponse
-	54, // 54: grapery.api.TeamsAPI.UserInfo:output_type -> grapery.api.UserInfoResponse
-	55, // 55: grapery.api.TeamsAPI.UpdateUserAvator:output_type -> grapery.api.UpdateUserAvatorResponse
-	56, // 56: grapery.api.TeamsAPI.UserWatching:output_type -> grapery.api.UserWatchingResponse
-	57, // 57: grapery.api.TeamsAPI.UserGroup:output_type -> grapery.api.UserGroupResponse
-	58, // 58: grapery.api.TeamsAPI.UserFollowingGroup:output_type -> grapery.api.UserFollowingGroupResponse
-	59, // 59: grapery.api.TeamsAPI.UserUpdate:output_type -> grapery.api.UserUpdateResponse
-	60, // 60: grapery.api.TeamsAPI.FetchUserActives:output_type -> grapery.api.FetchUserActivesResponse
-	61, // 61: grapery.api.TeamsAPI.SearchUser:output_type -> grapery.api.SearchUserResponse
-	62, // 62: grapery.api.TeamsAPI.CreateGroup:output_type -> grapery.api.CreateGroupResponse
-	63, // 63: grapery.api.TeamsAPI.GetGroup:output_type -> grapery.api.GetGroupResponse
-	64, // 64: grapery.api.TeamsAPI.GetGroupActives:output_type -> grapery.api.GetGroupActivesResponse
-	65, // 65: grapery.api.TeamsAPI.UpdateGroupInfo:output_type -> grapery.api.UpdateGroupInfoResponse
-	66, // 66: grapery.api.TeamsAPI.DeleteGroup:output_type -> grapery.api.DeleteGroupResponse
-	67, // 67: grapery.api.TeamsAPI.FetchGroupMembers:output_type -> grapery.api.FetchGroupMembersResponse
-	68, // 68: grapery.api.TeamsAPI.SearchGroup:output_type -> grapery.api.SearchGroupResponse
-	69, // 69: grapery.api.TeamsAPI.FetchGroupProjects:output_type -> grapery.api.FetchGroupProjectsResponse
-	70, // 70: grapery.api.TeamsAPI.JoinGroup:output_type -> grapery.api.JoinGroupResponse
-	71, // 71: grapery.api.TeamsAPI.LeaveGroup:output_type -> grapery.api.LeaveGroupResponse
-	72, // 72: grapery.api.TeamsAPI.GetProject:output_type -> grapery.api.GetProjectResponse
-	73, // 73: grapery.api.TeamsAPI.CreateProject:output_type -> grapery.api.CreateProjectResponse
-	74, // 74: grapery.api.TeamsAPI.UpdateProject:output_type -> grapery.api.UpdateProjectResponse
-	75, // 75: grapery.api.TeamsAPI.DeleteProject:output_type -> grapery.api.DeleteProjectResponse
-	76, // 76: grapery.api.TeamsAPI.GetProjectProfile:output_type -> grapery.api.GetProjectProfileResponse
-	77, // 77: grapery.api.TeamsAPI.UpdateProjectProfile:output_type -> grapery.api.UpdateProjectProfileResponse
-	78, // 78: grapery.api.TeamsAPI.WatchProject:output_type -> grapery.api.WatchProjectResponse
-	79, // 79: grapery.api.TeamsAPI.UnWatchProject:output_type -> grapery.api.UnWatchProjectResponse
-	80, // 80: grapery.api.TeamsAPI.SearchGroupProject:output_type -> grapery.api.SearchProjectResponse
-	81, // 81: grapery.api.TeamsAPI.SearchProject:output_type -> grapery.api.SearchAllProjectResponse
-	82, // 82: grapery.api.TeamsAPI.ExploreProject:output_type -> grapery.api.ExploreProjectsResponse
-	83, // 83: grapery.api.TeamsAPI.GetProjectItems:output_type -> grapery.api.GetProjectItemsResponse
-	84, // 84: grapery.api.TeamsAPI.GetGroupItems:output_type -> grapery.api.GetGroupItemsResponse
-	85, // 85: grapery.api.TeamsAPI.GetUserItems:output_type -> grapery.api.GetUserItemsResponse
-	86, // 86: grapery.api.TeamsAPI.GetItem:output_type -> grapery.api.GetItemResponse
-	87, // 87: grapery.api.TeamsAPI.CreateItem:output_type -> grapery.api.CreateItemResponse
-	88, // 88: grapery.api.TeamsAPI.UpdateItem:output_type -> grapery.api.UpdateItemResponse
-	89, // 89: grapery.api.TeamsAPI.DeleteItem:output_type -> grapery.api.DeleteItemResponse
-	90, // 90: grapery.api.TeamsAPI.LikeItem:output_type -> grapery.api.LikeItemResponse
-	91, // 91: grapery.api.TeamsAPI.CreateComment:output_type -> grapery.api.CreateCommentResp
-	92, // 92: grapery.api.TeamsAPI.GetItemComment:output_type -> grapery.api.GetItemCommentResp
-	93, // 93: grapery.api.TeamsAPI.GetGroupItemComment:output_type -> grapery.api.GetUserProjectCommentResp
-	47, // [47:94] is the sub-list for method output_type
-	0,  // [0:47] is the sub-list for method input_type
+	5,  // 46: grapery.api.TeamsAPI.Explore:output_type -> grapery.api.ExploreResponse
+	7,  // 47: grapery.api.TeamsAPI.Trending:output_type -> grapery.api.TrendingResponse
+	1,  // 48: grapery.api.TeamsAPI.Version:output_type -> grapery.api.VersionResponse
+	3,  // 49: grapery.api.TeamsAPI.About:output_type -> grapery.api.AboutResponse
+	50, // 50: grapery.api.TeamsAPI.Logout:output_type -> grapery.api.LogoutResponse
+	51, // 51: grapery.api.TeamsAPI.Register:output_type -> grapery.api.RegisterResponse
+	52, // 52: grapery.api.TeamsAPI.ResetPwd:output_type -> grapery.api.ResetPasswordResponse
+	53, // 53: grapery.api.TeamsAPI.UserInfo:output_type -> grapery.api.UserInfoResponse
+	54, // 54: grapery.api.TeamsAPI.UpdateUserAvator:output_type -> grapery.api.UpdateUserAvatorResponse
+	55, // 55: grapery.api.TeamsAPI.UserWatching:output_type -> grapery.api.UserWatchingResponse
+	56, // 56: grapery.api.TeamsAPI.UserGroup:output_type -> grapery.api.UserGroupResponse
+	57, // 57: grapery.api.TeamsAPI.UserFollowingGroup:output_type -> grapery.api.UserFollowingGroupResponse
+	58, // 58: grapery.api.TeamsAPI.UserUpdate:output_type -> grapery.api.UserUpdateResponse
+	59, // 59: grapery.api.TeamsAPI.FetchUserActives:output_type -> grapery.api.FetchUserActivesResponse
+	60, // 60: grapery.api.TeamsAPI.SearchUser:output_type -> grapery.api.SearchUserResponse
+	61, // 61: grapery.api.TeamsAPI.CreateGroup:output_type -> grapery.api.CreateGroupResponse
+	62, // 62: grapery.api.TeamsAPI.GetGroup:output_type -> grapery.api.GetGroupResponse
+	63, // 63: grapery.api.TeamsAPI.GetGroupActives:output_type -> grapery.api.GetGroupActivesResponse
+	64, // 64: grapery.api.TeamsAPI.UpdateGroupInfo:output_type -> grapery.api.UpdateGroupInfoResponse
+	65, // 65: grapery.api.TeamsAPI.DeleteGroup:output_type -> grapery.api.DeleteGroupResponse
+	66, // 66: grapery.api.TeamsAPI.FetchGroupMembers:output_type -> grapery.api.FetchGroupMembersResponse
+	67, // 67: grapery.api.TeamsAPI.SearchGroup:output_type -> grapery.api.SearchGroupResponse
+	68, // 68: grapery.api.TeamsAPI.FetchGroupProjects:output_type -> grapery.api.FetchGroupProjectsResponse
+	69, // 69: grapery.api.TeamsAPI.JoinGroup:output_type -> grapery.api.JoinGroupResponse
+	70, // 70: grapery.api.TeamsAPI.LeaveGroup:output_type -> grapery.api.LeaveGroupResponse
+	71, // 71: grapery.api.TeamsAPI.GetProject:output_type -> grapery.api.GetProjectResponse
+	72, // 72: grapery.api.TeamsAPI.CreateProject:output_type -> grapery.api.CreateProjectResponse
+	73, // 73: grapery.api.TeamsAPI.UpdateProject:output_type -> grapery.api.UpdateProjectResponse
+	74, // 74: grapery.api.TeamsAPI.DeleteProject:output_type -> grapery.api.DeleteProjectResponse
+	75, // 75: grapery.api.TeamsAPI.GetProjectProfile:output_type -> grapery.api.GetProjectProfileResponse
+	76, // 76: grapery.api.TeamsAPI.UpdateProjectProfile:output_type -> grapery.api.UpdateProjectProfileResponse
+	77, // 77: grapery.api.TeamsAPI.WatchProject:output_type -> grapery.api.WatchProjectResponse
+	78, // 78: grapery.api.TeamsAPI.UnWatchProject:output_type -> grapery.api.UnWatchProjectResponse
+	79, // 79: grapery.api.TeamsAPI.SearchGroupProject:output_type -> grapery.api.SearchProjectResponse
+	80, // 80: grapery.api.TeamsAPI.SearchProject:output_type -> grapery.api.SearchAllProjectResponse
+	81, // 81: grapery.api.TeamsAPI.ExploreProject:output_type -> grapery.api.ExploreProjectsResponse
+	82, // 82: grapery.api.TeamsAPI.GetProjectItems:output_type -> grapery.api.GetProjectItemsResponse
+	83, // 83: grapery.api.TeamsAPI.GetGroupItems:output_type -> grapery.api.GetGroupItemsResponse
+	84, // 84: grapery.api.TeamsAPI.GetUserItems:output_type -> grapery.api.GetUserItemsResponse
+	85, // 85: grapery.api.TeamsAPI.GetItem:output_type -> grapery.api.GetItemResponse
+	86, // 86: grapery.api.TeamsAPI.CreateItem:output_type -> grapery.api.CreateItemResponse
+	87, // 87: grapery.api.TeamsAPI.UpdateItem:output_type -> grapery.api.UpdateItemResponse
+	88, // 88: grapery.api.TeamsAPI.DeleteItem:output_type -> grapery.api.DeleteItemResponse
+	89, // 89: grapery.api.TeamsAPI.LikeItem:output_type -> grapery.api.LikeItemResponse
+	90, // 90: grapery.api.TeamsAPI.CreateComment:output_type -> grapery.api.CreateCommentResp
+	91, // 91: grapery.api.TeamsAPI.GetItemComment:output_type -> grapery.api.GetItemCommentResp
+	46, // [46:92] is the sub-list for method output_type
+	0,  // [0:46] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -1152,7 +1139,6 @@ type TeamsAPIClient interface {
 	LikeItem(ctx context.Context, in *LikeItemRequest, opts ...grpc.CallOption) (*LikeItemResponse, error)
 	CreateComment(ctx context.Context, in *CreateCommentReq, opts ...grpc.CallOption) (*CreateCommentResp, error)
 	GetItemComment(ctx context.Context, in *GetItemCommentReq, opts ...grpc.CallOption) (*GetItemCommentResp, error)
-	GetGroupItemComment(ctx context.Context, in *GetUserProjectCommentReq, opts ...grpc.CallOption) (*GetUserProjectCommentResp, error)
 }
 
 type teamsAPIClient struct {
@@ -1577,15 +1563,6 @@ func (c *teamsAPIClient) GetItemComment(ctx context.Context, in *GetItemCommentR
 	return out, nil
 }
 
-func (c *teamsAPIClient) GetGroupItemComment(ctx context.Context, in *GetUserProjectCommentReq, opts ...grpc.CallOption) (*GetUserProjectCommentResp, error) {
-	out := new(GetUserProjectCommentResp)
-	err := c.cc.Invoke(ctx, "/grapery.api.TeamsAPI/GetGroupItemComment", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TeamsAPIServer is the server API for TeamsAPI service.
 type TeamsAPIServer interface {
 	Explore(context.Context, *ExploreRequest) (*ExploreResponse, error)
@@ -1634,7 +1611,6 @@ type TeamsAPIServer interface {
 	LikeItem(context.Context, *LikeItemRequest) (*LikeItemResponse, error)
 	CreateComment(context.Context, *CreateCommentReq) (*CreateCommentResp, error)
 	GetItemComment(context.Context, *GetItemCommentReq) (*GetItemCommentResp, error)
-	GetGroupItemComment(context.Context, *GetUserProjectCommentReq) (*GetUserProjectCommentResp, error)
 }
 
 // UnimplementedTeamsAPIServer can be embedded to have forward compatible implementations.
@@ -1778,9 +1754,6 @@ func (*UnimplementedTeamsAPIServer) CreateComment(context.Context, *CreateCommen
 }
 func (*UnimplementedTeamsAPIServer) GetItemComment(context.Context, *GetItemCommentReq) (*GetItemCommentResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetItemComment not implemented")
-}
-func (*UnimplementedTeamsAPIServer) GetGroupItemComment(context.Context, *GetUserProjectCommentReq) (*GetUserProjectCommentResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetGroupItemComment not implemented")
 }
 
 func RegisterTeamsAPIServer(s *grpc.Server, srv TeamsAPIServer) {
@@ -2615,24 +2588,6 @@ func _TeamsAPI_GetItemComment_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TeamsAPI_GetGroupItemComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserProjectCommentReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TeamsAPIServer).GetGroupItemComment(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grapery.api.TeamsAPI/GetGroupItemComment",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TeamsAPIServer).GetGroupItemComment(ctx, req.(*GetUserProjectCommentReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _TeamsAPI_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "grapery.api.TeamsAPI",
 	HandlerType: (*TeamsAPIServer)(nil),
@@ -2820,10 +2775,6 @@ var _TeamsAPI_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetItemComment",
 			Handler:    _TeamsAPI_GetItemComment_Handler,
-		},
-		{
-			MethodName: "GetGroupItemComment",
-			Handler:    _TeamsAPI_GetGroupItemComment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

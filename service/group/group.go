@@ -101,8 +101,3 @@ func (g *GroupService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 	}
 	return ret, nil
 }
-
-func (g *GroupService) GetGroupItemComment(ctx context.Context, req *api.GetUserProjectCommentReq) (*api.GetUserProjectCommentResp, error) {
-
-	return nil, nil
-}

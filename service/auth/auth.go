@@ -92,6 +92,7 @@ func (ts *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api
 	}
 	return &api.LogoutResponse{}, nil
 }
+
 func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (*api.RegisterResponse, error) {
 	hashpwd := jwt.HashPassword(req.GetPassword())
 	err := auth.GetAuthService().Register(

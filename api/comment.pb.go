@@ -286,82 +286,6 @@ func (*GetItemCommentResp) Descriptor() ([]byte, []int) {
 	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{4}
 }
 
-type GetUserProjectCommentReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *GetUserProjectCommentReq) Reset() {
-	*x = GetUserProjectCommentReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *GetUserProjectCommentReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetUserProjectCommentReq) ProtoMessage() {}
-
-func (x *GetUserProjectCommentReq) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetUserProjectCommentReq.ProtoReflect.Descriptor instead.
-func (*GetUserProjectCommentReq) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{5}
-}
-
-type GetUserProjectCommentResp struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *GetUserProjectCommentResp) Reset() {
-	*x = GetUserProjectCommentResp{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *GetUserProjectCommentResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetUserProjectCommentResp) ProtoMessage() {}
-
-func (x *GetUserProjectCommentResp) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetUserProjectCommentResp.ProtoReflect.Descriptor instead.
-func (*GetUserProjectCommentResp) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{6}
-}
-
 type GetUserCommentReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -371,7 +295,7 @@ type GetUserCommentReq struct {
 func (x *GetUserCommentReq) Reset() {
 	*x = GetUserCommentReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[7]
+		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -384,7 +308,7 @@ func (x *GetUserCommentReq) String() string {
 func (*GetUserCommentReq) ProtoMessage() {}
 
 func (x *GetUserCommentReq) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[7]
+	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -397,7 +321,7 @@ func (x *GetUserCommentReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserCommentReq.ProtoReflect.Descriptor instead.
 func (*GetUserCommentReq) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{7}
+	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{5}
 }
 
 type GetUserCommentResp struct {
@@ -409,7 +333,7 @@ type GetUserCommentResp struct {
 func (x *GetUserCommentResp) Reset() {
 	*x = GetUserCommentResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[8]
+		mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -422,7 +346,7 @@ func (x *GetUserCommentResp) String() string {
 func (*GetUserCommentResp) ProtoMessage() {}
 
 func (x *GetUserCommentResp) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[8]
+	mi := &file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +359,7 @@ func (x *GetUserCommentResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserCommentResp.ProtoReflect.Descriptor instead.
 func (*GetUserCommentResp) Descriptor() ([]byte, []int) {
-	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{8}
+	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP(), []int{6}
 }
 
 var File_github_com_grapery_grapery_common_protoc_comment_proto protoreflect.FileDescriptor
@@ -477,15 +401,12 @@ var file_github_com_grapery_grapery_common_protoc_comment_proto_rawDesc = []byte
 	0x64, 0x12, 0x17, 0x0a, 0x07, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01,
 	0x28, 0x05, 0x52, 0x06, 0x69, 0x74, 0x65, 0x6d, 0x49, 0x64, 0x22, 0x14, 0x0a, 0x12, 0x47, 0x65,
 	0x74, 0x49, 0x74, 0x65, 0x6d, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70,
-	0x22, 0x1a, 0x0a, 0x18, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x50, 0x72, 0x6f, 0x6a, 0x65,
-	0x63, 0x74, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x22, 0x1b, 0x0a, 0x19,
-	0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x43, 0x6f,
-	0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x22, 0x13, 0x0a, 0x11, 0x47, 0x65, 0x74,
-	0x55, 0x73, 0x65, 0x72, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x22, 0x14,
-	0x0a, 0x12, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74,
-	0x52, 0x65, 0x73, 0x70, 0x42, 0x20, 0x5a, 0x1e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65,
-	0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x22, 0x13, 0x0a, 0x11, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72, 0x43, 0x6f, 0x6d, 0x6d, 0x65,
+	0x6e, 0x74, 0x52, 0x65, 0x71, 0x22, 0x14, 0x0a, 0x12, 0x47, 0x65, 0x74, 0x55, 0x73, 0x65, 0x72,
+	0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x42, 0x20, 0x5a, 0x1e, 0x67,
+	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72,
+	0x79, 0x2f, 0x67, 0x72, 0x61, 0x70, 0x65, 0x72, 0x79, 0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -500,17 +421,15 @@ func file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescGZIP() [
 	return file_github_com_grapery_grapery_common_protoc_comment_proto_rawDescData
 }
 
-var file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_github_com_grapery_grapery_common_protoc_comment_proto_goTypes = []interface{}{
-	(*Content)(nil),                   // 0: grapery.api.Content
-	(*CreateCommentReq)(nil),          // 1: grapery.api.CreateCommentReq
-	(*CreateCommentResp)(nil),         // 2: grapery.api.CreateCommentResp
-	(*GetItemCommentReq)(nil),         // 3: grapery.api.GetItemCommentReq
-	(*GetItemCommentResp)(nil),        // 4: grapery.api.GetItemCommentResp
-	(*GetUserProjectCommentReq)(nil),  // 5: grapery.api.GetUserProjectCommentReq
-	(*GetUserProjectCommentResp)(nil), // 6: grapery.api.GetUserProjectCommentResp
-	(*GetUserCommentReq)(nil),         // 7: grapery.api.GetUserCommentReq
-	(*GetUserCommentResp)(nil),        // 8: grapery.api.GetUserCommentResp
+	(*Content)(nil),            // 0: grapery.api.Content
+	(*CreateCommentReq)(nil),   // 1: grapery.api.CreateCommentReq
+	(*CreateCommentResp)(nil),  // 2: grapery.api.CreateCommentResp
+	(*GetItemCommentReq)(nil),  // 3: grapery.api.GetItemCommentReq
+	(*GetItemCommentResp)(nil), // 4: grapery.api.GetItemCommentResp
+	(*GetUserCommentReq)(nil),  // 5: grapery.api.GetUserCommentReq
+	(*GetUserCommentResp)(nil), // 6: grapery.api.GetUserCommentResp
 }
 var file_github_com_grapery_grapery_common_protoc_comment_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -588,30 +507,6 @@ func file_github_com_grapery_grapery_common_protoc_comment_proto_init() {
 			}
 		}
 		file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetUserProjectCommentReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetUserProjectCommentResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetUserCommentReq); i {
 			case 0:
 				return &v.state
@@ -623,7 +518,7 @@ func file_github_com_grapery_grapery_common_protoc_comment_proto_init() {
 				return nil
 			}
 		}
-		file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_github_com_grapery_grapery_common_protoc_comment_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetUserCommentResp); i {
 			case 0:
 				return &v.state
@@ -642,7 +537,7 @@ func file_github_com_grapery_grapery_common_protoc_comment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_github_com_grapery_grapery_common_protoc_comment_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -36,6 +37,9 @@ type jwtClaims struct {
 }
 
 func (w *JwtWrapper) GenerateToken(user *api.UserInfo) (signedToken string, err error) {
+	if user.Email == "" || user.Name == "" {
+		return "", fmt.Errorf("invalid user info: %v", user.Name)
+	}
 	claims := &jwtClaims{
 		UID:   int64(user.UserId),
 		Email: user.Email,

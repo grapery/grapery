@@ -38,7 +38,10 @@ type ItemService struct{}
 
 func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByProject(repo, req.GetProjectId(), int(req.GetOffset()), int(req.GetNumber()))
+	list, err := models.GetItemByProject(repo,
+		req.GetProjectId(),
+		int(req.GetOffset()),
+		int(req.GetNumber()))
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +193,7 @@ func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemReques
 	}
 	return &api.DeleteItemResponse{}, nil
 }
+
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
 	repo := models.NewRepository(ctx)
 	err = models.CreateItemLiker(repo, req.GetProjectId(), req.GetItemId(), req.GetUserId())
