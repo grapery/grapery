@@ -169,6 +169,7 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		Info: convert.ConvertItemToInfo(item),
 	}, nil
 }
+
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
 	repo := models.NewRepository(ctx)
 	item := &models.Item{
