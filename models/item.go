@@ -21,6 +21,8 @@ type Item struct {
 	Content       string          `json:"content,omitempty"`
 	Url           string          `json:"url,omitempty"`
 	Size          string          `json:"size,omitempty"`
+	PrevId        int64           `json:"prev_id,omitempty"`
+	NextId        int64           `json:"next_id,omitempty"`
 	Token         []string        `json:"token,omitempty"`
 	IsHiddenToken bool            `json:"is_hidden_token,omitempty"`
 	Tags          []string        `json:"tags,omitempty"`

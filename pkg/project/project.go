@@ -52,6 +52,7 @@ func (p *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequ
 		Info: convert.ConvertProjectToApiProjectInfo(project),
 	}, nil
 }
+
 func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (resp *api.CreateProjectResponse, err error) {
 	project := &models.Project{
 		Name:    req.GetName(),

@@ -10,17 +10,6 @@ import (
 	"github.com/grapery/grapery/utils/errors"
 )
 
-/*
-用户有默认的自己的一个group,叫做场地或者空间
-Group
-用户参与的组织：
-1.类似于一个大家庭，一个小家庭，情侣的二人世界
-2.学校，学院，系，实验室，班级，同学合作小组，
-3.一些关系比较近的大学校友同学，或者一些开放组织
-4.一些公共组织，类似于气候变化，共同地理位置
-5.一些大型公司，或者对抗大型公司恶性事件而结成的组织
-6.私密学术讨论组织
-*/
 type Group struct {
 	IDBase
 	Name        string          `json:"name,omitempty"`
