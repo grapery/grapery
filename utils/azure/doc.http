@@ -1,0 +1,10 @@
+POST https://grapery.openai.azure.com/openai/deployments/text-davinci-003/completions?api-version=2022-12-01
+Content-Type: application/json
+api-key: 4b54c14ce53d4c96a336c42ea7c68dd2
+
+{
+  "prompt": "Once upon a time",
+  "max_tokens": 5
+}
+
+
