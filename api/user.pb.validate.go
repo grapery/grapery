@@ -382,6 +382,8 @@ func (m *RegisterRequest) Validate() error {
 
 	// no validation rules for Password
 
+	// no validation rules for Name
+
 	return nil
 }
 

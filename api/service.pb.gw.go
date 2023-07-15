@@ -103,6 +103,40 @@ func local_request_TeamsAPI_About_0(ctx context.Context, marshaler runtime.Marsh
 
 }
 
+func request_TeamsAPI_Login_0(ctx context.Context, marshaler runtime.Marshaler, client TeamsAPIClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq LoginRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.Login(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_TeamsAPI_Login_0(ctx context.Context, marshaler runtime.Marshaler, server TeamsAPIServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq LoginRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.Login(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_TeamsAPI_Logout_0(ctx context.Context, marshaler runtime.Marshaler, client TeamsAPIClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq LogoutRequest
 	var metadata runtime.ServerMetadata
@@ -1616,6 +1650,26 @@ func RegisterTeamsAPIHandlerServer(ctx context.Context, mux *runtime.ServeMux, s
 
 	})
 
+	mux.Handle("POST", pattern_TeamsAPI_Login_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TeamsAPI_Login_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TeamsAPI_Login_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_TeamsAPI_Logout_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2577,6 +2631,26 @@ func RegisterTeamsAPIHandlerClient(ctx context.Context, mux *runtime.ServeMux, c
 
 	})
 
+	mux.Handle("POST", pattern_TeamsAPI_Login_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TeamsAPI_Login_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TeamsAPI_Login_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_TeamsAPI_Logout_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -3421,97 +3495,99 @@ func RegisterTeamsAPIHandlerClient(ctx context.Context, mux *runtime.ServeMux, c
 }
 
 var (
-	pattern_TeamsAPI_Explore_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "explore"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Explore_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "explore"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_Trending_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "trending"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Trending_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "trending"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_Version_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "version"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Version_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "version"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_About_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "about"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_About_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "about"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_Logout_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "logout"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Login_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "login"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_Register_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "register"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Logout_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "logout"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_ResetPwd_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "reset", "pwd"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_Register_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "register"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UserInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "user", "info"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_ResetPwd_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "reset", "pwd"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UpdateUserAvator_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "user", "info", "avator"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UserInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "user", "info"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UserWatching_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "user", "info", "watching"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UpdateUserAvator_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "user", "info", "avator"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UserGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "user", "info", "groups"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UserWatching_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "user", "info", "watching"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UserFollowingGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "user", "info", "groups", "following"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UserGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "user", "info", "groups"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UserUpdate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "user", "info", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UserFollowingGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "user", "info", "groups", "following"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_FetchUserActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "user", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UserUpdate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "user", "info", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_SearchUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "users", "search"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_FetchUserActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "user", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_CreateGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "group"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_SearchUser_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "users", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "info"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_CreateGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "group"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetGroupActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "info"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UpdateGroupInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "group", "info", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetGroupActives_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "actives"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_DeleteGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "group", "info", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UpdateGroupInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "group", "info", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_FetchGroupMembers_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "group", "info", "members"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_DeleteGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "group", "info", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_SearchGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "search"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_FetchGroupMembers_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "group", "info", "members"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_FetchGroupProjects_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "projects"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_SearchGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_JoinGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "join"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_FetchGroupProjects_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "projects"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_LeaveGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "leave"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_JoinGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "join"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "list"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_LeaveGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "leave"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "group", "info", "project"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "list"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UpdateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "group", "info", "project"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_DeleteProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UpdateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "profile"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_DeleteProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UpdateProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "profile"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_WatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "watch"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UpdateProjectProfile_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UnWatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "project", "unwatch"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_WatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "watch"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_SearchGroupProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "info", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UnWatchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "unwatch"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_SearchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_SearchGroupProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_ExploreProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "projects", "explore"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_SearchProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "projects", "search"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetProjectItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "info", "items"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_ExploreProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "projects", "explore"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetGroupItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "group", "items"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetProjectItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "info", "items"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetUserItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "user", "items"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetGroupItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "items"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "item", "info"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetUserItems_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "user", "items"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_CreateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "item", "add"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "item", "info"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_UpdateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "item", "update"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_CreateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "item", "add"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_DeleteItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "item", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_UpdateItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "item", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_LikeItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"v1", "group", "project", "item", "like"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_DeleteItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "item", "remove"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_CreateComment_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"v1", "group", "project", "item", "comment", "add"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_LikeItem_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "project", "item", "like"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetItemComment_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"v1", "group", "project", "item", "comment", "list"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_CreateComment_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5, 2, 6}, []string{"api", "v1", "group", "project", "item", "comment", "add"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_TeamsAPI_GetItemComment_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5, 2, 6}, []string{"api", "v1", "group", "project", "item", "comment", "list"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -3522,6 +3598,8 @@ var (
 	forward_TeamsAPI_Version_0 = runtime.ForwardResponseMessage
 
 	forward_TeamsAPI_About_0 = runtime.ForwardResponseMessage
+
+	forward_TeamsAPI_Login_0 = runtime.ForwardResponseMessage
 
 	forward_TeamsAPI_Logout_0 = runtime.ForwardResponseMessage
 

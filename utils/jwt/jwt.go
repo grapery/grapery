@@ -37,7 +37,7 @@ type jwtClaims struct {
 }
 
 func (w *JwtWrapper) GenerateToken(user *api.UserInfo) (signedToken string, err error) {
-	if user.Email == "" || user.Name == "" {
+	if user.Email == "" || user.UserId == 0 {
 		return "", fmt.Errorf("invalid user info: %v", user.Name)
 	}
 	claims := &jwtClaims{

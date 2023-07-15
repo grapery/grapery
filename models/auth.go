@@ -29,7 +29,7 @@ func (a Auth) TableName() string {
 }
 
 func CreateWithPhone(a *Auth) error {
-	a.Expired = 0
+	a.Expired = uint64(time.Now().Unix()) + 3600*72
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
@@ -53,11 +53,8 @@ func IsUserAuthExist(account string) bool {
 		)
 		return false
 	}
-	if accountInfo.CreatedAt.Unix() == 0 {
+	if accountInfo.CreateAt.Unix() == 0 {
 		return false
-	}
-	if accountInfo.Expired == 0 {
-		return true
 	}
 	if accountInfo.Expired < uint64(time.Now().Unix()) {
 		return false
@@ -66,7 +63,7 @@ func IsUserAuthExist(account string) bool {
 }
 
 func CreateWithEmail(a *Auth) error {
-	a.Expired = 0
+	a.Expired = uint64(time.Now().Unix()) + 3600*72
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(

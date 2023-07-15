@@ -27,6 +27,7 @@ import (
 type TeamsService struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
+
 	*auth.AuthService
 	*user.UserService
 	*group.GroupService
@@ -107,7 +108,11 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		if err != nil {
 			log.Fatal("failed to register: ", err)
 		}
-		http.Handle("/login", http.HandlerFunc(auth.LoginFunc))
+		http.Handle("/v1/login", http.HandlerFunc(auth.LoginFunc))
+		http.Handle("/v1/logout", http.HandlerFunc(auth.Logout))
+		http.Handle("/v1/register", http.HandlerFunc(auth.Register))
+		http.Handle("/v1/reset_password", http.HandlerFunc(auth.ResetPwd))
+		http.Handle("/v1/about", http.HandlerFunc(auth.About))
 		http.Handle("/", mux)
 		httpServer := http.Server{Addr: fmt.Sprintf("localhost:%s", cfg.HttpPort)}
 		if err := httpServer.ListenAndServe(); err != nil {

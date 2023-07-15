@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"strings"
+	"time"
 
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
@@ -29,7 +30,7 @@ func NewAuthService() *AuthService {
 }
 
 type AuthServer interface {
-	Register(ctx context.Context, account string, pwd string) error
+	Register(ctx context.Context, name string, account string, pwd string) error
 	Login(ctx context.Context, account string, pwd string) (*api.UserInfo, error)
 	Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error)
 	ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error)
@@ -40,24 +41,30 @@ type AuthServer interface {
 type AuthService struct {
 }
 
-func (auth *AuthService) Register(ctx context.Context, account string, pwd string) (err error) {
+func (auth *AuthService) Register(ctx context.Context, name string, account string, pwd string) (err error) {
 	info := new(models.Auth)
 
 	info.Password = pwd
 	if models.IsUserAuthExist(account) {
 		return errors.ErrAuthIsExist
 	}
+
 	user := new(models.User)
+	user.Name = name
 	if strings.Contains(account, "@") {
 		user.Email = account
 	} else {
 		user.Phone = account
 	}
+	user.CreateAt = time.Now()
+	user.UpdateAt = time.Now()
 	err = user.Create()
 	if err != nil {
 		return nil
 	}
 	info.UID = uint64(user.ID)
+	info.CreateAt = time.Now()
+	info.UpdateAt = time.Now()
 	if strings.Contains(account, "@") {
 		info.Email = account
 		err = models.CreateWithEmail(info)
@@ -87,6 +94,7 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 	}
 	return &api.UserInfo{
 		UserId: uint64(info.ID),
+		Email:  info.Email,
 	}, nil
 }
 

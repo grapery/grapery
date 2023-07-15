@@ -62,8 +62,8 @@ func Init(uname, pwd, dbname string) error {
 		return err
 	}
 	/*callback: https://github.com/go-gorm/gorm/blob/master/callbacks/callbacks.go*/
-	database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createOp)
-	database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateOp)
+	//database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createOp)
+	//database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateOp)
 	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
@@ -93,9 +93,9 @@ func Close() error {
 }
 
 type Base struct {
-	CreatedAt time.Time `gorm:"primary_key,column:create_at" json:"created_at,omitempty"`
-	UpdatedAt time.Time `gorm:"primary_key,column:update_at" json:"updated_at,omitempty"`
-	Deleted   bool      `gorm:"primary_key,column:deleted" json:"deleted,omitempty"`
+	CreateAt time.Time `gorm:"primary_key,column:create_at" json:"create_at,omitempty"`
+	UpdateAt time.Time `gorm:"primary_key,column:update_at" json:"update_at,omitempty"`
+	Deleted  bool      `gorm:"primary_key,column:deleted" json:"deleted,omitempty"`
 }
 
 type IDBase struct {
