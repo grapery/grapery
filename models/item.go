@@ -55,8 +55,9 @@ func DeleteItem(repo *Repository, itemID uint64) error {
 
 func GetItem(repo *Repository, itemID uint64) (*Item, error) {
 	item := new(Item)
-	err := repo.DB().Model(item).First(item).
-		Where("id = ?", itemID).Error
+	err := repo.DB().Model(item).
+		Where("id = ?", itemID).
+		First(item).Error
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +66,10 @@ func GetItem(repo *Repository, itemID uint64) (*Item, error) {
 
 func GetItemByTitle(repo *Repository, title string) (*Item, error) {
 	item := new(Item)
-	err := repo.DB().Model(item).First(item).
-		Where("title = ?", title).Error
+	err := repo.DB().
+		Model(item).
+		Where("title = ?", title).
+		First(item).Error
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +78,10 @@ func GetItemByTitle(repo *Repository, title string) (*Item, error) {
 
 func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).First(items).
-		Where("item_type = ?", itemType).Error
+	err := repo.DB().
+		Model(&Item{}).
+		Where("item_type = ?", itemType).
+		First(items).Error
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +90,11 @@ func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
 
 func GetItemByProject(repo *Repository, projectID uint64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).Scan(items).
+	err := repo.DB().Model(&Item{}).
 		Where("project_id = ?", projectID).
-		Offset(offset).Limit(number).Error
+		Offset(offset).
+		Limit(number).
+		Scan(items).Error
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +186,7 @@ func CreateItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
 	}
 	err := repo.DB().Model(item).Create(item).Error
 	if err != nil {
-		log.Error("create item liker failed: %s", err.Error())
+		log.Errorf("create item liker failed: %s", err.Error())
 		return err
 	}
 	return nil
