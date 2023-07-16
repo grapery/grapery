@@ -11,13 +11,22 @@ import (
 type ProjectService struct {
 }
 
-func (ps *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequest) (*api.GetProjectResponse, error) {
-	info, err := projectService.GetProjectServer().GetProject(ctx, req)
+func (ps *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProjectRequest) (*api.GetProjectResponse, error) {
+	info, err := projectService.GetProjectServer().GetProjectInfo(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	return info, nil
 }
+
+func (ps *ProjectService) GetProjectList(ctx context.Context, req *api.GetProjectListRequest) (*api.GetProjectListResponse, error) {
+	info, err := projectService.GetProjectServer().GetProjectList(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
 func (ps *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
 	info, err := projectService.GetProjectServer().CreateProject(ctx, req)
 	if err != nil {

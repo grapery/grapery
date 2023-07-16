@@ -183,6 +183,165 @@ var _ interface {
 	ErrorName() string
 } = GetProjectResponseValidationError{}
 
+// Validate checks the field values on GetProjectListRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *GetProjectListRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for GroupId
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// GetProjectListRequestValidationError is the validation error returned by
+// GetProjectListRequest.Validate if the designated constraints aren't met.
+type GetProjectListRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetProjectListRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetProjectListRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetProjectListRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetProjectListRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetProjectListRequestValidationError) ErrorName() string {
+	return "GetProjectListRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetProjectListRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetProjectListRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetProjectListRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetProjectListRequestValidationError{}
+
+// Validate checks the field values on GetProjectListResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *GetProjectListResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GetProjectListResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Offset
+
+	// no validation rules for Number
+
+	return nil
+}
+
+// GetProjectListResponseValidationError is the validation error returned by
+// GetProjectListResponse.Validate if the designated constraints aren't met.
+type GetProjectListResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetProjectListResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetProjectListResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetProjectListResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetProjectListResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetProjectListResponseValidationError) ErrorName() string {
+	return "GetProjectListResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetProjectListResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetProjectListResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetProjectListResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetProjectListResponseValidationError{}
+
 // Validate checks the field values on CreateProjectRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.

@@ -885,7 +885,7 @@ func local_request_TeamsAPI_LeaveGroup_0(ctx context.Context, marshaler runtime.
 
 }
 
-func request_TeamsAPI_GetProject_0(ctx context.Context, marshaler runtime.Marshaler, client TeamsAPIClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_TeamsAPI_GetProjectInfo_0(ctx context.Context, marshaler runtime.Marshaler, client TeamsAPIClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq GetProjectRequest
 	var metadata runtime.ServerMetadata
 
@@ -897,12 +897,12 @@ func request_TeamsAPI_GetProject_0(ctx context.Context, marshaler runtime.Marsha
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.GetProject(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetProjectInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_TeamsAPI_GetProject_0(ctx context.Context, marshaler runtime.Marshaler, server TeamsAPIServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_TeamsAPI_GetProjectInfo_0(ctx context.Context, marshaler runtime.Marshaler, server TeamsAPIServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq GetProjectRequest
 	var metadata runtime.ServerMetadata
 
@@ -914,7 +914,41 @@ func local_request_TeamsAPI_GetProject_0(ctx context.Context, marshaler runtime.
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.GetProject(ctx, &protoReq)
+	msg, err := server.GetProjectInfo(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_TeamsAPI_GetProjectList_0(ctx context.Context, marshaler runtime.Marshaler, client TeamsAPIClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetProjectListRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.GetProjectList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_TeamsAPI_GetProjectList_0(ctx context.Context, marshaler runtime.Marshaler, server TeamsAPIServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetProjectListRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.GetProjectList(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -2144,7 +2178,7 @@ func RegisterTeamsAPIHandlerServer(ctx context.Context, mux *runtime.ServeMux, s
 
 	})
 
-	mux.Handle("POST", pattern_TeamsAPI_GetProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_TeamsAPI_GetProjectInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
@@ -2153,14 +2187,34 @@ func RegisterTeamsAPIHandlerServer(ctx context.Context, mux *runtime.ServeMux, s
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_TeamsAPI_GetProject_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_TeamsAPI_GetProjectInfo_0(rctx, inboundMarshaler, server, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_TeamsAPI_GetProject_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_TeamsAPI_GetProjectInfo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_TeamsAPI_GetProjectList_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TeamsAPI_GetProjectList_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TeamsAPI_GetProjectList_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -3145,7 +3199,7 @@ func RegisterTeamsAPIHandlerClient(ctx context.Context, mux *runtime.ServeMux, c
 
 	})
 
-	mux.Handle("POST", pattern_TeamsAPI_GetProject_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_TeamsAPI_GetProjectInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
@@ -3154,14 +3208,34 @@ func RegisterTeamsAPIHandlerClient(ctx context.Context, mux *runtime.ServeMux, c
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_TeamsAPI_GetProject_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_TeamsAPI_GetProjectInfo_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_TeamsAPI_GetProject_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_TeamsAPI_GetProjectInfo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_TeamsAPI_GetProjectList_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TeamsAPI_GetProjectList_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TeamsAPI_GetProjectList_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -3623,9 +3697,11 @@ var (
 
 	pattern_TeamsAPI_LeaveGroup_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "group", "leave"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_GetProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "list"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetProjectInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 3}, []string{"api", "v1", "group", "info", "project"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_TeamsAPI_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "group", "info", "project"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_TeamsAPI_GetProjectList_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "list"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_TeamsAPI_CreateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "add"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_TeamsAPI_UpdateProject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "group", "info", "project", "update"}, "", runtime.AssumeColonVerbOpt(true)))
 
@@ -3721,7 +3797,9 @@ var (
 
 	forward_TeamsAPI_LeaveGroup_0 = runtime.ForwardResponseMessage
 
-	forward_TeamsAPI_GetProject_0 = runtime.ForwardResponseMessage
+	forward_TeamsAPI_GetProjectInfo_0 = runtime.ForwardResponseMessage
+
+	forward_TeamsAPI_GetProjectList_0 = runtime.ForwardResponseMessage
 
 	forward_TeamsAPI_CreateProject_0 = runtime.ForwardResponseMessage
 

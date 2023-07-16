@@ -23,7 +23,8 @@ func NewProjectService() *ProjectService {
 }
 
 type ProjectServer interface {
-	GetProject(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error)
+	GetProjectInfo(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error)
+	GetProjectList(ctx context.Context, req *api.GetProjectListRequest) (resp *api.GetProjectListResponse, err error)
 	CreateProject(ctx context.Context, req *api.CreateProjectRequest) (resp *api.CreateProjectResponse, err error)
 	UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (resp *api.UpdateProjectResponse, err error)
 	DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (resp *api.DeleteProjectResponse, err error)
@@ -39,7 +40,7 @@ type ProjectServer interface {
 type ProjectService struct {
 }
 
-func (p *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error) {
+func (p *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error) {
 	project := &models.Project{
 		GroupID: req.GetGroupId(),
 	}
@@ -50,6 +51,21 @@ func (p *ProjectService) GetProject(ctx context.Context, req *api.GetProjectRequ
 	}
 	return &api.GetProjectResponse{
 		Info: convert.ConvertProjectToApiProjectInfo(project),
+	}, nil
+}
+
+func (p *ProjectService) GetProjectList(ctx context.Context, req *api.GetProjectListRequest) (resp *api.GetProjectListResponse, err error) {
+	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	if err != nil {
+		return nil, err
+	}
+	var tempList = make([]*api.ProjectInfo, 0)
+	for _, val := range projects {
+		tempList = append(tempList, convert.ConvertProjectToApiProjectInfo(val))
+	}
+	return &api.GetProjectListResponse{
+		List:   tempList,
+		Offset: req.GetOffset() + uint64(len(tempList)),
 	}, nil
 }
 
