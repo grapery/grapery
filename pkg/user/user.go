@@ -3,9 +3,10 @@ package user
 import (
 	"context"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/grapery/grapery/api"
 	"github.com/grapery/grapery/models"
-	log "github.com/sirupsen/logrus"
 )
 
 var userServer UserServer
@@ -31,9 +32,14 @@ type UserServer interface {
 	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
+	UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error)
 }
 
 type UserService struct {
+}
+
+func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error) {
+	return nil, nil
 }
 
 func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {

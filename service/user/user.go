@@ -10,6 +10,14 @@ import (
 type UserService struct {
 }
 
+func (ts *UserService) UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error) {
+	info, err := userService.GetUserServer().UserInit(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
 func (ts *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error) {
 	info, err := userService.GetUserServer().UserWatching(ctx, req)
 	if err != nil {

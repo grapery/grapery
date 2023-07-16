@@ -907,6 +907,10 @@ func (m *VideoDetail) Validate() error {
 
 	// no validation rules for Num
 
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -975,6 +979,10 @@ func (m *MusicShareDetail) Validate() error {
 	// no validation rules for ResourceUrl
 
 	// no validation rules for Source
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
 
 	return nil
 }
@@ -1047,6 +1055,10 @@ func (m *VoiceDetail) Validate() error {
 
 	// no validation rules for TimeLength
 
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -1115,6 +1127,10 @@ func (m *ShareDetail) Validate() error {
 	// no validation rules for ResourceUrl
 
 	// no validation rules for Source
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
 
 	return nil
 }
@@ -1340,6 +1356,10 @@ func (m *ItemInfo) Validate() error {
 
 	// no validation rules for Itype
 
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -1413,6 +1433,8 @@ func (m *UserProfileInfo) Validate() error {
 
 	// no validation rules for Avatar
 
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -1480,6 +1502,8 @@ func (m *GroupProfileInfo) Validate() error {
 
 	// no validation rules for GroupId
 
+	// no validation rules for Ctime
+
 	// no validation rules for Mtime
 
 	return nil
@@ -1538,3 +1562,74 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GroupProfileInfoValidationError{}
+
+// Validate checks the field values on UserPrivate with the rules defined in
+// the proto definition for this message. If any rules are violated, an error
+// is returned.
+func (m *UserPrivate) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for ConnectType
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
+	return nil
+}
+
+// UserPrivateValidationError is the validation error returned by
+// UserPrivate.Validate if the designated constraints aren't met.
+type UserPrivateValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UserPrivateValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UserPrivateValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UserPrivateValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UserPrivateValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UserPrivateValidationError) ErrorName() string { return "UserPrivateValidationError" }
+
+// Error satisfies the builtin error interface
+func (e UserPrivateValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUserPrivate.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UserPrivateValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UserPrivateValidationError{}

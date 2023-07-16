@@ -1990,3 +1990,152 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SearchUserResponseValidationError{}
+
+// Validate checks the field values on UserInitRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *UserInitRequest) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	return nil
+}
+
+// UserInitRequestValidationError is the validation error returned by
+// UserInitRequest.Validate if the designated constraints aren't met.
+type UserInitRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UserInitRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UserInitRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UserInitRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UserInitRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UserInitRequestValidationError) ErrorName() string { return "UserInitRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e UserInitRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUserInitRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UserInitRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UserInitRequestValidationError{}
+
+// Validate checks the field values on UserInitResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *UserInitResponse) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for UserId
+
+	for idx, item := range m.GetList() {
+		_, _ = idx, item
+
+		if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return UserInitResponseValidationError{
+					field:  fmt.Sprintf("List[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// UserInitResponseValidationError is the validation error returned by
+// UserInitResponse.Validate if the designated constraints aren't met.
+type UserInitResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UserInitResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UserInitResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UserInitResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UserInitResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UserInitResponseValidationError) ErrorName() string { return "UserInitResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e UserInitResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUserInitResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UserInitResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UserInitResponseValidationError{}
