@@ -44,7 +44,7 @@ func AuthFunc(ctx context.Context) (context.Context, error) {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
 	}
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", jwtInfo.SecretKey)
-	newCtx := context.WithValue(ctx, "user_id", tokenInfo.Id)
+	newCtx := context.WithValue(ctx, "user_id", tokenInfo.UID)
 	return newCtx, nil
 }
 
