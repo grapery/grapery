@@ -60,7 +60,7 @@ func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("user_id = ?", userID).
-		Find(ret).Error; err != nil {
+		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] comment failed: %s ", userID, err.Error())
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func GetCommentByProject(projectID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("project_id = ?", projectID).
-		Find(ret).Error; err != nil {
+		Scan(ret).Error; err != nil {
 		log.Errorf("get project [%d] comment failed: %s ", projectID, err.Error())
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, err
 		Where("created_at < ? and created_at > ? and delete = 0",
 			end,
 			start).
-		Find(ret).Error; err != nil {
+		Scan(ret).Error; err != nil {
 		log.Errorf("get comment in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func GetCommentListByItem(userID uint64, commentType uint) (*[]*Comment, error) 
 	if err := DataBase().Where("user_id = ? and comment_type = ? and delete = 0",
 		userID,
 		commentType).
-		Find(ret).Error; err != nil {
+		Scan(ret).Error; err != nil {
 		log.Errorf("get user [%d] comment type [%d] failed ", userID, commentType)
 		return nil, err
 	}

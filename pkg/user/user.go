@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
@@ -39,7 +40,62 @@ type UserService struct {
 }
 
 func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error) {
-	return nil, nil
+	defer func() {
+		if re := recover(); re != nil {
+			fmt.Println("re: ", re)
+		}
+	}()
+	defaultGroup, ok, err := models.GetUserDefaultGroup(int(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		if defaultGroup.OwnerID != req.GetUserId() {
+			return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
+		}
+		return &api.UserInitResponse{
+			UserId: req.GetUserId(),
+			List: []*api.GroupInfo{
+				{
+					GroupId: uint64(defaultGroup.ID),
+					Name:    defaultGroup.Name,
+					Avatar:  defaultGroup.Avatar,
+					Desc:    defaultGroup.Gtype,
+					Creator: &api.UserInfo{
+						UserId: uint64(req.GetUserId()),
+					},
+					Ctime: defaultGroup.CreateAt.Unix(),
+					Mtime: defaultGroup.UpdateAt.Unix(),
+				},
+			},
+		}, nil
+	}
+	// user default group is not exist,need create one
+	if !ok {
+		defaultGroup, ok, err = models.GetUserDefaultGroup(int(req.GetUserId()))
+		if !ok {
+			return nil, fmt.Errorf("create default group failed: %+v", err)
+		}
+	}
+	if defaultGroup.OwnerID != req.GetUserId() {
+		return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
+	}
+	return &api.UserInitResponse{
+		UserId: req.GetUserId(),
+		List: []*api.GroupInfo{
+			{
+				GroupId: uint64(defaultGroup.ID),
+				Name:    defaultGroup.Name,
+				Avatar:  defaultGroup.Avatar,
+				Desc:    defaultGroup.Gtype,
+				Creator: &api.UserInfo{
+					UserId: uint64(req.GetUserId()),
+				},
+				Ctime: defaultGroup.CreateAt.Unix(),
+				Mtime: defaultGroup.UpdateAt.Unix(),
+			},
+		},
+	}, nil
 }
 
 func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {

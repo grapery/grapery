@@ -23,20 +23,20 @@ type Item struct {
 	Size          string          `json:"size,omitempty"`
 	PrevId        int64           `json:"prev_id,omitempty"`
 	NextId        int64           `json:"next_id,omitempty"`
-	Token         []string        `json:"token,omitempty"`
+	Token         string          `json:"token,omitempty"`
 	IsHiddenToken bool            `json:"is_hidden_token,omitempty"`
-	Tags          []string        `json:"tags,omitempty"`
+	Tags          string          `json:"tags,omitempty"`
 	LikeCount     uint64          `json:"like_count,omitempty"`
 }
 
-func (it Item) TableName() string {
-	return "item"
+func (i Item) TableName() string {
+	return "items"
 }
 
 func CreateItem(repo *Repository, item *Item) error {
 	err := repo.DB().Model(item).Create(item).Error
 	if err != nil {
-		log.Error("create item failed: %s", err.Error())
+		log.Errorf("create item failed: %s", err.Error())
 		return err
 	}
 	log.Info("create item : ", item.Title)
@@ -85,7 +85,7 @@ func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
 
 func GetItemByProject(repo *Repository, projectID uint64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).Find(items).
+	err := repo.DB().Model(&Item{}).Scan(items).
 		Where("project_id = ?", projectID).
 		Offset(offset).Limit(number).Error
 	if err != nil {
@@ -96,9 +96,14 @@ func GetItemByProject(repo *Repository, projectID uint64, offset, number int) ([
 
 func GetItemByGroup(repo *Repository, grouId uint64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).Find(items).
-		Where("group_id = ?", grouId).
-		Offset(offset).Limit(number).Error
+	err := DataBase().Model(Item{}).
+		Where("project_id in (?)",
+			DataBase().
+				Model(Project{}).
+				Select("project_id").
+				Where("group_id = ?", grouId)).
+		Order("create_at").
+		Offset(offset).Limit(number).Scan(items).Error
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +112,12 @@ func GetItemByGroup(repo *Repository, grouId uint64, offset, number int) ([]*Ite
 
 func GetItemByUser(repo *Repository, userId uint64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).Find(items).
+	err := repo.DB().Model(&Item{}).
 		Where("user_id = ?", userId).
-		Offset(offset).Limit(number).Error
+		Order("create_at").
+		Offset(offset).
+		Limit(number).
+		Scan(items).Error
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +126,12 @@ func GetItemByUser(repo *Repository, userId uint64, offset, number int) ([]*Item
 
 func GetItemByProjectAndCreator(repo *Repository, projectID uint64, userID uint64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).Find(items).
+	err := repo.DB().Model(&Item{}).
 		Where("project_id = ? and user_id = ?", projectID, userID).
-		Offset(offset).Limit(number).Error
+		Order("create_at").
+		Offset(offset).
+		Limit(number).
+		Scan(items).Error
 	if err != nil {
 		return nil, err
 	}

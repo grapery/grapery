@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -30,25 +31,47 @@ func (g Group) TableName() string {
 
 func (g *Group) Create() error {
 	err := DataBase().Table(g.TableName()).
-		Where("name = ? and  user_id = ? and deleted = ?", g.Name, g.CreatorID, 0).
-		Find(g).
+		Where("name = ? and  creator_id = ? and owner_id = ? and deleted = ?",
+			g.Name, g.CreatorID, g.CreatorID, 0).
+		First(g).
 		Error
-	if err != nil {
-		if err != gorm.ErrRecordNotFound {
-			log.Errorf("query group failed: %s", err.Error())
-			return err
-		}
-		if err == gorm.ErrRecordNotFound {
-			err = DataBase().Table(g.TableName()).Create(g).First(g).Error
-			if err != nil {
-				log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
-				return errors.ErrGroupIsAlreadyExist
-			}
-		}
-	} else {
-		log.Errorf("group [%s] is exist : ", g.ID)
-		return errors.ErrGroupIsAlreadyExist
+	fmt.Printf("err: %+v \n", err)
+	if err != gorm.ErrRecordNotFound {
+		log.Errorf("query group failed: %s", err.Error())
+		return err
 	}
+	if err == gorm.ErrRecordNotFound {
+		err = DataBase().Model(g.TableName()).Create(g).Error
+		if err != nil {
+			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
+			return errors.ErrGroupIsAlreadyExist
+		}
+	}
+
+	return nil
+}
+
+func CreateGroup(g *Group) error {
+	err := DataBase().Table(g.TableName()).
+		Where("name = ? and  creator_id = ? and owner_id = ? and deleted = ?",
+			g.Name, g.CreatorID, g.CreatorID, 0).
+		First(g).
+		Error
+	if err == nil && g.OwnerID != 0 {
+		return nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		log.Errorf("query group failed: %s", err.Error())
+		return err
+	}
+	if err == gorm.ErrRecordNotFound {
+		err = DataBase().Create(g).Error
+		if err != nil {
+			log.Errorf("create group [%s] failed: %s", g.Name, err.Error())
+			return errors.ErrGroupIsAlreadyExist
+		}
+	}
+
 	return nil
 }
 
@@ -94,7 +117,7 @@ func (g *Group) UpdateAvatar() error {
 
 func (g *Group) GetByName() error {
 	if err := DataBase().Table(g.TableName()).Where("name = ? and deleted = ?",
-		g.Name, 0).Find(g).Error; err != nil {
+		g.Name, 0).First(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}
@@ -136,7 +159,7 @@ func (g GroupMember) TableName() string {
 func (g *GroupMember) Create() error {
 	err := DataBase().Table(g.TableName()).
 		Where("group_id = ? and  user_id = ? and deleted = 0", g.GroupID, g.UserID).
-		Find(g).Error
+		First(g).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
 			log.Errorf("query group member failed: %s", err.Error())
@@ -156,7 +179,7 @@ func (g *GroupMember) Create() error {
 func (g *GroupMember) IsInGroup() (bool, error) {
 	err := DataBase().Table(g.TableName()).
 		Where("group_id = ? and  user_id = ? and deleted = 0", g.GroupID, g.UserID).
-		Find(g).
+		First(g).
 		Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -206,16 +229,61 @@ func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
 	return list, nil
 }
 
-func GetUserDefaultGroup(userID int) (g *Group, err error) {
+func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
+	userInfo := new(User)
+	userInfo.ID = uint(userID)
+	err = userInfo.GetById()
+	if err != nil {
+		return nil, false, err
+	}
 	g = new(Group)
 	err = DataBase().Model(Group{}).
-		Where("creator_id = ? and is_default = ?  and deleted = 0", userID, true).
+		Where("owner_id = ? and is_default = ?  and deleted = 0", userID, true).
 		Scan(g).
 		Error
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return g, nil
+	if err == gorm.ErrRecordNotFound {
+		return nil, false, nil
+	}
+	newGroup := &Group{
+		Name:        "默认的群组",
+		OwnerID:     uint64(userID),
+		ShortDesc:   "默认的群组",
+		CreatorID:   uint64(userID),
+		VisableType: api.VisibleType_AllPublic,
+		IsDefault:   true,
+		Gtype:       "",
+		Members:     1,
+		IDBase: IDBase{
+			Base: Base{
+				CreateAt: time.Now(),
+				UpdateAt: time.Now(),
+			},
+		},
+	}
+	err = CreateGroup(newGroup)
+	if err != nil {
+		return nil, false, err
+	}
+	mem := &GroupMember{
+		GroupID:  uint64(newGroup.ID),
+		UserID:   uint64(userID),
+		Nickname: userInfo.Name,
+		Role:     1,
+		IDBase: IDBase{
+			Base: Base{
+				CreateAt: time.Now(),
+				UpdateAt: time.Now(),
+			},
+		},
+	}
+	mem.Create()
+	if err != nil {
+		return nil, false, err
+	}
+	return g, true, nil
 }
 
 // GetUserFollowedGroups

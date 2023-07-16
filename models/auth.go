@@ -85,7 +85,7 @@ func UpdatePwd(a *Auth) error {
 
 func GetByEmail(email string) (*Auth, error) {
 	var a = new(Auth)
-	if err := DataBase().Model(a).Where("email = ?", email).Find(a).
+	if err := DataBase().Model(a).Where("email = ?", email).First(a).
 		Where("email = ? and deleted = ? and is_valid = ?", email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
@@ -103,7 +103,7 @@ func GetByPhone(phone string) (*Auth, error) {
 	if err := DataBase().Model(a).
 		Where("phone = ?", phone).
 		Where("deleted = ?", 0).
-		Find(a).
+		First(a).
 		Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
@@ -120,7 +120,7 @@ func GetByUID(id int) (*Auth, error) {
 	var a = new(Auth)
 	if err := DataBase().Model(a).
 		Where("id = ? and deleted = ? and is_valid = ?", id, 0, true).
-		Find(a).Error; err != nil {
+		First(a).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
 		}

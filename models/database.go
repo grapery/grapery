@@ -43,7 +43,6 @@ func Init(uname, pwd, dbname string) error {
 		},
 	)
 	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, dbname)
-	println("mysql :", sqldbUrl)
 
 	sqlDB, err := sql.Open("mysql", sqldbUrl)
 
@@ -62,18 +61,18 @@ func Init(uname, pwd, dbname string) error {
 		return err
 	}
 	/*callback: https://github.com/go-gorm/gorm/blob/master/callbacks/callbacks.go*/
-	//database.Callback().Create().Before("gorm:create").Register("gorm:update_ctime_mtime", createOp)
-	//database.Callback().Update().Before("gorm:update").Register("gorm:update_mtime", updateOp)
+	//database.Callback().Create().Before("gorm:create").Register("gorm:create", createOp)
+	//database.Callback().Update().Before("gorm:update").Register("uu", updateOp)
 	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
+	database.AutoMigrate(&Item{})
 	database.AutoMigrate(&User{})
 	database.AutoMigrate(&Auth{})
 	database.AutoMigrate(&Active{})
 	database.AutoMigrate(&Group{})
 	database.AutoMigrate(&Project{})
 	database.AutoMigrate(&GroupMember{})
-	database.AutoMigrate(&Item{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
 	return nil

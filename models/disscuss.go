@@ -21,7 +21,7 @@ func GetDisscussByCreator(creator string, pageSize, pageNum int) ([]*Disscuss, e
 	result := make([]*Disscuss, 0)
 	err := DataBase().Model(Disscuss{}).
 		Where("creator = ?", creator).
-		Find(&result).Offset(int(pageNum-1) * pageSize).Limit(pageSize).
+		Scan(&result).Offset(int(pageNum-1) * pageSize).Limit(pageSize).
 		Error
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func GetDisscussByProjectID(projectID int64, pageSize, pageNum int) ([]*Disscuss
 	result := make([]*Disscuss, 0)
 	err := DataBase().Model(Disscuss{}).
 		Where("project_id = ?", projectID).
-		Find(&result).Offset(int(projectID-1) * pageSize).Limit(pageSize).
+		Scan(&result).Offset(int(projectID-1) * pageSize).Limit(pageSize).
 		Error
 	if err != nil {
 		return nil, err

@@ -122,6 +122,10 @@ func (m *UserInfo) Validate() error {
 
 	// no validation rules for Desc
 
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -228,6 +232,10 @@ func (m *GroupInfo) Validate() error {
 		}
 
 	}
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
 
 	return nil
 }
@@ -343,6 +351,10 @@ func (m *ProjectInfo) Validate() error {
 
 	// no validation rules for IsClose
 
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
+
 	return nil
 }
 
@@ -427,6 +439,10 @@ func (m *ProjectProfileInfo) Validate() error {
 	// no validation rules for IsClose
 
 	// no validation rules for IsPrivate
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
 
 	return nil
 }
@@ -535,6 +551,10 @@ func (m *ActiveInfo) Validate() error {
 			}
 		}
 	}
+
+	// no validation rules for Ctime
+
+	// no validation rules for Mtime
 
 	return nil
 }
