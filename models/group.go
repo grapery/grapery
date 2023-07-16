@@ -193,8 +193,8 @@ func (g *GroupMember) IsInGroup() (bool, error) {
 
 func (g *GroupMember) Delete() error {
 	if err := DataBase().Table(g.TableName()).
-		Update("deleted", 1).
 		Where("user_id = ? and group_id = ? and deleted = 0", g.UserID, g.GroupID).
+		Update("deleted", 1).
 		Error; err != nil {
 		return fmt.Errorf("group [%d] member [%d] failed %s", g.GroupID, g.UserID, err.Error())
 	}
@@ -279,7 +279,7 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 			},
 		},
 	}
-	mem.Create()
+	err = mem.Create()
 	if err != nil {
 		return nil, false, err
 	}

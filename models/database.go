@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/callbacks"
 	logger "gorm.io/gorm/logger"
 )
 
@@ -60,9 +61,7 @@ func Init(uname, pwd, dbname string) error {
 		log.Errorf("create orm failed  : [%s]", err.Error())
 		return err
 	}
-	/*callback: https://github.com/go-gorm/gorm/blob/master/callbacks/callbacks.go*/
-	//database.Callback().Create().Before("gorm:create").Register("gorm:create", createOp)
-	//database.Callback().Update().Before("gorm:update").Register("uu", updateOp)
+	database.Callback().Update().Before("gorm:update").Register("update_update_at", callbacks.BeforeCreate)
 	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
@@ -92,8 +91,8 @@ func Close() error {
 }
 
 type Base struct {
-	CreateAt time.Time `gorm:"primary_key,column:create_at" json:"create_at,omitempty"`
-	UpdateAt time.Time `gorm:"primary_key,column:update_at" json:"update_at,omitempty"`
+	CreateAt time.Time `gorm:"column:create_at;autoCreateTime" json:"create_at,omitempty"`
+	UpdateAt time.Time `gorm:"column:update_at;autoUpdateTime" json:"update_at,omitempty"`
 	Deleted  bool      `gorm:"primary_key,column:deleted" json:"deleted,omitempty"`
 }
 
@@ -128,13 +127,15 @@ func DataBase() *gorm.DB {
 }
 
 func createOp(db *gorm.DB) {
-	now := time.Now().Unix()
-	db.Update("create_at = ?", now).Update("update_at = ?", now)
+	now := time.Now()
+	fmt.Println("craete:", now.String())
+	db.Set("create_at = ?", now).Set("update_at = ?", now)
 }
 
 func updateOp(db *gorm.DB) {
-	now := time.Now().Unix()
-	db.Update("update_at = ?", now)
+	now := time.Now()
+	fmt.Println("update:", now.String())
+	db.Set("update_at = ?", now)
 }
 
 func deleteFilter(db *gorm.DB) {

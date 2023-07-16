@@ -29,6 +29,7 @@ func (a *Active) Create() error {
 
 func (a *Active) Get() error {
 	if err := DataBase().Model(Active{}).First(a).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get active [%d] failed : [%s]", a.ID, err.Error()))
 		return err
 	}
 	return nil
@@ -102,6 +103,5 @@ func GetActiveByGroupID(groupID uint64) (*[]*Active, error) {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get group [%d] active failed ", groupID))
 		return nil, err
 	}
-
 	return ret, nil
 }
