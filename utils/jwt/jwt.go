@@ -29,6 +29,13 @@ type JwtWrapper struct {
 	ExpirationHours int64
 }
 
+func NewJwtWrapper(key string, expiration int) *JwtWrapper {
+	return &JwtWrapper{
+		SecretKey:       key,
+		ExpirationHours: int64(expiration),
+	}
+}
+
 type jwtClaims struct {
 	jwt.StandardClaims
 	UID   int64

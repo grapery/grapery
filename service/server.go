@@ -21,6 +21,7 @@ import (
 	"github.com/grapery/grapery/service/group"
 	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/utils/cache"
+	"github.com/grapery/grapery/utils/jwt"
 )
 
 // TeamsService imaplement api.RegisterTeamsAPIServer interface
@@ -50,7 +51,12 @@ func (ts *TeamsService) About(ctx context.Context, req *api.AboutRequest) (*api.
 // NewTeamsService create a new TeamsService
 func NewTeamsService() *TeamsService {
 	ts := &TeamsService{}
-	ts.AuthService = &auth.AuthService{}
+	ts.AuthService = &auth.AuthService{
+		Jwt: &jwt.JwtWrapper{
+			SecretKey:       "grapery",
+			ExpirationHours: 24 * 7,
+		},
+	}
 	ts.UserService = &user.UserService{}
 	ts.GroupService = &group.GroupService{}
 	ts.ProjectService = &group.ProjectService{}

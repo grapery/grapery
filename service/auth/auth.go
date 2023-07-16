@@ -4,13 +4,15 @@ import (
 	// "net/http"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/grapery/grapery/api"
@@ -18,12 +20,25 @@ import (
 	"github.com/grapery/grapery/utils/jwt"
 )
 
+const (
+	GrpcGateWayCookie = "grpcgateway-cookie"
+	SecretKey         = "grapery"
+	ExpirationHours   = 24 * 7
+)
+
 func AuthFunc(ctx context.Context) (context.Context, error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "token")
-	if err != nil {
-		return nil, err
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "metadata.FromIncomingContext: %v", codes.FailedPrecondition)
 	}
-	jwtInfo := jwt.JwtWrapper{}
+	tokenList := md[GrpcGateWayCookie]
+
+	if len(tokenList) <= 0 {
+		return nil, fmt.Errorf("empty auth from md: %s", GrpcGateWayCookie)
+	}
+	tokenListTemp := strings.Split(tokenList[0], "=")
+	token := tokenListTemp[1]
+	jwtInfo := jwt.NewJwtWrapper(SecretKey, ExpirationHours)
 	tokenInfo, err := jwtInfo.ValidateToken(token)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
@@ -40,8 +55,7 @@ type Result struct {
 }
 
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
-	auth := new(AuthService)
-
+	auth := NewAuthService(SecretKey, ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -56,7 +70,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 
 	if req.Account == "" || req.Password == "" {
 		ret.Code = -1
-		ret.Error = "params error"
+		ret.Error = "account or password params error"
 		resultData, _ := json.Marshal(ret)
 		w.Write(resultData)
 		return
@@ -91,7 +105,7 @@ func ParseInt(s string) int {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	auth := new(AuthService)
+	auth := NewAuthService(SecretKey, ExpirationHours)
 	query := r.URL.Query()
 	req := &api.LogoutRequest{
 		Token: query.Get("token"),
@@ -131,7 +145,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func Register(w http.ResponseWriter, r *http.Request) {
-	auth := new(AuthService)
+	auth := NewAuthService(SecretKey, ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -167,7 +181,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func ResetPwd(w http.ResponseWriter, r *http.Request) {
-	auth := new(AuthService)
+	auth := NewAuthService(SecretKey, ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -212,7 +226,13 @@ func About(w http.ResponseWriter, r *http.Request) {
 }
 
 type AuthService struct {
-	Jwt jwt.JwtWrapper
+	Jwt *jwt.JwtWrapper
+}
+
+func NewAuthService(key string, expiration int) *AuthService {
+	return &AuthService{
+		Jwt: jwt.NewJwtWrapper(key, expiration),
+	}
 }
 
 func (ts *AuthService) Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, error) {

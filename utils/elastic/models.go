@@ -22,7 +22,7 @@ func (e *ElasticUser) ElasticID() string {
 }
 
 func (e *ElasticUser) LastUsedTime() int64 {
-	return int64(e.UpdatedAt.Unix())
+	return int64(e.UpdateAt.Unix())
 }
 
 func (e *ElasticUser) SetLastUsedTime(int64) {
