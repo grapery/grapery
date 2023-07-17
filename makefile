@@ -1,6 +1,6 @@
 GO=go
 
-VERSION := 0.0.1
+VERSION := 0.5.1
 BUILD := `git rev-parse --short HEAD`
 IMAGE := grapery-app:$(VERSION)-$(BUILD)
 TARGETS := grapes
@@ -13,7 +13,8 @@ project=github.com/grapery/grapery
 
 
 $(TARGETS): 
-	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/$@
+	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
+	$(GO) build -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	redocly build-docs -o index.html common-protoc/service.swagger.json
 
 image: $(TARGETS)
