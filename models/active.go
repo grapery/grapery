@@ -85,7 +85,12 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, e
 func GetActiveByProjectID(projectID uint64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("project_id = ? and delete = 0", projectID).
+		Where("item_id in (?)",
+			DataBase().
+				Model(Item{}).
+				Select("id").
+				Where("project_id = ?", projectID)).
+		Order("create_at").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).
 			Error(fmt.Sprintf("get project [%d] active failed ", projectID))

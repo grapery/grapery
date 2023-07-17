@@ -18,14 +18,14 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/mozillazg/go-httpheader v0.3.1 // indirect
+	github.com/mozillazg/go-httpheader v0.4.0 // indirect
 	github.com/olivere/elastic v6.2.37+incompatible
 	github.com/onsi/gomega v1.16.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/sashabaranov/go-openai v1.8.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.611
-	github.com/tencentyun/cos-go-sdk-v5 v0.7.41
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.42
 	go.uber.org/zap v1.19.1
 	golang.org/x/crypto v0.7.0
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
