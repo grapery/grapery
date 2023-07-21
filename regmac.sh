@@ -39,5 +39,5 @@ for i in $(ls $basepath/$pb_package/*.proto); do
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--swift_out=/Users/grapestree/Desktop/apps/voyager3/voyager3/ "$fn"
+		--swift_out=/Users/grapestree/Desktop/apps/voyoger3/voyoger3/ "$fn"
 done
