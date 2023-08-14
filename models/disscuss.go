@@ -21,7 +21,9 @@ func GetDisscussByCreator(creator string, pageSize, pageNum int) ([]*Disscuss, e
 	result := make([]*Disscuss, 0)
 	err := DataBase().Model(Disscuss{}).
 		Where("creator = ?", creator).
-		Scan(&result).Offset(int(pageNum-1) * pageSize).Limit(pageSize).
+		Offset(int(pageNum-1) * pageSize).
+		Limit(pageSize).
+		Scan(&result).
 		Error
 	if err != nil {
 		return nil, err
