@@ -11,11 +11,12 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ensure the imports are used
@@ -30,15 +31,30 @@ var (
 	_ = time.Duration(0)
 	_ = (*url.URL)(nil)
 	_ = (*mail.Address)(nil)
-	_ = ptypes.DynamicAny{}
+	_ = anypb.Any{}
+	_ = sort.Sort
 )
 
 // Validate checks the field values on Content with the rules defined in the
-// proto definition for this message. If any rules are violated, an error is returned.
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *Content) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Content with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in ContentMultiError, or nil if none found.
+func (m *Content) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Content) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
+
+	var errors []error
 
 	// no validation rules for Ctype
 
@@ -48,8 +64,28 @@ func (m *Content) Validate() error {
 
 	// no validation rules for Data
 
+	if len(errors) > 0 {
+		return ContentMultiError(errors)
+	}
+
 	return nil
 }
+
+// ContentMultiError is an error wrapping multiple validation errors returned
+// by Content.ValidateAll() if the designated constraints aren't met.
+type ContentMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ContentMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ContentMultiError) AllErrors() []error { return m }
 
 // ContentValidationError is the validation error returned by Content.Validate
 // if the designated constraints aren't met.
@@ -106,19 +142,54 @@ var _ interface {
 } = ContentValidationError{}
 
 // Validate checks the field values on CreateCommentReq with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *CreateCommentReq) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateCommentReq with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateCommentReqMultiError, or nil if none found.
+func (m *CreateCommentReq) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateCommentReq) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
+
+	var errors []error
 
 	// no validation rules for GroupId
 
 	// no validation rules for ItemId
 
+	if len(errors) > 0 {
+		return CreateCommentReqMultiError(errors)
+	}
+
 	return nil
 }
+
+// CreateCommentReqMultiError is an error wrapping multiple validation errors
+// returned by CreateCommentReq.ValidateAll() if the designated constraints
+// aren't met.
+type CreateCommentReqMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateCommentReqMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateCommentReqMultiError) AllErrors() []error { return m }
 
 // CreateCommentReqValidationError is the validation error returned by
 // CreateCommentReq.Validate if the designated constraints aren't met.
@@ -175,15 +246,50 @@ var _ interface {
 } = CreateCommentReqValidationError{}
 
 // Validate checks the field values on CreateCommentResp with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *CreateCommentResp) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateCommentResp with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateCommentRespMultiError, or nil if none found.
+func (m *CreateCommentResp) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateCommentResp) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return CreateCommentRespMultiError(errors)
+	}
+
 	return nil
 }
+
+// CreateCommentRespMultiError is an error wrapping multiple validation errors
+// returned by CreateCommentResp.ValidateAll() if the designated constraints
+// aren't met.
+type CreateCommentRespMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateCommentRespMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateCommentRespMultiError) AllErrors() []error { return m }
 
 // CreateCommentRespValidationError is the validation error returned by
 // CreateCommentResp.Validate if the designated constraints aren't met.
@@ -242,19 +348,54 @@ var _ interface {
 } = CreateCommentRespValidationError{}
 
 // Validate checks the field values on GetItemCommentReq with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *GetItemCommentReq) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetItemCommentReq with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetItemCommentReqMultiError, or nil if none found.
+func (m *GetItemCommentReq) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetItemCommentReq) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
+
+	var errors []error
 
 	// no validation rules for GroupId
 
 	// no validation rules for ItemId
 
+	if len(errors) > 0 {
+		return GetItemCommentReqMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetItemCommentReqMultiError is an error wrapping multiple validation errors
+// returned by GetItemCommentReq.ValidateAll() if the designated constraints
+// aren't met.
+type GetItemCommentReqMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetItemCommentReqMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetItemCommentReqMultiError) AllErrors() []error { return m }
 
 // GetItemCommentReqValidationError is the validation error returned by
 // GetItemCommentReq.Validate if the designated constraints aren't met.
@@ -314,14 +455,49 @@ var _ interface {
 
 // Validate checks the field values on GetItemCommentResp with the rules
 // defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
+// violated, the first error encountered is returned, or nil if there are no violations.
 func (m *GetItemCommentResp) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetItemCommentResp with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetItemCommentRespMultiError, or nil if none found.
+func (m *GetItemCommentResp) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetItemCommentResp) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetItemCommentRespMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetItemCommentRespMultiError is an error wrapping multiple validation errors
+// returned by GetItemCommentResp.ValidateAll() if the designated constraints
+// aren't met.
+type GetItemCommentRespMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetItemCommentRespMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetItemCommentRespMultiError) AllErrors() []error { return m }
 
 // GetItemCommentRespValidationError is the validation error returned by
 // GetItemCommentResp.Validate if the designated constraints aren't met.
@@ -380,15 +556,50 @@ var _ interface {
 } = GetItemCommentRespValidationError{}
 
 // Validate checks the field values on GetUserCommentReq with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *GetUserCommentReq) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetUserCommentReq with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetUserCommentReqMultiError, or nil if none found.
+func (m *GetUserCommentReq) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetUserCommentReq) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetUserCommentReqMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetUserCommentReqMultiError is an error wrapping multiple validation errors
+// returned by GetUserCommentReq.ValidateAll() if the designated constraints
+// aren't met.
+type GetUserCommentReqMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetUserCommentReqMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetUserCommentReqMultiError) AllErrors() []error { return m }
 
 // GetUserCommentReqValidationError is the validation error returned by
 // GetUserCommentReq.Validate if the designated constraints aren't met.
@@ -448,14 +659,49 @@ var _ interface {
 
 // Validate checks the field values on GetUserCommentResp with the rules
 // defined in the proto definition for this message. If any rules are
-// violated, an error is returned.
+// violated, the first error encountered is returned, or nil if there are no violations.
 func (m *GetUserCommentResp) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetUserCommentResp with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetUserCommentRespMultiError, or nil if none found.
+func (m *GetUserCommentResp) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetUserCommentResp) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetUserCommentRespMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetUserCommentRespMultiError is an error wrapping multiple validation errors
+// returned by GetUserCommentResp.ValidateAll() if the designated constraints
+// aren't met.
+type GetUserCommentRespMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetUserCommentRespMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetUserCommentRespMultiError) AllErrors() []error { return m }
 
 // GetUserCommentRespValidationError is the validation error returned by
 // GetUserCommentResp.Validate if the designated constraints aren't met.

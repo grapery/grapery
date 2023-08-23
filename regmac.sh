@@ -18,26 +18,26 @@ for i in $(ls $basepath/$pb_package/*.proto); do
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
-		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--go_out=plugins=grpc:. "$fn"
+		-I$GOPATH/src/github.com/googleapis/\
+		--go_out=. --go-grpc_out=require_unimplemented_servers=false:. "$fn"
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
-		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--grpc-gateway_out=logtostderr=true:. "$fn"
+		-I$GOPATH/src/github.com/googleapis/\
+		--grpc-gateway_out=. "$fn"
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
-		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--swagger_out=logtostderr=true:. "$fn"
+		-I$GOPATH/src/github.com/googleapis/\
+		--openapiv2_out=logtostderr=true:. "$fn"
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
-		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
+		-I$GOPATH/src/github.com/googleapis/\
 		--validate_out="lang=go:". "$fn"
 	protoc -I$proto_install/include -I. \
 		-I$GOPATH/src \
 		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/\
-		-I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis\
-		--swift_out=/Users/grapestree/Desktop/apps/voyoger3/voyoger3/ "$fn"
+		-I$GOPATH/src/github.com/googleapis/\
+		--swift_out=/Users/grapestree/Desktop/apps/voyager3/voyager3/ "$fn"
 done

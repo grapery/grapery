@@ -9,7 +9,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -36,6 +36,7 @@ type TeamsService struct {
 	*group.ItemService
 	*group.CommentService
 	*common.CommonService
+	// api.UnimplementedTeamsAPIServer
 }
 
 func (ts *TeamsService) Version(ctx context.Context, req *api.VersionRequest) (*api.VersionResponse, error) {
@@ -96,13 +97,12 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		mux := runtime.NewServeMux(runtime.WithMarshalerOption(
-			runtime.MIMEWildcard, &runtime.JSONPb{OrigName: true, EmitDefaults: true}),
-			runtime.WithMarshalerOption("application/smalljson", &runtime.JSONPb{OrigName: true, EmitDefaults: false}),
+			runtime.MIMEWildcard, &runtime.JSONPb{}),
+			runtime.WithMarshalerOption("application/smalljson", &runtime.JSONPb{}),
 		)
 		maxRecvMsgSize := 16 * 1024 * 1024
 		log.Infof("http server max message size : [%d] Bytes", maxRecvMsgSize)
 		dialOptions := []grpc.DialOption{
-			grpc.WithInsecure(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxRecvMsgSize)),
 		}
 		err := api.RegisterTeamsAPIHandlerFromEndpoint(

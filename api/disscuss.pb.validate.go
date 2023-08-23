@@ -11,11 +11,12 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ensure the imports are used
@@ -30,19 +31,55 @@ var (
 	_ = time.Duration(0)
 	_ = (*url.URL)(nil)
 	_ = (*mail.Address)(nil)
-	_ = ptypes.DynamicAny{}
+	_ = anypb.Any{}
+	_ = sort.Sort
 )
 
 // Validate checks the field values on DisscussParams with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *DisscussParams) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DisscussParams with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DisscussParamsMultiError,
+// or nil if none found.
+func (m *DisscussParams) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DisscussParams) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return DisscussParamsMultiError(errors)
+	}
+
 	return nil
 }
+
+// DisscussParamsMultiError is an error wrapping multiple validation errors
+// returned by DisscussParams.ValidateAll() if the designated constraints
+// aren't met.
+type DisscussParamsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DisscussParamsMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DisscussParamsMultiError) AllErrors() []error { return m }
 
 // DisscussParamsValidationError is the validation error returned by
 // DisscussParams.Validate if the designated constraints aren't met.
@@ -99,15 +136,50 @@ var _ interface {
 } = DisscussParamsValidationError{}
 
 // Validate checks the field values on CreateDisscussReq with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *CreateDisscussReq) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateDisscussReq with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateDisscussReqMultiError, or nil if none found.
+func (m *CreateDisscussReq) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateDisscussReq) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return CreateDisscussReqMultiError(errors)
+	}
+
 	return nil
 }
+
+// CreateDisscussReqMultiError is an error wrapping multiple validation errors
+// returned by CreateDisscussReq.ValidateAll() if the designated constraints
+// aren't met.
+type CreateDisscussReqMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateDisscussReqMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateDisscussReqMultiError) AllErrors() []error { return m }
 
 // CreateDisscussReqValidationError is the validation error returned by
 // CreateDisscussReq.Validate if the designated constraints aren't met.
@@ -166,15 +238,50 @@ var _ interface {
 } = CreateDisscussReqValidationError{}
 
 // Validate checks the field values on CreateDisscusResp with the rules defined
-// in the proto definition for this message. If any rules are violated, an
-// error is returned.
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
 func (m *CreateDisscusResp) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateDisscusResp with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateDisscusRespMultiError, or nil if none found.
+func (m *CreateDisscusResp) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateDisscusResp) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return CreateDisscusRespMultiError(errors)
+	}
+
 	return nil
 }
+
+// CreateDisscusRespMultiError is an error wrapping multiple validation errors
+// returned by CreateDisscusResp.ValidateAll() if the designated constraints
+// aren't met.
+type CreateDisscusRespMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateDisscusRespMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateDisscusRespMultiError) AllErrors() []error { return m }
 
 // CreateDisscusRespValidationError is the validation error returned by
 // CreateDisscusResp.Validate if the designated constraints aren't met.
@@ -233,15 +340,50 @@ var _ interface {
 } = CreateDisscusRespValidationError{}
 
 // Validate checks the field values on GetDisscusReq with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *GetDisscusReq) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetDisscusReq with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in GetDisscusReqMultiError, or
+// nil if none found.
+func (m *GetDisscusReq) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetDisscusReq) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetDisscusReqMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetDisscusReqMultiError is an error wrapping multiple validation errors
+// returned by GetDisscusReq.ValidateAll() if the designated constraints
+// aren't met.
+type GetDisscusReqMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetDisscusReqMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetDisscusReqMultiError) AllErrors() []error { return m }
 
 // GetDisscusReqValidationError is the validation error returned by
 // GetDisscusReq.Validate if the designated constraints aren't met.
@@ -298,15 +440,50 @@ var _ interface {
 } = GetDisscusReqValidationError{}
 
 // Validate checks the field values on GetDisscusResp with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *GetDisscusResp) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetDisscusResp with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in GetDisscusRespMultiError,
+// or nil if none found.
+func (m *GetDisscusResp) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetDisscusResp) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetDisscusRespMultiError(errors)
+	}
+
 	return nil
 }
+
+// GetDisscusRespMultiError is an error wrapping multiple validation errors
+// returned by GetDisscusResp.ValidateAll() if the designated constraints
+// aren't met.
+type GetDisscusRespMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetDisscusRespMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetDisscusRespMultiError) AllErrors() []error { return m }
 
 // GetDisscusRespValidationError is the validation error returned by
 // GetDisscusResp.Validate if the designated constraints aren't met.

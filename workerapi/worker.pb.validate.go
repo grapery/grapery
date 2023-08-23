@@ -11,11 +11,12 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ensure the imports are used
@@ -30,19 +31,55 @@ var (
 	_ = time.Duration(0)
 	_ = (*url.URL)(nil)
 	_ = (*mail.Address)(nil)
-	_ = ptypes.DynamicAny{}
+	_ = anypb.Any{}
+	_ = sort.Sort
 )
 
 // Validate checks the field values on StatusRequest with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *StatusRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StatusRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in StatusRequestMultiError, or
+// nil if none found.
+func (m *StatusRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StatusRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
+	if len(errors) > 0 {
+		return StatusRequestMultiError(errors)
+	}
+
 	return nil
 }
+
+// StatusRequestMultiError is an error wrapping multiple validation errors
+// returned by StatusRequest.ValidateAll() if the designated constraints
+// aren't met.
+type StatusRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StatusRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StatusRequestMultiError) AllErrors() []error { return m }
 
 // StatusRequestValidationError is the validation error returned by
 // StatusRequest.Validate if the designated constraints aren't met.
@@ -99,17 +136,52 @@ var _ interface {
 } = StatusRequestValidationError{}
 
 // Validate checks the field values on StatusResponse with the rules defined in
-// the proto definition for this message. If any rules are violated, an error
-// is returned.
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
 func (m *StatusResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StatusResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in StatusResponseMultiError,
+// or nil if none found.
+func (m *StatusResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StatusResponse) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
+	var errors []error
+
 	// no validation rules for Version
+
+	if len(errors) > 0 {
+		return StatusResponseMultiError(errors)
+	}
 
 	return nil
 }
+
+// StatusResponseMultiError is an error wrapping multiple validation errors
+// returned by StatusResponse.ValidateAll() if the designated constraints
+// aren't met.
+type StatusResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StatusResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StatusResponseMultiError) AllErrors() []error { return m }
 
 // StatusResponseValidationError is the validation error returned by
 // StatusResponse.Validate if the designated constraints aren't met.
