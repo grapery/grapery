@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/mail"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -81,6 +82,21 @@ const (
 type Context struct {
 	Ctx    context.Context
 	UserID uint64
-	Err    error
+	Error  error
 	Resp   interface{}
+}
+
+func (c *Context) Deadline() (deadline time.Time, ok bool) {
+	return c.Ctx.Deadline()
+}
+
+func (c *Context) Done() <-chan struct{} {
+	return c.Ctx.Done()
+}
+func (c *Context) Err() error {
+	return c.Ctx.Err()
+}
+
+func (c *Context) Value(key any) any {
+	return c.Ctx.Value(key)
 }
