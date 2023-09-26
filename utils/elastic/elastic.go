@@ -35,7 +35,7 @@ type Logger struct {
 }
 
 func (l *Logger) Printf(format string, v ...interface{}) {
-	l.logger.Info(fmt.Sprintf(format, v))
+	l.logger.Info(fmt.Sprintf(format, v...))
 }
 
 type ErrorLogger struct {
@@ -43,7 +43,7 @@ type ErrorLogger struct {
 }
 
 func (l *ErrorLogger) Printf(format string, v ...interface{}) {
-	l.logger.Error(fmt.Sprintf(format, v))
+	l.logger.Error(fmt.Sprintf(format, v...))
 }
 
 func Init(address []string) {
