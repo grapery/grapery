@@ -3,7 +3,7 @@ package project
 import (
 	"context"
 
-	api "github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils/convert"
 )

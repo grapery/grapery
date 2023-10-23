@@ -8,7 +8,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 )
 
 func HashPassword(password string) string {

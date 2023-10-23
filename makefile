@@ -15,12 +15,10 @@ project=github.com/grapery/grapery
 $(TARGETS): 
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
-	redocly build-docs -o index.html common-protoc/service.swagger.json
 
 withpgo: $(TARGETS)
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
-	redocly build-docs -o index.html common-protoc/service.swagger.json
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)-app

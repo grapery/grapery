@@ -3,7 +3,7 @@ package models
 import (
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 )
 
 /*

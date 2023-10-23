@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/utils/errors"
 )
 

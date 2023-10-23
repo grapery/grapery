@@ -6,7 +6,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"

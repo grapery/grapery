@@ -13,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	api "github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/config"
 	models "github.com/grapery/grapery/models"
 	auth "github.com/grapery/grapery/service/auth"

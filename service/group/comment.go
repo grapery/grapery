@@ -7,7 +7,7 @@ import (
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 )
 
 type CommentService struct {

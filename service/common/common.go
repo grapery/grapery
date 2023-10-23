@@ -4,7 +4,7 @@ import (
 	// "net/http"
 	"context"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 )
 
 type CommonService struct {

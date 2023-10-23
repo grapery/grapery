@@ -9,7 +9,7 @@ import (
 	_ "github.com/gin-contrib/sessions/redis"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils/errors"
 )

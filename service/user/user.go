@@ -3,7 +3,7 @@ package user
 import (
 	"context"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	userService "github.com/grapery/grapery/pkg/user"
 )
 

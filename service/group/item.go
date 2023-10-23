@@ -3,7 +3,7 @@ package group
 import (
 	"context"
 
-	"github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 	itemService "github.com/grapery/grapery/pkg/item"
 )
 

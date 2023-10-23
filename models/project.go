@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	api "github.com/grapery/grapery/api"
+	api "github.com/grapery/common-protoc/gen"
 )
 
 /*
