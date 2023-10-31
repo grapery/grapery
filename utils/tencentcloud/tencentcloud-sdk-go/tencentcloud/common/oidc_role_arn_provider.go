@@ -3,7 +3,6 @@ package common
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
@@ -67,7 +66,7 @@ func DefaultTkeOIDCRoleArnProvider() (*OIDCRoleArnProvider, error) {
 	if tokenFile == "" {
 		return nil, errors.New("env TKE_IDENTITY_TOKEN_FILE not exist")
 	}
-	tokenBytes, err := ioutil.ReadFile(tokenFile)
+	tokenBytes, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return nil, err
 	}

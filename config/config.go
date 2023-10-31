@@ -3,7 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -71,7 +71,7 @@ func ValiedConfig(cfg *Config) error {
 
 func LoadConfig(configPath string) error {
 	log.Info("load config : ", configPath)
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		log.Errorf("read config file error : %v", err)
 		return err
