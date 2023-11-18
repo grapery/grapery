@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_log "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
@@ -80,12 +79,9 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	}
 	opt := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 		grpc_log.UnaryServerInterceptor(utils_log.InterceptorLogger(loggor)),
-		grpc_auth.UnaryServerInterceptor(auth.AuthFunc),
+		auth.AuthInterceptor(auth.AuthFunc),
 	))
-	opt1 := grpc.StreamInterceptor(
-		grpc_auth.StreamServerInterceptor(auth.AuthFunc),
-	)
-	s := grpc.NewServer(opt, opt1)
+	s := grpc.NewServer(opt)
 	api.RegisterTeamsAPIServer(s, ts)
 	go func() {
 		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", cfg.RpcPort))
@@ -119,11 +115,6 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		if err != nil {
 			log.Fatal("failed to register: ", err)
 		}
-		http.Handle("/v1/login", http.HandlerFunc(auth.LoginFunc))
-		http.Handle("/v1/logout", http.HandlerFunc(auth.Logout))
-		http.Handle("/v1/register", http.HandlerFunc(auth.Register))
-		http.Handle("/v1/reset_password", http.HandlerFunc(auth.ResetPwd))
-		http.Handle("/v1/about", http.HandlerFunc(auth.About))
 		http.Handle("/", mux)
 		httpServer := http.Server{Addr: fmt.Sprintf("localhost:%s", cfg.HttpPort)}
 		if err := httpServer.ListenAndServe(); err != nil {

@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -21,8 +23,32 @@ import (
 	"github.com/grapery/grapery/utils/jwt"
 )
 
+func AuthInterceptor(authFunc grpc_auth.AuthFunc) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		println("method: ", info.FullMethod)
+		if info.FullMethod == "/common.TeamsAPI/Login" ||
+			info.FullMethod == "/common.TeamsAPI/About" ||
+			info.FullMethod == "/common.TeamsAPI/Register" ||
+			info.FullMethod == "/common.TeamsAPI/Reset_password" {
+			return handler(ctx, req)
+		}
+		var newCtx context.Context
+		var err error
+		if overrideSrv, ok := info.Server.(grpc_auth.ServiceAuthFuncOverride); ok {
+			newCtx, err = overrideSrv.AuthFuncOverride(ctx, info.FullMethod)
+		} else {
+			newCtx, err = authFunc(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return handler(newCtx, req)
+	}
+}
+
 func AuthFunc(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
+	fmt.Println("metadata", md)
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "metadata.FromIncomingContext: %v", codes.FailedPrecondition)
 	}
@@ -171,7 +197,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	resultData, _ := json.Marshal(ret)
 	w.Header().Add("Content-Type", "application/json")
 	w.Write(resultData)
-	return
 }
 
 func ResetPwd(w http.ResponseWriter, r *http.Request) {
@@ -214,7 +239,6 @@ func ResetPwd(w http.ResponseWriter, r *http.Request) {
 	resultData, _ := json.Marshal(ret)
 	w.Header().Add("Content-Type", "application/json")
 	w.Write(resultData)
-	return
 }
 
 func About(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +247,6 @@ func About(w http.ResponseWriter, r *http.Request) {
 	resultData, _ := json.Marshal(ret)
 	w.Header().Add("Content-Type", "application/json")
 	w.Write(resultData)
-	return
 }
 
 type AuthService struct {
