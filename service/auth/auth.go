@@ -17,13 +17,8 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/pkg/auth"
+	utils "github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/jwt"
-)
-
-const (
-	GrpcGateWayCookie = "grpcgateway-cookie"
-	SecretKey         = "grapery"
-	ExpirationHours   = 24 * 7
 )
 
 func AuthFunc(ctx context.Context) (context.Context, error) {
@@ -31,20 +26,20 @@ func AuthFunc(ctx context.Context) (context.Context, error) {
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "metadata.FromIncomingContext: %v", codes.FailedPrecondition)
 	}
-	tokenList := md[GrpcGateWayCookie]
+	tokenList := md[utils.GrpcGateWayCookie]
 
 	if len(tokenList) <= 0 {
-		return nil, fmt.Errorf("empty auth from md: %s", GrpcGateWayCookie)
+		return nil, fmt.Errorf("empty auth from md: %s", utils.GrpcGateWayCookie)
 	}
 	tokenListTemp := strings.Split(tokenList[0], "=")
 	token := tokenListTemp[1]
-	jwtInfo := jwt.NewJwtWrapper(SecretKey, ExpirationHours)
+	jwtInfo := jwt.NewJwtWrapper(utils.SecretKey, utils.ExpirationHours)
 	tokenInfo, err := jwtInfo.ValidateToken(token)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
 	}
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", jwtInfo.SecretKey)
-	newCtx := context.WithValue(ctx, "user_id", tokenInfo.UID)
+	newCtx := context.WithValue(ctx, utils.UserIdKey, tokenInfo.UID)
 	return newCtx, nil
 }
 
@@ -55,7 +50,7 @@ type Result struct {
 }
 
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(SecretKey, ExpirationHours)
+	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -67,7 +62,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	req := &api.LoginRequest{}
 	err = json.Unmarshal(reqBody, req)
-
+	fmt.Println(req.String())
 	if req.Account == "" || req.Password == "" {
 		ret.Code = -1
 		ret.Error = "account or password params error"
@@ -90,7 +85,6 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	w.Header().Add("Cookie", "token="+ret.Token)
 	w.Write(resultData)
-	return
 }
 
 func ParseInt(s string) int {
@@ -105,7 +99,7 @@ func ParseInt(s string) int {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(SecretKey, ExpirationHours)
+	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
 	query := r.URL.Query()
 	req := &api.LogoutRequest{
 		Token: query.Get("token"),
@@ -145,7 +139,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func Register(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(SecretKey, ExpirationHours)
+	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -181,7 +175,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func ResetPwd(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(SecretKey, ExpirationHours)
+	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
 	reqBody, err := io.ReadAll(r.Body)
 	ret := new(Result)
 	if err != nil {
@@ -192,7 +186,14 @@ func ResetPwd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req := &api.ResetPasswordRequest{}
-	json.Unmarshal(reqBody, req)
+	err = json.Unmarshal(reqBody, req)
+	if err != nil {
+		ret.Code = -1
+		ret.Error = "params error"
+		resultData, _ := json.Marshal(ret)
+		w.Write(resultData)
+		return
+	}
 	if req.Account == "" || req.OldPwd == "" || req.NewPwd == "" {
 		ret.Code = -1
 		ret.Error = "params error"

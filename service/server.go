@@ -7,11 +7,12 @@ import (
 	"net/http"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
+	grpc_log "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/utils/cache"
 	"github.com/grapery/grapery/utils/jwt"
+	utils_log "github.com/grapery/grapery/utils/log"
 )
 
 // TeamsService imaplement api.RegisterTeamsAPIServer interface
@@ -69,7 +71,7 @@ func NewTeamsService() *TeamsService {
 }
 
 func Run(ts *TeamsService, cfg *config.Config) error {
-	grpcLog := log.WithField("server", "api")
+	loggor := log.New()
 	cache.NewRedisClient(cfg)
 	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
 	if err != nil {
@@ -77,10 +79,12 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		return err
 	}
 	opt := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-		grpc_logrus.UnaryServerInterceptor(grpcLog),
+		grpc_log.UnaryServerInterceptor(utils_log.InterceptorLogger(loggor)),
 		grpc_auth.UnaryServerInterceptor(auth.AuthFunc),
 	))
-	opt1 := grpc.StreamInterceptor(grpc_auth.StreamServerInterceptor(auth.AuthFunc))
+	opt1 := grpc.StreamInterceptor(
+		grpc_auth.StreamServerInterceptor(auth.AuthFunc),
+	)
 	s := grpc.NewServer(opt, opt1)
 	api.RegisterTeamsAPIServer(s, ts)
 	go func() {
@@ -103,6 +107,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		maxRecvMsgSize := 16 * 1024 * 1024
 		log.Infof("http server max message size : [%d] Bytes", maxRecvMsgSize)
 		dialOptions := []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxRecvMsgSize)),
 		}
 		err := api.RegisterTeamsAPIHandlerFromEndpoint(

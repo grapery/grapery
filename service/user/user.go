@@ -5,6 +5,7 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	userService "github.com/grapery/grapery/pkg/user"
+	"github.com/grapery/grapery/utils"
 )
 
 type UserService struct {
@@ -69,6 +70,10 @@ func (ts *UserService) UpdateUserAvator(ctx context.Context, req *api.UpdateUser
 	return info, nil
 }
 func (ts *UserService) UserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
+	uid := utils.GetUserInfoFromMetadata(ctx)
+	if req.GetUserId() == 0 {
+		req.UserId = uint64(uid)
+	}
 	info, err := userService.GetUserServer().GetUserInfo(ctx, req)
 	if err != nil {
 		return nil, err

@@ -11,12 +11,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	GrpcGateWayCookie = "grpcgateway-cookie"
+	SecretKey         = "grapery"
+	ExpirationHours   = 24 * 7
+	UserIdKey         = "user_id"
+)
+
 var (
 	CookieName   = "grapery"
 	Domain       = ""
 	CookieMaxAge = 86400
 	CookiePath   = ""
 )
+
+func GetUserInfoFromMetadata(ctx context.Context) int64 {
+	uid := ctx.Value(UserIdKey)
+	return uid.(int64)
+}
 
 // HasPrefixes returns true if the string s has any of the given prefixes.
 func HasPrefixes(src string, prefixes ...string) bool {
