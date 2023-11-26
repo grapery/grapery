@@ -4,6 +4,7 @@ import (
 	// "net/http"
 	"context"
 
+	"connectrpc.com/connect"
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
@@ -13,22 +14,22 @@ import (
 type CommentService struct {
 }
 
-func (ts *CommentService) CreateComment(ctx context.Context, req *api.CreateCommentReq) (*api.CreateCommentResp, error) {
+func (ts *CommentService) CreateComment(ctx context.Context, req *connect.Request[api.CreateCommentReq]) (*connect.Response[api.CreateCommentResp], error) {
 	return nil, nil
 }
 
-func (ts *CommentService) AppendComment(ctx context.Context, req *api.CreateCommentReq) (*api.CreateCommentResp, error) {
+func (ts *CommentService) AppendComment(ctx context.Context, req *connect.Request[api.CreateCommentReq]) (*connect.Response[api.CreateCommentResp], error) {
 	return nil, nil
 }
 
-func (ts *CommentService) EmojiComment(ctx context.Context, req *api.CreateCommentReq) (*api.CreateCommentResp, error) {
+func (ts *CommentService) EmojiComment(ctx context.Context, req *connect.Request[api.CreateCommentReq]) (*connect.Response[api.CreateCommentResp], error) {
 	return nil, nil
 }
 
-func (ts *CommentService) GetItemComment(ctx context.Context, req *api.GetItemCommentReq) (*api.GetItemCommentResp, error) {
+func (ts *CommentService) GetItemComment(ctx context.Context, req *connect.Request[api.GetItemCommentReq]) (*connect.Response[api.GetItemCommentResp], error) {
 	return nil, nil
 }
 
-func (ts *CommentService) DeleteComment(ctx context.Context, req *api.CreateCommentReq) (*api.CreateCommentResp, error) {
+func (ts *CommentService) DeleteComment(ctx context.Context, req *connect.Request[api.CreateCommentReq]) (*connect.Response[api.CreateCommentResp], error) {
 	return nil, nil
 }

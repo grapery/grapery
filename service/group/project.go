@@ -3,6 +3,8 @@ package group
 import (
 	"context"
 
+	"connectrpc.com/connect"
+
 	api "github.com/grapery/common-protoc/gen"
 	itemService "github.com/grapery/grapery/pkg/item"
 	projectService "github.com/grapery/grapery/pkg/project"
@@ -11,87 +13,111 @@ import (
 type ProjectService struct {
 }
 
-func (ps *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProjectRequest) (*api.GetProjectResponse, error) {
-	info, err := projectService.GetProjectServer().GetProjectInfo(ctx, req)
+func (ps *ProjectService) GetProjectInfo(ctx context.Context, req *connect.Request[api.GetProjectRequest]) (*connect.Response[api.GetProjectResponse], error) {
+	info, err := projectService.GetProjectServer().GetProjectInfo(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.GetProjectResponse]{
+		Msg: info,
+	}, nil
 }
 
-func (ps *ProjectService) GetProjectList(ctx context.Context, req *api.GetProjectListRequest) (*api.GetProjectListResponse, error) {
-	info, err := projectService.GetProjectServer().GetProjectList(ctx, req)
+func (ps *ProjectService) GetProjectList(ctx context.Context, req *connect.Request[api.GetProjectListRequest]) (*connect.Response[api.GetProjectListResponse], error) {
+	info, err := projectService.GetProjectServer().GetProjectList(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.GetProjectListResponse]{
+		Msg: info,
+	}, nil
 }
 
-func (ps *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
-	info, err := projectService.GetProjectServer().CreateProject(ctx, req)
+func (ps *ProjectService) CreateProject(ctx context.Context, req *connect.Request[api.CreateProjectRequest]) (*connect.Response[api.CreateProjectResponse], error) {
+	info, err := projectService.GetProjectServer().CreateProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.CreateProjectResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
-	info, err := projectService.GetProjectServer().UpdateProject(ctx, req)
+func (ps *ProjectService) UpdateProject(ctx context.Context, req *connect.Request[api.UpdateProjectRequest]) (*connect.Response[api.UpdateProjectResponse], error) {
+	info, err := projectService.GetProjectServer().UpdateProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UpdateProjectResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
-	info, err := projectService.GetProjectServer().DeleteProject(ctx, req)
+func (ps *ProjectService) DeleteProject(ctx context.Context, req *connect.Request[api.DeleteProjectRequest]) (*connect.Response[api.DeleteProjectResponse], error) {
+	info, err := projectService.GetProjectServer().DeleteProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.DeleteProjectResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (*api.GetProjectProfileResponse, error) {
-	info, err := projectService.GetProjectServer().GetProjectProfile(ctx, req)
+func (ps *ProjectService) GetProjectProfile(ctx context.Context, req *connect.Request[api.GetProjectProfileRequest]) (*connect.Response[api.GetProjectProfileResponse], error) {
+	info, err := projectService.GetProjectServer().GetProjectProfile(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.GetProjectProfileResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (*api.UpdateProjectProfileResponse, error) {
-	info, err := projectService.GetProjectServer().UpdateProjectProfile(ctx, req)
+func (ps *ProjectService) UpdateProjectProfile(ctx context.Context, req *connect.Request[api.UpdateProjectProfileRequest]) (*connect.Response[api.UpdateProjectProfileResponse], error) {
+	info, err := projectService.GetProjectServer().UpdateProjectProfile(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UpdateProjectProfileResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (*api.WatchProjectResponse, error) {
-	info, err := projectService.GetProjectServer().WatchProject(ctx, req)
+func (ps *ProjectService) WatchProject(ctx context.Context, req *connect.Request[api.WatchProjectReqeust]) (*connect.Response[api.WatchProjectResponse], error) {
+	info, err := projectService.GetProjectServer().WatchProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.WatchProjectResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (*api.UnWatchProjectResponse, error) {
-	info, err := projectService.GetProjectServer().UnWatchProject(ctx, req)
+func (ps *ProjectService) UnWatchProject(ctx context.Context, req *connect.Request[api.UnWatchProjectReqeust]) (*connect.Response[api.UnWatchProjectResponse], error) {
+	info, err := projectService.GetProjectServer().UnWatchProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UnWatchProjectResponse]{
+		Msg: info,
+	}, nil
 }
 
-func (ps *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (*api.SearchAllProjectResponse, error) {
-	info, err := projectService.GetProjectServer().SearchProject(ctx, req)
+func (ps *ProjectService) SearchProject(ctx context.Context, req *connect.Request[api.SearchAllProjectRequest]) (*connect.Response[api.SearchAllProjectResponse], error) {
+	info, err := projectService.GetProjectServer().SearchProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.SearchAllProjectResponse]{
+		Msg: info,
+	}, nil
 }
-func (ps *ProjectService) ExploreProject(ctx context.Context, req *api.ExploreProjectsRequest) (*api.ExploreProjectsResponse, error) {
+func (ps *ProjectService) ExploreProject(ctx context.Context, req *connect.Request[api.ExploreProjectsRequest]) (*connect.Response[api.ExploreProjectsResponse], error) {
 
-	return nil, nil
+	return &connect.Response[api.ExploreProjectsResponse]{
+		Msg: nil,
+	}, nil
 }
-func (ps *ProjectService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (*api.GetProjectItemsResponse, error) {
-	info, err := itemService.GetItemServer().GetProjectItems(ctx, req)
+func (ps *ProjectService) GetProjectItems(ctx context.Context, req *connect.Request[api.GetProjectItemsRequest]) (*connect.Response[api.GetProjectItemsResponse], error) {
+	info, err := itemService.GetItemServer().GetProjectItems(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.GetProjectItemsResponse]{
+		Msg: info,
+	}, nil
 }

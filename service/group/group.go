@@ -4,6 +4,7 @@ import (
 	// "net/http"
 	"context"
 
+	"connectrpc.com/connect"
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
@@ -15,89 +16,113 @@ import (
 type GroupService struct {
 }
 
-func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (*api.CreateGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().CreateGroup(ctx, req)
+func (g *GroupService) CreateGroup(ctx context.Context, req *connect.Request[api.CreateGroupReqeust]) (*connect.Response[api.CreateGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().CreateGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.CreateGroupResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (*api.GetGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().GetGroup(ctx, req)
+func (g *GroupService) GetGroup(ctx context.Context, req *connect.Request[api.GetGroupReqeust]) (*connect.Response[api.GetGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().GetGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.GetGroupResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (*api.GetGroupActivesResponse, error) {
-	ret, err := groupService.GetGroupServer().GetGroupActives(ctx, req)
+func (g *GroupService) GetGroupActives(ctx context.Context, req *connect.Request[api.GetGroupActivesRequest]) (*connect.Response[api.GetGroupActivesResponse], error) {
+	ret, err := groupService.GetGroupServer().GetGroupActives(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.GetGroupActivesResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (*api.UpdateGroupInfoResponse, error) {
-	ret, err := groupService.GetGroupServer().UpdateGroupInfo(ctx, req)
+func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *connect.Request[api.UpdateGroupInfoRequest]) (*connect.Response[api.UpdateGroupInfoResponse], error) {
+	ret, err := groupService.GetGroupServer().UpdateGroupInfo(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.UpdateGroupInfoResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (*api.DeleteGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().DeleteGroup(ctx, req)
+func (g *GroupService) DeleteGroup(ctx context.Context, req *connect.Request[api.DeleteGroupRequest]) (*connect.Response[api.DeleteGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().DeleteGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.DeleteGroupResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (*api.FetchGroupMembersResponse, error) {
-	ret, err := groupService.GetGroupServer().FetchGroupMembers(ctx, req)
+func (g *GroupService) FetchGroupMembers(ctx context.Context, req *connect.Request[api.FetchGroupMembersRequest]) (*connect.Response[api.FetchGroupMembersResponse], error) {
+	ret, err := groupService.GetGroupServer().FetchGroupMembers(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.FetchGroupMembersResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (*api.SearchGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().SearchGroup(ctx, req)
+func (g *GroupService) SearchGroup(ctx context.Context, req *connect.Request[api.SearchGroupReqeust]) (*connect.Response[api.SearchGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().SearchGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.SearchGroupResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (*api.FetchGroupProjectsResponse, error) {
-	ret, err := groupService.GetGroupServer().FetchGroupProjects(ctx, req)
+func (g *GroupService) FetchGroupProjects(ctx context.Context, req *connect.Request[api.FetchGroupProjectsReqeust]) (*connect.Response[api.FetchGroupProjectsResponse], error) {
+	ret, err := groupService.GetGroupServer().FetchGroupProjects(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.FetchGroupProjectsResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (*api.JoinGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().JoinGroup(ctx, req)
+func (g *GroupService) JoinGroup(ctx context.Context, req *connect.Request[api.JoinGroupRequest]) (*connect.Response[api.JoinGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().JoinGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.JoinGroupResponse]{
+		Msg: ret,
+	}, nil
 }
-func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (*api.LeaveGroupResponse, error) {
-	ret, err := groupService.GetGroupServer().LeaveGroup(ctx, req)
+func (g *GroupService) LeaveGroup(ctx context.Context, req *connect.Request[api.LeaveGroupRequest]) (*connect.Response[api.LeaveGroupResponse], error) {
+	ret, err := groupService.GetGroupServer().LeaveGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.LeaveGroupResponse]{
+		Msg: ret,
+	}, nil
 }
 
-func (g *GroupService) SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
-	ret, err := groupService.GetGroupServer().QueryGroupProject(ctx, req)
+func (g *GroupService) SearchGroupProject(ctx context.Context, req *connect.Request[api.SearchProjectRequest]) (*connect.Response[api.SearchProjectResponse], error) {
+	ret, err := groupService.GetGroupServer().QueryGroupProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.SearchProjectResponse]{
+		Msg: ret,
+	}, nil
 }
 
-func (g *GroupService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (*api.GetGroupItemsResponse, error) {
-	ret, err := itemService.GetItemServer().GetGroupItems(ctx, req)
+func (g *GroupService) GetGroupItems(ctx context.Context, req *connect.Request[api.GetGroupItemsRequest]) (*connect.Response[api.GetGroupItemsResponse], error) {
+	ret, err := itemService.GetItemServer().GetGroupItems(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return &connect.Response[api.GetGroupItemsResponse]{
+		Msg: ret,
+	}, nil
 }

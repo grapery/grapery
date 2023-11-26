@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"connectrpc.com/connect"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	"google.golang.org/grpc"
@@ -44,6 +45,48 @@ func AuthInterceptor(authFunc grpc_auth.AuthFunc) grpc.UnaryServerInterceptor {
 		}
 		return handler(newCtx, req)
 	}
+}
+
+type AuthInterceptorFunc struct {
+	Handle func(context.Context, connect.Spec, http.Header, any) error
+}
+
+func (f AuthInterceptorFunc) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		println("method: ", req.Spec().Procedure)
+		if req.Spec().Procedure == "/common.TeamsAPI/Login" ||
+			req.Spec().Procedure == "/common.TeamsAPI/About" ||
+			req.Spec().Procedure == "/common.TeamsAPI/Register" ||
+			req.Spec().Procedure == "/common.TeamsAPI/Reset_password" {
+			return next(ctx, req)
+		}
+		err := f.Handle(ctx, req.Spec(), req.Header(), req)
+		if err != nil {
+			return nil, err
+		}
+		return next(ctx, req)
+	}
+}
+
+func (f AuthInterceptorFunc) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+func (f AuthInterceptorFunc) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return next
+}
+
+func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Header, a any) error {
+	cookieInfo := header.Get(utils.GrpcGateWayCookie)
+	tokenListTemp := strings.Split(cookieInfo, "=")
+	token := tokenListTemp[1]
+	jwtInfo := jwt.NewJwtWrapper(utils.SecretKey, utils.ExpirationHours)
+	tokenInfo, err := jwtInfo.ValidateToken(token)
+	if err != nil {
+		return status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+	}
+	header.Set("auth.sub", jwtInfo.SecretKey)
+	header.Set(utils.UserIdKey, fmt.Sprintf("%d", tokenInfo.UID))
+	return nil
 }
 
 func AuthFunc(ctx context.Context) (context.Context, error) {
@@ -86,17 +129,19 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 		w.Write(resultData)
 		return
 	}
-	req := &api.LoginRequest{}
-	err = json.Unmarshal(reqBody, req)
-	fmt.Println(req.String())
-	if req.Account == "" || req.Password == "" {
+	info := &api.LoginRequest{}
+	err = json.Unmarshal(reqBody, info)
+	fmt.Println(info.String())
+	if info.Account == "" || info.Password == "" {
 		ret.Code = -1
 		ret.Error = "account or password params error"
 		resultData, _ := json.Marshal(ret)
 		w.Write(resultData)
 		return
 	}
-
+	req := &connect.Request[api.LoginRequest]{
+		Msg: info,
+	}
 	resp, err := auth.Login(r.Context(), req)
 	if err != nil {
 		ret.Code = -1
@@ -106,7 +151,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ret.Code = 1
-	ret.Token = resp.GetToken()
+	ret.Token = resp.Msg.GetToken()
 	resultData, _ := json.Marshal(ret)
 	w.Header().Add("Content-Type", "application/json")
 	w.Header().Add("Cookie", "token="+ret.Token)
@@ -124,131 +169,6 @@ func ParseInt(s string) int {
 	return val
 }
 
-func Logout(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
-	query := r.URL.Query()
-	req := &api.LogoutRequest{
-		Token: query.Get("token"),
-	}
-	val, err := strconv.Atoi(query.Get("user_id"))
-	ret := new(Result)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = "parse params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	req.UserId = uint64(val)
-	if req.Token == "" || req.UserId == 0 {
-		ret.Code = -1
-		ret.Error = "check params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-
-	_, err = auth.Logout(r.Context(), req)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = err.Error()
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	ret.Code = 1
-	resultData, _ := json.Marshal(ret)
-	w.Header().Add("Content-Type", "application/json")
-	w.Header().Add("Cookie", "token="+ret.Token)
-	w.Write(resultData)
-	return
-}
-
-func Register(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
-	reqBody, err := io.ReadAll(r.Body)
-	ret := new(Result)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = "params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	req := &api.RegisterRequest{}
-	json.Unmarshal(reqBody, req)
-	if req.Account == "" || req.Password == "" {
-		ret.Code = -1
-		ret.Error = "params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-
-	resp, err := auth.Register(r.Context(), req)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = err.Error()
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	ret.Code = int(resp.GetStatus())
-	resultData, _ := json.Marshal(ret)
-	w.Header().Add("Content-Type", "application/json")
-	w.Write(resultData)
-}
-
-func ResetPwd(w http.ResponseWriter, r *http.Request) {
-	auth := NewAuthService(utils.SecretKey, utils.ExpirationHours)
-	reqBody, err := io.ReadAll(r.Body)
-	ret := new(Result)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = "params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	req := &api.ResetPasswordRequest{}
-	err = json.Unmarshal(reqBody, req)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = "params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	if req.Account == "" || req.OldPwd == "" || req.NewPwd == "" {
-		ret.Code = -1
-		ret.Error = "params error"
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-
-	resp, err := auth.ResetPwd(r.Context(), req)
-	if err != nil {
-		ret.Code = -1
-		ret.Error = err.Error()
-		resultData, _ := json.Marshal(ret)
-		w.Write(resultData)
-		return
-	}
-	ret.Code = int(resp.GetStatus())
-	resultData, _ := json.Marshal(ret)
-	w.Header().Add("Content-Type", "application/json")
-	w.Write(resultData)
-}
-
-func About(w http.ResponseWriter, r *http.Request) {
-	ret := new(Result)
-	ret.Code = 1
-	resultData, _ := json.Marshal(ret)
-	w.Header().Add("Content-Type", "application/json")
-	w.Write(resultData)
-}
-
 type AuthService struct {
 	Jwt *jwt.JwtWrapper
 }
@@ -259,9 +179,9 @@ func NewAuthService(key string, expiration int) *AuthService {
 	}
 }
 
-func (ts *AuthService) Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, error) {
+func (ts *AuthService) Login(ctx context.Context, req *connect.Request[api.LoginRequest]) (*connect.Response[api.LoginResponse], error) {
 	info, err := auth.GetAuthService().
-		Login(ctx, req.GetAccount(), req.GetPassword())
+		Login(ctx, req.Msg.GetAccount(), req.Msg.GetPassword())
 	if err != nil {
 		return nil, err
 	}
@@ -273,22 +193,22 @@ func (ts *AuthService) Login(ctx context.Context, req *api.LoginRequest) (*api.L
 		UserId: info.GetUserId(),
 		Token:  token,
 	}
-	return ret, nil
+	return &connect.Response[api.LoginResponse]{Msg: ret}, nil
 }
-func (ts *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error) {
-	_, err := auth.GetAuthService().Logout(ctx, req)
+func (ts *AuthService) Logout(ctx context.Context, req *connect.Request[api.LogoutRequest]) (*connect.Response[api.LogoutResponse], error) {
+	_, err := auth.GetAuthService().Logout(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return &api.LogoutResponse{}, nil
+	return &connect.Response[api.LogoutResponse]{}, nil
 }
 
-func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (*api.RegisterResponse, error) {
+func (ts *AuthService) Register(ctx context.Context, req *connect.Request[api.RegisterRequest]) (*connect.Response[api.RegisterResponse], error) {
 	err := auth.GetAuthService().Register(
 		context.Background(),
-		req.GetName(),
-		req.GetAccount(),
-		req.GetPassword(),
+		req.Msg.GetName(),
+		req.Msg.GetAccount(),
+		req.Msg.GetPassword(),
 	)
 	if err != nil {
 		return nil, err
@@ -296,12 +216,10 @@ func (ts *AuthService) Register(ctx context.Context, req *api.RegisterRequest) (
 	return nil, nil
 }
 
-func (ts *AuthService) ResetPwd(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
-	req.OldPwd = req.GetOldPwd()
-	req.NewPwd = req.GetNewPwd()
-	_, err := auth.GetAuthService().ResetPassword(ctx, req)
+func (ts *AuthService) ResetPwd(ctx context.Context, req *connect.Request[api.ResetPasswordRequest]) (*connect.Response[api.ResetPasswordResponse], error) {
+	_, err := auth.GetAuthService().ResetPassword(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return &api.ResetPasswordResponse{}, nil
+	return &connect.Response[api.ResetPasswordResponse]{}, nil
 }

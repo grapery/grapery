@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 
+	"connectrpc.com/connect"
+
 	api "github.com/grapery/common-protoc/gen"
 	userService "github.com/grapery/grapery/pkg/user"
 	"github.com/grapery/grapery/utils"
@@ -11,72 +13,90 @@ import (
 type UserService struct {
 }
 
-func (ts *UserService) UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error) {
-	info, err := userService.GetUserServer().UserInit(ctx, req)
+func (ts *UserService) UserInit(ctx context.Context, req *connect.Request[api.UserInitRequest]) (*connect.Response[api.UserInitResponse], error) {
+	info, err := userService.GetUserServer().UserInit(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserInitResponse]{
+		Msg: info,
+	}, nil
 }
 
-func (ts *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error) {
-	info, err := userService.GetUserServer().UserWatching(ctx, req)
+func (ts *UserService) UserWatching(ctx context.Context, req *connect.Request[api.UserWatchingRequest]) (*connect.Response[api.UserWatchingResponse], error) {
+	info, err := userService.GetUserServer().UserWatching(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserWatchingResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) UserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
-	info, err := userService.GetUserServer().GetUserGroup(ctx, req)
+func (ts *UserService) UserGroup(ctx context.Context, req *connect.Request[api.UserGroupRequest]) (*connect.Response[api.UserGroupResponse], error) {
+	info, err := userService.GetUserServer().GetUserGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserGroupResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) UserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error) {
-	info, err := userService.GetUserServer().GetUserFollowingGroup(ctx, req)
+func (ts *UserService) UserFollowingGroup(ctx context.Context, req *connect.Request[api.UserFollowingGroupRequest]) (*connect.Response[api.UserFollowingGroupResponse], error) {
+	info, err := userService.GetUserServer().GetUserFollowingGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserFollowingGroupResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) UserUpdate(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error) {
-	info, err := userService.GetUserServer().UpdateUser(ctx, req)
+func (ts *UserService) UserUpdate(ctx context.Context, req *connect.Request[api.UserUpdateRequest]) (*connect.Response[api.UserUpdateResponse], error) {
+	info, err := userService.GetUserServer().UpdateUser(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserUpdateResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error) {
-	info, err := userService.GetUserServer().FetchUserActives(ctx, req)
+func (ts *UserService) FetchUserActives(ctx context.Context, req *connect.Request[api.FetchUserActivesRequest]) (*connect.Response[api.FetchUserActivesResponse], error) {
+	info, err := userService.GetUserServer().FetchUserActives(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.FetchUserActivesResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error) {
-	info, err := userService.GetUserServer().SearchUser(ctx, req)
+func (ts *UserService) SearchUser(ctx context.Context, req *connect.Request[api.SearchUserRequest]) (*connect.Response[api.SearchUserResponse], error) {
+	info, err := userService.GetUserServer().SearchUser(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.SearchUserResponse]{
+		Msg: info,
+	}, nil
 }
 
-func (ts *UserService) UpdateUserAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (*api.UpdateUserAvatorResponse, error) {
-	info, err := userService.GetUserServer().UpdateAvator(ctx, req)
+func (ts *UserService) UpdateUserAvator(ctx context.Context, req *connect.Request[api.UpdateUserAvatorRequest]) (*connect.Response[api.UpdateUserAvatorResponse], error) {
+	info, err := userService.GetUserServer().UpdateAvator(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UpdateUserAvatorResponse]{
+		Msg: info,
+	}, nil
 }
-func (ts *UserService) UserInfo(ctx context.Context, req *api.UserInfoRequest) (*api.UserInfoResponse, error) {
+func (ts *UserService) UserInfo(ctx context.Context, req *connect.Request[api.UserInfoRequest]) (*connect.Response[api.UserInfoResponse], error) {
 	uid := utils.GetUserInfoFromMetadata(ctx)
-	if req.GetUserId() == 0 {
-		req.UserId = uint64(uid)
+	if req.Msg.GetUserId() == 0 {
+		req.Msg.UserId = uint64(uid)
 	}
-	info, err := userService.GetUserServer().GetUserInfo(ctx, req)
+	info, err := userService.GetUserServer().GetUserInfo(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return info, nil
+	return &connect.Response[api.UserInfoResponse]{
+		Msg: info,
+	}, nil
 }

@@ -99,7 +99,7 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 }
 
 func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error) {
-	log.Printf("user %d is logout", req.GetUserId())
+	log.Printf("user %d is logout", req.GetToken())
 	return &api.LogoutResponse{}, nil
 }
 

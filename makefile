@@ -30,7 +30,7 @@ check:
 	@$(GO) tool vet ${SRC}
 
 test:
-	@$(GO) test -race `$(GO) list ./... | grep -v /vendor/`
+	@$(GO) test -race `$(GO) list ./... 
 
 clean:
 	rm -f $(TARGETS)
@@ -41,6 +41,4 @@ cov:
 cert:
 	sh ./certs/gen.sh
 
-regen:
-	sh ./regen.sh
 	
