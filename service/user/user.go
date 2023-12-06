@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"errors"
+	"strconv"
 
 	"connectrpc.com/connect"
 
@@ -88,7 +90,11 @@ func (ts *UserService) UpdateUserAvator(ctx context.Context, req *connect.Reques
 	}, nil
 }
 func (ts *UserService) UserInfo(ctx context.Context, req *connect.Request[api.UserInfoRequest]) (*connect.Response[api.UserInfoResponse], error) {
-	uid := utils.GetUserInfoFromMetadata(ctx)
+	uidTemp := req.Header().Get(utils.UserIdKey)
+	if len(uidTemp) == 0 {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("unauthenticated"))
+	}
+	uid, _ := strconv.Atoi(uidTemp)
 	if req.Msg.GetUserId() == 0 {
 		req.Msg.UserId = uint64(uid)
 	}

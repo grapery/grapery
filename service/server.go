@@ -99,14 +99,13 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 				Handle: auth.ConnectAuthFuncfunc,
 			},
 		),
-		connect.WithRecover(nil),
 	}
 	go func() {
 		mux := http.NewServeMux()
 		path, handler := genconnect.NewTeamsAPIHandler(ts, opts...)
 		mux.Handle(path, handler)
 		http.ListenAndServe(
-			"localhost:12307",
+			"127.0.0.1:12307",
 			h2c.NewHandler(mux, &http2.Server{}),
 		)
 	}()

@@ -77,8 +77,11 @@ func (f AuthInterceptorFunc) WrapStreamingHandler(next connect.StreamingHandlerF
 
 func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Header, a any) error {
 	cookieInfo := header.Get(utils.GrpcGateWayCookie)
-	tokenListTemp := strings.Split(cookieInfo, "=")
-	token := tokenListTemp[1]
+	if len(cookieInfo) == 0 {
+		return status.Errorf(codes.Unauthenticated, "empty auth from md: %s", utils.GrpcGateWayCookie)
+	}
+	fmt.Println("tokenListTemp: ", cookieInfo)
+	token := cookieInfo
 	jwtInfo := jwt.NewJwtWrapper(utils.SecretKey, utils.ExpirationHours)
 	tokenInfo, err := jwtInfo.ValidateToken(token)
 	if err != nil {
