@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"net/mail"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -87,29 +86,7 @@ const (
 	EmbedTypeRich    EmbedType = "rich"
 	EmbedTypeImage   EmbedType = "image"
 	EmbedTypeVideo   EmbedType = "video"
-	EmbedTypeGifv    EmbedType = "gifv"
+	EmbedTypeGifv    EmbedType = "gif"
 	EmbedTypeArticle EmbedType = "article"
 	EmbedTypeLink    EmbedType = "link"
 )
-
-type Context struct {
-	Ctx    context.Context
-	UserID uint64
-	Error  error
-	Resp   interface{}
-}
-
-func (c *Context) Deadline() (deadline time.Time, ok bool) {
-	return c.Ctx.Deadline()
-}
-
-func (c *Context) Done() <-chan struct{} {
-	return c.Ctx.Done()
-}
-func (c *Context) Err() error {
-	return c.Ctx.Err()
-}
-
-func (c *Context) Value(key any) any {
-	return c.Ctx.Value(key)
-}

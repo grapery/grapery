@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 
 	"connectrpc.com/connect"
 
@@ -88,6 +89,15 @@ func (ps *ProjectService) WatchProject(ctx context.Context, req *connect.Request
 	}, nil
 }
 func (ps *ProjectService) UnWatchProject(ctx context.Context, req *connect.Request[api.UnWatchProjectReqeust]) (*connect.Response[api.UnWatchProjectResponse], error) {
+	if req.Msg.GetGroupId() <= 0 {
+		return nil, errors.New("group id is empty")
+	}
+	if req.Msg.GetProjectId() <= 0 {
+		return nil, errors.New("project id is empty")
+	}
+	if req.Msg.GetUserId() <= 0 {
+		return nil, errors.New("user id is empty")
+	}
 	info, err := projectService.GetProjectServer().UnWatchProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
