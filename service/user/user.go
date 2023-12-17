@@ -16,6 +16,10 @@ type UserService struct {
 }
 
 func (ts *UserService) UserInit(ctx context.Context, req *connect.Request[api.UserInitRequest]) (*connect.Response[api.UserInitResponse], error) {
+	if req.Msg.GetUserId() <= 0 {
+		return nil, errors.New("user id is empty")
+
+	}
 	info, err := userService.GetUserServer().UserInit(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -26,6 +30,9 @@ func (ts *UserService) UserInit(ctx context.Context, req *connect.Request[api.Us
 }
 
 func (ts *UserService) UserWatching(ctx context.Context, req *connect.Request[api.UserWatchingRequest]) (*connect.Response[api.UserWatchingResponse], error) {
+	if req.Msg.GetUserId() <= 0 {
+		return nil, errors.New("user id is empty")
+	}
 	info, err := userService.GetUserServer().UserWatching(ctx, req.Msg)
 	if err != nil {
 		return nil, err

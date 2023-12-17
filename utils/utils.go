@@ -19,10 +19,11 @@ const (
 )
 
 var (
-	CookieName   = "grapery"
-	Domain       = ""
-	CookieMaxAge = 86400
-	CookiePath   = ""
+	CookieName = "grapery"
+	Domain     = ""
+	// for 7 day
+	CookieMaxAge = 60 * 60 * 24 * 7
+	CookiePath   = "grapery.xyz"
 )
 
 func GetUserInfoFromMetadata(ctx context.Context) int64 {
