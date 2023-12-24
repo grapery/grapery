@@ -67,26 +67,12 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 	}
 	return &api.GetGroupResponse{
 		Info: &api.GroupInfo{
-			GroupId: uint64(group.ID),
+			GroupId: int64(group.ID),
 			Name:    group.Name,
 			Avatar:  group.Avatar,
 			Desc:    group.ShortDesc,
-			Creator: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
-			Owner: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
+			Creator: int64(creator.ID),
+			Owner:   int64(creator.ID),
 		},
 	}, nil
 }
@@ -108,26 +94,12 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 	}
 	return &api.GetGroupResponse{
 		Info: &api.GroupInfo{
-			GroupId: uint64(group.ID),
+			GroupId: int64(group.ID),
 			Name:    group.Name,
 			Avatar:  group.Avatar,
 			Desc:    group.ShortDesc,
-			Creator: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
-			Owner: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
+			Creator: int64(creator.ID),
+			Owner:   int64(creator.ID),
 		},
 	}, nil
 }
@@ -149,26 +121,12 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqe
 	}
 	return &api.CreateGroupResponse{
 		Info: &api.GroupInfo{
-			GroupId: uint64(group.ID),
+			GroupId: int64(group.ID),
 			Name:    group.Name,
 			Avatar:  group.Avatar,
 			Desc:    group.ShortDesc,
-			Creator: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
-			Owner: &api.UserInfo{
-				UserId:   uint64(creator.ID),
-				Name:     creator.Name,
-				Avatar:   creator.Avatar,
-				Email:    creator.Email,
-				Location: creator.Location,
-				Desc:     creator.ShortDesc,
-			},
+			Creator: int64(creator.ID),
+			Owner:   int64(creator.ID),
 		},
 	}, nil
 }
@@ -218,7 +176,7 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 }
 
 func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error) {
-	users, err := models.GetGroupMemberInfoList(int(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	users, err := models.GetGroupMemberInfoList(int(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -229,13 +187,13 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 
 	return &api.FetchGroupMembersResponse{
 		List:   usersInfo,
-		Offset: req.GetOffset() + uint64(len(usersInfo)),
-		Total:  uint64(len(usersInfo)),
+		Offset: req.GetOffset() + int64(len(usersInfo)),
+		Total:  int64(len(usersInfo)),
 	}, nil
 }
 
 func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (resp *api.FetchGroupProjectsResponse, err error) {
-	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -244,9 +202,9 @@ func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGro
 		list[idx] = convert.ConvertProjectToApiProjectInfo(val)
 	}
 	return &api.FetchGroupProjectsResponse{
-		List:   list,
-		Offset: req.GetOffset() + uint64(len(list)),
-		Number: uint64(len(list)),
+		List:     list,
+		Offset:   req.GetOffset() + int64(len(list)),
+		PageSize: int64(len(list)),
 	}, nil
 }
 
@@ -272,7 +230,7 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
 	// group 包含 资源（project），处理组（teams）,退出组的话，teams也会同时停止使用
 	groupMember := &models.GroupMember{
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 		UserID:  req.GetUserId(),
 	}
 	isIn, err := groupMember.IsInGroup()

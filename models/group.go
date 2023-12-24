@@ -13,16 +13,16 @@ import (
 
 type Group struct {
 	IDBase
-	Name        string          `json:"name,omitempty"`
-	ShortDesc   string          `json:"short_desc,omitempty"`
-	Gtype       string          `json:"gtype,omitempty"`
-	CreatorID   uint64          `json:"creator_id,omitempty"`
-	OwnerID     uint64          `json:"owner_id,omitempty"`
-	Members     uint64          `json:"members,omitempty"`
-	VisableType api.VisibleType `json:"visable_type,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Avatar      string          `json:"avatar,omitempty"`
-	IsDefault   bool            `json:"is_default,omitempty"`
+	Name        string        `json:"name,omitempty"`
+	ShortDesc   string        `json:"short_desc,omitempty"`
+	Gtype       string        `json:"gtype,omitempty"`
+	CreatorID   int64         `json:"creator_id,omitempty"`
+	OwnerID     int64         `json:"owner_id,omitempty"`
+	Members     int64         `json:"members,omitempty"`
+	VisableType api.ScopeType `json:"visable_type,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Avatar      string        `json:"avatar,omitempty"`
+	IsDefault   bool          `json:"is_default,omitempty"`
 }
 
 func (g Group) TableName() string {
@@ -146,8 +146,8 @@ func (g *Group) Delete() error {
 
 type GroupMember struct {
 	IDBase
-	GroupID  uint64 `json:"group_id,omitempty"`
-	UserID   uint64 `json:"user_id,omitempty"`
+	GroupID  int64 `json:"group_id,omitempty"`
+	UserID   int64 `json:"user_id,omitempty"`
 	Nickname string
 	Role     int64
 }
@@ -249,10 +249,10 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 	}
 	newGroup := &Group{
 		Name:        "默认的群组",
-		OwnerID:     uint64(userID),
+		OwnerID:     int64(userID),
 		ShortDesc:   "默认的群组",
-		CreatorID:   uint64(userID),
-		VisableType: api.VisibleType_AllPublic,
+		CreatorID:   int64(userID),
+		VisableType: api.ScopeType_AllPublic,
 		IsDefault:   true,
 		Gtype:       "",
 		Members:     1,
@@ -268,8 +268,8 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 		return nil, false, err
 	}
 	mem := &GroupMember{
-		GroupID:  uint64(newGroup.ID),
-		UserID:   uint64(userID),
+		GroupID:  int64(newGroup.ID),
+		UserID:   int64(userID),
 		Nickname: userInfo.Name,
 		Role:     1,
 		IDBase: IDBase{

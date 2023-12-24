@@ -39,9 +39,9 @@ type ItemService struct{}
 func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
 	list, err := models.GetItemByProject(repo,
-		req.GetProjectId(),
+		int64(req.GetProjectId()),
 		int(req.GetOffset()),
-		int(req.GetNumber()))
+		int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -51,16 +51,16 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 			ProjectId: req.GetProjectId(),
 			UserId:    req.GetUserId(),
 			List:      nil,
-			Number:    0,
+			PageSize:  0,
 			Offset:    req.GetOffset(),
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
 	for idx := range list {
 		item := new(api.ItemInfo)
-		item.UserId = list[idx].UserID
+		item.UserId = int64(list[idx].UserID)
 		item.Content = nil
-		item.ProjectId = list[idx].ProjectID
+		item.ProjectId = int64(list[idx].ProjectID)
 		item.Itype = list[idx].ItemType
 		item.Title = list[idx].Description
 		result = append(result, item)
@@ -70,30 +70,33 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 		ProjectId: req.GetProjectId(),
 		UserId:    req.GetUserId(),
 		List:      result,
-		Number:    uint64(len(result)),
-		Offset:    req.GetOffset() + uint64(len(result)),
+		PageSize:  int64(len(result)),
+		Offset:    req.GetOffset() + int64(len(result)),
 	}, nil
 }
 
 func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByGroup(repo, req.GetGroupId(), int(req.GetOffset()), int(req.GetNumber()))
+	list, err := models.GetItemByGroup(repo,
+		int64(req.GetGroupId()),
+		int(req.GetOffset()),
+		int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
 	if len(list) != 0 {
 		return &api.GetGroupItemsResponse{
-			GroupId: req.GetGroupId(),
-			UserId:  req.GetUserId(),
-			List:    nil,
-			Number:  0,
-			Offset:  req.GetOffset(),
+			GroupId:  req.GetGroupId(),
+			UserId:   req.GetUserId(),
+			List:     nil,
+			PageSize: 0,
+			Offset:   req.GetOffset(),
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
 	for idx := range list {
 		item := new(api.ItemInfo)
-		item.UserId = list[idx].UserID
+		item.UserId = int64(list[idx].UserID)
 		item.Content = nil
 		item.ProjectId = list[idx].ProjectID
 		item.Itype = list[idx].ItemType
@@ -101,26 +104,26 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 		result = append(result, item)
 	}
 	return &api.GetGroupItemsResponse{
-		GroupId: req.GetGroupId(),
-		UserId:  req.GetUserId(),
-		List:    result,
-		Number:  uint64(len(result)),
-		Offset:  req.GetOffset() + uint64(len(result)),
+		GroupId:  req.GetGroupId(),
+		UserId:   req.GetUserId(),
+		List:     result,
+		PageSize: int64(len(result)),
+		Offset:   req.GetOffset() + int64(len(result)),
 	}, nil
 }
 
 func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByProject(repo, req.GetUserId(), int(req.GetOffset()), int(req.GetNumber()))
+	list, err := models.GetItemByProject(repo, int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
 	if len(list) != 0 {
 		return &api.GetUserItemsResponse{
-			UserId: req.GetUserId(),
-			List:   nil,
-			Number: 0,
-			Offset: req.GetOffset(),
+			UserId:   req.GetUserId(),
+			List:     nil,
+			PageSize: 0,
+			Offset:   req.GetOffset(),
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -134,10 +137,10 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 		result = append(result, item)
 	}
 	return &api.GetUserItemsResponse{
-		UserId: req.GetUserId(),
-		List:   result,
-		Number: uint64(len(result)),
-		Offset: req.GetOffset() + uint64(len(result)),
+		UserId:   req.GetUserId(),
+		List:     result,
+		PageSize: int64(len(result)),
+		Offset:   req.GetOffset() + int64(len(result)),
 	}, nil
 }
 
@@ -161,7 +164,7 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		Description: req.GetInfo().Title,
 		ItemType:    api.ItemType_ShortWord,
 	}
-	err = models.UpdateItemVisable(repo, req.GetItemId(), api.VisibleType_Public)
+	err = models.UpdateItemVisable(repo, int64(req.GetItemId()), api.ScopeType_AllPublic)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +191,7 @@ func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemReques
 }
 func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error) {
 	repo := models.NewRepository(ctx)
-	err = models.DeleteItem(repo, req.GetItemId())
+	err = models.DeleteItem(repo, int64(req.GetItemId()))
 	if err != nil {
 		return nil, err
 	}

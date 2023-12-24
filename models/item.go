@@ -12,21 +12,21 @@ import (
 */
 type Item struct {
 	IDBase
-	ProjectID     uint64          `json:"project_id,omitempty"`
-	UserID        uint64          `json:"user_id,omitempty"`
-	Visable       api.VisibleType `json:"visable,omitempty"`
-	Title         string          `json:"title,omitempty"`
-	Description   string          `json:"description,omitempty"`
-	ItemType      api.ItemType    `json:"item_type,omitempty"`
-	Content       string          `json:"content,omitempty"`
-	Url           string          `json:"url,omitempty"`
-	Size          string          `json:"size,omitempty"`
-	PrevId        int64           `json:"prev_id,omitempty"`
-	NextId        int64           `json:"next_id,omitempty"`
-	Token         string          `json:"token,omitempty"`
-	IsHiddenToken bool            `json:"is_hidden_token,omitempty"`
-	Tags          string          `json:"tags,omitempty"`
-	LikeCount     uint64          `json:"like_count,omitempty"`
+	ProjectID     int64         `json:"project_id,omitempty"`
+	UserID        int64         `json:"user_id,omitempty"`
+	Visable       api.ScopeType `json:"visable,omitempty"`
+	Title         string        `json:"title,omitempty"`
+	Description   string        `json:"description,omitempty"`
+	ItemType      api.ItemType  `json:"item_type,omitempty"`
+	Content       string        `json:"content,omitempty"`
+	Url           string        `json:"url,omitempty"`
+	Size          string        `json:"size,omitempty"`
+	PrevId        int64         `json:"prev_id,omitempty"`
+	NextId        int64         `json:"next_id,omitempty"`
+	Token         string        `json:"token,omitempty"`
+	IsHiddenToken bool          `json:"is_hidden_token,omitempty"`
+	Tags          string        `json:"tags,omitempty"`
+	LikeCount     int64         `json:"like_count,omitempty"`
 }
 
 func (i Item) TableName() string {
@@ -43,7 +43,7 @@ func CreateItem(repo *Repository, item *Item) error {
 	return nil
 }
 
-func DeleteItem(repo *Repository, itemID uint64) error {
+func DeleteItem(repo *Repository, itemID int64) error {
 	err := repo.DB().Model(&Item{}).Update("delete = ? ", true).
 		Where("id = ?", itemID).Error
 	if err != nil {
@@ -53,7 +53,7 @@ func DeleteItem(repo *Repository, itemID uint64) error {
 	return nil
 }
 
-func GetItem(repo *Repository, itemID uint64) (*Item, error) {
+func GetItem(repo *Repository, itemID int64) (*Item, error) {
 	item := new(Item)
 	err := repo.DB().Model(item).
 		Where("id = ?", itemID).
@@ -88,7 +88,7 @@ func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
 	return *items, nil
 }
 
-func GetItemByProject(repo *Repository, projectID uint64, offset, number int) ([]*Item, error) {
+func GetItemByProject(repo *Repository, projectID int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
 	err := repo.DB().Model(&Item{}).
 		Where("project_id = ?", projectID).
@@ -101,7 +101,7 @@ func GetItemByProject(repo *Repository, projectID uint64, offset, number int) ([
 	return *items, nil
 }
 
-func GetItemByGroup(repo *Repository, grouId uint64, offset, number int) ([]*Item, error) {
+func GetItemByGroup(repo *Repository, grouId int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
 	err := DataBase().Model(Item{}).
 		Where("project_id in (?)",
@@ -117,7 +117,7 @@ func GetItemByGroup(repo *Repository, grouId uint64, offset, number int) ([]*Ite
 	return *items, nil
 }
 
-func GetItemByUser(repo *Repository, userId uint64, offset, number int) ([]*Item, error) {
+func GetItemByUser(repo *Repository, userId int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
 	err := repo.DB().Model(&Item{}).
 		Where("user_id = ?", userId).
@@ -131,7 +131,7 @@ func GetItemByUser(repo *Repository, userId uint64, offset, number int) ([]*Item
 	return *items, nil
 }
 
-func GetItemByProjectAndCreator(repo *Repository, projectID uint64, userID uint64, offset, number int) ([]*Item, error) {
+func GetItemByProjectAndCreator(repo *Repository, projectID int64, userID int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
 	err := repo.DB().Model(&Item{}).
 		Where("project_id = ? and user_id = ?", projectID, userID).
@@ -145,7 +145,7 @@ func GetItemByProjectAndCreator(repo *Repository, projectID uint64, userID uint6
 	return *items, nil
 }
 
-func UpdateItemVisable(repo *Repository, itemID uint64, vtype api.VisibleType) error {
+func UpdateItemVisable(repo *Repository, itemID int64, vtype api.ScopeType) error {
 	err := repo.DB().Model(&Item{}).Update("visable", vtype).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
@@ -154,7 +154,7 @@ func UpdateItemVisable(repo *Repository, itemID uint64, vtype api.VisibleType) e
 	return nil
 }
 
-func UpdateItemTags(repo *Repository, itemID uint64, tags string) error {
+func UpdateItemTags(repo *Repository, itemID int64, tags string) error {
 	err := repo.DB().Model(&Item{}).Update("tags", tags).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
@@ -163,7 +163,7 @@ func UpdateItemTags(repo *Repository, itemID uint64, tags string) error {
 	return nil
 }
 
-func UpdateItemTitle(repo *Repository, itemID uint64, title string) error {
+func UpdateItemTitle(repo *Repository, itemID int64, title string) error {
 	err := repo.DB().Model(&Item{}).Update("title", title).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
@@ -174,12 +174,12 @@ func UpdateItemTitle(repo *Repository, itemID uint64, title string) error {
 
 type ItemLiker struct {
 	IDBase
-	ItemID uint64 `json:"item_id,omitempty"`
-	UserID uint64 `json:"user_id,omitempty"`
-	Ltype  uint64 `json:"ltype,omitempty"`
+	ItemID int64 `json:"item_id,omitempty"`
+	UserID int64 `json:"user_id,omitempty"`
+	Ltype  int64 `json:"ltype,omitempty"`
 }
 
-func CreateItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
+func CreateItemLiker(repo *Repository, projectId, itemId, userId int64) error {
 	item := &ItemLiker{
 		ItemID: itemId,
 		UserID: userId,
@@ -192,7 +192,7 @@ func CreateItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
 	return nil
 }
 
-func DeleteItemLiker(repo *Repository, projectId, itemId, userId uint64) error {
+func DeleteItemLiker(repo *Repository, projectId, itemId, userId int64) error {
 	item := &ItemLiker{
 		ItemID: itemId,
 		UserID: userId,

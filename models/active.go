@@ -10,9 +10,9 @@ import (
 
 type Active struct {
 	IDBase
-	UserId     uint64         `json:"user_id,omitempty"`
+	UserId     int64          `json:"user_id,omitempty"`
 	ActiveType api.ActiveType `json:"active_type,omitempty"`
-	ItemID     uint64         `json:"item_id,omitempty"`
+	ItemID     int64          `json:"item_id,omitempty"`
 }
 
 func (a Active) TableName() string {
@@ -44,7 +44,7 @@ func (a *Active) Delete() error {
 	return nil
 }
 
-func GetActiveByUserID(userID uint64) (*[]*Active, error) {
+func GetActiveByUserID(userID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("user_id = ? and delete = 0", userID).
@@ -68,7 +68,7 @@ func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error
 	return ret, nil
 }
 
-func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, error) {
+func GetActiveListByActiveType(creatorID int64, activeType uint) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().
 		Model(Active{}).
@@ -82,7 +82,7 @@ func GetActiveListByActiveType(creatorID uint64, activeType uint) (*[]*Active, e
 	return ret, nil
 }
 
-func GetActiveByProjectID(projectID uint64) (*[]*Active, error) {
+func GetActiveByProjectID(projectID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("item_id in (?)",
@@ -100,7 +100,7 @@ func GetActiveByProjectID(projectID uint64) (*[]*Active, error) {
 	return ret, nil
 }
 
-func GetActiveByGroupID(groupID uint64) (*[]*Active, error) {
+func GetActiveByGroupID(groupID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
 		Where("group_id = ? and delete = 0", groupID).

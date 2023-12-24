@@ -131,3 +131,23 @@ func (ps *ProjectService) GetProjectItems(ctx context.Context, req *connect.Requ
 		Msg: info,
 	}, nil
 }
+
+func (ps *ProjectService) GetProjectMembers(ctx context.Context, req *connect.Request[api.GetProjectMembersRequest]) (*connect.Response[api.GetProjectMembersResponse], error) {
+	info, err := projectService.GetProjectServer().GetProjectMembers(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.GetProjectMembersResponse]{
+		Msg: info,
+	}, nil
+}
+
+func (ps *ProjectService) GetProjectWatcher(ctx context.Context, req *connect.Request[api.GetProjectWatcherReqeust]) (*connect.Response[api.GetProjectWatcherResponse], error) {
+	info, err := projectService.GetProjectServer().GetProjectWatcher(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.GetProjectWatcherResponse]{
+		Msg: info,
+	}, nil
+}

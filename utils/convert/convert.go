@@ -12,7 +12,7 @@ import (
 func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
 	return &api.ActiveInfo{
 		ActiveType:  ac.ActiveType,
-		User:        &api.UserInfo{UserId: ac.UserId},
+		User:        &api.UserInfo{UserId: int64(ac.UserId)},
 		ItemInfo:    &api.ItemInfo{},
 		ProjectInfo: &api.ProjectInfo{},
 	}
@@ -20,7 +20,7 @@ func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
 
 func ConvertUserToApiUser(user *models.User) *api.UserInfo {
 	return &api.UserInfo{
-		UserId:   uint64(user.ID),
+		UserId:   int64(user.ID),
 		Name:     user.Name,
 		Avatar:   user.Avatar,
 		Email:    user.Email,
@@ -31,9 +31,9 @@ func ConvertUserToApiUser(user *models.User) *api.UserInfo {
 
 func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
 	info := new(api.ItemInfo)
-	info.UserId = item.UserID
+	info.UserId = int64(item.UserID)
 	info.Content = nil
-	info.ProjectId = item.ProjectID
+	info.ProjectId = int64(item.ProjectID)
 	info.Itype = item.ItemType
 	info.Title = item.Description
 	return info
@@ -41,9 +41,9 @@ func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
 
 func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
 	item := new(models.Item)
-	item.UserID = info.UserId
+	item.UserID = int64(info.UserId)
 	item.Description = info.Title
-	item.ProjectID = info.ProjectId
+	item.ProjectID = int64(info.ProjectId)
 	item.ItemType = info.Itype
 	return item
 }
@@ -58,8 +58,8 @@ func ConvertProjectToApiProjectInfo(p *models.Project) *api.ProjectInfo {
 
 func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
 	info := &api.ItemInfo{
-		ProjectId: i.ProjectID,
-		UserId:    i.UserID,
+		ProjectId: int64(i.ProjectID),
+		UserId:    int64(i.UserID),
 		Title:     i.Title,
 		Itype:     i.ItemType,
 	}

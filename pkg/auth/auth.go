@@ -62,7 +62,7 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	if err != nil {
 		return nil
 	}
-	info.UID = uint64(user.ID)
+	info.UID = int64(user.ID)
 	info.CreateAt = time.Now()
 	info.UpdateAt = time.Now()
 	if strings.Contains(account, "@") {
@@ -93,7 +93,7 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	return &api.UserInfo{
-		UserId: uint64(info.ID),
+		UserId: int64(info.ID),
 		Email:  info.Email,
 	}, nil
 }

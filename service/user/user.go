@@ -103,7 +103,7 @@ func (ts *UserService) UserInfo(ctx context.Context, req *connect.Request[api.Us
 	}
 	uid, _ := strconv.Atoi(uidTemp)
 	if req.Msg.GetUserId() == 0 {
-		req.Msg.UserId = uint64(uid)
+		req.Msg.UserId = int64(uid)
 	}
 	info, err := userService.GetUserServer().GetUserInfo(ctx, req.Msg)
 	if err != nil {

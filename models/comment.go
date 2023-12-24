@@ -9,9 +9,9 @@ import (
 
 type Comment struct {
 	IDBase
-	UserID  uint64 `json:"user_id,omitempty"`
+	UserID  int64  `json:"user_id,omitempty"`
 	ItemID  int    `json:"item_id,omitempty"`
-	PreID   uint64 `json:"pre_id,omitempty"`
+	PreID   int64  `json:"pre_id,omitempty"`
 	Content []byte `json:"content,omitempty"`
 }
 

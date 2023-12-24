@@ -19,21 +19,21 @@ type Project struct {
 	Tilte       string `json:"tilte,omitempty"`
 	ShortDesc   string `json:"short_desc,omitempty"`
 	ProjectType int    `json:"project_type,omitempty"`
-	CreatorID   uint64 `json:"creator_id,omitempty"`
-	OwnerID     uint64 `json:"owner_id,omitempty"`
-	GroupID     uint64 `json:"group_id,omitempty"`
+	CreatorID   int64  `json:"creator_id,omitempty"`
+	OwnerID     int64  `json:"owner_id,omitempty"`
+	GroupID     int64  `json:"group_id,omitempty"`
 	ProjectSetting
 }
 
 type ProjectSetting struct {
-	Description   string          `json:"description,omitempty"`
-	Avatar        string          `json:"avatar,omitempty"`
-	WatchingCount uint64          `json:"watching_count,omitempty"`
-	InvolvedCount uint64          `json:"involved_count,omitempty"`
-	Visable       api.VisibleType `json:"visable,omitempty"`
-	IsAchieve     bool            `json:"is_achieve,omitempty"`
-	IsClose       bool            `json:"is_close,omitempty"`
-	IsPrivate     bool            `json:"is_private,omitempty"`
+	Description   string        `json:"description,omitempty"`
+	Avatar        string        `json:"avatar,omitempty"`
+	WatchingCount int64         `json:"watching_count,omitempty"`
+	InvolvedCount int64         `json:"involved_count,omitempty"`
+	Visable       api.ScopeType `json:"visable,omitempty"`
+	IsAchieve     bool          `json:"is_achieve,omitempty"`
+	IsClose       bool          `json:"is_close,omitempty"`
+	IsPrivate     bool          `json:"is_private,omitempty"`
 }
 
 func (p Project) TableName() string {
@@ -299,9 +299,9 @@ func GetGroupProjectListByOwner(groupID int, ownerID int, offset, number int) (l
 
 type ProjectWatcher struct {
 	IDBase
-	GroupID   uint64 `json:"group_id,omitempty"`
-	ProjectID uint64 `json:"project_id,omitempty"`
-	UserID    uint64 `json:"user_id,omitempty"`
+	GroupID   int64 `json:"group_id,omitempty"`
+	ProjectID int64 `json:"project_id,omitempty"`
+	UserID    int64 `json:"user_id,omitempty"`
 }
 
 func (p ProjectWatcher) TableName() string {
@@ -318,7 +318,7 @@ func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project,
 	if err != nil {
 		return nil, err
 	}
-	var pidList = make([]uint64, len(plist))
+	var pidList = make([]int64, len(plist))
 	for _, val := range plist {
 		pidList = append(pidList, val.ProjectID)
 	}
@@ -334,7 +334,7 @@ func GetUserWatchingProjects(userId int64, number, offset int) (list []*Project,
 	return list, nil
 }
 
-func StartWatchingProject(userID, groupID, projectId uint64) error {
+func StartWatchingProject(userID, groupID, projectId int64) error {
 	p := &ProjectWatcher{
 		UserID:    userID,
 		GroupID:   groupID,
@@ -354,7 +354,7 @@ func StartWatchingProject(userID, groupID, projectId uint64) error {
 	return nil
 }
 
-func StopWatchingProject(userID, groupID, projectId uint64) error {
+func StopWatchingProject(userID, groupID, projectId int64) error {
 	p := &ProjectWatcher{
 		UserID:    userID,
 		GroupID:   groupID,

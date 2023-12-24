@@ -6,9 +6,9 @@ import (
 
 type LikeItem struct {
 	IDBase
-	UserID   uint64 `json:"user_id,omitempty"`
-	ItemID   uint64 `json:"item_id,omitempty"`
-	LikeType uint64 `json:"like_type,omitempty"`
+	UserID   int64 `json:"user_id,omitempty"`
+	ItemID   int64 `json:"item_id,omitempty"`
+	LikeType int64 `json:"like_type,omitempty"`
 }
 
 func (l LikeItem) TableName() string {
@@ -35,7 +35,7 @@ func CreateLikeItem(repo *Repository, item *LikeItem) error {
 	return nil
 }
 
-func DeleteLikeItem(repo *Repository, itemID uint64) error {
+func DeleteLikeItem(repo *Repository, itemID int64) error {
 	err := repo.DB().Model(&LikeItem{}).
 		Update("deleted= ? ", 1).
 		Where("id = ?", itemID).Error
@@ -46,7 +46,7 @@ func DeleteLikeItem(repo *Repository, itemID uint64) error {
 	return nil
 }
 
-func GetLikeItem(repo *Repository, itemID uint64) (*LikeItem, error) {
+func GetLikeItem(repo *Repository, itemID int64) (*LikeItem, error) {
 	item := new(LikeItem)
 	err := repo.DB().Model(&LikeItem{}).First(item).
 		Where("id = ?", itemID).Error

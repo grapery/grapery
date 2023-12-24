@@ -35,6 +35,8 @@ type ProjectServer interface {
 	SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
 	SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (resp *api.SearchAllProjectResponse, err error)
 	ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error)
+	GetProjectMembers(ctx context.Context, req *api.GetProjectMembersRequest) (resp *api.GetProjectMembersResponse, err error)
+	GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherReqeust) (resp *api.GetProjectWatcherResponse, err error)
 }
 
 type ProjectService struct {
@@ -42,7 +44,7 @@ type ProjectService struct {
 
 func (p *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProjectRequest) (resp *api.GetProjectResponse, err error) {
 	project := &models.Project{
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 	}
 	project.ID = uint(req.GetProjectId())
 	err = project.Get()
@@ -55,7 +57,7 @@ func (p *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProject
 }
 
 func (p *ProjectService) GetProjectList(ctx context.Context, req *api.GetProjectListRequest) (resp *api.GetProjectListResponse, err error) {
-	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +67,14 @@ func (p *ProjectService) GetProjectList(ctx context.Context, req *api.GetProject
 	}
 	return &api.GetProjectListResponse{
 		List:   tempList,
-		Offset: req.GetOffset() + uint64(len(tempList)),
+		Offset: req.GetOffset() + int64(len(tempList)),
 	}, nil
 }
 
 func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProjectRequest) (resp *api.CreateProjectResponse, err error) {
 	project := &models.Project{
 		Name:    req.GetName(),
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 	}
 	err = project.Create()
 	if err != nil {
@@ -88,7 +90,7 @@ func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProje
 }
 func (p *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (resp *api.UpdateProjectResponse, err error) {
 	project := &models.Project{
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 	}
 	project.ID = uint(req.GetProjectId())
 	err = project.Get()
@@ -99,7 +101,7 @@ func (p *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProje
 }
 func (p *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (resp *api.DeleteProjectResponse, err error) {
 	project := &models.Project{
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 	}
 	project.ID = uint(req.GetProjectId())
 	err = project.Delete()
@@ -110,7 +112,7 @@ func (p *ProjectService) DeleteProject(ctx context.Context, req *api.DeleteProje
 }
 func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (resp *api.GetProjectProfileResponse, err error) {
 	project := &models.Project{
-		GroupID: req.GetGroupId(),
+		GroupID: int64(req.GetGroupId()),
 	}
 	project.ID = uint(req.GetProjectId())
 	err = project.Get()
@@ -123,15 +125,14 @@ func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProj
 	resp.UserId = req.UserId
 	resp.Info = &api.ProjectProfileInfo{
 		ProjectId:     req.GetProjectId(),
-		GroupId:       uint32(req.GetGroupId()),
+		GroupId:       int32(req.GetGroupId()),
 		Description:   project.Description,
-		WatchingCount: project.WatchingCount,
-		InvolvedCount: project.InvolvedCount,
+		WatchingCount: int64(project.WatchingCount),
+		InvolvedCount: int64(project.InvolvedCount),
 		Avatar:        project.Avatar,
-		Visable:       project.Visable,
+		ScopeType:     project.Visable,
 		IsAchieve:     project.IsAchieve,
 		IsClose:       project.IsClose,
-		IsPrivate:     project.IsPrivate,
 	}
 	return resp, nil
 }
@@ -140,9 +141,9 @@ func (p *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.Upda
 }
 func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error) {
 	err = models.StartWatchingProject(
-		req.GetUserId(),
-		req.GetGroupId(),
-		req.GetProjectId(),
+		int64(req.GetUserId()),
+		int64(req.GetGroupId()),
+		int64(req.GetProjectId()),
 	)
 	if err != nil {
 		return nil, err
@@ -152,9 +153,9 @@ func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProject
 
 func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error) {
 	err = models.StopWatchingProject(
-		req.GetUserId(),
-		req.GetGroupId(),
-		req.GetProjectId(),
+		int64(req.GetUserId()),
+		int64(req.GetGroupId()),
+		int64(req.GetProjectId()),
 	)
 	if err != nil {
 		return nil, err
@@ -165,10 +166,10 @@ func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchPro
 func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error) {
 	var list []*models.Project
 	if req.GetGroupId() != 0 {
-		list, err = models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+		list, err = models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 
 	} else {
-		list, err = models.GetAllProjects(int(req.GetOffset()), int(req.GetNumber()))
+		list, err = models.GetAllProjects(int(req.GetOffset()), int(req.GetPageSize()))
 	}
 	if err != nil {
 		return nil, err
@@ -178,14 +179,14 @@ func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.ExplorePr
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.ExploreProjectsResponse{
-		List:   infoList,
-		Number: uint64(len(infoList)),
-		Offset: uint64(len(infoList)),
+		List:     infoList,
+		PageSize: int64(len(infoList)),
+		Offset:   int64(len(infoList)),
 	}, nil
 }
 
 func (p *ProjectService) SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error) {
-	list, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetNumber()))
+	list, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -194,15 +195,15 @@ func (p *ProjectService) SearchGroupProject(ctx context.Context, req *api.Search
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.SearchProjectResponse{
-		GroupId: req.GetGroupId(),
-		List:    infoList,
-		Number:  uint64(len(infoList)),
-		Offset:  uint64(len(infoList)),
+		GroupId:  req.GetGroupId(),
+		List:     infoList,
+		PageSize: int64(len(infoList)),
+		Offset:   int64(len(infoList)),
 	}, nil
 }
 
 func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (resp *api.SearchAllProjectResponse, err error) {
-	list, err := models.GetAllProjects(int(req.GetOffset()), int(req.GetNumber()))
+	list, err := models.GetAllProjects(int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +212,15 @@ func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllPr
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.SearchAllProjectResponse{
-		List:   infoList,
-		Number: uint64(len(infoList)),
-		Offset: uint64(len(infoList)),
+		List:     infoList,
+		PageSize: int64(len(infoList)),
+		Offset:   int64(len(infoList)),
 	}, nil
+}
+
+func (p *ProjectService) GetProjectMembers(ctx context.Context, req *api.GetProjectMembersRequest) (resp *api.GetProjectMembersResponse, err error) {
+	return nil, nil
+}
+func (p *ProjectService) GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherReqeust) (resp *api.GetProjectWatcherResponse, err error) {
+	return nil, nil
 }

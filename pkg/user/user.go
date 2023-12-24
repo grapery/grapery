@@ -57,15 +57,13 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 			UserId: req.GetUserId(),
 			List: []*api.GroupInfo{
 				{
-					GroupId: uint64(defaultGroup.ID),
+					GroupId: int64(defaultGroup.ID),
 					Name:    defaultGroup.Name,
 					Avatar:  defaultGroup.Avatar,
 					Desc:    defaultGroup.Gtype,
-					Creator: &api.UserInfo{
-						UserId: uint64(req.GetUserId()),
-					},
-					Ctime: defaultGroup.CreateAt.Unix(),
-					Mtime: defaultGroup.UpdateAt.Unix(),
+					Creator: req.GetUserId(),
+					Ctime:   defaultGroup.CreateAt.Unix(),
+					Mtime:   defaultGroup.UpdateAt.Unix(),
 				},
 			},
 		}, nil
@@ -84,15 +82,13 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 		UserId: req.GetUserId(),
 		List: []*api.GroupInfo{
 			{
-				GroupId: uint64(defaultGroup.ID),
+				GroupId: int64(defaultGroup.ID),
 				Name:    defaultGroup.Name,
 				Avatar:  defaultGroup.Avatar,
 				Desc:    defaultGroup.Gtype,
-				Creator: &api.UserInfo{
-					UserId: uint64(req.GetUserId()),
-				},
-				Ctime: defaultGroup.CreateAt.Unix(),
-				Mtime: defaultGroup.UpdateAt.Unix(),
+				Creator: req.GetUserId(),
+				Ctime:   defaultGroup.CreateAt.Unix(),
+				Mtime:   defaultGroup.UpdateAt.Unix(),
 			},
 		},
 	}, nil
@@ -108,7 +104,7 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	}
 	return &api.UserInfoResponse{
 		Info: &api.UserInfo{
-			UserId:   uint64(u.ID),
+			UserId:   int64(u.ID),
 			Name:     u.Name,
 			Avatar:   u.Avatar,
 			Email:    u.Email,
@@ -129,7 +125,7 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	}
 	return &api.UpdateUserAvatorResponse{
 		Info: &api.UserInfo{
-			UserId:   uint64(u.ID),
+			UserId:   int64(u.ID),
 			Name:     u.Name,
 			Avatar:   u.Avatar,
 			Email:    u.Email,
@@ -155,7 +151,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		return nil, err
 	}
 	info := &api.UserInfo{
-		UserId:   uint64(u.ID),
+		UserId:   int64(u.ID),
 		Name:     u.Name,
 		Avatar:   u.Avatar,
 		Email:    u.Email,
@@ -165,10 +161,10 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
 		groups[idx].Name = list[idx].Name
-		groups[idx].GroupId = uint64(list[idx].ID)
+		groups[idx].GroupId = int64(list[idx].ID)
 		groups[idx].Desc = list[idx].ShortDesc
-		groups[idx].Owner = info
-		groups[idx].Creator = info
+		groups[idx].Owner = info.UserId
+		groups[idx].Creator = info.UserId
 	}
 	return &api.UserGroupResponse{
 		List: groups,
@@ -189,7 +185,7 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		return nil, err
 	}
 	info := &api.UserInfo{
-		UserId:   uint64(u.ID),
+		UserId:   int64(u.ID),
 		Name:     u.Name,
 		Avatar:   u.Avatar,
 		Email:    u.Email,
@@ -199,10 +195,10 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
 		groups[idx].Name = list[idx].Name
-		groups[idx].GroupId = uint64(list[idx].ID)
+		groups[idx].GroupId = int64(list[idx].ID)
 		groups[idx].Desc = list[idx].ShortDesc
-		groups[idx].Owner = info
-		groups[idx].Creator = info
+		groups[idx].Owner = info.GetUserId()
+		groups[idx].Creator = info.GetUserId()
 	}
 	return &api.UserFollowingGroupResponse{
 		List: groups,
@@ -250,7 +246,7 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		return nil, err
 	}
 	info := &api.UserInfo{
-		UserId:   uint64(u.ID),
+		UserId:   int64(u.ID),
 		Name:     u.Name,
 		Avatar:   u.Avatar,
 		Email:    u.Email,
@@ -261,8 +257,8 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		projects[idx].Avatar = list[idx].Avatar
 		projects[idx].Name = list[idx].Name
 		projects[idx].ProjectId = uint64(list[idx].ID)
-		projects[idx].Owner = info
-		projects[idx].Creator = info
+		projects[idx].Owner = info.GetUserId()
+		projects[idx].Creator = info.GetUserId()
 	}
 	return &api.UserWatchingResponse{
 		List: projects,

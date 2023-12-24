@@ -13,7 +13,7 @@ import (
 
 type Auth struct {
 	IDBase
-	UID      uint64       `json:"uid,omitempty" gorm:"unique_index,column:uid"`
+	UID      int64        `json:"uid,omitempty" gorm:"unique_index,column:uid"`
 	Email    string       `json:"email,omitempty" gorm:"unique_index"`
 	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
 	Password string       `json:"password,omitempty" gorm:"password"`
@@ -21,7 +21,7 @@ type Auth struct {
 	Salt     string       `json:"salt,omitempty" gorm:"salt"`
 	IsValid  bool         `json:"is_valid,omitempty"`
 	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
-	Expired  uint64       `json:"expired,omitempty"`
+	Expired  int64        `json:"expired,omitempty"`
 }
 
 func (a Auth) TableName() string {
@@ -29,7 +29,7 @@ func (a Auth) TableName() string {
 }
 
 func CreateWithPhone(a *Auth) error {
-	a.Expired = uint64(time.Now().Unix()) + 3600*72
+	a.Expired = int64(time.Now().Unix()) + 3600*72
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
@@ -56,14 +56,14 @@ func IsUserAuthExist(account string) bool {
 	if accountInfo.CreateAt.Unix() == 0 {
 		return false
 	}
-	if accountInfo.Expired < uint64(time.Now().Unix()) {
+	if accountInfo.Expired < int64(time.Now().Unix()) {
 		return false
 	}
 	return true
 }
 
 func CreateWithEmail(a *Auth) error {
-	a.Expired = uint64(time.Now().Unix()) + 3600*72
+	a.Expired = int64(time.Now().Unix()) + 3600*72
 	err := DataBase().Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
