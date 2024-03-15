@@ -34,7 +34,9 @@ type ItemServer interface {
 	UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error)
 }
 
-type ItemService struct{}
+type ItemService struct {
+	IsReady bool
+}
 
 func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
 	repo := models.NewRepository(ctx)
