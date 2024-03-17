@@ -29,13 +29,18 @@ type ElasticConfig struct {
 
 // Config define common config struct
 type Config struct {
-	SqlDB    *DBConfig      `json:"sql_db,omitempty"`
-	Redis    *RedisConfig   `json:"redis,omitempty"`
-	Elastic  *ElasticConfig `json:"elastic,omitempty"`
-	LogLevel string         `json:"log_level,omitempty"`
-	RpcPort  string         `json:"rpc_port,omitempty"`
-	HttpPort string         `json:"http_port,omitempty"`
-	S3Store  *S3Store       `json:"s3store,omitempty"`
+	SqlDB      *DBConfig      `json:"sql_db,omitempty"`
+	Redis      *RedisConfig   `json:"redis,omitempty"`
+	Elastic    *ElasticConfig `json:"elastic,omitempty"`
+	LogLevel   string         `json:"log_level,omitempty"`
+	RpcPort    string         `json:"rpc_port,omitempty"`
+	HttpPort   string         `json:"http_port,omitempty"`
+	S3Store    *S3Store       `json:"s3store,omitempty"`
+	Ali        *AIPlatform    `json:"ali,omitempty"`
+	Tencent    *AIPlatform    `json:"tencent,omitempty"`
+	Midjourney *AIPlatform    `json:"midjourney,omitempty"`
+	SelfHost   *AIPlatform    `json:"selfhost,omitempty"`
+	MiniMax    *AIPlatform    `json:"minimax,omitempty"`
 }
 
 type S3Store struct {
@@ -43,6 +48,15 @@ type S3Store struct {
 	Secret  string
 	Bucket  string
 	Address string
+}
+
+type AIPlatform struct {
+	Name    string `json:"name,omitempty"`
+	Address string `json:"address,omitempty"`
+	Secret  string `json:"secret,omitempty"`
+	Key     string `json:"key,omitempty"`
+	Token   string `json:"token,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
 }
 
 func ValiedConfig(cfg *Config) error {

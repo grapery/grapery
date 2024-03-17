@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -28,9 +29,9 @@ func (a Auth) TableName() string {
 	return "auth"
 }
 
-func CreateWithPhone(a *Auth) error {
+func CreateWithPhone(ctx context.Context, a *Auth) error {
 	a.Expired = int64(time.Now().Unix()) + 3600*72
-	err := DataBase().Model(a).Create(a).Error
+	err := DataBase().WithContext(ctx).Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("create auth [%s] failed [%s] ", a.Phone, err.Error()),
@@ -40,9 +41,9 @@ func CreateWithPhone(a *Auth) error {
 	return nil
 }
 
-func IsUserAuthExist(account string) bool {
+func IsUserAuthExist(ctx context.Context, account string) bool {
 	var accountInfo = new(Auth)
-	err := DataBase().Model(Auth{}).
+	err := DataBase().WithContext(ctx).Model(Auth{}).
 		Where("email = ? or phone = ?", account, account).
 		Order("create_at").
 		Limit(1).
@@ -62,9 +63,9 @@ func IsUserAuthExist(account string) bool {
 	return true
 }
 
-func CreateWithEmail(a *Auth) error {
+func CreateWithEmail(ctx context.Context, a *Auth) error {
 	a.Expired = int64(time.Now().Unix()) + 3600*72
-	err := DataBase().Model(a).Create(a).Error
+	err := DataBase().WithContext(ctx).Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("create auth [%s] with email failed [%s] ", a.Email, err.Error()))
@@ -73,8 +74,8 @@ func CreateWithEmail(a *Auth) error {
 	return nil
 }
 
-func UpdatePwd(a *Auth) error {
-	if err := DataBase().Model(a).
+func UpdatePwd(ctx context.Context, a *Auth) error {
+	if err := DataBase().WithContext(ctx).Model(a).
 		Update("password", a.Password).
 		Where("is_valid = ? and uid = ?", true, a.UID).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("update password failed : [%s]", err.Error()))
@@ -83,9 +84,9 @@ func UpdatePwd(a *Auth) error {
 	return nil
 }
 
-func GetByEmail(email string) (*Auth, error) {
+func GetByEmail(ctx context.Context, email string) (*Auth, error) {
 	var a = new(Auth)
-	if err := DataBase().Model(a).Where("email = ?", email).First(a).
+	if err := DataBase().WithContext(ctx).Model(a).Where("email = ?", email).First(a).
 		Where("email = ? and deleted = ? and is_valid = ?", email, 0, true).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
@@ -98,9 +99,9 @@ func GetByEmail(email string) (*Auth, error) {
 	return a, nil
 }
 
-func GetByPhone(phone string) (*Auth, error) {
+func GetByPhone(ctx context.Context, phone string) (*Auth, error) {
 	var a = new(Auth)
-	if err := DataBase().Model(a).
+	if err := DataBase().WithContext(ctx).Model(a).
 		Where("phone = ?", phone).
 		Where("deleted = ?", 0).
 		First(a).
@@ -116,24 +117,24 @@ func GetByPhone(phone string) (*Auth, error) {
 	return a, nil
 }
 
-func GetByUID(id int) (*Auth, error) {
+func GetByUID(ctx context.Context, uid int) (*Auth, error) {
 	var a = new(Auth)
-	if err := DataBase().Model(a).
-		Where("id = ? and deleted = ? and is_valid = ?", id, 0, true).
+	if err := DataBase().WithContext(ctx).Model(a).
+		Where("id = ? and deleted = ? and is_valid = ?", uid, 0, true).
 		First(a).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.ErrAuthNotFound
 		}
 		log.Log().WithOptions(logFieldModels).Error(
-			fmt.Sprintf("get auth [%d] info failed : [%s]", id, err),
+			fmt.Sprintf("get auth [%d] info failed : [%s]", uid, err),
 		)
-		return nil, fmt.Errorf("get auth [%d] info failed ", id)
+		return nil, fmt.Errorf("get auth [%d] info failed ", uid)
 	}
 	return a, nil
 }
 
-func (a *Auth) Delete() error {
-	if err := DataBase().Table(a.TableName()).
+func (a *Auth) Delete(ctx context.Context) error {
+	if err := DataBase().WithContext(ctx).Table(a.TableName()).
 		Update("deleted", 1).
 		Where("is_valid = ? ", true).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(
