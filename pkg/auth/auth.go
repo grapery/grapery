@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	info := new(models.Auth)
 
 	info.Password = pwd
-	if models.IsUserAuthExist(account) {
+	if models.IsUserAuthExist(ctx, account) {
 		return errors.ErrAuthIsExist
 	}
 
@@ -67,10 +68,10 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	info.UpdateAt = time.Now()
 	if strings.Contains(account, "@") {
 		info.Email = account
-		err = models.CreateWithEmail(info)
+		err = models.CreateWithEmail(ctx, info)
 	} else {
 		info.Phone = account
-		err = models.CreateWithPhone(info)
+		err = models.CreateWithPhone(ctx, info)
 	}
 	if err != nil {
 		return err
@@ -82,9 +83,9 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 	info := new(models.Auth)
 	var err error
 	if strings.Contains(account, "@") {
-		info, err = models.GetByEmail(account)
+		info, err = models.GetByEmail(ctx, account)
 	} else {
-		info, err = models.GetByPhone(account)
+		info, err = models.GetByPhone(ctx, account)
 	}
 	if err != nil {
 		return nil, err
@@ -107,9 +108,9 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	info := new(models.Auth)
 	var err error
 	if strings.Contains(req.GetAccount(), "@") {
-		info, err = models.GetByEmail(req.GetAccount())
+		info, err = models.GetByEmail(ctx, req.GetAccount())
 	} else {
-		info, err = models.GetByPhone(req.GetAccount())
+		info, err = models.GetByPhone(ctx, req.GetAccount())
 
 	}
 	if err != nil {
@@ -121,12 +122,14 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	} else {
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
-	err = models.UpdatePwd(info)
+	err = models.UpdatePwd(ctx, info)
 	if err != nil {
-		return &api.ResetPasswordResponse{
-			Account: req.GetAccount(),
-			Status:  -1,
-		}, err
+		if err != nil {
+			return &api.ResetPasswordResponse{
+				Account: req.GetAccount(),
+				Status:  -1,
+			}, err
+		}
 	}
 	return &api.ResetPasswordResponse{
 		Account: req.GetAccount(),
@@ -135,5 +138,9 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 }
 
 func (auth *AuthService) Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error) {
+	if req.GetToken() == "" {
+		return nil, fmt.Errorf("token is empty")
+	}
+
 	return nil, nil
 }
