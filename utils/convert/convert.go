@@ -72,7 +72,6 @@ func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
 		itemDetail.Detail = &api.ItemDetail_Share{
 			Share: shareLink,
 		}
-	case api.ItemType_Location:
 	case api.ItemType_Picture:
 		shareLink := new(api.PictureDetail)
 		err = json.Unmarshal([]byte(i.Content), shareLink)
