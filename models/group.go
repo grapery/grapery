@@ -328,3 +328,8 @@ func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err
 	}
 	return users, nil
 }
+
+type GroupProfile struct {
+	IDBase
+	GroupID int64 `json:"group_id,omitempty"`
+}

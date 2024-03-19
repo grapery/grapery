@@ -373,3 +373,8 @@ func StopWatchingProject(userID, groupID, projectId int64) error {
 	}
 	return nil
 }
+
+type ProjectProfile struct {
+	IDBase
+	ProjectID int64 `json:"project_id,omitempty"`
+}

@@ -146,3 +146,8 @@ func GetUsersByIds(ids []int64) (users []*User, err error) {
 	}
 	return users, nil
 }
+
+type UserProfile struct {
+	IDBase
+	UserID int64 `json:"user_id,omitempty"`
+}

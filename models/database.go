@@ -73,6 +73,10 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&GroupMember{})
 	database.AutoMigrate(&LikeItem{})
 	database.AutoMigrate(&Comment{})
+
+	database.AutoMigrate(&UserProfile{})
+	database.AutoMigrate(&ProjectProfile{})
+	database.AutoMigrate(&GroupProfile{})
 	return nil
 }
 

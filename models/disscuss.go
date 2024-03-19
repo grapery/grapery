@@ -1,11 +1,18 @@
 package models
 
+type DiscussStatus int
+
+const (
+	DiscussStatusClosed DiscussStatus = iota + 1
+	DiscussStatusOpen
+)
+
 type Disscuss struct {
 	IDBase
 	Creator   int64 `json:"creator,omitempty"`
 	ProjectID int64 `json:"project_id,omitempty"`
 	Title     string
-	Status    int
+	Status    DiscussStatus
 	Desc      string
 }
 
