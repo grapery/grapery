@@ -1,6 +1,8 @@
 package models
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/grapery/common-protoc/gen"
@@ -33,8 +35,8 @@ func (i Item) TableName() string {
 	return "items"
 }
 
-func CreateItem(repo *Repository, item *Item) error {
-	err := repo.DB().Model(item).Create(item).Error
+func CreateItem(ctx context.Context, item *Item) error {
+	err := DataBase().WithContext(ctx).Model(item).Create(item).Error
 	if err != nil {
 		log.Errorf("create item failed: %s", err.Error())
 		return err
@@ -43,8 +45,8 @@ func CreateItem(repo *Repository, item *Item) error {
 	return nil
 }
 
-func DeleteItem(repo *Repository, itemID int64) error {
-	err := repo.DB().Model(&Item{}).Update("delete = ? ", true).
+func DeleteItem(ctx context.Context, itemID int64) error {
+	err := DataBase().WithContext(ctx).Model(&Item{}).Update("delete = ? ", true).
 		Where("id = ?", itemID).Error
 	if err != nil {
 		log.Error("update item failed: ", err)
@@ -53,9 +55,9 @@ func DeleteItem(repo *Repository, itemID int64) error {
 	return nil
 }
 
-func GetItem(repo *Repository, itemID int64) (*Item, error) {
+func GetItem(ctx context.Context, itemID int64) (*Item, error) {
 	item := new(Item)
-	err := repo.DB().Model(item).
+	err := DataBase().WithContext(ctx).Model(item).
 		Where("id = ?", itemID).
 		First(item).Error
 	if err != nil {
@@ -64,9 +66,9 @@ func GetItem(repo *Repository, itemID int64) (*Item, error) {
 	return item, nil
 }
 
-func GetItemByTitle(repo *Repository, title string) (*Item, error) {
+func GetItemByTitle(ctx context.Context, title string) (*Item, error) {
 	item := new(Item)
-	err := repo.DB().
+	err := DataBase().WithContext(ctx).
 		Model(item).
 		Where("title = ?", title).
 		First(item).Error
@@ -76,9 +78,9 @@ func GetItemByTitle(repo *Repository, title string) (*Item, error) {
 	return item, nil
 }
 
-func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
+func GetItemsByType(ctx context.Context, itemType api.ItemType) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().
+	err := DataBase().WithContext(ctx).
 		Model(&Item{}).
 		Where("item_type = ?", itemType).
 		First(items).Error
@@ -88,9 +90,9 @@ func GetItemsByType(repo *Repository, itemType api.ItemType) ([]*Item, error) {
 	return *items, nil
 }
 
-func GetItemByProject(repo *Repository, projectID int64, offset, number int) ([]*Item, error) {
+func GetItemByProject(ctx context.Context, projectID int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).
+	err := DataBase().WithContext(ctx).Model(&Item{}).
 		Where("project_id = ?", projectID).
 		Offset(offset).
 		Limit(number).
@@ -101,7 +103,7 @@ func GetItemByProject(repo *Repository, projectID int64, offset, number int) ([]
 	return *items, nil
 }
 
-func GetItemByGroup(repo *Repository, grouId int64, offset, number int) ([]*Item, error) {
+func GetItemByGroup(ctx context.Context, grouId int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
 	err := DataBase().Model(Item{}).
 		Where("project_id in (?)",
@@ -117,9 +119,9 @@ func GetItemByGroup(repo *Repository, grouId int64, offset, number int) ([]*Item
 	return *items, nil
 }
 
-func GetItemByUser(repo *Repository, userId int64, offset, number int) ([]*Item, error) {
+func GetItemByUser(ctx context.Context, userId int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).
+	err := DataBase().WithContext(ctx).Model(&Item{}).
 		Where("user_id = ?", userId).
 		Order("create_at").
 		Offset(offset).
@@ -131,9 +133,9 @@ func GetItemByUser(repo *Repository, userId int64, offset, number int) ([]*Item,
 	return *items, nil
 }
 
-func GetItemByProjectAndCreator(repo *Repository, projectID int64, userID int64, offset, number int) ([]*Item, error) {
+func GetItemByProjectAndCreator(ctx context.Context, projectID int64, userID int64, offset, number int) ([]*Item, error) {
 	items := new([]*Item)
-	err := repo.DB().Model(&Item{}).
+	err := DataBase().WithContext(ctx).Model(&Item{}).
 		Where("project_id = ? and user_id = ?", projectID, userID).
 		Order("create_at").
 		Offset(offset).
@@ -145,8 +147,8 @@ func GetItemByProjectAndCreator(repo *Repository, projectID int64, userID int64,
 	return *items, nil
 }
 
-func UpdateItemVisable(repo *Repository, itemID int64, vtype api.ScopeType) error {
-	err := repo.DB().Model(&Item{}).Update("visable", vtype).
+func UpdateItemVisable(ctx context.Context, itemID int64, vtype api.ScopeType) error {
+	err := DataBase().WithContext(ctx).Model(&Item{}).Update("visable", vtype).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err
@@ -154,8 +156,8 @@ func UpdateItemVisable(repo *Repository, itemID int64, vtype api.ScopeType) erro
 	return nil
 }
 
-func UpdateItemTags(repo *Repository, itemID int64, tags string) error {
-	err := repo.DB().Model(&Item{}).Update("tags", tags).
+func UpdateItemTags(ctx context.Context, itemID int64, tags string) error {
+	err := DataBase().WithContext(ctx).Model(&Item{}).Update("tags", tags).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err
@@ -163,8 +165,8 @@ func UpdateItemTags(repo *Repository, itemID int64, tags string) error {
 	return nil
 }
 
-func UpdateItemTitle(repo *Repository, itemID int64, title string) error {
-	err := repo.DB().Model(&Item{}).Update("title", title).
+func UpdateItemTitle(ctx context.Context, itemID int64, title string) error {
+	err := DataBase().WithContext(ctx).Model(&Item{}).Update("title", title).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err
@@ -179,12 +181,12 @@ type ItemLiker struct {
 	Ltype  int64 `json:"ltype,omitempty"`
 }
 
-func CreateItemLiker(repo *Repository, projectId, itemId, userId int64) error {
+func CreateItemLiker(ctx context.Context, projectId, itemId, userId int64) error {
 	item := &ItemLiker{
 		ItemID: itemId,
 		UserID: userId,
 	}
-	err := repo.DB().Model(item).Create(item).Error
+	err := DataBase().WithContext(ctx).Model(item).Create(item).Error
 	if err != nil {
 		log.Errorf("create item liker failed: %s", err.Error())
 		return err
@@ -192,12 +194,12 @@ func CreateItemLiker(repo *Repository, projectId, itemId, userId int64) error {
 	return nil
 }
 
-func DeleteItemLiker(repo *Repository, projectId, itemId, userId int64) error {
+func DeleteItemLiker(ctx context.Context, projectId, itemId, userId int64) error {
 	item := &ItemLiker{
 		ItemID: itemId,
 		UserID: userId,
 	}
-	err := repo.DB().Model(item).Update("delete = ? ", true).
+	err := DataBase().WithContext(ctx).Model(item).Update("delete = ? ", true).
 		Where("item_id = ? and user_id = ?", itemId, userId).Error
 	if err != nil {
 		log.Error("delete item liker failed: ", err)

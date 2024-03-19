@@ -1,7 +1,6 @@
 package models
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -99,23 +98,6 @@ type Base struct {
 type IDBase struct {
 	ID uint `gorm:"primary_key,column:id" json:"id,omitempty"`
 	Base
-}
-
-type Repository struct {
-	Ctx    context.Context
-	UserID uint64
-	db     *gorm.DB
-}
-
-func (r *Repository) DB() *gorm.DB {
-	return r.db
-}
-
-func NewRepository(ctx context.Context) *Repository {
-	return &Repository{
-		Ctx: ctx,
-		db:  DataBase(),
-	}
 }
 
 func DataBase() *gorm.DB {

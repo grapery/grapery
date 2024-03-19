@@ -39,8 +39,7 @@ type ItemService struct {
 }
 
 func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
-	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByProject(repo,
+	list, err := models.GetItemByProject(ctx,
 		int64(req.GetProjectId()),
 		int(req.GetOffset()),
 		int(req.GetPageSize()))
@@ -78,8 +77,7 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 }
 
 func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error) {
-	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByGroup(repo,
+	list, err := models.GetItemByGroup(ctx,
 		int64(req.GetGroupId()),
 		int(req.GetOffset()),
 		int(req.GetPageSize()))
@@ -115,8 +113,8 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 }
 
 func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error) {
-	repo := models.NewRepository(ctx)
-	list, err := models.GetItemByProject(repo, int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
+	list, err := models.GetItemByProject(ctx,
+		int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +145,7 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 }
 
 func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error) {
-	repo := models.NewRepository(ctx)
-	item, err := models.GetItem(repo, req.GetItemId())
+	item, err := models.GetItem(ctx, req.GetItemId())
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +155,6 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 }
 
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
-	repo := models.NewRepository(ctx)
 	item := &models.Item{
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
@@ -166,7 +162,7 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 		Description: req.GetInfo().Title,
 		ItemType:    api.ItemType_ShortWord,
 	}
-	err = models.UpdateItemVisable(repo, int64(req.GetItemId()), api.ScopeType_AllPublic)
+	err = models.UpdateItemVisable(ctx, int64(req.GetItemId()), api.ScopeType_AllPublic)
 	if err != nil {
 		return nil, err
 	}
@@ -176,14 +172,13 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 }
 
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
-	repo := models.NewRepository(ctx)
 	item := &models.Item{
 		ProjectID: req.GetProjectId(),
 		UserID:    req.GetUserId(),
 		Title:     req.GetName(),
 		ItemType:  api.ItemType_ShortWord,
 	}
-	err = models.CreateItem(repo, item)
+	err = models.CreateItem(ctx, item)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +187,7 @@ func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemReques
 	}, nil
 }
 func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error) {
-	repo := models.NewRepository(ctx)
-	err = models.DeleteItem(repo, int64(req.GetItemId()))
+	err = models.DeleteItem(ctx, int64(req.GetItemId()))
 	if err != nil {
 		return nil, err
 	}
@@ -201,8 +195,7 @@ func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemReques
 }
 
 func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
-	repo := models.NewRepository(ctx)
-	err = models.CreateItemLiker(repo, req.GetProjectId(), req.GetItemId(), req.GetUserId())
+	err = models.CreateItemLiker(ctx, req.GetProjectId(), req.GetItemId(), req.GetUserId())
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +203,7 @@ func (it *ItemService) LikeItem(ctx context.Context, req *api.LikeItemRequest) (
 }
 
 func (it *ItemService) UnLikeItem(ctx context.Context, req *api.LikeItemRequest) (resp *api.LikeItemResponse, err error) {
-	repo := models.NewRepository(ctx)
-	err = models.DeleteItemLiker(repo, req.GetProjectId(), req.GetItemId(), req.GetUserId())
+	err = models.DeleteItemLiker(ctx, req.GetProjectId(), req.GetItemId(), req.GetUserId())
 	if err != nil {
 		return nil, err
 	}
