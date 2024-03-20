@@ -28,14 +28,12 @@ type Project struct {
 }
 
 type ProjectSetting struct {
-	Description   string        `json:"description,omitempty"`
-	Avatar        string        `json:"avatar,omitempty"`
-	WatchingCount int64         `json:"watching_count,omitempty"`
-	InvolvedCount int64         `json:"involved_count,omitempty"`
-	Visable       api.ScopeType `json:"visable,omitempty"`
-	IsAchieve     bool          `json:"is_achieve,omitempty"`
-	IsClose       bool          `json:"is_close,omitempty"`
-	IsPrivate     bool          `json:"is_private,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Avatar      string        `json:"avatar,omitempty"`
+	Visable     api.ScopeType `json:"visable,omitempty"`
+	IsAchieve   bool          `json:"is_achieve,omitempty"`
+	IsClose     bool          `json:"is_close,omitempty"`
+	IsPrivate   bool          `json:"is_private,omitempty"`
 }
 
 func (p Project) TableName() string {
@@ -131,14 +129,12 @@ func (p *Project) GetProfile() error {
 func (p *Project) UpdateProfile() error {
 	err := DataBase().Model(p).
 		Updates(map[string]interface{}{
-			"description":    p.Description,
-			"avatar":         p.Avatar,
-			"watching_count": p.WatchingCount,
-			"involved_count": p.InvolvedCount,
-			"visable":        p.Visable,
-			"is_achieve":     p.IsAchieve,
-			"is_close":       p.IsClose,
-			"is_private":     p.IsPrivate,
+			"description": p.Description,
+			"avatar":      p.Avatar,
+			"visable":     p.Visable,
+			"is_achieve":  p.IsAchieve,
+			"is_close":    p.IsClose,
+			"is_private":  p.IsPrivate,
 		}).
 		Where("id = ? and deleted = ?", p.ID, 0).Error
 	if err != nil {
