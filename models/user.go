@@ -24,18 +24,16 @@ const (
  */
 type User struct {
 	IDBase
-	Name     string         `json:"name,omitempty" gorm:"index"`
-	Email    string         `json:"email,omitempty" gorm:"index"`
-	Phone    string         `json:"phone,omitempty" gorm:"index"`
-	Gender   int            `json:"gender,omitempty"`
-	BioID    string         `json:"bio,omitempty"`
-	Status   api.UserStatus `json:"status,omitempty"`
-	Location string         `json:"location,omitempty"`
-	Avatar   string         `json:"avatar,omitempty"`
-
-	NumProject int    `json:"num_project,omitempty"`
-	NumGroup   int    `json:"num_group,omitempty"`
-	ShortDesc  string `json:"short_desc,omitempty"`
+	Name      string         `json:"name,omitempty" gorm:"index"`
+	Email     string         `json:"email,omitempty" gorm:"index"`
+	Phone     string         `json:"phone,omitempty" gorm:"index"`
+	Gender    int            `json:"gender,omitempty"`
+	BioID     string         `json:"bio,omitempty"`
+	Status    api.UserStatus `json:"status,omitempty"`
+	Location  string         `json:"location,omitempty"`
+	Avatar    string         `json:"avatar,omitempty"`
+	ShortDesc string         `json:"short_desc,omitempty"`
+	ProfileId int64          `json:"profile_id,omitempty"`
 }
 
 func (u User) TableName() string {
@@ -149,5 +147,50 @@ func GetUsersByIds(ids []int64) (users []*User, err error) {
 
 type UserProfile struct {
 	IDBase
-	UserID int64 `json:"user_id,omitempty"`
+	UserId         int64 `json:"user_id,omitempty"`
+	NumProject     int   `json:"num_project,omitempty"`
+	NumGroup       int   `json:"num_group,omitempty"`
+	DefaultGroupID int64 `json:"default_group_id,omitempty"`
+	MinSameGroup   int   `json:"min_same_group,omitempty"`
+	Status         int   `json:"status,omitempty"`
+}
+
+func (u *UserProfile) TableName() string {
+	return "user_profile"
+}
+
+func (u *UserProfile) Create() error {
+	err := DataBase().Model(u).Create(u).First(u).Error
+	if err != nil {
+		log.Errorf("create user profile [%d] failed [%s] ", u.UserId, err.Error())
+		return fmt.Errorf("create user profile failed")
+	}
+	return nil
+}
+
+func (u *UserProfile) Update() error {
+	err := DataBase().Model(u).Updates(u).Where("id = ?", u.ID).Error
+	if err != nil {
+		log.Errorf("update user profile [%d] failed ", u.ID)
+		return fmt.Errorf("update user profile [%d] failed ", u.ID)
+	}
+	return nil
+}
+
+func (u *UserProfile) GetById() error {
+	err := DataBase().Model(u).Where("id = ?", u.ID).First(u).Error
+	if err != nil {
+		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
+		return fmt.Errorf("get user profile [%d] info failed ", u.ID)
+	}
+	return nil
+}
+
+func (u *UserProfile) GetByUserId() error {
+	err := DataBase().Model(u).Where("user_id = ?", u.UserId).First(u).Error
+	if err != nil {
+		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
+		return fmt.Errorf("get user profile [%d] info failed ", u.ID)
+	}
+	return nil
 }
