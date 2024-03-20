@@ -7,12 +7,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// pic/wold/emoji
 type Comment struct {
 	IDBase
 	UserID  int64  `json:"user_id,omitempty"`
 	ItemID  int    `json:"item_id,omitempty"`
 	PreID   int64  `json:"pre_id,omitempty"`
 	Content []byte `json:"content,omitempty"`
+	RefID   int64  `json:"ref_id,omitempty"`
 }
 
 func (c Comment) TableName() string {

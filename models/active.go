@@ -12,6 +12,8 @@ type Active struct {
 	IDBase
 	UserId     int64          `json:"user_id,omitempty"`
 	ActiveType api.ActiveType `json:"active_type,omitempty"`
+	ProjectId  int64          `json:"project_id,omitempty"`
+	GroupId    int64          `json:"group_id,omitempty"`
 	ItemID     int64          `json:"item_id,omitempty"`
 }
 
