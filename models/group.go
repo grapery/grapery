@@ -11,6 +11,8 @@ import (
 	"github.com/grapery/grapery/utils/errors"
 )
 
+type GroupType int
+
 type Group struct {
 	IDBase
 	Name        string        `json:"name,omitempty"`

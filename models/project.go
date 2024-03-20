@@ -8,6 +8,8 @@ import (
 	api "github.com/grapery/common-protoc/gen"
 )
 
+type ProjectType int
+
 /*
 项目，或者说事件流；
 1.包含多种内容
