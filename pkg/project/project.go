@@ -124,15 +124,13 @@ func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProj
 	resp.ProjectId = req.GetProjectId()
 	resp.UserId = req.UserId
 	resp.Info = &api.ProjectProfileInfo{
-		ProjectId:     req.GetProjectId(),
-		GroupId:       int32(req.GetGroupId()),
-		Description:   project.Description,
-		WatchingCount: int64(project.WatchingCount),
-		InvolvedCount: int64(project.InvolvedCount),
-		Avatar:        project.Avatar,
-		ScopeType:     project.Visable,
-		IsAchieve:     project.IsAchieve,
-		IsClose:       project.IsClose,
+		ProjectId:   req.GetProjectId(),
+		GroupId:     int32(req.GetGroupId()),
+		Description: project.Description,
+		Avatar:      project.Avatar,
+		ScopeType:   project.Visable,
+		IsAchieve:   project.IsAchieve,
+		IsClose:     project.IsClose,
 	}
 	return resp, nil
 }

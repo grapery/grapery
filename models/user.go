@@ -61,7 +61,7 @@ func (u *User) UpdateName() error {
 func (u *User) UpdateBio() error {
 	err := DataBase().Model(u).Update("bio", u.BioID).Where("id = ?", u.ID).Error
 	if err != nil {
-		log.Errorf("update user [%d] bio [%d] failed ", u.ID, u.BioID)
+		log.Errorf("update user [%d] bio [%s] failed ", u.ID, u.BioID)
 		return fmt.Errorf("update user [%d] bio failed ", u.ID)
 	}
 	return nil

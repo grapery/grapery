@@ -36,7 +36,7 @@ func CreateLikeItem(ctx context.Context, item *LikeItem) error {
 	}
 	err = DataBase().WithContext(ctx).Model(&LikeItem{}).Create(item).Error
 	if err != nil {
-		log.Error("create likeitem failed: %s", err.Error())
+		log.Errorf("create likeitem failed: %s", err.Error())
 		return err
 	}
 	return nil
