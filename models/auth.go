@@ -64,7 +64,7 @@ func IsUserAuthExist(ctx context.Context, account string) bool {
 }
 
 func CreateWithEmail(ctx context.Context, a *Auth) error {
-	a.Expired = int64(time.Now().Unix()) + 3600*72
+	a.Expired = int64(time.Now().Unix()) + 3600*72 // 3 days
 	err := DataBase().WithContext(ctx).Model(a).Create(a).Error
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error(

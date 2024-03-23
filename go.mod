@@ -15,7 +15,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
 	github.com/olivere/elastic v6.2.37+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/sashabaranov/go-openai v1.18.3
+	github.com/sashabaranov/go-openai v1.20.4
 	github.com/sirupsen/logrus v1.9.3
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.21.0
