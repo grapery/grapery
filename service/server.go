@@ -30,7 +30,7 @@ type TeamsService struct {
 	*user.UserService
 	*group.GroupService
 	*group.ProjectService
-	*group.ItemService
+	*group.StoryItemService
 	*group.CommentService
 	*common.CommonService
 	// api.UnimplementedTeamsAPIServer
@@ -39,7 +39,7 @@ type TeamsService struct {
 func (ts *TeamsService) Version(ctx context.Context, req *connect.Request[api.VersionRequest]) (*connect.Response[api.VersionResponse], error) {
 	return &connect.Response[api.VersionResponse]{
 		Msg: &api.VersionResponse{
-			Version: "0.0.1",
+			Version: "0.1.1",
 		},
 	}, nil
 }
@@ -63,7 +63,7 @@ func NewTeamsService() *TeamsService {
 	ts.UserService = &user.UserService{}
 	ts.GroupService = &group.GroupService{}
 	ts.ProjectService = &group.ProjectService{}
-	ts.ItemService = &group.ItemService{}
+	ts.StoryItemService = &group.StoryItemService{}
 	ts.CommentService = &group.CommentService{}
 	ts.CommonService = &common.CommonService{}
 	ts.Ctx, ts.Cancel = context.WithCancel(context.Background())

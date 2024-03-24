@@ -12,6 +12,7 @@ import (
 )
 
 type ProjectService struct {
+	Filter string
 }
 
 func (ps *ProjectService) GetProjectInfo(ctx context.Context, req *connect.Request[api.GetProjectRequest]) (*connect.Response[api.GetProjectResponse], error) {

@@ -126,14 +126,16 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	if err != nil {
 		if err != nil {
 			return &api.ResetPasswordResponse{
-				Account: req.GetAccount(),
-				Status:  -1,
+				Account:   req.GetAccount(),
+				Status:    -1,
+				Timestamp: time.Now().Unix(),
 			}, err
 		}
 	}
 	return &api.ResetPasswordResponse{
-		Account: req.GetAccount(),
-		Status:  0,
+		Account:   req.GetAccount(),
+		Status:    0,
+		Timestamp: time.Now().Unix(),
 	}, nil
 }
 

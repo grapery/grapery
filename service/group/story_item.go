@@ -9,10 +9,10 @@ import (
 	itemService "github.com/grapery/grapery/pkg/item"
 )
 
-type ItemService struct {
+type StoryItemService struct {
 }
 
-func (ts *ItemService) GetUserItems(ctx context.Context, req *connect.Request[api.GetUserItemsRequest]) (*connect.Response[api.GetUserItemsResponse], error) {
+func (ts *StoryItemService) GetUserItems(ctx context.Context, req *connect.Request[api.GetUserItemsRequest]) (*connect.Response[api.GetUserItemsResponse], error) {
 	info, err := itemService.GetItemServer().GetUserItems(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (ts *ItemService) GetUserItems(ctx context.Context, req *connect.Request[ap
 		Msg: info,
 	}, nil
 }
-func (ts *ItemService) GetItem(ctx context.Context, req *connect.Request[api.GetItemRequest]) (*connect.Response[api.GetItemResponse], error) {
+func (ts *StoryItemService) GetItem(ctx context.Context, req *connect.Request[api.GetItemRequest]) (*connect.Response[api.GetItemResponse], error) {
 	info, err := itemService.GetItemServer().GetItem(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (ts *ItemService) GetItem(ctx context.Context, req *connect.Request[api.Get
 		Msg: info,
 	}, nil
 }
-func (ts *ItemService) CreateItem(ctx context.Context, req *connect.Request[api.CreateItemRequest]) (*connect.Response[api.CreateItemResponse], error) {
+func (ts *StoryItemService) CreateItem(ctx context.Context, req *connect.Request[api.CreateItemRequest]) (*connect.Response[api.CreateItemResponse], error) {
 	info, err := itemService.GetItemServer().CreateItem(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (ts *ItemService) CreateItem(ctx context.Context, req *connect.Request[api.
 		Msg: info,
 	}, nil
 }
-func (ts *ItemService) UpdateItem(ctx context.Context, req *connect.Request[api.UpdateItemRequest]) (*connect.Response[api.UpdateItemResponse], error) {
+func (ts *StoryItemService) UpdateItem(ctx context.Context, req *connect.Request[api.UpdateItemRequest]) (*connect.Response[api.UpdateItemResponse], error) {
 	info, err := itemService.GetItemServer().UpdateItem(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (ts *ItemService) UpdateItem(ctx context.Context, req *connect.Request[api.
 		Msg: info,
 	}, nil
 }
-func (ts *ItemService) DeleteItem(ctx context.Context, req *connect.Request[api.DeleteItemRequest]) (*connect.Response[api.DeleteItemResponse], error) {
+func (ts *StoryItemService) DeleteItem(ctx context.Context, req *connect.Request[api.DeleteItemRequest]) (*connect.Response[api.DeleteItemResponse], error) {
 	info, err := itemService.GetItemServer().DeleteItem(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (ts *ItemService) DeleteItem(ctx context.Context, req *connect.Request[api.
 		Msg: info,
 	}, nil
 }
-func (ts *ItemService) LikeItem(ctx context.Context, req *connect.Request[api.LikeItemRequest]) (*connect.Response[api.LikeItemResponse], error) {
+func (ts *StoryItemService) LikeItem(ctx context.Context, req *connect.Request[api.LikeItemRequest]) (*connect.Response[api.LikeItemResponse], error) {
 	info, err := itemService.GetItemServer().LikeItem(ctx, req.Msg)
 	if err != nil {
 		return nil, err
