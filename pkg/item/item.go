@@ -39,7 +39,7 @@ type ItemService struct {
 }
 
 func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
-	list, err := models.GetItemByProject(ctx,
+	list, err := models.GetStoryItemByProject(ctx,
 		int64(req.GetProjectId()),
 		int(req.GetOffset()),
 		int(req.GetPageSize()))
@@ -77,7 +77,7 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 }
 
 func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error) {
-	list, err := models.GetItemByGroup(ctx,
+	list, err := models.GetStoryItemByGroup(ctx,
 		int64(req.GetGroupId()),
 		int(req.GetOffset()),
 		int(req.GetPageSize()))
@@ -113,7 +113,7 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 }
 
 func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error) {
-	list, err := models.GetItemByProject(ctx,
+	list, err := models.GetStoryItemByProject(ctx,
 		int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 }
 
 func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error) {
-	item, err := models.GetItem(ctx, req.GetItemId())
+	item, err := models.GetStoryItem(ctx, req.GetItemId())
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +155,14 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 }
 
 func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemRequest) (resp *api.UpdateItemResponse, err error) {
-	item := &models.Item{
+	item := &models.StoryItem{
 		ProjectID:   req.GetProjectId(),
 		UserID:      req.GetUserId(),
 		Title:       req.GetInfo().Title,
 		Description: req.GetInfo().Title,
 		ItemType:    api.ItemType_ShortWord,
 	}
-	err = models.UpdateItemVisable(ctx, int64(req.GetItemId()), api.ScopeType_AllPublic)
+	err = models.UpdateStoryItemVisable(ctx, int64(req.GetItemId()), api.ScopeType_AllPublic)
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +172,13 @@ func (it *ItemService) UpdateItem(ctx context.Context, req *api.UpdateItemReques
 }
 
 func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemRequest) (resp *api.CreateItemResponse, err error) {
-	item := &models.Item{
+	item := &models.StoryItem{
 		ProjectID: req.GetProjectId(),
 		UserID:    req.GetUserId(),
 		Title:     req.GetName(),
 		ItemType:  api.ItemType_ShortWord,
 	}
-	err = models.CreateItem(ctx, item)
+	err = models.CreateStoryItem(ctx, item)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (it *ItemService) CreateItem(ctx context.Context, req *api.CreateItemReques
 	}, nil
 }
 func (it *ItemService) DeleteItem(ctx context.Context, req *api.DeleteItemRequest) (resp *api.DeleteItemResponse, err error) {
-	err = models.DeleteItem(ctx, int64(req.GetItemId()))
+	err = models.DeleteStoryItem(ctx, int64(req.GetItemId()))
 	if err != nil {
 		return nil, err
 	}

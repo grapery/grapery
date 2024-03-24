@@ -76,7 +76,7 @@ func (e *ElasticProject) SetLastUsedTime(int64) {
 }
 
 type ElasticItem struct {
-	*models.Item
+	*models.StoryItem
 }
 
 func (e *ElasticItem) Index() string {

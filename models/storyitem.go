@@ -12,7 +12,7 @@ import (
 内容承载的item:
 图片，文字,视频，音乐
 */
-type Item struct {
+type StoryItem struct {
 	IDBase
 	ProjectID     int64         `json:"project_id,omitempty"`
 	UserID        int64         `json:"user_id,omitempty"`
@@ -29,13 +29,14 @@ type Item struct {
 	IsHiddenToken bool          `json:"is_hidden_token,omitempty"`
 	Tags          string        `json:"tags,omitempty"`
 	LikeCount     int64         `json:"like_count,omitempty"`
+	IsAIGenerate  bool          `json:"is_ai_generate,omitempty"`
 }
 
-func (i Item) TableName() string {
-	return "items"
+func (i StoryItem) TableName() string {
+	return "story_item"
 }
 
-func CreateItem(ctx context.Context, item *Item) error {
+func CreateStoryItem(ctx context.Context, item *StoryItem) error {
 	err := DataBase().WithContext(ctx).Model(item).Create(item).Error
 	if err != nil {
 		log.Errorf("create item failed: %s", err.Error())
@@ -45,8 +46,8 @@ func CreateItem(ctx context.Context, item *Item) error {
 	return nil
 }
 
-func DeleteItem(ctx context.Context, itemID int64) error {
-	err := DataBase().WithContext(ctx).Model(&Item{}).Update("delete = ? ", true).
+func DeleteStoryItem(ctx context.Context, itemID int64) error {
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).Update("delete = ? ", true).
 		Where("id = ?", itemID).Error
 	if err != nil {
 		log.Error("update item failed: ", err)
@@ -55,8 +56,8 @@ func DeleteItem(ctx context.Context, itemID int64) error {
 	return nil
 }
 
-func GetItem(ctx context.Context, itemID int64) (*Item, error) {
-	item := new(Item)
+func GetStoryItem(ctx context.Context, itemID int64) (*StoryItem, error) {
+	item := new(StoryItem)
 	err := DataBase().WithContext(ctx).Model(item).
 		Where("id = ?", itemID).
 		First(item).Error
@@ -66,8 +67,8 @@ func GetItem(ctx context.Context, itemID int64) (*Item, error) {
 	return item, nil
 }
 
-func GetItemByTitle(ctx context.Context, title string) (*Item, error) {
-	item := new(Item)
+func GetStoryItemByTitle(ctx context.Context, title string) (*StoryItem, error) {
+	item := new(StoryItem)
 	err := DataBase().WithContext(ctx).
 		Model(item).
 		Where("title = ?", title).
@@ -78,10 +79,10 @@ func GetItemByTitle(ctx context.Context, title string) (*Item, error) {
 	return item, nil
 }
 
-func GetItemsByType(ctx context.Context, itemType api.ItemType) ([]*Item, error) {
-	items := new([]*Item)
+func GetStoryItemsByType(ctx context.Context, itemType api.ItemType) ([]*StoryItem, error) {
+	items := new([]*StoryItem)
 	err := DataBase().WithContext(ctx).
-		Model(&Item{}).
+		Model(&StoryItem{}).
 		Where("item_type = ?", itemType).
 		First(items).Error
 	if err != nil {
@@ -90,9 +91,9 @@ func GetItemsByType(ctx context.Context, itemType api.ItemType) ([]*Item, error)
 	return *items, nil
 }
 
-func GetItemByProject(ctx context.Context, projectID int64, offset, number int) ([]*Item, error) {
-	items := new([]*Item)
-	err := DataBase().WithContext(ctx).Model(&Item{}).
+func GetStoryItemByProject(ctx context.Context, projectID int64, offset, number int) ([]*StoryItem, error) {
+	items := new([]*StoryItem)
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).
 		Where("project_id = ?", projectID).
 		Offset(offset).
 		Limit(number).
@@ -103,9 +104,9 @@ func GetItemByProject(ctx context.Context, projectID int64, offset, number int) 
 	return *items, nil
 }
 
-func GetItemByGroup(ctx context.Context, grouId int64, offset, number int) ([]*Item, error) {
-	items := new([]*Item)
-	err := DataBase().Model(Item{}).
+func GetStoryItemByGroup(ctx context.Context, grouId int64, offset, number int) ([]*StoryItem, error) {
+	items := new([]*StoryItem)
+	err := DataBase().Model(StoryItem{}).
 		Where("project_id in (?)",
 			DataBase().
 				Model(Project{}).
@@ -119,9 +120,9 @@ func GetItemByGroup(ctx context.Context, grouId int64, offset, number int) ([]*I
 	return *items, nil
 }
 
-func GetItemByUser(ctx context.Context, userId int64, offset, number int) ([]*Item, error) {
-	items := new([]*Item)
-	err := DataBase().WithContext(ctx).Model(&Item{}).
+func GetStoryItemByUser(ctx context.Context, userId int64, offset, number int) ([]*StoryItem, error) {
+	items := new([]*StoryItem)
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).
 		Where("user_id = ?", userId).
 		Order("create_at").
 		Offset(offset).
@@ -133,9 +134,9 @@ func GetItemByUser(ctx context.Context, userId int64, offset, number int) ([]*It
 	return *items, nil
 }
 
-func GetItemByProjectAndCreator(ctx context.Context, projectID int64, userID int64, offset, number int) ([]*Item, error) {
-	items := new([]*Item)
-	err := DataBase().WithContext(ctx).Model(&Item{}).
+func GetStoryItemByProjectAndCreator(ctx context.Context, projectID int64, userID int64, offset, number int) ([]*StoryItem, error) {
+	items := new([]*StoryItem)
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).
 		Where("project_id = ? and user_id = ?", projectID, userID).
 		Order("create_at").
 		Offset(offset).
@@ -147,8 +148,8 @@ func GetItemByProjectAndCreator(ctx context.Context, projectID int64, userID int
 	return *items, nil
 }
 
-func UpdateItemVisable(ctx context.Context, itemID int64, vtype api.ScopeType) error {
-	err := DataBase().WithContext(ctx).Model(&Item{}).Update("visable", vtype).
+func UpdateStoryItemVisable(ctx context.Context, itemID int64, vtype api.ScopeType) error {
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).Update("visable", vtype).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err
@@ -156,8 +157,8 @@ func UpdateItemVisable(ctx context.Context, itemID int64, vtype api.ScopeType) e
 	return nil
 }
 
-func UpdateItemTags(ctx context.Context, itemID int64, tags string) error {
-	err := DataBase().WithContext(ctx).Model(&Item{}).Update("tags", tags).
+func UpdateStoryItemTags(ctx context.Context, itemID int64, tags string) error {
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).Update("tags", tags).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err
@@ -165,8 +166,8 @@ func UpdateItemTags(ctx context.Context, itemID int64, tags string) error {
 	return nil
 }
 
-func UpdateItemTitle(ctx context.Context, itemID int64, title string) error {
-	err := DataBase().WithContext(ctx).Model(&Item{}).Update("title", title).
+func UpdateStoryItemTitle(ctx context.Context, itemID int64, title string) error {
+	err := DataBase().WithContext(ctx).Model(&StoryItem{}).Update("title", title).
 		Where("id = ? and deleted = ?", itemID, 0).Error
 	if err != nil {
 		return err

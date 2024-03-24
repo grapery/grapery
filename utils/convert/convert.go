@@ -29,7 +29,7 @@ func ConvertUserToApiUser(user *models.User) *api.UserInfo {
 	}
 }
 
-func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
+func ConvertItemToInfo(item *models.StoryItem) *api.ItemInfo {
 	info := new(api.ItemInfo)
 	info.UserId = int64(item.UserID)
 	info.Content = nil
@@ -39,8 +39,8 @@ func ConvertItemToInfo(item *models.Item) *api.ItemInfo {
 	return info
 }
 
-func ConvertInfoToItem(info *api.ItemInfo) *models.Item {
-	item := new(models.Item)
+func ConvertInfoToItem(info *api.ItemInfo) *models.StoryItem {
+	item := new(models.StoryItem)
 	item.UserID = int64(info.UserId)
 	item.Description = info.Title
 	item.ProjectID = int64(info.ProjectId)
@@ -56,7 +56,7 @@ func ConvertProjectToApiProjectInfo(p *models.Project) *api.ProjectInfo {
 	return &api.ProjectInfo{}
 }
 
-func ConvertItemToApiItemInfo(i *models.Item) *api.ItemInfo {
+func ConvertItemToApiItemInfo(i *models.StoryItem) *api.ItemInfo {
 	info := &api.ItemInfo{
 		ProjectId: int64(i.ProjectID),
 		UserId:    int64(i.UserID),

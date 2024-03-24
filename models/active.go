@@ -89,7 +89,7 @@ func GetActiveByProjectID(projectID int64) (*[]*Active, error) {
 	if err := DataBase().Model(Active{}).
 		Where("item_id in (?)",
 			DataBase().
-				Model(Item{}).
+				Model(StoryItem{}).
 				Select("id").
 				Where("project_id = ?", projectID)).
 		Order("create_at").

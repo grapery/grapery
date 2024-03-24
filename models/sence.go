@@ -1,5 +1,6 @@
 package models
 
+// 场景，剧情，故事板
 type Sence struct {
 	IDBase
 	Name        string `json:"name"`
@@ -21,8 +22,8 @@ func (sence Sence) TableName() string {
 type Timeline struct {
 	IDBase
 	Name        string `json:"name"`
-	RootId      int64  `json:"root_id"`
-	ForkId      int64  `json:"fork_id"`
+	RootItemId  int64  `json:"root_item_id"`
+	ForkItemId  int64  `json:"fork_item_id"`
 	Creator     int64  `json:"creator"`
 	Description string `json:"description"`
 	ProjectId   int64  `json:"project_id"`

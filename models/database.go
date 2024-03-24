@@ -64,7 +64,7 @@ func Init(uname, pwd, dbname string) error {
 	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
-	database.AutoMigrate(&Item{})
+	database.AutoMigrate(&StoryItem{})
 	database.AutoMigrate(&User{})
 	database.AutoMigrate(&Auth{})
 	database.AutoMigrate(&Active{})
