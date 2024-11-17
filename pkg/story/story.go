@@ -825,7 +825,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	}
 	templatePrompt = strings.Replace(templatePrompt, "story_content", board.Description, -1)
 	var storyBackgroup string
-	if board.PrevId != -1 {
+	if board.PrevId != -1 && board.PrevId != 0 {
 		prevBoard, err := models.GetStoryboard(ctx, board.PrevId)
 		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			log.Log().Error("get prev storyboard failed", zap.Error(err))
