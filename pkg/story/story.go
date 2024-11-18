@@ -2032,7 +2032,21 @@ func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowS
 }
 
 func (s *StoryService) SearchStories(ctx context.Context, req *api.SearchStoriesRequest) (*api.SearchStoriesResponse, error) {
-	return nil, nil
+	stories, total, err := models.GetStoriesByName(ctx, req.GetKeyword(), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		log.Log().Error("get story roles failed", zap.Error(err))
+		return nil, err
+	}
+	apiStories := make([]*api.Story, 0)
+	for _, story := range stories {
+		apiStories = append(apiStories, convert.ConvertStoryToApiStory(story))
+	}
+	return &api.SearchStoriesResponse{
+		Code:    0,
+		Message: "OK",
+		Stories: apiStories,
+		Total:   total,
+	}, nil
 }
 
 func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequest) (*api.SearchRolesResponse, error) {

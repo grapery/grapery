@@ -7,7 +7,6 @@ import (
 	api "github.com/grapery/common-protoc/gen"
 )
 
-
 const (
 	WebpFormat = 1
 	PngFormat  = 2
@@ -203,4 +202,22 @@ func GetStoryByGroupID(ctx context.Context, groupID int64, page int, pageSize in
 		return nil, err
 	}
 	return s, nil
+}
+
+func GetStoriesByName(ctx context.Context, name string, offset, number int) ([]*Story, int64, error) {
+	var stories []*Story
+	var total int64
+	if err := DataBase().Model(&Story{}).
+		Where("title like ?", "%"+name+"%").
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := DataBase().Model(&Story{}).
+		Where("title like ?", "%"+name+"%").
+		Offset(offset).
+		Limit(number).
+		Find(&stories).Error; err != nil {
+		return nil, 0, err
+	}
+	return stories, total, nil
 }
