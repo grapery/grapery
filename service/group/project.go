@@ -80,7 +80,7 @@ func (ps *ProjectService) UpdateProjectProfile(ctx context.Context, req *connect
 		Msg: info,
 	}, nil
 }
-func (ps *ProjectService) WatchProject(ctx context.Context, req *connect.Request[api.WatchProjectReqeust]) (*connect.Response[api.WatchProjectResponse], error) {
+func (ps *ProjectService) WatchProject(ctx context.Context, req *connect.Request[api.WatchProjectRequest]) (*connect.Response[api.WatchProjectResponse], error) {
 	info, err := projectService.GetProjectServer().WatchProject(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (ps *ProjectService) WatchProject(ctx context.Context, req *connect.Request
 		Msg: info,
 	}, nil
 }
-func (ps *ProjectService) UnWatchProject(ctx context.Context, req *connect.Request[api.UnWatchProjectReqeust]) (*connect.Response[api.UnWatchProjectResponse], error) {
+func (ps *ProjectService) UnWatchProject(ctx context.Context, req *connect.Request[api.UnWatchProjectRequest]) (*connect.Response[api.UnWatchProjectResponse], error) {
 	if req.Msg.GetGroupId() <= 0 {
 		return nil, errors.New("group id is empty")
 	}
@@ -143,7 +143,7 @@ func (ps *ProjectService) GetProjectMembers(ctx context.Context, req *connect.Re
 	}, nil
 }
 
-func (ps *ProjectService) GetProjectWatcher(ctx context.Context, req *connect.Request[api.GetProjectWatcherReqeust]) (*connect.Response[api.GetProjectWatcherResponse], error) {
+func (ps *ProjectService) GetProjectWatcher(ctx context.Context, req *connect.Request[api.GetProjectWatcherRequest]) (*connect.Response[api.GetProjectWatcherResponse], error) {
 	info, err := projectService.GetProjectServer().GetProjectWatcher(ctx, req.Msg)
 	if err != nil {
 		return nil, err

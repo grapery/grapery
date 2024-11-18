@@ -54,6 +54,10 @@ func ConvertGroupToApiGroupInfo(g *models.Group) *api.GroupInfo {
 		Name:    g.Name,
 		Avatar:  g.Avatar,
 		Owner:   g.OwnerID,
+		Desc:    g.ShortDesc,
+		Creator: g.CreatorID,
+		Ctime:   g.CreateAt.Unix(),
+		Mtime:   g.UpdateAt.Unix(),
 	}
 }
 
@@ -178,5 +182,12 @@ func ConvertApiStoryBoardSceneToStoryBoardScene(scene *api.StoryBoardSence) *mod
 		GenResult:    scene.GenResult,
 		IsGenerating: int(scene.IsGenerating),
 		Status:       int(scene.Status),
+	}
+}
+
+func ConvertStoryRoleToApiStoryRoleInfo(role *models.StoryRole) *api.StoryRole {
+	return &api.StoryRole{
+		RoleId:        int64(role.ID),
+		CharacterName: role.CharacterName,
 	}
 }

@@ -346,6 +346,67 @@ func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err
 	return users, nil
 }
 
+func GetGroupsByIdsOrderByActive(groupIds []int, offset, number int) (list []*Group, total int64, err error) {
+	total = 0
+	err = DataBase().Model(Group{}).
+		Where("id in (?)", groupIds).
+		Count(&total).
+		Error
+	if err != nil {
+		return nil, 0, err
+	}
+	list = make([]*Group, 0)
+	err = DataBase().Model(Group{}).
+		Where("id in (?)", groupIds).
+		Order("update_at desc").
+		Offset(offset).
+		Limit(number).
+		Error
+	if err != nil {
+		log.Errorf("get groups by ids order by active failed: %s", err.Error())
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+func GetUserFollowedGroups(userID int, offset, number int) (list []*Group, total int64, err error) {
+	groupIds := make([]int, 0)
+	err = DataBase().Model(&WatchItem{}).
+		Select("distinct group_id").
+		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
+			userID, WatchItemTypeGroup, WatchTypeIsWatch).
+		Scan(&groupIds).
+		Error
+	if err != nil {
+		return nil, 0, err
+	}
+	list, total, err = GetGroupsByIdsOrderByActive(groupIds, offset, number)
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+func GetGroupByName(name string, offset, number int) (groups []*Group, total int64, err error) {
+	groups = make([]*Group, 0)
+	err = DataBase().Model(Group{}).
+		Where("name like ? and deleted = 0", "%"+name+"%").
+		Count(&total).
+		Error
+	if err != nil {
+		return nil, 0, err
+	}
+	err = DataBase().Model(Group{}).
+		Where("name like ? and deleted = 0", "%"+name+"%").
+		Offset(offset).
+		Limit(number).
+		Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return groups, total, nil
+}
+
 type GroupProfile struct {
 	IDBase
 	GroupID        int64 `json:"group_id,omitempty"`

@@ -11,12 +11,14 @@ const (
 
 type Disscuss struct {
 	IDBase
-	Creator int64 `json:"creator,omitempty"`
-	StoryID int64 `json:"story_id,omitempty"`
-	GroupID int64 `json:"group_id,omitempty"`
-	Title   string
-	Status  DiscussStatus
-	Desc    string
+	Creator      int64 `json:"creator,omitempty"`
+	StoryID      int64 `json:"story_id,omitempty"`
+	GroupID      int64 `json:"group_id,omitempty"`
+	Title        string
+	Status       DiscussStatus
+	Desc         string
+	TotalUser    int64 `json:"total_user,omitempty"`
+	TotalMessage int64 `json:"total_message,omitempty"`
 }
 
 func (d Disscuss) TableName() string {

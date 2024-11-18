@@ -75,6 +75,14 @@ type StoryServer interface {
 	GetStoryBoardSenceGenerate(ctx context.Context, req *api.GetStoryBoardSenceGenerateRequest) (*api.GetStoryBoardSenceGenerateResponse, error)
 	GetStoryBoardGenerate(ctx context.Context, req *api.GetStoryBoardGenerateRequest) (*api.GetStoryBoardGenerateResponse, error)
 	RenderStoryBoardSences(ctx context.Context, req *api.RenderStoryBoardSencesRequest) (*api.RenderStoryBoardSencesResponse, error)
+
+	LikeStoryRole(ctx context.Context, req *api.LikeStoryRoleRequest) (*api.LikeStoryRoleResponse, error)
+	UnLikeStoryRole(ctx context.Context, req *api.UnLikeStoryRoleRequest) (*api.UnLikeStoryRoleResponse, error)
+	FollowStoryRole(ctx context.Context, req *api.FollowStoryRoleRequest) (*api.FollowStoryRoleResponse, error)
+	UnFollowStoryRole(ctx context.Context, req *api.UnFollowStoryRoleRequest) (*api.UnFollowStoryRoleResponse, error)
+	SearchRoles(ctx context.Context, req *api.SearchRolesRequest) (*api.SearchRolesResponse, error)
+	RestoreStoryboard(ctx context.Context, req *api.RestoreStoryboardRequest) (*api.RestoreStoryboardResponse, error)
+	SearchStories(ctx context.Context, req *api.SearchStoriesRequest) (*api.SearchStoriesResponse, error)
 }
 
 type StoryService struct {
@@ -1455,7 +1463,7 @@ func (s *StoryService) GetStoryContributors(ctx context.Context, req *api.GetSto
 }
 
 func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStoryRoleRequest) (*api.CreateStoryRoleResponse, error) {
-	story, err := models.GetStory(ctx, req.GetInfo().GetStoryId())
+	story, err := models.GetStory(ctx, req.GetRole().GetStoryId())
 	if err != nil {
 		return nil, err
 	}
@@ -1465,7 +1473,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 			Message: "story is closed",
 		}, nil
 	}
-	role, err := models.GetStoryRoleByName(ctx, req.GetInfo().GetCharacterName(), int64(story.ID))
+	role, err := models.GetStoryRoleByName(ctx, req.GetRole().GetCharacterName(), int64(story.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -1476,15 +1484,15 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 		}, nil
 	}
 	newRole := new(models.StoryRole)
-	newRole.CharacterName = req.GetInfo().GetCharacterName()
+	newRole.CharacterName = req.GetRole().GetCharacterName()
 	newRole.StoryID = int64(story.ID)
-	newRole.CreatorID = req.GetInfo().GetCreatorId()
-	newRole.CharacterDescription = req.GetInfo().GetCharacterDescription()
-	newRole.CharacterAvatar = req.GetInfo().GetCharacterAvatar()
-	newRole.CharacterID = req.GetInfo().GetCharacterId()
-	newRole.CharacterType = req.GetInfo().GetCharacterType()
-	newRole.CharacterPrompt = req.GetInfo().GetCharacterPrompt()
-	newRole.CharacterRefImages = req.GetInfo().GetCharacterRefImages()
+	newRole.CreatorID = req.GetRole().GetCreatorId()
+	newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
+	newRole.CharacterAvatar = req.GetRole().GetCharacterAvatar()
+	newRole.CharacterID = req.GetRole().GetCharacterId()
+	newRole.CharacterType = req.GetRole().GetCharacterType()
+	newRole.CharacterPrompt = req.GetRole().GetCharacterPrompt()
+	newRole.CharacterRefImages = req.GetRole().GetCharacterRefImages()
 	newRole.Status = 1
 	_, err = models.CreateStoryRole(ctx, newRole)
 	if err != nil {
@@ -1504,7 +1512,7 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 	return &api.GetStoryRoleDetailResponse{
 		Code:    0,
 		Message: "OK",
-		Info: &api.StoryRoleInfo{
+		Info: &api.StoryRole{
 			RoleId:               int64(role.ID),
 			CharacterDescription: role.CharacterDescription,
 			CharacterName:        role.CharacterName,
@@ -1516,6 +1524,11 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 			CharacterRefImages:   role.CharacterRefImages,
 			Ctime:                role.CreateAt.Unix(),
 			Mtime:                role.UpdateAt.Unix(),
+			CreatorId:            role.CreatorID,
+			FollowCount:          role.FollowCount,
+			LikeCount:            role.LikeCount,
+			Status:               int32(role.Status),
+			StoryboardNum:        role.StoryboardNum,
 		},
 	}, nil
 }
@@ -1948,4 +1961,122 @@ func (s *StoryService) GetStoryBoardGenerate(ctx context.Context, req *api.GetSt
 		GeneratingStage: int32(total - generating),
 		List:            apiScenes,
 	}, nil
+}
+
+func (s *StoryService) LikeStoryRole(ctx context.Context, req *api.LikeStoryRoleRequest) (*api.LikeStoryRoleResponse, error) {
+	err := models.LikeStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	if err != nil {
+		log.Log().Error("like story role failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.IncreaseStoryRoleLikeCount(ctx, req.GetRoleId(), 1)
+	if err != nil {
+		log.Log().Error("increase story role like count failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.LikeStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) UnLikeStoryRole(ctx context.Context, req *api.UnLikeStoryRoleRequest) (*api.UnLikeStoryRoleResponse, error) {
+	err := models.UnLikeStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	if err != nil {
+		log.Log().Error("unlike story role failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.DecreaseStoryRoleLikeCount(ctx, req.GetRoleId(), 1)
+	if err != nil {
+		log.Log().Error("decrease story role like count failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.UnLikeStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStoryRoleRequest) (*api.FollowStoryRoleResponse, error) {
+	err := models.WatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	if err != nil {
+		log.Log().Error("follow story role failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.IncreaseStoryRoleFollowCount(ctx, req.GetRoleId(), 1)
+	if err != nil {
+		log.Log().Error("increase story role follow count failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.FollowStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowStoryRoleRequest) (*api.UnFollowStoryRoleResponse, error) {
+	err := models.UnWatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	if err != nil {
+		log.Log().Error("unfollow story role failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.DecreaseStoryRoleFollowCount(ctx, req.GetRoleId(), 1)
+	if err != nil {
+		log.Log().Error("decrease story role follow count failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.UnFollowStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) SearchStories(ctx context.Context, req *api.SearchStoriesRequest) (*api.SearchStoriesResponse, error) {
+	return nil, nil
+}
+
+func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequest) (*api.SearchRolesResponse, error) {
+	roles, total, err := models.GetStoryRolesByName(ctx, req.GetKeyword(), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		log.Log().Error("get story roles failed", zap.Error(err))
+		return nil, err
+	}
+	apiRoles := make([]*api.StoryRole, 0)
+	for _, role := range roles {
+		apiRoles = append(apiRoles, convert.ConvertStoryRoleToApiStoryRoleInfo(role))
+	}
+	return &api.SearchRolesResponse{
+		Code:    0,
+		Message: "OK",
+		Roles:   apiRoles,
+		Total:   total,
+	}, nil
+}
+
+func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreStoryboardRequest) (*api.RestoreStoryboardResponse, error) {
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		log.Log().Error("get story failed", zap.Error(err))
+		return nil, err
+	}
+	if story == nil {
+		log.Log().Error("story not found")
+		return &api.RestoreStoryboardResponse{
+			Code:    -1,
+			Message: "story not found",
+		}, nil
+	}
+	storyboard, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+	if err != nil {
+		log.Log().Error("get storyboard failed", zap.Error(err))
+		return nil, err
+	}
+	if storyboard == nil {
+		log.Log().Error("storyboard not found")
+		return &api.RestoreStoryboardResponse{
+			Code:    -1,
+			Message: "storyboard not found",
+		}, nil
+	}
+	return nil, nil
 }

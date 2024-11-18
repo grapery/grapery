@@ -15,7 +15,7 @@ type StoryService struct {
 }
 
 func (s *StoryService) CreateStory(ctx context.Context, req *connect.Request[gen.CreateStoryRequest]) (*connect.Response[gen.CreateStoryResponse], error) {
-	groupInfo, err := groupService.GetGroupServer().GetGroup(ctx, &gen.GetGroupReqeust{
+	groupInfo, err := groupService.GetGroupServer().GetGroup(ctx, &gen.GetGroupRequest{
 		GroupId: req.Msg.GroupId,
 		UserId:  req.Msg.OwnerId,
 	})
@@ -530,6 +530,93 @@ func (ts *StoryService) RenderStoryBoardSences(ctx context.Context, req *connect
 		Code:    ret.Code,
 		Message: "OK",
 		List:    ret.List,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) SearchRoles(ctx context.Context, req *connect.Request[gen.SearchRolesRequest]) (*connect.Response[gen.SearchRolesResponse], error) {
+	ret, err := storyServer.GetStoryServer().SearchRoles(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.SearchRolesResponse{
+		Code:    ret.Code,
+		Message: "OK",
+		Roles:   ret.Roles,
+		Total:   ret.Total,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) FollowStoryRole(ctx context.Context, req *connect.Request[gen.FollowStoryRoleRequest]) (*connect.Response[gen.FollowStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().FollowStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.FollowStoryRoleResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) LikeStoryRole(ctx context.Context, req *connect.Request[gen.LikeStoryRoleRequest]) (*connect.Response[gen.LikeStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().LikeStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.LikeStoryRoleResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) RestoreStoryboard(ctx context.Context, req *connect.Request[gen.RestoreStoryboardRequest]) (*connect.Response[gen.RestoreStoryboardResponse], error) {
+	ret, err := storyServer.GetStoryServer().RestoreStoryboard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.RestoreStoryboardResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) SearchStories(ctx context.Context, req *connect.Request[gen.SearchStoriesRequest]) (*connect.Response[gen.SearchStoriesResponse], error) {
+	ret, err := storyServer.GetStoryServer().SearchStories(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.SearchStoriesResponse{
+		Code:    ret.Code,
+		Message: "OK",
+		Stories: ret.Stories,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) UnFollowStoryRole(ctx context.Context, req *connect.Request[gen.UnFollowStoryRoleRequest]) (*connect.Response[gen.UnFollowStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().UnFollowStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.UnFollowStoryRoleResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) UnLikeStoryRole(ctx context.Context, req *connect.Request[gen.UnLikeStoryRoleRequest]) (*connect.Response[gen.UnLikeStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().UnLikeStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.UnLikeStoryRoleResponse{
+		Code:    ret.Code,
+		Message: "OK",
 	}
 	return connect.NewResponse(resp), nil
 }

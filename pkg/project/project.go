@@ -33,13 +33,13 @@ type ProjectServer interface {
 	DeleteProject(ctx context.Context, req *api.DeleteProjectRequest) (resp *api.DeleteProjectResponse, err error)
 	GetProjectProfile(ctx context.Context, req *api.GetProjectProfileRequest) (resp *api.GetProjectProfileResponse, err error)
 	UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error)
-	WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error)
-	UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error)
+	WatchProject(ctx context.Context, req *api.WatchProjectRequest) (resp *api.WatchProjectResponse, err error)
+	UnWatchProject(ctx context.Context, req *api.UnWatchProjectRequest) (resp *api.UnWatchProjectResponse, err error)
 	SearchGroupProject(ctx context.Context, req *api.SearchProjectRequest) (resp *api.SearchProjectResponse, err error)
 	SearchProject(ctx context.Context, req *api.SearchAllProjectRequest) (resp *api.SearchAllProjectResponse, err error)
 	ExploreProjects(ctx context.Context, req *api.ExploreProjectsRequest) (resp *api.ExploreProjectsResponse, err error)
 	GetProjectMembers(ctx context.Context, req *api.GetProjectMembersRequest) (resp *api.GetProjectMembersResponse, err error)
-	GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherReqeust) (resp *api.GetProjectWatcherResponse, err error)
+	GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherRequest) (resp *api.GetProjectWatcherResponse, err error)
 }
 
 type ProjectService struct {
@@ -153,7 +153,7 @@ func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProj
 func (p *ProjectService) UpdateProjectProfile(ctx context.Context, req *api.UpdateProjectProfileRequest) (resp *api.UpdateProjectProfileResponse, err error) {
 	return nil, nil
 }
-func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectReqeust) (resp *api.WatchProjectResponse, err error) {
+func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProjectRequest) (resp *api.WatchProjectResponse, err error) {
 	err = models.StartWatchingProject(
 		int64(req.GetUserId()),
 		int64(req.GetGroupId()),
@@ -165,7 +165,7 @@ func (p *ProjectService) WatchProject(ctx context.Context, req *api.WatchProject
 	return &api.WatchProjectResponse{}, nil
 }
 
-func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectReqeust) (resp *api.UnWatchProjectResponse, err error) {
+func (p *ProjectService) UnWatchProject(ctx context.Context, req *api.UnWatchProjectRequest) (resp *api.UnWatchProjectResponse, err error) {
 	err = models.StopWatchingProject(
 		int64(req.GetUserId()),
 		int64(req.GetGroupId()),
@@ -235,6 +235,6 @@ func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllPr
 func (p *ProjectService) GetProjectMembers(ctx context.Context, req *api.GetProjectMembersRequest) (resp *api.GetProjectMembersResponse, err error) {
 	return nil, nil
 }
-func (p *ProjectService) GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherReqeust) (resp *api.GetProjectWatcherResponse, err error) {
+func (p *ProjectService) GetProjectWatcher(ctx context.Context, req *api.GetProjectWatcherRequest) (resp *api.GetProjectWatcherResponse, err error) {
 	return nil, nil
 }

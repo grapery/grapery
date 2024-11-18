@@ -30,6 +30,7 @@ type LikeItem struct {
 	TimelineID   int64 `json:"timeline_id,omitempty"`
 	StoryID      int64 `json:"story_id,omitempty"`
 	StoryboardId int64 `json:"storyboard_id,omitempty"`
+	RoleID       int64 `json:"role_id,omitempty"`
 	LikeType     int64 `json:"like_type,omitempty"`
 	LikeItemType int64 `json:"like_item_type,omitempty"`
 }
@@ -171,6 +172,25 @@ func GetLikeItemByStoryBoard(ctx context.Context, storyId int64, storyboardId in
 	return list, nil
 }
 
+func LikeStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+	err := DataBase().WithContext(ctx).Model(&LikeItem{}).Create(&LikeItem{
+		UserID:       int64(userId),
+		StoryID:      storyId,
+		RoleID:       roleId,
+		LikeType:     LikeTypeLike,
+		LikeItemType: LikeItemTypeRole,
+	}).Error
+	return err
+}
+
+func UnLikeStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("user_id = ? and story_id = ? and role_id = ?",
+			userId, storyId, roleId).
+		Update("deleted = ?", 1).Error
+	return err
+}
+
 type WatchType int64
 
 const (
@@ -188,17 +208,18 @@ const (
 	WatchItemTypeTimeline
 	WatchItemTypeStory
 	WatchItemTypeStoryboard
+	WatchItemTypeStoryRole
 )
 
 type WatchItem struct {
 	IDBase
-	UserID         int64         `json:"user_id,omitempty"`
-	GroupID        int64         `json:"group_id,omitempty"`
-	TimelineID     int64         `json:"timeline_id,omitempty"`
-	StoryID        int64         `json:"story_id,omitempty"`
-	RoleID         int64         `json:"role_id,omitempty"`
-	WatchType      WatchType     `json:"watch_type,omitempty"`
-	WatchItemTypes WatchItemType `json:"watch_item_type,omitempty"`
+	UserID        int64         `json:"user_id,omitempty"`
+	GroupID       int64         `json:"group_id,omitempty"`
+	TimelineID    int64         `json:"timeline_id,omitempty"`
+	StoryID       int64         `json:"story_id,omitempty"`
+	RoleID        int64         `json:"role_id,omitempty"`
+	WatchType     WatchType     `json:"watch_type,omitempty"`
+	WatchItemType WatchItemType `json:"watch_item_type,omitempty"`
 }
 
 func (w WatchItem) TableName() string {
@@ -313,4 +334,23 @@ func UnWatchItem(ctx context.Context, itemID int64) error {
 		return err
 	}
 	return nil
+}
+
+func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
+		UserID:        int64(userId),
+		StoryID:       storyId,
+		RoleID:        roleId,
+		WatchType:     WatchTypeIsWatch,
+		WatchItemType: WatchItemTypeStoryRole,
+	}).Error
+	return err
+}
+
+func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("user_id = ? and story_id = ? and role_id = ?",
+			userId, storyId, roleId).
+		Update("deleted = ?", 1).Error
+	return err
 }

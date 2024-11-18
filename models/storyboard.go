@@ -17,12 +17,13 @@ type StoryBoard struct {
 	PrevId      int64
 	Avatar      string
 	Status      int
-	Stage       int
-	Params      string
-	ForkAble    bool
-	ForkNum     int
-	Level       int
-	IsAiGen     bool
+	// 0: 初始化，1：生成中，2：生成完成，3：生成失败
+	Stage    int
+	Params   string
+	ForkAble bool
+	ForkNum  int
+	Level    int
+	IsAiGen  bool
 }
 
 func (board StoryBoard) TableName() string {

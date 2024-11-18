@@ -1,6 +1,10 @@
 package models
 
-import "context"
+import (
+	"context"
+
+	"gorm.io/gorm"
+)
 
 type StoryRole struct {
 	IDBase
@@ -14,6 +18,10 @@ type StoryRole struct {
 	CharacterDescription string   `json:"character_description"`
 	CreatorID            int64    `json:"creator_id"`
 	Status               int      `json:"status"`
+	LikeCount            int64    `json:"like_count"`
+	FollowCount          int64    `json:"follow_count"`
+	StoryboardNum        int64    `json:"storyboard_num"`
+	Version              int64    `json:"version"`
 }
 
 func (s *StoryRole) TableName() string {
@@ -78,4 +86,57 @@ func GetStoryRoleByName(ctx context.Context, name string, storyId int64) (*Story
 		return nil, err
 	}
 	return &role, nil
+}
+
+func GetStoryRolesByName(ctx context.Context, name string, offset, number int) ([]*StoryRole, int64, error) {
+	var roles []*StoryRole
+	var total int64
+	if err := DataBase().Model(&StoryRole{}).
+		Where("character_name like ?", "%"+name+"%").
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := DataBase().Model(&StoryRole{}).
+		Where("character_name like ?", "%"+name+"%").
+		Offset(offset).
+		Limit(number).
+		Find(&roles).Error; err != nil {
+		return nil, 0, err
+	}
+	return roles, total, nil
+}
+
+func IncreaseStoryRoleLikeCount(ctx context.Context, roleID int64, count int64) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("like_count", gorm.Expr("like_count + ?", count)).Error
+}
+
+func DecreaseStoryRoleLikeCount(ctx context.Context, roleID int64, count int64) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("like_count", gorm.Expr("like_count - ?", count)).Error
+}
+
+func IncreaseStoryRoleFollowCount(ctx context.Context, roleID int64, count int64) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("follow_count", gorm.Expr("follow_count + ?", count)).Error
+}
+
+func DecreaseStoryRoleFollowCount(ctx context.Context, roleID int64, count int64) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("follow_count", gorm.Expr("follow_count - ?", count)).Error
+}
+
+func IncreaseStoryRoleStoryboardNum(ctx context.Context, roleID int64, count int64) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("storyboard_num", gorm.Expr("storyboard_num + ?", count)).Error
 }

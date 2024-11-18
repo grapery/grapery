@@ -16,7 +16,7 @@ import (
 type GroupService struct {
 }
 
-func (g *GroupService) CreateGroup(ctx context.Context, req *connect.Request[api.CreateGroupReqeust]) (*connect.Response[api.CreateGroupResponse], error) {
+func (g *GroupService) CreateGroup(ctx context.Context, req *connect.Request[api.CreateGroupRequest]) (*connect.Response[api.CreateGroupResponse], error) {
 	ret, err := groupService.GetGroupServer().CreateGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *connect.Request[api
 		Msg: ret,
 	}, nil
 }
-func (g *GroupService) GetGroup(ctx context.Context, req *connect.Request[api.GetGroupReqeust]) (*connect.Response[api.GetGroupResponse], error) {
+func (g *GroupService) GetGroup(ctx context.Context, req *connect.Request[api.GetGroupRequest]) (*connect.Response[api.GetGroupResponse], error) {
 	ret, err := groupService.GetGroupServer().GetGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *connect.Reque
 		Msg: ret,
 	}, nil
 }
-func (g *GroupService) SearchGroup(ctx context.Context, req *connect.Request[api.SearchGroupReqeust]) (*connect.Response[api.SearchGroupResponse], error) {
+func (g *GroupService) SearchGroup(ctx context.Context, req *connect.Request[api.SearchGroupRequest]) (*connect.Response[api.SearchGroupResponse], error) {
 	ret, err := groupService.GetGroupServer().SearchGroup(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *connect.Request[api
 		Msg: ret,
 	}, nil
 }
-func (g *GroupService) FetchGroupProjects(ctx context.Context, req *connect.Request[api.FetchGroupProjectsReqeust]) (*connect.Response[api.FetchGroupProjectsResponse], error) {
+func (g *GroupService) FetchGroupProjects(ctx context.Context, req *connect.Request[api.FetchGroupProjectsRequest]) (*connect.Response[api.FetchGroupProjectsResponse], error) {
 	ret, err := groupService.GetGroupServer().FetchGroupProjects(ctx, req.Msg)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (g *GroupService) GetGroupItems(ctx context.Context, req *connect.Request[a
 	}, nil
 }
 
-func (g *GroupService) FetchGroupStorys(ctx context.Context, req *connect.Request[api.FetchGroupStorysReqeust]) (*connect.Response[api.FetchGroupStorysResponse], error) {
+func (g *GroupService) FetchGroupStorys(ctx context.Context, req *connect.Request[api.FetchGroupStorysRequest]) (*connect.Response[api.FetchGroupStorysResponse], error) {
 	ret, err := groupService.GetGroupServer().FetchGroupStorys(ctx, req.Msg)
 	if err != nil {
 		return nil, err

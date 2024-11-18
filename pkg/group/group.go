@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 
 	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
@@ -32,20 +33,20 @@ func NewGroupService() *GroupService {
 
 // need do some log
 type GroupServer interface {
-	GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
-	GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error)
-	CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error)
+	GetGroup(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error)
+	GetByName(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error)
+	CreateGroup(ctx context.Context, req *api.CreateGroupRequest) (resp *api.CreateGroupResponse, err error)
 	DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error)
 	GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error)
 	UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (resp *api.UpdateGroupInfoResponse, err error)
 	FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error)
-	FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (resp *api.FetchGroupProjectsResponse, err error)
+	FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsRequest) (resp *api.FetchGroupProjectsResponse, err error)
 	JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error)
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
-	SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error)
+	SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error)
 
 	QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error)
-	FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysReqeust) (*api.FetchGroupStorysResponse, error)
+	FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error)
 
 	GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (*api.GetGroupProfileResponse, error)
 	UpdateGroupProfile(ctx context.Context, req *api.UpdateGroupProfileRequest) (*api.UpdateGroupProfileResponse, error)
@@ -54,7 +55,7 @@ type GroupServer interface {
 type GroupService struct {
 }
 
-func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
+func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error) {
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
@@ -85,7 +86,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupReqeust) (
 	}, nil
 }
 
-func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) (resp *api.GetGroupResponse, err error) {
+func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error) {
 	group := &models.Group{}
 	group.Name = req.GetName()
 	err = group.GetByName()
@@ -116,7 +117,7 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupReqeust) 
 	}, nil
 }
 
-func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupReqeust) (resp *api.CreateGroupResponse, err error) {
+func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequest) (resp *api.CreateGroupResponse, err error) {
 	group := &models.Group{}
 	group.Name = req.Name
 	group.CreatorID = req.GetUserId()
@@ -254,7 +255,7 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 	}, nil
 }
 
-func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsReqeust) (resp *api.FetchGroupProjectsResponse, err error) {
+func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsRequest) (resp *api.FetchGroupProjectsResponse, err error) {
 	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
@@ -369,16 +370,38 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.UpdateGr
 	return nil, nil
 }
 
-func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupReqeust) (resp *api.SearchGroupResponse, err error) {
-
-	return nil, nil
+func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error) {
+	name := req.GetName()
+	if name == "" {
+		return nil, errors.New("params is empty")
+	}
+	if req.GetOffset() < 0 || req.GetPageSize() < 0 {
+		return nil, errors.New("params is invalid")
+	}
+	groups, total, err := models.GetGroupByName(name, int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		return nil, err
+	}
+	list := make([]*api.GroupInfo, len(groups), len(groups))
+	for idx, val := range groups {
+		list[idx] = convert.ConvertGroupToApiGroupInfo(val)
+	}
+	return &api.SearchGroupResponse{
+		Code:    0,
+		Message: "ok",
+		Data: &api.SearchGroupResponse_Data{
+			List:     list,
+			Offset:   total - int64(len(list)),
+			PageSize: int64(len(list)),
+		},
+	}, nil
 }
 
 func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
 	return nil, nil
 }
 
-func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysReqeust) (*api.FetchGroupStorysResponse, error) {
+func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error) {
 	// TODO: 实现获取群组的故事列表
 	storys, err := models.GetStoryByGroupID(ctx, req.GetGroupId(), int(req.GetPage()), int(req.GetPageSize()))
 	if err != nil {

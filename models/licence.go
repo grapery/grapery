@@ -9,6 +9,8 @@ type Licence struct {
 	Avatar      string `json:"avatar"`
 	Creator     int64  `json:"creator"`
 	Status      int    `json:"status"`
+	Version     int    `json:"version"`
+	Apply       int    `json:"apply"`
 }
 
 func (licence Licence) TableName() string {
