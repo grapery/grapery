@@ -187,7 +187,41 @@ func ConvertApiStoryBoardSceneToStoryBoardScene(scene *api.StoryBoardSence) *mod
 
 func ConvertStoryRoleToApiStoryRoleInfo(role *models.StoryRole) *api.StoryRole {
 	return &api.StoryRole{
-		RoleId:        int64(role.ID),
-		CharacterName: role.CharacterName,
+		RoleId:               int64(role.ID),
+		CharacterName:        role.CharacterName,
+		CharacterDescription: role.CharacterDescription,
+		CharacterAvatar:      role.CharacterAvatar,
+		CreatorId:            int64(role.CreatorID),
+		Ctime:                role.CreateAt.Unix(),
+		Mtime:                role.UpdateAt.Unix(),
 	}
+}
+
+func ConvertApiStoryBoardToStoryBoard(apiStoryBoard *api.StoryBoard) *models.StoryBoard {
+	board := &models.StoryBoard{
+		StoryID:     apiStoryBoard.StoryId,
+		CreatorID:   apiStoryBoard.Creator,
+		PrevId:      apiStoryBoard.PrevBoardId,
+		Title:       apiStoryBoard.Title,
+		Description: apiStoryBoard.Content,
+	}
+	params, _ := json.Marshal(apiStoryBoard.Params)
+	board.Params = string(params)
+	return board
+}
+
+func ConvertStoryBoardToApiStoryBoard(storyBoard *models.StoryBoard) *api.StoryBoard {
+	ret := &api.StoryBoard{
+		StoryId:      storyBoard.StoryID,
+		StoryBoardId: int64(storyBoard.ID),
+		Creator:      storyBoard.CreatorID,
+		Title:        storyBoard.Title,
+		Content:      storyBoard.Description,
+		PrevBoardId:  storyBoard.PrevId,
+		IsAiGen:      storyBoard.IsAiGen,
+		Ctime:        storyBoard.CreateAt.Unix(),
+		Mtime:        storyBoard.UpdateAt.Unix(),
+	}
+	_ = json.Unmarshal([]byte(storyBoard.Params), &ret.Params)
+	return ret
 }

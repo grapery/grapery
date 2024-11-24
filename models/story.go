@@ -221,3 +221,44 @@ func GetStoriesByName(ctx context.Context, name string, offset, number int) ([]*
 	}
 	return stories, total, nil
 }
+
+func GetUserCreatedStoryboardsWithStoryId(ctx context.Context, userId int, storyId int, offset, number int) ([]*StoryBoard, int64, error) {
+	var boards []*StoryBoard
+	var total int64
+
+	query := DataBase().Model(&StoryBoard{}).Where("creator_id = ?", userId)
+	if storyId > 0 {
+		query = query.Where("id != ?", storyId)
+	}
+
+	// Count total records
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated records
+	if err := query.Order("created_at desc").Offset(offset).Limit(number).Find(&boards).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return boards, total, nil
+}
+
+func GetUserCreatedRolesWithStoryId(ctx context.Context, userId int, storyId int, offset, number int) ([]*StoryRole, int64, error) {
+	var roles []*StoryRole
+	var total int64
+
+	query := DataBase().Model(&StoryRole{}).Where("creator_id = ?", userId)
+	if storyId > 0 {
+		query = query.Where("id != ?", storyId)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.Order("created_at desc").Offset(offset).Limit(number).Find(&roles).Error; err != nil {
+		return nil, 0, err
+	}
+	return roles, total, nil
+}

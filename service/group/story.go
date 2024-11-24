@@ -620,3 +620,29 @@ func (ts *StoryService) UnLikeStoryRole(ctx context.Context, req *connect.Reques
 	}
 	return connect.NewResponse(resp), nil
 }
+
+// 获取用户创建的故事板
+func (ts *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *connect.Request[gen.GetUserCreatedStoryboardsRequest]) (*connect.Response[gen.GetUserCreatedStoryboardsResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserCreatedStoryboards(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetUserCreatedStoryboardsResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// 获取用户创建的角色
+func (ts *StoryService) GetUserCreatedRoles(ctx context.Context, req *connect.Request[gen.GetUserCreatedRolesRequest]) (*connect.Response[gen.GetUserCreatedRolesResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserCreatedRoles(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetUserCreatedRolesResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}

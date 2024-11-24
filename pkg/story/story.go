@@ -83,6 +83,8 @@ type StoryServer interface {
 	SearchRoles(ctx context.Context, req *api.SearchRolesRequest) (*api.SearchRolesResponse, error)
 	RestoreStoryboard(ctx context.Context, req *api.RestoreStoryboardRequest) (*api.RestoreStoryboardResponse, error)
 	SearchStories(ctx context.Context, req *api.SearchStoriesRequest) (*api.SearchStoriesResponse, error)
+	GetUserCreatedStoryboards(ctx context.Context, req *api.GetUserCreatedStoryboardsRequest) (*api.GetUserCreatedStoryboardsResponse, error)
+	GetUserCreatedRoles(ctx context.Context, req *api.GetUserCreatedRolesRequest) (*api.GetUserCreatedRolesResponse, error)
 }
 
 type StoryService struct {
@@ -2093,4 +2095,54 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 		}, nil
 	}
 	return nil, nil
+}
+
+// 获取用户创建的故事板
+func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.GetUserCreatedStoryboardsRequest) (*api.GetUserCreatedStoryboardsResponse, error) {
+	storyboards, total, err := models.GetUserCreatedStoryboardsWithStoryId(ctx, int(req.GetUserId()), int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		log.Log().Error("get user created storyboards failed", zap.Error(err))
+		return nil, err
+	}
+	apiStoryboards := make([]*api.StoryBoard, 0)
+	for idx, storyboard := range storyboards {
+		apiStoryboards = append(apiStoryboards, convert.ConvertStoryBoardToApiStoryBoard(storyboard))
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(storyboard.ID))
+		if err != nil {
+			log.Log().Error("get storyboard scenes failed", zap.Error(err))
+			return nil, err
+		}
+		apiStoryboards[idx].Sences = &api.StoryBoardSences{
+			List: make([]*api.StoryBoardSence, 0),
+		}
+		for _, scene := range sences {
+			apiStoryboards[idx].Sences.List = append(apiStoryboards[idx].Sences.List, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
+		}
+
+	}
+	return &api.GetUserCreatedStoryboardsResponse{
+		Code:        0,
+		Message:     "OK",
+		Storyboards: apiStoryboards,
+		Total:       total,
+	}, nil
+}
+
+// 获取用户创建的角色
+func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUserCreatedRolesRequest) (*api.GetUserCreatedRolesResponse, error) {
+	roles, total, err := models.GetUserCreatedRolesWithStoryId(ctx, int(req.GetUserId()), int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		log.Log().Error("get user created roles failed", zap.Error(err))
+		return nil, err
+	}
+	apiRoles := make([]*api.StoryRole, 0)
+	for _, role := range roles {
+		apiRoles = append(apiRoles, convert.ConvertStoryRoleToApiStoryRoleInfo(role))
+	}
+	return &api.GetUserCreatedRolesResponse{
+		Code:    0,
+		Message: "OK",
+		Roles:   apiRoles,
+		Total:   total,
+	}, nil
 }
