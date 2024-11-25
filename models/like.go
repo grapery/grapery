@@ -172,6 +172,20 @@ func GetLikeItemByStoryBoard(ctx context.Context, storyId int64, storyboardId in
 	return list, nil
 }
 
+func GetLikeItemByStoryBoardAndUser(ctx context.Context, storyId int64, storyboardId int64, userId int) (*LikeItem, error) {
+	item := new(LikeItem)
+	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("story_id = ? and storyboard_id = ? and user_id = ?", storyId, storyboardId, userId).
+		First(item).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	return item, nil
+}
+
 func LikeStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
 	err := DataBase().WithContext(ctx).Model(&LikeItem{}).Create(&LikeItem{
 		UserID:       int64(userId),

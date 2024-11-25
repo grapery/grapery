@@ -1536,6 +1536,7 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 }
 
 func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error) {
+
 	return nil, nil
 }
 
@@ -1577,12 +1578,45 @@ func (s *StoryService) LikeStory(ctx context.Context, req *api.LikeStoryRequest)
 }
 
 func (s *StoryService) UnLikeStory(ctx context.Context, req *api.UnLikeStoryRequest) (*api.UnLikeStoryResponse, error) {
-
-	return nil, nil
+	likeItem, err := models.GetLikeItemByStoryAndUser(ctx, req.GetStoryId(), int(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if likeItem == nil {
+		return &api.UnLikeStoryResponse{
+			Code:    -1,
+			Message: "not liked",
+		}, nil
+	}
+	err = models.DeleteLikeItem(ctx, int64(likeItem.ID))
+	if err != nil {
+		return nil, err
+	}
+	return &api.UnLikeStoryResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
 
 func (s *StoryService) UnLikeStoryboard(ctx context.Context, req *api.UnLikeStoryboardRequest) (*api.UnLikeStoryboardResponse, error) {
-	return nil, nil
+	likeItem, err := models.GetLikeItemByStoryBoardAndUser(ctx, req.GetStoryId(), req.GetBoardId(), int(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if likeItem == nil {
+		return &api.UnLikeStoryboardResponse{
+			Code:    -1,
+			Message: "not liked",
+		}, nil
+	}
+	err = models.DeleteLikeItem(ctx, int64(likeItem.ID))
+	if err != nil {
+		return nil, err
+	}
+	return &api.UnLikeStoryboardResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
 
 func (s *StoryService) GetStoryboardScene(ctx context.Context, req *api.GetStoryBoardSencesRequest) (*api.GetStoryBoardSencesResponse, error) {
@@ -2070,6 +2104,7 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 }
 
 func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreStoryboardRequest) (*api.RestoreStoryboardResponse, error) {
+	resp := &api.RestoreStoryboardResponse{}
 	story, err := models.GetStory(ctx, req.GetStoryId())
 	if err != nil {
 		log.Log().Error("get story failed", zap.Error(err))
@@ -2077,11 +2112,11 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 	}
 	if story == nil {
 		log.Log().Error("story not found")
-		return &api.RestoreStoryboardResponse{
-			Code:    -1,
-			Message: "story not found",
-		}, nil
+		resp.Code = -1
+		resp.Message = "story not found"
+		return resp, nil
 	}
+
 	storyboard, err := models.GetStoryboard(ctx, req.GetStoryboardId())
 	if err != nil {
 		log.Log().Error("get storyboard failed", zap.Error(err))
@@ -2089,12 +2124,43 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 	}
 	if storyboard == nil {
 		log.Log().Error("storyboard not found")
-		return &api.RestoreStoryboardResponse{
-			Code:    -1,
-			Message: "storyboard not found",
-		}, nil
+		resp.Code = -1
+		resp.Message = "storyboard not found"
+		return resp, nil
 	}
-	return nil, nil
+	if storyboard.Stage == int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED) {
+		resp.Code = -1
+		resp.Message = "storyboard is already published"
+		return resp, nil
+	}
+	switch storyboard.Stage {
+	case int(api.StoryboardStage_STORYBOARD_STAGE_CREATED):
+		// 创建完故事剧情(故事板)，但是没有渲染剧情
+	case int(api.StoryboardStage_STORYBOARD_STAGE_RENDERED):
+		// 创建完故事剧情，但是没有渲染场景
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard scenes failed", zap.Error(err))
+			return nil, err
+		}
+		if len(sences) < 0 {
+			resp.Code = -1
+			resp.Message = "storyboard has scenes"
+			return resp, nil
+		}
+	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_IMAGE):
+		// 创建完故事剧情以及场景，但是没有生成图片,正常剧情渲染
+	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_VIDEO):
+		// 创建完故事剧情以及场景，但是没有生成音频，建议只有点赞高的、关注多的角色、付费用户使用
+	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_AUDIO):
+		// 创建完故事剧情以及场景，但是没有生成音频，建议只有旁白使用
+	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_TEXT):
+		// 创建完故事剧情，但是没有创建场景描述
+	case int(api.StoryboardStage_STORYBOARD_STAGE_FINISHED):
+		// 已经创建完所有，但是没有发布
+	}
+
+	return resp, nil
 }
 
 // 获取用户创建的故事板
