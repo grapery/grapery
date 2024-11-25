@@ -1376,7 +1376,7 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 		apiRole.CharacterId = role.CharacterID
 		apiRole.CharacterType = role.CharacterType
 		apiRole.CharacterPrompt = role.CharacterPrompt
-		apiRole.CharacterRefImages = role.CharacterRefImages
+		apiRole.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
 		apiRole.CharacterDescription = role.CharacterDescription
 		apiRoles = append(apiRoles, apiRole)
 	}
@@ -1417,7 +1417,7 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 		apiRole.CharacterId = role.CharacterID
 		apiRole.CharacterType = role.CharacterType
 		apiRole.CharacterPrompt = role.CharacterPrompt
-		apiRole.CharacterRefImages = role.CharacterRefImages
+		apiRole.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
 		apiRole.CharacterDescription = role.CharacterDescription
 		apiRoles = append(apiRoles, apiRole)
 	}
@@ -1494,7 +1494,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.CharacterID = req.GetRole().GetCharacterId()
 	newRole.CharacterType = req.GetRole().GetCharacterType()
 	newRole.CharacterPrompt = req.GetRole().GetCharacterPrompt()
-	newRole.CharacterRefImages = req.GetRole().GetCharacterRefImages()
+	newRole.CharacterRefImages = strings.Join(req.GetRole().GetCharacterRefImages(), ",")
 	newRole.Status = 1
 	_, err = models.CreateStoryRole(ctx, newRole)
 	if err != nil {
@@ -1523,7 +1523,7 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 			StoryId:              int64(role.StoryID),
 			CharacterType:        role.CharacterType,
 			CharacterPrompt:      role.CharacterPrompt,
-			CharacterRefImages:   role.CharacterRefImages,
+			CharacterRefImages:   strings.Split(role.CharacterRefImages, ","),
 			Ctime:                role.CreateAt.Unix(),
 			Mtime:                role.UpdateAt.Unix(),
 			CreatorId:            role.CreatorID,

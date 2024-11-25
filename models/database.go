@@ -85,6 +85,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&StoryGen{})
 	database.AutoMigrate(&Prompt{})
 	database.AutoMigrate(&StoryBoardScene{})
+	database.AutoMigrate(&StoryRole{})
 	return nil
 }
 

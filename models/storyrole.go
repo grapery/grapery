@@ -8,23 +8,23 @@ import (
 
 type StoryRole struct {
 	IDBase
-	StoryID              int64    `json:"story_id"`
-	CharacterName        string   `json:"character_name"`
-	CharacterAvatar      string   `json:"character_avatar"`
-	CharacterID          string   `json:"character_id"`
-	CharacterType        string   `json:"character_type"`
-	CharacterPrompt      string   `json:"character_prompt"`
-	CharacterRefImages   []string `json:"character_ref_images"`
-	CharacterDescription string   `json:"character_description"`
-	CreatorID            int64    `json:"creator_id"`
-	Status               int      `json:"status"`
-	LikeCount            int64    `json:"like_count"`
-	FollowCount          int64    `json:"follow_count"`
-	StoryboardNum        int64    `json:"storyboard_num"`
-	Version              int64    `json:"version"`
+	StoryID              int64  `json:"story_id"`
+	CharacterName        string `json:"character_name"`
+	CharacterAvatar      string `json:"character_avatar"`
+	CharacterID          string `json:"character_id"`
+	CharacterType        string `json:"character_type"`
+	CharacterPrompt      string `json:"character_prompt"`
+	CharacterRefImages   string `json:"character_ref_images"`
+	CharacterDescription string `json:"character_description"`
+	CreatorID            int64  `json:"creator_id"`
+	Status               int    `json:"status"`
+	LikeCount            int64  `json:"like_count"`
+	FollowCount          int64  `json:"follow_count"`
+	StoryboardNum        int64  `json:"storyboard_num"`
+	Version              int64  `json:"version"`
 }
 
-func (s *StoryRole) TableName() string {
+func (s StoryRole) TableName() string {
 	return "story_role"
 }
 
