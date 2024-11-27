@@ -627,9 +627,14 @@ func (ts *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *conn
 	if err != nil {
 		return nil, err
 	}
+	print("storyboards len: ", len(ret.Storyboards))
 	resp := &gen.GetUserCreatedStoryboardsResponse{
-		Code:    ret.Code,
-		Message: "OK",
+		Code:        ret.Code,
+		Message:     "OK",
+		Total:       ret.Total,
+		Offset:      ret.Offset,
+		PageSize:    ret.PageSize,
+		Storyboards: ret.Storyboards,
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -643,6 +648,89 @@ func (ts *StoryService) GetUserCreatedRoles(ctx context.Context, req *connect.Re
 	resp := &gen.GetUserCreatedRolesResponse{
 		Code:    ret.Code,
 		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) GetStoryRoleStories(ctx context.Context, req *connect.Request[gen.GetStoryRoleStoriesRequest]) (*connect.Response[gen.GetStoryRoleStoriesResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetStoryRoleStories(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetStoryRoleStoriesResponse{
+		Code:     ret.Code,
+		Message:  "OK",
+		Stories:  ret.Stories,
+		Total:    ret.Total,
+		Offset:   ret.Offset,
+		PageSize: ret.PageSize,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *connect.Request[gen.GetStoryRoleStoryboardsRequest]) (*connect.Response[gen.GetStoryRoleStoryboardsResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetStoryRoleStoryboards(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetStoryRoleStoryboardsResponse{
+		Code:        ret.Code,
+		Message:     "OK",
+		Storyboards: ret.Storyboards,
+		Total:       ret.Total,
+		Offset:      ret.Offset,
+		PageSize:    ret.PageSize,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) CreateStoryRoleChat(ctx context.Context, req *connect.Request[gen.CreateStoryRoleChatRequest]) (*connect.Response[gen.CreateStoryRoleChatResponse], error) {
+	ret, err := storyServer.GetStoryServer().CreateStoryRoleChat(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.CreateStoryRoleChatResponse{
+		Code:        ret.Code,
+		Message:     "OK",
+		ChatContext: ret.ChatContext,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) ChatWithStoryRole(ctx context.Context, req *connect.Request[gen.ChatWithStoryRoleRequest]) (*connect.Response[gen.ChatWithStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().ChatWithStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.ChatWithStoryRoleResponse{
+		Code:          ret.Code,
+		Message:       "OK",
+		ReplyMessages: ret.ReplyMessages,
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *connect.Request[gen.UpdateStoryRoleDetailRequest]) (*connect.Response[gen.UpdateStoryRoleDetailResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRoleDetail(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.UpdateStoryRoleDetailResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (ts *StoryService) GetUserWithRoleChatList(ctx context.Context, req *connect.Request[gen.GetUserWithRoleChatListRequest]) (*connect.Response[gen.GetUserWithRoleChatListResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserWithRoleChatList(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetUserWithRoleChatListResponse{
+		Code:    ret.Code,
+		Message: "OK",
+		Chats:   ret.Chats,
 	}
 	return connect.NewResponse(resp), nil
 }

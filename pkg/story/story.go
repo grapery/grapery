@@ -57,15 +57,6 @@ type StoryServer interface {
 	GetStoryBoardRender(ctx context.Context, req *api.GetStoryBoardRenderRequest) (*api.GetStoryBoardRenderResponse, error)
 
 	ContinueRenderStory(ctx context.Context, req *api.ContinueRenderStoryRequest) (*api.ContinueRenderStoryResponse, error)
-	RenderStoryRoles(ctx context.Context, req *api.RenderStoryRolesRequest) (*api.RenderStoryRolesResponse, error)
-	UpdateStoryRole(ctx context.Context, req *api.UpdateStoryRoleRequest) (*api.UpdateStoryRoleResponse, error)
-	RenderStoryRoleDetail(ctx context.Context, req *api.RenderStoryRoleDetailRequest) (*api.RenderStoryRoleDetailResponse, error)
-	GetStoryRoles(ctx context.Context, req *api.GetStoryRolesRequest) (*api.GetStoryRolesResponse, error)
-	GetStoryBoardRoles(ctx context.Context, req *api.GetStoryBoardRolesRequest) (*api.GetStoryBoardRolesResponse, error)
-	GetStoryContributors(ctx context.Context, req *api.GetStoryContributorsRequest) (*api.GetStoryContributorsResponse, error)
-	CreateStoryRole(ctx context.Context, req *api.CreateStoryRoleRequest) (*api.CreateStoryRoleResponse, error)
-	GetStoryRoleDetail(ctx context.Context, req *api.GetStoryRoleDetailRequest) (*api.GetStoryRoleDetailResponse, error)
-	RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error)
 
 	GetStoryboardScene(ctx context.Context, req *api.GetStoryBoardSencesRequest) (*api.GetStoryBoardSencesResponse, error)
 	CreateStoryBoardScene(ctx context.Context, req *api.CreateStoryBoardSenceRequest) (*api.CreateStoryBoardSenceResponse, error)
@@ -85,6 +76,22 @@ type StoryServer interface {
 	SearchStories(ctx context.Context, req *api.SearchStoriesRequest) (*api.SearchStoriesResponse, error)
 	GetUserCreatedStoryboards(ctx context.Context, req *api.GetUserCreatedStoryboardsRequest) (*api.GetUserCreatedStoryboardsResponse, error)
 	GetUserCreatedRoles(ctx context.Context, req *api.GetUserCreatedRolesRequest) (*api.GetUserCreatedRolesResponse, error)
+
+	RenderStoryRoles(ctx context.Context, req *api.RenderStoryRolesRequest) (*api.RenderStoryRolesResponse, error)
+	UpdateStoryRole(ctx context.Context, req *api.UpdateStoryRoleRequest) (*api.UpdateStoryRoleResponse, error)
+	RenderStoryRoleDetail(ctx context.Context, req *api.RenderStoryRoleDetailRequest) (*api.RenderStoryRoleDetailResponse, error)
+	GetStoryRoles(ctx context.Context, req *api.GetStoryRolesRequest) (*api.GetStoryRolesResponse, error)
+	GetStoryBoardRoles(ctx context.Context, req *api.GetStoryBoardRolesRequest) (*api.GetStoryBoardRolesResponse, error)
+	GetStoryContributors(ctx context.Context, req *api.GetStoryContributorsRequest) (*api.GetStoryContributorsResponse, error)
+	CreateStoryRole(ctx context.Context, req *api.CreateStoryRoleRequest) (*api.CreateStoryRoleResponse, error)
+	GetStoryRoleDetail(ctx context.Context, req *api.GetStoryRoleDetailRequest) (*api.GetStoryRoleDetailResponse, error)
+	RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error)
+	GetStoryRoleStories(ctx context.Context, req *api.GetStoryRoleStoriesRequest) (*api.GetStoryRoleStoriesResponse, error)
+	GetStoryRoleStoryboards(ctx context.Context, req *api.GetStoryRoleStoryboardsRequest) (*api.GetStoryRoleStoryboardsResponse, error)
+	CreateStoryRoleChat(ctx context.Context, req *api.CreateStoryRoleChatRequest) (*api.CreateStoryRoleChatResponse, error)
+	ChatWithStoryRole(ctx context.Context, req *api.ChatWithStoryRoleRequest) (*api.ChatWithStoryRoleResponse, error)
+	UpdateStoryRoleDetail(ctx context.Context, req *api.UpdateStoryRoleDetailRequest) (*api.UpdateStoryRoleDetailResponse, error)
+	GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error)
 }
 
 type StoryService struct {
@@ -2170,21 +2177,23 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		log.Log().Error("get user created storyboards failed", zap.Error(err))
 		return nil, err
 	}
+	log.Log().Info("get user created storyboards", zap.Int("total", len(storyboards)))
 	apiStoryboards := make([]*api.StoryBoard, 0)
 	for idx, storyboard := range storyboards {
-		apiStoryboards = append(apiStoryboards, convert.ConvertStoryBoardToApiStoryBoard(storyboard))
+		log.Log().Info("get user created storyboard", zap.Int64("id", int64(storyboard.ID)), zap.Int("index", idx))
+		newApiStoryboard := convert.ConvertStoryBoardToApiStoryBoard(storyboard)
 		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(storyboard.ID))
 		if err != nil {
 			log.Log().Error("get storyboard scenes failed", zap.Error(err))
-			return nil, err
+			continue
 		}
-		apiStoryboards[idx].Sences = &api.StoryBoardSences{
+		newApiStoryboard.Sences = &api.StoryBoardSences{
 			List: make([]*api.StoryBoardSence, 0),
 		}
 		for _, scene := range sences {
-			apiStoryboards[idx].Sences.List = append(apiStoryboards[idx].Sences.List, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
+			newApiStoryboard.Sences.List = append(newApiStoryboard.Sences.List, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
 		}
-
+		apiStoryboards = append(apiStoryboards, newApiStoryboard)
 	}
 	return &api.GetUserCreatedStoryboardsResponse{
 		Code:        0,
@@ -2211,4 +2220,34 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		Roles:   apiRoles,
 		Total:   total,
 	}, nil
+}
+
+// 获取角色故事
+func (s *StoryService) GetStoryRoleStories(ctx context.Context, req *api.GetStoryRoleStoriesRequest) (*api.GetStoryRoleStoriesResponse, error) {
+	return nil, nil
+}
+
+// 获取角色故事板
+func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.GetStoryRoleStoryboardsRequest) (*api.GetStoryRoleStoryboardsResponse, error) {
+	return nil, nil
+}
+
+// 创建角色聊天
+func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateStoryRoleChatRequest) (*api.CreateStoryRoleChatResponse, error) {
+	return nil, nil
+}
+
+// 角色聊天
+func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithStoryRoleRequest) (*api.ChatWithStoryRoleResponse, error) {
+	return nil, nil
+}
+
+// 获取角色聊天列表
+func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error) {
+	return nil, nil
+}
+
+// 更新角色详情
+func (s *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *api.UpdateStoryRoleDetailRequest) (*api.UpdateStoryRoleDetailResponse, error) {
+	return nil, nil
 }
