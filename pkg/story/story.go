@@ -1471,82 +1471,6 @@ func (s *StoryService) GetStoryContributors(ctx context.Context, req *api.GetSto
 	}, nil
 }
 
-func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStoryRoleRequest) (*api.CreateStoryRoleResponse, error) {
-	story, err := models.GetStory(ctx, req.GetRole().GetStoryId())
-	if err != nil {
-		return nil, err
-	}
-	if story.Status == -1 {
-		return &api.CreateStoryRoleResponse{
-			Code:    -1,
-			Message: "story is closed",
-		}, nil
-	}
-	role, err := models.GetStoryRoleByName(ctx, req.GetRole().GetCharacterName(), int64(story.ID))
-	if err != nil {
-		return nil, err
-	}
-	if role != nil {
-		return &api.CreateStoryRoleResponse{
-			Code:    -1,
-			Message: "role already exists",
-		}, nil
-	}
-	newRole := new(models.StoryRole)
-	newRole.CharacterName = req.GetRole().GetCharacterName()
-	newRole.StoryID = int64(story.ID)
-	newRole.CreatorID = req.GetRole().GetCreatorId()
-	newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
-	newRole.CharacterAvatar = req.GetRole().GetCharacterAvatar()
-	newRole.CharacterID = req.GetRole().GetCharacterId()
-	newRole.CharacterType = req.GetRole().GetCharacterType()
-	newRole.CharacterPrompt = req.GetRole().GetCharacterPrompt()
-	newRole.CharacterRefImages = strings.Join(req.GetRole().GetCharacterRefImages(), ",")
-	newRole.Status = 1
-	_, err = models.CreateStoryRole(ctx, newRole)
-	if err != nil {
-		return nil, err
-	}
-	return &api.CreateStoryRoleResponse{
-		Code:    0,
-		Message: "OK",
-	}, nil
-}
-
-func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStoryRoleDetailRequest) (*api.GetStoryRoleDetailResponse, error) {
-	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
-	if err != nil {
-		return nil, err
-	}
-	return &api.GetStoryRoleDetailResponse{
-		Code:    0,
-		Message: "OK",
-		Info: &api.StoryRole{
-			RoleId:               int64(role.ID),
-			CharacterDescription: role.CharacterDescription,
-			CharacterName:        role.CharacterName,
-			CharacterAvatar:      role.CharacterAvatar,
-			CharacterId:          role.CharacterID,
-			StoryId:              int64(role.StoryID),
-			CharacterType:        role.CharacterType,
-			CharacterPrompt:      role.CharacterPrompt,
-			CharacterRefImages:   strings.Split(role.CharacterRefImages, ","),
-			Ctime:                role.CreateAt.Unix(),
-			Mtime:                role.UpdateAt.Unix(),
-			CreatorId:            role.CreatorID,
-			FollowCount:          role.FollowCount,
-			LikeCount:            role.LikeCount,
-			Status:               int32(role.Status),
-			StoryboardNum:        role.StoryboardNum,
-		},
-	}, nil
-}
-
-func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error) {
-
-	return nil, nil
-}
-
 func (s *StoryService) LikeStory(ctx context.Context, req *api.LikeStoryRequest) (*api.LikeStoryResponse, error) {
 	// 检查是否已经点赞
 	likeItem, err := models.GetLikeItemByStoryAndUser(ctx, req.GetStoryId(), int(req.GetUserId()))
@@ -2222,6 +2146,83 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 	}, nil
 }
 
+func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStoryRoleRequest) (*api.CreateStoryRoleResponse, error) {
+	story, err := models.GetStory(ctx, req.GetRole().GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	if story.Status == -1 {
+		return &api.CreateStoryRoleResponse{
+			Code:    -1,
+			Message: "story is closed",
+		}, nil
+	}
+	role, err := models.GetStoryRoleByName(ctx, req.GetRole().GetCharacterName(), int64(story.ID))
+	if err != nil {
+		return nil, err
+	}
+	if role != nil {
+		return &api.CreateStoryRoleResponse{
+			Code:    -1,
+			Message: "role already exists",
+		}, nil
+	}
+	newRole := new(models.StoryRole)
+	newRole.CharacterName = req.GetRole().GetCharacterName()
+	newRole.StoryID = int64(story.ID)
+	newRole.CreatorID = req.GetRole().GetCreatorId()
+	newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
+	newRole.CharacterAvatar = req.GetRole().GetCharacterAvatar()
+	newRole.CharacterID = req.GetRole().GetCharacterId()
+	newRole.CharacterType = req.GetRole().GetCharacterType()
+	newRole.CharacterPrompt = req.GetRole().GetCharacterPrompt()
+	newRole.CharacterRefImages = strings.Join(req.GetRole().GetCharacterRefImages(), ",")
+	newRole.Status = 1
+	_, err = models.CreateStoryRole(ctx, newRole)
+	if err != nil {
+		return nil, err
+	}
+	return &api.CreateStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStoryRoleDetailRequest) (*api.GetStoryRoleDetailResponse, error) {
+	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get story role detail failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.GetStoryRoleDetailResponse{
+		Code:    0,
+		Message: "OK",
+		Info: &api.StoryRole{
+			RoleId:               int64(role.ID),
+			CharacterDescription: role.CharacterDescription,
+			CharacterName:        role.CharacterName,
+			CharacterAvatar:      role.CharacterAvatar,
+			CharacterId:          role.CharacterID,
+			StoryId:              int64(role.StoryID),
+			CharacterType:        role.CharacterType,
+			CharacterPrompt:      role.CharacterPrompt,
+			CharacterRefImages:   strings.Split(role.CharacterRefImages, ","),
+			Ctime:                role.CreateAt.Unix(),
+			Mtime:                role.UpdateAt.Unix(),
+			CreatorId:            role.CreatorID,
+			FollowCount:          role.FollowCount,
+			LikeCount:            role.LikeCount,
+			Status:               int32(role.Status),
+			StoryboardNum:        role.StoryboardNum,
+		},
+	}, nil
+}
+
+func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error) {
+
+	return nil, nil
+}
+
 // 获取角色故事
 func (s *StoryService) GetStoryRoleStories(ctx context.Context, req *api.GetStoryRoleStoriesRequest) (*api.GetStoryRoleStoriesResponse, error) {
 	return nil, nil
@@ -2249,5 +2250,41 @@ func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.Get
 
 // 更新角色详情
 func (s *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *api.UpdateStoryRoleDetailRequest) (*api.UpdateStoryRoleDetailResponse, error) {
+	log.Log().Info("update story role detail", zap.Any("req", req.String()))
+	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get story role detail failed", zap.Error(err))
+		return nil, err
+	}
+	if role == nil {
+		return &api.UpdateStoryRoleDetailResponse{
+			Code:    -1,
+			Message: "role not found",
+		}, nil
+	}
+	updates := make(map[string]interface{})
+	if req.GetRole().GetCharacterDescription() != "" {
+		updates["character_description"] = req.GetRole().GetCharacterDescription()
+	}
+	if req.GetRole().GetCharacterAvatar() != "" {
+		updates["character_avatar"] = req.GetRole().GetCharacterAvatar()
+	}
+	if req.GetRole().GetCharacterId() != "" {
+		updates["character_id"] = req.GetRole().GetCharacterId()
+	}
+	if req.GetRole().GetCharacterType() != "" {
+		updates["character_type"] = req.GetRole().GetCharacterType()
+	}
+	if req.GetRole().GetCharacterPrompt() != "" {
+		updates["character_prompt"] = req.GetRole().GetCharacterPrompt()
+	}
+	if len(req.GetRole().GetCharacterRefImages()) > 0 {
+		updates["character_ref_images"] = strings.Join(req.GetRole().GetCharacterRefImages(), ",")
+	}
+	err = models.UpdateStoryRole(ctx, int64(role.ID), updates)
+	if err != nil {
+		log.Log().Error("update story role detail failed", zap.Error(err))
+		return nil, err
+	}
 	return nil, nil
 }
