@@ -2158,7 +2158,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 		}, nil
 	}
 	role, err := models.GetStoryRoleByName(ctx, req.GetRole().GetCharacterName(), int64(story.ID))
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 	if role != nil {
@@ -2235,7 +2235,38 @@ func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.Get
 
 // 创建角色聊天
 func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateStoryRoleChatRequest) (*api.CreateStoryRoleChatResponse, error) {
-	return nil, nil
+	exist, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get user chat context failed", zap.Error(err))
+		return nil, err
+	}
+	if exist != nil {
+		return &api.CreateStoryRoleChatResponse{
+			Code:    -1,
+			Message: "chat context already exists",
+		}, nil
+	}
+	chatContext := new(models.ChatContext)
+	chatContext.UserID = int64(req.GetUserId())
+	chatContext.RoleID = req.GetRoleId()
+	chatContext.Title = "聊天消息"
+	chatContext.Content = ""
+	chatContext.Status = 1
+	err = models.CreateChatContext(ctx, chatContext)
+	if err != nil {
+		log.Log().Error("create story role chat failed", zap.Error(err))
+		return nil, err
+	}
+	return &api.CreateStoryRoleChatResponse{
+		Code:    0,
+		Message: "OK",
+		ChatContext: &api.ChatContext{
+			ChatId:         int64(chatContext.ID),
+			UserId:         int64(chatContext.UserID),
+			RoleId:         int64(chatContext.RoleID),
+			LastUpdateTime: chatContext.UpdateAt.Unix(),
+		},
+	}, nil
 }
 
 // 角色聊天

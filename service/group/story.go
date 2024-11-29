@@ -646,8 +646,12 @@ func (ts *StoryService) GetUserCreatedRoles(ctx context.Context, req *connect.Re
 		return nil, err
 	}
 	resp := &gen.GetUserCreatedRolesResponse{
-		Code:    ret.Code,
-		Message: "OK",
+		Code:     ret.Code,
+		Message:  "OK",
+		Roles:    ret.Roles,
+		Total:    ret.Total,
+		Offset:   ret.Offset,
+		PageSize: ret.PageSize,
 	}
 	return connect.NewResponse(resp), nil
 }
