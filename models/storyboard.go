@@ -413,3 +413,88 @@ func UpdateStoryBoardSceneGenResult(ctx context.Context, id int64, genResult str
 		Where("status >= 0").
 		Update("gen_result = ?", genResult).Error
 }
+
+type StoryBoardRole struct {
+	IDBase
+	CreatorId int64
+	StoryId   int64
+	BoardId   int64
+	RoleId    int64
+	Name      string
+	Avatar    string
+	Status    int
+}
+
+func (board StoryBoardRole) TableName() string {
+	return "story_board_role"
+}
+
+func CreateStoryBoardRole(ctx context.Context, role *StoryBoardRole) (int64, error) {
+	role.Status = 1
+	if err := DataBase().Model(role).
+		WithContext(ctx).
+		Create(role).Error; err != nil {
+		return 0, err
+	}
+	return int64(role.IDBase.ID), nil
+}
+
+func GetStoryBoardRoles(ctx context.Context, boardId int64) ([]*StoryBoardRole, error) {
+	role := make([]*StoryBoardRole, 0)
+	err := DataBase().Model(role).
+		WithContext(ctx).
+		Where("board_id = ?", boardId).
+		Where("status >= 0").
+		Scan(&role).Error
+	if err != nil {
+		return nil, err
+	}
+	return role, nil
+}
+
+func GetStoryBoardRolesByBoard(ctx context.Context, boardId int64) ([]*StoryBoardRole, error) {
+	roles := make([]*StoryBoardRole, 0)
+	err := DataBase().Model(&StoryBoardRole{}).
+		WithContext(ctx).
+		Where("board_id = ?", boardId).
+		Where("status >= 0").
+		Find(&roles).Error
+	if err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+func DelStoryBoardRole(ctx context.Context, id int64) error {
+	err := DataBase().Model(&StoryBoardRole{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("status = ?", -1).Error
+	return err
+}
+
+func UpdateStoryBoardRole(ctx context.Context, role *StoryBoardRole) error {
+	return DataBase().Model(role).WithContext(ctx).
+		Where("id = ?", role.IDBase.ID).
+		Where("status >= 0").
+		Updates(role).Error
+}
+
+func UpdateStoryBoardRoleMultiColumn(ctx context.Context, id int64, columns map[string]interface{}) error {
+	return DataBase().Model(&StoryBoardRole{}).
+		WithContext(ctx).
+		Where("id = ?", id).
+		Where("status >= 0").
+		Updates(columns).Error
+}
+
+// 获取角色参与的某一个故事的所有故事板
+func GetStoryBoardsByRoleID(ctx context.Context, roleID int64) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	if err := DataBase().Model(&StoryBoard{}).
+		Where("role_id = ?", roleID).
+		Where("status >= 0").
+		Find(&boards).Error; err != nil {
+		return nil, err
+	}
+	return boards, nil
+}

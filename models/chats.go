@@ -8,7 +8,7 @@ type ChatContext struct {
 	RoleID      int64  `json:"role_id,omitempty"`
 	Title       string `json:"title,omitempty"`
 	Content     string `json:"content,omitempty"`
-	Status      int64  `json:"status,omitempty"`
+	Status      int64  `json:"status,omitempty"` // 1: open, 2: close, 3: delete
 	UseAgent    int64  `json:"use_agent,omitempty"`
 	AgentPrompt string `json:"agent_prompt,omitempty"`
 }
@@ -23,13 +23,22 @@ func CreateChatContext(ctx context.Context, chatContext *ChatContext) error {
 
 func GetChatContextByID(ctx context.Context, id int64) (*ChatContext, error) {
 	var chatContext ChatContext
-	err := DataBase().Where("id = ?", id).WithContext(ctx).First(&chatContext).Error
+	err := DataBase().
+		Where("id = ?", id).
+		WithContext(ctx).
+		First(&chatContext).Error
 	return &chatContext, err
 }
 
 func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) ([]*ChatContext, int, error) {
 	var chatContexts []*ChatContext
-	err := DataBase().Where("user_id = ?", userID).WithContext(ctx).Offset((page - 1) * size).Limit(size).Find(&chatContexts).Error
+	err := DataBase().
+		Where("user_id = ?", userID).
+		Where("status = ?", 1).
+		WithContext(ctx).
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&chatContexts).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -43,22 +52,35 @@ func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) (
 
 func GetChatContextByUserIDAndRoleID(ctx context.Context, userID int64, roleID int64) (*ChatContext, error) {
 	var chatContext ChatContext
-	err := DataBase().Where("user_id = ?", userID).Where("role_id = ?", roleID).WithContext(ctx).First(&chatContext).Error
+	err := DataBase().Where("user_id = ?", userID).
+		Where("role_id = ?", roleID).
+		Where("status = ?", 1).
+		WithContext(ctx).
+		First(&chatContext).Error
 	return &chatContext, err
 }
 
 func GetChatContextByRoleID(ctx context.Context, roleID int64) ([]*ChatContext, error) {
 	var chatContexts []*ChatContext
-	err := DataBase().Where("role_id = ?", roleID).WithContext(ctx).Find(&chatContexts).Error
+	err := DataBase().
+		Where("role_id = ?", roleID).
+		Where("status = ?", 1).
+		WithContext(ctx).
+		Find(&chatContexts).Error
 	return chatContexts, err
 }
 
 func UpdateChatContext(ctx context.Context, id int64, updates map[string]interface{}) error {
-	return DataBase().Model(&ChatContext{}).Where("id = ?", id).WithContext(ctx).Updates(updates).Error
+	return DataBase().Model(&ChatContext{}).
+		Where("id = ?", id).
+		WithContext(ctx).
+		Updates(updates).Error
 }
 
 func DeleteChatContext(ctx context.Context, id int64) error {
-	return DataBase().Delete(&ChatContext{}, id).WithContext(ctx).Error
+	return DataBase().Model(&ChatContext{}).Update("status", -1).
+		Where("id = ?", id).
+		WithContext(ctx).Error
 }
 
 type ChatMessage struct {

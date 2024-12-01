@@ -92,6 +92,7 @@ type StoryServer interface {
 	ChatWithStoryRole(ctx context.Context, req *api.ChatWithStoryRoleRequest) (*api.ChatWithStoryRoleResponse, error)
 	UpdateStoryRoleDetail(ctx context.Context, req *api.UpdateStoryRoleDetailRequest) (*api.UpdateStoryRoleDetailResponse, error)
 	GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error)
+	GetUserChatWithRole(ctx context.Context, req *api.GetUserChatWithRoleRequest) (*api.GetUserChatWithRoleResponse, error)
 }
 
 type StoryService struct {
@@ -2230,7 +2231,27 @@ func (s *StoryService) GetStoryRoleStories(ctx context.Context, req *api.GetStor
 
 // 获取角色故事板
 func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.GetStoryRoleStoryboardsRequest) (*api.GetStoryRoleStoryboardsResponse, error) {
-	return nil, nil
+	boards, err := models.GetStoryBoardsByRoleID(ctx, req.GetRoleId())
+	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Log().Error("get story role storyboards failed", zap.Error(err))
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return &api.GetStoryRoleStoryboardsResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	apiBoards := make([]*api.StoryBoard, 0)
+	for _, board := range boards {
+		apiBoards = append(apiBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+	}
+	return &api.GetStoryRoleStoryboardsResponse{
+		Code:        0,
+		Message:     "OK",
+		Storyboards: apiBoards,
+		Total:       int64(len(apiBoards)),
+	}, nil
 }
 
 // 创建角色聊天
@@ -2271,7 +2292,41 @@ func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateS
 
 // 角色聊天
 func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithStoryRoleRequest) (*api.ChatWithStoryRoleResponse, error) {
-	return nil, nil
+	chatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.Messages[0].GetUserId()), int64(req.Messages[0].GetRoleId()))
+	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Log().Error("get user chat context failed", zap.Error(err))
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		// 创建聊天上下文
+		chatCtx = new(models.ChatContext)
+		chatCtx.UserID = int64(req.Messages[0].GetUserId())
+		chatCtx.RoleID = int64(req.Messages[0].GetRoleId())
+		chatCtx.Title = "聊天消息"
+		chatCtx.Content = ""
+		chatCtx.Status = 1
+		err = models.CreateChatContext(ctx, chatCtx)
+		if err != nil {
+			log.Log().Error("create story role chat failed", zap.Error(err))
+			return nil, err
+		}
+	}
+	for _, message := range req.Messages {
+		chatMessage := new(models.ChatMessage)
+		chatMessage.ChatContextID = int64(chatCtx.ID)
+		chatMessage.UserID = int64(message.GetUserId())
+		chatMessage.Content = message.Message
+		chatMessage.Status = 1
+		err = models.CreateChatMessage(ctx, chatMessage)
+		if err != nil {
+			log.Log().Error("create story role chat message failed", zap.Error(err))
+			return nil, err
+		}
+	}
+	return &api.ChatWithStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
 
 // 获取角色聊天列表
@@ -2318,4 +2373,35 @@ func (s *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *api.Updat
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (s *StoryService) GetUserChatWithRole(ctx context.Context, req *api.GetUserChatWithRoleRequest) (*api.GetUserChatWithRoleResponse, error) {
+	chatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
+	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Log().Error("get user chat context failed", zap.Error(err))
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return &api.GetUserChatWithRoleResponse{
+			Code:    1,
+			Message: "chat context not found",
+		}, nil
+	}
+	if chatCtx == nil {
+		return &api.GetUserChatWithRoleResponse{
+			Code:    1,
+			Message: "chat context not found",
+		}, nil
+	}
+	return &api.GetUserChatWithRoleResponse{
+		Code:    0,
+		Message: "OK",
+		ChatContext: &api.ChatContext{
+			ChatId:         int64(chatCtx.ID),
+			UserId:         int64(chatCtx.UserID),
+			RoleId:         int64(chatCtx.RoleID),
+			Timestamp:      chatCtx.CreateAt.Unix(),
+			LastUpdateTime: chatCtx.UpdateAt.Unix(),
+		},
+	}, nil
 }

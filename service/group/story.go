@@ -738,3 +738,17 @@ func (ts *StoryService) GetUserWithRoleChatList(ctx context.Context, req *connec
 	}
 	return connect.NewResponse(resp), nil
 }
+
+func (ts *StoryService) GetUserChatWithRole(ctx context.Context, req *connect.Request[gen.GetUserChatWithRoleRequest]) (*connect.Response[gen.GetUserChatWithRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserChatWithRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GetUserChatWithRoleResponse{
+		Code:        ret.Code,
+		Message:     "OK",
+		ChatContext: ret.ChatContext,
+		Messages:    ret.Messages,
+	}
+	return connect.NewResponse(resp), nil
+}
