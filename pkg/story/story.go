@@ -3,6 +3,7 @@ package story
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -2256,6 +2257,9 @@ func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.Get
 
 // 创建角色聊天
 func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateStoryRoleChatRequest) (*api.CreateStoryRoleChatResponse, error) {
+	if req.GetUserId() == 0 || req.GetRoleId() == 0 {
+		return nil, errors.New("invalid user id or role id")
+	}
 	exist, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
 	if err != nil {
 		log.Log().Error("get user chat context failed", zap.Error(err))
@@ -2376,6 +2380,9 @@ func (s *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *api.Updat
 }
 
 func (s *StoryService) GetUserChatWithRole(ctx context.Context, req *api.GetUserChatWithRoleRequest) (*api.GetUserChatWithRoleResponse, error) {
+	if req.GetUserId() == 0 || req.GetRoleId() == 0 {
+		return nil, errors.New("invalid user id or role id")
+	}
 	chatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
 	if err != nil && err != gorm.ErrRecordNotFound {
 		log.Log().Error("get user chat context failed", zap.Error(err))
