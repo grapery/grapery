@@ -51,13 +51,13 @@ func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) (
 }
 
 func GetChatContextByUserIDAndRoleID(ctx context.Context, userID int64, roleID int64) (*ChatContext, error) {
-	var chatContext ChatContext
+	var chatContext = new(ChatContext)
 	err := DataBase().Where("user_id = ?", userID).
 		Where("role_id = ?", roleID).
 		Where("status = ?", 1).
 		WithContext(ctx).
 		First(&chatContext).Error
-	return &chatContext, err
+	return chatContext, err
 }
 
 func GetChatContextByRoleID(ctx context.Context, roleID int64) ([]*ChatContext, error) {

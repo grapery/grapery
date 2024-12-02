@@ -2260,15 +2260,21 @@ func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateS
 	if req.GetUserId() == 0 || req.GetRoleId() == 0 {
 		return nil, errors.New("invalid user id or role id")
 	}
-	exist, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
-	if err != nil {
+	existChatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), req.GetRoleId())
+	if err != nil && err != gorm.ErrRecordNotFound {
 		log.Log().Error("get user chat context failed", zap.Error(err))
 		return nil, err
 	}
-	if exist != nil {
+	if existChatCtx != nil && existChatCtx.Status == 1 {
 		return &api.CreateStoryRoleChatResponse{
-			Code:    -1,
-			Message: "chat context already exists",
+			Code:    0,
+			Message: "OK",
+			ChatContext: &api.ChatContext{
+				ChatId:         int64(existChatCtx.ID),
+				UserId:         int64(existChatCtx.UserID),
+				RoleId:         int64(existChatCtx.RoleID),
+				LastUpdateTime: existChatCtx.UpdateAt.Unix(),
+			},
 		}, nil
 	}
 	chatContext := new(models.ChatContext)
