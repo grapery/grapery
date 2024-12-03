@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	_ "database/sql"
 	_ "encoding/json"
 	"fmt"
@@ -143,6 +144,54 @@ func GetUsersByIds(ids []int64) (users []*User, err error) {
 		return nil, err
 	}
 	return users, nil
+}
+
+func GetUserById(ctx context.Context, id int64) (*User, error) {
+	user := &User{}
+	err := DataBase().
+		Model(user).
+		Where("id = ? and deleted = ?", id, 0).First(user).Error
+	if err != nil {
+		log.Errorf("get user [%d] info failed : [%s]", id, err.Error())
+		return nil, fmt.Errorf("get user [%d] info failed ", id)
+	}
+	return user, nil
+}
+
+func GetUserByPhone(ctx context.Context, phone string) (*User, error) {
+	user := &User{}
+	err := DataBase().
+		Model(user).
+		Where("phone = ? and deleted = ?", phone, 0).First(user).Error
+	if err != nil {
+		log.Errorf("get user [%s] info failed : [%s]", phone, err.Error())
+		return nil, fmt.Errorf("get user [%s] info failed ", phone)
+	}
+	return user, nil
+}
+
+func GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	user := &User{}
+	err := DataBase().
+		Model(user).
+		Where("email = ? and deleted = ?", email, 0).First(user).Error
+	if err != nil {
+		log.Errorf("get user [%s] info failed : [%s]", email, err.Error())
+		return nil, fmt.Errorf("get user [%s] info failed ", email)
+	}
+	return user, nil
+}
+
+func GetUserByName(ctx context.Context, name string) (*User, error) {
+	user := &User{}
+	err := DataBase().
+		Model(user).
+		Where("name = ? and deleted = ?", name, 0).First(user).Error
+	if err != nil {
+		log.Errorf("get user [%s] info failed : [%s]", name, err.Error())
+		return nil, fmt.Errorf("get user [%s] info failed ", name)
+	}
+	return user, nil
 }
 
 type UserProfile struct {

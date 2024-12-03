@@ -225,3 +225,19 @@ func ConvertStoryBoardToApiStoryBoard(storyBoard *models.StoryBoard) *api.StoryB
 	_ = json.Unmarshal([]byte(storyBoard.Params), &ret.Params)
 	return ret
 }
+
+func ConvertChatMessageToApiChatMessage(chatMessage *models.ChatMessage) *api.ChatMessage {
+	return &api.ChatMessage{
+		Id:        int64(chatMessage.ID),
+		ChatId:    int64(chatMessage.ChatContextID),
+		UserId:    int64(chatMessage.UserID),
+		RoleId:    int64(chatMessage.RoleID),
+		Sender:    int32(chatMessage.Sender),
+		Message:   chatMessage.Content,
+		Timestamp: chatMessage.CreateAt.Unix(),
+	}
+}
+
+func ConvertApiChatMessageToChatMessage(chatMessage *api.ChatMessage) *models.ChatMessage {
+	return &models.ChatMessage{}
+}

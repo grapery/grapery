@@ -2341,7 +2341,28 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 
 // 获取角色聊天列表
 func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error) {
-	return nil, nil
+	log.Log().Info("get user with role chat list", zap.Any("req", req.String()))
+	chatCtxs, total, err := models.GetChatContextByUserID(ctx, int64(req.GetUserId()), 0, 100)
+	if err != nil {
+		log.Log().Error("get user chat context failed", zap.Error(err))
+		return nil, err
+	}
+	_ = total
+	apiChatCtxs := make([]*api.ChatContext, 0)
+	for _, chatCtx := range chatCtxs {
+		apiChatCtxs = append(apiChatCtxs, &api.ChatContext{
+			ChatId:         int64(chatCtx.ID),
+			UserId:         int64(chatCtx.UserID),
+			RoleId:         int64(chatCtx.RoleID),
+			Timestamp:      chatCtx.CreateAt.Unix(),
+			LastUpdateTime: chatCtx.UpdateAt.Unix(),
+		})
+	}
+	return &api.GetUserWithRoleChatListResponse{
+		Code:    0,
+		Message: "OK",
+		Chats:   apiChatCtxs,
+	}, nil
 }
 
 // 更新角色详情
@@ -2406,6 +2427,27 @@ func (s *StoryService) GetUserChatWithRole(ctx context.Context, req *api.GetUser
 			Message: "chat context not found",
 		}, nil
 	}
+	user, err := models.GetUserById(ctx, int64(chatCtx.UserID))
+	if err != nil {
+		log.Log().Error("get user by id failed", zap.Error(err))
+		return nil, err
+	}
+	role, err := models.GetStoryRoleByID(ctx, chatCtx.RoleID)
+	if err != nil {
+		log.Log().Error("get story role by id failed", zap.Error(err))
+		return nil, err
+	}
+	lastMSg, err := models.GetChatContextLastMessage(ctx, int64(chatCtx.ID))
+	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Log().Error("get last chat message failed", zap.Error(err))
+		return nil, err
+	}
+	if lastMSg == nil {
+		lastMSg = &models.ChatMessage{
+			ChatContextID: int64(chatCtx.ID),
+			Sender:        0,
+		}
+	}
 	return &api.GetUserChatWithRoleResponse{
 		Code:    0,
 		Message: "OK",
@@ -2415,6 +2457,9 @@ func (s *StoryService) GetUserChatWithRole(ctx context.Context, req *api.GetUser
 			RoleId:         int64(chatCtx.RoleID),
 			Timestamp:      chatCtx.CreateAt.Unix(),
 			LastUpdateTime: chatCtx.UpdateAt.Unix(),
+			User:           convert.ConvertUserToApiUser(user),
+			Role:           convert.ConvertStoryRoleToApiStoryRoleInfo(role),
+			LastMessage:    convert.ConvertChatMessageToApiChatMessage(lastMSg),
 		},
 	}, nil
 }

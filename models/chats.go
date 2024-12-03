@@ -32,10 +32,9 @@ func GetChatContextByID(ctx context.Context, id int64) (*ChatContext, error) {
 
 func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) ([]*ChatContext, int, error) {
 	var chatContexts []*ChatContext
-	err := DataBase().
+	err := DataBase().WithContext(ctx).
 		Where("user_id = ?", userID).
 		Where("status = ?", 1).
-		WithContext(ctx).
 		Offset((page - 1) * size).
 		Limit(size).
 		Find(&chatContexts).Error
@@ -88,6 +87,7 @@ type ChatMessage struct {
 	ChatContextID int64  `json:"chat_context_id,omitempty"`
 	UserID        int64  `json:"user_id,omitempty"`
 	RoleID        int64  `json:"role_id,omitempty"`
+	Sender        int64  `json:"sender,omitempty"`
 	MessageType   int64  `json:"message_type,omitempty"`
 	Content       string `json:"content,omitempty"`
 	Status        int64  `json:"status,omitempty"`
@@ -117,6 +117,38 @@ func GetChatMessageByChatContextID(ctx context.Context, chatContextID int64, pag
 	var total int64
 	err = DataBase().Model(&ChatMessage{}).
 		Where("chat_context_id = ?", chatContextID).
+		Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return chatMessages, int(total), nil
+}
+
+func GetChatContextLastMessage(ctx context.Context, chatContextID int64) (*ChatMessage, error) {
+	var chatMessage ChatMessage
+	err := DataBase().Where("chat_context_id = ?", chatContextID).
+		Order("id DESC").
+		Limit(1).
+		WithContext(ctx).
+		First(&chatMessage).Error
+	return &chatMessage, err
+}
+
+func GetChatMessageBySender(ctx context.Context, chatContextID, userID int64, page, size int) ([]*ChatMessage, int, error) {
+	var chatMessages []*ChatMessage
+	err := DataBase().Where("chat_context_id = ?", chatContextID).
+		Where("sender = ?", userID).
+		WithContext(ctx).
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&chatMessages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	err = DataBase().Model(&ChatMessage{}).
+		Where("chat_context_id = ?", chatContextID).
+		Where("sender = ?", userID).
 		Count(&total).Error
 	if err != nil {
 		return nil, 0, err
