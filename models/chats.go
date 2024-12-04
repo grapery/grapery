@@ -35,6 +35,7 @@ func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) (
 	err := DataBase().WithContext(ctx).
 		Where("user_id = ?", userID).
 		Where("status = ?", 1).
+		Order("update_at DESC").
 		Offset((page - 1) * size).
 		Limit(size).
 		Find(&chatContexts).Error
