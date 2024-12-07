@@ -94,6 +94,7 @@ type StoryServer interface {
 	UpdateStoryRoleDetail(ctx context.Context, req *api.UpdateStoryRoleDetailRequest) (*api.UpdateStoryRoleDetailResponse, error)
 	GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error)
 	GetUserChatWithRole(ctx context.Context, req *api.GetUserChatWithRoleRequest) (*api.GetUserChatWithRoleResponse, error)
+	GetUserChatMessages(ctx context.Context, req *api.GetUserChatMessagesRequest) (*api.GetUserChatMessagesResponse, error)
 }
 
 type StoryService struct {
@@ -2321,21 +2322,26 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 			return nil, err
 		}
 	}
+	reply := make([]*api.ChatMessage, 0)
 	for _, message := range req.Messages {
 		chatMessage := new(models.ChatMessage)
 		chatMessage.ChatContextID = int64(chatCtx.ID)
 		chatMessage.UserID = int64(message.GetUserId())
-		chatMessage.Content = message.Message
+		chatMessage.Content = message.GetMessage()
 		chatMessage.Status = 1
+		chatMessage.RoleID = int64(message.GetRoleId())
+		chatMessage.Sender = int64(message.GetSender())
 		err = models.CreateChatMessage(ctx, chatMessage)
 		if err != nil {
 			log.Log().Error("create story role chat message failed", zap.Error(err))
 			return nil, err
 		}
+		reply = append(reply, convert.ConvertChatMessageToApiChatMessage(chatMessage))
 	}
 	return &api.ChatWithStoryRoleResponse{
-		Code:    0,
-		Message: "OK",
+		Code:          0,
+		Message:       "OK",
+		ReplyMessages: reply,
 	}, nil
 }
 
@@ -2486,5 +2492,68 @@ func (s *StoryService) GetUserChatWithRole(ctx context.Context, req *api.GetUser
 			Role:           convert.ConvertStoryRoleToApiStoryRoleInfo(role),
 			LastMessage:    convert.ConvertChatMessageToApiChatMessage(lastMSg),
 		},
+	}, nil
+}
+
+func (s *StoryService) GetUserChatMessages(ctx context.Context, req *api.GetUserChatMessagesRequest) (*api.GetUserChatMessagesResponse, error) {
+	if req.GetChatId() == 0 && req.GetUserId() == 0 && req.GetRoleId() == 0 {
+		return nil, errors.New("invalid chat id or user id or role id")
+	}
+	var (
+		lastTimestamp int64
+		total         int
+		err           error
+		chatMsgs      []*models.ChatMessage
+	)
+	if req.GetChatId() == 0 && req.GetUserId() != 0 && req.GetRoleId() == 0 {
+		// 获取用户的消息，不区分聊天上下文
+		chatMsgs, total, err = models.GetChatMessageByUserID(ctx, int64(req.GetUserId()), 0, 100)
+		if err != nil {
+			log.Log().Error("get user chat messages failed", zap.Error(err))
+			return nil, err
+		}
+		_ = total
+		for _, chatMsg := range chatMsgs {
+			if lastTimestamp == 0 || chatMsg.CreateAt.Unix() < lastTimestamp {
+				lastTimestamp = chatMsg.CreateAt.Unix()
+			}
+		}
+	} else if req.GetChatId() == 0 && req.GetUserId() == 0 && req.GetRoleId() != 0 {
+		// 获取角色的消息，不区分聊天上下文
+		chatMsgs, total, err = models.GetChatMessageByRoleID(ctx, req.GetRoleId(), 0, 100)
+		if err != nil {
+			log.Log().Error("get role chat messages failed", zap.Error(err))
+			return nil, err
+		}
+		_ = total
+		for _, chatMsg := range chatMsgs {
+			if lastTimestamp == 0 || chatMsg.CreateAt.Unix() < lastTimestamp {
+				lastTimestamp = chatMsg.CreateAt.Unix()
+			}
+		}
+	} else if req.GetChatId() != 0 && req.GetUserId() == 0 && req.GetRoleId() == 0 {
+		// 获取指定聊天的消息
+		chatMsgs, total, err = models.GetChatMessageByChatContextID(ctx, int64(req.GetChatId()), 0, 100)
+		if err != nil {
+			log.Log().Error("get chat context chat messages failed", zap.Error(err))
+			return nil, err
+		}
+		_ = total
+		for _, chatMsg := range chatMsgs {
+			if lastTimestamp == 0 || chatMsg.CreateAt.Unix() < lastTimestamp {
+				lastTimestamp = chatMsg.CreateAt.Unix()
+			}
+		}
+	}
+	apiChatMsgs := make([]*api.ChatMessage, 0)
+	for _, chatMsg := range chatMsgs {
+		apiChatMsgs = append(apiChatMsgs, convert.ConvertChatMessageToApiChatMessage(chatMsg))
+	}
+	return &api.GetUserChatMessagesResponse{
+		Code:      0,
+		Message:   "OK",
+		Timestamp: lastTimestamp,
+		Total:     int64(total),
+		Messages:  apiChatMsgs,
 	}, nil
 }

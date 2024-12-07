@@ -752,3 +752,11 @@ func (ts *StoryService) GetUserChatWithRole(ctx context.Context, req *connect.Re
 	}
 	return connect.NewResponse(resp), nil
 }
+
+func (ts *StoryService) GetUserChatMessages(ctx context.Context, req *connect.Request[gen.GetUserChatMessagesRequest]) (*connect.Response[gen.GetUserChatMessagesResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserChatMessages(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ type UserServer interface {
 	GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error)
 	GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (*api.UserFollowingGroupResponse, error)
 	UpdateUser(ctx context.Context, req *api.UserUpdateRequest) (*api.UserUpdateResponse, error)
-	FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (*api.FetchUserActivesResponse, error)
+	FetchActives(ctx context.Context, req *api.FetchActivesRequest) (*api.FetchActivesResponse, error)
 	SearchUser(ctx context.Context, req *api.SearchUserRequest) (*api.SearchUserResponse, error)
 	UserWatching(ctx context.Context, req *api.UserWatchingRequest) (*api.UserWatchingResponse, error)
 	UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error)
@@ -217,24 +218,157 @@ func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequ
 	}
 	return &api.UserUpdateResponse{}, nil
 }
-func (user *UserService) FetchUserActives(ctx context.Context, req *api.FetchUserActivesRequest) (
-	*api.FetchUserActivesResponse, error) {
+
+func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActivesRequest) (
+	*api.FetchActivesResponse, error) {
 	// TODO: fetch user actives
-	actives := make([]*api.ActiveInfo, 0)
-	data, err := models.GetActiveByUserID(req.GetUserId())
+	if req.GetUserId() <= 0 {
+		return nil, fmt.Errorf("invalid user id")
+	}
+	if req.GetTimestamp() <= 0 {
+		return nil, fmt.Errorf("invalid timestamp")
+	}
+	if req.GetAtype() > api.ActiveType_LikeGroup || req.GetAtype() < api.ActiveType_AllActive {
+		return nil, fmt.Errorf("invalid active type")
+	}
+	var (
+		groupIds, storyIds, roleIds []int64
+		err                         error
+		groupMap                    = make(map[int64]*models.Group)
+		storyMap                    = make(map[int64]*models.Story)
+		roleMap                     = make(map[int64]*models.StoryRole)
+		lasttimeStamp               = req.GetTimestamp()
+	)
+	if req.GetAtype() == api.ActiveType_FollowGroup {
+		groupIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if req.GetAtype() == api.ActiveType_FollowStory {
+		storyIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	roleIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
 	if err != nil {
 		return nil, err
 	}
-	for _, active := range *data {
-		actives = append(actives, &api.ActiveInfo{
-			ItemInfo: &api.ItemInfo{},
-			User: &api.UserInfo{
-				UserId: active.UserId,
-			},
-		})
+	// TODO: fetch user actives
+	apiActives := make([]*api.ActiveInfo, 0)
+	allActives := make([]*models.Active, 0)
+	if len(groupIds) != 0 {
+		actives, _, err := models.GetActiveByFollowingGroupID(req.GetUserId(), groupIds, int(req.GetOffset()), int(req.GetPageSize()))
+		if err != nil {
+			return nil, err
+		}
+		if len(*actives) != 0 {
+			allActives = append(allActives, *actives...)
+		}
+		targetGroupIds := make([]int64, 0)
+		for _, active := range *actives {
+			groupMap[active.GroupId] = &models.Group{}
+			targetGroupIds = append(targetGroupIds, active.GroupId)
+		}
+		groups, err := models.GetGroupsByIds(targetGroupIds)
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range groups {
+			groupMap[int64(group.ID)] = group
+		}
 	}
-	return &api.FetchUserActivesResponse{
-		List: actives,
+	if len(storyIds) != 0 {
+		actives, _, err := models.GetActiveByFollowingStoryID(req.GetUserId(), storyIds, int(req.GetOffset()), int(req.GetPageSize()))
+		if err != nil {
+			return nil, err
+		}
+		if len(*actives) != 0 {
+			allActives = append(allActives, *actives...)
+		}
+		targetStoryIds := make([]int64, 0)
+		for _, active := range *actives {
+			groupMap[active.GroupId] = &models.Group{}
+			targetStoryIds = append(targetStoryIds, active.GroupId)
+		}
+		stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+		if err != nil {
+			return nil, err
+		}
+		for _, story := range stories {
+			storyMap[int64(story.ID)] = story
+		}
+	}
+	if len(roleIds) != 0 {
+		actives, _, err := models.GetActiveByFollowingStoryRoleID(req.GetUserId(), roleIds, int(req.GetOffset()), int(req.GetPageSize()))
+		if err != nil {
+			return nil, err
+		}
+		if len(*actives) != 0 {
+			allActives = append(allActives, *actives...)
+		}
+		targetStoryroleIds := make([]int64, 0)
+		for _, active := range *actives {
+			roleMap[active.GroupId] = &models.StoryRole{}
+			targetStoryroleIds = append(targetStoryroleIds, active.GroupId)
+		}
+		roles, err := models.GetStoryRolesByIDs(ctx, targetStoryroleIds)
+		if err != nil {
+			return nil, err
+		}
+		for _, role := range roles {
+			roleMap[int64(role.ID)] = role
+		}
+	}
+	sort.Sort(models.ActiveList(allActives))
+	for _, active := range allActives {
+		apiActive := &api.ActiveInfo{}
+		if req.GetAtype() == api.ActiveType_FollowGroup {
+			apiActive.ActiveType = api.ActiveType_FollowGroup
+			apiActive.GroupInfo = &api.GroupInfo{
+				GroupId: active.GroupId,
+				Name:    groupMap[active.GroupId].Name,
+				Avatar:  groupMap[active.GroupId].Avatar,
+				Desc:    groupMap[active.GroupId].ShortDesc,
+				Creator: groupMap[active.GroupId].CreatorID,
+				Owner:   groupMap[active.GroupId].OwnerID,
+			}
+		}
+		if req.GetAtype() == api.ActiveType_FollowStory {
+			apiActive.ActiveType = api.ActiveType_FollowStory
+			apiActive.StoryInfo = &api.Story{
+				Id:     active.StoryId,
+				Name:   storyMap[active.StoryId].Name,
+				Avatar: storyMap[active.StoryId].Avatar,
+				Desc:   storyMap[active.StoryId].ShortDesc,
+			}
+		}
+		if req.GetAtype() == api.ActiveType_FollowRole {
+			apiActive.ActiveType = api.ActiveType_FollowRole
+			apiActive.RoleInfo = &api.StoryRole{
+				RoleId:               active.StoryRoleId,
+				CharacterName:        roleMap[active.StoryRoleId].CharacterName,
+				CharacterAvatar:      roleMap[active.StoryRoleId].CharacterAvatar,
+				CharacterDescription: roleMap[active.StoryRoleId].CharacterDescription,
+				CharacterPrompt:      roleMap[active.StoryRoleId].CharacterPrompt,
+				Ctime:                roleMap[active.StoryRoleId].CreateAt.Unix(),
+				Mtime:                int64(roleMap[active.StoryRoleId].UpdateAt.Unix()),
+				LikeCount:            roleMap[active.StoryRoleId].LikeCount,
+				FollowCount:          roleMap[active.StoryRoleId].FollowCount,
+				StoryboardNum:        roleMap[active.StoryRoleId].StoryboardNum,
+			}
+		}
+		apiActives = append(apiActives, apiActive)
+		if lasttimeStamp > active.CreateAt.Unix() {
+			lasttimeStamp = active.CreateAt.Unix()
+		}
+	}
+
+	return &api.FetchActivesResponse{
+		List:      apiActives,
+		Timestamp: lasttimeStamp,
 	}, nil
 }
 

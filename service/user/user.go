@@ -68,12 +68,12 @@ func (ts *UserService) UserUpdate(ctx context.Context, req *connect.Request[api.
 		Msg: info,
 	}, nil
 }
-func (ts *UserService) FetchUserActives(ctx context.Context, req *connect.Request[api.FetchUserActivesRequest]) (*connect.Response[api.FetchUserActivesResponse], error) {
-	info, err := userService.GetUserServer().FetchUserActives(ctx, req.Msg)
+func (ts *UserService) FetchActives(ctx context.Context, req *connect.Request[api.FetchActivesRequest]) (*connect.Response[api.FetchActivesResponse], error) {
+	info, err := userService.GetUserServer().FetchActives(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
-	return &connect.Response[api.FetchUserActivesResponse]{
+	return &connect.Response[api.FetchActivesResponse]{
 		Msg: info,
 	}, nil
 }

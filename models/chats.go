@@ -156,3 +156,66 @@ func GetChatMessageBySender(ctx context.Context, chatContextID, userID int64, pa
 	}
 	return chatMessages, int(total), nil
 }
+
+// 根据用户的id获取消息
+func GetChatMessageByUserID(ctx context.Context, userID int64, page, size int) ([]*ChatMessage, int, error) {
+	var chatMessages []*ChatMessage
+	err := DataBase().Where("user_id = ?", userID).
+		WithContext(ctx).
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&chatMessages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	err = DataBase().Model(&ChatMessage{}).
+		Where("user_id = ?", userID).
+		Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return chatMessages, int(total), nil
+}
+
+// 根角色的id获取消息
+func GetChatMessageByRoleID(ctx context.Context, roleID int64, page, size int) ([]*ChatMessage, int, error) {
+	var chatMessages []*ChatMessage
+	err := DataBase().Where("role_id = ?", roleID).
+		WithContext(ctx).
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&chatMessages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	err = DataBase().Model(&ChatMessage{}).
+		Where("role_id = ?", roleID).
+		Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return chatMessages, int(total), nil
+}
+
+// 根据chat_context_id获取批量的消息
+func GetChatMessageByChatContextIDBatch(ctx context.Context, chatContextID int64, page, size int) ([]*ChatMessage, int, error) {
+	var chatMessages []*ChatMessage
+	err := DataBase().Where("chat_context_id = ?", chatContextID).
+		WithContext(ctx).
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&chatMessages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	err = DataBase().Model(&ChatMessage{}).
+		Where("chat_context_id = ?", chatContextID).
+		Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return chatMessages, int(total), nil
+}

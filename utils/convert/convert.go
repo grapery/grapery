@@ -9,15 +9,6 @@ import (
 	"github.com/grapery/grapery/models"
 )
 
-func ConvertActiveToApiActiveInfo(ac *models.Active) *api.ActiveInfo {
-	return &api.ActiveInfo{
-		ActiveType:  ac.ActiveType,
-		User:        &api.UserInfo{UserId: int64(ac.UserId)},
-		ItemInfo:    &api.ItemInfo{},
-		ProjectInfo: &api.ProjectInfo{},
-	}
-}
-
 func ConvertUserToApiUser(user *models.User) *api.UserInfo {
 	return &api.UserInfo{
 		UserId:   int64(user.ID),

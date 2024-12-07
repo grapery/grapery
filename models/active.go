@@ -25,6 +25,20 @@ func (a Active) TableName() string {
 	return "active"
 }
 
+type ActiveList []*Active
+
+func (a ActiveList) Len() int {
+	return len(a)
+}
+
+func (a ActiveList) Less(i, j int) bool {
+	return a[i].CreateAt.Unix() > a[j].CreateAt.Unix()
+}
+
+func (a ActiveList) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
 func (a *Active) Create() error {
 	if err := DataBase().Model(Active{}).Create(a).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("create new active [%d] failed : [%s]", a.ID, err.Error()))
@@ -155,4 +169,70 @@ func GetActiveByStoryRoleID(storyRoleID int64) (*[]*Active, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// 按时间倒序获取用户关注的小组的活动
+func GetActiveByFollowingGroupID(userID int64, groupIds []int64, page, pageSize int) (*[]*Active, int64, error) {
+	var ret = new([]*Active)
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and group_id in (?) and delete = 0", userID, groupIds).
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at desc").
+		Scan(ret).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following group [%v] active failed ", userID, groupIds))
+		return nil, 0, err
+	}
+	var total int64
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and group_id in (?) and delete = 0", userID, groupIds).
+		Count(&total).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following group [%v] active count failed ", userID, groupIds))
+		return nil, 0, err
+	}
+	return ret, total, nil
+}
+
+// 按时间倒序获取用户关注的故事的活动
+func GetActiveByFollowingStoryID(userID int64, storyIds []int64, page, pageSize int) (*[]*Active, int64, error) {
+	var ret = new([]*Active)
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and story_id in (?) and delete = 0", userID, storyIds).
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at desc").
+		Scan(ret).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story [%v] active failed ", userID, storyIds))
+		return nil, 0, err
+	}
+	var total int64
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and story_id in (?) and delete = 0", userID, storyIds).
+		Count(&total).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story [%v] active count failed ", userID, storyIds))
+		return nil, 0, err
+	}
+	return ret, total, nil
+}
+
+// 按时间倒序获取用户关注的故事角色的活动
+func GetActiveByFollowingStoryRoleID(userID int64, storyRoleIds []int64, page, pageSize int) (*[]*Active, int64, error) {
+	var ret = new([]*Active)
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and story_role_id in (?) and delete = 0", userID, storyRoleIds).
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at desc").
+		Scan(ret).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story role [%v] active failed ", userID, storyRoleIds))
+		return nil, 0, err
+	}
+	var total int64
+	if err := DataBase().Model(Active{}).
+		Where("user_id = ? and story_role_id in (?) and delete = 0", userID, storyRoleIds).
+		Count(&total).Error; err != nil {
+		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story role [%v] active count failed ", userID, storyRoleIds))
+		return nil, 0, err
+	}
+	return ret, total, nil
 }

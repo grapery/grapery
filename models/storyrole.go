@@ -140,3 +140,27 @@ func IncreaseStoryRoleStoryboardNum(ctx context.Context, roleID int64, count int
 		WithContext(ctx).
 		Update("storyboard_num", gorm.Expr("storyboard_num + ?", count)).Error
 }
+
+func GetUserFollowedStoryRoleIds(ctx context.Context, userId int) ([]int64, error) {
+	var roleIds []int64
+	err := DataBase().Model(&WatchItem{}).
+		Select("distinct role_id").
+		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
+			userId, WatchItemTypeStoryRole, WatchTypeIsWatch).
+		Pluck("role_id", &roleIds).Error
+	if err != nil {
+		return nil, err
+	}
+	return roleIds, nil
+}
+
+// 根据角色ID列表获取角色列表
+func GetStoryRolesByIDs(ctx context.Context, roleIds []int64) ([]*StoryRole, error) {
+	var roles []*StoryRole
+	if err := DataBase().Model(&StoryRole{}).
+		Where("id in (?)", roleIds).
+		Find(&roles).Error; err != nil {
+		return nil, err
+	}
+	return roles, nil
+}

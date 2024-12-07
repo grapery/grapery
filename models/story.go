@@ -262,3 +262,29 @@ func GetUserCreatedRolesWithStoryId(ctx context.Context, userId int, storyId int
 	}
 	return roles, total, nil
 }
+
+func GetUserFollowedStoryIds(ctx context.Context, userId int) ([]int64, error) {
+	var storyIds []int64
+	err := DataBase().Model(&WatchItem{}).
+		Select("distinct story_id").
+		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
+			userId, WatchItemTypeStory, WatchTypeIsWatch).
+		Pluck("story_id", &storyIds).Error
+	if err != nil {
+		return nil, err
+	}
+	return storyIds, nil
+}
+
+// 根据故事id列表获取故事列表
+func GetStoriesByIDs(ctx context.Context, ids []int64) ([]*Story, error) {
+	var stories []*Story
+	err := DataBase().Model(&Story{}).
+		WithContext(ctx).
+		Where("id in (?)", ids).
+		Find(&stories).Error
+	if err != nil {
+		return nil, err
+	}
+	return stories, nil
+}

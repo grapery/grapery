@@ -387,6 +387,20 @@ func GetUserFollowedGroups(userID int, offset, number int) (list []*Group, total
 	return list, total, nil
 }
 
+func GetUserFollowedGroupIds(userID int) ([]int64, int64, error) {
+	groupIds := make([]int64, 0)
+	err := DataBase().Model(&WatchItem{}).
+		Select("distinct group_id").
+		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
+			userID, WatchItemTypeGroup, WatchTypeIsWatch).
+		Scan(&groupIds).
+		Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return groupIds, int64(len(groupIds)), nil
+}
+
 func GetGroupByName(name string, offset, number int) (groups []*Group, total int64, err error) {
 	groups = make([]*Group, 0)
 	err = DataBase().Model(Group{}).
@@ -405,6 +419,19 @@ func GetGroupByName(name string, offset, number int) (groups []*Group, total int
 		return nil, 0, err
 	}
 	return groups, total, nil
+}
+
+// 根据group id 列表获取group 列表
+func GetGroupsByIds(groupIds []int64) (groups []*Group, err error) {
+	groups = make([]*Group, 0)
+	err = DataBase().Model(Group{}).
+		Where("id in (?)", groupIds).
+		Scan(&groups).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return groups, nil
 }
 
 type GroupProfile struct {
