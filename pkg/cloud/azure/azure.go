@@ -74,9 +74,15 @@ type ChatMessage struct {
 func (c *AzureOpenAIClient) Chat(ctx context.Context, messages []ChatMessage) (string, error) {
 	chatMessages := make([]azopenai.ChatRequestMessageClassification, len(messages))
 	for i, msg := range messages {
-		chatMessages[i] = azopenai.ChatRequestMessageClassification{
-			Role:    msg.Role,
-			Content: msg.Content,
+		switch msg.Role {
+		case "user":
+			chatMessages[i] = &azopenai.ChatRequestUserMessage{}
+		case "assistant":
+			chatMessages[i] = &azopenai.ChatRequestAssistantMessage{}
+		case "system":
+			chatMessages[i] = &azopenai.ChatRequestSystemMessage{}
+		default:
+			return "", fmt.Errorf("unsupported role: %s", msg.Role)
 		}
 	}
 
@@ -116,7 +122,7 @@ func (c *AzureOpenAIClient) CreateFineTune(ctx context.Context, config FineTuneM
 	}
 
 	// Create fine-tuning job
-	resp, err := c.client.CreateFineTuningJob(ctx, azopenai.FineTuningJobOptions{
+	resp, err := c.client.GetFineTuningJobs(ctx, azopenai.FineTuningJobOptions{
 		TrainingData: content,
 		Model:        to.Ptr(config.ModelName),
 		Hyperparameters: &azopenai.FineTuningJobHyperparameters{

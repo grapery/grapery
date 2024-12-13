@@ -95,6 +95,7 @@ type ChatMessage struct {
 	NeedRender    int64  `json:"is_need_render,omitempty"`
 	Prompt        string `json:"prompt,omitempty"`
 	AfterRender   string `json:"after_render,omitempty"`
+	UUID          string `json:"uuid,omitempty"`
 }
 
 func (c ChatMessage) TableName() string {

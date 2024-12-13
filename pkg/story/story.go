@@ -2331,12 +2331,48 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 		chatMessage.Status = 1
 		chatMessage.RoleID = int64(message.GetRoleId())
 		chatMessage.Sender = int64(message.GetSender())
+		chatMessage.UUID = message.GetUuid()
 		err = models.CreateChatMessage(ctx, chatMessage)
 		if err != nil {
 			log.Log().Error("create story role chat message failed", zap.Error(err))
 			return nil, err
 		}
 		reply = append(reply, convert.ConvertChatMessageToApiChatMessage(chatMessage))
+		{
+			roleInfo, err := models.GetStoryRoleByID(ctx, int64(message.GetRoleId()))
+			if err != nil {
+				log.Log().Error("get story role by id failed", zap.Error(err))
+				return nil, err
+			}
+			var chatParams = &client.ChatWithRoleParams{
+				MessageContent: message.GetMessage(),
+				Background:     roleInfo.CharacterDescription,
+				SenseDesc:      "", // sence
+				RolePositive:   "", // 角色的描述
+				RoleNegative:   "",
+				RequestId:      message.GetUuid(),
+				UserId:         fmt.Sprintf("grapery_chat_ctx_%d_user_%d", chatCtx.ID, chatCtx.UserID),
+			}
+			chatResp, err := s.client.ChatWithRole(ctx, chatParams)
+			if err != nil {
+				log.Log().Error("chat with role failed", zap.Error(err))
+				return nil, err
+			}
+			roleReplyMessage := new(models.ChatMessage)
+			roleReplyMessage.ChatContextID = int64(chatCtx.ID)
+			roleReplyMessage.UserID = int64(message.GetUserId())
+			roleReplyMessage.Content = chatResp.Content
+			roleReplyMessage.Status = 1
+			roleReplyMessage.RoleID = int64(message.GetRoleId())
+			roleReplyMessage.Sender = int64(message.GetRoleId())
+			roleReplyMessage.UUID = message.GetUuid()
+			err = models.CreateChatMessage(ctx, roleReplyMessage)
+			if err != nil {
+				log.Log().Error("create story role chat message failed", zap.Error(err))
+				return nil, err
+			}
+			reply = append(reply, convert.ConvertChatMessageToApiChatMessage(roleReplyMessage))
+		}
 	}
 	return &api.ChatWithStoryRoleResponse{
 		Code:          0,

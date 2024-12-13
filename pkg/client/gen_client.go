@@ -26,6 +26,9 @@ const (
 // openai
 // metric_order
 // zhipu
+// keling
+// tencent
+// step
 const (
 	PlatformAzure       = 1
 	PlatformGoogle      = 2
@@ -34,6 +37,9 @@ const (
 	PlatformOpenAI      = 5
 	PlatformMetricOrder = 6
 	PlatformZhipu       = 7
+	PlatformKeling      = 8
+	PlatformTencent     = 9
+	PlatformStep        = 10
 )
 
 type StoryClient struct {
@@ -185,5 +191,46 @@ func (c *StoryClient) GenStoryPeopleCharactor(ctx context.Context, params *GenSt
 	resData, _ := json.Marshal(res)
 	fmt.Println("chat respnse: ", string(resData))
 	ret.Content = completeMessage
+	return ret, nil
+}
+
+type ChatWithRoleParams struct {
+	Role           string `json:"role"`
+	MessageContent string `json:"message_content"`
+	Background     string `json:"background"`
+	SenseDesc      string `json:"sense_desc"`
+	RolePositive   string `json:"role_positive"`
+	RoleNegative   string `json:"role_negative"`
+	RequestId      string `json:"request_id"`
+	UserId         string `json:"user_id"`
+}
+
+type ChatWithRoleResult struct {
+	Content string `json:"content"`
+}
+
+func (c *StoryClient) ChatWithRole(ctx context.Context, params *ChatWithRoleParams) (*ChatWithRoleResult, error) {
+	ret := &ChatWithRoleResult{}
+	chatService := c.Client.ChatCompletion("charglm-4")
+	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
+		Role:    "user",
+		Content: params.MessageContent,
+	}).
+		SetUserID(params.UserId).
+		SetRequestID(params.RequestId).
+		SetModel("charglm-4")
+	roleContent := fmt.Sprintf("角色描述：%s", params.Background)
+	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
+		Role:    "system",
+		Content: roleContent,
+	})
+	res, err := chatService.Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resData, _ := json.Marshal(res)
+	fmt.Println("ChatWithRole chat respnse: ", string(resData))
+	ret.Content = res.Choices[0].Message.Content
+	fmt.Printf("ChatWithRole chat respnse: %+v\n", res.Choices[0].Message)
 	return ret, nil
 }
