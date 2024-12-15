@@ -17,7 +17,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/grapery/common-protoc/gen v0.0.0-20241212010237-23cb14e3875b
+	github.com/grapery/common-protoc/gen v0.0.0-20241215113727-9baabe828620
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
 	github.com/jinzhu/copier v0.4.0
@@ -32,7 +32,7 @@ require (
 	golang.org/x/crypto v0.30.0
 	golang.org/x/net v0.32.0
 	google.golang.org/api v0.210.0
-	google.golang.org/grpc v1.68.1
+	google.golang.org/grpc v1.69.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
@@ -46,7 +46,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.5.2 // indirect
 	cloud.google.com/go/longrunning v0.6.3 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/boj/redistore v0.0.0-20180917114910-cd5dcc76aeff // indirect
 	github.com/bytedance/sonic v1.12.5 // indirect
