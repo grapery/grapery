@@ -2303,7 +2303,7 @@ func (s *StoryService) CreateStoryRoleChat(ctx context.Context, req *api.CreateS
 
 // 角色聊天
 func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithStoryRoleRequest) (*api.ChatWithStoryRoleResponse, error) {
-	chatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.Messages[0].GetUserId()), int64(req.Messages[0].GetRoleId()))
+	chatCtx, err := models.GetChatContextByUserIDAndRoleID(ctx, int64(req.GetUserId()), int64(req.GetRoleId()))
 	if err != nil && err != gorm.ErrRecordNotFound {
 		log.Log().Error("get user chat context failed", zap.Error(err))
 		return nil, err
@@ -2311,8 +2311,8 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 	if err == gorm.ErrRecordNotFound {
 		// 创建聊天上下文
 		chatCtx = new(models.ChatContext)
-		chatCtx.UserID = int64(req.Messages[0].GetUserId())
-		chatCtx.RoleID = int64(req.Messages[0].GetRoleId())
+		chatCtx.UserID = int64(req.GetUserId())
+		chatCtx.RoleID = int64(req.GetRoleId())
 		chatCtx.Title = "聊天消息"
 		chatCtx.Content = ""
 		chatCtx.Status = 1
@@ -2322,6 +2322,7 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 			return nil, err
 		}
 	}
+	fmt.Println("ChatWithStoryRole req ", req.String())
 	reply := make([]*api.ChatMessage, 0)
 	for _, message := range req.Messages {
 		chatMessage := new(models.ChatMessage)
@@ -2339,7 +2340,7 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 		}
 		reply = append(reply, convert.ConvertChatMessageToApiChatMessage(chatMessage))
 		{
-			roleInfo, err := models.GetStoryRoleByID(ctx, int64(message.GetRoleId()))
+			roleInfo, err := models.GetStoryRoleByID(ctx, int64(req.GetRoleId()))
 			if err != nil {
 				log.Log().Error("get story role by id failed", zap.Error(err))
 				return nil, err
@@ -2392,6 +2393,9 @@ func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.Get
 	_ = total
 	apiChatCtxs := make([]*api.ChatContext, 0)
 	for _, chatCtx := range chatCtxs {
+		if chatCtx.UserID == 0 || chatCtx.RoleID == 0 {
+			continue
+		}
 		user, err := models.GetUserById(ctx, int64(chatCtx.UserID))
 		if err != nil {
 			log.Log().Error("get user by id failed", zap.Error(err))
