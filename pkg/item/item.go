@@ -48,12 +48,16 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 	}
 	if len(list) != 0 {
 		return &api.GetProjectItemsResponse{
-			GroupId:   req.GetGroupId(),
-			ProjectId: req.GetProjectId(),
-			UserId:    req.GetUserId(),
-			List:      nil,
-			PageSize:  0,
-			Offset:    req.GetOffset(),
+			Code: 0,
+			Msg:  "success",
+			Data: &api.GetProjectItemsResponse_Data{
+				GroupId:   req.GetGroupId(),
+				ProjectId: req.GetProjectId(),
+				UserId:    req.GetUserId(),
+				List:      nil,
+				PageSize:  0,
+				Offset:    req.GetOffset(),
+			},
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -67,12 +71,16 @@ func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectI
 		result = append(result, item)
 	}
 	return &api.GetProjectItemsResponse{
-		GroupId:   req.GetGroupId(),
-		ProjectId: req.GetProjectId(),
-		UserId:    req.GetUserId(),
-		List:      result,
-		PageSize:  int64(len(result)),
-		Offset:    req.GetOffset() + int64(len(result)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetProjectItemsResponse_Data{
+			GroupId:   req.GetGroupId(),
+			ProjectId: req.GetProjectId(),
+			UserId:    req.GetUserId(),
+			List:      result,
+			PageSize:  int64(len(result)),
+			Offset:    req.GetOffset() + int64(len(result)),
+		},
 	}, nil
 }
 
@@ -86,11 +94,15 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 	}
 	if len(list) != 0 {
 		return &api.GetGroupItemsResponse{
-			GroupId:  req.GetGroupId(),
-			UserId:   req.GetUserId(),
-			List:     nil,
-			PageSize: 0,
-			Offset:   req.GetOffset(),
+			Code: 0,
+			Msg:  "success",
+			Data: &api.GetGroupItemsResponse_Data{
+				GroupId:  req.GetGroupId(),
+				UserId:   req.GetUserId(),
+				List:     nil,
+				PageSize: 0,
+				Offset:   req.GetOffset(),
+			},
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -104,11 +116,15 @@ func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItems
 		result = append(result, item)
 	}
 	return &api.GetGroupItemsResponse{
-		GroupId:  req.GetGroupId(),
-		UserId:   req.GetUserId(),
-		List:     result,
-		PageSize: int64(len(result)),
-		Offset:   req.GetOffset() + int64(len(result)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetGroupItemsResponse_Data{
+			GroupId:  req.GetGroupId(),
+			UserId:   req.GetUserId(),
+			List:     result,
+			PageSize: int64(len(result)),
+			Offset:   req.GetOffset() + int64(len(result)),
+		},
 	}, nil
 }
 
@@ -122,10 +138,14 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 	}
 	if len(list) == 0 {
 		return &api.GetUserItemsResponse{
-			UserId:   req.GetUserId(),
-			List:     nil,
-			PageSize: 0,
-			Offset:   req.GetOffset(),
+			Code: 0,
+			Msg:  "success",
+			Data: &api.GetUserItemsResponse_Data{
+				UserId:   req.GetUserId(),
+				List:     nil,
+				PageSize: 0,
+				Offset:   req.GetOffset(),
+			},
 		}, nil
 	}
 	result := make([]*api.ItemInfo, 0, len(list))
@@ -139,10 +159,14 @@ func (it *ItemService) GetUserItems(ctx context.Context, req *api.GetUserItemsRe
 		result = append(result, item)
 	}
 	return &api.GetUserItemsResponse{
-		UserId:   req.GetUserId(),
-		List:     result,
-		PageSize: int64(len(result)),
-		Offset:   req.GetOffset() + int64(len(result)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetUserItemsResponse_Data{
+			UserId:   req.GetUserId(),
+			List:     result,
+			PageSize: int64(len(result)),
+			Offset:   req.GetOffset() + int64(len(result)),
+		},
 	}, nil
 }
 
@@ -152,7 +176,11 @@ func (it *ItemService) GetItem(ctx context.Context, req *api.GetItemRequest) (re
 		return nil, err
 	}
 	return &api.GetItemResponse{
-		Info: convert.ConvertItemToInfo(item),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetItemResponse_Data{
+			Info: convert.ConvertItemToInfo(item),
+		},
 	}, nil
 }
 

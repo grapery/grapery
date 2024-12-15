@@ -95,6 +95,7 @@ type StoryServer interface {
 	GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error)
 	GetUserChatWithRole(ctx context.Context, req *api.GetUserChatWithRoleRequest) (*api.GetUserChatWithRoleResponse, error)
 	GetUserChatMessages(ctx context.Context, req *api.GetUserChatMessagesRequest) (*api.GetUserChatMessagesResponse, error)
+	GetNextStoryboard(ctx context.Context, req *api.GetNextStoryboardRequest) (*api.GetNextStoryboardResponse, error)
 }
 
 type StoryService struct {
@@ -469,7 +470,7 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 		Message: "OK",
 		Data: &api.GetStoryboardsResponse_Data{
 			List:  datas,
-			Total: int32(len(datas)),
+			Total: int64(len(datas)),
 		},
 	}, nil
 }
@@ -2596,4 +2597,8 @@ func (s *StoryService) GetUserChatMessages(ctx context.Context, req *api.GetUser
 		Total:     int64(total),
 		Messages:  apiChatMsgs,
 	}, nil
+}
+
+func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextStoryboardRequest) (*api.GetNextStoryboardResponse, error) {
+	return nil, nil
 }

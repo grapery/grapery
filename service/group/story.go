@@ -760,3 +760,11 @@ func (ts *StoryService) GetUserChatMessages(ctx context.Context, req *connect.Re
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (ts *StoryService) GetNextStoryboard(ctx context.Context, req *connect.Request[gen.GetNextStoryboardRequest]) (*connect.Response[gen.GetNextStoryboardResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetNextStoryboard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

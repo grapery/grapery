@@ -173,7 +173,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ret.Code = 1
-	ret.Token = resp.Msg.GetToken()
+	ret.Token = resp.Msg.GetData().GetToken()
 	resultData, _ := json.Marshal(ret)
 	w.Header().Add("Content-Type", "application/json")
 	w.Header().Add("Cookie", "token="+ret.Token)
@@ -213,8 +213,12 @@ func (ts *AuthService) Login(ctx context.Context, req *connect.Request[api.Login
 		return nil, err
 	}
 	ret := &api.LoginResponse{
-		UserId: info.GetUserId(),
-		Token:  token,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.LoginResponse_Data{
+			UserId: info.GetUserId(),
+			Token:  token,
+		},
 	}
 	return &connect.Response[api.LoginResponse]{Msg: ret}, nil
 }

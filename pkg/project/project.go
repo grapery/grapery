@@ -57,7 +57,11 @@ func (p *ProjectService) GetProjectInfo(ctx context.Context, req *api.GetProject
 	}
 	log.Log().Info("get project success", zap.String("project_name", project.Name))
 	return &api.GetProjectResponse{
-		Info: convert.ConvertProjectToApiProjectInfo(project),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetProjectResponse_Data{
+			Info: convert.ConvertProjectToApiProjectInfo(project),
+		},
 	}, nil
 }
 
@@ -73,8 +77,12 @@ func (p *ProjectService) GetProjectList(ctx context.Context, req *api.GetProject
 	}
 	log.Log().Info("get project list success", zap.Int("project_num", len(tempList)))
 	return &api.GetProjectListResponse{
-		List:   tempList,
-		Offset: req.GetOffset() + int64(len(tempList)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.GetProjectListResponse_Data{
+			List:   tempList,
+			Offset: req.GetOffset() + int64(len(tempList)),
+		},
 	}, nil
 }
 
@@ -95,7 +103,11 @@ func (p *ProjectService) CreateProject(ctx context.Context, req *api.CreateProje
 	}
 	log.Log().Info("create project success", zap.String("project_name", project.Name))
 	return &api.CreateProjectResponse{
-		Info: convert.ConvertProjectToApiProjectInfo(project),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.CreateProjectResponse_Data{
+			Info: convert.ConvertProjectToApiProjectInfo(project),
+		},
 	}, nil
 }
 func (p *ProjectService) UpdateProject(ctx context.Context, req *api.UpdateProjectRequest) (resp *api.UpdateProjectResponse, err error) {
@@ -135,17 +147,18 @@ func (p *ProjectService) GetProjectProfile(ctx context.Context, req *api.GetProj
 		return nil, err
 	}
 	resp = new(api.GetProjectProfileResponse)
-	resp.GroupId = req.GetGroupId()
-	resp.ProjectId = req.GetProjectId()
-	resp.UserId = req.UserId
-	resp.Info = &api.ProjectProfileInfo{
-		ProjectId:   req.GetProjectId(),
-		GroupId:     int32(req.GetGroupId()),
-		Description: project.Description,
-		Avatar:      project.Avatar,
-		ScopeType:   project.Visable,
-		IsAchieve:   project.IsAchieve,
-		IsClose:     project.IsClose,
+	resp.Code = 0
+	resp.Msg = "success"
+	resp.Data = &api.GetProjectProfileResponse_Data{
+		Info: &api.ProjectProfileInfo{
+			ProjectId:   req.GetProjectId(),
+			GroupId:     int32(req.GetGroupId()),
+			Description: project.Description,
+			Avatar:      project.Avatar,
+			ScopeType:   project.Visable,
+			IsAchieve:   project.IsAchieve,
+			IsClose:     project.IsClose,
+		},
 	}
 	log.Log().Info("get project profile success", zap.String("project_name", project.Name))
 	return resp, nil
@@ -193,9 +206,12 @@ func (p *ProjectService) ExploreProjects(ctx context.Context, req *api.ExplorePr
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.ExploreProjectsResponse{
-		List:     infoList,
-		PageSize: int64(len(infoList)),
-		Offset:   int64(len(infoList)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.ExploreProjectsResponse_Data{
+			List:   infoList,
+			Offset: int64(len(infoList)),
+		},
 	}, nil
 }
 
@@ -209,10 +225,14 @@ func (p *ProjectService) SearchGroupProject(ctx context.Context, req *api.Search
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.SearchProjectResponse{
-		GroupId:  req.GetGroupId(),
-		List:     infoList,
-		PageSize: int64(len(infoList)),
-		Offset:   int64(len(infoList)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.SearchProjectResponse_Data{
+			GroupId:  req.GetGroupId(),
+			List:     infoList,
+			Offset:   int64(len(infoList)),
+			PageSize: int64(len(infoList)),
+		},
 	}, nil
 }
 
@@ -226,9 +246,13 @@ func (p *ProjectService) SearchProject(ctx context.Context, req *api.SearchAllPr
 		infoList = append(infoList, convert.ConvertProjectToApiProjectInfo(val))
 	}
 	return &api.SearchAllProjectResponse{
-		List:     infoList,
-		PageSize: int64(len(infoList)),
-		Offset:   int64(len(infoList)),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.SearchAllProjectResponse_Data{
+			List:     infoList,
+			Offset:   int64(len(infoList)),
+			PageSize: int64(len(infoList)),
+		},
 	}, nil
 }
 

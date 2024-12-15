@@ -58,16 +58,20 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 			return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
 		}
 		return &api.UserInitResponse{
-			UserId: req.GetUserId(),
-			List: []*api.GroupInfo{
-				{
-					GroupId: int64(defaultGroup.ID),
-					Name:    defaultGroup.Name,
-					Avatar:  defaultGroup.Avatar,
-					Desc:    defaultGroup.Gtype,
-					Creator: req.GetUserId(),
-					Ctime:   defaultGroup.CreateAt.Unix(),
-					Mtime:   defaultGroup.UpdateAt.Unix(),
+			Code: 0,
+			Msg:  "success",
+			Data: &api.UserInitResponse_Data{
+				UserId: req.GetUserId(),
+				List: []*api.GroupInfo{
+					{
+						GroupId: int64(defaultGroup.ID),
+						Name:    defaultGroup.Name,
+						Avatar:  defaultGroup.Avatar,
+						Desc:    defaultGroup.Gtype,
+						Creator: req.GetUserId(),
+						Ctime:   defaultGroup.CreateAt.Unix(),
+						Mtime:   defaultGroup.UpdateAt.Unix(),
+					},
 				},
 			},
 		}, nil
@@ -83,16 +87,20 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 		return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
 	}
 	return &api.UserInitResponse{
-		UserId: req.GetUserId(),
-		List: []*api.GroupInfo{
-			{
-				GroupId: int64(defaultGroup.ID),
-				Name:    defaultGroup.Name,
-				Avatar:  defaultGroup.Avatar,
-				Desc:    defaultGroup.Gtype,
-				Creator: req.GetUserId(),
-				Ctime:   defaultGroup.CreateAt.Unix(),
-				Mtime:   defaultGroup.UpdateAt.Unix(),
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UserInitResponse_Data{
+			UserId: req.GetUserId(),
+			List: []*api.GroupInfo{
+				{
+					GroupId: int64(defaultGroup.ID),
+					Name:    defaultGroup.Name,
+					Avatar:  defaultGroup.Avatar,
+					Desc:    defaultGroup.Gtype,
+					Creator: req.GetUserId(),
+					Ctime:   defaultGroup.CreateAt.Unix(),
+					Mtime:   defaultGroup.UpdateAt.Unix(),
+				},
 			},
 		},
 	}, nil
@@ -107,14 +115,18 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 		return nil, err
 	}
 	return &api.UserInfoResponse{
-		Info: &api.UserInfo{
-			UserId:   int64(u.ID),
-			Name:     u.Name,
-			Avatar:   u.Avatar,
-			Email:    u.Email,
-			Location: u.Location,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UserInfoResponse_Data{
+			Info: &api.UserInfo{
+				UserId:   int64(u.ID),
+				Name:     u.Name,
+				Avatar:   u.Avatar,
+				Email:    u.Email,
+				Location: u.Location,
+			},
 		},
-	}, err
+	}, nil
 }
 
 func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAvatorRequest) (
@@ -128,14 +140,18 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 		return nil, err
 	}
 	return &api.UpdateUserAvatorResponse{
-		Info: &api.UserInfo{
-			UserId:   int64(u.ID),
-			Name:     u.Name,
-			Avatar:   u.Avatar,
-			Email:    u.Email,
-			Location: u.Location,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UpdateUserAvatorResponse_Data{
+			Info: &api.UserInfo{
+				UserId:   int64(u.ID),
+				Name:     u.Name,
+				Avatar:   u.Avatar,
+				Email:    u.Email,
+				Location: u.Location,
+			},
 		},
-	}, err
+	}, nil
 }
 
 func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
@@ -167,7 +183,11 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		groups[idx].Creator = info.UserId
 	}
 	return &api.UserGroupResponse{
-		List: groups,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UserGroupResponse_Data{
+			List: groups,
+		},
 	}, nil
 }
 func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
@@ -201,7 +221,11 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		groups[idx].Creator = info.GetUserId()
 	}
 	return &api.UserFollowingGroupResponse{
-		List: groups,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UserFollowingGroupResponse_Data{
+			List: groups,
+		},
 	}, nil
 }
 
@@ -367,8 +391,12 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	}
 
 	return &api.FetchActivesResponse{
-		List:      apiActives,
-		Timestamp: lasttimeStamp,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.FetchActivesResponse_Data{
+			List:      apiActives,
+			Timestamp: lasttimeStamp,
+		},
 	}, nil
 }
 
@@ -408,7 +436,11 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		projects[idx].Creator = info.GetUserId()
 	}
 	return &api.UserWatchingResponse{
-		List: projects,
+		Code: 0,
+		Msg:  "success",
+		Data: &api.UserWatchingResponse_Data{
+			List: projects,
+		},
 	}, nil
 }
 
@@ -423,7 +455,9 @@ func (user *UserService) GetUserProfile(ctx context.Context, req *api.GetUserPro
 		return nil, err
 	}
 	return &api.GetUserProfileResponse{
-		Info: convertModelUserProfileToApi(profile),
+		Code:    0,
+		Message: "success",
+		Info:    convertModelUserProfileToApi(profile),
 	}, nil
 }
 
