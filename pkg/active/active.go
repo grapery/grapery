@@ -63,12 +63,11 @@ func (ts *ActiveService) WriteGroupActive(ctx context.Context, group *models.Gro
 // 写入故事活动
 func (ts *ActiveService) WriteStoryActive(ctx context.Context, group *models.Group, story *models.Story, boards *models.StoryBoard, role *models.StoryRole, userId int64, activeType api.ActiveType) error {
 	activeItem := &models.Active{
-		UserId:       userId,
-		ActiveType:   activeType,
-		GroupId:      int64(group.ID),
-		StoryId:      int64(story.ID),
-		StoryBoardId: int64(boards.ID),
-		Status:       1,
+		UserId:     userId,
+		ActiveType: activeType,
+		GroupId:    int64(group.ID),
+		StoryId:    int64(story.ID),
+		Status:     1,
 	}
 	switch activeType {
 	case api.ActiveType_NewStory:

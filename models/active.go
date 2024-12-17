@@ -40,6 +40,8 @@ func (a ActiveList) Swap(i, j int) {
 }
 
 func (a *Active) Create() error {
+	a.CreateAt = time.Now()
+	a.UpdateAt = time.Now()
 	if err := DataBase().Model(Active{}).Create(a).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("create new active [%d] failed : [%s]", a.ID, err.Error()))
 		return fmt.Errorf("create new active [%d] failed: %s", a.ID, err.Error())
