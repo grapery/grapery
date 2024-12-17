@@ -15,6 +15,7 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/pkg/client"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/compliance"
@@ -180,6 +181,12 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 	} else {
 		req.Params.NegativePrompt = models.NegativePrompt
 	}
+	group := &models.Group{}
+	group.ID = uint(req.GroupId)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	}
 	params, _ := json.Marshal(req.Params)
 	newStory := &models.Story{
 		Title:       req.Title,
@@ -203,6 +210,8 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 			Data:    nil,
 		}, nil
 	}
+	newStory.ID = uint(storyId)
+	active.GetActiveServer().WriteStoryActive(ctx, group, newStory, nil, nil, req.GetCreatorId(), api.ActiveType_NewStory)
 	return &api.CreateStoryResponse{
 		Code:    0,
 		Message: "create story success",
@@ -269,6 +278,7 @@ func (s *StoryService) UpdateStory(ctx context.Context, req *api.UpdateStoryRequ
 }
 
 func (s *StoryService) WatchStory(ctx context.Context, req *api.WatchStoryRequest) (resp *api.WatchStoryResponse, err error) {
+
 	storyInfo, err := models.GetStory(ctx, req.StoryId)
 	if err != nil {
 		return nil, err
@@ -282,6 +292,14 @@ func (s *StoryService) WatchStory(ctx context.Context, req *api.WatchStoryReques
 	})
 	if err != nil {
 		return nil, err
+	}
+	group := &models.Group{}
+	group.ID = uint(storyInfo.GroupID)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	} else {
+		active.GetActiveServer().WriteStoryActive(ctx, group, storyInfo, nil, nil, req.UserId, api.ActiveType_FollowStory)
 	}
 	return &api.WatchStoryResponse{
 		Code:    0,
@@ -360,6 +378,7 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 	if err != nil {
 		return nil, err
 	}
+	newStroyBoard.ID = uint(storyBoardId)
 	if storyInfo.RootBoardID == 0 {
 		err = models.UpdateStorySpecColumns(ctx, req.Board.StoryId, map[string]interface{}{
 			"root_board_id": storyBoardId,
@@ -367,6 +386,15 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 		if err != nil {
 			return nil, err
 		}
+	}
+	group := &models.Group{}
+	group.ID = uint(storyInfo.GroupID)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	} else {
+		active.GetActiveServer().WriteStoryActive(ctx, group, storyInfo, newStroyBoard,
+			nil, req.GetBoard().GetCreator(), api.ActiveType_NewStoryBoard)
 	}
 	return &api.CreateStoryboardResponse{
 		Code:    0,
@@ -531,10 +559,27 @@ func (s *StoryService) ForkStoryboard(ctx context.Context, req *api.ForkStoryboa
 		log.Log().Error("unmarshal origin story board failed", zap.Error(err))
 		return nil, err
 	}
-	id, err := models.CreateStoryBoard(ctx, originStoryBoard)
+	newStoryBoard.ID = 0
+	newStoryBoard.CreatorID = req.GetUserId()
+	newStoryBoard.CreateAt = time.Now()
+	newStoryBoard.UpdateAt = time.Now()
+	id, err := models.CreateStoryBoard(ctx, newStoryBoard)
 	if err != nil {
 		log.Log().Error("create new story board failed", zap.Error(err))
 		return nil, err
+	}
+	story, err := models.GetStory(ctx, originStoryBoard.StoryID)
+	if err != nil {
+		return nil, err
+	}
+	group := &models.Group{}
+	group.ID = uint(story.GroupID)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	} else {
+		active.GetActiveServer().WriteStoryActive(ctx, group, story, newStoryBoard,
+			nil, req.GetUserId(), api.ActiveType_ForkStory)
 	}
 	resp = &api.ForkStoryboardResponse{
 		Code:    0,
@@ -553,6 +598,23 @@ func (s *StoryService) LikeStoryboard(ctx context.Context, req *api.LikeStoryboa
 	if err != nil {
 		log.Log().Error("create like item failed", zap.Error(err))
 		return nil, err
+	}
+	storyBoard, err := models.GetStoryboard(ctx, req.BoardId)
+	if err != nil {
+		return nil, err
+	}
+	story, err := models.GetStory(ctx, storyBoard.StoryID)
+	if err != nil {
+		return nil, err
+	}
+	group := &models.Group{}
+	group.ID = uint(story.GroupID)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	} else {
+		active.GetActiveServer().WriteStoryActive(ctx, group, story, storyBoard,
+			nil, req.GetUserId(), api.ActiveType_LikeStory)
 	}
 	resp = &api.LikeStoryboardResponse{
 		Code:    0,
@@ -1505,6 +1567,14 @@ func (s *StoryService) LikeStory(ctx context.Context, req *api.LikeStoryRequest)
 	err = models.UpdateStory(ctx, story)
 	if err != nil {
 		return nil, err
+	}
+	group := &models.Group{}
+	group.ID = uint(story.GroupID)
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	} else {
+		active.GetActiveServer().WriteStoryActive(ctx, group, story, nil, nil, req.UserId, api.ActiveType_LikeStory)
 	}
 	return &api.LikeStoryResponse{
 		Code:    0,

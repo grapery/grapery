@@ -9,6 +9,7 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
 )
@@ -276,6 +277,12 @@ func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGro
 }
 
 func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error) {
+	group := &models.Group{}
+	group.ID = uint(req.GetGroupId())
+	err = group.GetByID()
+	if err != nil {
+		return nil, err
+	}
 	groupMember := &models.GroupMember{
 		GroupID: req.GetGroupId(),
 		UserID:  req.GetUserId(),
@@ -295,11 +302,12 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 	if err != nil {
 		return nil, err
 	}
+
+	active.GetActiveServer().WriteGroupActive(ctx, group, nil, nil, req.GetUserId(), api.ActiveType_JoinGroup)
 	return &api.JoinGroupResponse{}, nil
 }
 
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
-	// group 包含 资源（project），处理组（teams）,退出组的话，teams也会同时停止使用
 	groupMember := &models.GroupMember{
 		GroupID: int64(req.GetGroupId()),
 		UserID:  req.GetUserId(),

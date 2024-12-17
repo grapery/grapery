@@ -252,8 +252,8 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetTimestamp() <= 0 {
 		return nil, fmt.Errorf("invalid timestamp")
 	}
-	if req.GetAtype() > api.ActiveType_LikeGroup || req.GetAtype() < api.ActiveType_AllActive {
-		return nil, fmt.Errorf("invalid active type")
+	if req.GetAtype() > api.ActiveFlowType_GroupFlowType || req.GetAtype() < api.ActiveFlowType_AllFlowType {
+		return nil, fmt.Errorf("invalid active type %d", req.GetAtype())
 	}
 	var (
 		groupIds, storyIds, roleIds []int64
@@ -263,23 +263,27 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		roleMap                     = make(map[int64]*models.StoryRole)
 		lasttimeStamp               = req.GetTimestamp()
 	)
-	if req.GetAtype() == api.ActiveType_FollowGroup {
-		groupIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
-		if err != nil {
-			return nil, err
-		}
-	}
-	if req.GetAtype() == api.ActiveType_FollowStory {
-		storyIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
+	if req.GetAtype() == api.ActiveFlowType_GroupFlowType {
+		groupIds, _, err = models.GetUserFollowedGroupIds(ctx, int(req.GetUserId()))
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	roleIds, _, err = models.GetUserFollowedGroupIds(int(req.GetUserId()))
-	if err != nil {
-		return nil, err
+	if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
+		storyIds, err = models.GetUserFollowedStoryIds(ctx, int(req.GetUserId()))
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
+		roleIds, err = models.GetUserFollowedStoryRoleIds(ctx, int(req.GetUserId()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// TODO: fetch user actives
 	apiActives := make([]*api.ActiveInfo, 0)
 	allActives := make([]*models.Active, 0)
@@ -349,7 +353,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	sort.Sort(models.ActiveList(allActives))
 	for _, active := range allActives {
 		apiActive := &api.ActiveInfo{}
-		if req.GetAtype() == api.ActiveType_FollowGroup {
+		if req.GetAtype() == api.ActiveFlowType_GroupFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowGroup
 			apiActive.GroupInfo = &api.GroupInfo{
 				GroupId: active.GroupId,
@@ -360,7 +364,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				Owner:   groupMap[active.GroupId].OwnerID,
 			}
 		}
-		if req.GetAtype() == api.ActiveType_FollowStory {
+		if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowStory
 			apiActive.StoryInfo = &api.Story{
 				Id:     active.StoryId,
@@ -369,7 +373,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				Desc:   storyMap[active.StoryId].ShortDesc,
 			}
 		}
-		if req.GetAtype() == api.ActiveType_FollowRole {
+		if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowRole
 			apiActive.RoleInfo = &api.StoryRole{
 				RoleId:               active.StoryRoleId,
@@ -396,6 +400,8 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		Data: &api.FetchActivesResponse_Data{
 			List:      apiActives,
 			Timestamp: lasttimeStamp,
+			PageSize:  int64(req.GetPageSize()),
+			Offset:    int64(req.GetOffset()),
 		},
 	}, nil
 }

@@ -196,10 +196,11 @@ func GetUserByName(ctx context.Context, name string) (*User, error) {
 
 type UserProfile struct {
 	IDBase
-	UserId         int64 `json:"user_id,omitempty"`
-	NumGroup       int   `json:"num_group,omitempty"`
-	DefaultGroupID int64 `json:"default_group_id,omitempty"`
-	MinSameGroup   int   `json:"min_same_group,omitempty"`
+	UserId         int64  `json:"user_id,omitempty"`
+	Background     string `json:"background,omitempty"`
+	NumGroup       int    `json:"num_group,omitempty"`
+	DefaultGroupID int64  `json:"default_group_id,omitempty"`
+	MinSameGroup   int    `json:"min_same_group,omitempty"`
 
 	Limit      int `json:"limit,omitempty"`
 	UsedTokens int `json:"used_tokens,omitempty"`

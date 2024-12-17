@@ -52,48 +52,72 @@ func (e *ElasticGroup) SetLastUsedTime(int64) {
 
 }
 
-type ElasticProject struct {
-	*models.Project
+type ElasticStory struct {
+	*models.Story
 }
 
-func (e *ElasticProject) Index() string {
+func (e *ElasticStory) Index() string {
 	return e.TableName()
 }
 
-func (e *ElasticProject) Type() string {
+func (e *ElasticStory) Type() string {
 	return ""
 }
-func (e *ElasticProject) ElasticID() string {
+func (e *ElasticStory) ElasticID() string {
 	return ""
 }
 
-func (e *ElasticProject) LastUsedTime() int64 {
+func (e *ElasticStory) LastUsedTime() int64 {
 	return 0
 }
 
-func (e *ElasticProject) SetLastUsedTime(int64) {
+func (e *ElasticStory) SetLastUsedTime(int64) {
 
 }
 
-type ElasticItem struct {
-	*models.StoryItem
+type ElasticStoryBoard struct {
+	*models.StoryBoard
 }
 
-func (e *ElasticItem) Index() string {
+func (e *ElasticStoryBoard) Index() string {
 	return e.TableName()
 }
 
-func (e *ElasticItem) Type() string {
+func (e *ElasticStoryBoard) Type() string {
 	return ""
 }
-func (e *ElasticItem) ElasticID() string {
+func (e *ElasticStoryBoard) ElasticID() string {
 	return ""
 }
 
-func (e *ElasticItem) LastUsedTime() int64 {
+func (e *ElasticStoryBoard) LastUsedTime() int64 {
 	return 0
 }
 
-func (e *ElasticItem) SetLastUsedTime(int64) {
+func (e *ElasticStoryBoard) SetLastUsedTime(int64) {
+
+}
+
+type ElasticStoryBoardRole struct {
+	*models.StoryBoardRole
+}
+
+func (e *ElasticStoryBoardRole) Index() string {
+	return e.TableName()
+}
+
+func (e *ElasticStoryBoardRole) Type() string {
+	return ""
+}
+
+func (e *ElasticStoryBoardRole) ElasticID() string {
+	return ""
+}
+
+func (e *ElasticStoryBoardRole) LastUsedTime() int64 {
+	return 0
+}
+
+func (e *ElasticStoryBoardRole) SetLastUsedTime(int64) {
 
 }

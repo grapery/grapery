@@ -107,15 +107,22 @@ func GetMultiDocByIds(ctx context.Context, esDoc ElasticDoc, IDList []string) (r
 				return nil, err
 			}
 			results[ret.ElasticID()] = ret
-		case *ElasticProject:
-			var ret = new(ElasticProject)
+		case *ElasticStory:
+			var ret = new(ElasticStory)
 			err = json.Unmarshal(*doc.Source, ret)
 			if err != nil {
 				return nil, err
 			}
 			results[ret.ElasticID()] = ret
-		case *ElasticItem:
-			var ret = new(ElasticItem)
+		case *ElasticStoryBoard:
+			var ret = new(ElasticStoryBoard)
+			err = json.Unmarshal(*doc.Source, ret)
+			if err != nil {
+				return nil, err
+			}
+			results[ret.ElasticID()] = ret
+		case *ElasticStoryBoardRole:
+			var ret = new(ElasticStoryBoardRole)
 			err = json.Unmarshal(*doc.Source, ret)
 			if err != nil {
 				return nil, err
