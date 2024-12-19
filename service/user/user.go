@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 
 	"connectrpc.com/connect"
@@ -71,8 +72,10 @@ func (ts *UserService) UserUpdate(ctx context.Context, req *connect.Request[api.
 func (ts *UserService) FetchActives(ctx context.Context, req *connect.Request[api.FetchActivesRequest]) (*connect.Response[api.FetchActivesResponse], error) {
 	info, err := userService.GetUserServer().FetchActives(ctx, req.Msg)
 	if err != nil {
+		log.Println("FetchActives error", err)
 		return nil, err
 	}
+	log.Println("FetchActives success", info.String())
 	return &connect.Response[api.FetchActivesResponse]{
 		Msg: info,
 	}, nil

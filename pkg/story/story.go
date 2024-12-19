@@ -210,6 +210,11 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 			Data:    nil,
 		}, nil
 	}
+
+	err = models.CreateWatchStoryItem(ctx, int(req.CreatorId), int64(storyId), int64(group.ID))
+	if err != nil {
+		log.Log().Error("watch story failed", zap.Error(err))
+	}
 	newStory.ID = uint(storyId)
 	active.GetActiveServer().WriteStoryActive(ctx, group, newStory, nil, nil, req.GetCreatorId(), api.ActiveType_NewStory)
 	return &api.CreateStoryResponse{
@@ -2039,7 +2044,12 @@ func (s *StoryService) UnLikeStoryRole(ctx context.Context, req *api.UnLikeStory
 }
 
 func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStoryRoleRequest) (*api.FollowStoryRoleResponse, error) {
-	err := models.WatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		log.Log().Error("get story failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.WatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId(), story.GroupID)
 	if err != nil {
 		log.Log().Error("follow story role failed", zap.Error(err))
 		return nil, err
@@ -2056,7 +2066,12 @@ func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStory
 }
 
 func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowStoryRoleRequest) (*api.UnFollowStoryRoleResponse, error) {
-	err := models.UnWatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		log.Log().Error("get story failed", zap.Error(err))
+		return nil, err
+	}
+	err = models.UnWatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId(), story.GroupID)
 	if err != nil {
 		log.Log().Error("unfollow story role failed", zap.Error(err))
 		return nil, err
@@ -2254,6 +2269,11 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.Status = 1
 	_, err = models.CreateStoryRole(ctx, newRole)
 	if err != nil {
+		return nil, err
+	}
+	err = models.CreateWatchStoryItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(story.GroupID))
+	if err != nil {
+		log.Log().Error("create watch story item failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.CreateStoryRoleResponse{

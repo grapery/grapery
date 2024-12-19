@@ -246,11 +246,9 @@ func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequ
 func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActivesRequest) (
 	*api.FetchActivesResponse, error) {
 	// TODO: fetch user actives
+	log.Println("FetchActives req: ", req.String())
 	if req.GetUserId() <= 0 {
 		return nil, fmt.Errorf("invalid user id")
-	}
-	if req.GetTimestamp() <= 0 {
-		return nil, fmt.Errorf("invalid timestamp")
 	}
 	if req.GetAtype() > api.ActiveFlowType_GroupFlowType || req.GetAtype() < api.ActiveFlowType_AllFlowType {
 		return nil, fmt.Errorf("invalid active type %d", req.GetAtype())

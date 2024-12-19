@@ -88,9 +88,6 @@ func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Hea
 	header.Set("auth.sub", jwtInfo.SecretKey)
 	header.Set(utils.UserIdKey, fmt.Sprintf("%d", tokenInfo.UID))
 	// ------------------------------
-	params := header.Clone()
-	headerData, _ := json.Marshal(params)
-	println("WithRequestLogInterceptor method: ", spec.Procedure, " params: ", string(headerData))
 	aData, _ := json.Marshal(a)
 	println("WithRequestLogInterceptor method: ", spec.Procedure, " a: ", string(aData))
 	// ------------------------------
@@ -98,9 +95,6 @@ func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Hea
 }
 
 func WithRequestLogInterceptor(ctx context.Context, spec connect.Spec, header http.Header, a any) error {
-	params := header.Clone()
-	headerData, _ := json.Marshal(params)
-	println("WithRequestLogInterceptor method: ", spec.Procedure, " params: ", string(headerData))
 	aData := a.([]byte)
 	println("WithRequestLogInterceptor method: ", spec.Procedure, " a: ", string(aData))
 	return nil

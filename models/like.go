@@ -273,11 +273,11 @@ func GetWatchItemByUser(ctx context.Context, userID int) (list []*WatchItem, err
 	return list, nil
 }
 
-func CreateWatchStoryItem(ctx context.Context, item *WatchItem) error {
+func CreateWatchStoryItem(ctx context.Context, userId int, storyId int64, groupId int64) error {
 	var num int64
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and story_id = ?",
-			item.UserID, item.StoryID).
+			userId, storyId).
 		Count(&num).Error
 	if err != nil {
 		log.Error("create WatchItem failed: ", err)
@@ -287,7 +287,13 @@ func CreateWatchStoryItem(ctx context.Context, item *WatchItem) error {
 		log.Info("WatchItem already exist")
 		return nil
 	}
-	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(item).Error
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
+		UserID:        int64(userId),
+		StoryID:       storyId,
+		GroupID:       groupId,
+		WatchType:     WatchTypeIsWatch,
+		WatchItemType: WatchItemTypeStory,
+	}).Error
 	if err != nil {
 		log.Errorf("create WatchItem failed: %s", err.Error())
 		return err
@@ -295,11 +301,19 @@ func CreateWatchStoryItem(ctx context.Context, item *WatchItem) error {
 	return nil
 }
 
-func CreateWatchGroupItem(ctx context.Context, item *WatchItem) error {
+func UnWatchStoryItem(ctx context.Context, userId int, storyId int64) error {
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("user_id = ? and story_id = ?",
+			userId, storyId).
+		Update("deleted = ?", 1).Error
+	return err
+}
+
+func CreateWatchGroupItem(ctx context.Context, userId int, groupId int64) error {
 	var num int64
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and group_id = ?",
-			item.UserID, item.GroupID).
+			userId, groupId).
 		Count(&num).Error
 	if err != nil {
 		log.Error("create WatchItem failed: ", err)
@@ -309,7 +323,12 @@ func CreateWatchGroupItem(ctx context.Context, item *WatchItem) error {
 		log.Info("WatchItem already exist")
 		return nil
 	}
-	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(item).Error
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
+		UserID:        int64(userId),
+		GroupID:       groupId,
+		WatchType:     WatchTypeIsWatch,
+		WatchItemType: WatchItemTypeGroup,
+	}).Error
 	if err != nil {
 		log.Errorf("create WatchItem failed: %s", err.Error())
 		return err
@@ -317,11 +336,19 @@ func CreateWatchGroupItem(ctx context.Context, item *WatchItem) error {
 	return nil
 }
 
-func CreateWatchRoleItem(ctx context.Context, item *WatchItem) error {
+func UnWatchGroupItem(ctx context.Context, userId int, groupId int64) error {
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("user_id = ? and group_id = ?",
+			userId, groupId).
+		Update("deleted = ?", 1).Error
+	return err
+}
+
+func CreateWatchRoleItem(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
 	var num int64
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and role_id = ?",
-			item.UserID, item.RoleID).
+			userId, roleId).
 		Count(&num).Error
 	if err != nil {
 		log.Error("create WatchItem failed: ", err)
@@ -331,7 +358,14 @@ func CreateWatchRoleItem(ctx context.Context, item *WatchItem) error {
 		log.Info("WatchItem already exist")
 		return nil
 	}
-	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(item).Error
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
+		UserID:        int64(userId),
+		GroupID:       groupId,
+		StoryID:       storyId,
+		RoleID:        roleId,
+		WatchType:     WatchTypeIsWatch,
+		WatchItemType: WatchItemTypeStoryRole,
+	}).Error
 	if err != nil {
 		log.Errorf("create WatchItem failed: %s", err.Error())
 		return err
@@ -339,20 +373,10 @@ func CreateWatchRoleItem(ctx context.Context, item *WatchItem) error {
 	return nil
 }
 
-func UnWatchItem(ctx context.Context, itemID int64) error {
-	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
-		Update("deleted= ? ", 1).
-		Where("id = ?", itemID).Error
-	if err != nil {
-		log.Error("update watch item failed: ", err)
-		return err
-	}
-	return nil
-}
-
-func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
 		UserID:        int64(userId),
+		GroupID:       groupId,
 		StoryID:       storyId,
 		RoleID:        roleId,
 		WatchType:     WatchTypeIsWatch,
@@ -361,10 +385,10 @@ func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64
 	return err
 }
 
-func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
+func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
-		Where("user_id = ? and story_id = ? and role_id = ?",
-			userId, storyId, roleId).
+		Where("user_id = ? and story_id = ? and role_id = ? and group_id = ?",
+			userId, storyId, roleId, groupId).
 		Update("deleted = ?", 1).Error
 	return err
 }
