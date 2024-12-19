@@ -353,6 +353,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	sort.Sort(models.ActiveList(allActives))
 	for _, active := range allActives {
 		apiActive := &api.ActiveInfo{}
+		apiActive.ActiveId = int64(active.ID)
 		if req.GetAtype() == api.ActiveFlowType_GroupFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowGroup
 			apiActive.GroupInfo = &api.GroupInfo{
@@ -362,15 +363,19 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				Desc:    groupMap[active.GroupId].ShortDesc,
 				Creator: groupMap[active.GroupId].CreatorID,
 				Owner:   groupMap[active.GroupId].OwnerID,
+				Ctime:   groupMap[active.GroupId].CreateAt.Unix(),
+				Mtime:   groupMap[active.GroupId].UpdateAt.Unix(),
 			}
 		}
 		if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowStory
 			apiActive.StoryInfo = &api.Story{
-				Id:     active.StoryId,
+				Id:     int64(active.StoryId),
 				Name:   storyMap[active.StoryId].Name,
 				Avatar: storyMap[active.StoryId].Avatar,
 				Desc:   storyMap[active.StoryId].ShortDesc,
+				Ctime:  storyMap[active.StoryId].CreateAt.Unix(),
+				Mtime:  storyMap[active.StoryId].UpdateAt.Unix(),
 			}
 		}
 		if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
