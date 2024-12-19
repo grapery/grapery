@@ -198,8 +198,8 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 		AIGen:       req.GetIsAiGen(),
 		CreatorID:   req.CreatorId,
 		Params:      string(params),
-		FollowCount: 0,
-		LikeCount:   0,
+		FollowCount: 1,
+		LikeCount:   1,
 	}
 	storyId, err := models.CreateStory(ctx, newStory)
 	if err != nil {
@@ -598,12 +598,6 @@ func (s *StoryService) ForkStoryboard(ctx context.Context, req *api.ForkStoryboa
 }
 
 func (s *StoryService) LikeStoryboard(ctx context.Context, req *api.LikeStoryboardRequest) (resp *api.LikeStoryboardResponse, err error) {
-	item := new(models.LikeItem)
-	err = models.CreateLikeStoryBoardItem(ctx, item)
-	if err != nil {
-		log.Log().Error("create like item failed", zap.Error(err))
-		return nil, err
-	}
 	storyBoard, err := models.GetStoryboard(ctx, req.BoardId)
 	if err != nil {
 		return nil, err
@@ -612,6 +606,19 @@ func (s *StoryService) LikeStoryboard(ctx context.Context, req *api.LikeStoryboa
 	if err != nil {
 		return nil, err
 	}
+	item := new(models.LikeItem)
+	item.UserID = req.GetUserId()
+	item.GroupID = int64(story.GroupID)
+	item.StoryID = req.GetStoryId()
+	item.StoryboardId = req.GetBoardId()
+	item.LikeItemType = models.LikeItemTypeStoryboard
+	item.LikeType = models.LikeTypeLike
+	err = models.CreateLikeStoryBoardItem(ctx, item)
+	if err != nil {
+		log.Log().Error("create like item failed", zap.Error(err))
+		return nil, err
+	}
+
 	group := &models.Group{}
 	group.ID = uint(story.GroupID)
 	err = group.GetByID()
@@ -1598,6 +1605,16 @@ func (s *StoryService) UnLikeStory(ctx context.Context, req *api.UnLikeStoryRequ
 			Message: "not liked",
 		}, nil
 	}
+	// 更新故事的点赞数
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	story.LikeCount = story.LikeCount - 1
+	err = models.UpdateStory(ctx, story)
+	if err != nil {
+		return nil, err
+	}
 	err = models.DeleteLikeItem(ctx, int64(likeItem.ID))
 	if err != nil {
 		return nil, err
@@ -2266,6 +2283,8 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.CharacterType = req.GetRole().GetCharacterType()
 	newRole.CharacterPrompt = req.GetRole().GetCharacterPrompt()
 	newRole.CharacterRefImages = strings.Join(req.GetRole().GetCharacterRefImages(), ",")
+	newRole.FollowCount = 1
+	newRole.LikeCount = 1
 	newRole.Status = 1
 	_, err = models.CreateStoryRole(ctx, newRole)
 	if err != nil {

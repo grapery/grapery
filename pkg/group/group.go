@@ -155,6 +155,10 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 	if err != nil {
 		return nil, err
 	}
+	err = models.CreateWatchGroupItem(ctx, int(group.CreatorID), int64(group.ID))
+	if err != nil {
+		log.Info("create watch group item failed: ", err.Error())
+	}
 	return &api.CreateGroupResponse{
 		Code:    0,
 		Message: "ok",
