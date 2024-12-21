@@ -266,6 +266,18 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		if err != nil {
 			return nil, err
 		}
+		if len(groupIds) == 0 {
+			return &api.FetchActivesResponse{
+				Code: 0,
+				Msg:  "success",
+				Data: &api.FetchActivesResponse_Data{
+					List:      nil,
+					Timestamp: lasttimeStamp,
+					PageSize:  int64(req.GetPageSize()),
+					Offset:    int64(req.GetOffset()),
+				},
+			}, nil
+		}
 	}
 
 	if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
@@ -273,12 +285,36 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		if err != nil {
 			return nil, err
 		}
+		if len(storyIds) == 0 {
+			return &api.FetchActivesResponse{
+				Code: 0,
+				Msg:  "success",
+				Data: &api.FetchActivesResponse_Data{
+					List:      nil,
+					Timestamp: lasttimeStamp,
+					PageSize:  int64(req.GetPageSize()),
+					Offset:    int64(req.GetOffset()),
+				},
+			}, nil
+		}
 	}
 
 	if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
 		roleIds, err = models.GetUserFollowedStoryRoleIds(ctx, int(req.GetUserId()))
 		if err != nil {
 			return nil, err
+		}
+		if len(roleIds) == 0 {
+			return &api.FetchActivesResponse{
+				Code: 0,
+				Msg:  "success",
+				Data: &api.FetchActivesResponse_Data{
+					List:      nil,
+					Timestamp: lasttimeStamp,
+					PageSize:  int64(req.GetPageSize()),
+					Offset:    int64(req.GetOffset()),
+				},
+			}, nil
 		}
 	}
 
