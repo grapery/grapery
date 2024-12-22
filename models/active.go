@@ -70,7 +70,7 @@ func (a *Active) Delete() error {
 func GetActiveByUserID(userID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and delete = 0", userID).
+		Where("user_id = ? and deleted = 0", userID).
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] active failed ", userID))
 		return nil, err
@@ -82,7 +82,7 @@ func GetActiveByUserID(userID int64) (*[]*Active, error) {
 func GetActiveListByTimeRange(start time.Time, end time.Time) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("created_at < ? and  created_at > ? and delete = 0", end, start).
+		Where("created_at < ? and  created_at > ? and deleted = 0", end, start).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).
@@ -97,7 +97,7 @@ func GetActiveListByActiveType(creatorID int64, activeType uint) (*[]*Active, er
 	var ret = new([]*Active)
 	if err := DataBase().
 		Model(Active{}).
-		Where("creator_id = ? and active_type = ? and delete = 0", creatorID, activeType).
+		Where("creator_id = ? and active_type = ? and deleted = 0", creatorID, activeType).
 		Order("created_at desc").
 		Scan(ret).
 		Error; err != nil {
@@ -112,7 +112,7 @@ func GetActiveListByActiveType(creatorID int64, activeType uint) (*[]*Active, er
 func GetActiveByGroupID(groupID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("group_id = ? and delete = 0", groupID).
+		Where("group_id = ? and deleted = 0", groupID).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get group [%d] active failed ", groupID))
@@ -125,7 +125,7 @@ func GetActiveByGroupID(groupID int64) (*[]*Active, error) {
 func GetActiveByStoryID(storyID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("story_id = ? and delete = 0", storyID).
+		Where("story_id = ? and deleted = 0", storyID).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get story [%d] active failed ", storyID))
@@ -138,7 +138,7 @@ func GetActiveByStoryID(storyID int64) (*[]*Active, error) {
 func GetActiveByStoryBoardID(storyBoardID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("storyboard_id = ? and delete = 0", storyBoardID).
+		Where("storyboard_id = ? and deleted = 0", storyBoardID).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get storyboard [%d] active failed ", storyBoardID))
@@ -151,7 +151,7 @@ func GetActiveByStoryBoardID(storyBoardID int64) (*[]*Active, error) {
 func GetActiveByStoryBoardSceneID(storyBoardSceneID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("storyboard_scene_id = ? and delete = 0", storyBoardSceneID).
+		Where("storyboard_scene_id = ? and deleted = 0", storyBoardSceneID).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get storyboard scene [%d] active failed ", storyBoardSceneID))
@@ -164,7 +164,7 @@ func GetActiveByStoryBoardSceneID(storyBoardSceneID int64) (*[]*Active, error) {
 func GetActiveByStoryRoleID(storyRoleID int64) (*[]*Active, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("story_role_id = ? and delete = 0", storyRoleID).
+		Where("story_role_id = ? and deleted = 0", storyRoleID).
 		Order("created_at desc").
 		Scan(ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get story role [%d] active failed ", storyRoleID))
@@ -174,20 +174,20 @@ func GetActiveByStoryRoleID(storyRoleID int64) (*[]*Active, error) {
 }
 
 // 按时间倒序获取用户关注的小组的活动
-func GetActiveByFollowingGroupID(userID int64, groupIds []int64, page, pageSize int) (*[]*Active, int64, error) {
-	var ret = new([]*Active)
+func GetActiveByFollowingGroupID(userID int64, groupIds []int64, page, pageSize int) ([]*Active, int64, error) {
+	var ret = make([]*Active, 0)
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and group_id in (?) and delete = 0", userID, groupIds).
+		Where("user_id = ? and group_id in (?) and deleted = 0", userID, groupIds).
+		Order("create_at desc").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
-		Order("created_at desc").
-		Scan(ret).Error; err != nil {
+		Find(&ret).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following group [%v] active failed ", userID, groupIds))
 		return nil, 0, err
 	}
 	var total int64
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and group_id in (?) and delete = 0", userID, groupIds).
+		Where("user_id = ? and group_id in (?) and deleted = 0", userID, groupIds).
 		Count(&total).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following group [%v] active count failed ", userID, groupIds))
 		return nil, 0, err
@@ -199,7 +199,7 @@ func GetActiveByFollowingGroupID(userID int64, groupIds []int64, page, pageSize 
 func GetActiveByFollowingStoryID(userID int64, storyIds []int64, page, pageSize int) (*[]*Active, int64, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and story_id in (?) and delete = 0", userID, storyIds).
+		Where("user_id = ? and story_id in (?) and deleted = 0", userID, storyIds).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Order("created_at desc").
@@ -209,7 +209,7 @@ func GetActiveByFollowingStoryID(userID int64, storyIds []int64, page, pageSize 
 	}
 	var total int64
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and story_id in (?) and delete = 0", userID, storyIds).
+		Where("user_id = ? and story_id in (?) and deleted = 0", userID, storyIds).
 		Count(&total).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story [%v] active count failed ", userID, storyIds))
 		return nil, 0, err
@@ -221,7 +221,7 @@ func GetActiveByFollowingStoryID(userID int64, storyIds []int64, page, pageSize 
 func GetActiveByFollowingStoryRoleID(userID int64, storyRoleIds []int64, page, pageSize int) (*[]*Active, int64, error) {
 	var ret = new([]*Active)
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and story_role_id in (?) and delete = 0", userID, storyRoleIds).
+		Where("user_id = ? and story_role_id in (?) and deleted = 0", userID, storyRoleIds).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Order("created_at desc").
@@ -231,7 +231,7 @@ func GetActiveByFollowingStoryRoleID(userID int64, storyRoleIds []int64, page, p
 	}
 	var total int64
 	if err := DataBase().Model(Active{}).
-		Where("user_id = ? and story_role_id in (?) and delete = 0", userID, storyRoleIds).
+		Where("user_id = ? and story_role_id in (?) and deleted = 0", userID, storyRoleIds).
 		Count(&total).Error; err != nil {
 		log.Log().WithOptions(logFieldModels).Error(fmt.Sprintf("get user [%d] following story role [%v] active count failed ", userID, storyRoleIds))
 		return nil, 0, err

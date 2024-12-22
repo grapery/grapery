@@ -75,10 +75,7 @@ func (ts *UserService) FetchActives(ctx context.Context, req *connect.Request[ap
 		log.Println("FetchActives error", err)
 		return nil, err
 	}
-	log.Println("FetchActives success", info.String())
-	return &connect.Response[api.FetchActivesResponse]{
-		Msg: info,
-	}, nil
+	return connect.NewResponse(info), nil
 }
 func (ts *UserService) SearchUser(ctx context.Context, req *connect.Request[api.SearchUserRequest]) (*connect.Response[api.SearchUserResponse], error) {
 	info, err := userService.GetUserServer().SearchUser(ctx, req.Msg)
@@ -95,9 +92,7 @@ func (ts *UserService) UpdateUserAvator(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	return &connect.Response[api.UpdateUserAvatorResponse]{
-		Msg: info,
-	}, nil
+	return connect.NewResponse(info), nil
 }
 func (ts *UserService) UserInfo(ctx context.Context, req *connect.Request[api.UserInfoRequest]) (*connect.Response[api.UserInfoResponse], error) {
 	uidTemp := req.Header().Get(utils.UserIdKey)

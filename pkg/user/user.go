@@ -264,9 +264,11 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_GroupFlowType {
 		groupIds, _, err = models.GetUserFollowedGroupIds(ctx, int(req.GetUserId()))
 		if err != nil {
+			log.Errorf("get user [%d] followed group ids failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		if len(groupIds) == 0 {
+			log.Infof("user [%d] has no followed group", req.GetUserId())
 			return &api.FetchActivesResponse{
 				Code: 0,
 				Msg:  "success",
@@ -283,9 +285,11 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
 		storyIds, err = models.GetUserFollowedStoryIds(ctx, int(req.GetUserId()))
 		if err != nil {
+			log.Errorf("get user [%d] followed story ids failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		if len(storyIds) == 0 {
+			log.Infof("user [%d] has no followed story", req.GetUserId())
 			return &api.FetchActivesResponse{
 				Code: 0,
 				Msg:  "success",
@@ -302,9 +306,11 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
 		roleIds, err = models.GetUserFollowedStoryRoleIds(ctx, int(req.GetUserId()))
 		if err != nil {
+			log.Errorf("get user [%d] followed story role ids failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		if len(roleIds) == 0 {
+			log.Infof("user [%d] has no followed story role", req.GetUserId())
 			return &api.FetchActivesResponse{
 				Code: 0,
 				Msg:  "success",
@@ -324,18 +330,20 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(groupIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingGroupID(req.GetUserId(), groupIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
+			log.Errorf("get user [%d] followed group actives failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
-		if len(*actives) != 0 {
-			allActives = append(allActives, *actives...)
+		if len(actives) != 0 {
+			allActives = append(allActives, actives...)
 		}
 		targetGroupIds := make([]int64, 0)
-		for _, active := range *actives {
+		for _, active := range actives {
 			groupMap[active.GroupId] = &models.Group{}
 			targetGroupIds = append(targetGroupIds, active.GroupId)
 		}
 		groups, err := models.GetGroupsByIds(targetGroupIds)
 		if err != nil {
+			log.Errorf("get user [%d] followed group failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		for _, group := range groups {
@@ -345,6 +353,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(storyIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingStoryID(req.GetUserId(), storyIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
+			log.Errorf("get user [%d] followed story actives failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		if len(*actives) != 0 {
@@ -357,6 +366,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
 		if err != nil {
+			log.Errorf("get user [%d] followed story failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		for _, story := range stories {
@@ -366,6 +376,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(roleIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingStoryRoleID(req.GetUserId(), roleIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
+			log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		if len(*actives) != 0 {
@@ -378,6 +389,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		roles, err := models.GetStoryRolesByIDs(ctx, targetStoryroleIds)
 		if err != nil {
+			log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
 			return nil, err
 		}
 		for _, role := range roles {
@@ -455,6 +467,7 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 	*api.UserWatchingResponse, error) {
 	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), 0, 10)
 	if err != nil {
+		log.Errorf("get user [%d] watching projects failed: %s", req.GetUserId(), err.Error())
 		return nil, err
 	}
 	var projects = make([]*api.ProjectInfo, 0, len(list))

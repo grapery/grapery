@@ -389,15 +389,17 @@ func GetUserFollowedGroups(userID int, offset, number int) (list []*Group, total
 
 func GetUserFollowedGroupIds(ctx context.Context, userID int) ([]int64, int64, error) {
 	groupIds := make([]int64, 0)
-	err := DataBase().Model(&WatchItem{}).WithContext(ctx).
+	err := DataBase().Model(&WatchItem{}).
 		Select("distinct group_id").
 		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
 			userID, WatchItemTypeGroup, WatchTypeIsWatch).
 		Scan(&groupIds).
 		Error
 	if err != nil {
+		log.Errorf("get user [%d] followed group ids failed: %s", userID, err.Error())
 		return nil, 0, err
 	}
+	log.Infof("get user [%d] followed group ids success: %v", userID, groupIds)
 	return groupIds, int64(len(groupIds)), nil
 }
 
