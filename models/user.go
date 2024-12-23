@@ -8,6 +8,7 @@ import (
 	_ "time"
 
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	api "github.com/grapery/common-protoc/gen"
 )
@@ -206,13 +207,20 @@ type UserProfile struct {
 	UsedTokens int `json:"used_tokens,omitempty"`
 	Status     int `json:"status,omitempty"`
 
-	CreatedGroupNum   int `json:"created_group_num,omitempty"`
-	CreatedStoryNum   int `json:"created_story_num,omitempty"`
-	CreatedRoleNum    int `json:"created_role_num,omitempty"`
-	WatchingStoryNum  int `json:"watching_story_num,omitempty"`
-	WatchingGroupNum  int `json:"watching_group_num,omitempty"`
+	CreatedGroupNum      int `json:"created_group_num,omitempty"`
+	CreatedStoryNum      int `json:"created_story_num,omitempty"`
+	CreatedRoleNum       int `json:"created_role_num,omitempty"`
+	CreatedBoardNum      int `json:"created_board_num,omitempty"`
+	CreatedGenNum        int `json:"created_gen_num,omitempty"`
+	WatchingStoryNum     int `json:"watching_story_num,omitempty"`
+	WatchingGroupNum     int `json:"watching_group_num,omitempty"`
+	WatchingStoryRoleNum int `json:"watching_story_role_num,omitempty"`
+
 	ContributStoryNum int `json:"contribut_story_num,omitempty"`
 	ContributRoleNum  int `json:"contribut_role_num,omitempty"`
+
+	LikedStoryNum int `json:"liked_story_num,omitempty"`
+	LikedRoleNum  int `json:"liked_role_num,omitempty"`
 }
 
 func (u *UserProfile) TableName() string {
@@ -257,4 +265,128 @@ func (u *UserProfile) GetByUserId() error {
 
 func (u *UserProfile) IsTokenFinished() bool {
 	return u.UsedTokens >= u.Limit
+}
+
+// ... existing UserProfile struct and methods ...
+
+// Increment methods
+func (u *UserProfile) IncrementCreatedGroupNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_group_num", gorm.Expr("created_group_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementCreatedStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_story_num", gorm.Expr("created_story_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementCreatedRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_role_num", gorm.Expr("created_role_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementCreatedBoardNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_board_num", gorm.Expr("created_board_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementCreatedGenNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_gen_num", gorm.Expr("created_gen_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementWatchingStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_story_num", gorm.Expr("watching_story_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementWatchingGroupNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_group_num", gorm.Expr("watching_group_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementWatchingStoryRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_story_role_num", gorm.Expr("watching_story_role_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementContributStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("contribut_story_num", gorm.Expr("contribut_story_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementContributRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("contribut_role_num", gorm.Expr("contribut_role_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementLikedStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("liked_story_num", gorm.Expr("liked_story_num + ?", 1)).Error
+}
+
+func (u *UserProfile) IncrementLikedRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("liked_role_num", gorm.Expr("liked_role_num + ?", 1)).Error
+}
+
+// Decrement methods
+func (u *UserProfile) DecrementCreatedGroupNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_group_num", gorm.Expr("created_group_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementCreatedStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_story_num", gorm.Expr("created_story_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementCreatedRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_role_num", gorm.Expr("created_role_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementCreatedBoardNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_board_num", gorm.Expr("created_board_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementCreatedGenNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("created_gen_num", gorm.Expr("created_gen_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementWatchingStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_story_num", gorm.Expr("watching_story_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementWatchingGroupNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_group_num", gorm.Expr("watching_group_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementWatchingStoryRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("watching_story_role_num", gorm.Expr("watching_story_role_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementContributStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("contribut_story_num", gorm.Expr("contribut_story_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementContributRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("contribut_role_num", gorm.Expr("contribut_role_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementLikedStoryNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("liked_story_num", gorm.Expr("liked_story_num - ?", 1)).Error
+}
+
+func (u *UserProfile) DecrementLikedRoleNum() error {
+	return DataBase().Model(u).Where("user_id = ?", u.UserId).
+		Update("liked_role_num", gorm.Expr("liked_role_num - ?", 1)).Error
 }

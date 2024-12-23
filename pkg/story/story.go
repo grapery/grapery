@@ -1148,7 +1148,40 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 }
 
 func (s *StoryService) GenStoryboardText(ctx context.Context, req *api.GenStoryboardTextRequest) (*api.GenStoryboardTextResponse, error) {
-	return &api.GenStoryboardTextResponse{}, nil
+	board, err := models.GetStoryboard(ctx, req.GetBoardId())
+	if err != nil {
+		return nil, err
+	}
+	story, err := models.GetStory(ctx, board.StoryID)
+	if err != nil {
+		return nil, err
+	}
+	if story.Status == -1 {
+		return &api.GenStoryboardTextResponse{
+			Code:    -1,
+			Message: "story is closed",
+		}, nil
+	}
+	storyGen, err := models.GetStoryGensByStoryBoard(ctx, req.GetBoardId(), 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(storyGen) == 0 {
+		return &api.GenStoryboardTextResponse{
+			Code:    -1,
+			Message: "storyboard is not rendering",
+		}, nil
+	}
+	storyGenContent, err := json.Marshal(storyGen[0].Content)
+	if err != nil {
+		return nil, err
+	}
+	_ = storyGenContent
+	return &api.GenStoryboardTextResponse{
+		Code:    0,
+		Message: "OK",
+		Data:    nil,
+	}, nil
 }
 
 func (s *StoryService) GetStoryRender(ctx context.Context, req *api.GetStoryRenderRequest) (*api.GetStoryRenderResponse, error) {
@@ -1381,6 +1414,22 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 }
 
 func (s *StoryService) RenderStoryRoles(ctx context.Context, req *api.RenderStoryRolesRequest) (*api.RenderStoryRolesResponse, error) {
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	if story.Status == -1 {
+		return &api.RenderStoryRolesResponse{
+			Code:    -1,
+			Message: "story is closed",
+		}, nil
+	}
+	roles, err := models.GetStoryRole(ctx, int64(story.ID))
+	if err != nil {
+		return nil, err
+	}
+	log.Log().Sugar().Infof("story [%d] roles: %v", story.ID, roles)
+
 	return &api.RenderStoryRolesResponse{
 		Code:    0,
 		Message: "OK",
@@ -1437,6 +1486,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		Message: "OK",
 	}, nil
 }
+
 func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRolesRequest) (*api.GetStoryRolesResponse, error) {
 	story, err := models.GetStory(ctx, req.GetStoryId())
 	if err != nil {
@@ -1474,6 +1524,7 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 		},
 	}, nil
 }
+
 func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStoryBoardRolesRequest) (*api.GetStoryBoardRolesResponse, error) {
 	board, err := models.GetStoryboard(ctx, req.GetBoardId())
 	if err != nil {
@@ -2166,35 +2217,136 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 		return resp, nil
 	}
 	if storyboard.Stage == int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED) {
-		resp.Code = -1
+		resp.Code = 0
 		resp.Message = "storyboard is already published"
 		return resp, nil
 	}
 	switch storyboard.Stage {
 	case int(api.StoryboardStage_STORYBOARD_STAGE_CREATED):
 		// 创建完故事剧情(故事板)，但是没有渲染剧情
+		board, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard failed", zap.Error(err))
+			return nil, err
+		}
+		resp.Store = &api.StoryboardStageStore{
+			Storyboard:     convert.ConvertStoryBoardToApiStoryBoard(board),
+			Stage:          api.StoryboardStage_STORYBOARD_STAGE_CREATED,
+			LastUpdateTime: board.UpdateAt.Unix(),
+			Version:        board.UpdateAt.Unix(),
+			UserId:         int64(board.CreatorID),
+		}
 	case int(api.StoryboardStage_STORYBOARD_STAGE_RENDERED):
-		// 创建完故事剧情，但是没有渲染场景
+		// 创建完故事剧情，但是没有生成图片,正常剧情渲染
+		board, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard failed", zap.Error(err))
+			return nil, err
+		}
+		resp.Store = &api.StoryboardStageStore{
+			Storyboard:     convert.ConvertStoryBoardToApiStoryBoard(board),
+			Stage:          api.StoryboardStage_STORYBOARD_STAGE_RENDERED,
+			LastUpdateTime: board.UpdateAt.Unix(),
+			Version:        board.UpdateAt.Unix(),
+			UserId:         int64(board.CreatorID),
+		}
 		sences, err := models.GetStoryBoardScenesByBoard(ctx, req.GetStoryboardId())
 		if err != nil {
 			log.Log().Error("get storyboard scenes failed", zap.Error(err))
 			return nil, err
 		}
-		if len(sences) < 0 {
-			resp.Code = -1
-			resp.Message = "storyboard has scenes"
+		if len(sences) == 0 {
+			resp.Code = 0
+			resp.Message = "storyboard has no scenes"
 			return resp, nil
 		}
+		var apiScenes []*api.StoryBoardSence
+		for _, scene := range sences {
+			apiScenes = append(apiScenes, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
+		}
+		resp.Store.Storyboard.Sences = &api.StoryBoardSences{
+			List: apiScenes,
+		}
+		resp.Store.Sences = &api.StoryBoardSences{
+			List:  apiScenes,
+			Total: int64(len(apiScenes)),
+		}
 	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_IMAGE):
-		// 创建完故事剧情以及场景，但是没有生成图片,正常剧情渲染
+		// 创建完故事剧情以及场景，已经渲染完图片，没有确认完成
+		board, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard failed", zap.Error(err))
+			return nil, err
+		}
+		resp.Store = &api.StoryboardStageStore{
+			Storyboard:     convert.ConvertStoryBoardToApiStoryBoard(board),
+			Stage:          api.StoryboardStage_STORYBOARD_STAGE_RENDERED,
+			LastUpdateTime: board.UpdateAt.Unix(),
+			Version:        board.UpdateAt.Unix(),
+			UserId:         int64(board.CreatorID),
+		}
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard scenes failed", zap.Error(err))
+			return nil, err
+		}
+		if len(sences) == 0 {
+			resp.Code = 0
+			resp.Message = "storyboard has no scenes"
+			return resp, nil
+		}
+		var apiScenes []*api.StoryBoardSence
+		for _, scene := range sences {
+			apiScenes = append(apiScenes, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
+		}
+		resp.Store.Storyboard.Sences = &api.StoryBoardSences{
+			List: apiScenes,
+		}
+		resp.Store.Sences = &api.StoryBoardSences{
+			List:  apiScenes,
+			Total: int64(len(apiScenes)),
+		}
 	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_VIDEO):
-		// 创建完故事剧情以及场景，但是没有生成音频，建议只有点赞高的、关注多的角色、付费用户使用
+		// 创建完故事剧情以及场景，但是没有生成视频，建议只有点赞高的、关注多的角色、付费用户使用
 	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_AUDIO):
 		// 创建完故事剧情以及场景，但是没有生成音频，建议只有旁白使用
 	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_TEXT):
 		// 创建完故事剧情，但是没有创建场景描述
 	case int(api.StoryboardStage_STORYBOARD_STAGE_FINISHED):
 		// 已经创建完所有，但是没有发布
+		board, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard failed", zap.Error(err))
+			return nil, err
+		}
+		resp.Store = &api.StoryboardStageStore{
+			Storyboard:     convert.ConvertStoryBoardToApiStoryBoard(board),
+			Stage:          api.StoryboardStage_STORYBOARD_STAGE_RENDERED,
+			LastUpdateTime: board.UpdateAt.Unix(),
+			Version:        board.UpdateAt.Unix(),
+			UserId:         int64(board.CreatorID),
+		}
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, req.GetStoryboardId())
+		if err != nil {
+			log.Log().Error("get storyboard scenes failed", zap.Error(err))
+			return nil, err
+		}
+		if len(sences) == 0 {
+			resp.Code = 0
+			resp.Message = "storyboard has no scenes"
+			return resp, nil
+		}
+		var apiScenes []*api.StoryBoardSence
+		for _, scene := range sences {
+			apiScenes = append(apiScenes, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
+		}
+		resp.Store.Storyboard.Sences = &api.StoryBoardSences{
+			List: apiScenes,
+		}
+		resp.Store.Sences = &api.StoryBoardSences{
+			List:  apiScenes,
+			Total: int64(len(apiScenes)),
+		}
 	}
 
 	return resp, nil
