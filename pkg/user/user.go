@@ -361,8 +361,8 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		targetStoryIds := make([]int64, 0)
 		for _, active := range *actives {
-			groupMap[active.GroupId] = &models.Group{}
-			targetStoryIds = append(targetStoryIds, active.GroupId)
+			storyMap[active.StoryId] = &models.Story{}
+			targetStoryIds = append(targetStoryIds, active.StoryId)
 		}
 		stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
 		if err != nil {
@@ -384,8 +384,8 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		targetStoryroleIds := make([]int64, 0)
 		for _, active := range *actives {
-			roleMap[active.GroupId] = &models.StoryRole{}
-			targetStoryroleIds = append(targetStoryroleIds, active.GroupId)
+			roleMap[active.StoryRoleId] = &models.StoryRole{}
+			targetStoryroleIds = append(targetStoryroleIds, active.StoryRoleId)
 		}
 		roles, err := models.GetStoryRolesByIDs(ctx, targetStoryroleIds)
 		if err != nil {
@@ -395,6 +395,28 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		for _, role := range roles {
 			roleMap[int64(role.ID)] = role
 		}
+	}
+	activeUsers := make(map[int64]*models.User)
+	userIds := make([]int64, 0)
+	for _, active := range allActives {
+		activeUsers[active.UserId] = &models.User{}
+		userIds = append(userIds, active.UserId)
+	}
+	users, err := models.GetUsersByIds(userIds)
+	if err != nil {
+		log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
+		return nil, err
+	}
+	if len(users) != 0 {
+		for _, user := range users {
+			activeUsers[int64(user.ID)] = user
+		}
+	} else {
+		log.Infof("user [%d] has no followed story role", req.GetUserId())
+		return &api.FetchActivesResponse{
+			Code: api.ResponseCode_USER_PROFILE_INCOMPLETE,
+			Msg:  "failed",
+		}, nil
 	}
 	sort.Sort(models.ActiveList(allActives))
 	for _, active := range allActives {
@@ -412,6 +434,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				Ctime:   groupMap[active.GroupId].CreateAt.Unix(),
 				Mtime:   groupMap[active.GroupId].UpdateAt.Unix(),
 			}
+			apiActive.User = &api.UserInfo{
+				UserId:   int64(activeUsers[active.UserId].ID),
+				Name:     activeUsers[active.UserId].Name,
+				Avatar:   activeUsers[active.UserId].Avatar,
+				Email:    activeUsers[active.UserId].Email,
+				Location: activeUsers[active.UserId].Location,
+			}
 		}
 		if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
 			apiActive.ActiveType = api.ActiveType_FollowStory
@@ -422,6 +451,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				Desc:   storyMap[active.StoryId].ShortDesc,
 				Ctime:  storyMap[active.StoryId].CreateAt.Unix(),
 				Mtime:  storyMap[active.StoryId].UpdateAt.Unix(),
+			}
+			apiActive.User = &api.UserInfo{
+				UserId:   int64(activeUsers[active.UserId].ID),
+				Name:     activeUsers[active.UserId].Name,
+				Avatar:   activeUsers[active.UserId].Avatar,
+				Email:    activeUsers[active.UserId].Email,
+				Location: activeUsers[active.UserId].Location,
 			}
 		}
 		if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
@@ -437,6 +473,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 				LikeCount:            roleMap[active.StoryRoleId].LikeCount,
 				FollowCount:          roleMap[active.StoryRoleId].FollowCount,
 				StoryboardNum:        roleMap[active.StoryRoleId].StoryboardNum,
+			}
+			apiActive.User = &api.UserInfo{
+				UserId:   int64(activeUsers[active.UserId].ID),
+				Name:     activeUsers[active.UserId].Name,
+				Avatar:   activeUsers[active.UserId].Avatar,
+				Email:    activeUsers[active.UserId].Email,
+				Location: activeUsers[active.UserId].Location,
 			}
 		}
 		apiActives = append(apiActives, apiActive)
