@@ -2861,5 +2861,38 @@ func (s *StoryService) GetUserChatMessages(ctx context.Context, req *api.GetUser
 }
 
 func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextStoryboardRequest) (*api.GetNextStoryboardResponse, error) {
-	return nil, nil
+	resp := &api.GetNextStoryboardResponse{}
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	if story.Status != 1 {
+		resp.Code = api.ResponseCode_STORY_ARCHIVED
+		resp.Message = api.ResponseCode_STORY_ARCHIVED.String()
+		return resp, nil
+	}
+	boards, err := models.GetStoryBoardByStoryAndPrevId(ctx,
+		req.GetStoryId(), req.GetStoryboardId(), int(req.GetOffset()),
+		int(req.GetPageSize()), req.GetOrderBy().String())
+	if err != nil {
+		return nil, err
+	}
+	if len(boards) == 0 {
+		resp.Code = 0
+		resp.Message = "OK"
+		resp.Offset = 0
+		resp.Storyboards = make([]*api.StoryBoard, 0)
+		resp.IsMultiBranch = true
+		return resp, nil
+	}
+	retBoards := make([]*api.StoryBoard, 0)
+	for _, board := range boards {
+		retBoards = append(retBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+	}
+	resp.Storyboards = retBoards
+	resp.IsMultiBranch = true
+	resp.Offset = 0
+	resp.Total = int64(len(boards))
+	resp.PageSize = int64(len(boards))
+	return resp, nil
 }

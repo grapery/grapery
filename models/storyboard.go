@@ -112,6 +112,31 @@ func GetStoryContributors(ctx context.Context, storyID int64) ([]*User, error) {
 	return contributors, nil
 }
 
+func GetStoryBoardByStoryAndPrevId(ctx context.Context, storyID int64, prevId int64, page int, pageSize int, orderBy string) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	query := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("story_id = ? and prev_id = ? and status >= 0", storyID, prevId)
+
+	if orderBy != "" {
+		if orderBy == "create_at" {
+			query = query.Order("create_at desc")
+		} else if orderBy == "update_at" {
+			query = query.Order("update_at desc")
+		} else if orderBy == "fork_num" {
+			query = query.Order("fork_num desc")
+		} else if orderBy == "like" {
+			query = query.Order("like desc")
+		}
+	}
+
+	err := query.Offset(page * pageSize).Limit(pageSize).Find(&boards).Error
+	if err != nil {
+		return nil, err
+	}
+	return boards, nil
+}
+
 type StoryGenResult struct {
 }
 
