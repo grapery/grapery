@@ -2484,7 +2484,11 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 }
 
 func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error) {
-
+	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	_ = role
 	return nil, nil
 }
 

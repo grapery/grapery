@@ -71,6 +71,13 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 		log.Error("get user info by id failed:", err.Error())
 		return nil, err
 	}
+	profile := &models.GroupProfile{}
+	profile.GroupID = int64(group.ID)
+	profile, err = models.GetGroupProfile(ctx, profile.GroupID)
+	if err != nil {
+		log.Error("get group profile failed: ", err.Error())
+		return nil, err
+	}
 	return &api.GetGroupResponse{
 		Code:    0,
 		Message: "ok",
@@ -83,6 +90,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 				Creator: int64(creator.ID),
 				Owner:   int64(creator.ID),
 			},
+			Profile: convert.ConvertGroupProfileToApiGroupProfile(profile),
 		},
 	}, nil
 }
