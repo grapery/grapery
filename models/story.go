@@ -129,6 +129,11 @@ type Story struct {
 	CommentCount int64
 	ShareCount   int64
 	FollowCount  int64
+	Style        string
+	StyleDesc    string
+	StyleImage   string
+	Subject      string
+	SubjectDesc  string
 }
 
 func (s *Story) TableName() string {

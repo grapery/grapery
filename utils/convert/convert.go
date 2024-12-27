@@ -138,8 +138,6 @@ func ConvertGroupProfileToApiGroupProfile(p *models.GroupProfile) *api.GroupProf
 		IsVerified:       p.IsVerified,
 		Description:      p.Desc,
 		GroupFollowerNum: int32(p.Followers),
-		Ctime:            p.CreateAt.Unix(),
-		Mtime:            p.UpdateAt.Unix(),
 	}
 }
 

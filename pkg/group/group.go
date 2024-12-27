@@ -78,6 +78,11 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 		log.Error("get group profile failed: ", err.Error())
 		return nil, err
 	}
+	var apiProfile *api.GroupProfileInfo
+	if profile != nil {
+		apiProfile = convert.ConvertGroupProfileToApiGroupProfile(profile)
+		apiProfile.GroupId = int64(group.ID)
+	}
 	return &api.GetGroupResponse{
 		Code:    0,
 		Message: "ok",
@@ -90,7 +95,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 				Creator: int64(creator.ID),
 				Owner:   int64(creator.ID),
 			},
-			Profile: convert.ConvertGroupProfileToApiGroupProfile(profile),
+			Profile: apiProfile,
 		},
 	}, nil
 }

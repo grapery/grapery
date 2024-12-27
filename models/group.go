@@ -284,6 +284,11 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
+
+	err = CreateGroupProfile(context.Background(), int64(newGroup.ID), "默认的群组", 0, false, 1)
+	if err != nil {
+		log.Errorf("create group profile failed: %s", err.Error())
+	}
 	mem := &GroupMember{
 		GroupID:  int64(newGroup.ID),
 		UserID:   int64(userID),
