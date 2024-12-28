@@ -161,6 +161,61 @@ func GetLikeItemByStoryAndUser(ctx context.Context, storyId int64, userId int) (
 	return item, nil
 }
 
+// 根据一组故事id，以及一个用户id来获取喜欢的列表
+func GetLikeItemByStoriesAndUser(ctx context.Context, storyIds []int64, userId int) (list []*LikeItem, err error) {
+	list = make([]*LikeItem, 0)
+	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("story_id in (?) and user_id = ?", storyIds, userId).
+		Where("deleted = ?", 0).
+		Where("like_item_type = ?", LikeItemTypeStory).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func GetLikeItemByGroup(ctx context.Context, groupId []int64, userId int) (list []*LikeItem, err error) {
+	list = make([]*LikeItem, 0)
+	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("group_id in (?) and user_id = ?", groupId, userId).
+		Where("deleted = ?", 0).
+		Where("like_item_type = ?", LikeItemTypeGroup).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// 根据一组角色id，以及一个用户id来获取喜欢的列表
+func GetLikeItemByRolesAndUser(ctx context.Context, roleIds []int64, userId int) (list []*LikeItem, err error) {
+	list = make([]*LikeItem, 0)
+	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("role_id in (?) and user_id = ?", roleIds, userId).
+		Where("deleted = ?", 0).
+		Where("like_item_type = ?", LikeItemTypeRole).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// // 根据一组故事板id，以及一个用户id来获取喜欢的列表
+func GetLikeItemByStoryBoardsAndUser(ctx context.Context, storyboardIds []int64, userId int) (list []*LikeItem, err error) {
+	list = make([]*LikeItem, 0)
+	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("storyboard_id in (?) and user_id = ?", storyboardIds, userId).
+		Where("deleted = ?", 0).
+		Where("like_item_type = ?", LikeItemTypeStoryboard).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func GetLikeItemByStoryBoard(ctx context.Context, storyId int64, storyboardId int64) (list []*LikeItem, err error) {
 	list = make([]*LikeItem, 0)
 	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
@@ -391,4 +446,46 @@ func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int
 			userId, storyId, roleId, groupId).
 		Update("deleted = ?", 1).Error
 	return err
+}
+
+// 根据一组故事id，以及一个用户id来获取关注的列表
+func GetWatchItemByStoriesAndUser(ctx context.Context, storyIds []int64, userId int) (list []*WatchItem, err error) {
+	list = make([]*WatchItem, 0)
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("story_id in (?) and user_id = ?", storyIds, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeStory).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// 根据一组角色id，以及一个用户id来获取关注的列表
+func GetWatchItemByRolesAndUser(ctx context.Context, roleIds []int64, userId int) (list []*WatchItem, err error) {
+	list = make([]*WatchItem, 0)
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("role_id in (?) and user_id = ?", roleIds, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeStoryRole).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// 根据一组小组id，以及一个用户id来获取喜欢的列表
+func GetWatchItemByGroupsAndUser(ctx context.Context, groupIds []int64, userId int) (list []*WatchItem, err error) {
+	list = make([]*WatchItem, 0)
+	err = DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("group_id in (?) and user_id = ?", groupIds, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeGroup).
+		Scan(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }

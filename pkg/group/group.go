@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
@@ -423,7 +424,8 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequ
 }
 
 func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
-	return nil, nil
+	// TODO: 实现群组项目搜索
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error) {
@@ -437,11 +439,40 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 	for idx, val := range storys {
 		list[idx] = convert.ConvertStoryToApiStory(val)
 	}
+	storysIds := make([]int64, 0)
+	for _, val := range storys {
+		storysIds = append(storysIds, int64(val.ID))
+	}
+	likeItems, err := models.GetLikeItemByStoriesAndUser(ctx, storysIds, int(req.GetUserId()))
+	if err != nil {
+		log.Info("get like item by stories and user failed: ", err.Error())
+	}
+	likeMap := make(map[int64]bool)
+	for _, val := range likeItems {
+		likeMap[int64(val.StoryID)] = true
+	}
+	watchItems, err := models.GetWatchItemByStoriesAndUser(ctx, storysIds, int(req.GetUserId()))
+	if err != nil {
+		log.Info("get watch item by stories and user failed: ", err.Error())
+	}
+	watchMap := make(map[int64]bool)
+	for _, val := range watchItems {
+		watchMap[int64(val.StoryID)] = true
+	}
+	interactlist := make([]*api.UserInteractStatus, 0)
+	for _, val := range list {
+		interactlist = append(interactlist, &api.UserInteractStatus{
+			StoryId: int64(val.Id),
+			IsLike:  likeMap[int64(val.Id)],
+			IsWatch: watchMap[int64(val.Id)],
+		})
+	}
 	return &api.FetchGroupStorysResponse{
 		Code:    0,
 		Message: "ok",
 		Data: &api.FetchGroupStorysResponse_Data{
-			List: list,
+			List:     list,
+			Interact: interactlist,
 		},
 	}, nil
 }
