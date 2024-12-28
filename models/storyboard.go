@@ -174,7 +174,7 @@ type StoryGen struct {
 	StartTime  int64
 	FinishTime int64
 	GenType    int
-	// 1:故事，2：故事板
+	// 1:故事，2:故事板,3:角色
 	TaskType int
 }
 

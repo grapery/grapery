@@ -17,7 +17,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/grapery/common-protoc/gen v0.0.0-20241219010855-b2ceecfc6a36
+	github.com/grapery/common-protoc/gen v0.0.0-20241228131041-bbd162c867cc
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
 	github.com/jinzhu/copier v0.4.0
@@ -111,9 +111,9 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241219192143-6b3ec007d9bb // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241219192143-6b3ec007d9bb // indirect
-	google.golang.org/protobuf v1.36.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241223144023-3abc09e42ca8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
+	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
