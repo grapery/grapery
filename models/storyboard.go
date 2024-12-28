@@ -159,6 +159,7 @@ type StoryGen struct {
 	IDBase
 	OriginID       int64
 	BoardID        int64
+	RoleID         int64
 	Uuid           string
 	Step           int
 	LLmPlatform    string

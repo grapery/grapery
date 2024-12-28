@@ -234,3 +234,35 @@ func (c *StoryClient) ChatWithRole(ctx context.Context, params *ChatWithRolePara
 	fmt.Printf("ChatWithRole chat respnse: %+v\n", res.Choices[0].Message)
 	return ret, nil
 }
+
+type GenStoryRoleInfoParams struct {
+	Content string `json:"content"`
+}
+
+type GenStoryRoleInfoResult struct {
+	Content string `json:"content"`
+}
+
+func (c *StoryClient) GenStoryRoleInfo(ctx context.Context, params *GenStoryRoleInfoParams) (*GenStoryRoleInfoResult, error) {
+	ret := &GenStoryRoleInfoResult{}
+	chatService := c.Client.ChatCompletion("glm-4-flash")
+	completeMessage := ""
+	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
+		Role:    "user",
+		Content: params.Content,
+	}).SetStreamHandler(func(chunk zhipuapi.ChatCompletionResponse) error {
+		if len(chunk.Choices[0].Delta.Content) > 0 {
+			completeMessage = completeMessage + chunk.Choices[0].Delta.Content
+		}
+		return nil
+	})
+	res, err := chatService.Do(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gen story role info failed,code: %s, err: %v",
+			zhipuapi.GetAPIErrorCode(err), err)
+	}
+	resData, _ := json.Marshal(res)
+	fmt.Println("chat respnse: ", string(resData))
+	ret.Content = completeMessage
+	return ret, nil
+}

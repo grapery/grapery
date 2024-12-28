@@ -2,6 +2,7 @@ package story
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/client"
+	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
 	"github.com/grapery/grapery/utils/log"
 )
@@ -140,7 +142,15 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.CharacterName = req.GetRole().GetCharacterName()
 	newRole.StoryID = int64(story.ID)
 	newRole.CreatorID = req.GetRole().GetCreatorId()
-	newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
+	if newRole.CharacterPrompt == "" {
+		var promptDetail = new(api.RenderStoryRoleDetail)
+		err = json.Unmarshal([]byte(req.GetRole().GetCharacterPrompt()), promptDetail)
+		if err != nil {
+			log.Log().Error("unmarshal character prompt failed", zap.Error(err))
+			return nil, err
+		}
+		newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
+	}
 	newRole.CharacterAvatar = req.GetRole().GetCharacterAvatar()
 	newRole.CharacterID = req.GetRole().GetCharacterId()
 	newRole.CharacterType = req.GetRole().GetCharacterType()
@@ -241,21 +251,60 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	storyGen.Uuid = uuid.New().String()
 	storyGen.LLmPlatform = "Zhipu"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = templatePrompt
+	storyGen.PositivePrompt = prompt
 	storyGen.Regen = 2
 	storyGen.Params = req.String()
 	storyGen.OriginID = req.GetRoleId()
 	storyGen.StartTime = time.Now().Unix()
 	storyGen.BoardID = 0
-	storyGen.GenType = 3
+	storyGen.GenType = int(api.RenderType_RENDER_TYPE_STORYCHARACTERS)
 	storyGen.TaskType = 3
+	storyGen.Status = 1
 	_, err = models.CreateStoryGen(ctx, storyGen)
 	if err != nil {
 		return nil, err
 	}
+	var (
+		ret                   *client.GenStoryRoleInfoResult
+		renderStoryRoleParams = &client.GenStoryRoleInfoParams{
+			Content: prompt,
+		}
+	)
+
+	ret, err = s.client.GenStoryRoleInfo(ctx, renderStoryRoleParams)
+	if err != nil {
+		log.Log().Error("gen story info failed", zap.Error(err))
+		return nil, err
+	}
+	var renderDetail = new(api.RenderStoryRoleDetail)
+	result := make(map[string]map[string]string)
+	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	err = json.Unmarshal([]byte(cleanResult), &result)
+	storyGen.Content = cleanResult
+	storyGen.FinishTime = time.Now().Unix()
+	for key, val := range result {
+		if key == "故事角色详情" {
+			for k, v := range val {
+				if k == "性格" {
+					renderDetail.RoleCharacter = v
+				} else if k == "穿着" {
+					renderDetail.RoleDescription = v
+				} else if k == "行为准则" {
+					renderDetail.RoleBehavior = v
+				} else if k == "目标" {
+					renderDetail.RoleGoal = v
+				}
+			}
+		}
+	}
+	err = models.UpdateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("update story gen failed", zap.Error(err))
+	}
 	return &api.RenderStoryRoleResponse{
 		Code:    0,
 		Message: "OK",
+		Detail:  renderDetail,
 	}, nil
 }
 
@@ -497,6 +546,12 @@ func (s *StoryService) UpdateStoryRoleDetail(ctx context.Context, req *api.Updat
 		updates["character_type"] = req.GetRole().GetCharacterType()
 	}
 	if req.GetRole().GetCharacterPrompt() != "" {
+		var promptDetail = new(api.RenderStoryRoleDetail)
+		err = json.Unmarshal([]byte(req.GetRole().GetCharacterPrompt()), promptDetail)
+		if err != nil {
+			log.Log().Error("unmarshal character prompt failed", zap.Error(err))
+			return nil, err
+		}
 		updates["character_prompt"] = req.GetRole().GetCharacterPrompt()
 	}
 	if len(req.GetRole().GetCharacterRefImages()) > 0 {

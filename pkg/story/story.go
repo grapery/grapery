@@ -459,7 +459,6 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 		ret  *client.StoryInfoResult
 		resp = &api.RenderStoryResponse{}
 	)
-	fmt.Println("storyGen.Params: ", req.String())
 	if req.RenderType == api.RenderType_RENDER_TYPE_TEXT_UNSPECIFIED {
 		renderDetail.StoryId = req.StoryId
 		renderDetail.BoardId = req.BoardId
@@ -488,7 +487,6 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 	// 渲染剧情
 	result := make(map[string]map[string]interface{})
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
-	fmt.Println("cleanResult: ", cleanResult)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
