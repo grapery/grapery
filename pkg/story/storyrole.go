@@ -252,7 +252,7 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	storyGen.LLmPlatform = "Zhipu"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = prompt
-	storyGen.Regen = 2
+	storyGen.Regen = 0
 	storyGen.Params = req.String()
 	storyGen.OriginID = req.GetRoleId()
 	storyGen.StartTime = time.Now().Unix()
@@ -280,6 +280,118 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	result := make(map[string]map[string]string)
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
 	err = json.Unmarshal([]byte(cleanResult), &result)
+	if err != nil {
+		log.Log().Error("unmarshal gen result failed", zap.Error(err))
+		return nil, err
+	}
+	storyGen.Content = cleanResult
+	storyGen.FinishTime = time.Now().Unix()
+	for key, val := range result {
+		if key == "故事角色详情" {
+			for k, v := range val {
+				if k == "性格" {
+					renderDetail.RoleCharacter = v
+				} else if k == "穿着" {
+					renderDetail.RoleDescription = v
+				} else if k == "行为准则" {
+					renderDetail.RoleBehavior = v
+				} else if k == "目标" {
+					renderDetail.RoleGoal = v
+				}
+			}
+		}
+	}
+	err = models.UpdateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("update story gen failed", zap.Error(err))
+	}
+	return &api.RenderStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+		Detail:  renderDetail,
+	}, nil
+}
+
+func (s *StoryService) ContinueRenderStoryRole(ctx context.Context, req *api.RenderStoryRoleRequest) (*api.RenderStoryRoleResponse, error) {
+	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if role.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	if role.Status != 1 {
+		return nil, errors.New("role is not ready")
+	}
+	story, err := models.GetStory(ctx, role.StoryID)
+	if err != nil {
+		return nil, err
+	}
+	templatePrompt := `
+	为故事的角色生成性格描述，穿着描述，以及行为描述、角色的目标。我会提供这个角色参与的故事的背景。同时，也会输入我认为的这个角色的特点。
+	故事角色姓名:"""story_role_name"""
+	故事背景:"""story_background"""
+`
+
+	templatePrompt2 := `
+	返回的角色描述信息，请按照json格式返回，以下是返回样例：
+	--------
+		{
+			"故事角色详情": {
+				"性格": "xxxxxxx",
+				"穿着": "xxxxx",
+				"行为准则": "xxxxxx",
+				"目标": "xxxxx"
+			}
+		}
+	--------
+	请不要生成过于色情、暴力、恶心的内容，或者一直重复的内容，请不要出现任何违反法律法规的内容，保证角色贴合故事背景，同时遵循用户的输入的角色性格特点要求。
+	`
+	prompt := templatePrompt
+	prompt = strings.Replace(prompt, "story_role_name", role.CharacterName, -1)
+	prompt = strings.Replace(prompt, "story_background", story.ShortDesc, -1)
+	if req.GetPrompt() != "" {
+		prompt = prompt + `我建议这个角色的性格特征包括："""` + req.GetPrompt() + `"""。\n`
+	}
+	prompt = prompt + templatePrompt2
+	// 调用生成器
+	storyGen := new(models.StoryGen)
+	storyGen.Uuid = uuid.New().String()
+	storyGen.LLmPlatform = "Zhipu"
+	storyGen.NegativePrompt = ""
+	storyGen.PositivePrompt = prompt
+	storyGen.Regen = 0
+	storyGen.Params = req.String()
+	storyGen.OriginID = req.GetRoleId()
+	storyGen.StartTime = time.Now().Unix()
+	storyGen.BoardID = 0
+	storyGen.GenType = int(api.RenderType_RENDER_TYPE_STORYCHARACTERS)
+	storyGen.TaskType = 3
+	storyGen.Status = 1
+	_, err = models.CreateStoryGen(ctx, storyGen)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		ret                   *client.GenStoryRoleInfoResult
+		renderStoryRoleParams = &client.GenStoryRoleInfoParams{
+			Content: prompt,
+		}
+	)
+
+	ret, err = s.client.GenStoryRoleInfo(ctx, renderStoryRoleParams)
+	if err != nil {
+		log.Log().Error("gen story info failed", zap.Error(err))
+		return nil, err
+	}
+	var renderDetail = new(api.RenderStoryRoleDetail)
+	result := make(map[string]map[string]string)
+	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	err = json.Unmarshal([]byte(cleanResult), &result)
+	if err != nil {
+		log.Log().Error("unmarshal gen result failed", zap.Error(err))
+		return nil, err
+	}
 	storyGen.Content = cleanResult
 	storyGen.FinishTime = time.Now().Unix()
 	for key, val := range result {
