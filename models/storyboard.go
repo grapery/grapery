@@ -380,11 +380,55 @@ func UpdateStoryBoardRoleMultiColumn(ctx context.Context, id int64, columns map[
 // 获取角色参与的某一个故事的所有故事板
 func GetStoryBoardsByRoleID(ctx context.Context, roleID int64) ([]*StoryBoard, error) {
 	var boards []*StoryBoard
-	if err := DataBase().Model(&StoryBoard{}).
+	var boardsIDs []int64
+	if err := DataBase().Select("board_id").Model(&StoryBoardRole{}).
 		Where("role_id = ?", roleID).
 		Where("status >= 0").
-		Find(&boards).Error; err != nil {
+		Find(&boardsIDs).Limit(10).Error; err != nil {
+		return nil, err
+	}
+	if len(boardsIDs) == 0 {
+		return nil, nil
+	}
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("id in (?)", boardsIDs).
+		Where("status >= 0").
+		Find(&boards).Error
+	if err != nil {
 		return nil, err
 	}
 	return boards, nil
+}
+
+func GetStoryBoardSencesByRoleID(ctx context.Context, roleID int64) ([]*StoryBoardScene, error) {
+	var boards []*StoryBoard
+	var boardsIDs []int64
+	if err := DataBase().Select("board_id").Model(&StoryBoardRole{}).
+		Where("role_id = ?", roleID).
+		Where("status > 0").
+		Find(&boardsIDs).Limit(10).Error; err != nil {
+		return nil, err
+	}
+	if len(boardsIDs) == 0 {
+		return nil, nil
+	}
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("id in (?)", boardsIDs).
+		Where("status > 0").
+		Find(&boards).Error
+	if err != nil {
+		return nil, err
+	}
+	var scenes []*StoryBoardScene
+	err = DataBase().Model(&StoryBoardScene{}).
+		WithContext(ctx).
+		Where("board_id in (?)", boardsIDs).
+		Where("status > 0").
+		Find(&scenes).Error
+	if err != nil {
+		return nil, err
+	}
+	return scenes, nil
 }

@@ -1076,7 +1076,7 @@ func (s *StoryService) CreateStoryBoardScene(ctx context.Context, req *api.Creat
 	newScene.VideoPrompts = req.Sence.GetVideoPrompts()
 	newScene.Status = 1
 	newScene.IsGenerating = 0
-	newScene.GenResult = ""
+	newScene.GenResult = req.Sence.GetGenResult()
 	_, err := models.CreateStoryBoardScene(ctx, newScene)
 	if err != nil {
 		log.Log().Error("create storyboard scene failed", zap.Error(err))

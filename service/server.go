@@ -35,6 +35,8 @@ type TeamsService struct {
 	*group.CommentService
 	*common.CommonService
 	*group.StoryService
+	*group.StoryBoardService
+	*group.StoryRoleService
 	// api.UnimplementedTeamsAPIServer
 }
 
@@ -73,6 +75,8 @@ func NewTeamsService() *TeamsService {
 	ts.CommentService = &group.CommentService{}
 	ts.CommonService = &common.CommonService{}
 	ts.StoryService = &group.StoryService{}
+	ts.StoryBoardService = &group.StoryBoardService{}
+	ts.StoryRoleService = &group.StoryRoleService{}
 	ts.Ctx, ts.Cancel = context.WithCancel(context.Background())
 	return ts
 }
