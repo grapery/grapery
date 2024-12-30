@@ -125,6 +125,21 @@ func GetStoryGensByStoryAndBoard(ctx context.Context, storyID int64, boardID int
 	return gens, nil
 }
 
+func GetStoryGensByStoryAndRole(ctx context.Context, storyID int64, roleId int64) (*StoryGen, error) {
+	gen := &StoryGen{}
+	err := DataBase().Model(gen).
+		WithContext(ctx).
+		Where("origin_id = ?", storyID).
+		Where("role_id = ?", roleId).
+		Limit(1).
+		Order("create_at desc").
+		Find(&gen).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return gen, nil
+}
+
 func DelStoryGen(ctx context.Context, id int64) error {
 	err := DataBase().Model(&StoryGen{}).WithContext(ctx).
 		Where("id = ?", id).

@@ -691,7 +691,7 @@ func (s *StoryService) GetUserChatMessages(ctx context.Context, req *api.GetUser
 }
 
 // 根据角色参与的故事板的历史记录，以及和别的角色的冲突，生成角色的性格描述，以及新的角色背景图片和头像图片
-func (s *StoryService) RenderStoryRoleContinuouslyCancel(ctx context.Context, req *api.RenderStoryRoleContinuouslyRequest) (*api.RenderStoryRoleContinuouslyResponse, error) {
+func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api.RenderStoryRoleContinuouslyRequest) (*api.RenderStoryRoleContinuouslyResponse, error) {
 	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
 		return nil, err
@@ -706,12 +706,31 @@ func (s *StoryService) RenderStoryRoleContinuouslyCancel(ctx context.Context, re
 	if err != nil {
 		return nil, err
 	}
-	templatePrompt := `
-	为故事的角色生成性格描述，穿着描述，以及行为描述、角色的目标。我会提供这个角色参与的故事的背景。同时，也会输入我认为的这个角色的特点。
-	故事角色姓名:"""story_role_name"""
-	故事背景:"""story_background"""
+	historyStoryGen, err := models.GetStoryGensByStoryAndRole(ctx, role.StoryID, int64(role.ID))
+	if err != nil {
+		log.Log().Error("get story gen by story and role failed", zap.Error(err))
+	}
+	if historyStoryGen != nil && historyStoryGen.GenStatus == 1 {
+		return &api.RenderStoryRoleContinuouslyResponse{
+			Code:    0,
+			Message: "generating",
+			Detail:  nil,
+		}, nil
+	}
+	if historyStoryGen != nil && historyStoryGen.GenStatus == 2 && historyStoryGen.CreateAt.Add(time.Hour*12).Before(time.Now()) {
+		return &api.RenderStoryRoleContinuouslyResponse{
+			Code:    0,
+			Message: "role render finished",
+			Detail:  nil,
+		}, nil
+	}
 
-	故事中的这个角色所经历的故事场景:"""story_history"""
+	templatePrompt := `
+			为故事的角色生成性格描述，穿着描述，以及行为描述、角色的目标。我会提供这个角色参与的故事的背景。同时，也会输入我认为的这个角色的特点。
+			故事角色姓名:"""story_role_name"""
+			故事背景:"""story_background"""
+
+	故事中的这个角色按照时间顺序，所经历的故事场景:"""story_history"""
 `
 	histroryStoryBoardSences, err := models.GetStoryBoardSencesByRoleID(ctx, role.StoryID)
 	if err != nil {
