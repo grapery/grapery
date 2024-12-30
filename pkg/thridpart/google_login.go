@@ -16,7 +16,7 @@ type GoogleLogin struct {
 	ClientSecret string
 	RedirectURL  string
 	Scopes       []string
-	Config       *oauth2.Config
+	Config       *oauth2.Service
 }
 
 // NewGoogleLogin 创建新的谷歌登录实例
