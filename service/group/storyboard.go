@@ -327,3 +327,19 @@ func (s *StoryBoardService) GetUserCreatedStoryboards(ctx context.Context, req *
 	}
 	return connect.NewResponse(resp), nil
 }
+
+func (s *StoryBoardService) PublishStoryboard(ctx context.Context, req *connect.Request[gen.PublishStoryboardRequest]) (*connect.Response[gen.PublishStoryboardResponse], error) {
+	ret, err := storyServer.GetStoryServer().PublishStoryboard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryBoardService) CancelStoryboard(ctx context.Context, req *connect.Request[gen.CancelStoryboardRequest]) (*connect.Response[gen.CancelStoryboardResponse], error) {
+	ret, err := storyServer.GetStoryServer().CancelStoryboard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

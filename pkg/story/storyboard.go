@@ -1636,3 +1636,29 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 	resp.PageSize = int64(len(boards))
 	return resp, nil
 }
+
+func (s *StoryService) PublishStoryboard(ctx context.Context, req *api.PublishStoryboardRequest) (*api.PublishStoryboardResponse, error) {
+	storyboard, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+	if err != nil {
+		return nil, err
+	}
+	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED)
+	models.UpdateStoryboard(ctx, storyboard)
+	return &api.PublishStoryboardResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStoryboardRequest) (*api.CancelStoryboardResponse, error) {
+	storyboard, err := models.GetStoryboard(ctx, req.GetStoryboardId())
+	if err != nil {
+		return nil, err
+	}
+	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_UNSPECIFIED)
+	models.UpdateStoryboard(ctx, storyboard)
+	return &api.CancelStoryboardResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
