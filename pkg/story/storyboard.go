@@ -1569,7 +1569,8 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 
 // 获取用户创建的故事板
 func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.GetUserCreatedStoryboardsRequest) (*api.GetUserCreatedStoryboardsResponse, error) {
-	storyboards, total, err := models.GetUserCreatedStoryboardsWithStoryId(ctx, int(req.GetUserId()), int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
+	storyboards, total, err := models.GetUserCreatedStoryboardsWithStoryId(ctx, int(req.GetUserId()),
+		int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Log().Error("get user created storyboards failed", zap.Error(err))
 		return nil, err

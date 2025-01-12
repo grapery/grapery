@@ -231,7 +231,9 @@ func GetUserCreatedStoryboardsWithStoryId(ctx context.Context, userId int, story
 	var boards []*StoryBoard
 	var total int64
 
-	query := DataBase().Model(&StoryBoard{}).Where("creator_id = ?", userId)
+	query := DataBase().
+		Model(&StoryBoard{}).
+		Where("creator_id = ?", userId)
 	if storyId > 0 {
 		query = query.Where("id != ?", storyId)
 	}
@@ -242,7 +244,10 @@ func GetUserCreatedStoryboardsWithStoryId(ctx context.Context, userId int, story
 	}
 
 	// Get paginated records
-	if err := query.Order("create_at desc").Offset(offset).Limit(number).Scan(&boards).Error; err != nil {
+	if err := query.
+		Order("create_at desc").
+		Offset(offset).
+		Limit(number).Scan(&boards).Error; err != nil {
 		return nil, 0, err
 	}
 
