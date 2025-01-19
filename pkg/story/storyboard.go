@@ -696,6 +696,37 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	}
 	prevBoards := make([]*models.StoryBoard, 0)
 	prevBoards = append(prevBoards, board)
+	roles := req.GetRoles()
+	if len(roles) > 0 {
+		prevBoards = append(prevBoards, board)
+	}
+	originRoles, err := models.GetStoryRole(ctx, int64(story.ID))
+	if err != nil {
+		return nil, err
+	}
+	originRolesMap := make(map[string]*models.StoryRole)
+	rolesMap := make(map[string]*api.StoryRole)
+	finalRols := make(map[string]*models.StoryRole)
+	for _, role := range originRoles {
+		originRolesMap[role.CharacterID] = role
+	}
+	for _, role := range roles {
+		rolesMap[role.CharacterId] = role
+	}
+	for _, role := range roles {
+		if realRole, ok := originRolesMap[role.CharacterId]; !ok {
+			finalRols[role.CharacterName] = realRole
+		}
+	}
+
+	var rolesPrompt = make(map[string]interface{})
+	for _, role := range finalRols {
+		rolePrompt := make(map[string]interface{})
+		rolePrompt["角色名称"] = role.CharacterName
+		rolePrompt["角色描述"] = role.CharacterDescription
+		rolesPrompt[role.CharacterName] = rolePrompt
+	}
+	//
 
 	var boardIdtemp int64 = board.PrevId
 	for boardIdtemp != 0 {
@@ -710,7 +741,6 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		}
 	}
 
-	//  fork 时 据用户和 story 的id来检查是否重复
 	genParams := new(models.StoryBoardParams)
 	genParams.StoryContent = story.Origin
 	err = json.Unmarshal([]byte(board.Params), genParams)
@@ -725,7 +755,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	boardRequire["章节题目要求"] = req.GetTitle()
 	boardRequire["章节内容要求"] = req.GetDescription()
 	boardRequire["章节背景简介"] = req.GetBackground()
-	boardRequire["章节参与的角色要求"] = req.GetRoles()
+	boardRequire["章节参与的角色要求"] = rolesPrompt
 	boardRequireJson, _ := json.Marshal(boardRequire)
 
 	templatePrompt := `生成故事 story_name 的下一个章节,故事内容用中文描述,以json格式返回		
@@ -793,11 +823,8 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	retData, _ := json.Marshal(ret)
-	log.Log().Sugar().Infof("gen storyboard info success, req: %s, data:%s", req.String(), string(retData))
 	// 保存生成的故事板
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
-	fmt.Println("cleanResult: ", cleanResult)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
@@ -843,6 +870,26 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	err = models.UpdateStoryboard(ctx, board)
 	if err != nil {
 		log.Log().Error("update story gen failed", zap.Error(err))
+	}
+	for _, role := range finalRols {
+		role.StoryboardNum = role.StoryboardNum + 1
+		err = models.UpdateStoryRole(ctx, int64(role.ID), map[string]interface{}{
+			"storyboard_num": role.StoryboardNum,
+		})
+		if err != nil {
+			log.Log().Error("update story role failed", zap.Error(err))
+		}
+		roleActive := new(models.Active)
+		roleActive.StoryId = int64(story.ID)
+		roleActive.StoryRoleId = int64(role.ID)
+		roleActive.StoryBoardId = int64(board.ID)
+		roleActive.Content = board.Description
+		roleActive.Status = 1
+		roleActive.ActiveType = api.ActiveType_NewStoryBoard
+		err = roleActive.Create()
+		if err != nil {
+			log.Log().Error("create story role active failed", zap.Error(err))
+		}
 	}
 	return &api.ContinueRenderStoryResponse{
 		Code:    0,
@@ -919,9 +966,109 @@ func (s *StoryService) UpdateStoryRole(ctx context.Context, req *api.UpdateStory
 }
 
 func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.RenderStoryRoleDetailRequest) (*api.RenderStoryRoleDetailResponse, error) {
+
+	role, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get story role failed", zap.Error(err))
+		return &api.RenderStoryRoleDetailResponse{
+			Code:    -1,
+			Message: "get story role failed",
+		}, err
+	}
+	story, err := models.GetStory(ctx, int64(role.StoryID))
+	if err != nil {
+		log.Log().Error("get story failed", zap.Error(err))
+		return nil, err
+	}
+	if story.Status == -1 {
+		return &api.RenderStoryRoleDetailResponse{
+			Code:    -1,
+			Message: "story is closed",
+		}, nil
+	}
+	// 根据角色参与的故事背景，以及这个角色的描述，使用AI生成一个角色描述
+	roleRequire := make(map[string]interface{})
+	roleRequire["角色名称"] = role.CharacterName
+	roleRequire["角色描述"] = role.CharacterDescription
+	roleRequirePrompt := `生成故事 story_name 的角色,故事内容用中文描述,以json格式返回		
+		角色名称:
+		--------
+		` + role.CharacterName + `
+		--------
+		角色描述:
+		--------
+		` + role.CharacterDescription + `
+		--------
+		故事背景:
+		--------
+		` + story.ShortDesc + `
+		--------
+		请参考以上输入，生成故事的下一个章节。只生成新的章节的章节内容，章节题目，章节背景简介，章节参与的角色。请参考如下格式：
+		{
+			"角色描述": "xxxxxx......",
+			"角色短期目标": "xxxxxx......",
+			"角色长期目标": "xxxxxx......",
+			"角色性格": "xxxxxx......",
+			"角色背景": "xxxxxx......",
+			"角色弱点": "xxxxxx......",
+			"角色关系": "xxxxxx......",
+		}
+		`
+	storyGen := new(models.StoryGen)
+	storyGen.Uuid = uuid.New().String()
+	reqData, _ := json.Marshal(req)
+	storyGenData, _ := json.Marshal(reqData)
+	storyGen.LLmPlatform = "Zhipu"
+	storyGen.NegativePrompt = ""
+	storyGen.PositivePrompt = roleRequirePrompt
+	storyGen.Regen = 2
+	storyGen.Params = string(storyGenData)
+	storyGen.OriginID = int64(role.ID)
+	storyGen.StartTime = time.Now().Unix()
+	storyGen.BoardID = 0
+	storyGen.GenType = 0
+	storyGen.TaskType = 3
+	_, err = models.CreateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("create storyboard gen failed", zap.Error(err))
+		return nil, err
+	}
+	log.Log().Sugar().Info("gen storyboard prompt: ", roleRequirePrompt)
+	renderStoryParams := &client.StoryInfoParams{
+		Content: roleRequirePrompt,
+	}
+	result := make(map[string]string)
+	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
+	if err != nil {
+		log.Log().Error("gen storyboard info failed", zap.Error(err))
+		return nil, err
+	}
+	// 保存生成的故事板
+	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	err = json.Unmarshal([]byte(cleanResult), &result)
+	if err != nil {
+		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
+		return nil, err
+	}
+	apiRoleDetail := new(api.StoryRole)
+	apiRoleDetail.RoleId = int64(role.ID)
+	apiRoleDetail.CharacterName = role.CharacterName
+	apiRoleDetail.CharacterAvatar = role.CharacterAvatar
+	apiRoleDetail.CharacterId = role.CharacterID
+	apiRoleDetail.CharacterType = role.CharacterType
+	apiRoleDetail.CharacterPrompt = role.CharacterPrompt
+	apiRoleDetail.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
+	apiRoleDetail.CharacterDescription = cleanResult
+	storyGen.Content = cleanResult
+	storyGen.FinishTime = time.Now().Unix()
+	err = models.UpdateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("update story gen failed", zap.Error(err))
+	}
 	return &api.RenderStoryRoleDetailResponse{
 		Code:    0,
 		Message: "OK",
+		Role:    apiRoleDetail,
 	}, nil
 }
 
