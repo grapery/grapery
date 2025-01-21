@@ -96,6 +96,9 @@ type ChatMessage struct {
 	Prompt        string `json:"prompt,omitempty"`
 	AfterRender   string `json:"after_render,omitempty"`
 	UUID          string `json:"uuid,omitempty"`
+	SendTime      int64  `json:"send_time,omitempty"`
+	ReceiveTime   int64  `json:"receive_time,omitempty"`
+	MessageID     string `json:"message_id,omitempty"`
 }
 
 func (c ChatMessage) TableName() string {
