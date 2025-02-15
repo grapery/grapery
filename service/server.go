@@ -81,6 +81,7 @@ func NewTeamsService() *TeamsService {
 	ts.StoryService = &group.StoryService{}
 	ts.StoryBoardService = &group.StoryBoardService{}
 	ts.StoryRoleService = &group.StoryRoleService{}
+	ts.MessageService = message.NewMessageService()
 	ts.Ctx, ts.Cancel = context.WithCancel(context.Background())
 	return ts
 }
