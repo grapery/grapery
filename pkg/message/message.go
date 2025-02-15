@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"strconv"
 	"time"
 
-	ali_mns "github.com/aliyun/aliyun-mns-go-sdk"
+	rmq_client "github.com/apache/rocketmq-clients/golang/v5"
+	"github.com/apache/rocketmq-clients/golang/v5/credentials"
 )
 
 type ChatMessageService interface {
-	SendMessage(ctx context.Context, message string) error
+	SendNormalMessage(ctx context.Context, message string) error
+	SendDelayMessage(ctx context.Context, message string) error
+	SendFiFoMessage(ctx context.Context, message string) error
 	ReceiveMessage(ctx context.Context, message string) error
 }
 
@@ -25,177 +29,208 @@ func ReceiveMessage(ctx context.Context, message string) error {
 }
 
 const (
-	// 阿里云消息队列服务地址
-	endpoint = "http://1866841989078847.mns.cn-hangzhou.aliyuncs.com"
-	// 队列名称
-	queueName = "test-queue"
-	// 主题名称
-	topicName = "test-topic"
+	RocketMQTopic         = "xxxxxx"
+	RocketMQConsumerGroup = "xxxxxx"
+	RocketMQEndpoint      = "xxxxxx"
+	RocketMQAccessKey     = "xxxxxx"
+	RocketMQSecretKey     = "xxxxxx"
 )
 
-func main() {
+var (
+	// maximum waiting time for receive func
+	AwaitDuration = time.Second * 5
+	// maximum number of messages received at one time
+	MaxMessageNum int32 = 16
+	// invisibleDuration should > 20s
+	InvisibleDuration = time.Second * 20
+	// receive messages in a loop
+)
+
+func ConsumeMessage(ctx context.Context, message string) {
+	// log to console
+	os.Setenv("mq.consoleAppender.enabled", "true")
+	rmq_client.ResetLogger()
+	// In most case, you don't need to create many consumers, singleton pattern is more recommended.
+	simpleConsumer, err := rmq_client.NewSimpleConsumer(&rmq_client.Config{
+		Endpoint:      RocketMQEndpoint,
+		ConsumerGroup: RocketMQConsumerGroup,
+		Credentials: &credentials.SessionCredentials{
+			AccessKey:    RocketMQAccessKey,
+			AccessSecret: RocketMQSecretKey,
+		},
+	},
+		rmq_client.WithAwaitDuration(AwaitDuration),
+		rmq_client.WithSubscriptionExpressions(map[string]*rmq_client.FilterExpression{
+			RocketMQTopic: rmq_client.SUB_ALL,
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// start simpleConsumer
+	err = simpleConsumer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// graceful stop simpleConsumer
+	defer simpleConsumer.GracefulStop()
+
 	go func() {
-		log.Println(http.ListenAndServe("localhost:8080", nil))
-	}()
-
-	// Replace with your own endpoint.
-	client := ali_mns.NewClient(endpoint)
-	msg := ali_mns.MessageSendRequest{
-		MessageBody:  "hello <\"aliyun-mns-go-sdk\">",
-		DelaySeconds: 0,
-		Priority:     8,
-	}
-
-	queueManager := ali_mns.NewMNSQueueManager(client)
-	err := queueManager.CreateQueue(queueName, 0, 65536, 345600, 30, 0, 3)
-	time.Sleep(time.Duration(2) * time.Second)
-	if err != nil && !ali_mns.ERR_MNS_QUEUE_ALREADY_EXIST_AND_HAVE_SAME_ATTR.IsEqual(err) {
-		fmt.Println(err)
-		return
-	}
-
-	queue := ali_mns.NewMNSQueue(queueName, client)
-	for i := 1; i < 10000; i++ {
-		ret, err := queue.SendMessage(msg)
-		go func() {
-			fmt.Println(queue.QPSMonitor().QPS())
-		}()
-
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Println("response: ", ret)
-		}
-
-		endChan := make(chan int)
-		respChan := make(chan ali_mns.MessageReceiveResponse)
-		errChan := make(chan error)
-		go func() {
-			select {
-			case resp := <-respChan:
-				{
-					fmt.Println("response: ", resp)
-					fmt.Println("change the visibility: ", resp.ReceiptHandle)
-					if ret, e := queue.ChangeMessageVisibility(resp.ReceiptHandle, 5); e != nil {
-						fmt.Println(e)
-					} else {
-						fmt.Println("visibility changed", ret)
-						fmt.Println("delete it now: ", ret.ReceiptHandle)
-						if e := queue.DeleteMessage(ret.ReceiptHandle); e != nil {
-							fmt.Println(e)
-						}
-						endChan <- 1
-					}
-				}
-			case err := <-errChan:
-				{
-					fmt.Println(err)
-					endChan <- 1
-				}
+		for {
+			fmt.Println("start receive message")
+			mvs, err := simpleConsumer.Receive(context.TODO(), MaxMessageNum, InvisibleDuration)
+			if err != nil {
+				fmt.Println(err)
 			}
-		}()
+			// ack message
+			for _, mv := range mvs {
+				simpleConsumer.Ack(context.TODO(), mv)
+				fmt.Println(mv)
+			}
+			fmt.Println("wait a moment")
+			fmt.Println()
+			time.Sleep(time.Second * 3)
+		}
+	}()
+}
 
-		queue.ReceiveMessage(respChan, errChan, 30)
-		<-endChan
+func NormalSendMessage(ctx context.Context, message string) {
+	os.Setenv("mq.consoleAppender.enabled", "true")
+	rmq_client.ResetLogger()
+	// In most case, you don't need to create many producers, singleton pattern is more recommended.
+	producer, err := rmq_client.NewProducer(&rmq_client.Config{
+		Endpoint: RocketMQEndpoint,
+		Credentials: &credentials.SessionCredentials{
+			AccessKey:    RocketMQAccessKey,
+			AccessSecret: RocketMQSecretKey,
+		},
+	},
+		rmq_client.WithTopics(RocketMQTopic),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// start producer
+	err = producer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// graceful stop producer
+	defer producer.GracefulStop()
+
+	for i := 0; i < 10; i++ {
+		// new a message
+		msg := &rmq_client.Message{
+			Topic: RocketMQTopic,
+			Body:  []byte("this is a message : " + strconv.Itoa(i)),
+		}
+		// set keys and tag
+		msg.SetKeys("a", "b")
+		msg.SetTag("ab")
+		// send message in sync
+		resp, err := producer.Send(context.TODO(), msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for i := 0; i < len(resp); i++ {
+			fmt.Printf("%#v\n", resp[i])
+		}
+		// wait a moment
+		time.Sleep(time.Second * 1)
 	}
 }
 
-func TopicManage() {
-	// Replace with your own endpoint.
-	queueSubName := "test-sub-queue"
-	httpSubName := "test-sub-http"
-	client := ali_mns.NewClient(endpoint)
-
-	// 1. create a queue for receiving pushed messages
-	queueManager := ali_mns.NewMNSQueueManager(client)
-	err := queueManager.CreateSimpleQueue(queueName)
-	if err != nil && !ali_mns.ERR_MNS_QUEUE_ALREADY_EXIST_AND_HAVE_SAME_ATTR.IsEqual(err) {
-		fmt.Println(err)
-		return
-	}
-
-	// 2. create the topic
-	topicManager := ali_mns.NewMNSTopicManager(client)
-	// topicManager.DeleteTopic("testTopic")
-	err = topicManager.CreateSimpleTopic(topicName)
-	if err != nil && !ali_mns.ERR_MNS_TOPIC_ALREADY_EXIST_AND_HAVE_SAME_ATTR.IsEqual(err) {
-		fmt.Println(err)
-		return
-	}
-
-	topic := ali_mns.NewMNSTopic(topicName, client)
-	// 3. subscribe to topic, the endpoint is queue
-	queueSub := ali_mns.MessageSubsribeRequest{
-		Endpoint:            topic.GenerateQueueEndpoint(queueName),
-		NotifyContentFormat: ali_mns.SIMPLIFIED,
-	}
-
-	// 4. subscribe to topic, the endpoint is HTTP(S)
-	httpSub := ali_mns.MessageSubsribeRequest{
-		Endpoint:            "http://www.baidu.com",
-		NotifyContentFormat: ali_mns.SIMPLIFIED,
-	}
-
-	err = topic.Subscribe(queueSubName, queueSub)
-	if err != nil && !ali_mns.ERR_MNS_SUBSCRIPTION_ALREADY_EXIST_AND_HAVE_SAME_ATTR.IsEqual(err) {
-		fmt.Println(err)
-		return
-	}
-
-	err = topic.Subscribe(httpSubName, httpSub)
-	if err != nil && !ali_mns.ERR_MNS_SUBSCRIPTION_ALREADY_EXIST_AND_HAVE_SAME_ATTR.IsEqual(err) {
-		fmt.Println(err)
-		return
-	}
-
-	time.Sleep(time.Duration(2) * time.Second)
-
-	// 5. now publish message
-	msg := ali_mns.MessagePublishRequest{
-		MessageBody: "hello topic <\"aliyun-mns-go-sdk\">",
-		MessageAttributes: &ali_mns.MessageAttributes{
-			MailAttributes: &ali_mns.MailAttributes{
-				Subject:     "AAA中文",
-				AccountName: "BBB",
-			},
+func DelaySendMessage(ctx context.Context, message string) {
+	// log to console
+	os.Setenv("mq.consoleAppender.enabled", "true")
+	rmq_client.ResetLogger()
+	// In most case, you don't need to create many producers, singleton pattern is more recommended.
+	producer, err := rmq_client.NewProducer(&rmq_client.Config{
+		Endpoint: RocketMQEndpoint,
+		Credentials: &credentials.SessionCredentials{
+			AccessKey:    RocketMQAccessKey,
+			AccessSecret: RocketMQSecretKey,
 		},
-	}
-	_, err = topic.PublishMessage(msg)
+	},
+		rmq_client.WithTopics(RocketMQTopic),
+	)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
+	}
+	// start producer
+	err = producer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// graceful stop producer
+	defer producer.GracefulStop()
+	for i := 0; i < 10; i++ {
+		// new a message
+		msg := &rmq_client.Message{
+			Topic: RocketMQTopic,
+			Body:  []byte("this is a message : " + strconv.Itoa(i)),
+		}
+		// set keys and tag
+		msg.SetKeys("a", "b")
+		msg.SetTag("ab")
+		// set delay timestamp
+		msg.SetDelayTimestamp(time.Now().Add(time.Second * 10))
+		// send message in sync
+		resp, err := producer.Send(context.TODO(), msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for i := 0; i < len(resp); i++ {
+			fmt.Printf("%#v\n", resp[i])
+		}
+		// wait a moment
+		time.Sleep(time.Second * 1)
 	}
 
-	// 6. receive the message from queue
-	queue := ali_mns.NewMNSQueue(queueName, client)
-	endChan := make(chan int)
-	respChan := make(chan ali_mns.MessageReceiveResponse)
-	errChan := make(chan error)
-	go func() {
-		select {
-		case resp := <-respChan:
-			{
-				fmt.Println("response: ", resp)
-				fmt.Println("change the visibility: ", resp.ReceiptHandle)
-				if ret, e := queue.ChangeMessageVisibility(resp.ReceiptHandle, 5); e != nil {
-					fmt.Println(e)
-				} else {
-					fmt.Println("visibility changed", ret)
-					fmt.Println("delete it now: ", ret.ReceiptHandle)
-					if e := queue.DeleteMessage(ret.ReceiptHandle); e != nil {
-						fmt.Println(e)
-					}
-					endChan <- 1
-				}
-			}
-		case err := <-errChan:
-			{
-				fmt.Println(err)
-				endChan <- 1
-			}
-		}
-	}()
+}
 
-	queue.ReceiveMessage(respChan, errChan, 30)
-	<-endChan
+func FiFoSendMessage(ctx context.Context, message string) {
+	os.Setenv("mq.consoleAppender.enabled", "true")
+	rmq_client.ResetLogger()
+	// In most case, you don't need to create many producers, singleton pattern is more recommended.
+	producer, err := rmq_client.NewProducer(&rmq_client.Config{
+		Endpoint: RocketMQEndpoint,
+		Credentials: &credentials.SessionCredentials{
+			AccessKey:    RocketMQAccessKey,
+			AccessSecret: RocketMQSecretKey,
+		},
+	},
+		rmq_client.WithTopics(RocketMQTopic),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// start producer
+	err = producer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// graceful stop producer
+	defer producer.GracefulStop()
+	for i := 0; i < 10; i++ {
+		// new a message
+		msg := &rmq_client.Message{
+			Topic: RocketMQTopic,
+			Body:  []byte("this is a message : " + strconv.Itoa(i)),
+		}
+		// set keys and tag
+		msg.SetKeys("a", "b")
+		msg.SetTag("ab")
+		msg.SetMessageGroup("fifo")
+		// send message in sync
+		resp, err := producer.Send(context.TODO(), msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for i := 0; i < len(resp); i++ {
+			fmt.Printf("%#v\n", resp[i])
+		}
+		// wait a moment
+		time.Sleep(time.Second * 1)
+	}
 }

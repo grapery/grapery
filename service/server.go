@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"connectrpc.com/connect"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	"google.golang.org/grpc"
 
 	api "github.com/grapery/common-protoc/gen"
 	genconnect "github.com/grapery/common-protoc/gen/genconnect"
@@ -16,6 +18,7 @@ import (
 	auth "github.com/grapery/grapery/service/auth"
 	"github.com/grapery/grapery/service/common"
 	"github.com/grapery/grapery/service/group"
+	"github.com/grapery/grapery/service/message"
 	"github.com/grapery/grapery/service/user"
 	"github.com/grapery/grapery/utils/cache"
 	"github.com/grapery/grapery/utils/jwt"
@@ -37,6 +40,7 @@ type TeamsService struct {
 	*group.StoryService
 	*group.StoryBoardService
 	*group.StoryRoleService
+	*message.MessageService
 	// api.UnimplementedTeamsAPIServer
 }
 
@@ -85,7 +89,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 	cache.NewRedisClient(cfg)
 	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
 	if err != nil {
-		log.Errorf("init sql database failed : [%s]", err.Error())
+		logrus.Errorf("init sql database failed : [%s]", err.Error())
 		return err
 	}
 	opts := []connect.HandlerOption{
@@ -103,6 +107,46 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 			"127.0.0.1:12305",
 			h2c.NewHandler(mux, &http2.Server{}),
 		)
+	}()
+
+	// 启动 gRPC 聊天服务器
+	go func() {
+		chatAddr := "127.0.0.1:12307"
+		logrus.Infof("Starting gRPC chat server on %s", chatAddr)
+
+		// 创建 TCP 监听器
+		lis, err := net.Listen("tcp", chatAddr)
+		if err != nil {
+			logrus.Errorf("Failed to listen: %v", err)
+			ts.Cancel()
+			return
+		}
+
+		// 创建 gRPC 服务器
+		grpcServer := grpc.NewServer(
+			grpc.ChainUnaryInterceptor(
+			// 可以添加拦截器
+			),
+			grpc.ChainStreamInterceptor(
+			// 可以添加流拦截器
+			),
+		)
+
+		// 注册聊天服务
+		api.RegisterStreamMessageServiceServer(grpcServer, ts.MessageService)
+
+		// 处理优雅关闭
+		go func() {
+			<-ts.Ctx.Done()
+			logrus.Info("Shutting down gRPC chat server...")
+			grpcServer.GracefulStop()
+		}()
+
+		// 启动 gRPC 服务器
+		if err := grpcServer.Serve(lis); err != nil {
+			logrus.Errorf("gRPC server error: %v", err)
+			ts.Cancel()
+		}
 	}()
 	return nil
 }
