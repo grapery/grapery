@@ -76,15 +76,14 @@ func (s *MessageService) StreamChatMessage(stream api.StreamMessageService_Strea
 		if err != nil {
 			return err // 处理接收错误
 		}
-
 		// 处理消息逻辑（例如：记录消息，存储数据库等）
 		fmt.Printf("Received message: %s\n", req.Message.Content)
-
+		time.Sleep(10 * time.Second)
 		// 构建响应消息
 		response := &api.StreamChatMessageResponse{
 			Code:      1,
-			Message:   fmt.Sprintf("Message received: %s", req.Message.Content),
-			Timestamp: req.Timestamp,
+			Message:   fmt.Sprintf("现在时间: ", time.Now()),
+			Timestamp: time.Now().Unix(),
 			RequestId: req.RequestId,
 		}
 
