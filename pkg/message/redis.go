@@ -105,7 +105,7 @@ func (rq *RedisQueue) Publish(ctx context.Context, topic string, payload []byte)
 	}
 
 	// 发布消息通知
-	if err := rq.client.Publish(ctx, topic, data).Err(); err != nil {
+	if err := rq.client.Publish(topic, data).Err(); err != nil {
 		return fmt.Errorf("redis publish failed: %w", err)
 	}
 
