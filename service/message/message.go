@@ -66,6 +66,12 @@ func NewMessageService() *MessageService {
 	return ms
 }
 
+// 用户建立连接的消息，初始化本次连接，并管理此次的连接会话。如果用户长时间没有消息流，则关闭此次连接。
+
+func (s *MessageService) initChatContext(stream api.StreamMessageService_StreamChatMessageServer) error {
+	return nil
+}
+
 func (s *MessageService) StreamChatMessage(stream api.StreamMessageService_StreamChatMessageServer) error {
 	for {
 		// 从客户端接收消息
