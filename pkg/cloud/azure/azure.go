@@ -3,8 +3,6 @@ package azure
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -100,51 +98,3 @@ func (c *AzureOpenAIClient) Chat(ctx context.Context, messages []ChatMessage) (s
 }
 
 // FineTuneModel represents fine-tuning model configuration
-type FineTuneModel struct {
-	TrainingFile string
-	ModelName    string
-	Epochs       int32
-}
-
-// CreateFineTune initiates a fine-tuning job
-func (c *AzureOpenAIClient) CreateFineTune(ctx context.Context, config FineTuneModel) error {
-	// Upload training file
-	file, err := os.Open(config.TrainingFile)
-	if err != nil {
-		return fmt.Errorf("failed to open training file: %v", err)
-	}
-	defer file.Close()
-
-	// Read file content
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return fmt.Errorf("failed to read training file: %v", err)
-	}
-
-	// Create fine-tuning job
-	resp, err := c.client.GetFineTuningJobs(ctx, azopenai.FineTuningJobOptions{
-		TrainingData: content,
-		Model:        to.Ptr(config.ModelName),
-		Hyperparameters: &azopenai.FineTuningJobHyperparameters{
-			NEpochs: to.Ptr(config.Epochs),
-		},
-		DeploymentName: &c.deploymentName,
-	}, nil)
-
-	if err != nil {
-		return fmt.Errorf("failed to create fine-tuning job: %v", err)
-	}
-
-	fmt.Printf("Fine-tuning job created with ID: %s\n", *resp.ID)
-	return nil
-}
-
-// GetFineTuneStatus gets the status of a fine-tuning job
-func (c *AzureOpenAIClient) GetFineTuneStatus(ctx context.Context, jobID string) (string, error) {
-	resp, err := c.client.GetFineTuningJob(ctx, jobID, &c.deploymentName, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to get fine-tuning job status: %v", err)
-	}
-
-	return *resp.Status, nil
-}
