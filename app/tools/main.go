@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"time"
-
-	"github.com/google/uuid"
 
 	api "github.com/grapery/common-protoc/gen"
 	"google.golang.org/grpc"
@@ -51,19 +50,20 @@ func conversations() {
 	for n := 0; n < 5; n++ {
 		err := stream.Send(&api.StreamChatMessageRequest{
 			Message: &api.StreamChatMessage{
-				RoleId: 1,
-				UserId: 666,
+				RoleId: 2,
+				UserId: 1,
 				Messages: []*api.ChatMessage{
 					{
-						RoleId:  1,
-						UserId:  666,
+						RoleId:  2,
+						UserId:  1,
 						Sender:  1,
 						Message: "hello grapery",
+						ChatId:  1,
 					},
 				},
 			},
 			Timestamp: time.Now().Unix(),
-			RequestId: uuid.New().String(),
+			RequestId: fmt.Sprintf("%d", time.Now().Unix()),
 			Token:     "1234567890",
 		})
 		if err != nil {
