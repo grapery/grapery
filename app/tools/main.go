@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,10 +51,16 @@ func conversations() {
 	for n := 0; n < 5; n++ {
 		err := stream.Send(&api.StreamChatMessageRequest{
 			Message: &api.StreamChatMessage{
-				Content:   "stream client rpc " + strconv.Itoa(n),
-				MsgType:   api.MsgType_TEXT,
-				SyncNum:   int64(n),
-				Timestamp: time.Now().Unix(),
+				RoleId: 1,
+				UserId: 666,
+				Messages: []*api.ChatMessage{
+					{
+						RoleId:  1,
+						UserId:  666,
+						Sender:  1,
+						Message: "hello grapery",
+					},
+				},
 			},
 			Timestamp: time.Now().Unix(),
 			RequestId: uuid.New().String(),
