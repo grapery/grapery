@@ -1,4 +1,4 @@
-package thridpart
+package thirdpart
 
 import (
 	"context"
