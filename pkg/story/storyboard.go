@@ -1812,11 +1812,121 @@ func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStor
 }
 
 func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, req *api.GetUserWatchStoryActiveStoryBoardsRequest) (*api.GetUserWatchStoryActiveStoryBoardsResponse, error) {
-	return nil, nil
+	stortIds, err := models.GetStoriesIdByUserFollow(ctx, int64(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if len(stortIds) == 0 {
+		return &api.GetUserWatchStoryActiveStoryBoardsResponse{
+			Code:    0,
+			Message: "OK",
+			Total:   0,
+		}, nil
+	}
+	boards, err := models.GetStoryBoardsByStoryIds(ctx, stortIds, int(req.GetOffset()), int(req.GetPageSize()), req.GetFilter())
+	if err != nil {
+		return nil, err
+	}
+	apiBoards := make([]*api.StoryBoardActive, 0)
+	for _, board := range boards {
+		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
+		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(board.ID))
+		if err != nil {
+			return nil, err
+		}
+		boardsItem.Roles = make([]*api.StoryRole, 0)
+		for _, role := range roles {
+			boardsItem.Roles = append(boardsItem.Roles, convert.ConvertSummaryStoryRoleToApiStoryRoleInfo(role))
+		}
+		apiRoles := make([]*api.StoryBoardActiveRole, 0)
+		for _, role := range roles {
+			apiRoles = append(apiRoles, &api.StoryBoardActiveRole{
+				RoleId:     int64(role.ID),
+				RoleName:   role.Name,
+				RoleAvatar: role.Avatar,
+			})
+		}
+		apiBoards = append(apiBoards, &api.StoryBoardActive{
+			Storyboard:        boardsItem,
+			TotalLikeCount:    int64(board.LikeNum),
+			TotalCommentCount: int64(board.CommentNum),
+			TotalShareCount:   int64(board.ShareNum),
+			TotalForkCount:    int64(board.ForkNum),
+			Roles:             apiRoles,
+			Mtime:             board.UpdateAt.Unix(),
+		})
+	}
+	return &api.GetUserWatchStoryActiveStoryBoardsResponse{
+		Code:        0,
+		Message:     "OK",
+		Storyboards: apiBoards,
+		Total:       int64(len(boards)),
+	}, nil
 }
+
 func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, req *api.GetUserWatchRoleActiveStoryBoardsRequest) (*api.GetUserWatchRoleActiveStoryBoardsResponse, error) {
-	return nil, nil
+	rolesIds, err := models.GetStoryBoardRolesIDByUserFollow(ctx, int64(req.GetUserId()))
+	if err != nil {
+		return nil, err
+	}
+	if len(rolesIds) == 0 {
+		return &api.GetUserWatchRoleActiveStoryBoardsResponse{
+			Code:    0,
+			Message: "OK",
+			Total:   0,
+		}, nil
+	}
+	boards, roleBoardList, err := models.GetStoryBoardsByRolesID(ctx, rolesIds, int(req.GetOffset()), int(req.GetPageSize()), req.GetFilter())
+	if err != nil {
+		return nil, err
+	}
+	roleBoardMap := make(map[int64][]*models.StoryBoardRole)
+	for _, roleBoard := range roleBoardList {
+		roleBoardMap[roleBoard.BoardId] = append(roleBoardMap[roleBoard.BoardId], roleBoard)
+	}
+	apiBoards := make([]*api.StoryBoardActive, 0)
+	for _, board := range boards {
+		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
+		for _, role := range roleBoardMap[int64(board.ID)] {
+			apiRoles := make([]*api.StoryBoardActiveRole, 0)
+			apiRoles = append(apiRoles, &api.StoryBoardActiveRole{
+				RoleId:     int64(role.ID),
+				RoleName:   role.Name,
+				RoleAvatar: role.Avatar,
+			})
+			apiBoards = append(apiBoards, &api.StoryBoardActive{
+				Storyboard:        boardsItem,
+				TotalLikeCount:    int64(board.LikeNum),
+				TotalCommentCount: int64(board.CommentNum),
+				TotalShareCount:   int64(board.ShareNum),
+				TotalForkCount:    int64(board.ForkNum),
+				Roles:             apiRoles,
+				Mtime:             board.UpdateAt.Unix(),
+			})
+		}
+
+	}
+	return &api.GetUserWatchRoleActiveStoryBoardsResponse{
+		Code:        0,
+		Message:     "OK",
+		Storyboards: apiBoards,
+		Total:       int64(len(boards)),
+	}, nil
 }
+
 func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetUnPublishStoryboardRequest) (*api.GetUnPublishStoryboardResponse, error) {
-	return nil, nil
+	boards, err := models.GetUnPublishedStoryBoardsByUserId(ctx, req.GetUserId(), int(req.GetOffset()), int(req.GetPageSize()), "create_at desc")
+	if err != nil {
+		return nil, err
+	}
+	apiBoards := make([]*api.StoryBoard, 0)
+	for _, board := range boards {
+		apiBoards = append(apiBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+	}
+	return &api.GetUnPublishStoryboardResponse{
+		Code:        0,
+		Message:     "OK",
+		Storyboards: apiBoards,
+		Total:       int64(len(boards)),
+	}, nil
 }

@@ -13,14 +13,20 @@ type StoryBoard struct {
 	StoryID     int64
 	PrevId      int64
 	Avatar      string
-	Status      int
+	// 是否删除
+	Status int
 	// 0: 初始化，1：生成中，2：生成完成，3：生成失败
-	Stage    int
-	Params   string
-	ForkAble bool
-	ForkNum  int
-	Level    int
-	IsAiGen  bool
+	Stage int
+
+	Params     string
+	ForkAble   bool
+	ForkNum    int
+	LikeNum    int
+	CommentNum int
+	RoleNum    int
+	ShareNum   int
+	Level      int
+	IsAiGen    bool
 }
 
 func (board StoryBoard) TableName() string {
@@ -431,4 +437,67 @@ func GetStoryBoardSencesByRoleID(ctx context.Context, roleID int64) ([]*StoryBoa
 		return nil, err
 	}
 	return scenes, nil
+}
+
+func GetStoryBoardsByStoryIds(ctx context.Context, storyIds []int64, page int, pageSize int, orderBy string) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("story_id in (?)", storyIds).
+		Where("status = ?", 1).
+		Order("create_at desc").
+		Offset(page * pageSize).
+		Limit(pageSize).
+		Find(&boards).Error
+	if err != nil {
+		return nil, err
+	}
+	return boards, nil
+}
+
+func GetStoryBoardsByRolesID(ctx context.Context, rolesIDs []int64, page int, pageSize int, orderBy string) ([]*StoryBoard, []*StoryBoardRole, error) {
+	var boards []*StoryBoard
+	var boardsIDs []int64
+	var roleModels []*StoryBoardRole
+	if err := DataBase().Select("board_id").Model(&StoryBoardRole{}).
+		Where("role_id in (?)", rolesIDs).
+		Where("status > 0").
+		Find(&roleModels).
+		Offset(page * pageSize).
+		Limit(pageSize).
+		Error; err != nil {
+		return nil, nil, err
+	}
+	if len(roleModels) == 0 {
+		return nil, nil, nil
+	}
+	for _, role := range roleModels {
+		boardsIDs = append(boardsIDs, role.BoardId)
+	}
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("id in (?)", boardsIDs).
+		Where("status > 0").
+		Order("create_at desc").
+		Find(&boards).Error
+	if err != nil {
+		return nil, nil, err
+	}
+	return boards, roleModels, nil
+}
+
+func GetUnPublishedStoryBoardsByUserId(ctx context.Context, userId int64, page int, pageSize int, orderBy string) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("creator_id = ?", userId).
+		Where("stage != ?", 2).
+		Order("create_at desc").
+		Offset(page * pageSize).
+		Limit(pageSize).
+		Find(&boards).Error
+	if err != nil {
+		return nil, err
+	}
+	return boards, nil
 }

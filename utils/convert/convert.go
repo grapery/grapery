@@ -180,6 +180,23 @@ func ConvertStoryRoleToApiStoryRoleInfo(role *models.StoryRole) *api.StoryRole {
 		CharacterDescription: role.CharacterDescription,
 		CharacterAvatar:      role.CharacterAvatar,
 		CreatorId:            int64(role.CreatorID),
+		Status:               int32(role.Status),
+		LikeCount:            int64(role.LikeCount),
+		FollowCount:          int64(role.FollowCount),
+		StoryboardNum:        int64(role.StoryboardNum),
+		Version:              int64(role.Version),
+		Ctime:                role.CreateAt.Unix(),
+		Mtime:                role.UpdateAt.Unix(),
+	}
+}
+
+func ConvertSummaryStoryRoleToApiStoryRoleInfo(role *models.StoryBoardRole) *api.StoryRole {
+	return &api.StoryRole{
+		RoleId:               int64(role.ID),
+		CharacterName:        role.Name,
+		CharacterDescription: role.Avatar,
+		CharacterAvatar:      role.Avatar,
+		CreatorId:            int64(role.CreatorId),
 		Ctime:                role.CreateAt.Unix(),
 		Mtime:                role.UpdateAt.Unix(),
 	}
@@ -209,6 +226,9 @@ func ConvertStoryBoardToApiStoryBoard(storyBoard *models.StoryBoard) *api.StoryB
 		IsAiGen:      storyBoard.IsAiGen,
 		Ctime:        storyBoard.CreateAt.Unix(),
 		Mtime:        storyBoard.UpdateAt.Unix(),
+	}
+	if storyBoard.ForkNum > 1 {
+		ret.IsMultiBranch = true
 	}
 	_ = json.Unmarshal([]byte(storyBoard.Params), &ret.Params)
 	return ret

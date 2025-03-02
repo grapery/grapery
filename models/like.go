@@ -489,3 +489,30 @@ func GetWatchItemByGroupsAndUser(ctx context.Context, groupIds []int64, userId i
 	}
 	return list, nil
 }
+
+func GetStoriesIdByUserFollow(ctx context.Context, userId int64) ([]int64, error) {
+	var storiesIds []int64
+	if err := DataBase().Model(&WatchItem{}).
+		Where("user_id = ?", userId).
+		Where("watch_item_type = ?", WatchItemTypeStory).
+		Where("watch_type = ?", WatchTypeIsWatch).
+		Where("deleted = ?", 0).
+		Pluck("story_id", &storiesIds).Error; err != nil {
+		return nil, err
+	}
+
+	return storiesIds, nil
+}
+
+func GetStoryBoardRolesIDByUserFollow(ctx context.Context, userId int64) ([]int64, error) {
+	var rolesIds []int64
+	if err := DataBase().Model(&WatchItem{}).
+		Where("user_id = ?", userId).
+		Where("watch_item_type = ?", WatchItemTypeStoryRole).
+		Where("watch_type = ?", WatchTypeIsWatch).
+		Where("deleted = ?", 0).
+		Pluck("role_id", &rolesIds).Error; err != nil {
+		return nil, err
+	}
+	return rolesIds, nil
+}
