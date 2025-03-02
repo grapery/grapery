@@ -1829,6 +1829,10 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
+		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
+		if err != nil {
+			return nil, err
+		}
 		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
 		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(board.ID))
 		if err != nil {
@@ -1854,6 +1858,11 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 			TotalForkCount:    int64(board.ForkNum),
 			Roles:             apiRoles,
 			Mtime:             board.UpdateAt.Unix(),
+			Creator: &api.StoryBoardActiveUser{
+				UserId:     int64(creator.ID),
+				UserName:   creator.Name,
+				UserAvatar: creator.Avatar,
+			},
 		})
 	}
 	return &api.GetUserWatchStoryActiveStoryBoardsResponse{
@@ -1886,6 +1895,10 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
+		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
+		if err != nil {
+			return nil, err
+		}
 		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
 		for _, role := range roleBoardMap[int64(board.ID)] {
 			apiRoles := make([]*api.StoryBoardActiveRole, 0)
@@ -1902,6 +1915,11 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 				TotalForkCount:    int64(board.ForkNum),
 				Roles:             apiRoles,
 				Mtime:             board.UpdateAt.Unix(),
+				Creator: &api.StoryBoardActiveUser{
+					UserId:     int64(creator.ID),
+					UserName:   creator.Name,
+					UserAvatar: creator.Avatar,
+				},
 			})
 		}
 

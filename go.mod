@@ -11,7 +11,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
-	github.com/grapery/common-protoc/gen v0.0.0-20250302015631-abf7005b0cc5
+	github.com/grapery/common-protoc/gen v0.0.0-20250302131421-36f813d4061f
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0
 	github.com/sirupsen/logrus v1.9.3
