@@ -343,3 +343,27 @@ func (s *StoryBoardService) CancelStoryboard(ctx context.Context, req *connect.R
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryBoardService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, req *connect.Request[gen.GetUserWatchStoryActiveStoryBoardsRequest]) (*connect.Response[gen.GetUserWatchStoryActiveStoryBoardsResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserWatchStoryActiveStoryBoards(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryBoardService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, req *connect.Request[gen.GetUserWatchRoleActiveStoryBoardsRequest]) (*connect.Response[gen.GetUserWatchRoleActiveStoryBoardsResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUserWatchRoleActiveStoryBoards(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryBoardService) GetUnPublishStoryboard(ctx context.Context, req *connect.Request[gen.GetUnPublishStoryboardRequest]) (*connect.Response[gen.GetUnPublishStoryboardResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetUnPublishStoryboard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

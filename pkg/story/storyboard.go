@@ -1810,3 +1810,13 @@ func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStor
 		Message: "OK",
 	}, nil
 }
+
+func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, req *api.GetUserWatchStoryActiveStoryBoardsRequest) (*api.GetUserWatchStoryActiveStoryBoardsResponse, error) {
+	return nil, nil
+}
+func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, req *api.GetUserWatchRoleActiveStoryBoardsRequest) (*api.GetUserWatchRoleActiveStoryBoardsResponse, error) {
+	return nil, nil
+}
+func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetUnPublishStoryboardRequest) (*api.GetUnPublishStoryboardResponse, error) {
+	return nil, nil
+}

@@ -519,16 +519,10 @@ func DecGroupProfileStoryCount(ctx context.Context, groupId int64) error {
 		Update("story_count", gorm.Expr("story_count - 1")).Error
 }
 
-func UpdateGroupProfile(ctx context.Context, groupId int64, desc string, defaultStoryId int64, isVerified bool, followers int64) error {
+func UpdateGroupProfile(ctx context.Context, groupId int64, desc string, followers int64) error {
 	needUpdate := make(map[string]interface{})
 	if desc != "" {
 		needUpdate["desc"] = desc
-	}
-	if defaultStoryId != 0 {
-		needUpdate["default_story_id"] = defaultStoryId
-	}
-	if isVerified {
-		needUpdate["is_verified"] = isVerified
 	}
 	return DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).

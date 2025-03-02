@@ -98,6 +98,10 @@ type StoryServer interface {
 
 	CancelStoryboard(ctx context.Context, req *api.CancelStoryboardRequest) (*api.CancelStoryboardResponse, error)
 	PublishStoryboard(ctx context.Context, req *api.PublishStoryboardRequest) (*api.PublishStoryboardResponse, error)
+
+	GetUserWatchStoryActiveStoryBoards(ctx context.Context, req *api.GetUserWatchStoryActiveStoryBoardsRequest) (*api.GetUserWatchStoryActiveStoryBoardsResponse, error)
+	GetUserWatchRoleActiveStoryBoards(ctx context.Context, req *api.GetUserWatchRoleActiveStoryBoardsRequest) (*api.GetUserWatchRoleActiveStoryBoardsResponse, error)
+	GetUnPublishStoryboard(ctx context.Context, req *api.GetUnPublishStoryboardRequest) (*api.GetUnPublishStoryboardResponse, error)
 }
 
 type StoryService struct {

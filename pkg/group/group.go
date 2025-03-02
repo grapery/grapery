@@ -363,11 +363,11 @@ func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupPro
 			Message: "ok",
 			Data: &api.GetGroupProfileResponse_Data{
 				Info: &api.GroupProfileInfo{
-					GroupId:            req.GetGroupId(),
-					Description:        "",
-					DefaultProjectList: 0,
-					IsVerified:         false,
-					GroupFollowerNum:   0,
+					GroupId:          req.GetGroupId(),
+					Description:      "",
+					GroupStoryNum:    0,
+					GroupFollowerNum: 0,
+					GroupMemberNum:   0,
 				},
 			},
 		}, nil
@@ -386,8 +386,6 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.UpdateGr
 	err = models.UpdateGroupProfile(ctx,
 		req.GetGroupId(),
 		profile.GetDescription(),
-		int64(profile.GetDefaultProjectList()),
-		profile.GetIsVerified(),
 		int64(profile.GetGroupFollowerNum()),
 	)
 	if err != nil {

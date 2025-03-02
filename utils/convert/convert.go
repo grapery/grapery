@@ -134,10 +134,9 @@ func ConvertGroupProfileToApiGroupProfile(p *models.GroupProfile) *api.GroupProf
 	return &api.GroupProfileInfo{
 		GroupId:          p.GroupID,
 		GroupMemberNum:   int32(p.Members),
-		GroupProjectNum:  int32(p.StoryCount),
-		IsVerified:       p.IsVerified,
 		Description:      p.Desc,
 		GroupFollowerNum: int32(p.Followers),
+		GroupStoryNum:    int32(p.StoryCount),
 	}
 }
 
