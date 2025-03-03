@@ -53,6 +53,22 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 			return nil, err
 		}
 	}
+	if len(req.GetBoard().GetRoles()) > 0 {
+		for _, role := range req.GetBoard().GetRoles() {
+			roleInfo := new(models.StoryBoardRole)
+			roleInfo.BoardId = storyBoardId
+			roleInfo.RoleId = role.RoleId
+			roleInfo.Name = role.CharacterName
+			roleInfo.Avatar = role.CharacterAvatar
+			roleInfo.StoryId = req.GetBoard().GetStoryId()
+			roleInfo.CreatorId = req.GetBoard().GetCreator()
+			roleInfo.Status = 1
+			_, err = models.CreateStoryBoardRole(ctx, roleInfo)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	group := &models.Group{}
 	group.ID = uint(storyInfo.GroupID)
 	err = group.GetByID()
