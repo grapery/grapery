@@ -457,20 +457,11 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 	for _, val := range watchItems {
 		watchMap[int64(val.StoryID)] = true
 	}
-	interactlist := make([]*api.UserInteractStatus, 0)
-	for _, val := range list {
-		interactlist = append(interactlist, &api.UserInteractStatus{
-			StoryId: int64(val.Id),
-			IsLike:  likeMap[int64(val.Id)],
-			IsWatch: watchMap[int64(val.Id)],
-		})
-	}
 	return &api.FetchGroupStorysResponse{
 		Code:    0,
 		Message: "ok",
 		Data: &api.FetchGroupStorysResponse_Data{
-			List:     list,
-			Interact: interactlist,
+			List: list,
 		},
 	}, nil
 }

@@ -113,6 +113,12 @@ func (ts *UserService) UserInfo(ctx context.Context, req *connect.Request[api.Us
 }
 
 func (ts *UserService) GetUserProfile(ctx context.Context, req *connect.Request[api.GetUserProfileRequest]) (*connect.Response[api.GetUserProfileResponse], error) {
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		log.Println("get user id from context failed: ", err.Error())
+		return nil, err
+	}
+	log.Println("user id: ", userID)
 	info, err := userService.GetUserServer().GetUserProfile(ctx, req.Msg)
 	if err != nil {
 		return nil, err

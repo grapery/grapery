@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"net/mail"
 	"strings"
@@ -98,4 +99,13 @@ func CleanLLmJsonResult(jsonStr string) string {
 				strings.Trim(
 					strings.Trim(jsonStr, "\r"), "\n"), "\\"), "‘"), "```json")
 	return jsonStr
+}
+
+// GetUserIDFromContext 从 context 中获取 user_id
+func GetUserIDFromContext(ctx context.Context) (int64, error) {
+	userID, ok := ctx.Value(UserIdKey).(int64)
+	if !ok {
+		return 0, fmt.Errorf("user id not found in context")
+	}
+	return userID, nil
 }

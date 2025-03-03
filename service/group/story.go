@@ -9,6 +9,7 @@ import (
 	"github.com/grapery/common-protoc/gen"
 	groupService "github.com/grapery/grapery/pkg/group"
 	storyServer "github.com/grapery/grapery/pkg/story"
+	"github.com/grapery/grapery/utils"
 )
 
 type StoryService struct {
@@ -62,6 +63,13 @@ func (s *StoryService) GetStoryInfo(ctx context.Context, req *connect.Request[ge
 		return nil, err
 	}
 	fmt.Printf("req %s info %s", req.Msg.String(), info.String())
+	userID, err := utils.GetUserIDFromContext(ctx)
+
+	if err != nil {
+		fmt.Printf("get user id from context failed: %s", err.Error())
+		return nil, err
+	}
+	fmt.Printf("user id: %d", userID)
 	resp := &gen.GetStoryInfoResponse{
 		Code:    0,
 		Message: "OK",

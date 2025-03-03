@@ -48,7 +48,7 @@ func AuthInterceptor(authFunc grpc_auth.AuthFunc) grpc.UnaryServerInterceptor {
 }
 
 type AuthInterceptorFunc struct {
-	Handle func(context.Context, connect.Spec, http.Header, any) error
+	Handle func(context.Context, connect.Spec, http.Header, any) (context.Context, error)
 }
 
 func (f AuthInterceptorFunc) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -59,11 +59,11 @@ func (f AuthInterceptorFunc) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc
 			req.Spec().Procedure == "/common.TeamsAPI/Reset_password" {
 			return next(ctx, req)
 		}
-		err := f.Handle(ctx, req.Spec(), req.Header(), req)
+		newCtx, err := f.Handle(ctx, req.Spec(), req.Header(), req)
 		if err != nil {
 			return nil, err
 		}
-		return next(ctx, req)
+		return next(newCtx, req)
 	}
 }
 
@@ -74,24 +74,28 @@ func (f AuthInterceptorFunc) WrapStreamingHandler(next connect.StreamingHandlerF
 	return next
 }
 
-func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Header, a any) error {
+func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Header, a any) (context.Context, error) {
 	cookieInfo := header.Get(utils.GrpcGateWayCookie)
 	if len(cookieInfo) == 0 {
-		return status.Errorf(codes.Unauthenticated, "empty auth from md: %s", utils.GrpcGateWayCookie)
+		return nil, status.Errorf(codes.Unauthenticated, "empty auth from md: %s", utils.GrpcGateWayCookie)
 	}
 	token := cookieInfo
 	jwtInfo := jwt.NewJwtWrapper(utils.SecretKey, utils.ExpirationHours)
 	tokenInfo, err := jwtInfo.ValidateToken(token)
 	if err != nil {
-		return status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
 	}
 	header.Set("auth.sub", jwtInfo.SecretKey)
 	header.Set(utils.UserIdKey, fmt.Sprintf("%d", tokenInfo.UID))
+
+	// 将 user_id 存入 context
+	newCtx := context.WithValue(ctx, utils.UserIdKey, tokenInfo.UID)
+
 	// ------------------------------
 	aData, _ := json.Marshal(a)
 	println("WithRequestLogInterceptor method: ", spec.Procedure, " params: ", string(aData))
 	// ------------------------------
-	return nil
+	return newCtx, nil
 }
 
 func WithRequestLogInterceptor(ctx context.Context, spec connect.Spec, header http.Header, a any) error {
@@ -279,4 +283,13 @@ func (ts *AuthService) RefreshToken(ctx context.Context, req *connect.Request[ap
 		Token:  newToken,
 	}
 	return &connect.Response[api.RefreshTokenResponse]{Msg: ret}, nil
+}
+
+// GetUserIDFromContext 从 context 中获取 user_id
+func GetUserIDFromContext(ctx context.Context) (int64, error) {
+	userID, ok := ctx.Value(utils.UserIdKey).(int64)
+	if !ok {
+		return 0, fmt.Errorf("user id not found in context")
+	}
+	return userID, nil
 }
