@@ -227,10 +227,24 @@ func GetLikeItemByStoryBoard(ctx context.Context, storyId int64, storyboardId in
 	return list, nil
 }
 
-func GetLikeItemByStoryBoardAndUser(ctx context.Context, storyId int64, storyboardId int64, userId int) (*LikeItem, error) {
+func GetLikeItemByStoryBoardAndUser(ctx context.Context, storyboardId int64, userId int) (*LikeItem, error) {
 	item := new(LikeItem)
 	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
-		Where("story_id = ? and storyboard_id = ? and user_id = ?", storyId, storyboardId, userId).
+		Where("storyboard_id = ? and user_id = ?", storyboardId, userId).
+		First(item).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	return item, nil
+}
+
+func GetLikeItemByStoryRoleAndUser(ctx context.Context, roleId int64, userId int) (*LikeItem, error) {
+	item := new(LikeItem)
+	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
+		Where("role_id = ? and user_id = ?", roleId, userId).
 		First(item).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
@@ -460,6 +474,75 @@ func GetWatchItemByStoriesAndUser(ctx context.Context, storyIds []int64, userId 
 		return nil, err
 	}
 	return list, nil
+}
+
+// 根据一组故事id，以及一个用户id来获取关注的列表
+func GetWatchItemByStoryAndUser(ctx context.Context, storyId int64, userId int) (*WatchItem, error) {
+	item := new(WatchItem)
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("story_id = ? and user_id = ?", storyId, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeStory).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func GetWatchItemByStoryboardAndUser(ctx context.Context, storyboardId int64, userId int) (*WatchItem, error) {
+	item := new(WatchItem)
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("storyboard_id = ? and user_id = ?", storyboardId, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeStoryboard).
+		First(item).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	return item, nil
+}
+
+func GetWatchItemByStoryRoleAndUser(ctx context.Context, roleId int64, userId int64) (*WatchItem, error) {
+	item := new(WatchItem)
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("role_id = ? and user_id = ?", roleId, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeStoryRole).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func GetWatchItemByGroupAndUser(ctx context.Context, groupId int64, userId int64) (*WatchItem, error) {
+	item := new(WatchItem)
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("group_id = ? and user_id = ?", groupId, userId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeGroup).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func GetWatchItemByTargetUserAndUser(ctx context.Context, targetUserId int64, userId int64) (*WatchItem, error) {
+	item := new(WatchItem)
+	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
+		Where("user_id = ? and target_user_id = ?", userId, targetUserId).
+		Where("deleted = ?", 0).
+		Where("watch_item_type = ?", WatchItemTypeUser).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 
 // 根据一组角色id，以及一个用户id来获取关注的列表

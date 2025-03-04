@@ -1169,7 +1169,7 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 }
 
 func (s *StoryService) UnLikeStoryboard(ctx context.Context, req *api.UnLikeStoryboardRequest) (*api.UnLikeStoryboardResponse, error) {
-	likeItem, err := models.GetLikeItemByStoryBoardAndUser(ctx, req.GetStoryId(), req.GetBoardId(), int(req.GetUserId()))
+	likeItem, err := models.GetLikeItemByStoryBoardAndUser(ctx, req.GetBoardId(), int(req.GetUserId()))
 	if err != nil {
 		return nil, err
 	}

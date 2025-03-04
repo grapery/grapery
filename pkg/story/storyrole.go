@@ -180,6 +180,10 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 		log.Log().Error("get story role detail failed", zap.Error(err))
 		return nil, err
 	}
+	cu, err := s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
+	if err != nil {
+		log.Log().Error("get story role current user status failed", zap.Error(err))
+	}
 	return &api.GetStoryRoleDetailResponse{
 		Code:    0,
 		Message: "OK",
@@ -200,6 +204,7 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 			LikeCount:            role.LikeCount,
 			Status:               int32(role.Status),
 			StoryboardNum:        role.StoryboardNum,
+			CurrentUserStatus:    cu,
 		},
 	}, nil
 }
