@@ -236,11 +236,22 @@ func (s *StoryService) GetStory(ctx context.Context, req *api.GetStoryInfoReques
 	if err != nil {
 		return nil, err
 	}
+	cu, err := s.GetStoryCurrentUserStatus(ctx, req.StoryId)
+	if err != nil {
+		log.Log().Error("get story current user status failed", zap.Error(err))
+	}
+	creator, err := models.GetUserById(ctx, storyInfo.CreatorID)
+	if err != nil {
+		log.Log().Error("get story creator failed", zap.Error(err))
+	}
+	info := ConvertStoryToApiStory(storyInfo)
+	info.CurrentUserStatus = cu
 	return &api.GetStoryInfoResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.GetStoryInfoResponse_Data{
-			Info: ConvertStoryToApiStory(storyInfo),
+			Info:    info,
+			Creator: convert.ConvertUserToApiUser(creator),
 		},
 	}, nil
 }
@@ -324,6 +335,7 @@ func ConvertApiStoryBoardToStoryBoard(apiStoryBoard *api.StoryBoard) *models.Sto
 		PrevId:      apiStoryBoard.PrevBoardId,
 		Title:       apiStoryBoard.Title,
 		Description: apiStoryBoard.Content,
+		IsAiGen:     true,
 	}
 	params, _ := json.Marshal(apiStoryBoard.Params)
 	board.Params = string(params)
@@ -704,7 +716,12 @@ func (s *StoryService) SearchStories(ctx context.Context, req *api.SearchStories
 	}
 	apiStories := make([]*api.Story, 0)
 	for _, story := range stories {
-		apiStories = append(apiStories, convert.ConvertStoryToApiStory(story))
+		info := convert.ConvertStoryToApiStory(story)
+		info.CurrentUserStatus, err = s.GetStoryCurrentUserStatus(ctx, int64(story.ID))
+		if err != nil {
+			log.Log().Error("get story current user status failed", zap.Error(err))
+		}
+		apiStories = append(apiStories, info)
 	}
 	return &api.SearchStoriesResponse{
 		Code:    0,
@@ -722,7 +739,12 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 	}
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
-		apiRoles = append(apiRoles, convert.ConvertStoryRoleToApiStoryRoleInfo(role))
+		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		info.CurrentUserStatus, err = s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
+		if err != nil {
+			log.Log().Error("get story role current user status failed", zap.Error(err))
+		}
+		apiRoles = append(apiRoles, info)
 	}
 	return &api.SearchRolesResponse{
 		Code:    0,

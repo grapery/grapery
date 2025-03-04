@@ -119,6 +119,11 @@ func (s *StoryService) GetStoryboard(ctx context.Context, req *api.GetStoryboard
 		}
 		board.Sences.Total = int64(len(board.Sences.List))
 	}
+	cu, err := s.GetStoryboardCurrentUserStatus(ctx, req.BoardId)
+	if err != nil {
+		log.Log().Error("get storyboard current user status failed", zap.Error(err))
+	}
+	board.CurrentUserStatus = cu
 	return &api.GetStoryboardResponse{
 		Code:    0,
 		Message: "OK",
@@ -173,6 +178,11 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 			}
 			boardInfo.Sences.Total = int64(len(boardInfo.Sences.List))
 		}
+		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get storyboard current user status failed", zap.Error(err))
+		}
+		boardInfo.CurrentUserStatus = cu
 		datas = append(datas, boardInfo)
 	}
 	return &api.GetStoryboardsResponse{
@@ -1114,6 +1124,11 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 		apiRole.CharacterPrompt = role.CharacterPrompt
 		apiRole.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
 		apiRole.CharacterDescription = role.CharacterDescription
+		cu, err := s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
+		if err != nil {
+			log.Log().Error("get story role current user status failed", zap.Error(err))
+		}
+		apiRole.CurrentUserStatus = cu
 		apiRoles = append(apiRoles, apiRole)
 	}
 
@@ -1156,6 +1171,11 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 		apiRole.CharacterPrompt = role.CharacterPrompt
 		apiRole.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
 		apiRole.CharacterDescription = role.CharacterDescription
+		cu, err := s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
+		if err != nil {
+			log.Log().Error("get story role current user status failed", zap.Error(err))
+		}
+		apiRole.CurrentUserStatus = cu
 		apiRoles = append(apiRoles, apiRole)
 	}
 
@@ -1754,6 +1774,11 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		for _, scene := range sences {
 			newApiStoryboard.Sences.List = append(newApiStoryboard.Sences.List, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
 		}
+		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(storyboard.ID))
+		if err != nil {
+			log.Log().Error("get storyboard current user status failed", zap.Error(err))
+		}
+		newApiStoryboard.CurrentUserStatus = cu
 		apiStoryboards = append(apiStoryboards, newApiStoryboard)
 	}
 	return &api.GetUserCreatedStoryboardsResponse{
@@ -1791,7 +1816,13 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 	}
 	retBoards := make([]*api.StoryBoard, 0)
 	for _, board := range boards {
-		retBoards = append(retBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get storyboard current user status failed", zap.Error(err))
+		}
+		boardInfo := convert.ConvertStoryBoardToApiStoryBoard(board)
+		boardInfo.CurrentUserStatus = cu
+		retBoards = append(retBoards, boardInfo)
 	}
 	resp.Storyboards = retBoards
 	resp.IsMultiBranch = true
