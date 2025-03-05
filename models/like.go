@@ -45,8 +45,11 @@ func CreateLikeStoryItem(ctx context.Context, item *LikeItem) error {
 		Where("user_id = ? and story_id = ?",
 			item.UserID, item.StoryID).
 		Count(&num).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil
 	}
 	if num > 0 {
 		return nil
@@ -65,8 +68,11 @@ func CreateLikeStoryTimelineItem(ctx context.Context, item *LikeItem) error {
 		Where("user_id = ? and story_id = ? and timeline_id = ?",
 			item.UserID, item.StoryID, item.TimelineID).
 		Count(&num).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil
 	}
 	if num > 0 {
 		return nil
@@ -116,8 +122,11 @@ func GetLikeItem(ctx context.Context, itemID int64) (*LikeItem, error) {
 	item := new(LikeItem)
 	err := DataBase().WithContext(ctx).Model(&LikeItem{}).First(item).
 		Where("id = ?", itemID).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return item, nil
 }
@@ -127,8 +136,11 @@ func GetLikeItemByUser(ctx context.Context, userID int) (list []*LikeItem, err e
 	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
 		Where("user_id = ?", userID).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -138,8 +150,11 @@ func GetLikeItemByStory(ctx context.Context, storyId int64) (list []*LikeItem, e
 	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
 		Where("story_id = ?", storyId).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -169,8 +184,11 @@ func GetLikeItemByStoriesAndUser(ctx context.Context, storyIds []int64, userId i
 		Where("deleted = ?", 0).
 		Where("like_item_type = ?", LikeItemTypeStory).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -182,8 +200,11 @@ func GetLikeItemByGroup(ctx context.Context, groupId []int64, userId int) (list 
 		Where("deleted = ?", 0).
 		Where("like_item_type = ?", LikeItemTypeGroup).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -196,8 +217,11 @@ func GetLikeItemByRolesAndUser(ctx context.Context, roleIds []int64, userId int)
 		Where("deleted = ?", 0).
 		Where("like_item_type = ?", LikeItemTypeRole).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -210,8 +234,11 @@ func GetLikeItemByStoryBoardsAndUser(ctx context.Context, storyboardIds []int64,
 		Where("deleted = ?", 0).
 		Where("like_item_type = ?", LikeItemTypeStoryboard).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -221,8 +248,11 @@ func GetLikeItemByStoryBoard(ctx context.Context, storyId int64, storyboardId in
 	err = DataBase().WithContext(ctx).Model(&LikeItem{}).
 		Where("story_id = ? and storyboard_id = ?", storyId, storyboardId).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -314,8 +344,11 @@ func GetWatchItemByGroup(ctx context.Context, groupId int64) (list []*WatchItem,
 	err = DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("group_id = ?", groupId).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -325,8 +358,11 @@ func GetWatchItemByStory(ctx context.Context, storyId int64) (list []*WatchItem,
 	err = DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("story_id = ?", storyId).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -470,8 +506,11 @@ func GetWatchItemByStoriesAndUser(ctx context.Context, storyIds []int64, userId 
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeStory).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -484,8 +523,11 @@ func GetWatchItemByStoryAndUser(ctx context.Context, storyId int64, userId int) 
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeStory).
 		First(item).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return item, nil
 }
@@ -513,8 +555,11 @@ func GetWatchItemByStoryRoleAndUser(ctx context.Context, roleId int64, userId in
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeStoryRole).
 		First(item).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return item, nil
 }
@@ -526,8 +571,11 @@ func GetWatchItemByGroupAndUser(ctx context.Context, groupId int64, userId int64
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeGroup).
 		First(item).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return item, nil
 }
@@ -539,8 +587,11 @@ func GetWatchItemByTargetUserAndUser(ctx context.Context, targetUserId int64, us
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeUser).
 		First(item).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return item, nil
 }
@@ -553,8 +604,11 @@ func GetWatchItemByRolesAndUser(ctx context.Context, roleIds []int64, userId int
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeStoryRole).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -567,8 +621,11 @@ func GetWatchItemByGroupsAndUser(ctx context.Context, groupIds []int64, userId i
 		Where("deleted = ?", 0).
 		Where("watch_item_type = ?", WatchItemTypeGroup).
 		Scan(&list).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
 	}
 	return list, nil
 }
@@ -582,6 +639,13 @@ func GetStoriesIdByUserFollow(ctx context.Context, userId int64) ([]int64, error
 		Where("deleted = ?", 0).
 		Pluck("story_id", &storiesIds).Error; err != nil {
 		return nil, err
+	} else {
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 	}
 
 	return storiesIds, nil
@@ -596,6 +660,13 @@ func GetStoryBoardRolesIDByUserFollow(ctx context.Context, userId int64) ([]int6
 		Where("deleted = ?", 0).
 		Pluck("role_id", &rolesIds).Error; err != nil {
 		return nil, err
+	} else {
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 	}
 	return rolesIds, nil
 }
