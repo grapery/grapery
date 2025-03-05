@@ -76,14 +76,6 @@ func (s *StoryService) GetStoryboardCurrentUserStatus(ctx context.Context, story
 		return nil, err
 	}
 	cu := new(api.WhatCurrentUserStatus)
-	// 查询用户是否关注了角色
-	follow, err := models.GetWatchItemByStoryboardAndUser(ctx, storyboardId, int(userID))
-	if err != nil {
-		return nil, err
-	}
-	if follow != nil && follow.Deleted == false {
-		cu.IsFollowed = true
-	}
 	// 查询用户是否点赞了角色
 	like, err := models.GetLikeItemByStoryBoardAndUser(ctx, storyboardId, int(userID))
 	if err != nil {

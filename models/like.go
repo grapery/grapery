@@ -532,22 +532,6 @@ func GetWatchItemByStoryAndUser(ctx context.Context, storyId int64, userId int) 
 	return item, nil
 }
 
-func GetWatchItemByStoryboardAndUser(ctx context.Context, storyboardId int64, userId int) (*WatchItem, error) {
-	item := new(WatchItem)
-	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
-		Where("storyboard_id = ? and user_id = ?", storyboardId, userId).
-		Where("deleted = ?", 0).
-		Where("watch_item_type = ?", WatchItemTypeStoryboard).
-		First(item).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-	if err == gorm.ErrRecordNotFound {
-		return nil, nil
-	}
-	return item, nil
-}
-
 func GetWatchItemByStoryRoleAndUser(ctx context.Context, roleId int64, userId int64) (*WatchItem, error) {
 	item := new(WatchItem)
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
