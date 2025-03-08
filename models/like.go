@@ -635,7 +635,7 @@ func GetStoriesIdByUserFollow(ctx context.Context, userId int64) ([]int64, error
 	return storiesIds, nil
 }
 
-func GetStoryBoardRolesIDByUserFollow(ctx context.Context, userId int64) ([]int64, error) {
+func GetStoryRolesIDByUserFollow(ctx context.Context, userId int64) ([]int64, error) {
 	var rolesIds []int64
 	if err := DataBase().Model(&WatchItem{}).
 		Where("user_id = ?", userId).

@@ -1921,7 +1921,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 }
 
 func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, req *api.GetUserWatchRoleActiveStoryBoardsRequest) (*api.GetUserWatchRoleActiveStoryBoardsResponse, error) {
-	rolesIds, err := models.GetStoryBoardRolesIDByUserFollow(ctx, int64(req.GetUserId()))
+	rolesIds, err := models.GetStoryRolesIDByUserFollow(ctx, int64(req.GetUserId()))
 	if err != nil {
 		return nil, err
 	}
