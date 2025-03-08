@@ -314,14 +314,23 @@ func (s *StoryService) WatchStory(ctx context.Context, req *api.WatchStoryReques
 	if err != nil {
 		return nil, err
 	}
-	group := &models.Group{}
-	group.ID = uint(storyInfo.GroupID)
-	err = group.GetByID()
+	watchInfo, err := models.GetWatchItemByStoryAndUser(ctx, req.GetStoryId(), int(req.GetUserId()))
 	if err != nil {
 		return nil, err
-	} else {
-		active.GetActiveServer().WriteStoryActive(ctx, group, storyInfo, nil, nil, req.UserId, api.ActiveType_FollowStory)
 	}
+	// 如果已经关注，不再重复关注
+	if watchInfo != nil {
+		return &api.WatchStoryResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	} else {
+		err = models.CreateWatchStoryItem(ctx, int(req.GetUserId()), req.GetStoryId(), 0)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &api.WatchStoryResponse{
 		Code:    0,
 		Message: "OK",

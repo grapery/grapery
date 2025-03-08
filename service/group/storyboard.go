@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"connectrpc.com/connect"
 
@@ -349,6 +350,7 @@ func (s *StoryBoardService) GetUserWatchStoryActiveStoryBoards(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("GetUserWatchStoryActiveStoryBoards: %v", ret.String())
 	return connect.NewResponse(ret), nil
 }
 
@@ -357,6 +359,7 @@ func (s *StoryBoardService) GetUserWatchRoleActiveStoryBoards(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("GetUserWatchRoleActiveStoryBoards: %v", ret.String())
 	return connect.NewResponse(ret), nil
 }
 
@@ -365,5 +368,6 @@ func (s *StoryBoardService) GetUnPublishStoryboard(ctx context.Context, req *con
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("GetUnPublishStoryboard: %v", ret.String())
 	return connect.NewResponse(ret), nil
 }
