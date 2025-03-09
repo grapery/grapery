@@ -826,3 +826,19 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 		Detail:  renderDetail,
 	}, nil
 }
+
+func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.GenerateRoleDescriptionRequest) (*api.GenerateRoleDescriptionResponse, error) {
+	return nil, nil
+}
+
+func (s *StoryService) UpdateRoleDescription(ctx context.Context, req *api.UpdateRoleDescriptionRequest) (*api.UpdateRoleDescriptionResponse, error) {
+	return nil, nil
+}
+
+func (s *StoryService) GenerateRolePrompt(ctx context.Context, req *api.GenerateRolePromptRequest) (*api.GenerateRolePromptResponse, error) {
+	return nil, nil
+}
+
+func (s *StoryService) UpdateRolePrompt(ctx context.Context, req *api.UpdateRolePromptRequest) (*api.UpdateRolePromptResponse, error) {
+	return nil, nil
+}

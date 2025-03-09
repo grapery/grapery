@@ -257,3 +257,35 @@ func (s *StoryRoleService) RenderStoryRoleContinuously(ctx context.Context, req 
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryRoleService) GenerateRoleDescription(ctx context.Context, req *connect.Request[gen.GenerateRoleDescriptionRequest]) (*connect.Response[gen.GenerateRoleDescriptionResponse], error) {
+	ret, err := storyServer.GetStoryServer().GenerateRoleDescription(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryRoleService) UpdateRoleDescription(ctx context.Context, req *connect.Request[gen.UpdateRoleDescriptionRequest]) (*connect.Response[gen.UpdateRoleDescriptionResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateRoleDescription(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryRoleService) GenerateRolePrompt(ctx context.Context, req *connect.Request[gen.GenerateRolePromptRequest]) (*connect.Response[gen.GenerateRolePromptResponse], error) {
+	ret, err := storyServer.GetStoryServer().GenerateRolePrompt(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryRoleService) UpdateRolePrompt(ctx context.Context, req *connect.Request[gen.UpdateRolePromptRequest]) (*connect.Response[gen.UpdateRolePromptResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateRolePrompt(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

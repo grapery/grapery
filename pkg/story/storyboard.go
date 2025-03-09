@@ -1874,6 +1874,33 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 	if err != nil {
 		return nil, err
 	}
+	targetStoryIds := make([]int64, 0)
+	for _, board := range boards {
+		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
+	}
+	stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+	if err != nil {
+		return nil, err
+	}
+	storiesSummary := make(map[int64]*api.StorySummaryInfo)
+	for _, story := range stories {
+		if story.Status != 1 {
+			continue
+		}
+		if story.Deleted == true {
+			continue
+		}
+		if _, ok := storiesSummary[int64(story.ID)]; ok {
+			continue
+		}
+		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+			StoryId:          int64(story.ID),
+			StoryTitle:       story.Name,
+			StoryDescription: story.ShortDesc,
+			StoryCover:       "",
+			StoryAvatar:      story.Avatar,
+		}
+	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
 		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
@@ -1910,6 +1937,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 				UserName:   creator.Name,
 				UserAvatar: creator.Avatar,
 			},
+			Summary: storiesSummary[int64(board.StoryID)],
 		})
 	}
 	return &api.GetUserWatchStoryActiveStoryBoardsResponse{
@@ -1940,6 +1968,33 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 	for _, roleBoard := range roleBoardList {
 		roleBoardMap[roleBoard.BoardId] = append(roleBoardMap[roleBoard.BoardId], roleBoard)
 	}
+	targetStoryIds := make([]int64, 0)
+	for _, board := range boards {
+		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
+	}
+	stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+	if err != nil {
+		return nil, err
+	}
+	storiesSummary := make(map[int64]*api.StorySummaryInfo)
+	for _, story := range stories {
+		if story.Status != 1 {
+			continue
+		}
+		if story.Deleted == true {
+			continue
+		}
+		if _, ok := storiesSummary[int64(story.ID)]; ok {
+			continue
+		}
+		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+			StoryId:          int64(story.ID),
+			StoryTitle:       story.Name,
+			StoryDescription: story.ShortDesc,
+			StoryCover:       "",
+			StoryAvatar:      story.Avatar,
+		}
+	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
 		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
@@ -1967,6 +2022,7 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 					UserName:   creator.Name,
 					UserAvatar: creator.Avatar,
 				},
+				Summary: storiesSummary[int64(board.StoryID)],
 			})
 		}
 
@@ -1983,6 +2039,33 @@ func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetU
 	boards, err := models.GetUnPublishedStoryBoardsByUserId(ctx, req.GetUserId(), int(req.GetOffset()), int(req.GetPageSize()), "create_at desc")
 	if err != nil {
 		return nil, err
+	}
+	targetStoryIds := make([]int64, 0)
+	for _, board := range boards {
+		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
+	}
+	stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+	if err != nil {
+		return nil, err
+	}
+	storiesSummary := make(map[int64]*api.StorySummaryInfo)
+	for _, story := range stories {
+		if story.Status != 1 {
+			continue
+		}
+		if story.Deleted == true {
+			continue
+		}
+		if _, ok := storiesSummary[int64(story.ID)]; ok {
+			continue
+		}
+		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+			StoryId:          int64(story.ID),
+			StoryTitle:       story.Name,
+			StoryDescription: story.ShortDesc,
+			StoryCover:       "",
+			StoryAvatar:      story.Avatar,
+		}
 	}
 	apiBoards := make([]*api.StoryBoard, 0)
 	for _, board := range boards {
