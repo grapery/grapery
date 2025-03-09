@@ -142,15 +142,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.CharacterName = req.GetRole().GetCharacterName()
 	newRole.StoryID = int64(story.ID)
 	newRole.CreatorID = req.GetRole().GetCreatorId()
-	if newRole.CharacterPrompt == "" {
-		var promptDetail = new(api.RenderStoryRoleDetail)
-		err = json.Unmarshal([]byte(req.GetRole().GetCharacterPrompt()), promptDetail)
-		if err != nil {
-			log.Log().Error("unmarshal character prompt failed", zap.Error(err))
-			return nil, err
-		}
-		newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
-	}
+	newRole.CharacterDescription = req.GetRole().GetCharacterDescription()
 	newRole.CharacterAvatar = req.GetRole().GetCharacterAvatar()
 	newRole.CharacterID = req.GetRole().GetCharacterId()
 	newRole.CharacterType = req.GetRole().GetCharacterType()
@@ -159,11 +151,11 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.FollowCount = 1
 	newRole.LikeCount = 1
 	newRole.Status = 1
-	_, err = models.CreateStoryRole(ctx, newRole)
+	roleId, err := models.CreateStoryRole(ctx, newRole)
 	if err != nil {
 		return nil, err
 	}
-	err = models.CreateWatchStoryItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(story.GroupID))
+	err = models.CreateWatchRoleItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(roleId), int64(story.GroupID))
 	if err != nil {
 		log.Log().Error("create watch story item failed", zap.Error(err))
 		return nil, err

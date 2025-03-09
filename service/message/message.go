@@ -40,6 +40,7 @@ type MessageService struct {
 
 // 添加心跳检测
 func (s *MessageService) cleanupInactiveClients() {
+	log.Log().Info("start cleanup inactive clients")
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -48,8 +49,9 @@ func (s *MessageService) cleanupInactiveClients() {
 		now := time.Now()
 		for id, client := range s.clients {
 			client.mu.RLock()
-			if now.Sub(client.LastSeen) > 5*time.Minute {
+			if now.Sub(client.LastSeen) > 30*time.Minute {
 				close(client.Messages)
+				log.Log().Info("close client", zap.String("client_id", id))
 				delete(s.clients, id)
 			}
 			client.mu.RUnlock()
@@ -191,8 +193,9 @@ func (s *MessageService) StreamChatMessage(stream api.StreamMessageService_Strea
 		if err != nil {
 			// 发送失败响应
 			response.Code = -1
-			response.Message = "message send error"
+			response.Message = "message send error: " + err.Error()
 			response.Timestamp = time.Now().Unix()
+			response.RequestId = req.RequestId
 			if err := stream.Send(response); err != nil {
 				continue
 			}
@@ -201,13 +204,15 @@ func (s *MessageService) StreamChatMessage(stream api.StreamMessageService_Strea
 			response.Code = 0
 			response.Message = "message send success"
 			response.Timestamp = time.Now().Unix()
+			response.RequestId = req.RequestId
 			if err := stream.Send(response); err != nil {
 				continue
 			}
-			// 发送成功后，等待回复消息
+			// TODO: 发送成功后，等待回复消息
 			select {
 			case roleReplyMessage := <-recRet:
 				if roleReplyMessage == nil {
+					log.Log().Info("role reply message is nil")
 					continue
 				}
 				replyMsg := make([]*api.StreamChatMessage, 0)
