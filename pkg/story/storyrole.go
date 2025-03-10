@@ -828,17 +828,174 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 }
 
 func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.GenerateRoleDescriptionRequest) (*api.GenerateRoleDescriptionResponse, error) {
-	return nil, nil
+	storyinfo, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+
+	// Get all roles in the story to provide context
+	roles, err := models.GetStoryRole(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+
+	// Build role context information
+	var otherRolesInfo strings.Builder
+	for _, role := range roles {
+		if role.ID != roleinfo.ID {
+			otherRolesInfo.WriteString(fmt.Sprintf("角色名称: %s\n角色描述: %s\n\n", role.CharacterName, role.CharacterDescription))
+		}
+	}
+
+	// Build the prompt template
+	promptTemplate := `
+		请为一个故事中的角色生成详细的角色设定。以下是相关背景信息：
+
+		故事背景：
+		%s
+
+		故事简介：
+		%s
+
+		当前角色基本信息：
+		角色名称：%s
+		%s
+
+		故事中的其他角色：
+		%s
+
+		请根据以上信息，生成一个详细的角色设定描述，包含以下方面：
+		1. 角色背景
+		2. 性格特征
+		3. 处事风格
+		4. 认知范围
+		5. 能力特点
+		6. 外貌特征
+		7. 穿着喜好
+
+		请以JSON格式返回，格式如下：
+		{
+			"角色设定": {
+				"角色背景": "详细描述",
+				"性格特征": "详细描述",
+				"处事风格": "详细描述",
+				"认知范围": "详细描述",
+				"能力特点": "详细描述",
+				"外貌特征": "详细描述",
+				"穿着喜好": "详细描述"
+			}
+		}
+
+		注意：
+		1. 描述要符合故事背景和整体设定
+		2. 避免矛盾的人设
+		3. 确保描述合理且具体
+		4. 不要包含任何暴力、色情或违法的内容
+		`
+
+	// Format the prompt with actual data
+	prompt := fmt.Sprintf(promptTemplate,
+		storyinfo.ShortDesc,           // 故事背景
+		storyinfo.Params,              // 故事简介
+		roleinfo.CharacterName,        // 角色名称
+		roleinfo.CharacterDescription, // 当前角色描述
+		otherRolesInfo.String(),       // 其他角色信息
+	)
+
+	// Call AI client to generate description
+	genParams := &client.GenStoryRoleInfoParams{
+		Content: prompt,
+	}
+
+	result, err := s.client.GenStoryRoleInfo(ctx, genParams)
+	if err != nil {
+		log.Log().Error("generate role description failed", zap.Error(err))
+		return nil, err
+	}
+
+	// Clean and parse the AI response
+	cleanResult := utils.CleanLLmJsonResult(result.Content)
+	var roleDescription map[string]map[string]string
+	err = json.Unmarshal([]byte(cleanResult), &roleDescription)
+	if err != nil {
+		log.Log().Error("unmarshal role description failed", zap.Error(err))
+		return nil, err
+	}
+	roleDescriptionStr, err := json.Marshal(roleDescription)
+	if err != nil {
+		log.Log().Error("marshal role description failed", zap.Error(err))
+		return nil, err
+	}
+
+	// Create response
+	return &api.GenerateRoleDescriptionResponse{
+		Code:        0,
+		Message:     "OK",
+		Description: string(roleDescriptionStr),
+	}, nil
 }
 
 func (s *StoryService) UpdateRoleDescription(ctx context.Context, req *api.UpdateRoleDescriptionRequest) (*api.UpdateRoleDescriptionResponse, error) {
-	return nil, nil
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	roleinfo.CharacterDescription = req.GetDescription()
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"character_description": req.GetDescription(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateRoleDescriptionResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
 
 func (s *StoryService) GenerateRolePrompt(ctx context.Context, req *api.GenerateRolePromptRequest) (*api.GenerateRolePromptResponse, error) {
+	storyinfo, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	_ = storyinfo
 	return nil, nil
 }
 
 func (s *StoryService) UpdateRolePrompt(ctx context.Context, req *api.UpdateRolePromptRequest) (*api.UpdateRolePromptResponse, error) {
-	return nil, nil
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	roleinfo.CharacterPrompt = req.GetPrompt()
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"character_prompt": req.GetPrompt(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateRolePromptResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
