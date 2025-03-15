@@ -572,13 +572,39 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 		log.Errorf("get user profile failed : %s", err.Error())
 		return nil, err
 	}
-	profile = convertApiUserProfileInfoToModel(req.GetInfo())
-	profile.UserId = req.GetUserId()
-	err = profile.Update()
-	if err != nil {
-		log.Errorf("update user profile failed : %s", err.Error())
-		return nil, err
+	if req.GetBackgroundImage() != "" {
+		profile.UserId = req.GetUserId()
+		err = profile.Update()
+		if err != nil {
+			log.Errorf("update user profile backgroud image failed : %s", err.Error())
+			return nil, err
+		}
 	}
+	needUpdates := make(map[string]interface{}, 0)
+	if req.GetAvatar() != "" {
+		needUpdates["avatar"] = req.GetAvatar()
+	}
+	if req.GetName() != "" {
+		needUpdates["name"] = req.GetName()
+	}
+	if req.GetLocation() != "" {
+		needUpdates["location"] = req.GetLocation()
+	}
+	if req.GetEmail() != "" {
+		needUpdates["email"] = req.GetEmail()
+	}
+	if req.GetDescription() != "" {
+		needUpdates["description"] = req.GetDescription()
+	}
+
+	err = models.UpdateUserInfo(ctx, req.GetUserId(), needUpdates)
+	if err != nil {
+		return &api.UpdateUserProfileResponse{
+			Code:    -1,
+			Message: "user info err:" + err.Error(),
+		}, nil
+	}
+
 	return &api.UpdateUserProfileResponse{
 		Code:    0,
 		Message: "success",

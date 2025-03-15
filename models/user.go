@@ -90,6 +90,19 @@ func (u *User) UpdateAll() error {
 	return nil
 }
 
+func UpdateUserInfo(ctx context.Context, userId int64, needUpdates map[string]interface{}) error {
+	err := DataBase().Model(User{}).
+		WithContext(ctx).
+		Updates(needUpdates).
+		Where("id = ?", userId).Error
+	if err != nil {
+		log.Errorf("update user info failed [%s]", err.Error())
+		return fmt.Errorf("update user info failed")
+	}
+	log.Info("update user info success")
+	return nil
+}
+
 func (u *User) GetById() error {
 	err := DataBase().Model(u).Where("id = ? and deleted = ?", u.ID, 0).First(u).Error
 	if err != nil {
