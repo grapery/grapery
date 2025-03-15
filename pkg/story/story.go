@@ -3,6 +3,7 @@ package story
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -107,6 +108,7 @@ type StoryServer interface {
 	UpdateRoleDescription(ctx context.Context, req *api.UpdateRoleDescriptionRequest) (*api.UpdateRoleDescriptionResponse, error)
 	GenerateRolePrompt(ctx context.Context, req *api.GenerateRolePromptRequest) (*api.GenerateRolePromptResponse, error)
 	UpdateRolePrompt(ctx context.Context, req *api.UpdateRolePromptRequest) (*api.UpdateRolePromptResponse, error)
+	UpdateStoryRoleAvator(ctx context.Context, req *api.UpdateStoryRoleAvatorRequest) (*api.UpdateStoryRoleAvatorResponse, error)
 }
 
 type StoryService struct {
@@ -765,5 +767,26 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 		Message: "OK",
 		Roles:   apiRoles,
 		Total:   total,
+	}, nil
+}
+
+func (s *StoryService) UpdateStoryRoleAvator(ctx context.Context, req *api.UpdateStoryRoleAvatorRequest) (*api.UpdateStoryRoleAvatorResponse, error) {
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	roleinfo.CharacterAvatar = req.GetAvator()
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"character_avatar": req.GetAvator(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateStoryRoleAvatorResponse{
+		Code:    0,
+		Message: "OK",
 	}, nil
 }

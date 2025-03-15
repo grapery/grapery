@@ -289,3 +289,11 @@ func (s *StoryRoleService) UpdateRolePrompt(ctx context.Context, req *connect.Re
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryRoleService) UpdateStoryRoleAvator(ctx context.Context, req *connect.Request[gen.UpdateStoryRoleAvatorRequest]) (*connect.Response[gen.UpdateStoryRoleAvatorResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRoleAvator(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

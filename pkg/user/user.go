@@ -38,6 +38,7 @@ type UserServer interface {
 	UserInit(ctx context.Context, req *api.UserInitRequest) (*api.UserInitResponse, error)
 	GetUserProfile(ctx context.Context, req *api.GetUserProfileRequest) (*api.GetUserProfileResponse, error)
 	UpdateUserProfile(ctx context.Context, req *api.UpdateUserProfileRequest) (*api.UpdateUserProfileResponse, error)
+	UpdateUserBackgroundImage(ctx context.Context, req *api.UpdateUserBackgroundImageRequest) (*api.UpdateUserBackgroundImageResponse, error)
 }
 
 type UserService struct {
@@ -608,6 +609,31 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 	return &api.UpdateUserProfileResponse{
 		Code:    0,
 		Message: "success",
+	}, nil
+}
+
+func (user *UserService) UpdateUserBackgroundImage(ctx context.Context, req *api.UpdateUserBackgroundImageRequest) (*api.UpdateUserBackgroundImageResponse, error) {
+	profile := &models.UserProfile{
+		UserId: req.GetUserId(),
+	}
+	err := profile.GetByUserId()
+	if err != nil {
+		log.Errorf("get user profile failed : %s", err.Error())
+		return nil, err
+	}
+
+	err = models.UpdateUserInfo(ctx, int64(req.GetUserId()), map[string]interface{}{
+		"background_image": req.GetBackgroundImage(),
+	})
+	if err != nil {
+		return &api.UpdateUserBackgroundImageResponse{
+			Code:    -1,
+			Message: "update user background image failed : " + err.Error(),
+		}, nil
+	}
+	return &api.UpdateUserBackgroundImageResponse{
+		Code:    0,
+		Message: "OK",
 	}, nil
 }
 

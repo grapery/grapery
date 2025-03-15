@@ -140,3 +140,13 @@ func (ts *UserService) UpdateUserProfile(ctx context.Context, req *connect.Reque
 		},
 	}, nil
 }
+
+func (ts *UserService) UpdateUserBackgroundImage(ctx context.Context, req *connect.Request[api.UpdateUserBackgroundImageRequest]) (*connect.Response[api.UpdateUserBackgroundImageResponse], error) {
+	info, err := userService.GetUserServer().UpdateUserBackgroundImage(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.UpdateUserBackgroundImageResponse]{
+		Msg: info,
+	}, nil
+}
