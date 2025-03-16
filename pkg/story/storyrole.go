@@ -316,7 +316,7 @@ func (s *StoryService) GetStoryRoleStories(ctx context.Context, req *api.GetStor
 
 // 获取角色故事板
 func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.GetStoryRoleStoryboardsRequest) (*api.GetStoryRoleStoryboardsResponse, error) {
-	boards, err := models.GetStoryBoardsByRoleID(ctx, req.GetRoleId())
+	boards, err := models.GetStoryBoardsByRoleID(ctx, req.GetRoleId(), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil && err != gorm.ErrRecordNotFound {
 		log.Log().Error("get story role storyboards failed", zap.Error(err))
 		return nil, err
@@ -327,15 +327,71 @@ func (s *StoryService) GetStoryRoleStoryboards(ctx context.Context, req *api.Get
 			Message: "OK",
 		}, nil
 	}
-	apiBoards := make([]*api.StoryBoard, 0)
+	if len(boards) == 0 {
+		return &api.GetStoryRoleStoryboardsResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	targetStoryIds := make([]int64, 0)
 	for _, board := range boards {
-		apiBoards = append(apiBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
+	}
+	stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+	if err != nil {
+		return nil, err
+	}
+	storiesSummary := make(map[int64]*api.StorySummaryInfo)
+	for _, story := range stories {
+		if story.Status != 1 {
+			continue
+		}
+		if story.Deleted == true {
+			continue
+		}
+		if _, ok := storiesSummary[int64(story.ID)]; ok {
+			continue
+		}
+		storyItem := &api.StorySummaryInfo{
+			StoryId:          int64(story.ID),
+			StoryTitle:       story.Name,
+			StoryDescription: story.ShortDesc,
+			StoryCover:       "",
+			StoryAvatar:      story.Avatar,
+		}
+		if storyItem.StoryTitle == "" {
+			storyItem.StoryTitle = story.Title
+		}
+		storiesSummary[int64(story.ID)] = storyItem
+	}
+	apiBoards := make([]*api.StoryBoardActive, 0)
+	for _, board := range boards {
+		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
+		if err != nil {
+			return nil, err
+		}
+		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
+		apiBoards = append(apiBoards, &api.StoryBoardActive{
+			Storyboard:        boardsItem,
+			TotalLikeCount:    int64(board.LikeNum),
+			TotalCommentCount: int64(board.CommentNum),
+			TotalShareCount:   int64(board.ShareNum),
+			TotalForkCount:    int64(board.ForkNum),
+			Mtime:             board.UpdateAt.Unix(),
+			Creator: &api.StoryBoardActiveUser{
+				UserId:     int64(creator.ID),
+				UserName:   creator.Name,
+				UserAvatar: creator.Avatar,
+			},
+			Summary: storiesSummary[int64(board.StoryID)],
+		})
+
 	}
 	return &api.GetStoryRoleStoryboardsResponse{
-		Code:        0,
-		Message:     "OK",
-		Storyboards: apiBoards,
-		Total:       int64(len(apiBoards)),
+		Code:              0,
+		Message:           "OK",
+		Storyboardactives: apiBoards,
+		Total:             int64(len(apiBoards)),
 	}, nil
 }
 

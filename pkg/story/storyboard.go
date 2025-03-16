@@ -2079,14 +2079,33 @@ func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetU
 		}
 		storiesSummary[int64(story.ID)] = storyItem
 	}
-	apiBoards := make([]*api.StoryBoard, 0)
+	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
-		apiBoards = append(apiBoards, convert.ConvertStoryBoardToApiStoryBoard(board))
+		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
+		if err != nil {
+			return nil, err
+		}
+		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
+		apiBoards = append(apiBoards, &api.StoryBoardActive{
+			Storyboard:        boardsItem,
+			TotalLikeCount:    int64(board.LikeNum),
+			TotalCommentCount: int64(board.CommentNum),
+			TotalShareCount:   int64(board.ShareNum),
+			TotalForkCount:    int64(board.ForkNum),
+			Mtime:             board.UpdateAt.Unix(),
+			Creator: &api.StoryBoardActiveUser{
+				UserId:     int64(creator.ID),
+				UserName:   creator.Name,
+				UserAvatar: creator.Avatar,
+			},
+			Summary: storiesSummary[int64(board.StoryID)],
+		})
+
 	}
 	return &api.GetUnPublishStoryboardResponse{
-		Code:        0,
-		Message:     "OK",
-		Storyboards: apiBoards,
-		Total:       int64(len(boards)),
+		Code:              0,
+		Message:           "OK",
+		Storyboardactives: apiBoards,
+		Total:             int64(len(boards)),
 	}, nil
 }

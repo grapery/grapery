@@ -384,13 +384,13 @@ func UpdateStoryBoardRoleMultiColumn(ctx context.Context, id int64, columns map[
 }
 
 // 获取角色参与的某一个故事的所有故事板
-func GetStoryBoardsByRoleID(ctx context.Context, roleID int64) ([]*StoryBoard, error) {
+func GetStoryBoardsByRoleID(ctx context.Context, roleID int64, page int, pageSize int) ([]*StoryBoard, error) {
 	var boards []*StoryBoard
 	var boardsIDs []int64
 	if err := DataBase().Select("board_id").Model(&StoryBoardRole{}).
 		Where("role_id = ?", roleID).
 		Where("status >= 0").
-		Find(&boardsIDs).Limit(10).Error; err != nil {
+		Find(&boardsIDs).Limit(pageSize).Offset(page * pageSize).Error; err != nil {
 		return nil, err
 	}
 	if len(boardsIDs) == 0 {
@@ -400,7 +400,7 @@ func GetStoryBoardsByRoleID(ctx context.Context, roleID int64) ([]*StoryBoard, e
 		WithContext(ctx).
 		Where("id in (?)", boardsIDs).
 		Where("status >= 0").
-		Find(&boards).Error
+		Find(&boards).Limit(pageSize).Offset(page * pageSize).Error
 	if err != nil {
 		return nil, err
 	}

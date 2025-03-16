@@ -166,15 +166,7 @@ func (s *StoryRoleService) GetStoryRoleStoryboards(ctx context.Context, req *con
 	if err != nil {
 		return nil, err
 	}
-	resp := &gen.GetStoryRoleStoryboardsResponse{
-		Code:        ret.Code,
-		Message:     "OK",
-		Storyboards: ret.Storyboards,
-		Total:       ret.Total,
-		Offset:      ret.Offset,
-		PageSize:    ret.PageSize,
-	}
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(ret), nil
 }
 
 func (s *StoryRoleService) CreateStoryRoleChat(ctx context.Context, req *connect.Request[gen.CreateStoryRoleChatRequest]) (*connect.Response[gen.CreateStoryRoleChatResponse], error) {
