@@ -1893,13 +1893,17 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 		if _, ok := storiesSummary[int64(story.ID)]; ok {
 			continue
 		}
-		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+		storyItem := &api.StorySummaryInfo{
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
 			StoryCover:       "",
 			StoryAvatar:      story.Avatar,
 		}
+		if story.Name == "" {
+			storyItem.StoryTitle = story.Title
+		}
+		storiesSummary[int64(story.ID)] = storyItem
 	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
@@ -1987,13 +1991,17 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 		if _, ok := storiesSummary[int64(story.ID)]; ok {
 			continue
 		}
-		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+		storyItem := &api.StorySummaryInfo{
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
 			StoryCover:       "",
 			StoryAvatar:      story.Avatar,
 		}
+		if storyItem.StoryTitle == "" {
+			storyItem.StoryTitle = story.Title
+		}
+		storiesSummary[int64(story.ID)] = storyItem
 	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
@@ -2059,13 +2067,17 @@ func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetU
 		if _, ok := storiesSummary[int64(story.ID)]; ok {
 			continue
 		}
-		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+		storyItem := &api.StorySummaryInfo{
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
 			StoryCover:       "",
 			StoryAvatar:      story.Avatar,
 		}
+		if storyItem.StoryTitle == "" {
+			storyItem.StoryTitle = story.Title
+		}
+		storiesSummary[int64(story.ID)] = storyItem
 	}
 	apiBoards := make([]*api.StoryBoard, 0)
 	for _, board := range boards {

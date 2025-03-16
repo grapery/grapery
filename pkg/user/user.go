@@ -575,6 +575,7 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 	}
 	if req.GetBackgroundImage() != "" {
 		profile.UserId = req.GetUserId()
+		profile.Background = req.GetBackgroundImage()
 		err = profile.Update()
 		if err != nil {
 			log.Errorf("update user profile backgroud image failed : %s", err.Error())
@@ -621,10 +622,8 @@ func (user *UserService) UpdateUserBackgroundImage(ctx context.Context, req *api
 		log.Errorf("get user profile failed : %s", err.Error())
 		return nil, err
 	}
-
-	err = models.UpdateUserInfo(ctx, int64(req.GetUserId()), map[string]interface{}{
-		"background_image": req.GetBackgroundImage(),
-	})
+	profile.Background = req.GetBackgroundImage()
+	err = profile.Update()
 	if err != nil {
 		return &api.UpdateUserBackgroundImageResponse{
 			Code:    -1,
