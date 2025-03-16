@@ -85,22 +85,41 @@ func CreateGroup(g *Group) error {
 	return nil
 }
 
-func (g *Group) UpdateAll() error {
+func (g *Group) UpdateAll(groupId int64) error {
+	if groupId < 1 {
+		return errors.ErrGroupIsNotExist
+	}
+	needUpdate := make(map[string]interface{})
+	if g.ShortDesc != "" {
+		needUpdate["short_desc"] = g.ShortDesc
+	}
+	if g.Gtype != "" {
+		needUpdate["gtype"] = g.Gtype
+	}
+	if g.Avatar != "" {
+		needUpdate["avatar"] = g.Avatar
+	}
+	if g.Name != "" {
+		needUpdate["name"] = g.Name
+	}
+	if g.Description != "" {
+		needUpdate["description"] = g.Description
+	}
 	if err := DataBase().Table(g.TableName()).
-		Update("short_desc", g.ShortDesc).
-		Update("gtype", g.Gtype).
-		Update("avatar", g.Avatar).
-		Update("name", g.Name).
+		Where("id = ? and deleted = ?", groupId, 0).
+		Updates(needUpdate).
 		Error; err != nil {
-		log.Errorf("update group [%d] all failed : [%s]", g.ID, err)
-		return fmt.Errorf("update group [%d] all failed : [%s]", g.ID, err)
+		log.Errorf("update group [%d] all failed : [%s]", groupId, err)
+		return fmt.Errorf("update group [%d] all failed : [%s]", groupId, err)
 	}
 	return nil
 }
 
 func (g *Group) UpdateDesc() error {
 	if err := DataBase().Table(g.TableName()).
-		Update("short_desc", g.ShortDesc).Error; err != nil {
+		Update("short_desc", g.ShortDesc).
+		Where("id = ? and deleted = ?", g.ID, 0).
+		Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 	}
@@ -109,7 +128,9 @@ func (g *Group) UpdateDesc() error {
 
 func (g *Group) UpdateGroupType() error {
 	if err := DataBase().Table(g.TableName()).
-		Update("gtype", g.Gtype).Error; err != nil {
+		Update("gtype", g.Gtype).
+		Where("id = ? and deleted = ?", g.ID, 0).
+		Error; err != nil {
 		log.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] desc failed : [%s]", g.ID, err)
 	}
@@ -118,7 +139,9 @@ func (g *Group) UpdateGroupType() error {
 
 func (g *Group) UpdateAvatar() error {
 	if err := DataBase().Table(g.TableName()).
-		Update("avatar", g.Avatar).Where("id = ? and deleted = ?", g.ID, 0).Error; err != nil {
+		Update("avatar", g.Avatar).
+		Where("id = ? and deleted = ?", g.ID, 0).
+		Error; err != nil {
 		log.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 		return fmt.Errorf("update group [%d] avatar failed : [%s]", g.ID, err)
 	}
@@ -126,8 +149,9 @@ func (g *Group) UpdateAvatar() error {
 }
 
 func (g *Group) GetByName() error {
-	if err := DataBase().Table(g.TableName()).Where("name = ? and deleted = ?",
-		g.Name, 0).First(g).Error; err != nil {
+	if err := DataBase().Table(g.TableName()).
+		Where("name = ? and deleted = ?", g.Name, 0).
+		First(g).Error; err != nil {
 		log.Errorf("get group [%s] info failed : [%s]", g.Name, err)
 		return fmt.Errorf("get group [%s] info failed ", g.Name)
 	}

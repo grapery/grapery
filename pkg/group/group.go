@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -226,9 +227,12 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 	group := new(models.Group)
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
+	groupData, _ := json.Marshal(group)
+	fmt.Printf("update group %d info: %s \n", group.ID, string(groupData))
 	if err != nil {
 		return &api.UpdateGroupInfoResponse{}, err
 	}
+	fmt.Println("UpdateGroupInfo params: ", req.String())
 	if req.GetInfo().GetAvatar() != "" {
 		group.Avatar = req.GetInfo().GetAvatar()
 	}
@@ -242,7 +246,7 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 		group.Status = int64(req.GetInfo().Status)
 	}
 
-	err = group.UpdateAll()
+	err = group.UpdateAll(req.GetGroupId())
 	if err != nil {
 		return nil, err
 	}
