@@ -28,6 +28,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible // indirect
 	github.com/apache/rocketmq-clients/golang/v5 v5.1.1-rc1 // indirect
 	github.com/bytedance/sonic v1.12.10 // indirect
 	github.com/bytedance/sonic/loader v0.2.3 // indirect
@@ -81,6 +82,7 @@ require (
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/api v0.223.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
