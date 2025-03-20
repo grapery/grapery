@@ -16,6 +16,7 @@ import (
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/pkg/client"
+	"github.com/grapery/grapery/pkg/cloud/aliyun"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
 	"github.com/grapery/grapery/utils/log"
@@ -619,7 +620,17 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 							log.Log().Error("gen storyboard info failed", zap.Error(err))
 							return nil, err
 						}
-						storyGen.ImageUrls = strings.Join(ret.ImageUrls, ",")
+						aliyunUrls := make([]string, 0)
+						for _, imageUrl := range ret.ImageUrls {
+							aliyunClient := aliyun.GetGlobalClient()
+							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+							if err != nil {
+								log.Log().Error("upload file from url failed", zap.Error(err))
+								continue
+							}
+							aliyunUrls = append(aliyunUrls, aliyunUrl)
+						}
+						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
 						storyGen.Content = ""
 						storyGen.FinishTime = time.Now().Unix()
 						err = models.UpdateStoryGen(ctx, storyGen)
@@ -1404,7 +1415,17 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	retData, _ := json.Marshal(ret.ImageUrls)
+	aliyunUrls := make([]string, 0)
+	for _, imageUrl := range ret.ImageUrls {
+		aliyunClient := aliyun.GetGlobalClient()
+		aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+		if err != nil {
+			log.Log().Error("upload file from url failed", zap.Error(err))
+			continue
+		}
+		aliyunUrls = append(aliyunUrls, aliyunUrl)
+	}
+	retData, _ := json.Marshal(aliyunUrls)
 	scene.GenResult = string(retData)
 	scene.IsGenerating = 0
 	scene.Status = 1
@@ -1499,7 +1520,17 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 			log.Log().Error("gen storyboard info failed", zap.Error(err))
 			return nil, err
 		}
-		retData, _ := json.Marshal(ret.ImageUrls)
+		aliyunUrls := make([]string, 0)
+		for _, imageUrl := range ret.ImageUrls {
+			aliyunClient := aliyun.GetGlobalClient()
+			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+			if err != nil {
+				log.Log().Error("upload file from url failed", zap.Error(err))
+				continue
+			}
+			aliyunUrls = append(aliyunUrls, aliyunUrl)
+		}
+		retData, _ := json.Marshal(aliyunUrls)
 		scene.GenResult = string(retData)
 		scene.IsGenerating = 0
 		scene.Status = 1
