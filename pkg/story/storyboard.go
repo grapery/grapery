@@ -162,9 +162,12 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 	if err != nil {
 		return nil, err
 	}
-	datas := make([]*api.StoryBoard, 0)
+	story, err := models.GetStory(ctx, req.StoryId)
+	if err != nil {
+		return nil, err
+	}
+	apiBoardsActive := make([]*api.StoryBoardActive, 0)
 	for _, board := range boardList {
-		fmt.Println("board: ", ConvertStoryBoardToApiStoryBoard(board).String())
 		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(board.ID))
 		if err != nil {
 			log.Log().Error("get board sences failed", zap.Error(err))
@@ -173,8 +176,6 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 		if len(sences) != 0 {
 			boardInfo.Sences = new(api.StoryBoardSences)
 			for _, scene := range sences {
-				sceneData, _ := json.Marshal(scene)
-				log.Log().Info("get scene success", zap.String("scene", string(sceneData)))
 				boardInfo.Sences.List = append(boardInfo.Sences.List, ConvertStorySceneToApiScene(scene))
 			}
 			boardInfo.Sences.Total = int64(len(boardInfo.Sences.List))
@@ -184,14 +185,55 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 			log.Log().Error("get storyboard current user status failed", zap.Error(err))
 		}
 		boardInfo.CurrentUserStatus = cu
-		datas = append(datas, boardInfo)
+		creator, err := models.GetUserById(ctx, board.CreatorID)
+		if err != nil {
+			log.Log().Error("get story creator failed", zap.Error(err))
+		}
+		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get storyboard roles failed", zap.Error(err))
+		}
+		apiRole := make([]*api.StoryBoardActiveRole, 0)
+		for _, role := range roles {
+			apiRole = append(apiRole, &api.StoryBoardActiveRole{
+				RoleId:     int64(role.ID),
+				RoleName:   role.Name,
+				RoleAvatar: role.Avatar,
+			})
+		}
+		apiBoardsActiveItem := &api.StoryBoardActive{
+			Storyboard:        boardInfo,
+			TotalLikeCount:    0,
+			TotalCommentCount: 0,
+			TotalShareCount:   0,
+			TotalRenderCount:  0,
+			TotalForkCount:    0,
+			Users:             []*api.StoryBoardActiveUser{},
+			Roles:             apiRole,
+			Creator: &api.StoryBoardActiveUser{
+				UserId:     int64(creator.ID),
+				UserName:   creator.Name,
+				UserAvatar: creator.Avatar,
+			},
+			Summary: &api.StorySummaryInfo{
+				StoryId:          int64(story.ID),
+				StoryTitle:       story.Title,
+				StoryAvatar:      story.Avatar,
+				StoryDescription: story.Origin,
+				CreateTime:       story.CreateAt.Unix(),
+				CreateUserId:     story.CreatorID,
+			},
+			Isliked: true,
+			Mtime:   boardInfo.Mtime,
+		}
+		apiBoardsActive = append(apiBoardsActive, apiBoardsActiveItem)
 	}
 	return &api.GetStoryboardsResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.GetStoryboardsResponse_Data{
-			List:  datas,
-			Total: int64(len(datas)),
+			List:  apiBoardsActive,
+			Total: int64(len(apiBoardsActive)),
 		},
 	}, nil
 }
