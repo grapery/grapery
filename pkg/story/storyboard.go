@@ -2103,6 +2103,24 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 			return nil, err
 		}
 		boardsItem := convert.ConvertStoryBoardToApiStoryBoard(board)
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get board sences failed", zap.Error(err))
+		}
+		if len(sences) != 0 {
+			boardsItem.Sences = new(api.StoryBoardSences)
+			for _, scene := range sences {
+				boardsItem.Sences.List = append(boardsItem.Sences.List, ConvertStorySceneToApiScene(scene))
+			}
+			boardsItem.Sences.Total = int64(len(boardsItem.Sences.List))
+		} else {
+			log.Log().Warn("story sences is empty")
+		}
+		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get storyboard current user status failed", zap.Error(err))
+		}
+		boardsItem.CurrentUserStatus = cu
 		for _, role := range roleBoardMap[int64(board.ID)] {
 			apiRoles := make([]*api.StoryBoardActiveRole, 0)
 			apiRoles = append(apiRoles, &api.StoryBoardActiveRole{
