@@ -1832,7 +1832,23 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		return nil, err
 	}
 	log.Log().Info("get user created storyboards", zap.Int("total", len(storyboards)))
-	apiStoryboards := make([]*api.StoryBoard, 0)
+	storiesSummary := make(map[int64]*api.StorySummaryInfo)
+	storyIds := make([]int64, 0)
+	for _, storyboard := range storyboards {
+		storyIds = append(storyIds, int64(storyboard.StoryID))
+	}
+	stories, err := models.GetStoriesByIDs(ctx, storyIds)
+	if err != nil {
+		return nil, err
+	}
+	for _, story := range stories {
+		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+			StoryId:          int64(story.ID),
+			StoryTitle:       story.Name,
+			StoryDescription: story.ShortDesc,
+		}
+	}
+	apiStoryboards := make([]*api.StoryBoardActive, 0)
 	for idx, storyboard := range storyboards {
 		log.Log().Info("get user created storyboard", zap.Int64("id", int64(storyboard.ID)), zap.Int("index", idx))
 		newApiStoryboard := convert.ConvertStoryBoardToApiStoryBoard(storyboard)
@@ -1852,7 +1868,32 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 			log.Log().Error("get storyboard current user status failed", zap.Error(err))
 		}
 		newApiStoryboard.CurrentUserStatus = cu
-		apiStoryboards = append(apiStoryboards, newApiStoryboard)
+		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(storyboard.ID))
+		if err != nil {
+			return nil, err
+		}
+		newApiStoryboard.Roles = make([]*api.StoryRole, 0)
+		for _, role := range roles {
+			newApiStoryboard.Roles = append(newApiStoryboard.Roles, convert.ConvertSummaryStoryRoleToApiStoryRoleInfo(role))
+		}
+		apiRoles := make([]*api.StoryBoardActiveRole, 0)
+		for _, role := range roles {
+			apiRoles = append(apiRoles, &api.StoryBoardActiveRole{
+				RoleId:     int64(role.ID),
+				RoleName:   role.Name,
+				RoleAvatar: role.Avatar,
+			})
+		}
+		apiStoryboards = append(apiStoryboards, &api.StoryBoardActive{
+			Storyboard:        newApiStoryboard,
+			TotalLikeCount:    int64(storyboard.LikeNum),
+			TotalCommentCount: int64(storyboard.CommentNum),
+			TotalShareCount:   int64(storyboard.ShareNum),
+			TotalForkCount:    int64(storyboard.ForkNum),
+			Roles:             apiRoles,
+			Mtime:             storyboard.UpdateAt.Unix(),
+			Summary:           storiesSummary[int64(storyboard.StoryID)],
+		})
 	}
 	return &api.GetUserCreatedStoryboardsResponse{
 		Code:        0,
@@ -1883,11 +1924,11 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 		resp.Code = 0
 		resp.Message = "OK"
 		resp.Offset = 0
-		resp.Storyboards = make([]*api.StoryBoard, 0)
+		resp.Storyboards = make([]*api.StoryBoardActive, 0)
 		resp.IsMultiBranch = true
 		return resp, nil
 	}
-	retBoards := make([]*api.StoryBoard, 0)
+	apiBoards := make([]*api.StoryBoardActive, 0)
 	for _, board := range boards {
 		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(board.ID))
 		if err != nil {
@@ -1895,9 +1936,55 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 		}
 		boardInfo := convert.ConvertStoryBoardToApiStoryBoard(board)
 		boardInfo.CurrentUserStatus = cu
-		retBoards = append(retBoards, boardInfo)
+		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(board.ID))
+		if err != nil {
+			log.Log().Error("get board sences failed", zap.Error(err))
+		}
+		if len(sences) != 0 {
+			boardInfo.Sences = new(api.StoryBoardSences)
+			for _, scene := range sences {
+				boardInfo.Sences.List = append(boardInfo.Sences.List, ConvertStorySceneToApiScene(scene))
+			}
+			boardInfo.Sences.Total = int64(len(boardInfo.Sences.List))
+		} else {
+			log.Log().Warn("story sences is empty")
+		}
+		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
+		if err != nil {
+			return nil, err
+		}
+		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(board.ID))
+		if err != nil {
+			return nil, err
+		}
+		boardInfo.Roles = make([]*api.StoryRole, 0)
+		for _, role := range roles {
+			boardInfo.Roles = append(boardInfo.Roles, convert.ConvertSummaryStoryRoleToApiStoryRoleInfo(role))
+		}
+		apiRoles := make([]*api.StoryBoardActiveRole, 0)
+		for _, role := range roles {
+			apiRoles = append(apiRoles, &api.StoryBoardActiveRole{
+				RoleId:     int64(role.ID),
+				RoleName:   role.Name,
+				RoleAvatar: role.Avatar,
+			})
+		}
+		apiBoards = append(apiBoards, &api.StoryBoardActive{
+			Storyboard:        boardInfo,
+			TotalLikeCount:    int64(board.LikeNum),
+			TotalCommentCount: int64(board.CommentNum),
+			TotalShareCount:   int64(board.ShareNum),
+			TotalForkCount:    int64(board.ForkNum),
+			Mtime:             board.UpdateAt.Unix(),
+			Roles:             apiRoles,
+			Creator: &api.StoryBoardActiveUser{
+				UserId:     int64(creator.ID),
+				UserName:   creator.Name,
+				UserAvatar: creator.Avatar,
+			},
+		})
 	}
-	resp.Storyboards = retBoards
+	resp.Storyboards = apiBoards
 	resp.IsMultiBranch = true
 	resp.Offset = 0
 	resp.Total = int64(len(boards))
