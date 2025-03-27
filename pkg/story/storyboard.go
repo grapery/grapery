@@ -1895,12 +1895,14 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 			Summary:           storiesSummary[int64(storyboard.StoryID)],
 		})
 	}
-	return &api.GetUserCreatedStoryboardsResponse{
+	result := &api.GetUserCreatedStoryboardsResponse{
 		Code:        0,
 		Message:     "OK",
 		Storyboards: apiStoryboards,
 		Total:       total,
-	}, nil
+	}
+	log.Log().Info("get user created storyboards", zap.Any("result", result.String()))
+	return result, nil
 }
 
 func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextStoryboardRequest) (*api.GetNextStoryboardResponse, error) {
@@ -1989,6 +1991,7 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 	resp.Offset = 0
 	resp.Total = int64(len(boards))
 	resp.PageSize = int64(len(boards))
+	log.Log().Info("get next storyboard", zap.Any("result", resp.String()))
 	return resp, nil
 }
 
