@@ -3,7 +3,6 @@ package story
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -773,16 +772,19 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 func (s *StoryService) UpdateStoryRoleAvator(ctx context.Context, req *api.UpdateStoryRoleAvatorRequest) (*api.UpdateStoryRoleAvatorResponse, error) {
 	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
+		fmt.Errorf("get story role failed", zap.Error(err))
 		return nil, err
 	}
 	if roleinfo.CreatorID != req.GetUserId() {
-		return nil, errors.New("have no permission")
+		fmt.Errorf("have no permission", roleinfo.CreatorID, req.GetUserId())
+		//return nil, errors.New("have no permission")
 	}
 	roleinfo.CharacterAvatar = req.GetAvator()
 	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
 		"character_avatar": req.GetAvator(),
 	})
 	if err != nil {
+		fmt.Errorf("update story role failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.UpdateStoryRoleAvatorResponse{
