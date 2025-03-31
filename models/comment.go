@@ -5,6 +5,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 const (
@@ -82,10 +83,15 @@ func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
 	return ret, nil
 }
 
-func GetCommentByStory(storyID uint64) (*[]*Comment, error) {
+func GetCommentByStory(storyID uint64, commentType int64, page int64, pageSize int64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("story_id = ?", storyID).
+		Where("comment_type = ?", commentType).
+		Where("status = ?", 1).
+		Order("created_at desc").
+		Limit(int(pageSize)).
+		Offset(int((page - 1) * pageSize)).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get story [%d] comment failed: %s ", storyID, err.Error())
 		return nil, err
@@ -113,6 +119,128 @@ func GetCommentListByStoryBoard(storyBoardID uint64) (*[]*Comment, error) {
 		storyBoardID).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get storyboard [%d] comment failed ", storyBoardID)
+		return nil, err
+	}
+	return ret, nil
+}
+
+func GetStoryCommentReplies(commentID uint64) (*[]*Comment, error) {
+	var ret = new([]*Comment)
+	if err := DataBase().Where("pre_id = ? and delete = 0",
+		commentID).
+		Scan(ret).Error; err != nil {
+		log.Errorf("get comment [%d] reply failed ", commentID)
+		return nil, err
+	}
+	return ret, nil
+}
+
+func GetStoryBoardCommentReplies(commentID uint64) (*[]*Comment, error) {
+	var ret = new([]*Comment)
+	if err := DataBase().Where("pre_id = ? and delete = 0",
+		commentID).
+		Scan(ret).Error; err != nil {
+		log.Errorf("get comment [%d] reply failed ", commentID)
+		return nil, err
+	}
+	return ret, nil
+}
+
+func DeleteComment(commentID uint64) error {
+	if err := DataBase().Model(&Comment{}).
+		Where("id = ?", commentID).
+		Update("delete", 1).Error; err != nil {
+		log.Errorf("delete comment [%d] failed ", commentID)
+		return err
+	}
+	return nil
+}
+
+func DeleteStoryCommentReply(commentID uint64) error {
+	if err := DataBase().Model(&Comment{}).
+		Where("pre_id = ?", commentID).
+		Update("delete", 1).Error; err != nil {
+		log.Errorf("delete comment [%d] reply failed ", commentID)
+		return err
+	}
+	return nil
+}
+
+func DeleteStoryBoardCommentReply(commentID uint64) error {
+	if err := DataBase().Model(&Comment{}).
+		Where("pre_id = ?", commentID).
+		Update("delete", 1).Error; err != nil {
+		log.Errorf("delete comment [%d] reply failed ", commentID)
+		return err
+	}
+	return nil
+}
+
+func LikeComment(commentID uint64, userId uint64) error {
+	if err := DataBase().Model(&Comment{}).
+		Where("id = ?", commentID).
+		Update("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
+		log.Errorf("like comment [%d] failed ", commentID)
+		return err
+	}
+	return nil
+}
+
+func DislikeComment(commentID uint64, userId uint64) error {
+	isLiked, err := GetCommentLike(commentID, userId)
+	if err != nil {
+		log.Errorf("get comment like [%d] failed ", commentID)
+		return err
+	}
+	if isLiked == nil {
+		return nil
+	}
+	err = isLiked.Delete()
+	if err != nil {
+		log.Errorf("delete comment like [%d] failed ", commentID)
+		return err
+	}
+	if err := DataBase().Model(&Comment{}).
+		Where("id = ?", commentID).
+		Update("dislike_count", gorm.Expr("dislike_count + 1")).Error; err != nil {
+		log.Errorf("dislike comment [%d] failed ", commentID)
+		return err
+	}
+	return nil
+}
+
+type CommentLike struct {
+	IDBase
+	UserID    int64 `json:"user_id,omitempty"`
+	CommentID int64 `json:"comment_id,omitempty"`
+}
+
+func (c CommentLike) TableName() string {
+	return "comment_like"
+}
+
+func (c *CommentLike) Create() error {
+	if err := DataBase().Model(c).Create(c).Error; err != nil {
+		log.Errorf("create new comment like [%d] failed : [%s]", c.ID, err.Error())
+		return fmt.Errorf("create new comment like [%d] failed ", c.ID)
+	}
+	return nil
+}
+
+func (c *CommentLike) Delete() error {
+	if err := DataBase().Model(c).Delete(c).Error; err != nil {
+		log.Errorf("delete comment like [%d] failed ", c.ID)
+		return err
+	}
+	return nil
+}
+
+func GetCommentLike(commentID uint64, userId uint64) (*CommentLike, error) {
+	var ret = new(CommentLike)
+	if err := DataBase().
+		Where("comment_id = ? and user_id = ?", commentID, userId).
+		First(ret).Error; err != nil {
+		log.Errorf("get comment like [%d] failed ", commentID)
 		return nil, err
 	}
 	return ret, nil

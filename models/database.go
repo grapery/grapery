@@ -89,6 +89,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&ChatContext{})
 	database.AutoMigrate(&ChatMessage{})
 	database.AutoMigrate(&StoryBoardRole{})
+	database.AutoMigrate(&CommentLike{})
 	return nil
 }
 
