@@ -437,10 +437,7 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 		log.Info("get story by group id failed: ", err.Error())
 		return nil, err
 	}
-	list := make([]*api.Story, len(storys), len(storys))
-	for idx, val := range storys {
-		list[idx] = convert.ConvertStoryToApiStory(val)
-	}
+
 	storysIds := make([]int64, 0)
 	for _, val := range storys {
 		storysIds = append(storysIds, int64(val.ID))
@@ -460,6 +457,22 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 	watchMap := make(map[int64]bool)
 	for _, val := range watchItems {
 		watchMap[int64(val.StoryID)] = true
+	}
+	list := make([]*api.Story, len(storys), len(storys))
+	for idx, val := range storys {
+		storyItem := convert.ConvertStoryToApiStory(val)
+		storyItem.CurrentUserStatus = &api.WhatCurrentUserStatus{
+			UserId:    req.GetUserId(),
+			IsLiked:   likeMap[int64(val.ID)],
+			IsWatched: watchMap[int64(val.ID)],
+		}
+		if likeMap[int64(val.ID)] {
+			storyItem.Isliked = true
+		}
+		if watchMap[int64(val.ID)] {
+			storyItem.Iswatched = true
+		}
+		list[idx] = storyItem
 	}
 	return &api.FetchGroupStorysResponse{
 		Code:    0,

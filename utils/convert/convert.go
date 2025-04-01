@@ -108,6 +108,7 @@ func ConvertStoryToApiStory(story *models.Story) *api.Story {
 	ret := &api.Story{
 		Id:          int64(story.ID),
 		Name:        story.Name,
+		Title:       story.Title,
 		Avatar:      story.Avatar,
 		CreatorId:   int64(story.CreatorID),
 		OwnerId:     int64(story.OwnerID),
@@ -120,6 +121,7 @@ func ConvertStoryToApiStory(story *models.Story) *api.Story {
 		RootBoardId: int64(story.RootBoardID),
 		Desc:        story.ShortDesc,
 		Status:      int32(story.Status),
+		TotalBoards: story.TotalBoards,
 		Ctime:       story.CreateAt.Unix(),
 		Mtime:       story.UpdateAt.Unix(),
 	}

@@ -109,31 +109,35 @@ const (
 
 type Story struct {
 	IDBase
-	Title        string
-	Name         string
-	ShortDesc    string
-	CreatorID    int64
-	OwnerID      int64
-	GroupID      int64
-	Origin       string
-	RootBoardID  int
-	AIGen        bool
-	Avatar       string
-	Visable      api.ScopeType
-	Status       StoryStatus
-	IsAchieve    bool
-	IsClose      bool
-	IsPrivate    bool
-	Params       string
+	Title       string
+	Name        string
+	ShortDesc   string
+	CreatorID   int64
+	OwnerID     int64
+	GroupID     int64
+	Origin      string
+	RootBoardID int
+	AIGen       bool
+	Avatar      string
+	Visable     api.ScopeType
+	Status      StoryStatus
+	IsAchieve   bool
+	IsClose     bool
+	IsPrivate   bool
+	Params      string
+	Style       string
+	StyleDesc   string
+	StyleImage  string
+	Subject     string
+	SubjectDesc string
+
 	LikeCount    int64
 	CommentCount int64
 	ShareCount   int64
 	FollowCount  int64
-	Style        string
-	StyleDesc    string
-	StyleImage   string
-	Subject      string
-	SubjectDesc  string
+	TotalBoards  int64
+	TotalRoles   int64
+	TotalMembers int64
 }
 
 func (s *Story) TableName() string {
