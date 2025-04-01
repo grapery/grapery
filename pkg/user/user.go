@@ -156,7 +156,7 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 }
 
 func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupRequest) (*api.UserGroupResponse, error) {
-	list, err := models.GetUserGroups(int(req.GetUserId()), 0, 10)
+	list, err := models.GetUserGroups(int(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
