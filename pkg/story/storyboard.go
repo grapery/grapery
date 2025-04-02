@@ -154,7 +154,10 @@ func (s *StoryService) UpdateStoryboard(ctx context.Context, req *api.UpdateStor
 	if err != nil {
 		return nil, err
 	}
-	return &api.UpdateStoryboardResponse{}, nil
+	return &api.UpdateStoryboardResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }
 
 func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboardsRequest) (resp *api.GetStoryboardsResponse, err error) {
@@ -166,12 +169,14 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 	if err != nil {
 		return nil, err
 	}
+	srcBoardMap := make(map[int64]*models.StoryBoard)
 	apiBoardsActive := make([]*api.StoryBoardActive, 0)
 	for _, board := range boardList {
 		sences, err := models.GetStoryBoardScenesByBoard(ctx, int64(board.ID))
 		if err != nil {
 			log.Log().Error("get board sences failed", zap.Error(err))
 		}
+		srcBoardMap[int64(board.ID)] = board
 		boardInfo := ConvertStoryBoardToApiStoryBoard(board)
 		if len(sences) != 0 {
 			boardInfo.Sences = new(api.StoryBoardSences)
@@ -203,11 +208,10 @@ func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboar
 		}
 		apiBoardsActiveItem := &api.StoryBoardActive{
 			Storyboard:        boardInfo,
-			TotalLikeCount:    0,
-			TotalCommentCount: 0,
-			TotalShareCount:   0,
-			TotalRenderCount:  0,
-			TotalForkCount:    0,
+			TotalLikeCount:    int64(srcBoardMap[int64(board.ID)].LikeNum),
+			TotalCommentCount: int64(srcBoardMap[int64(board.ID)].CommentNum),
+			TotalShareCount:   int64(srcBoardMap[int64(board.ID)].ShareNum),
+			TotalForkCount:    int64(srcBoardMap[int64(board.ID)].ForkNum),
 			Users:             []*api.StoryBoardActiveUser{},
 			Roles:             apiRole,
 			Creator: &api.StoryBoardActiveUser{
@@ -422,6 +426,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	templatePrompt := `
 	为故事章节的 """story_chapter""" 章节的生成详细故事情节细节，请参考故事剧情: """story_content"""。
 	故事背景为: """story_background"""。
+	参与人物为: """story_characters"""。
 	同时衔接前后章节的情节,上一章节的故事情节为: """story_backgroup"""，生成符合上下文的、合理的、更详细的情节，
 	可以生成4-6个故事的细节，以及生成可以展示这些故事剧情的图片 prompt 提示词。
 	以json格式返回格式可以参考如下例子:

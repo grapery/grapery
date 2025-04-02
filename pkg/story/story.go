@@ -366,6 +366,7 @@ func ConvertStoryBoardToApiStoryBoard(storyBoard *models.StoryBoard) *api.StoryB
 		Content:      storyBoard.Description,
 		PrevBoardId:  storyBoard.PrevId,
 		IsAiGen:      storyBoard.IsAiGen,
+		Status:       int32(storyBoard.Status),
 		Ctime:        storyBoard.CreateAt.Unix(),
 		Mtime:        storyBoard.UpdateAt.Unix(),
 	}
