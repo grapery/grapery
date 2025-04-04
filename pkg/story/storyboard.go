@@ -2130,6 +2130,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 			},
 			Summary: storiesSummary[int64(board.StoryID)],
 		})
+		fmt.Printf("storiesSummary : %+v \n", storiesSummary[int64(board.StoryID)])
 	}
 	resp := &api.GetUserWatchStoryActiveStoryBoardsResponse{
 		Code:        0,

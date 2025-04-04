@@ -23,7 +23,7 @@ type Comment struct {
 	GroupID      int64  `json:"group_id,omitempty"`
 	RoleID       int64  `json:"role_id,omitempty"`
 	TimelineID   int64  `json:"timeline_id,omitempty"`
-	StoryBoardID int64  `json:"storyboard_id,omitempty"`
+	StoryboardID int64  `json:"storyboard_id,omitempty"`
 	ItemType     int64  `json:"item_type,omitempty"`
 	PreID        int64  `json:"pre_id,omitempty"`
 	Content      []byte `json:"content,omitempty"`
@@ -75,7 +75,7 @@ func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("user_id = ?", userID).
-		Scan(ret).Error; err != nil {
+		Scan(&ret).Error; err != nil {
 		log.Errorf("get user [%d] comment failed: %s ", userID, err.Error())
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func GetCommentByStory(storyID uint64, commentType int64, page int64, pageSize i
 		Order("created_at desc").
 		Limit(int(pageSize)).
 		Offset(int((page - 1) * pageSize)).
-		Scan(ret).Error; err != nil {
+		Scan(&ret).Error; err != nil {
 		log.Errorf("get story [%d] comment failed: %s ", storyID, err.Error())
 		return nil, err
 	}
@@ -102,11 +102,11 @@ func GetCommentByStory(storyID uint64, commentType int64, page int64, pageSize i
 
 func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, error) {
 	var ret = new([]*Comment)
-	if err := DataBase().
-		Where("created_at < ? and created_at > ? and delete = 0",
+	if err := DataBase().Model(&Comment{}).
+		Where("created_at < ? and created_at > ? and deleted = 0",
 			end,
 			start).
-		Scan(ret).Error; err != nil {
+		Scan(&ret).Error; err != nil {
 		log.Errorf("get comment in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
@@ -115,10 +115,10 @@ func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, err
 
 func GetCommentListByStoryBoard(storyBoardID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
-	if err := DataBase().Where("storyboard_id = ? and delete = 0",
-		storyBoardID).
-		Scan(ret).Error; err != nil {
-		log.Errorf("get storyboard [%d] comment failed ", storyBoardID)
+	if err := DataBase().Model(&Comment{}).
+		Where("story_board_id = ? and deleted = 0", storyBoardID).
+		Scan(&ret).Error; err != nil {
+		log.Errorf("get storyboard [%d] comment failed ", storyBoardID, err.Error())
 		return nil, err
 	}
 	return ret, nil
@@ -126,9 +126,9 @@ func GetCommentListByStoryBoard(storyBoardID uint64) (*[]*Comment, error) {
 
 func GetStoryCommentReplies(commentID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
-	if err := DataBase().Where("pre_id = ? and delete = 0",
+	if err := DataBase().Model(&Comment{}).Where("pre_id = ? and deleted = 0",
 		commentID).
-		Scan(ret).Error; err != nil {
+		Scan(&ret).Error; err != nil {
 		log.Errorf("get comment [%d] reply failed ", commentID)
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func GetStoryCommentReplies(commentID uint64) (*[]*Comment, error) {
 
 func GetStoryBoardCommentReplies(commentID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
-	if err := DataBase().Where("pre_id = ? and delete = 0",
+	if err := DataBase().Model(&Comment{}).Where("pre_id = ? and deleted = 0",
 		commentID).
 		Scan(ret).Error; err != nil {
 		log.Errorf("get comment [%d] reply failed ", commentID)
@@ -149,7 +149,7 @@ func GetStoryBoardCommentReplies(commentID uint64) (*[]*Comment, error) {
 func DeleteComment(commentID uint64) error {
 	if err := DataBase().Model(&Comment{}).
 		Where("id = ?", commentID).
-		Update("delete", 1).Error; err != nil {
+		Update("deleted", 1).Error; err != nil {
 		log.Errorf("delete comment [%d] failed ", commentID)
 		return err
 	}
@@ -159,7 +159,7 @@ func DeleteComment(commentID uint64) error {
 func DeleteStoryCommentReply(commentID uint64) error {
 	if err := DataBase().Model(&Comment{}).
 		Where("pre_id = ?", commentID).
-		Update("delete", 1).Error; err != nil {
+		Update("deleted", 1).Error; err != nil {
 		log.Errorf("delete comment [%d] reply failed ", commentID)
 		return err
 	}
@@ -169,7 +169,7 @@ func DeleteStoryCommentReply(commentID uint64) error {
 func DeleteStoryBoardCommentReply(commentID uint64) error {
 	if err := DataBase().Model(&Comment{}).
 		Where("pre_id = ?", commentID).
-		Update("delete", 1).Error; err != nil {
+		Update("deleted", 1).Error; err != nil {
 		log.Errorf("delete comment [%d] reply failed ", commentID)
 		return err
 	}
@@ -237,7 +237,7 @@ func (c *CommentLike) Delete() error {
 
 func GetCommentLike(commentID uint64, userId uint64) (*CommentLike, error) {
 	var ret = new(CommentLike)
-	if err := DataBase().
+	if err := DataBase().Model(&CommentLike{}).
 		Where("comment_id = ? and user_id = ?", commentID, userId).
 		First(ret).Error; err != nil {
 		log.Errorf("get comment like [%d] failed ", commentID)

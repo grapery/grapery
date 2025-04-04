@@ -72,7 +72,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&Project{})
 	database.AutoMigrate(&GroupMember{})
 	database.AutoMigrate(&LikeItem{})
-	database.AutoMigrate(&Comment{})
+
 	database.AutoMigrate(&WatchItem{})
 
 	database.AutoMigrate(&UserProfile{})
@@ -89,6 +89,8 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&ChatContext{})
 	database.AutoMigrate(&ChatMessage{})
 	database.AutoMigrate(&StoryBoardRole{})
+
+	database.AutoMigrate(&Comment{})
 	database.AutoMigrate(&CommentLike{})
 	return nil
 }

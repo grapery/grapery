@@ -5,6 +5,7 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/utils/log"
 )
 
 var commentServer CommentServer
@@ -177,7 +178,7 @@ func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.D
 func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.CreateStoryBoardCommentRequest) (*api.CreateStoryBoardCommentResponse, error) {
 	comment := &models.Comment{
 		UserID:       req.GetUserId(),
-		StoryBoardID: req.GetBoardId(),
+		StoryboardID: req.GetBoardId(),
 		Content:      []byte(req.GetContent()),
 		CommentType:  models.CommentTypeComment,
 		Status:       1,
@@ -206,9 +207,15 @@ func (s *CommentService) DeleteStoryBoardComment(ctx context.Context, req *api.D
 func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.GetStoryBoardCommentsRequest) (*api.GetStoryBoardCommentsResponse, error) {
 	comments, err := models.GetCommentListByStoryBoard(uint64(req.GetBoardId()))
 	if err != nil {
-		return nil, err
+		return &api.GetStoryBoardCommentsResponse{
+			Code:     -1,
+			Message:  "get comments error",
+			Total:    0,
+			Comments: []*api.StoryComment{},
+		}, nil
 	}
 	if len(*comments) == 0 {
+		log.Log().Info("get comment list by story board empty")
 		return &api.GetStoryBoardCommentsResponse{
 			Code:     0,
 			Message:  "success",
@@ -224,10 +231,11 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 			CreatedAt: comment.CreateAt.Unix(),
 			UpdatedAt: comment.UpdateAt.Unix(),
 			UserId:    comment.UserID,
-			BoardId:   comment.StoryBoardID,
+			BoardId:   comment.StoryboardID,
 			LikeCount: comment.LikeCount,
 		})
 	}
+	log.Log().Info("get comment list by story board success")
 	return &api.GetStoryBoardCommentsResponse{
 		Code:     0,
 		Message:  "success",
