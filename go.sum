@@ -217,6 +217,8 @@ github.com/grapery/common-protoc/gen v0.0.0-20250331093521-88f60c8e9881 h1:VSN+c
 github.com/grapery/common-protoc/gen v0.0.0-20250331093521-88f60c8e9881/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grapery/common-protoc/gen v0.0.0-20250405043042-c5537804b50f h1:u92mDR2h5kqYSQ2sQAMo80o3s5G4odRLtT6sJ1FZ/9E=
 github.com/grapery/common-protoc/gen v0.0.0-20250405043042-c5537804b50f/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
+github.com/grapery/common-protoc/gen v0.0.0-20250405152714-bc5e530dff8d h1:W96og6ZbEGf3/PdZoXUkgsaJg6MWhU3fslNiiWpEiEg=
+github.com/grapery/common-protoc/gen v0.0.0-20250405152714-bc5e530dff8d/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0 h1:FbSCl+KggFl+Ocym490i/EyXF4lPgLoUtcSWquBM0Rs=
@@ -475,6 +477,8 @@ golang.org/x/sys v0.30.0 h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=
 golang.org/x/sys v0.30.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/sys v0.31.0 h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=
 golang.org/x/sys v0.31.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
+golang.org/x/sys v0.32.0 h1:s77OFDvIQeibCmezSnk/q6iAfkdiQaJi4VzroCFrN20=
+golang.org/x/sys v0.32.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.0.0-20170915032832-14c0d48ead0c/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
