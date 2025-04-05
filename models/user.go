@@ -160,6 +160,24 @@ func GetUsersByIds(ids []int64) (users []*User, err error) {
 	return users, nil
 }
 
+func GetUsersByIdsMap(ids []int64) (map[int]*User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var users = make([]*User, 0)
+	err := DataBase().Model(User{}).
+		Where("id in (?)", ids).
+		Scan(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	var userMap = make(map[int]*User)
+	for _, val := range users {
+		userMap[int(val.ID)] = val
+	}
+	return userMap, nil
+}
+
 func GetUserById(ctx context.Context, id int64) (*User, error) {
 	user := &User{}
 	err := DataBase().

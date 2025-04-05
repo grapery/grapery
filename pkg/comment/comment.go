@@ -2,6 +2,7 @@ package comment
 
 import (
 	"context"
+	"encoding/json"
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
@@ -223,6 +224,17 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 			Comments: []*api.StoryComment{},
 		}, nil
 	}
+	createrIds := make([]int64, 0)
+	for _, comment := range *comments {
+		createrIds = append(createrIds, comment.UserID)
+	}
+	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	if err != nil {
+		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		return nil, err
+	}
+	createrMapData, _ := json.Marshal(createrMap)
+	log.Log().Info("get user by ids map success: " + string(createrMapData))
 	apiComments := make([]*api.StoryComment, 0)
 	for _, comment := range *comments {
 		apiComments = append(apiComments, &api.StoryComment{
@@ -233,6 +245,11 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 			UserId:    comment.UserID,
 			BoardId:   comment.StoryboardID,
 			LikeCount: comment.LikeCount,
+			Creator: &api.UserInfo{
+				UserId: comment.UserID,
+				Name:   createrMap[int(comment.UserID)].Name,
+				Avatar: createrMap[int(comment.UserID)].Avatar,
+			},
 		})
 	}
 	log.Log().Info("get comment list by story board success")
