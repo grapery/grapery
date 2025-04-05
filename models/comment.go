@@ -116,7 +116,7 @@ func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, err
 func GetCommentListByStoryBoard(storyBoardID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
-		Where("story_board_id = ? and deleted = 0", storyBoardID).
+		Where("storyboard_id = ? and deleted = 0", storyBoardID).
 		Scan(&ret).Error; err != nil {
 		log.Errorf("get storyboard [%d] comment failed ", storyBoardID, err.Error())
 		return nil, err
@@ -177,6 +177,14 @@ func DeleteStoryBoardCommentReply(commentID uint64) error {
 }
 
 func LikeComment(commentID uint64, userId uint64) error {
+	newCommentLike := &CommentLike{
+		UserID:    int64(userId),
+		CommentID: int64(commentID),
+	}
+	err := newCommentLike.Create()
+	if err != nil {
+		return nil
+	}
 	if err := DataBase().Model(&Comment{}).
 		Where("id = ?", commentID).
 		Update("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
@@ -202,7 +210,7 @@ func DislikeComment(commentID uint64, userId uint64) error {
 	}
 	if err := DataBase().Model(&Comment{}).
 		Where("id = ?", commentID).
-		Update("dislike_count", gorm.Expr("dislike_count + 1")).Error; err != nil {
+		Update("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
 		log.Errorf("dislike comment [%d] failed ", commentID)
 		return err
 	}
