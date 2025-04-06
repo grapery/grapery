@@ -39,7 +39,7 @@ func (s *StoryBoardService) GetStoryboard(ctx context.Context, req *connect.Requ
 		Code:    ret.Code,
 		Message: "OK",
 		Data: &gen.GetStoryboardResponse_Data{
-			Info: ret.Data.Info,
+			BoardInfo: ret.Data.BoardInfo,
 		},
 	}
 	return connect.NewResponse(resp), nil

@@ -107,9 +107,6 @@ func (s *StoryService) GetStoryboard(ctx context.Context, req *api.GetStoryboard
 	if err != nil {
 		log.Log().Error("get board sences failed", zap.Error(err))
 	}
-
-	boardInfoData, _ := json.Marshal(boardInfo)
-	log.Log().Info("get storyboard success", zap.String("board", string(boardInfoData)))
 	board := ConvertStoryBoardToApiStoryBoard(boardInfo)
 	if len(sences) != 0 {
 		board.Sences = new(api.StoryBoardSences)
@@ -120,16 +117,39 @@ func (s *StoryService) GetStoryboard(ctx context.Context, req *api.GetStoryboard
 		}
 		board.Sences.Total = int64(len(board.Sences.List))
 	}
+
 	cu, err := s.GetStoryboardCurrentUserStatus(ctx, req.BoardId)
 	if err != nil {
 		log.Log().Error("get storyboard current user status failed", zap.Error(err))
 	}
+	creator, err := models.GetUserById(ctx, int64(boardInfo.CreatorID))
+	if err != nil {
+		return nil, err
+	}
 	board.CurrentUserStatus = cu
+	boardActive := &api.StoryBoardActive{
+		Storyboard:        board,
+		TotalLikeCount:    int64(boardInfo.LikeNum),
+		TotalCommentCount: int64(boardInfo.CommentNum),
+		TotalShareCount:   int64(boardInfo.ShareNum),
+		TotalForkCount:    int64(boardInfo.ForkNum),
+		Mtime:             boardInfo.UpdateAt.Unix(),
+		Creator: &api.StoryBoardActiveUser{
+			UserId:     int64(creator.ID),
+			UserName:   creator.Name,
+			UserAvatar: creator.Avatar,
+		},
+		Summary: &api.StorySummaryInfo{
+			StoryId:     int64(storyInfo.ID),
+			StoryTitle:  storyInfo.Title,
+			StoryAvatar: storyInfo.Avatar,
+		},
+	}
 	return &api.GetStoryboardResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.GetStoryboardResponse_Data{
-			Info: board,
+			BoardInfo: boardActive,
 		},
 	}, nil
 }
