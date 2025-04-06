@@ -2085,7 +2085,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
-			StoryCover:       "",
+			StoryCover:       story.Avatar,
 			StoryAvatar:      story.Avatar,
 		}
 		if story.Name == "" {

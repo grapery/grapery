@@ -350,7 +350,6 @@ func (s *StoryBoardService) GetUserWatchStoryActiveStoryBoards(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("GetUserWatchStoryActiveStoryBoards: %v", ret.String())
 	return connect.NewResponse(ret), nil
 }
 
