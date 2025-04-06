@@ -382,6 +382,11 @@ func (s *StoryService) LikeStoryboard(ctx context.Context, req *api.LikeStoryboa
 		active.GetActiveServer().WriteStoryActive(ctx, group, story, storyBoard,
 			nil, req.GetUserId(), api.ActiveType_LikeStory)
 	}
+	storyBoard.LikeNum++
+	err = models.UpdateStoryboard(ctx, storyBoard)
+	if err != nil {
+		return nil, err
+	}
 	resp = &api.LikeStoryboardResponse{
 		Code:    0,
 		Message: "OK",
@@ -1281,6 +1286,15 @@ func (s *StoryService) UnLikeStoryboard(ctx context.Context, req *api.UnLikeStor
 	if err != nil {
 		return nil, err
 	}
+	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
+	if err != nil {
+		return nil, err
+	}
+	storyBoard.LikeNum--
+	err = models.UpdateStoryboard(ctx, storyBoard)
+	if err != nil {
+		return nil, err
+	}
 	return &api.UnLikeStoryboardResponse{
 		Code:    0,
 		Message: "OK",
@@ -2047,6 +2061,7 @@ func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStor
 }
 
 func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, req *api.GetUserWatchStoryActiveStoryBoardsRequest) (*api.GetUserWatchStoryActiveStoryBoardsResponse, error) {
+	fmt.Println("GetUserWatchStoryActiveStoryBoards: ", req.String())
 	stortIds, err := models.GetStoriesIdByUserFollow(ctx, int64(req.GetUserId()))
 	if err != nil {
 		return nil, err

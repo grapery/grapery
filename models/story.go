@@ -296,6 +296,7 @@ func GetStoriesByIDs(ctx context.Context, ids []int64) ([]*Story, error) {
 	err := DataBase().Model(&Story{}).
 		WithContext(ctx).
 		Where("id in (?)", ids).
+		Order("create_at desc").
 		Find(&stories).Error
 	if err != nil {
 		return nil, err

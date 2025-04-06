@@ -54,6 +54,21 @@ func (s *CommentService) CreateStoryComment(ctx context.Context, req *api.Create
 	if err != nil {
 		return nil, err
 	}
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return &api.CreateStoryCommentResponse{
+			Code:    -1,
+			Message: "get story failed",
+		}, nil
+	}
+	story.CommentCount++
+	err = models.UpdateStory(ctx, story)
+	if err != nil {
+		return &api.CreateStoryCommentResponse{
+			Code:    -1,
+			Message: "update story comment count failed",
+		}, nil
+	}
 	return &api.CreateStoryCommentResponse{
 		Code:    0,
 		Message: "success",
@@ -99,6 +114,7 @@ func (s *CommentService) DeleteStoryComment(ctx context.Context, req *api.Delete
 	if err != nil {
 		return nil, err
 	}
+
 	return &api.DeleteStoryCommentResponse{
 		Code:    0,
 		Message: "success",
@@ -189,6 +205,21 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 	if err != nil {
 		return nil, err
 	}
+	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
+	if err != nil {
+		return &api.CreateStoryBoardCommentResponse{
+			Code:    -1,
+			Message: "get storyboard failed",
+		}, nil
+	}
+	storyBoard.CommentNum++
+	err = models.UpdateStoryboard(ctx, storyBoard)
+	if err != nil {
+		return &api.CreateStoryBoardCommentResponse{
+			Code:    -1,
+			Message: "update storyboard comment count failed",
+		}, nil
+	}
 	return &api.CreateStoryBoardCommentResponse{
 		Code:    0,
 		Message: "success",
@@ -200,6 +231,14 @@ func (s *CommentService) DeleteStoryBoardComment(ctx context.Context, req *api.D
 	if err != nil {
 		return nil, err
 	}
+	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
+	if err != nil {
+		return &api.DeleteStoryBoardCommentResponse{
+			Code:    -1,
+			Message: "get storyboard failed",
+		}, nil
+	}
+	storyBoard.CommentNum--
 	return &api.DeleteStoryBoardCommentResponse{
 		Code:    0,
 		Message: "success",
