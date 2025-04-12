@@ -862,7 +862,12 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			finalRols[role.CharacterName] = realRole
 		}
 	}
-
+	originRolesMapData, _ := json.Marshal(originRolesMap)
+	fmt.Printf("originRolesMap roles: %v \n", string(originRolesMapData))
+	rolesMapData, _ := json.Marshal(rolesMap)
+	fmt.Printf("rolesMap roles: %v \n", string(rolesMapData))
+	finalRolsData, err := json.Marshal(finalRols)
+	fmt.Printf("finalRols roles: %v \n", string(finalRolsData))
 	var rolesPrompt = make([]Character, 0)
 	for _, role := range finalRols {
 		rolePrompt := Character{
@@ -903,31 +908,33 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	boardRequire["章节背景简介"] = req.GetBackground()
 	boardRequire["章节参与的角色信息"] = rolesPrompt
 	boardRequireJson, _ := json.Marshal(boardRequire)
-
+	fmt.Printf("boardRequireJson: %v \n", string(boardRequireJson))
 	templatePrompt := `生成故事 story_name 的下一个章节,故事内容用中文描述,以json格式返回		
 		之前的故事章节:
 		--------
 		story_prev_content
 		--------
-		请参考以上故事章节，生成故事的下一个章节。请参考如下格式：
+		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 ‘章节参与的角色信息’ 规定的范围。
+		一定要遵守 ‘章节参与的角色信息’ 的要求，其中‘角色id’要符合‘章节参与的角色信息’里的限制。
+		参考如下格式生成内容：
 		--------
 		{
 			"章节情节简述": {
 				"章节题目": "地球生存环境恶化",
 				"章节内容": "地球资源日益枯竭，人类将目光投向了火星。我国成功组建了一支马克为首的精英宇航员队伍，肩负起在火星建立基地的重任，为地球移民做准备"
-				"参与人物": [
-						{
-							"角色id": "1",
-							"角色姓名": "马克",
-							"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-						},
-						{
-							"角色id": "2",
-							"角色姓名": "飞云",
-							"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-						},
-					],
-			}
+			},
+			"参与人物": [
+					{
+						"角色id": "1",
+						"角色姓名": "马克",
+						"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
+					},
+					{
+						"角色id": "2",
+						"角色姓名": "飞云",
+						"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
+					},
+			]
 		}
 		--------
 		`
@@ -940,10 +947,10 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			`\n --------\n`
 	}
 	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
-	story_prev_content := make([]*StoryChapter, 0)
+	story_prev_content := make([]*StoryChapterV2, 0)
 	for idx := len(prevBoards) - 1; idx >= 0; idx-- {
 		prevBoard := prevBoards[idx]
-		content := new(StoryChapter)
+		content := new(StoryChapterV2)
 		content.ChapterSummary.Title = prevBoard.Title
 		content.ChapterSummary.Content = prevBoard.Description
 		content.ChapterSummary.Characters = make([]Character, 0)
@@ -984,13 +991,14 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	renderStoryParams := &client.StoryInfoParams{
 		Content: templatePrompt,
 	}
-	result := new(ChapterSummary)
+	result := new(StoryChapterV2)
 	start := time.Now()
 	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
+	fmt.Printf("ret.Content: ", ret.Content)
 	// 保存生成的故事板
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
 	err = json.Unmarshal([]byte(cleanResult), &result)
@@ -1007,8 +1015,8 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	// Convert from StoryChapter to api.StoryChapter
 	storyChapter := &api.StoryChapter{
 		ChapterSummary: &api.ChapterSummary{
-			Title:      result.Title,
-			Content:    result.Content,
+			Title:      result.ChapterSummary.Title,
+			Content:    result.ChapterSummary.Content,
 			Characters: make([]*api.Character, 0),
 		},
 	}
@@ -1029,31 +1037,6 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	err = models.UpdateStoryGen(ctx, storyGen)
 	if err != nil {
 		log.Log().Error("update story gen failed", zap.Error(err))
-	}
-	board.ForkNum = board.ForkNum + 1
-	err = models.UpdateStoryboard(ctx, board)
-	if err != nil {
-		log.Log().Error("update story gen failed", zap.Error(err))
-	}
-	for _, role := range finalRols {
-		role.StoryboardNum = role.StoryboardNum + 1
-		err = models.UpdateStoryRole(ctx, int64(role.ID), map[string]interface{}{
-			"storyboard_num": role.StoryboardNum,
-		})
-		if err != nil {
-			log.Log().Error("update story role failed", zap.Error(err))
-		}
-		roleActive := new(models.Active)
-		roleActive.StoryId = int64(story.ID)
-		roleActive.StoryRoleId = int64(role.ID)
-		roleActive.StoryBoardId = int64(board.ID)
-		roleActive.Content = board.Description
-		roleActive.Status = 1
-		roleActive.ActiveType = api.ActiveType_NewStoryBoard
-		err = roleActive.Create()
-		if err != nil {
-			log.Log().Error("create story role active failed", zap.Error(err))
-		}
 	}
 	return &api.ContinueRenderStoryResponse{
 		Code:    0,
