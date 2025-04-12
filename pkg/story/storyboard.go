@@ -1134,32 +1134,21 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		}, nil
 	}
 	// 根据角色参与的故事背景，以及这个角色的描述，使用AI生成一个角色描述
-	roleRequire := make(map[string]interface{})
-	roleRequire["角色名称"] = role.CharacterName
-	roleRequire["角色描述"] = role.CharacterDescription
 	roleRequirePrompt := `生成故事 story_name 的角色,故事内容用中文描述,以json格式返回		
-		角色名称:
-		--------
-		` + role.CharacterName + `
-		--------
-		角色描述:
-		--------
-		` + role.CharacterDescription + `
-		--------
-		故事背景:
-		--------
-		` + story.ShortDesc + `
-		--------
+		角色名称:` + role.CharacterName + `
+		角色描述:` + role.CharacterDescription + `
+		故事背景:` + story.ShortDesc + `
 		请参考以上输入，生成故事的下一个章节。只生成新的章节的章节内容，章节题目，章节背景简介，章节参与的角色。请参考如下格式：
+		---
 		{
 			"角色描述": "xxxxxx......",
 			"角色短期目标": "xxxxxx......",
 			"角色长期目标": "xxxxxx......",
 			"角色性格": "xxxxxx......",
-			"角色背景": "xxxxxx......",
-			"角色弱点": "xxxxxx......",
-			"角色关系": "xxxxxx......",
+			"角色背景": "xxxxxx......"
 		}
+		---
+		请返回json格式，不要返回其他内容。角色的描述，短期目标，长期目标，性格，背景，请用中文描述。
 		`
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
@@ -1168,13 +1157,13 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 	storyGen.LLmPlatform = "Zhipu"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = roleRequirePrompt
-	storyGen.Regen = 2
+	storyGen.Regen = 1
 	storyGen.Params = string(storyGenData)
 	storyGen.OriginID = int64(role.ID)
 	storyGen.StartTime = time.Now().Unix()
 	storyGen.BoardID = 0
-	storyGen.GenType = 0
-	storyGen.TaskType = 3
+	storyGen.GenType = int(api.RenderType_RENDER_TYPE_TEXT_UNSPECIFIED)
+	storyGen.TaskType = int(api.RenderType_RENDER_TYPE_STORYCHARACTERS)
 	_, err = models.CreateStoryGen(ctx, storyGen)
 	if err != nil {
 		log.Log().Error("create storyboard gen failed", zap.Error(err))
@@ -1184,7 +1173,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 	renderStoryParams := &client.StoryInfoParams{
 		Content: roleRequirePrompt,
 	}
-	result := make(map[string]string)
+	result := new(CharacterDetail)
 	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
@@ -1205,7 +1194,14 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 	apiRoleDetail.CharacterType = role.CharacterType
 	apiRoleDetail.CharacterPrompt = role.CharacterPrompt
 	apiRoleDetail.CharacterRefImages = strings.Split(role.CharacterRefImages, ",")
-	apiRoleDetail.CharacterDescription = cleanResult
+	apiRoleDetail.CharacterDescription = result.Description
+	apiRoleDetail.CharacterDetail = &api.CharacterDetail{
+		Description:   result.Description,
+		ShortTermGoal: result.ShortTermGoal,
+		LongTermGoal:  result.LongTermGoal,
+		Personality:   result.Personality,
+		Background:    result.Background,
+	}
 	storyGen.Content = cleanResult
 	storyGen.FinishTime = time.Now().Unix()
 	err = models.UpdateStoryGen(ctx, storyGen)

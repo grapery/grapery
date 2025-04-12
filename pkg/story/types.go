@@ -38,6 +38,15 @@ type Character struct {
 	Description string `json:"角色描述,omitempty"`
 }
 
+// CharacterDetail 表示角色的详细信息
+type CharacterDetail struct {
+	Description   string `json:"角色描述,omitempty"`
+	ShortTermGoal string `json:"角色短期目标,omitempty"`
+	LongTermGoal  string `json:"角色长期目标,omitempty"`
+	Personality   string `json:"角色性格,omitempty"`
+	Background    string `json:"角色背景,omitempty"`
+}
+
 // StoryInfo 表示故事的完整信息
 type StoryInfo struct {
 	StoryNameAndTheme StoryNameAndTheme `json:"故事名称和主题,omitempty"`
