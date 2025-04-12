@@ -229,3 +229,11 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *connect.Reque
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryService) ArchiveStory(ctx context.Context, req *connect.Request[gen.ArchiveStoryRequest]) (*connect.Response[gen.ArchiveStoryResponse], error) {
+	ret := &gen.ArchiveStoryResponse{
+		Code:    0,
+		Message: "OK",
+	}
+	return connect.NewResponse(ret), nil
+}

@@ -318,6 +318,7 @@ type StoryBoardRole struct {
 	RoleId    int64
 	Name      string
 	Avatar    string
+	Desc      string
 	Status    int
 }
 

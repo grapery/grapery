@@ -461,28 +461,33 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 				"故事简介": "在2023年，国际火星探索任务成功地将首批人类送至火星。美国宇航员马克·沃特斯（Mark Watney）作为唯一的幸存者，面临着生死存亡的挑战。以下是他在火星上的求生记。"
 			},
 			
-			"故事章节": {
-				"第1章": {
+			"故事章节": [
+				{
+					"章节ID": "1",
 					"章节题目": "火星上的孤岛",
 					"章节内容": "马克在火星表面执行任务时，遭遇了一场突如其来的沙尘暴。他与同伴们在撤离过程中不幸与团队失去了联系。马克在沙尘暴中迷失方向，被火星表面的沙丘覆盖，最终昏迷。醒来后，他发现自己成为了火星上的孤岛求生者。"
 				},
-				"第2章": {
+				{
+					"章节ID": "2",
 					"章节题目": "生存挑战",
 					"章节内容": "马克意识到自己必须生存下去。他利用有限的资源，包括宇航服、食物和水，开始寻找生存的方法。他尝试修复通讯设备，但收到的只有静默。马克在火星上种菜、收集雨水，并研究如何利用太阳能来延长他的生存时间。"
 				},
-				"第3章": {
+				{
+					"章节ID": "3",
 					"章节题目": "生存挑战",
 					"章节内容": "马克意识到自己必须生存下去。他利用有限的资源，包括宇航服、食物和水，开始寻找生存的方法。他尝试修复通讯设备，但收到的只有静默。马克在火星上种菜、收集雨水，并研究如何利用太阳能来延长他的生存时间。"
 				},
-				"第4章": {
+				{
+					"章节ID": "4",
 					"章节题目": "火星救援行动",
 					"章节内容": "地球上接收到马克发出的信号后，立刻组织了救援行动。由于距离遥远，救援需要数月时间。马克在这期间不断改善自己的生存条件，甚至尝试与地球上的科学家进行通讯，寻求他们的帮助。"
 				},
-				"第x章": {
+				{
+					"章节ID": "x",
 					"章节题目": "最终救援",
 					"章节内容": "在漫长的等待中，马克终于等来了救援团队。他们利用火星漫游车抵达了马克的藏身之处。在地球上团队的努力下，马克被成功救回。"
 				}
-			}
+			]
 		}
 		--------
 		请保证故事的连贯，以及故事中的各个人物的角色前后一致
@@ -520,7 +525,7 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 	}
 
 	// 渲染剧情
-	result := make(map[string]map[string]interface{})
+	result := new(StoryInfo)
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
@@ -530,49 +535,34 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 	renderDetail.Text = ret.Content
 	renderDetail.RenderType = req.RenderType
 	renderDetail.Timecost = int32(time.Since(start).Seconds())
-	renderDetail.Result = make(map[string]*api.RenderStoryStructure)
-	renderDetail.Result["story"] = &api.RenderStoryStructure{
-		Text: ret.Content,
-		Data: make(map[string]*api.RenderStoryStructureValue),
+	renderDetail.Result = new(api.StoryInfo)
+	storyInfo := &api.StoryInfo{
+		StoryNameAndTheme: &api.StoryNameAndTheme{},
+		StoryChapters:     make([]*api.ChapterInfo, 0),
 	}
+
 	// 转换
-	for key, val := range result {
-		if key == "故事名称和主题" {
-			for chapter, va := range val {
-				if chapter == "故事名称" {
-					renderDetail.Result["story"].Data[chapter] = &api.RenderStoryStructureValue{
-						Text: va.(string),
-					}
-				} else if chapter == "故事主题" {
-					renderDetail.Result["story"].Data[chapter] = &api.RenderStoryStructureValue{
-						Text: va.(string),
-					}
-				} else if chapter == "故事简介" {
-					renderDetail.Result["story"].Data[chapter] = &api.RenderStoryStructureValue{
-						Text: va.(string),
-					}
-				}
-			}
-		} else if key == "故事章节" {
-			for chapter, va := range val {
-				renderDetail.Result[chapter] = &api.RenderStoryStructure{
-					Text: "",
-					Data: make(map[string]*api.RenderStoryStructureValue),
-				}
-				for subchapter, subva := range va.(map[string]interface{}) {
-					if subchapter == "章节题目" {
-						renderDetail.Result[chapter].Data[subchapter] = &api.RenderStoryStructureValue{
-							Text: subva.(string),
-						}
-					} else if subchapter == "章节内容" {
-						renderDetail.Result[chapter].Data[subchapter] = &api.RenderStoryStructureValue{
-							Text: subva.(string),
-						}
-					}
-				}
-			}
-		}
+	if result.StoryNameAndTheme.Name != "" {
+		storyInfo.StoryNameAndTheme.Name = result.StoryNameAndTheme.Name
 	}
+	if result.StoryNameAndTheme.Theme != "" {
+		storyInfo.StoryNameAndTheme.Theme = result.StoryNameAndTheme.Theme
+	}
+	if result.StoryNameAndTheme.Description != "" {
+		storyInfo.StoryNameAndTheme.Description = result.StoryNameAndTheme.Description
+	}
+
+	// 处理章节信息
+	for _, chapter := range result.StoryChapters {
+		apiChapter := &api.ChapterInfo{
+			Id:      chapter.ID,
+			Title:   chapter.Title,
+			Content: chapter.Content,
+		}
+		storyInfo.StoryChapters = append(storyInfo.StoryChapters, apiChapter)
+	}
+
+	renderDetail.Result = storyInfo
 	renderDetailData, _ := json.Marshal(renderDetail)
 	storyGen.Content = string(renderDetailData)
 	storyGen.FinishTime = time.Now().Unix()

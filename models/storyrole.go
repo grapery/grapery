@@ -22,6 +22,7 @@ type StoryRole struct {
 	FollowCount          int64  `json:"follow_count"`
 	StoryboardNum        int64  `json:"storyboard_num"`
 	Version              int64  `json:"version"`
+	BranchId             int64  `json:"branch_id"`
 }
 
 func (s StoryRole) TableName() string {
