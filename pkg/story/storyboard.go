@@ -573,8 +573,10 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	// 保存生成的故事板
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	fmt.Println("render storyboard cleanResult: ", cleanResult)
+	// 保存生成的故事板
+
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
@@ -601,7 +603,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	}
 
 	// Convert each detail scene
-	for _, detail := range result.ChapterDetailInfo.Details {
+	for _, detail := range result.ChapterDetailInfo {
 		apiDetail := &api.DetailScene{
 			Id:          detail.ID,
 			Content:     detail.Content,

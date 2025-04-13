@@ -19,9 +19,7 @@ type ChapterSummary struct {
 }
 
 // ChapterDetailInformation 包含多个详细情节
-type ChapterDetailInformation struct {
-	Details []*DetailScene `json:"详细情节,omitempty"`
-}
+type ChapterDetailInformation []*DetailScene
 
 // DetailScene 表示具体的场景信息
 type DetailScene struct {
