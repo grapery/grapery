@@ -289,3 +289,11 @@ func (s *StoryRoleService) UpdateStoryRoleAvator(ctx context.Context, req *conne
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryRoleService) GetStoryRoleList(ctx context.Context, req *connect.Request[gen.GetStoryRoleListRequest]) (*connect.Response[gen.GetStoryRoleListResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetStoryRoleList(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}

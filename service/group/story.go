@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"connectrpc.com/connect"
 
@@ -225,8 +226,10 @@ func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *connect.Reque
 func (s *StoryService) GetNextStoryboard(ctx context.Context, req *connect.Request[gen.GetNextStoryboardRequest]) (*connect.Response[gen.GetNextStoryboardResponse], error) {
 	ret, err := storyServer.GetStoryServer().GetNextStoryboard(ctx, req.Msg)
 	if err != nil {
+		log.Printf("get next storyboard failed: %s", err.Error())
 		return nil, err
 	}
+	log.Printf("get next storyboard success: %s", ret.String())
 	return connect.NewResponse(ret), nil
 }
 

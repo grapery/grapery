@@ -108,6 +108,7 @@ type StoryServer interface {
 	GenerateRolePrompt(ctx context.Context, req *api.GenerateRolePromptRequest) (*api.GenerateRolePromptResponse, error)
 	UpdateRolePrompt(ctx context.Context, req *api.UpdateRolePromptRequest) (*api.UpdateRolePromptResponse, error)
 	UpdateStoryRoleAvator(ctx context.Context, req *api.UpdateStoryRoleAvatorRequest) (*api.UpdateStoryRoleAvatorResponse, error)
+	GetStoryRoleList(ctx context.Context, req *api.GetStoryRoleListRequest) (*api.GetStoryRoleListResponse, error)
 }
 
 type StoryService struct {
@@ -737,7 +738,7 @@ func (s *StoryService) SearchStories(ctx context.Context, req *api.SearchStories
 }
 
 func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequest) (*api.SearchRolesResponse, error) {
-	roles, total, err := models.GetStoryRolesByName(ctx, req.GetKeyword(), int(req.GetOffset()), int(req.GetPageSize()))
+	roles, total, err := models.GetStoryRolesByName(ctx, req.GetKeyword(), req.GetStoryId(), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Log().Error("get story roles failed", zap.Error(err))
 		return nil, err
@@ -780,5 +781,23 @@ func (s *StoryService) UpdateStoryRoleAvator(ctx context.Context, req *api.Updat
 	return &api.UpdateStoryRoleAvatorResponse{
 		Code:    0,
 		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) GetStoryRoleList(ctx context.Context, req *api.GetStoryRoleListRequest) (*api.GetStoryRoleListResponse, error) {
+	roles, _, err := models.GetStoryRolesByName(ctx, req.GetSearchKey(), req.GetStoryId(), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		log.Log().Error("get story roles failed", zap.Error(err))
+		return nil, err
+	}
+	apiRoles := make([]*api.StoryRole, 0)
+	for _, role := range roles {
+		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		apiRoles = append(apiRoles, info)
+	}
+	return &api.GetStoryRoleListResponse{
+		Code:    0,
+		Message: "OK",
+		Roles:   apiRoles,
 	}, nil
 }

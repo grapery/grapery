@@ -1979,23 +1979,21 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 }
 
 func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextStoryboardRequest) (*api.GetNextStoryboardResponse, error) {
-	resp := &api.GetNextStoryboardResponse{}
-	story, err := models.GetStory(ctx, req.GetStoryId())
+	board, err := models.GetStoryboard(ctx, req.GetStoryboardId())
 	if err != nil {
+		log.Log().Error("get storyboard failed", zap.Error(err))
 		return nil, err
 	}
-	if story.Status != 1 {
-		resp.Code = api.ResponseCode_STORY_ARCHIVED
-		resp.Message = api.ResponseCode_STORY_ARCHIVED.String()
-		return resp, nil
-	}
+	resp := &api.GetNextStoryboardResponse{}
 	boards, err := models.GetStoryBoardByStoryAndPrevId(ctx,
-		req.GetStoryId(), req.GetStoryboardId(), int(req.GetOffset()),
+		board.StoryID, req.GetStoryboardId(), int(req.GetOffset()),
 		int(req.GetPageSize()), req.GetOrderBy().String())
 	if err != nil {
+		log.Log().Error("get next storyboard failed", zap.Error(err))
 		return nil, err
 	}
 	if len(boards) == 0 {
+		log.Log().Info("no next storyboard")
 		resp.Code = 0
 		resp.Message = "OK"
 		resp.Offset = 0
@@ -2004,6 +2002,7 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 		return resp, nil
 	}
 	apiBoards := make([]*api.StoryBoardActive, 0)
+	log.Log().Info("get next storyboard", zap.Int("total", len(boards)))
 	for _, board := range boards {
 		cu, err := s.GetStoryboardCurrentUserStatus(ctx, int64(board.ID))
 		if err != nil {
@@ -2026,10 +2025,12 @@ func (s *StoryService) GetNextStoryboard(ctx context.Context, req *api.GetNextSt
 		}
 		creator, err := models.GetUserById(ctx, int64(board.CreatorID))
 		if err != nil {
+			log.Log().Error("get user failed", zap.Error(err))
 			return nil, err
 		}
 		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(board.ID))
 		if err != nil {
+			log.Log().Error("get board roles failed", zap.Error(err))
 			return nil, err
 		}
 		boardInfo.Roles = make([]*api.StoryRole, 0)

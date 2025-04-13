@@ -89,15 +89,17 @@ func GetStoryRoleByName(ctx context.Context, name string, storyId int64) (*Story
 	return &role, nil
 }
 
-func GetStoryRolesByName(ctx context.Context, name string, offset, number int) ([]*StoryRole, int64, error) {
+func GetStoryRolesByName(ctx context.Context, name string, storyId int64, offset, number int) ([]*StoryRole, int64, error) {
 	var roles []*StoryRole
 	var total int64
 	if err := DataBase().Model(&StoryRole{}).
+		Where("story_id = ?", storyId).
 		Where("character_name like ?", "%"+name+"%").
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	if err := DataBase().Model(&StoryRole{}).
+		Where("story_id = ?", storyId).
 		Where("character_name like ?", "%"+name+"%").
 		Offset(offset).
 		Limit(number).
