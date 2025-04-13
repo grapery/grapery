@@ -826,7 +826,167 @@ func (s *StoryService) GetStoryBoardRender(ctx context.Context, req *api.GetStor
 	}, nil
 }
 
+func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRenderStoryRequest) (*api.ContinueRenderStoryResponse, error) {
+	story, err := models.GetStory(ctx, req.StoryId)
+	if err != nil {
+		return nil, err
+	}
+	if story.Status == -1 {
+		return &api.ContinueRenderStoryResponse{
+			Code:    -1,
+			Message: "story is closed",
+		}, nil
+	}
+	roles := req.GetRoles()
+	originRoles, err := models.GetStoryRole(ctx, int64(story.ID))
+	if err != nil {
+		return nil, err
+	}
+	originRolesMap := make(map[int64]*models.StoryRole)
+	rolesMap := make(map[int64]*api.StoryRole)
+	finalRols := make(map[string]*models.StoryRole)
+	for _, role := range originRoles {
+		originRolesMap[int64(role.ID)] = role
+	}
+	for _, role := range roles {
+		rolesMap[int64(role.RoleId)] = role
+	}
+	for _, role := range roles {
+		log.Log().Sugar().Info("role: %+v", role)
+		if realRole, ok := originRolesMap[int64(role.RoleId)]; ok {
+			finalRols[role.CharacterName] = realRole
+		}
+	}
+	var rolesPrompt = make([]Character, 0)
+	for _, role := range finalRols {
+		rolePrompt := Character{
+			ID:          role.CharacterID,
+			Name:        role.CharacterName,
+			Description: role.CharacterDescription,
+		}
+		rolesPrompt = append(rolesPrompt, rolePrompt)
+	}
+	storyGen := new(models.StoryGen)
+	storyGen.Uuid = uuid.New().String()
+	boardRequire := make(map[string]interface{})
+	boardRequire["章节题目要求"] = req.GetTitle()
+	boardRequire["章节内容要求"] = req.GetDescription()
+	boardRequire["章节背景简介"] = req.GetBackground()
+	boardRequire["章节参与的角色信息"] = rolesPrompt
+	templatePrompt := `生成故事 story_name 的第一个章节,故事内容用中文描述,以json格式返回		
+		选择的人员角色，不要超过 ‘章节参与的角色信息’ 规定的角色id和角色名称范围。
+		一定要遵守 ‘章节参与的角色信息’ 的要求，其中‘角色id’不要超出‘章节参与的角色信息’里的范围。
+		如果 ‘章节参与的角色信息’ 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容。
+		参考如下格式生成内容：
+		--------
+		{
+			"章节情节简述": {
+				"章节题目": "地球生存环境恶化",
+				"章节内容": "地球资源日益枯竭，人类将目光投向了火星。我国成功组建了一支马克为首的精英宇航员队伍，肩负起在火星建立基地的重任，为地球移民做准备"
+			},
+			"参与人物": [
+					{
+						"角色id": "1",
+						"角色姓名": "马克",
+						"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
+					},
+					{
+						"角色id": "2",
+						"角色姓名": "飞云",
+						"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
+					},
+			]
+		}
+		--------
+		`
+	boardRequireJson, _ := json.Marshal(boardRequire)
+	if len(req.GetDescription()) > 0 ||
+		len(req.GetBackground()) > 0 ||
+		len(rolesPrompt) > 0 {
+		templatePrompt = templatePrompt + `请一定要按照章节要求：
+		-------- \n"` +
+			string(boardRequireJson) +
+			`\n --------\n`
+	}
+	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
+	templatePrompt = strings.Replace(templatePrompt, "story_name", story.Title, -1)
+	storyGen.LLmPlatform = "Zhipu"
+	storyGen.NegativePrompt = ""
+	storyGen.PositivePrompt = templatePrompt
+	storyGen.Regen = 1
+	storyGen.Params = ""
+	storyGen.OriginID = req.GetStoryId()
+	storyGen.StartTime = time.Now().Unix()
+	storyGen.BoardID = req.GetPrevBoardId()
+	storyGen.GenType = int(req.GetRenderType())
+	storyGen.TaskType = 1
+	_, err = models.CreateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("create storyboard gen failed", zap.Error(err))
+		return nil, err
+	}
+	log.Log().Sugar().Info("gen storyboard prompt: ", templatePrompt)
+	renderStoryParams := &client.StoryInfoParams{
+		Content: templatePrompt,
+	}
+	result := new(StoryChapterV2)
+	start := time.Now()
+	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
+	if err != nil {
+		log.Log().Error("gen storyboard info failed", zap.Error(err))
+		return nil, err
+	}
+	// 保存生成的故事板
+	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	err = json.Unmarshal([]byte(cleanResult), &result)
+	if err != nil {
+		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
+		return nil, err
+	}
+	// 渲染剧情
+	renderDetail := new(api.RenderStoryboardDetail)
+	renderDetail.RenderType = req.RenderType
+	renderDetail.Timecost = int32(time.Since(start).Seconds())
+	renderDetail.Result = new(api.StoryChapter)
+
+	// Convert from StoryChapter to api.StoryChapter
+	storyChapter := &api.StoryChapter{
+		ChapterSummary: &api.ChapterSummary{
+			Title:      result.ChapterSummary.Title,
+			Content:    result.ChapterSummary.Content,
+			Characters: make([]*api.Character, 0),
+		},
+	}
+	for _, character := range result.Characters {
+		characterInfo := &api.Character{
+			Id:          character.ID,
+			Name:        character.Name,
+			Description: character.Description,
+		}
+		storyChapter.ChapterSummary.Characters = append(storyChapter.ChapterSummary.Characters, characterInfo)
+	}
+
+	renderDetail.Result = storyChapter
+
+	renderDetailData, _ := json.Marshal(renderDetail)
+	storyGen.Content = string(renderDetailData)
+	storyGen.FinishTime = time.Now().Unix()
+	err = models.UpdateStoryGen(ctx, storyGen)
+	if err != nil {
+		log.Log().Error("update story gen failed", zap.Error(err))
+	}
+	return &api.ContinueRenderStoryResponse{
+		Code:    0,
+		Message: "OK",
+		Data:    renderDetail,
+	}, nil
+}
+
 func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.ContinueRenderStoryRequest) (*api.ContinueRenderStoryResponse, error) {
+	if req.PrevBoardId <= 0 {
+		log.Log().Sugar().Info("continue render story is init")
+		return s.InitRenderStory(ctx, req)
+	}
 	board, err := models.GetStoryboard(ctx, req.PrevBoardId)
 	if err != nil {
 		return nil, err
