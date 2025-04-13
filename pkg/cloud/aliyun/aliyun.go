@@ -2,7 +2,9 @@ package aliyun
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/google/uuid"
@@ -74,11 +76,20 @@ func (c *AliyunClient) UploadFileFromURL(objectKey string, url string) (string, 
 	if objectKey == "" {
 		objectKey = "images/" + uuid.New().String() + ".jpg"
 	}
+	fmt.Println("UploadFileFromURL: ", objectKey, url)
 	err = c.bucket.PutObject(objectKey, response.Body)
 	if err != nil {
 		return "", err
 	}
-	return c.GetFileURL(objectKey, 3600)
+	// http://grapery-dev.oss-cn-shanghai.aliyuncs.com/images%2F5e407747-9553-425f-aa0f-73c926847ca4.jpg?Expires=1744559510&OSSAccessKeyId=LTAI5t9opRTB3NKb3nBiikx5&Signature=MUK6qt5H0cVvZNy4rQNlp9GTUgg%3D
+	newUrl, err := c.GetFileURL(objectKey, 3600)
+	if err != nil {
+		return "", err
+	}
+	// 去除掉url中的Expires和Signature
+	newUrl = strings.Split(newUrl, "?")[0]
+	newUrl = strings.ReplaceAll(newUrl, "http://", "https://")
+	return newUrl, nil
 }
 
 // DownloadFile 从阿里云 OSS 下载文件
