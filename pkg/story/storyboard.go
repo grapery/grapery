@@ -45,6 +45,7 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 	if err != nil {
 		return nil, err
 	}
+	log.Log().Info("create storyboard success", zap.Int64("storyBoardId", storyBoardId))
 	newStroyBoard.ID = uint(storyBoardId)
 	if storyInfo.RootBoardID == 0 {
 		err = models.UpdateStorySpecColumns(ctx, req.Board.StoryId, map[string]interface{}{

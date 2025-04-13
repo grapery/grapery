@@ -85,6 +85,30 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 		apiProfile = convert.ConvertGroupProfileToApiGroupProfile(profile)
 		apiProfile.GroupId = int64(group.ID)
 	}
+	likeItems, err := models.GetLikeItemByGroup(ctx, []int64{req.GetGroupId()}, int(req.GetUserId()))
+	if err != nil {
+		log.Info("get like item by group failed: ", err.Error())
+	}
+	likeMap := make(map[int64]bool)
+	for _, val := range likeItems {
+		likeMap[int64(val.GroupID)] = true
+	}
+	watchMap := make(map[int64]bool)
+	watchItem, err := models.GetWatchItemByGroupAndUser(ctx, req.GetGroupId(), req.GetUserId())
+	if err != nil {
+		log.Info("get watch item by group and user failed: ", err.Error())
+	} else {
+		watchMap[int64(watchItem.GroupID)] = true
+	}
+	var isIn bool = false
+	groupMember := &models.GroupMember{
+		GroupID: req.GetGroupId(),
+		UserID:  req.GetUserId(),
+	}
+	isIn, err = groupMember.IsInGroup()
+	if err != nil {
+		log.Info("get group member by group and user failed: ", err.Error())
+	}
 	return &api.GetGroupResponse{
 		Code:    0,
 		Message: "ok",
@@ -96,8 +120,15 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 				Desc:    group.ShortDesc,
 				Creator: int64(creator.ID),
 				Owner:   int64(creator.ID),
+				Profile: apiProfile,
+				CurrentUserStatus: &api.WhatCurrentUserStatus{
+					UserId:     utils.GetUserInfoFromMetadata(ctx),
+					IsJoined:   isIn,
+					IsFollowed: watchMap[int64(group.ID)],
+					IsWatched:  watchMap[int64(group.ID)],
+					IsLiked:    likeMap[int64(group.ID)],
+				},
 			},
-			Profile: apiProfile,
 		},
 	}, nil
 }
