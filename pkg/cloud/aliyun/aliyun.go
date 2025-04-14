@@ -74,7 +74,7 @@ func (c *AliyunClient) UploadFileFromURL(objectKey string, url string) (string, 
 	}
 	defer response.Body.Close()
 	if objectKey == "" {
-		objectKey = "images/" + uuid.New().String() + ".jpg"
+		objectKey = fmt.Sprintf("images/%s.jpg", uuid.New().String())
 	}
 	fmt.Println("UploadFileFromURL: ", objectKey, url)
 	err = c.bucket.PutObject(objectKey, response.Body)
