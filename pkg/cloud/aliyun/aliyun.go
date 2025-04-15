@@ -3,8 +3,12 @@ package aliyun
 import (
 	"bytes"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"strings"
+
+	"encoding/base64"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/google/uuid"
@@ -109,4 +113,78 @@ func (c *AliyunClient) GetFileURL(objectKey string, expiredInSec int64) (string,
 // DeleteFile 删除阿里云 OSS 上的文件
 func (c *AliyunClient) DeleteFile(objectKey string) error {
 	return c.bucket.DeleteObject(objectKey)
+}
+
+// 处理阿里云oss bucket的图片，生成对应的缩略图
+func (c *AliyunClient) GenerateThumbnail(objectKey string) (string, error) {
+	// 获取图片
+	pathSlice := strings.Split(objectKey, "/")
+	id := strings.Split(pathSlice[len(pathSlice)-1], ".")[0]
+	imgReader, err := c.bucket.GetObject(objectKey)
+	if err != nil {
+		return "", err
+	}
+	defer imgReader.Close()
+
+	// 解码图片
+	img, _, err := image.Decode(imgReader)
+	if err != nil {
+		return "", err
+	}
+
+	// 获取图片的宽高
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	// 生成缩略图
+	thumbnail := image.NewRGBA(image.Rect(0, 0, width/2, height/2))
+
+	// 使用基本的图像绘制功能进行缩小
+	// 这是一个简单的像素复制方法，在实际应用中可能需要更高级的缩放算法
+	for y := 0; y < height/2; y++ {
+		for x := 0; x < width/2; x++ {
+			thumbnail.Set(x, y, img.At(x*2, y*2))
+		}
+	}
+
+	// 将缩略图编码为JPEG格式
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, thumbnail, &jpeg.Options{Quality: 85}); err != nil {
+		return "", err
+	}
+
+	// 上传缩略图
+	thumbnailKey := fmt.Sprintf("thumbnail/%s.jpg", id)
+	_, err = c.UploadBytes(thumbnailKey, buf.Bytes())
+	if err != nil {
+		return "", err
+	}
+	return c.GetFileURL(thumbnailKey, 3600)
+}
+
+// 处理阿里云oss bucket的图片，生成对应的缩略图
+func (c *AliyunClient) GenerateThumbnailV2(objectKey string, size int) (string, error) {
+	// 生成目标图片的key
+	pathSlice := strings.Split(objectKey, "/")
+	id := strings.Split(pathSlice[len(pathSlice)-1], ".")[0]
+	targetKey := fmt.Sprintf("thumbnail/%s.jpg", id)
+
+	// 构建图片处理参数
+	// 将图片缩放为固定宽高200px
+	style := fmt.Sprintf("image/resize,m_fixed,w_%d,h_%d", size, size)
+	// 使用base64编码目标文件名和bucket名
+	process := fmt.Sprintf("%s|sys/saveas,o_%v,b_%v",
+		style,
+		base64.URLEncoding.EncodeToString([]byte(targetKey)),
+		base64.URLEncoding.EncodeToString([]byte(Bucket)))
+
+	// 执行图片处理
+	_, err := c.bucket.ProcessObject(objectKey, process)
+	if err != nil {
+		return "", err
+	}
+
+	// 返回处理后的图片URL
+	return c.GetFileURL(targetKey, 3600)
 }

@@ -742,7 +742,12 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 								log.Log().Error("upload file from url failed", zap.Error(err))
 								continue
 							}
-							aliyunUrls = append(aliyunUrls, aliyunUrl)
+							aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+							if err != nil {
+								log.Log().Error("generate thumbnail failed", zap.Error(err))
+								continue
+							}
+							aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 						}
 						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
 						storyGen.Content = ""
@@ -1701,7 +1706,12 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 			log.Log().Error("upload file from url failed", zap.Error(err))
 			continue
 		}
-		aliyunUrls = append(aliyunUrls, aliyunUrl)
+		aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+		if err != nil {
+			log.Log().Error("generate thumbnail failed", zap.Error(err))
+			continue
+		}
+		aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 	}
 	retData, _ := json.Marshal(aliyunUrls)
 	scene.GenResult = string(retData)
@@ -1806,7 +1816,12 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
 			}
-			aliyunUrls = append(aliyunUrls, aliyunUrl)
+			aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+			if err != nil {
+				log.Log().Error("generate thumbnail failed", zap.Error(err))
+				continue
+			}
+			aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 		}
 		retData, _ := json.Marshal(aliyunUrls)
 		scene.GenResult = string(retData)

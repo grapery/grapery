@@ -109,27 +109,28 @@ const (
 
 type Story struct {
 	IDBase
-	Title       string
-	Name        string
-	ShortDesc   string
-	CreatorID   int64
-	OwnerID     int64
-	GroupID     int64
-	Origin      string
-	RootBoardID int
-	AIGen       bool
-	Avatar      string
-	Visable     api.ScopeType
-	Status      StoryStatus
-	IsAchieve   bool
-	IsClose     bool
-	IsPrivate   bool
-	Params      string
-	Style       string
-	StyleDesc   string
-	StyleImage  string
-	Subject     string
-	SubjectDesc string
+	Title        string
+	Name         string
+	ShortDesc    string
+	CreatorID    int64
+	OwnerID      int64
+	GroupID      int64
+	Origin       string
+	RootBoardID  int
+	AIGen        bool
+	Avatar       string
+	OriginAvatar string
+	Visable      api.ScopeType
+	Status       StoryStatus
+	IsAchieve    bool
+	IsClose      bool
+	IsPrivate    bool
+	Params       string
+	Style        string
+	StyleDesc    string
+	StyleImage   string
+	Subject      string
+	SubjectDesc  string
 
 	LikeCount    int64
 	CommentCount int64
