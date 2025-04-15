@@ -20,7 +20,8 @@ func NewOpenAIClient() *OpenAIClient {
 	opts := []option.RequestOption{
 		option.WithAPIKey(APIKey),
 	}
+	cli := openai.NewClient(opts...)
 	return &OpenAIClient{
-		Client: openai.NewClient(opts...),
+		Client: &cli,
 	}
 }
