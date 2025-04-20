@@ -317,7 +317,6 @@ func (s *StoryBoardService) GetUserCreatedStoryboards(ctx context.Context, req *
 	if err != nil {
 		return nil, err
 	}
-	print("storyboards len: ", len(ret.Storyboards))
 	resp := &gen.GetUserCreatedStoryboardsResponse{
 		Code:        ret.Code,
 		Message:     "OK",
