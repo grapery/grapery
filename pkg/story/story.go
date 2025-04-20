@@ -222,7 +222,11 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 			Data:    nil,
 		}, nil
 	}
-
+	// 更新当前小组的故事数量
+	err = models.IncGroupProfileStoryCount(ctx, int64(group.ID))
+	if err != nil {
+		log.Log().Error("inc group profile story count failed", zap.Error(err))
+	}
 	err = models.CreateWatchStoryItem(ctx, int(req.CreatorId), int64(storyId), int64(group.ID))
 	if err != nil {
 		log.Log().Error("watch story failed", zap.Error(err))

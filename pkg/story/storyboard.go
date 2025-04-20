@@ -2300,12 +2300,12 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 	}
 	storiesSummary := make(map[int64]*api.StorySummaryInfo)
 	for _, story := range stories {
-		if story.Status != 1 {
-			continue
-		}
-		if story.Deleted == true {
-			continue
-		}
+		// if story.Status != 1 {
+		// 	continue
+		// }
+		// if story.Deleted == true {
+		// 	continue
+		// }
 		if _, ok := storiesSummary[int64(story.ID)]; ok {
 			continue
 		}

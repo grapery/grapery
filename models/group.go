@@ -27,6 +27,8 @@ type Group struct {
 	Avatar      string        `json:"avatar,omitempty"`
 	IsDefault   bool          `json:"is_default,omitempty"`
 	Status      int64         `json:"status,omitempty"`
+	Tags        string        `json:"tags,omitempty"`
+	Location    string        `json:"location,omitempty"`
 }
 
 func (g Group) TableName() string {
@@ -467,16 +469,17 @@ func GetGroupsByIds(groupIds []int64) (groups []*Group, err error) {
 
 type GroupProfile struct {
 	IDBase
-	GroupID        int64 `json:"group_id,omitempty"`
-	Desc           string
-	Members        int64
-	DefaultStoryId int64
-	StoryCount     int64
-	IsVerified     bool
-	Followers      int64
+	GroupID        int64  `json:"group_id,omitempty"`
+	Desc           string `json:"desc,omitempty"`
+	Members        int64  `json:"members,omitempty"`
+	DefaultStoryId int64  `json:"default_story_id,omitempty"`
+	StoryCount     int64  `json:"story_count,omitempty"`
+	IsVerified     bool   `json:"is_verified,omitempty"`
+	Followers      int64  `json:"followers,omitempty"`
+	BackgroundUrl  string `json:"background_url,omitempty"`
 }
 
-func (g *GroupProfile) TableName() string {
+func (g GroupProfile) TableName() string {
 	return "group_profile"
 }
 
@@ -511,14 +514,31 @@ func GetGroupProfile(ctx context.Context, groupID int64) (profile *GroupProfile,
 	profile = new(GroupProfile)
 	err = DataBase().Table(profile.TableName()).Where("group_id = ? and deleted = 0", groupID).First(profile).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Errorf("get group profile failed: %s", err.Error())
 		return nil, err
 	}
 	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get group profile failed: %s", err.Error())
 		return nil, nil
 	}
 	return profile, nil
 }
 
+// 根据groupIds 列表获取group profile 列表
+func GetGroupProfiles(ctx context.Context, groupIds []int64) (profiles []*GroupProfile, err error) {
+	profiles = make([]*GroupProfile, 0)
+	err = DataBase().Table(GroupProfile{}.TableName()).Where("group_id in (?) and deleted = 0", groupIds).Find(&profiles).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if len(profiles) == 0 {
+		return nil, nil
+	}
+	return profiles, nil
+}
 func IncGroupProfileMembers(ctx context.Context, groupId int64) error {
 	return DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
@@ -541,6 +561,33 @@ func DecGroupProfileStoryCount(ctx context.Context, groupId int64) error {
 	return DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("story_count", gorm.Expr("story_count - 1")).Error
+}
+
+func IncGroupProfileFollowers(ctx context.Context, groupId int64) error {
+	return DataBase().Table((&GroupProfile{}).TableName()).
+		Where("group_id = ? and deleted = 0", groupId).
+		Update("followers", gorm.Expr("followers + 1")).Error
+}
+
+func DecGroupProfileFollowers(ctx context.Context, groupId int64) error {
+	return DataBase().Table((&GroupProfile{}).TableName()).
+		Where("group_id = ? and deleted = 0", groupId).
+		Update("followers", gorm.Expr("followers - 1")).Error
+}
+
+// 根据groupId和userId获取用户加入小组的信息
+func GetGroupMemberByGroupAndUser(ctx context.Context, groupId int64, userId int64) (member *GroupMember, err error) {
+	member = new(GroupMember)
+	err = DataBase().Table((&GroupMember{}).TableName()).
+		Where("group_id = ? and user_id = ? and deleted = 0", groupId, userId).
+		First(member).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return member, nil
 }
 
 func UpdateGroupProfile(ctx context.Context, groupId int64, desc string, followers int64) error {

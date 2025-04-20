@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/utils"
 )
 
 var userServer UserServer
@@ -174,6 +176,21 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 	info := &api.UserInfo{
 		UserId: int64(u.ID),
 	}
+	groupIds := make([]int64, 0)
+	for _, group := range list {
+		groupIds = append(groupIds, int64(group.ID))
+	}
+	profiles, err := models.GetGroupProfiles(ctx, groupIds)
+	if err != nil {
+		log.Errorf("get group profiles failed : %s", err.Error())
+		return nil, err
+	}
+	groupProfileMap := make(map[int64]*models.GroupProfile)
+	for _, profile := range profiles {
+		groupProfileMap[profile.GroupID] = profile
+	}
+	groupProfileMapData, _ := json.Marshal(groupProfileMap)
+	log.Infof("groupProfileMap: %s", string(groupProfileMapData))
 	for idx, _ := range list {
 		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
@@ -182,6 +199,24 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		groups[idx].Desc = list[idx].ShortDesc
 		groups[idx].Owner = info.UserId
 		groups[idx].Creator = info.UserId
+		if groupProfileMap[int64(list[idx].ID)] != nil {
+			groups[idx].Profile = &api.GroupProfileInfo{
+				GroupId:          int64(list[idx].ID),
+				GroupMemberNum:   int32(groupProfileMap[int64(list[idx].ID)].Members),
+				GroupFollowerNum: int32(groupProfileMap[int64(list[idx].ID)].Followers),
+				GroupStoryNum:    int32(groupProfileMap[int64(list[idx].ID)].StoryCount),
+				Description:      groupProfileMap[int64(list[idx].ID)].Desc,
+				BackgroudUrl:     groupProfileMap[int64(list[idx].ID)].BackgroundUrl,
+			}
+		}
+		cu, err := user.GetGroupCurrentUserStatus(ctx, int64(list[idx].ID))
+		if err != nil {
+			return nil, err
+		}
+		groups[idx].CurrentUserStatus = cu
+
+		groups[idx].Ctime = list[idx].CreateAt.Unix()
+		groups[idx].Mtime = list[idx].UpdateAt.Unix()
 	}
 	return &api.UserGroupResponse{
 		Code: 0,
@@ -634,6 +669,114 @@ func (user *UserService) UpdateUserBackgroundImage(ctx context.Context, req *api
 		Code:    0,
 		Message: "OK",
 	}, nil
+}
+
+func (user *UserService) GetGroupCurrentUserStatus(ctx context.Context, groupId int64) (*api.WhatCurrentUserStatus, error) {
+	// 查询用户ID
+	if groupId == 0 {
+		return nil, nil
+	}
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cu := new(api.WhatCurrentUserStatus)
+	// 查询用户是否关注了小组
+	follow, err := models.GetWatchItemByGroupAndUser(ctx, groupId, int64(userID))
+	if err != nil {
+		return nil, err
+	}
+	if follow != nil && follow.Deleted == false {
+		cu.IsFollowed = true
+	}
+	// 查询用户是否加入了小组
+	join, err := models.GetGroupMemberByGroupAndUser(ctx, groupId, userID)
+	if err != nil {
+		return nil, err
+	}
+	if join != nil && join.Deleted == false {
+		cu.IsJoined = true
+	}
+	return cu, nil
+}
+
+func (user *UserService) GetStoryRoleCurrentUserStatus(ctx context.Context, roleId int64) (*api.WhatCurrentUserStatus, error) {
+	// 查询用户ID
+	if roleId == 0 {
+		return nil, nil
+	}
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cu := new(api.WhatCurrentUserStatus)
+	// 查询用户是否关注了角色
+	follow, err := models.GetWatchItemByStoryRoleAndUser(ctx, roleId, int64(userID))
+	if err != nil {
+		return nil, err
+	}
+	if follow != nil && follow.Deleted == false {
+		cu.IsFollowed = true
+	}
+	// 查询用户是否点赞了角色
+	like, err := models.GetLikeItemByStoryRoleAndUser(ctx, roleId, int(userID))
+	if err != nil {
+		return nil, err
+	}
+	if like != nil && like.Deleted == false {
+		cu.IsLiked = true
+	}
+	return cu, nil
+}
+
+func (user *UserService) GetStoryCurrentUserStatus(ctx context.Context, storyId int64) (*api.WhatCurrentUserStatus, error) {
+	// 查询用户ID
+	if storyId == 0 {
+		return nil, nil
+	}
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cu := new(api.WhatCurrentUserStatus)
+	// 查询用户是否关注了角色
+	follow, err := models.GetWatchItemByStoryAndUser(ctx, storyId, int(userID))
+	if err != nil {
+		return nil, err
+	}
+	if follow != nil && follow.Deleted == false {
+		cu.IsFollowed = true
+	}
+	// 查询用户是否点赞了角色
+	like, err := models.GetLikeItemByStoryAndUser(ctx, storyId, int(userID))
+	if err != nil {
+		return nil, err
+	}
+	if like != nil && like.Deleted == false {
+		cu.IsLiked = true
+	}
+	return cu, nil
+}
+
+func (user *UserService) GetStoryboardCurrentUserStatus(ctx context.Context, storyboardId int64) (*api.WhatCurrentUserStatus, error) {
+	// 查询用户ID
+	if storyboardId == 0 {
+		return nil, nil
+	}
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cu := new(api.WhatCurrentUserStatus)
+	// 查询用户是否点赞了角色
+	like, err := models.GetLikeItemByStoryBoardAndUser(ctx, storyboardId, int(userID))
+	if err != nil {
+		return nil, err
+	}
+	if like != nil && like.Deleted == false {
+		cu.IsLiked = true
+	}
+	return cu, nil
 }
 
 func convertApiUserProfileInfoToModel(info *api.UserProfileInfo) *models.UserProfile {
