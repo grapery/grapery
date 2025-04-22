@@ -2508,15 +2508,19 @@ func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetU
 		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
 	}
 	stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
+	log.Log().Info("stories: ", zap.Any("stories", stories))
 	if err != nil {
+		log.Log().Error("get stories by ids failed", zap.Error(err))
 		return nil, err
 	}
 	storiesSummary := make(map[int64]*api.StorySummaryInfo)
 	for _, story := range stories {
 		if story.Status != 1 {
+			log.Log().Info("story status is not 1", zap.Any("story", story))
 			continue
 		}
 		if story.Deleted == true {
+			log.Log().Info("story is deleted", zap.Any("story", story))
 			continue
 		}
 		if _, ok := storiesSummary[int64(story.ID)]; ok {
