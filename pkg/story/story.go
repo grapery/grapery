@@ -109,6 +109,9 @@ type StoryServer interface {
 	UpdateRolePrompt(ctx context.Context, req *api.UpdateRolePromptRequest) (*api.UpdateRolePromptResponse, error)
 	UpdateStoryRoleAvator(ctx context.Context, req *api.UpdateStoryRoleAvatorRequest) (*api.UpdateStoryRoleAvatorResponse, error)
 	GetStoryRoleList(ctx context.Context, req *api.GetStoryRoleListRequest) (*api.GetStoryRoleListResponse, error)
+
+	TrendingStory(ctx context.Context, req *api.TrendingStoryRequest) (*api.TrendingStoryResponse, error)
+	TrendingStoryRole(ctx context.Context, req *api.TrendingStoryRoleRequest) (*api.TrendingStoryRoleResponse, error)
 }
 
 type StoryService struct {
@@ -803,5 +806,63 @@ func (s *StoryService) GetStoryRoleList(ctx context.Context, req *api.GetStoryRo
 		Code:    0,
 		Message: "OK",
 		Roles:   apiRoles,
+	}, nil
+}
+
+func (s *StoryService) TrendingStory(ctx context.Context, req *api.TrendingStoryRequest) (*api.TrendingStoryResponse, error) {
+	stories, err := models.GetTrendingStories(ctx, int(req.GetPageNumber()), int(req.GetPageSize()), req.GetStart(), req.GetEnd())
+	if err != nil {
+		return nil, err
+	}
+	if len(stories) == 0 {
+		return &api.TrendingStoryResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	apiStories := make([]*api.Story, 0)
+	for _, story := range stories {
+		info := convert.ConvertStoryToApiStory(story)
+		info.CurrentUserStatus, err = s.GetStoryCurrentUserStatus(ctx, int64(story.ID))
+		if err != nil {
+			log.Log().Error("get story current user status failed", zap.Error(err))
+		}
+		apiStories = append(apiStories, info)
+	}
+	return &api.TrendingStoryResponse{
+		Code:    0,
+		Message: "OK",
+		Data: &api.TrendingStoryResponse_Data{
+			List: apiStories,
+		},
+	}, nil
+}
+
+func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingStoryRoleRequest) (*api.TrendingStoryRoleResponse, error) {
+	roles, err := models.GetTrendingStoryRoles(ctx, int(req.GetPageNumber()), int(req.GetPageSize()), req.GetStart(), req.GetEnd())
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) == 0 {
+		return &api.TrendingStoryRoleResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	apiRoles := make([]*api.StoryRole, 0)
+	for _, role := range roles {
+		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		info.CurrentUserStatus, err = s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
+		if err != nil {
+			log.Log().Error("get story role current user status failed", zap.Error(err))
+		}
+		apiRoles = append(apiRoles, info)
+	}
+	return &api.TrendingStoryRoleResponse{
+		Code:    0,
+		Message: "OK",
+		Data: &api.TrendingStoryRoleResponse_Data{
+			List: apiRoles,
+		},
 	}, nil
 }

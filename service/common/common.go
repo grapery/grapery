@@ -20,11 +20,6 @@ func (cs *CommonService) Explore(ctx context.Context, req *connect.Request[api.E
 	return nil, nil
 }
 
-// default is project
-func (cs *CommonService) Trending(ctx context.Context, req *connect.Request[api.TrendingRequest]) (*connect.Response[api.TrendingResponse], error) {
-	return nil, nil
-}
-
 func (cs *CommonService) UploadImageFile(ctx context.Context, req *connect.Request[api.UploadImageRequest]) (*connect.Response[api.UploadImageResponse], error) {
 	if req.Msg.ImageData == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("image data is empty"))

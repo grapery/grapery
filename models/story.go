@@ -304,3 +304,35 @@ func GetStoriesByIDs(ctx context.Context, ids []int64) ([]*Story, error) {
 	}
 	return stories, nil
 }
+
+func GetTrendingStories(ctx context.Context, offset, pageSize int, starttime, endtime int64) ([]*Story, error) {
+	var stories []*Story
+	err := DataBase().Model(&Story{}).
+		WithContext(ctx).
+		Where("create_at >= ? and create_at <= ?", starttime, endtime).
+		// 根据点赞数,关注数排序
+		Order("like_count desc, follow_count desc").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&stories).Error
+	if err != nil {
+		return nil, err
+	}
+	return stories, nil
+}
+
+func GetTrendingStoryRoles(ctx context.Context, offset, pageSize int, starttime, endtime int64) ([]*StoryRole, error) {
+	var roles []*StoryRole
+	err := DataBase().Model(&StoryRole{}).
+		WithContext(ctx).
+		Where("create_at >= ? and create_at <= ?", starttime, endtime).
+		// 根据参与故事、点赞数,关注数排序
+		Order("story_count desc, like_count desc, follow_count desc").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&roles).Error
+	if err != nil {
+		return nil, err
+	}
+	return roles, nil
+}

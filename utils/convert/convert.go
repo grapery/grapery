@@ -106,24 +106,30 @@ func ConvertItemToApiItemInfo(i *models.StoryItem) *api.ItemInfo {
 
 func ConvertStoryToApiStory(story *models.Story) *api.Story {
 	ret := &api.Story{
-		Id:          int64(story.ID),
-		Name:        story.Name,
-		Title:       story.Title,
-		Avatar:      story.Avatar,
-		CreatorId:   int64(story.CreatorID),
-		OwnerId:     int64(story.OwnerID),
-		GroupId:     int64(story.GroupID),
-		Visable:     story.Visable,
-		IsAchieve:   story.IsAchieve,
-		IsClose:     story.IsClose,
-		IsAiGen:     story.AIGen,
-		Origin:      story.Origin,
-		RootBoardId: int64(story.RootBoardID),
-		Desc:        story.ShortDesc,
-		Status:      int32(story.Status),
-		TotalBoards: story.TotalBoards,
-		Ctime:       story.CreateAt.Unix(),
-		Mtime:       story.UpdateAt.Unix(),
+		Id:           int64(story.ID),
+		Name:         story.Name,
+		Title:        story.Title,
+		Avatar:       story.Avatar,
+		CreatorId:    int64(story.CreatorID),
+		OwnerId:      int64(story.OwnerID),
+		GroupId:      int64(story.GroupID),
+		Visable:      story.Visable,
+		IsAchieve:    story.IsAchieve,
+		IsClose:      story.IsClose,
+		IsAiGen:      story.AIGen,
+		Origin:       story.Origin,
+		RootBoardId:  int64(story.RootBoardID),
+		Desc:         story.ShortDesc,
+		Status:       int32(story.Status),
+		TotalBoards:  story.TotalBoards,
+		TotalRoles:   story.TotalRoles,
+		TotalMembers: story.TotalMembers,
+		LikeCount:    story.LikeCount,
+		CommentCount: story.CommentCount,
+		ShareCount:   story.ShareCount,
+		FollowCount:  story.FollowCount,
+		Ctime:        story.CreateAt.Unix(),
+		Mtime:        story.UpdateAt.Unix(),
 	}
 	if ret.Avatar == "" {
 		ret.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
@@ -139,6 +145,9 @@ func ConvertGroupProfileToApiGroupProfile(p *models.GroupProfile) *api.GroupProf
 		Description:      p.Desc,
 		GroupFollowerNum: int32(p.Followers),
 		GroupStoryNum:    int32(p.StoryCount),
+		BackgroudUrl:     p.BackgroundUrl,
+		Ctime:            p.CreateAt.Unix(),
+		Mtime:            p.UpdateAt.Unix(),
 	}
 }
 

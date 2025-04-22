@@ -240,3 +240,19 @@ func (s *StoryService) ArchiveStory(ctx context.Context, req *connect.Request[ge
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryService) TrendingStory(ctx context.Context, req *connect.Request[gen.TrendingStoryRequest]) (*connect.Response[gen.TrendingStoryResponse], error) {
+	ret, err := storyServer.GetStoryServer().TrendingStory(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryService) TrendingStoryRole(ctx context.Context, req *connect.Request[gen.TrendingStoryRoleRequest]) (*connect.Response[gen.TrendingStoryRoleResponse], error) {
+	ret, err := storyServer.GetStoryServer().TrendingStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
