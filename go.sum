@@ -216,6 +216,8 @@ github.com/grapery/common-protoc/gen v0.0.0-20250414235023-f752c658a0b2 h1:Tavab
 github.com/grapery/common-protoc/gen v0.0.0-20250414235023-f752c658a0b2/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grapery/common-protoc/gen v0.0.0-20250422005458-5db1eb0fb49b h1:ORajMoUQaJwGyAMEvBZCPSagKMXkr5V0w7Ajx8ew7EU=
 github.com/grapery/common-protoc/gen v0.0.0-20250422005458-5db1eb0fb49b/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
+github.com/grapery/common-protoc/gen v0.0.0-20250425142931-d027650772c3 h1:h1+ithtf/pfS5yKHiKC7cwBnfV9GmZ5ixHjtZZFJGDk=
+github.com/grapery/common-protoc/gen v0.0.0-20250425142931-d027650772c3/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0 h1:FbSCl+KggFl+Ocym490i/EyXF4lPgLoUtcSWquBM0Rs=
@@ -604,10 +606,14 @@ google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e/go.mod h1:085qFyf2+XaZlRdCgKNCIZ3afY2p4HHZdoIRpId8F4A=
 google.golang.org/genproto/googleapis/api v0.0.0-20250421163800-61c742ae3ef0 h1:bphwUhSYYbcKacmc2crgiMvwARwqeNCtAI5g1PohT34=
 google.golang.org/genproto/googleapis/api v0.0.0-20250421163800-61c742ae3ef0/go.mod h1:Cd8IzgPo5Akum2c9R6FsXNaZbH3Jpa2gpHlW89FqlyQ=
+google.golang.org/genproto/googleapis/api v0.0.0-20250422160041-2d3770c4ea7f h1:tjZsroqekhC63+WMqzmWyW5Twj/ZfR5HAlpd5YQ1Vs0=
+google.golang.org/genproto/googleapis/api v0.0.0-20250422160041-2d3770c4ea7f/go.mod h1:Cd8IzgPo5Akum2c9R6FsXNaZbH3Jpa2gpHlW89FqlyQ=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e h1:ztQaXfzEXTmCBvbtWYRhJxW+0iJcz2qXfd38/e9l7bA=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e/go.mod h1:qQ0YXyHHx3XkvlzUtpXDkS29lDSafHMZBAZDc03LQ3A=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250421163800-61c742ae3ef0 h1:l7lvb5BMqtbmd7fibSq7fi956Fv9/sqiwI9qOw8ltCo=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250421163800-61c742ae3ef0/go.mod h1:qQ0YXyHHx3XkvlzUtpXDkS29lDSafHMZBAZDc03LQ3A=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20250422160041-2d3770c4ea7f h1:N/PrbTw4kdkqNRzVfWPrBekzLuarFREcbFOiOLkXon4=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20250422160041-2d3770c4ea7f/go.mod h1:qQ0YXyHHx3XkvlzUtpXDkS29lDSafHMZBAZDc03LQ3A=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.20.1/go.mod h1:10oTOabMzJvdu6/UiuZezV6QK5dSlG84ov/aaiqXj38=
 google.golang.org/grpc v1.21.1/go.mod h1:oYelfM1adQP15Ek0mdvEgi9Df8B9CZIaU1084ijfRaM=

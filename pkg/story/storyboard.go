@@ -2032,7 +2032,7 @@ func (s *StoryService) RestoreStoryboard(ctx context.Context, req *api.RestoreSt
 		// 创建完故事剧情以及场景，但是没有生成视频，建议只有点赞高的、关注多的角色、付费用户使用
 	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_AUDIO):
 		// 创建完故事剧情以及场景，但是没有生成音频，建议只有旁白使用
-	case int(api.StoryboardStage_STORYBOARD_STAGE_GEN_TEXT):
+	case int(api.StoryboardStage_STORYBOARD_STAGE_RENDER_SCENE):
 		// 创建完故事剧情，但是没有创建场景描述
 	case int(api.StoryboardStage_STORYBOARD_STAGE_FINISHED):
 		// 已经创建完所有，但是没有发布
