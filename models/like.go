@@ -109,7 +109,7 @@ func CreateLikeStoryBoardItem(ctx context.Context, item *LikeItem) error {
 
 func DeleteLikeItem(ctx context.Context, itemID int64) error {
 	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
-		Update("deleted= ? ", 1).
+		Update("deleted", 1).
 		Where("id = ?", itemID).Error
 	if err != nil {
 		log.Error("update like item failed: ", err)
@@ -120,7 +120,9 @@ func DeleteLikeItem(ctx context.Context, itemID int64) error {
 
 func GetLikeItem(ctx context.Context, itemID int64) (*LikeItem, error) {
 	item := new(LikeItem)
-	err := DataBase().WithContext(ctx).Model(&LikeItem{}).First(item).
+	err := DataBase().WithContext(ctx).
+		Model(&LikeItem{}).
+		First(item).
 		Where("id = ?", itemID).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
@@ -300,7 +302,7 @@ func UnLikeStoryRole(ctx context.Context, userId int, storyId int64, roleId int6
 	err := DataBase().WithContext(ctx).Model(&LikeItem{}).
 		Where("user_id = ? and story_id = ? and role_id = ?",
 			userId, storyId, roleId).
-		Update("deleted = ?", 1).Error
+		Update("deleted", 1).Error
 	return err
 }
 
@@ -410,7 +412,7 @@ func UnWatchStoryItem(ctx context.Context, userId int, storyId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and story_id = ?",
 			userId, storyId).
-		Update("deleted = ?", 1).Error
+		Update("deleted", 1).Error
 	return err
 }
 
@@ -445,7 +447,7 @@ func UnWatchGroupItem(ctx context.Context, userId int, groupId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and group_id = ?",
 			userId, groupId).
-		Update("deleted = ?", 1).Error
+		Update("deleted", 1).Error
 	return err
 }
 
@@ -494,7 +496,7 @@ func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and story_id = ? and role_id = ? and group_id = ?",
 			userId, storyId, roleId, groupId).
-		Update("deleted = ?", 1).Error
+		Update("deleted", 1).Error
 	return err
 }
 
