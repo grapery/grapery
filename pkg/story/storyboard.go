@@ -2093,11 +2093,17 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		return nil, err
 	}
 	for _, story := range stories {
-		storiesSummary[int64(story.ID)] = &api.StorySummaryInfo{
+		storySummaryInfo := &api.StorySummaryInfo{
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
+			StoryCover:       story.Avatar,
+			StoryAvatar:      story.Avatar,
 		}
+		if storySummaryInfo.StoryTitle == "" {
+			storySummaryInfo.StoryTitle = story.Title
+		}
+		storiesSummary[int64(story.ID)] = storySummaryInfo
 	}
 	apiStoryboards := make([]*api.StoryBoardActive, 0)
 	for idx, storyboard := range storyboards {
@@ -2316,7 +2322,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 			StoryCover:       story.Avatar,
 			StoryAvatar:      story.Avatar,
 		}
-		if story.Name == "" {
+		if storyItem.StoryTitle == "" {
 			storyItem.StoryTitle = story.Title
 		}
 		storiesSummary[int64(story.ID)] = storyItem
