@@ -705,7 +705,7 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 				}
 				for subchapter, subva := range va.(map[string]interface{}) {
 					if subchapter == "图片提示词" {
-						preDefineTemplate := strings.Replace(models.PreDefineTemplate[1].Prompt, "prompt", subva.(string), -1)
+						preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", subva.(string), -1)
 						templatePrompt := preDefineTemplate + ",人物数量:" + strconv.Itoa(charactorNum)
 						storyGen := new(models.StoryGen)
 						storyGen.Uuid = uuid.New().String()
@@ -1687,7 +1687,7 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 	_ = models.UpdateStoryBoardScene(ctx, scene)
 	// 2. 生成指定场景的图片
 	templatePrompt := scene.ImagePrompts
-	preDefineTemplate := strings.Replace(models.PreDefineTemplate[1].Prompt, "prompt", templatePrompt, -1)
+	preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", templatePrompt, -1)
 	templatePrompt = preDefineTemplate + ",人物: " + scene.CharacterIds
 	renderStoryParams := &client.GenStoryImagesParams{
 		Content: templatePrompt,
@@ -1797,7 +1797,7 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 	apiScenes := make([]*api.StoryBoardSence, 0)
 	for _, scene := range scenes {
 		templatePrompt := scene.ImagePrompts
-		preDefineTemplate := strings.Replace(models.PreDefineTemplate[1].Prompt, "prompt", templatePrompt, -1)
+		preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", templatePrompt, -1)
 		templatePrompt = preDefineTemplate + ",人物: " + scene.CharacterIds
 		renderStoryParams := &client.GenStoryImagesParams{
 			Content: templatePrompt,
