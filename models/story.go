@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	api "github.com/grapery/common-protoc/gen"
 )
@@ -307,9 +308,11 @@ func GetStoriesByIDs(ctx context.Context, ids []int64) ([]*Story, error) {
 
 func GetTrendingStories(ctx context.Context, offset, pageSize int, starttime, endtime int64) ([]*Story, error) {
 	var stories []*Story
+	start := time.Unix(starttime, 0)
+	end := time.Unix(endtime, 0)
 	err := DataBase().Model(&Story{}).
 		WithContext(ctx).
-		Where("create_at >= ? and create_at <= ?", starttime, endtime).
+		Where("create_at >= ? and create_at <= ?", start, end).
 		// 根据点赞数,关注数排序
 		Order("like_count desc, follow_count desc").
 		Offset(offset).
@@ -323,11 +326,13 @@ func GetTrendingStories(ctx context.Context, offset, pageSize int, starttime, en
 
 func GetTrendingStoryRoles(ctx context.Context, offset, pageSize int, starttime, endtime int64) ([]*StoryRole, error) {
 	var roles []*StoryRole
+	start := time.Unix(starttime, 0)
+	end := time.Unix(endtime, 0)
 	err := DataBase().Model(&StoryRole{}).
 		WithContext(ctx).
-		Where("create_at >= ? and create_at <= ?", starttime, endtime).
+		Where("create_at >= ? and create_at <= ?", start, end).
 		// 根据参与故事、点赞数,关注数排序
-		Order("story_count desc, like_count desc, follow_count desc").
+		Order("like_count desc, follow_count desc").
 		Offset(offset).
 		Limit(pageSize).
 		Find(&roles).Error

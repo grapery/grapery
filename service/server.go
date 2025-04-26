@@ -105,14 +105,14 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		path, handler := genconnect.NewTeamsAPIHandler(ts, opts...)
 		mux.Handle(path, handler)
 		http.ListenAndServe(
-			"192.168.1.73:12305",
+			"0.0.0.0:12305",
 			h2c.NewHandler(mux, &http2.Server{}),
 		)
 	}()
 
 	// 启动 gRPC 聊天服务器
 	go func() {
-		chatAddr := "192.168.1.73:12307"
+		chatAddr := "0.0.0.0:12307"
 		logrus.Infof("Starting gRPC chat server on %s", chatAddr)
 
 		// 创建 TCP 监听器
