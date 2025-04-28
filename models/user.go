@@ -105,6 +105,10 @@ func UpdateUserInfo(ctx context.Context, userId int64, needUpdates map[string]in
 
 func (u *User) GetById() error {
 	err := DataBase().Model(u).Where("id = ? and deleted = ?", u.ID, 0).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%d] info failed ", u.ID)
@@ -115,6 +119,10 @@ func (u *User) GetById() error {
 
 func (u *User) GetByName() error {
 	err := DataBase().Model(u).Where("name = ? and deleted = ? ", u.Name, 0).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%s] info failed : [%s]", u.Name, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", u.Name, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Name)
@@ -124,6 +132,10 @@ func (u *User) GetByName() error {
 
 func (u *User) GetByPhone() error {
 	err := DataBase().Model(u).Where("phone = ? and deleted = ?", u.Phone, 0).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Phone)
@@ -133,6 +145,10 @@ func (u *User) GetByPhone() error {
 
 func (u *User) GetByEmail() error {
 	err := DataBase().Model(u).Where("email = ? and deleted = ?", u.Email, 0).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user [%s] info failed ", u.Email)
@@ -154,7 +170,12 @@ func GetUsersByIds(ids []int64) (users []*User, err error) {
 		return nil, nil
 	}
 	err = DataBase().Model(User{}).Where("id in (?)", ids).Scan(&users).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get users by ids failed : [%s]", err.Error())
+		return nil, nil
+	}
 	if err != nil {
+		log.Errorf("get users by ids failed : [%s]", err.Error())
 		return nil, err
 	}
 	return users, nil
@@ -169,6 +190,7 @@ func GetUsersByIdsMap(ids []int64) (map[int]*User, error) {
 		Where("id in (?)", ids).
 		Scan(&users).Error
 	if err != nil {
+		log.Errorf("get users by ids map failed : [%s]", err.Error())
 		return nil, err
 	}
 	var userMap = make(map[int]*User)
@@ -183,6 +205,10 @@ func GetUserById(ctx context.Context, id int64) (*User, error) {
 	err := DataBase().
 		Model(user).
 		Where("id = ? and deleted = ?", id, 0).First(user).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%d] info failed : [%s]", id, err.Error())
+		return nil, nil
+	}
 	if err != nil {
 		log.Errorf("get user [%d] info failed : [%s]", id, err.Error())
 		return nil, fmt.Errorf("get user [%d] info failed ", id)
@@ -195,6 +221,10 @@ func GetUserByPhone(ctx context.Context, phone string) (*User, error) {
 	err := DataBase().
 		Model(user).
 		Where("phone = ? and deleted = ?", phone, 0).First(user).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%s] info failed : [%s]", phone, err.Error())
+		return nil, nil
+	}
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", phone, err.Error())
 		return nil, fmt.Errorf("get user [%s] info failed ", phone)
@@ -207,6 +237,10 @@ func GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	err := DataBase().
 		Model(user).
 		Where("email = ? and deleted = ?", email, 0).First(user).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%s] info failed : [%s]", email, err.Error())
+		return nil, nil
+	}
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", email, err.Error())
 		return nil, fmt.Errorf("get user [%s] info failed ", email)
@@ -219,6 +253,10 @@ func GetUserByName(ctx context.Context, name string) (*User, error) {
 	err := DataBase().
 		Model(user).
 		Where("name = ? and deleted = ?", name, 0).First(user).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user [%s] info failed : [%s]", name, err.Error())
+		return nil, nil
+	}
 	if err != nil {
 		log.Errorf("get user [%s] info failed : [%s]", name, err.Error())
 		return nil, fmt.Errorf("get user [%s] info failed ", name)
@@ -278,6 +316,10 @@ func (u *UserProfile) Update() error {
 
 func (u *UserProfile) GetById() error {
 	err := DataBase().Model(u).Where("id = ?", u.ID).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user profile [%d] info failed ", u.ID)
@@ -287,10 +329,15 @@ func (u *UserProfile) GetById() error {
 
 func (u *UserProfile) GetByUserId() error {
 	err := DataBase().Model(u).Where("user_id = ?", u.UserId).First(u).Error
+	if err == gorm.ErrRecordNotFound {
+		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
+		return nil
+	}
 	if err != nil {
 		log.Errorf("get user profile [%d] info failed : [%s]", u.ID, err.Error())
 		return fmt.Errorf("get user profile [%d] info failed ", u.ID)
 	}
+
 	return nil
 }
 

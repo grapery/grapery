@@ -179,11 +179,19 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	if err != nil {
 		return nil, err
 	}
+	userProfille := new(models.UserProfile)
+	userProfille.UserId = req.GetUserId()
+	err = userProfille.GetByUserId()
+	if err != nil {
+		log.Log().Error("update user profile error: ", zap.Error(err))
+		return nil, err
+	}
 	err = models.CreateWatchRoleItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(roleId), int64(story.GroupID))
 	if err != nil {
 		log.Log().Error("create watch story item failed", zap.Error(err))
 		return nil, err
 	}
+	log.Log().Info("create role success", zap.String("role", newRole.String()))
 	return &api.CreateStoryRoleResponse{
 		Code:    0,
 		Message: "OK",

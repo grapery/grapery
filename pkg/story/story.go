@@ -230,6 +230,13 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 	if err != nil {
 		log.Log().Error("inc group profile story count failed", zap.Error(err))
 	}
+	userProfile := &models.UserProfile{
+		UserId: req.CreatorId,
+	}
+	err = userProfile.IncrementCreatedStoryNum()
+	if err != nil {
+		log.Log().Error("increment created story num failed", zap.Error(err))
+	}
 	err = models.CreateWatchStoryItem(ctx, int(req.CreatorId), int64(storyId), int64(group.ID))
 	if err != nil {
 		log.Log().Error("watch story failed", zap.Error(err))
@@ -343,6 +350,13 @@ func (s *StoryService) WatchStory(ctx context.Context, req *api.WatchStoryReques
 		if err != nil {
 			return nil, err
 		}
+	}
+	userProfile := &models.UserProfile{
+		UserId: req.GetUserId(),
+	}
+	err = userProfile.IncrementWatchingStoryNum()
+	if err != nil {
+		log.Log().Error("increment watching story num failed", zap.Error(err))
 	}
 
 	return &api.WatchStoryResponse{

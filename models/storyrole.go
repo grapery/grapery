@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,6 +27,11 @@ type StoryRole struct {
 	BranchId             int64  `json:"branch_id"`
 }
 
+func (s StoryRole) String() string {
+	roleJson, _ := json.Marshal(s)
+	return string(roleJson)
+}
+
 func (s StoryRole) TableName() string {
 	return "story_role"
 }
@@ -35,6 +41,9 @@ func GetStoryRoleByCreatorId(ctx context.Context, creatorId int64) ([]*StoryRole
 	if err := DataBase().Model(&StoryRole{}).
 		Where("creator_id = ?", creatorId).
 		Find(&roles).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return roles, nil
@@ -54,6 +63,9 @@ func GetStoryRole(ctx context.Context, storyID int64) ([]*StoryRole, error) {
 	if err := DataBase().Model(&StoryRole{}).
 		Where("story_id = ?", storyID).
 		Find(&roles).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return roles, nil
@@ -64,6 +76,9 @@ func GetStoryRoleByID(ctx context.Context, roleID int64) (*StoryRole, error) {
 	if err := DataBase().Model(&StoryRole{}).
 		Where("id = ?", roleID).
 		First(&role).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &role, nil
@@ -89,6 +104,9 @@ func GetStoryRoleByName(ctx context.Context, name string, storyId int64) (*Story
 		Where("character_name = ?", name).
 		Where("story_id = ?", storyId).
 		First(&role).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &role, nil
@@ -101,6 +119,9 @@ func GetStoryRolesByName(ctx context.Context, name string, storyId int64, offset
 		Where("story_id = ?", storyId).
 		Where("character_name like ?", "%"+name+"%").
 		Count(&total).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	if err := DataBase().Model(&StoryRole{}).
@@ -109,6 +130,9 @@ func GetStoryRolesByName(ctx context.Context, name string, storyId int64, offset
 		Offset(offset).
 		Limit(number).
 		Find(&roles).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	return roles, total, nil
@@ -157,6 +181,9 @@ func GetUserFollowedStoryRoleIds(ctx context.Context, userId int) ([]int64, erro
 			userId, WatchItemTypeStoryRole, WatchTypeIsWatch).
 		Pluck("role_id", &roleIds).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return roleIds, nil
@@ -168,6 +195,9 @@ func GetStoryRolesByIDs(ctx context.Context, roleIds []int64) ([]*StoryRole, err
 	if err := DataBase().Model(&StoryRole{}).
 		Where("id in (?)", roleIds).
 		Find(&roles).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return roles, nil
