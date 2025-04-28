@@ -6,6 +6,7 @@ import (
 	"time"
 
 	api "github.com/grapery/common-protoc/gen"
+	"gorm.io/gorm"
 )
 
 const (
@@ -175,6 +176,9 @@ func GetStory(ctx context.Context, id int64) (*Story, error) {
 	s := &Story{}
 	err := DataBase().Model(s).WithContext(ctx).Where("id = ?", id).First(s).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if s.Avatar == "" {
@@ -187,6 +191,9 @@ func GetStoryByCreatorID(ctx context.Context, creatorID int64) (*Story, error) {
 	s := &Story{}
 	err := DataBase().Model(s).WithContext(ctx).Where("creator_id = ?", creatorID).First(s).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return s, nil
@@ -196,6 +203,9 @@ func GetStoryByOwnerID(ctx context.Context, ownerID int64) ([]*Story, error) {
 	s := make([]*Story, 0)
 	err := DataBase().Model(s).WithContext(ctx).Where("owner_id = ?", ownerID).Find(s).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return s, nil
@@ -210,6 +220,9 @@ func GetStoryByGroupID(ctx context.Context, groupID int64, page int, pageSize in
 		Limit(pageSize).
 		Find(&s).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return s, nil
@@ -221,6 +234,9 @@ func GetStoriesByName(ctx context.Context, name string, offset, number int) ([]*
 	if err := DataBase().Model(&Story{}).
 		Where("title like ?", "%"+name+"%").
 		Count(&total).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	if err := DataBase().Model(&Story{}).
@@ -228,6 +244,9 @@ func GetStoriesByName(ctx context.Context, name string, offset, number int) ([]*
 		Offset(offset).
 		Limit(number).
 		Find(&stories).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	return stories, total, nil
@@ -277,6 +296,9 @@ func GetUserCreatedRolesWithStoryId(ctx context.Context, userId int, storyId int
 		Offset(offset).
 		Limit(number).
 		Scan(&roles).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	return roles, total, nil
@@ -290,6 +312,9 @@ func GetUserFollowedStoryIds(ctx context.Context, userId int) ([]int64, error) {
 			userId, WatchItemTypeStory, WatchTypeIsWatch).
 		Pluck("story_id", &storyIds).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return storyIds, nil
@@ -304,6 +329,9 @@ func GetStoriesByIDs(ctx context.Context, ids []int64) ([]*Story, error) {
 		Order("create_at desc").
 		Find(&stories).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return stories, nil
@@ -322,6 +350,9 @@ func GetTrendingStories(ctx context.Context, offset, pageSize int, starttime, en
 		Limit(pageSize).
 		Find(&stories).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return stories, nil
@@ -340,6 +371,9 @@ func GetTrendingStoryRoles(ctx context.Context, offset, pageSize int, starttime,
 		Limit(pageSize).
 		Find(&roles).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return roles, nil
