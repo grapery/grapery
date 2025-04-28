@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+
+	"gorm.io/gorm"
 )
 
 // 场景，剧情，故事板
@@ -49,6 +51,9 @@ func GetStoryboard(ctx context.Context, id int64) (*StoryBoard, error) {
 		Where("id = ? and status >= 0", id).
 		First(board).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return board, nil
@@ -60,6 +65,9 @@ func GetStoryboardsByPrevId(ctx context.Context, prevId int64) ([]*StoryBoard, e
 		WithContext(ctx).
 		Where("prev_id = ? and status >= 0", prevId).Find(&boards).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return boards, nil
@@ -71,6 +79,9 @@ func GetStoryboardsByStory(ctx context.Context, storyID int64) ([]*StoryBoard, e
 		WithContext(ctx).
 		Where("story_id = ? and status >= 0", storyID).Find(&boards).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return boards, nil
@@ -82,6 +93,9 @@ func GetStoryboardsByCreator(ctx context.Context, creatorID int64) ([]*StoryBoar
 		WithContext(ctx).
 		Where("creator_id = ? and status >= 0", creatorID).Find(&boards).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return boards, nil
@@ -90,7 +104,13 @@ func GetStoryboardsByCreator(ctx context.Context, creatorID int64) ([]*StoryBoar
 func DelStoryboard(ctx context.Context, id int64) error {
 	err := DataBase().Model(&StoryBoard{}).WithContext(ctx).
 		Where("id = ?", id).Update("status = ?", -1).Error
-	return err
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func UpdateStoryboard(ctx context.Context, board *StoryBoard) error {
@@ -110,6 +130,9 @@ func GetStoryContributors(ctx context.Context, storyID int64) ([]*User, error) {
 		Find(&contributors).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return contributors, nil
@@ -135,6 +158,9 @@ func GetStoryBoardByStoryAndPrevId(ctx context.Context, storyID int64, prevId in
 
 	err := query.Offset(page * pageSize).Limit(pageSize).Find(&boards).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return boards, nil
