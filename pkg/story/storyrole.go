@@ -250,12 +250,16 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	返回的角色描述信息，请按照json格式返回，以下是返回样例：
 	--------
 		{
-			"故事角色详情": {
-				"性格": "xxxxxxx",
-				"穿着": "xxxxx",
-				"行为准则": "xxxxxx",
-				"目标": "xxxxx"
-			}
+			"角色背景": "xxxxxx",
+			"性格特征": "xxxxxx",
+			"处事风格": "xxxxxx",
+			"认知范围": "xxxxxx",
+			"能力特点": "xxxxxx",
+			"外貌特征": "xxxxxx",
+			"穿着喜好": "xxxxxx",
+			"角色描述": "xxxxxx",
+			"角色短期目标": "xxxxxx",
+			"角色长期目标": "xxxxxx"
 		}
 	--------
 	请不要生成过于色情、暴力、恶心的内容，或者一直重复的内容，请不要出现任何违反法律法规的内容，保证角色贴合故事背景，同时遵循用户的输入的角色性格特点要求。
@@ -298,7 +302,7 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 		return nil, err
 	}
 	var renderDetail = new(api.RenderStoryRoleDetail)
-	result := make(map[string]map[string]string)
+	result := new(CharacterDetail)
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
@@ -307,21 +311,16 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	}
 	storyGen.Content = cleanResult
 	storyGen.FinishTime = time.Now().Unix()
-	for key, val := range result {
-		if key == "故事角色详情" {
-			for k, v := range val {
-				if k == "性格" {
-					renderDetail.RoleCharacter = v
-				} else if k == "穿着" {
-					renderDetail.RoleDescription = v
-				} else if k == "行为准则" {
-					renderDetail.RoleBehavior = v
-				} else if k == "目标" {
-					renderDetail.RoleGoal = v
-				}
-			}
-		}
-	}
+	renderDetail.Background = result.Background
+	renderDetail.Appearance = result.Appearance
+	renderDetail.Personality = result.Personality
+	renderDetail.AbilityFeatures = result.AbilityFeatures
+	renderDetail.RoleDescription = result.Description
+	renderDetail.RoleGoal = result.LongTermGoal
+	renderDetail.RoleBehavior = result.HandlingStyle
+	renderDetail.Appearance = result.Appearance
+	renderDetail.Personality = result.Personality
+	renderDetail.AbilityFeatures = result.AbilityFeatures
 	err = models.UpdateStoryGen(ctx, storyGen)
 	if err != nil {
 		log.Log().Error("update story gen failed", zap.Error(err))
