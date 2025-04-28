@@ -978,15 +978,10 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 
 	// Clean and parse the AI response
 	cleanResult := utils.CleanLLmJsonResult(result.Content)
-	var roleDescription map[string]map[string]string
+	var roleDescription = new(CharacterSetting)
 	err = json.Unmarshal([]byte(cleanResult), &roleDescription)
 	if err != nil {
 		log.Log().Error("unmarshal role description failed", zap.Error(err))
-		return nil, err
-	}
-	roleDescriptionStr, err := json.Marshal(roleDescription)
-	if err != nil {
-		log.Log().Error("marshal role description failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -994,7 +989,7 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 	return &api.GenerateRoleDescriptionResponse{
 		Code:        0,
 		Message:     "OK",
-		Description: string(roleDescriptionStr),
+		Description: roleDescription.String(),
 	}, nil
 }
 

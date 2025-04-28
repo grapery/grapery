@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -69,6 +70,10 @@ func GetStoryRoleByID(ctx context.Context, roleID int64) (*StoryRole, error) {
 }
 
 func UpdateStoryRole(ctx context.Context, roleID int64, needUpdateFields map[string]interface{}) error {
+	if len(needUpdateFields) == 0 {
+		return nil
+	}
+	needUpdateFields["updated_at"] = time.Now()
 	if err := DataBase().Model(&StoryRole{}).
 		Where("id = ?", roleID).
 		WithContext(ctx).

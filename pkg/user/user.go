@@ -127,6 +127,9 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 				Avatar:   u.Avatar,
 				Email:    u.Email,
 				Location: u.Location,
+				Desc:     u.ShortDesc,
+				Ctime:    u.CreateAt.Unix(),
+				Mtime:    u.UpdateAt.Unix(),
 			},
 		},
 	}, nil

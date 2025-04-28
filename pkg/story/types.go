@@ -1,5 +1,7 @@
 package story
 
+import "encoding/json"
+
 // StoryChapter 表示故事章节的完整结构
 type StoryChapter struct {
 	ChapterSummary    ChapterSummary           `json:"章节情节简述,omitempty"`
@@ -49,6 +51,14 @@ type CharacterDetail struct {
 type StoryInfo struct {
 	StoryNameAndTheme StoryNameAndTheme `json:"故事名称和主题,omitempty"`
 	StoryChapters     []ChapterInfo     `json:"故事章节,omitempty"`
+}
+
+func (s *StoryInfo) String() string {
+	json, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(json)
 }
 
 // StoryNameAndTheme 表示故事的名称和主题信息
@@ -109,3 +119,42 @@ story := &StoryInfo{
 	},
 }
 */
+
+// CharacterSetting 角色设定结构体
+type CharacterSettingDetail struct {
+	// 角色背景
+	Background string `json:"角色背景"`
+	// 性格特征
+	Personality string `json:"性格特征"`
+	// 处事风格
+	HandlingStyle string `json:"处事风格"`
+	// 认知范围
+	CognitionRange string `json:"认知范围"`
+	// 能力特点
+	AbilityFeatures string `json:"能力特点"`
+	// 外貌特征
+	Appearance string `json:"外貌特征"`
+	// 穿着喜好
+	DressPreference string `json:"穿着喜好"`
+}
+
+// CharacterSettingResponse LLM返回的角色设定JSON结构
+type CharacterSetting struct {
+	RoleSetting CharacterSettingDetail `json:"角色设定"`
+}
+
+func (c *CharacterSetting) String() string {
+	json, err := json.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(json)
+}
+
+func (c *CharacterSettingDetail) String() string {
+	json, err := json.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(json)
+}
