@@ -150,18 +150,13 @@ var PreDefineTemplateChVersion = []PromptTemplate{
 
 type Prompt struct {
 	IDBase
-	Background     string
-	Content        string
+	Name           string
 	NegativePrompt string
 	PositivePrompt string
 	TemplateId     int64
-	UserID         int64
 	Platform       string
-	GenStatus      int
-	StartTime      int64
-	FinishTime     int64
-	TokenInput     int64
-	TokenOutput    int64
+	GroupID        int64
+	UserID         int64
 }
 
 func NewPrompt() *Prompt {
