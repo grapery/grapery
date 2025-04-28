@@ -273,7 +273,10 @@ func GetUserCreatedRolesWithStoryId(ctx context.Context, userId int, storyId int
 		return nil, 0, err
 	}
 
-	if err := query.Order("create_at desc").Offset(offset).Limit(number).Scan(&roles).Error; err != nil {
+	if err := query.Order("create_at desc").
+		Offset(offset).
+		Limit(number).
+		Scan(&roles).Error; err != nil {
 		return nil, 0, err
 	}
 	return roles, total, nil

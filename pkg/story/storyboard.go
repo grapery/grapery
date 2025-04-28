@@ -882,9 +882,9 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	boardRequire["章节背景简介"] = req.GetBackground()
 	boardRequire["章节参与的角色信息"] = rolesPrompt
 	templatePrompt := `生成故事 story_name 的第一个章节,故事内容用中文描述,以json格式返回		
-		选择的人员角色，不要超过 ‘章节参与的角色信息’ 规定的角色id和角色名称范围。
-		一定要遵守 ‘章节参与的角色信息’ 的要求，其中‘角色id’不要超出‘章节参与的角色信息’里的范围。
-		如果 ‘章节参与的角色信息’ 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容。
+		选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的角色id和角色名称范围。
+		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'不要超出'章节参与的角色信息'里的范围。
+		如果 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容。
 		参考如下格式生成内容：
 		--------
 		{
@@ -1082,8 +1082,8 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		--------
 		story_prev_content
 		--------
-		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 ‘章节参与的角色信息’ 规定的范围。
-		一定要遵守 ‘章节参与的角色信息’ 的要求，其中‘角色id’要符合‘章节参与的角色信息’里的限制。
+		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的范围。
+		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'要符合'章节参与的角色信息'里的限制。
 		参考如下格式生成内容：
 		--------
 		{
@@ -1306,7 +1306,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		角色名称:` + role.CharacterName + `
 		角色描述:` + role.CharacterDescription + `
 		故事背景:` + story.ShortDesc + `
-		请参考以上输入，生成故事的下一个章节。只生成新的章节的章节内容，章节题目，章节背景简介，章节参与的角色。请参考如下格式：
+		请参考以上输入,生成[角色描述,角色短期目标,角色长期目标,角色性格,角色背景],返回格式如下：
 		---
 		{
 			"角色描述": "xxxxxx......",

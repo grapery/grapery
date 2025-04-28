@@ -45,6 +45,24 @@ type CharacterDetail struct {
 	LongTermGoal  string `json:"角色长期目标,omitempty"`
 	Personality   string `json:"角色性格,omitempty"`
 	Background    string `json:"角色背景,omitempty"`
+	// 处事风格
+	HandlingStyle string `json:"处事风格,omitempty"`
+	// 认知范围
+	CognitionRange string `json:"认知范围,omitempty"`
+	// 能力特点
+	AbilityFeatures string `json:"能力特点,omitempty"`
+	// 外貌特征
+	Appearance string `json:"外貌特征,omitempty"`
+	// 穿着喜好
+	DressPreference string `json:"穿着喜好,omitempty"`
+}
+
+func (c *CharacterDetail) String() string {
+	json, err := json.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(json)
 }
 
 // StoryInfo 表示故事的完整信息
@@ -119,42 +137,3 @@ story := &StoryInfo{
 	},
 }
 */
-
-// CharacterSetting 角色设定结构体
-type CharacterSettingDetail struct {
-	// 角色背景
-	Background string `json:"角色背景"`
-	// 性格特征
-	Personality string `json:"性格特征"`
-	// 处事风格
-	HandlingStyle string `json:"处事风格"`
-	// 认知范围
-	CognitionRange string `json:"认知范围"`
-	// 能力特点
-	AbilityFeatures string `json:"能力特点"`
-	// 外貌特征
-	Appearance string `json:"外貌特征"`
-	// 穿着喜好
-	DressPreference string `json:"穿着喜好"`
-}
-
-// CharacterSettingResponse LLM返回的角色设定JSON结构
-type CharacterSetting struct {
-	RoleSetting CharacterSettingDetail `json:"角色设定"`
-}
-
-func (c *CharacterSetting) String() string {
-	json, err := json.Marshal(c)
-	if err != nil {
-		return ""
-	}
-	return string(json)
-}
-
-func (c *CharacterSettingDetail) String() string {
-	json, err := json.Marshal(c)
-	if err != nil {
-		return ""
-	}
-	return string(json)
-}
