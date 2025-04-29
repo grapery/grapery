@@ -20,15 +20,17 @@ type StoryBoard struct {
 	// 0: 初始化，1：生成中，2：生成完成，3：生成失败
 	Stage int
 
-	Params     string
+	Params string
+
 	ForkAble   bool
 	ForkNum    int
 	LikeNum    int
 	CommentNum int
 	RoleNum    int
 	ShareNum   int
-	Level      int
-	IsAiGen    bool
+
+	Level   int
+	IsAiGen bool
 }
 
 func (board StoryBoard) TableName() string {
@@ -63,7 +65,9 @@ func GetStoryboardsByPrevId(ctx context.Context, prevId int64) ([]*StoryBoard, e
 	var boards []*StoryBoard
 	err := DataBase().Model(&StoryBoard{}).
 		WithContext(ctx).
-		Where("prev_id = ? and status >= 0", prevId).Find(&boards).Error
+		Where("prev_id = ? and status >= 0", prevId).
+		Order("create_at desc").
+		Find(&boards).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -77,7 +81,9 @@ func GetStoryboardsByStory(ctx context.Context, storyID int64) ([]*StoryBoard, e
 	var boards []*StoryBoard
 	err := DataBase().Model(&StoryBoard{}).
 		WithContext(ctx).
-		Where("story_id = ? and status >= 0", storyID).Find(&boards).Error
+		Where("story_id = ? and status >= 0", storyID).
+		Order("create_at desc").
+		Find(&boards).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -91,7 +97,9 @@ func GetStoryboardsByCreator(ctx context.Context, creatorID int64) ([]*StoryBoar
 	var boards []*StoryBoard
 	err := DataBase().Model(&StoryBoard{}).
 		WithContext(ctx).
-		Where("creator_id = ? and status >= 0", creatorID).Find(&boards).Error
+		Where("creator_id = ? and status >= 0", creatorID).
+		Order("create_at desc").
+		Find(&boards).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -103,7 +111,8 @@ func GetStoryboardsByCreator(ctx context.Context, creatorID int64) ([]*StoryBoar
 
 func DelStoryboard(ctx context.Context, id int64) error {
 	err := DataBase().Model(&StoryBoard{}).WithContext(ctx).
-		Where("id = ?", id).Update("status = ?", -1).Error
+		Where("id = ?", id).
+		Update("status = ?", -1).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil
@@ -115,10 +124,14 @@ func DelStoryboard(ctx context.Context, id int64) error {
 
 func UpdateStoryboard(ctx context.Context, board *StoryBoard) error {
 	return DataBase().Model(board).WithContext(ctx).
-		Where("id = ?", board.IDBase.ID).Updates(board).Error
+		Where("id = ?", board.IDBase.ID).
+		Updates(board).Error
 }
 
 func UpdateStoryboardMultiColumn(ctx context.Context, id int64, columns map[string]interface{}) error {
+	if len(columns) == 0 {
+		return nil
+	}
 	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
 		Where("id = ?", id).Updates(columns).Error
 }

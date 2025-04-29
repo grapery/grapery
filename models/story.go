@@ -291,6 +291,9 @@ func GetUserCreatedRolesWithStoryId(ctx context.Context, userId int, storyId int
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+	if total == 0 {
+		return nil, 0, nil
+	}
 
 	if err := query.Order("create_at desc").
 		Offset(offset).
@@ -308,8 +311,10 @@ func GetUserFollowedStoryIds(ctx context.Context, userId int) ([]int64, error) {
 	var storyIds []int64
 	err := DataBase().Model(&WatchItem{}).
 		Select("distinct story_id").
-		Where("user_id = ? and deleted = 0 and watch_item_type = ? and watch_type = ?",
-			userId, WatchItemTypeStory, WatchTypeIsWatch).
+		Where("user_id = ?", userId).
+		Where("watch_item_type = ?", WatchItemTypeStory).
+		Where("watch_type = ?", WatchTypeIsWatch).
+		Where("deleted = 0").
 		Pluck("story_id", &storyIds).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
