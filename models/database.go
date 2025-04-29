@@ -92,6 +92,8 @@ func Init(uname, pwd, dbname string) error {
 
 	database.AutoMigrate(&Comment{})
 	database.AutoMigrate(&CommentLike{})
+
+	database.AutoMigrate(&Order{})
 	return nil
 }
 
