@@ -1,6 +1,10 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"context"
+
+	"gorm.io/gorm"
+)
 
 const (
 	ComicStyle  = "Japanese Anime"
@@ -205,21 +209,21 @@ func (p *Prompt) TableName() string {
 	return "prompt"
 }
 
-func (p *Prompt) Create() error {
-	return DataBase().Table(p.TableName()).Create(p).Error
+func (p *Prompt) Create(ctx context.Context) error {
+	return DataBase().Table(p.TableName()).WithContext(ctx).Create(p).Error
 }
 
-func (p *Prompt) Update() error {
-	return DataBase().Table(p.TableName()).Save(p).Error
+func (p *Prompt) Update(ctx context.Context) error {
+	return DataBase().Table(p.TableName()).WithContext(ctx).Save(p).Error
 }
 
-func (p *Prompt) Delete() error {
-	return DataBase().Table(p.TableName()).Delete(p).Error
+func (p *Prompt) Delete(ctx context.Context) error {
+	return DataBase().Table(p.TableName()).WithContext(ctx).Delete(p).Error
 }
 
-func GetPrompt(id int64) (*Prompt, error) {
+func GetPrompt(ctx context.Context, id int64) (*Prompt, error) {
 	var prompt Prompt
-	p, err := &prompt, DataBase().Model(&Prompt{}).Where("id = ?", id).First(&prompt).Error
+	p, err := &prompt, DataBase().Table(prompt.TableName()).WithContext(ctx).Where("id = ?", id).First(&prompt).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -229,9 +233,9 @@ func GetPrompt(id int64) (*Prompt, error) {
 	return p, nil
 }
 
-func ListPrompt(userID int64, promptType PromptType) ([]*Prompt, error) {
+func ListPrompt(ctx context.Context, userID int64, promptType PromptType) ([]*Prompt, error) {
 	var prompts []*Prompt
-	query := DataBase().Model(&Prompt{})
+	query := DataBase().Model(Prompt{}).WithContext(ctx)
 	if userID != 0 {
 		query = query.Where("user_id = ?", userID)
 	}
@@ -248,9 +252,9 @@ func ListPrompt(userID int64, promptType PromptType) ([]*Prompt, error) {
 	return prompts, nil
 }
 
-func ListPromptByGroupID(groupID int64, promptType PromptType) ([]*Prompt, error) {
+func ListPromptByGroupID(ctx context.Context, groupID int64, promptType PromptType) ([]*Prompt, error) {
 	var prompts []*Prompt
-	query := DataBase().Model(&Prompt{})
+	query := DataBase().Model(Prompt{}).WithContext(ctx)
 	if groupID != 0 {
 		query = query.Where("group_id = ?", groupID)
 	}
@@ -267,9 +271,9 @@ func ListPromptByGroupID(groupID int64, promptType PromptType) ([]*Prompt, error
 	return prompts, nil
 }
 
-func ListPromptName(promptType PromptType) ([]string, error) {
+func ListPromptName(ctx context.Context, promptType PromptType) ([]string, error) {
 	var prompts []string
-	err := DataBase().Model(&Prompt{}).
+	err := DataBase().Model(Prompt{}).WithContext(ctx).
 		Where("prompt_type = ?", promptType).
 		Pluck("name", &prompts).Error
 	if err != nil {
