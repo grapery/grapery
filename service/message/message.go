@@ -81,7 +81,22 @@ func NewMessageService() *MessageService {
 
 // 用户建立连接的消息，初始化本次连接，并管理此次的连接会话。如果用户长时间没有消息流，则关闭此次连接。
 
-func (s *MessageService) initChatContext(stream api.StreamMessageService_StreamChatMessageServer) error {
+func (s *MessageService) InitChatContext(stream api.StreamMessageService_StreamChatMessageServer) error {
+	userId := stream.Context().Value("user_id").(int64)
+	roleId := stream.Context().Value("role_id").(int64)
+	chatCtx, err := models.GetChatContextByUserIDAndRoleID(stream.Context(), userId, roleId)
+	if err != nil {
+		log.Log().Error("get user chat context failed", zap.Error(err))
+		return err
+	}
+	chatCtx.Status = 1
+	chatCtx.UserID = userId
+	chatCtx.RoleID = roleId
+	err = models.CreateChatContext(stream.Context(), chatCtx)
+	if err != nil {
+		log.Log().Error("create user chat context failed", zap.Error(err))
+		return err
+	}
 	return nil
 }
 
