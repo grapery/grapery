@@ -340,5 +340,17 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 	apiReplies := make([]*api.StoryComment, 0)
 	for _, reply := range *replies {
 		apiReplies = append(apiReplies, &api.StoryComment{
+			CommentId: int64(reply.ID),
+			Content:   string(reply.Content),
+			CreatedAt: reply.CreateAt.Unix(),
+			UpdatedAt: reply.UpdateAt.Unix(),
+			UserId:    reply.UserID,
+		})
+	}
+	return &api.GetStoryBoardCommentRepliesResponse{
+		Code:    0,
+		Message: "success",
+		Total:   int64(len(*replies)),
+		Replies: apiReplies,
 	}, nil
 }

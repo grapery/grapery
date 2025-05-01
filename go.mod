@@ -16,7 +16,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/grapery/common-protoc/gen v0.0.0-20250428132028-aa68d959d8c2
+	github.com/grapery/common-protoc/gen v0.0.0-20250501073347-4c309195b7a8
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0
 	github.com/olivere/elastic v6.2.37+incompatible
@@ -117,8 +117,8 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250425173222-7b384671a197 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250425173222-7b384671a197 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250428153025-10db94c68c34 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250428153025-10db94c68c34 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
