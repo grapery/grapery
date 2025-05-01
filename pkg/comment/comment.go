@@ -167,6 +167,7 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	comment := &models.Comment{
 		UserID:        req.GetUserId(),
 		StoryID:       rootComment.StoryID,
+		StoryboardID:  rootComment.StoryboardID,
 		PreID:         req.GetCommentId(),
 		RootCommentID: int64(rootComment.ID),
 		Content:       []byte(req.GetContent()),
