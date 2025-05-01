@@ -165,16 +165,16 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 		return nil, err
 	}
 	comment := &models.Comment{
-		UserID:      req.GetUserId(),
-		StoryID:     rootComment.StoryID,
-		PreID:       req.GetCommentId(),
-		RefID:       int64(rootComment.ID),
-		Content:     []byte(req.GetContent()),
-		CommentType: models.CommentTypeReply,
-		Status:      1,
+		UserID:        req.GetUserId(),
+		StoryID:       rootComment.StoryID,
+		PreID:         req.GetCommentId(),
+		RootCommentID: int64(rootComment.ID),
+		Content:       []byte(req.GetContent()),
+		CommentType:   models.CommentTypeReply,
+		Status:        1,
 	}
 	err = comment.Create()
-	if err != nil {you
+	if err != nil {
 		return nil, err
 	}
 	return &api.CreateStoryCommentReplyResponse{
@@ -247,7 +247,8 @@ func (s *CommentService) DeleteStoryBoardComment(ctx context.Context, req *api.D
 	}, nil
 }
 func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.GetStoryBoardCommentsRequest) (*api.GetStoryBoardCommentsResponse, error) {
-	comments, err := models.GetCommentListByStoryBoard(uint64(req.GetBoardId()))
+	comments, err := models.GetCommentListByStoryBoard(
+		uint64(req.GetBoardId()), int64(req.GetOffset()), int64(req.GetPageSize()))
 	if err != nil {
 		return &api.GetStoryBoardCommentsResponse{
 			Code:     -1,
@@ -320,5 +321,24 @@ func (s *CommentService) DislikeComment(ctx context.Context, req *api.DislikeCom
 	return &api.DislikeCommentResponse{
 		Code:    0,
 		Message: "success",
+	}, nil
+}
+
+func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *api.GetStoryBoardCommentRepliesRequest) (*api.GetStoryBoardCommentRepliesResponse, error) {
+	replies, err := models.GetStoryBoardCommentReplies(uint64(req.GetCommentId()))
+	if err != nil {
+		return nil, err
+	}
+	if len(*replies) == 0 {
+		return &api.GetStoryBoardCommentRepliesResponse{
+			Code:    0,
+			Message: "success",
+			Total:   0,
+			Replies: []*api.StoryComment{},
+		}, nil
+	}
+	apiReplies := make([]*api.StoryComment, 0)
+	for _, reply := range *replies {
+		apiReplies = append(apiReplies, &api.StoryComment{
 	}, nil
 }
