@@ -18,20 +18,20 @@ const (
 // 可以是普通的评论，或者是讨论中的回复
 type Comment struct {
 	IDBase
-	UserID       int64  `json:"user_id,omitempty"`
-	StoryID      int64  `json:"story_id,omitempty"`
-	GroupID      int64  `json:"group_id,omitempty"`
-	RoleID       int64  `json:"role_id,omitempty"`
-	TimelineID   int64  `json:"timeline_id,omitempty"`
-	StoryboardID int64  `json:"storyboard_id,omitempty"`
-	ItemType     int64  `json:"item_type,omitempty"`
-	PreID        int64  `json:"pre_id,omitempty"`
-	Content      []byte `json:"content,omitempty"`
-	RefID        int64  `json:"ref_id,omitempty"`
-	LikeCount    int64  `json:"like_count,omitempty"`
-	DislikeCount int64  `json:"dislike_count,omitempty"`
-	CommentType  int64  `json:"comment_type,omitempty"`
-	Status       int64  `json:"status,omitempty"`
+	UserID        int64  `json:"user_id,omitempty"`
+	StoryID       int64  `json:"story_id,omitempty"`
+	GroupID       int64  `json:"group_id,omitempty"`
+	RoleID        int64  `json:"role_id,omitempty"`
+	TimelineID    int64  `json:"timeline_id,omitempty"`
+	StoryboardID  int64  `json:"storyboard_id,omitempty"`
+	ItemType      int64  `json:"item_type,omitempty"`
+	PreID         int64  `json:"pre_id,omitempty"`
+	Content       []byte `json:"content,omitempty"`
+	RootCommentID int64  `json:"root_comment_id,omitempty"`
+	LikeCount     int64  `json:"like_count,omitempty"`
+	DislikeCount  int64  `json:"dislike_count,omitempty"`
+	CommentType   int64  `json:"comment_type,omitempty"`
+	Status        int64  `json:"status,omitempty"`
 }
 
 func (c Comment) TableName() string {
@@ -71,11 +71,17 @@ func (c *Comment) Delete() error {
 	return nil
 }
 
-func GetCommentByUserID(userID uint64) (*[]*Comment, error) {
+func GetCommentByUserID(userID uint64, page int64, pageSize int64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("user_id = ?", userID).
+		Order("created_at desc").
+		Limit(int(pageSize)).
+		Offset(int((page - 1) * pageSize)).
 		Scan(&ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get user [%d] comment failed: %s ", userID, err.Error())
 		return nil, err
 	}
@@ -93,6 +99,9 @@ func GetCommentByStory(storyID uint64, commentType int64, page int64, pageSize i
 		Limit(int(pageSize)).
 		Offset(int((page - 1) * pageSize)).
 		Scan(&ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get story [%d] comment failed: %s ", storyID, err.Error())
 		return nil, err
 	}
@@ -100,24 +109,37 @@ func GetCommentByStory(storyID uint64, commentType int64, page int64, pageSize i
 	return ret, nil
 }
 
-func GetCommentListByTimeRange(start time.Time, end time.Time) (*[]*Comment, error) {
+func GetCommentListByTimeRange(start time.Time, end time.Time, commentType int64, page int64, pageSize int64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
-		Where("created_at < ? and created_at > ? and deleted = 0",
+		Where("created_at < ? and created_at > ? and deleted = 0 and comment_type = ?",
 			end,
-			start).
+			start,
+			commentType).
+		Order("created_at desc").
+		Limit(int(pageSize)).
+		Offset(int((page - 1) * pageSize)).
 		Scan(&ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get comment in range [%s--%s] failed ", start.String(), end.String())
 		return nil, err
 	}
 	return ret, nil
 }
 
-func GetCommentListByStoryBoard(storyBoardID uint64) (*[]*Comment, error) {
+func GetCommentListByStoryBoard(storyBoardID uint64, page int64, pageSize int64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).
 		Where("storyboard_id = ? and deleted = 0", storyBoardID).
+		Order("created_at desc").
+		Limit(int(pageSize)).
+		Offset(int((page - 1) * pageSize)).
 		Scan(&ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get storyboard [%d] comment failed ", storyBoardID, err.Error())
 		return nil, err
 	}
@@ -129,6 +151,9 @@ func GetStoryCommentReplies(commentID uint64) (*[]*Comment, error) {
 	if err := DataBase().Model(&Comment{}).Where("pre_id = ? and deleted = 0",
 		commentID).
 		Scan(&ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get comment [%d] reply failed ", commentID)
 		return nil, err
 	}
@@ -140,6 +165,9 @@ func GetStoryBoardCommentReplies(commentID uint64) (*[]*Comment, error) {
 	if err := DataBase().Model(&Comment{}).Where("pre_id = ? and deleted = 0",
 		commentID).
 		Scan(ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get comment [%d] reply failed ", commentID)
 		return nil, err
 	}
@@ -248,6 +276,9 @@ func GetCommentLike(commentID uint64, userId uint64) (*CommentLike, error) {
 	if err := DataBase().Model(&CommentLike{}).
 		Where("comment_id = ? and user_id = ?", commentID, userId).
 		First(ret).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		log.Errorf("get comment like [%d] failed ", commentID)
 		return nil, err
 	}

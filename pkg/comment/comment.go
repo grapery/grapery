@@ -167,12 +167,14 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	comment := &models.Comment{
 		UserID:      req.GetUserId(),
 		StoryID:     rootComment.StoryID,
+		PreID:       req.GetCommentId(),
+		RefID:       int64(rootComment.ID),
 		Content:     []byte(req.GetContent()),
 		CommentType: models.CommentTypeReply,
 		Status:      1,
 	}
 	err = comment.Create()
-	if err != nil {
+	if err != nil {you
 		return nil, err
 	}
 	return &api.CreateStoryCommentReplyResponse{
