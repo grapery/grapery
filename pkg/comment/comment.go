@@ -173,10 +173,15 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 		Content:       []byte(req.GetContent()),
 		CommentType:   models.CommentTypeReply,
 		Status:        1,
+		ReplyCount:    0,
 	}
 	err = comment.Create()
 	if err != nil {
 		return nil, err
+	}
+	err = models.IncreaseReplyCount(uint64(rootComment.ID))
+	if err != nil {
+		log.Log().Sugar().Info("increase story comment reply count failed: %s", err.Error())
 	}
 	return &api.CreateStoryCommentReplyResponse{
 		Code:    0,
@@ -189,6 +194,19 @@ func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.D
 	if err != nil {
 		return nil, err
 	}
+	targetComment := &models.Comment{
+		IDBase: models.IDBase{
+			ID: uint(req.GetReplyId()),
+		},
+	}
+	err = targetComment.GetComment()
+	if err != nil {
+		return nil, err
+	}
+	err = models.DecreaseReplyCount(uint64(targetComment.RootCommentID))
+	if err != nil {
+		log.Log().Sugar().Info("decrease story comment reply count failed: %s", err.Error())
+	}
 	return &api.DeleteStoryCommentReplyResponse{
 		Code:    0,
 		Message: "success",
@@ -197,12 +215,14 @@ func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.D
 
 func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.CreateStoryBoardCommentRequest) (*api.CreateStoryBoardCommentResponse, error) {
 	comment := &models.Comment{
-		UserID:       req.GetUserId(),
-		StoryboardID: req.GetBoardId(),
-		Content:      []byte(req.GetContent()),
-		CommentType:  models.CommentTypeComment,
-		Status:       1,
-		LikeCount:    0,
+		UserID:        req.GetUserId(),
+		StoryboardID:  req.GetBoardId(),
+		Content:       []byte(req.GetContent()),
+		CommentType:   models.CommentTypeComment,
+		RootCommentID: 0,
+		PreID:         0,
+		Status:        1,
+		LikeCount:     0,
 	}
 	err := comment.Create()
 	if err != nil {
@@ -281,13 +301,14 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 	apiComments := make([]*api.StoryComment, 0)
 	for _, comment := range *comments {
 		apiComments = append(apiComments, &api.StoryComment{
-			CommentId: int64(comment.ID),
-			Content:   string(comment.Content),
-			CreatedAt: comment.CreateAt.Unix(),
-			UpdatedAt: comment.UpdateAt.Unix(),
-			UserId:    comment.UserID,
-			BoardId:   comment.StoryboardID,
-			LikeCount: comment.LikeCount,
+			CommentId:  int64(comment.ID),
+			Content:    string(comment.Content),
+			CreatedAt:  comment.CreateAt.Unix(),
+			UpdatedAt:  comment.UpdateAt.Unix(),
+			UserId:     comment.UserID,
+			BoardId:    comment.StoryboardID,
+			LikeCount:  comment.LikeCount,
+			ReplyCount: comment.ReplyCount,
 			Creator: &api.UserInfo{
 				UserId: comment.UserID,
 				Name:   createrMap[int(comment.UserID)].Name,
@@ -338,14 +359,33 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 			Replies: []*api.StoryComment{},
 		}, nil
 	}
+	createrIds := make([]int64, 0)
+	for _, reply := range *replies {
+		createrIds = append(createrIds, reply.UserID)
+	}
+	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	if err != nil {
+		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		return nil, err
+	}
+	createrMapData, _ := json.Marshal(createrMap)
+	log.Log().Info("get user by ids map success: " + string(createrMapData))
 	apiReplies := make([]*api.StoryComment, 0)
 	for _, reply := range *replies {
 		apiReplies = append(apiReplies, &api.StoryComment{
-			CommentId: int64(reply.ID),
-			Content:   string(reply.Content),
-			CreatedAt: reply.CreateAt.Unix(),
-			UpdatedAt: reply.UpdateAt.Unix(),
-			UserId:    reply.UserID,
+			CommentId:  int64(reply.ID),
+			Content:    string(reply.Content),
+			CreatedAt:  reply.CreateAt.Unix(),
+			UpdatedAt:  reply.UpdateAt.Unix(),
+			UserId:     reply.UserID,
+			BoardId:    reply.StoryboardID,
+			LikeCount:  reply.LikeCount,
+			ReplyCount: reply.ReplyCount,
+			Creator: &api.UserInfo{
+				UserId: reply.UserID,
+				Name:   createrMap[int(reply.UserID)].Name,
+				Avatar: createrMap[int(reply.UserID)].Avatar,
+			},
 		})
 	}
 	return &api.GetStoryBoardCommentRepliesResponse{
