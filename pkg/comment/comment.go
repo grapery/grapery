@@ -180,15 +180,19 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 		return nil, err
 	}
 	comment := &models.Comment{
-		UserID:        req.GetUserId(),
-		StoryID:       rootComment.StoryID,
-		StoryboardID:  rootComment.StoryboardID,
-		PreID:         req.GetCommentId(),
-		RootCommentID: int64(rootComment.RootCommentID),
-		Content:       []byte(req.GetContent()),
-		CommentType:   models.CommentTypeReply,
-		Status:        1,
-		ReplyCount:    0,
+		UserID:       req.GetUserId(),
+		StoryID:      rootComment.StoryID,
+		StoryboardID: rootComment.StoryboardID,
+		PreID:        req.GetCommentId(),
+		Content:      []byte(req.GetContent()),
+		CommentType:  models.CommentTypeReply,
+		Status:       1,
+		ReplyCount:   0,
+	}
+	if rootComment.RootCommentID == 0 {
+		comment.RootCommentID = int64(rootComment.ID)
+	} else {
+		comment.RootCommentID = int64(rootComment.RootCommentID)
 	}
 	err = comment.Create()
 	if err != nil {
