@@ -174,7 +174,7 @@ func GetStoryCommentReplies(commentID uint64) (*[]*Comment, error) {
 	var ret = new([]*Comment)
 	if err := DataBase().Model(&Comment{}).Where("root_comment_id = ? and deleted = 0",
 		commentID).
-		Order("create_at desc").
+		Order("create_at").
 		Order("like_count desc").
 		Scan(&ret).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

@@ -134,16 +134,31 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 			Replies: []*api.StoryComment{},
 		}, nil
 	}
+	createrIds := make([]int64, 0)
+	for _, comment := range *replies {
+		createrIds = append(createrIds, comment.UserID)
+	}
+	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	if err != nil {
+		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		return nil, err
+	}
 	apiReplies := make([]*api.StoryComment, 0)
 	for _, reply := range *replies {
 		apiReplies = append(apiReplies, &api.StoryComment{
-			CommentId: int64(reply.ID),
-			Content:   string(reply.Content),
-			CreatedAt: reply.CreateAt.Unix(),
-			UpdatedAt: reply.UpdateAt.Unix(),
-			UserId:    reply.UserID,
-			StoryId:   reply.StoryID,
-			LikeCount: reply.LikeCount,
+			CommentId:  int64(reply.ID),
+			Content:    string(reply.Content),
+			CreatedAt:  reply.CreateAt.Unix(),
+			UpdatedAt:  reply.UpdateAt.Unix(),
+			UserId:     reply.UserID,
+			StoryId:    reply.StoryID,
+			LikeCount:  reply.LikeCount,
+			ReplyCount: reply.ReplyCount,
+			Creator: &api.UserInfo{
+				UserId: reply.UserID,
+				Name:   createrMap[int(reply.UserID)].Name,
+				Avatar: createrMap[int(reply.UserID)].Avatar,
+			},
 		})
 	}
 	return &api.GetStoryCommentRepliesResponse{
@@ -169,7 +184,7 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 		StoryID:       rootComment.StoryID,
 		StoryboardID:  rootComment.StoryboardID,
 		PreID:         req.GetCommentId(),
-		RootCommentID: int64(rootComment.ID),
+		RootCommentID: int64(rootComment.RootCommentID),
 		Content:       []byte(req.GetContent()),
 		CommentType:   models.CommentTypeReply,
 		Status:        1,

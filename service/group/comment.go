@@ -49,6 +49,7 @@ func (ts *CommentService) GetStoryCommentReplies(ctx context.Context, req *conne
 	if err != nil {
 		return nil, err
 	}
+	println("get story comment replies success", ret.String())
 	return &connect.Response[api.GetStoryCommentRepliesResponse]{
 		Msg: ret,
 	}, nil
@@ -79,6 +80,7 @@ func (ts *CommentService) GetStoryBoardComments(ctx context.Context, req *connec
 	if err != nil {
 		return nil, err
 	}
+	println("get story board comments success", ret.String())
 	return &connect.Response[api.GetStoryBoardCommentsResponse]{
 		Msg: ret,
 	}, nil
