@@ -37,7 +37,7 @@ func (g Group) TableName() string {
 
 func (g *Group) Create() error {
 	if g.Avatar == "" {
-		g.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
+		g.Avatar = "https://grapery-dev.oss-cn-shanghai.aliyuncs.com/default.png"
 	}
 	err := DataBase().Table(g.TableName()).
 		Where("name = ? and  creator_id = ? and owner_id = ? and deleted = ?",
@@ -70,7 +70,7 @@ func CreateGroup(g *Group) error {
 		return nil
 	}
 	if g.Avatar == "" {
-		g.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
+		g.Avatar = "https://grapery-dev.oss-cn-shanghai.aliyuncs.com/default.png"
 	}
 	if err != nil && err != gorm.ErrRecordNotFound {
 		log.Errorf("query group failed: %s", err.Error())

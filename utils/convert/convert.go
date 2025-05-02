@@ -132,7 +132,7 @@ func ConvertStoryToApiStory(story *models.Story) *api.Story {
 		Mtime:        story.UpdateAt.Unix(),
 	}
 	if ret.Avatar == "" {
-		ret.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
+		ret.Avatar = "https://grapery-dev.oss-cn-shanghai.aliyuncs.com/default.png"
 	}
 	json.Unmarshal([]byte(story.Params), &ret.Params)
 	return ret

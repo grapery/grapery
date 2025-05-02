@@ -78,6 +78,7 @@ func (s *StoryService) GetStoryInfo(ctx context.Context, req *connect.Request[ge
 			Info: info.Data.Info,
 		},
 	}
+	fmt.Printf("GetStoryInfo %s", resp.String())
 	return connect.NewResponse(resp), nil
 }
 

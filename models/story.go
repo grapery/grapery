@@ -149,7 +149,7 @@ func (s *Story) TableName() string {
 
 func CreateStory(ctx context.Context, s *Story) (int64, error) {
 	if s.Avatar == "" {
-		s.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
+		s.Avatar = "https://grapery-dev.oss-cn-shanghai.aliyuncs.com/default.png"
 	}
 	if err := DataBase().Model(s).WithContext(ctx).Create(s).Error; err != nil {
 		return 0, err
@@ -182,7 +182,7 @@ func GetStory(ctx context.Context, id int64) (*Story, error) {
 		return nil, err
 	}
 	if s.Avatar == "" {
-		s.Avatar = "https://grapery-1301865260.cos.ap-shanghai.myqcloud.com/avator/tmp3evp1xxl.png"
+		s.Avatar = "https://grapery-dev.oss-cn-shanghai.aliyuncs.com/default.png"
 	}
 	return s, nil
 }

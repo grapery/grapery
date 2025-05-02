@@ -88,7 +88,7 @@ func UpdateStoryRole(ctx context.Context, roleID int64, needUpdateFields map[str
 	if len(needUpdateFields) == 0 {
 		return nil
 	}
-	needUpdateFields["updated_at"] = time.Now()
+	needUpdateFields["update_at"] = time.Now()
 	if err := DataBase().Model(&StoryRole{}).
 		Where("id = ?", roleID).
 		WithContext(ctx).
