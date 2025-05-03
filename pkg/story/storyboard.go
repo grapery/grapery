@@ -2283,13 +2283,11 @@ func (s *StoryService) PublishStoryboard(ctx context.Context, req *api.PublishSt
 	if err != nil {
 		return nil, err
 	}
-	preBoard := storyboard.PrevId
+	preBoardId := storyboard.PrevId
 	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED)
 	models.UpdateStoryboard(ctx, storyboard)
-	if preBoard > 0 {
-		err = models.UpdateStoryboardMultiColumn(ctx, preBoard, map[string]interface{}{
-			"stage": int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED),
-		})
+	if preBoardId > 0 {
+		err = models.IncrementStoryBoardForkNum(ctx, preBoardId)
 		if err != nil {
 			return nil, err
 		}
