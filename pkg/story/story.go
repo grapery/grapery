@@ -237,6 +237,10 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 	if err != nil {
 		log.Log().Error("increment created story num failed", zap.Error(err))
 	}
+	err = userProfile.IncrementWatchingStoryNum()
+	if err != nil {
+		log.Log().Error("increment watching story num failed", zap.Error(err))
+	}
 	err = models.CreateWatchStoryItem(ctx, int(req.CreatorId), int64(storyId), int64(group.ID))
 	if err != nil {
 		log.Log().Error("watch story failed", zap.Error(err))
@@ -690,6 +694,13 @@ func (s *StoryService) LikeStory(ctx context.Context, req *api.LikeStoryRequest)
 	if err != nil {
 		return nil, err
 	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.IncrementLikedStoryNum()
+	if err != nil {
+		log.Log().Error("increment liked story num failed", zap.Error(err))
+	}
 	group := &models.Group{}
 	group.ID = uint(story.GroupID)
 	err = group.GetByID()
@@ -728,6 +739,13 @@ func (s *StoryService) UnLikeStory(ctx context.Context, req *api.UnLikeStoryRequ
 	err = models.DeleteLikeItem(ctx, int64(likeItem.ID))
 	if err != nil {
 		return nil, err
+	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.DecrementLikedStoryNum()
+	if err != nil {
+		log.Log().Error("decrement liked story num failed", zap.Error(err))
 	}
 	return &api.UnLikeStoryResponse{
 		Code:    0,

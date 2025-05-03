@@ -71,6 +71,13 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 			}
 		}
 	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetBoard().GetCreator()),
+	}
+	err = userProfile.IncrementCreatedBoardNum()
+	if err != nil {
+		log.Log().Error("increment created board num failed", zap.Error(err))
+	}
 	group := &models.Group{}
 	group.ID = uint(storyInfo.GroupID)
 	err = group.GetByID()
@@ -295,7 +302,13 @@ func (s *StoryService) DelStoryboard(ctx context.Context, req *api.DelStoryboard
 	if err != nil {
 		return nil, err
 	}
-
+	userProfile := &models.UserProfile{
+		UserId: int64(currentBoard.CreatorID),
+	}
+	err = userProfile.DecrementCreatedBoardNum()
+	if err != nil {
+		log.Log().Error("decrement created board num failed", zap.Error(err))
+	}
 	return &api.DelStoryboardResponse{
 		Code:    0,
 		Message: "OK",
@@ -387,6 +400,13 @@ func (s *StoryService) LikeStoryboard(ctx context.Context, req *api.LikeStoryboa
 	err = models.UpdateStoryboard(ctx, storyBoard)
 	if err != nil {
 		return nil, err
+	}
+	userProfile := &models.UserProfile{
+		UserId: int64(storyBoard.CreatorID),
+	}
+	err = userProfile.IncrementLikedStoryNum()
+	if err != nil {
+		log.Log().Error("increment liked story num failed", zap.Error(err))
 	}
 	resp = &api.LikeStoryboardResponse{
 		Code:    0,

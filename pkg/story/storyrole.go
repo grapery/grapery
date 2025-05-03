@@ -31,6 +31,13 @@ func (s *StoryService) LikeStoryRole(ctx context.Context, req *api.LikeStoryRole
 		log.Log().Error("increase story role like count failed", zap.Error(err))
 		return nil, err
 	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.IncrementLikedRoleNum()
+	if err != nil {
+		log.Log().Error("increment liked role num failed", zap.Error(err))
+	}
 	return &api.LikeStoryRoleResponse{
 		Code:    0,
 		Message: "OK",
@@ -47,6 +54,13 @@ func (s *StoryService) UnLikeStoryRole(ctx context.Context, req *api.UnLikeStory
 	if err != nil {
 		log.Log().Error("decrease story role like count failed", zap.Error(err))
 		return nil, err
+	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.DecrementLikedRoleNum()
+	if err != nil {
+		log.Log().Error("decrement liked role num failed", zap.Error(err))
 	}
 	return &api.UnLikeStoryRoleResponse{
 		Code:    0,
@@ -81,6 +95,13 @@ func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStory
 		log.Log().Error("increase story role follow count failed", zap.Error(err))
 		return nil, err
 	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.IncrementWatchingStoryRoleNum()
+	if err != nil {
+		log.Log().Error("increment watching story role num failed", zap.Error(err))
+	}
 	return &api.FollowStoryRoleResponse{
 		Code:    0,
 		Message: "OK",
@@ -109,6 +130,13 @@ func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowS
 	if err != nil {
 		log.Log().Error("decrease story role follow count failed", zap.Error(err))
 		return nil, err
+	}
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err = userProfile.DecrementWatchingStoryRoleNum()
+	if err != nil {
+		log.Log().Error("decrement watching story role num failed", zap.Error(err))
 	}
 	return &api.UnFollowStoryRoleResponse{
 		Code:    0,
