@@ -117,6 +117,14 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 		log.Errorf("get user failed : %s", err.Error())
 		return nil, err
 	}
+	userProfile := &models.UserProfile{
+		UserId: int64(u.ID),
+	}
+	err = userProfile.GetByUserId()
+	if err != nil {
+		log.Errorf("get user profile failed : %s", err.Error())
+		return nil, err
+	}
 	return &api.UserInfoResponse{
 		Code: 0,
 		Msg:  "success",
@@ -131,6 +139,7 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 				Ctime:    u.CreateAt.Unix(),
 				Mtime:    u.UpdateAt.Unix(),
 			},
+			Profile: convertModelUserProfileToApi(userProfile),
 		},
 	}, nil
 }
@@ -821,6 +830,7 @@ func convertModelUserProfileToApi(profile *models.UserProfile) *api.UserProfileI
 		Limit:             int32(profile.Limit),
 		UsedTokens:        int32(profile.UsedTokens),
 		Status:            int32(profile.Status),
+		BackgroundImage:   profile.Background,
 		Ctime:             profile.CreateAt.Unix(),
 		Mtime:             profile.UpdateAt.Unix(),
 	}
