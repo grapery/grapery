@@ -456,11 +456,38 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	if imageStyle == "" {
 		imageStyle = "Ghibli style"
 	}
+
+	storyRoles, err := models.GetStoryBoardRoles(ctx, req.GetBoardId())
+	if err != nil {
+		log.Log().Error("get story board roles failed", zap.Error(err))
+	}
+	roleIds := make([]int64, 0)
+
+	storyRolesStr := ""
+	if len(storyRoles) != 0 {
+		for _, role := range storyRoles {
+			roleIds = append(roleIds, role.RoleId)
+		}
+		roles, err := models.GetStoryRolesByIDs(ctx, roleIds)
+		if err != nil {
+			log.Log().Error("get story roles failed", zap.Error(err))
+		}
+		for _, role := range roles {
+			storyRolesStr += "角色id:" + fmt.Sprintf("%d", role.ID) + "," + "角色姓名:" + role.CharacterName + "," + "角色描述:" + role.CharacterDescription + ";\n"
+		}
+	} else {
+		log.Log().Error("get story board roles failed", zap.Error(err))
+	}
+	storyCharacters := strings.Replace(`参与人物为: """story_characters"""。`, "story_characters", storyRolesStr, -1)
+
 	templatePrompt := `
 	为故事章节的 """story_chapter""" 章节的生成详细故事情节细节，请参考故事剧情: """story_content"""。
-	故事背景为: """story_background"""。
-	参与人物为: """story_characters"""。
-	同时衔接前后章节的情节,上一章节的故事情节为: """story_backgroup"""，生成符合上下文的、合理的、更详细的情节，
+	故事背景为: """story_background"""。`
+	if len(storyRoles) != 0 {
+		templatePrompt = storyCharacters + templatePrompt
+	}
+	templatePrompt = templatePrompt +
+		`同时衔接前后章节的情节,上一章节的故事情节为: """story_content"""，生成符合上下文的、合理的、更详细的情节，
 	可以生成4-6个故事的细节，以及生成可以展示这些故事剧情的图片 prompt 提示词，图片提示词的风格统一为"""imageStyle"""。
 	以json格式返回格式可以参考如下例子:
 	--------
@@ -503,6 +530,8 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 		}
 	--------
 	请保证故事的连贯，以及故事中的各个人物的角色前后一致，同时和故事背景契合，人物的描述清晰，情节人物的性格明显，场景描述详细，图片提示词准确。
+	请注意，如果没有要求 ‘参与人物’ 的输出要求，可以不用输出 ‘参与的人物’ 的 json 数据结构。有些章节是没有故事角色的，这个很正常。所以要遵守这一条，只有当输入有 ‘参与人物’ 的列表时
+	再输出这些 ’参与人物‘ 信息，这一点很重要，不要自作主张的引入角色或者故事人物。
 	`
 	templatePrompt = strings.Replace(templatePrompt, "story_chapter", board.Title, -1)
 	templatePrompt = strings.Replace(templatePrompt, "imageStyle", imageStyle, -1)
@@ -511,28 +540,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	} else {
 		templatePrompt = strings.Replace(templatePrompt, "story_background", story.Origin, -1)
 	}
-	storyRoles, err := models.GetStoryBoardRoles(ctx, req.GetBoardId())
-	if err != nil {
-		log.Log().Error("get story board roles failed", zap.Error(err))
-	}
-	roleIds := make([]int64, 0)
 
-	storyRolesStr := ""
-	if len(storyRoles) != 0 {
-		for _, role := range storyRoles {
-			roleIds = append(roleIds, role.RoleId)
-		}
-		roles, err := models.GetStoryRolesByIDs(ctx, roleIds)
-		if err != nil {
-			log.Log().Error("get story roles failed", zap.Error(err))
-		}
-		for _, role := range roles {
-			storyRolesStr += "角色id:" + fmt.Sprintf("%d", role.ID) + "," + "角色姓名:" + role.CharacterName + "," + "角色描述:" + role.CharacterDescription + ";\n"
-		}
-	} else {
-		log.Log().Error("get story board roles failed", zap.Error(err))
-	}
-	templatePrompt = strings.Replace(templatePrompt, "story_characters", storyRolesStr, -1)
 	templatePrompt = strings.Replace(templatePrompt, "story_content", board.Description, -1)
 	var storyBackgroup string
 	if board.PrevId != -1 && board.PrevId != 0 {
@@ -742,12 +750,13 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 								log.Log().Error("upload file from url failed", zap.Error(err))
 								continue
 							}
-							aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-							if err != nil {
-								log.Log().Error("generate thumbnail failed", zap.Error(err))
-								continue
-							}
-							aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+							// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+							// if err != nil {
+							// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
+							// 	continue
+							// }
+							// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+							aliyunUrls = append(aliyunUrls, aliyunUrl)
 						}
 						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
 						storyGen.Content = ""
@@ -868,7 +877,7 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	var rolesPrompt = make([]Character, 0)
 	for _, role := range finalRols {
 		rolePrompt := Character{
-			ID:          role.CharacterID,
+			ID:          fmt.Sprintf("%d", role.ID),
 			Name:        role.CharacterName,
 			Description: role.CharacterDescription,
 		}
@@ -880,11 +889,13 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	boardRequire["章节题目要求"] = req.GetTitle()
 	boardRequire["章节内容要求"] = req.GetDescription()
 	boardRequire["章节背景简介"] = req.GetBackground()
-	boardRequire["章节参与的角色信息"] = rolesPrompt
+	if len(finalRols) != 0 {
+		boardRequire["章节参与的角色信息"] = rolesPrompt
+	}
 	templatePrompt := `生成故事 story_name 的第一个章节,故事内容用中文描述,以json格式返回		
 		选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的角色id和角色名称范围。
 		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'不要超出'章节参与的角色信息'里的范围。
-		如果 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容。
+		如果没有 '章节参与的角色信息'，或者 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
 		参考如下格式生成内容：
 		--------
 		{
@@ -1020,13 +1031,13 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	rolesMap := make(map[string]*api.StoryRole)
 	finalRols := make(map[string]*models.StoryRole)
 	for _, role := range originRoles {
-		originRolesMap[role.CharacterID] = role
+		originRolesMap[fmt.Sprintf("%d", role.ID)] = role
 	}
 	for _, role := range roles {
-		rolesMap[role.CharacterId] = role
+		rolesMap[fmt.Sprintf("%d", role.RoleId)] = role
 	}
 	for _, role := range roles {
-		if realRole, ok := originRolesMap[role.CharacterId]; !ok {
+		if realRole, ok := originRolesMap[fmt.Sprintf("%d", role.RoleId)]; ok {
 			finalRols[role.CharacterName] = realRole
 		}
 	}
@@ -1039,7 +1050,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	var rolesPrompt = make([]Character, 0)
 	for _, role := range finalRols {
 		rolePrompt := Character{
-			ID:          role.CharacterID,
+			ID:          fmt.Sprintf("%d", role.ID),
 			Name:        role.CharacterName,
 			Description: role.CharacterDescription,
 		}
@@ -1048,7 +1059,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	//
 
 	var boardIdtemp int64 = board.PrevId
-	for boardIdtemp != 0 {
+	for boardIdtemp > 0 {
 		prevBoard, err := models.GetStoryboard(ctx, boardIdtemp)
 		if err != nil {
 			return nil, err
@@ -1074,7 +1085,10 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	boardRequire["章节题目要求"] = req.GetTitle()
 	boardRequire["章节内容要求"] = req.GetDescription()
 	boardRequire["章节背景简介"] = req.GetBackground()
-	boardRequire["章节参与的角色信息"] = rolesPrompt
+	if len(finalRols) != 0 {
+		boardRequire["章节参与的角色信息"] = rolesPrompt
+	}
+
 	boardRequireJson, _ := json.Marshal(boardRequire)
 	fmt.Printf("boardRequireJson: %v \n", string(boardRequireJson))
 	templatePrompt := `生成故事 story_name 的下一个章节,故事内容用中文描述,以json格式返回		
@@ -1084,6 +1098,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		--------
 		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的范围。
 		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'要符合'章节参与的角色信息'里的限制。
+		如果没有 '章节参与的角色信息'，或者 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
 		参考如下格式生成内容：
 		--------
 		{
@@ -1105,6 +1120,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			]
 		}
 		--------
+		以上输出的json结果中，参与人物的 角色id 一定要在 '章节参与的角色信息' 中存在，如果不存在，这个角色就不应该生成。一定不要擅自引入新的故事人物和角色，新的故事人物和角色，只能通过‘章节参与的角色信息’参数中获取。
 		`
 	if len(req.GetDescription()) > 0 ||
 		len(req.GetBackground()) > 0 ||
@@ -1309,11 +1325,16 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		请参考以上输入,生成[角色描述,角色短期目标,角色长期目标,角色性格,角色背景],返回格式如下：
 		---
 		{
-			"角色描述": "xxxxxx......",
-			"角色短期目标": "xxxxxx......",
-			"角色长期目标": "xxxxxx......",
-			"角色性格": "xxxxxx......",
-			"角色背景": "xxxxxx......"
+			"角色背景": "xxxxxx",
+			"性格特征": "xxxxxx",
+			"处事风格": "xxxxxx",
+			"认知范围": "xxxxxx",
+			"能力特点": "xxxxxx",
+			"外貌特征": "xxxxxx",
+			"穿着喜好": "xxxxxx",
+			"角色描述": "xxxxxx",
+			"角色短期目标": "xxxxxx",
+			"角色长期目标": "xxxxxx"
 		}
 		---
 		请返回json格式，不要返回其他内容。角色的描述，短期目标，长期目标，性格，背景，请用中文描述。
@@ -1480,8 +1501,8 @@ func (s *StoryService) UnLikeStoryboard(ctx context.Context, req *api.UnLikeStor
 	}
 	if likeItem == nil {
 		return &api.UnLikeStoryboardResponse{
-			Code:    -1,
-			Message: "not liked",
+			Code:    0,
+			Message: "OK",
 		}, nil
 	}
 	err = models.DeleteLikeItem(ctx, int64(likeItem.ID))
@@ -1541,6 +1562,7 @@ func (s *StoryService) GetStoryboardScene(ctx context.Context, req *api.GetStory
 		},
 	}, nil
 }
+
 func (s *StoryService) CreateStoryBoardScene(ctx context.Context, req *api.CreateStoryBoardSenceRequest) (*api.CreateStoryBoardSenceResponse, error) {
 	newScene := new(models.StoryBoardScene)
 	newScene.BoardId = req.Sence.GetBoardId()
@@ -1706,12 +1728,14 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 			log.Log().Error("upload file from url failed", zap.Error(err))
 			continue
 		}
-		aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-		if err != nil {
-			log.Log().Error("generate thumbnail failed", zap.Error(err))
-			continue
-		}
-		aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+		// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+		// log.Log().Sugar().Infof("aliyunThumbnailUrl: %s", aliyunThumbnailUrl)
+		// if err != nil {
+		// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
+		// 	continue
+		// }
+		// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+		aliyunUrls = append(aliyunUrls, aliyunUrl)
 	}
 	retData, _ := json.Marshal(aliyunUrls)
 	scene.GenResult = string(retData)
@@ -1816,12 +1840,13 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
 			}
-			aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-			if err != nil {
-				log.Log().Error("generate thumbnail failed", zap.Error(err))
-				continue
-			}
-			aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+			// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+			// if err != nil {
+			// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
+			// 	continue
+			// }
+			// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+			aliyunUrls = append(aliyunUrls, aliyunUrl)
 		}
 		retData, _ := json.Marshal(aliyunUrls)
 		scene.GenResult = string(retData)
@@ -2438,7 +2463,7 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
-			StoryCover:       "",
+			StoryCover:       utils.DefaultStoryAvatorUrl,
 			StoryAvatar:      story.Avatar,
 		}
 		if storyItem.StoryTitle == "" {
@@ -2536,7 +2561,7 @@ func (s *StoryService) GetUnPublishStoryboard(ctx context.Context, req *api.GetU
 			StoryId:          int64(story.ID),
 			StoryTitle:       story.Name,
 			StoryDescription: story.ShortDesc,
-			StoryCover:       "",
+			StoryCover:       utils.DefaultStoryAvatorUrl,
 			StoryAvatar:      story.Avatar,
 		}
 		if storyItem.StoryTitle == "" {

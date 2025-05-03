@@ -16,41 +16,41 @@ const (
 )
 
 type ChapterStruct struct {
-	HashID     string
-	Title      string
-	OriginDesc string
-	Content    string
-	IsEnd      bool
-	Avatar     string
-	Prev       string
-	Roles      map[string]RoleStruct
+	HashID     string                `json:"hash_id,omitempty"`
+	Title      string                `json:"title,omitempty"`
+	OriginDesc string                `json:"origin_desc,omitempty"`
+	Content    string                `json:"content,omitempty"`
+	IsEnd      bool                  `json:"is_end,omitempty"`
+	Avatar     string                `json:"avatar,omitempty"`
+	Prev       string                `json:"prev,omitempty"`
+	Roles      map[string]RoleStruct `json:"roles,omitempty"`
 }
 
 type RoleStruct struct {
-	Name        string
-	Description string
-	Avatar      string
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Avatar      string `json:"avatar,omitempty"`
 }
 
 type StoryStruct struct {
-	Title      string
-	OriginDesc string
-	Background string
-	AllRoles   map[string]RoleStruct
-	Chapters   []ChapterStruct
+	Title      string                `json:"title,omitempty"`
+	OriginDesc string                `json:"origin_desc,omitempty"`
+	Background string                `json:"background,omitempty"`
+	AllRoles   map[string]RoleStruct `json:"all_roles,omitempty"`
+	Chapters   []ChapterStruct       `json:"chapters,omitempty"`
 }
 
 type StoryParams struct {
-	UserId       string
-	StoryContent string
-	Theme        string
+	UserId       string `json:"user_id,omitempty"`
+	StoryContent string `json:"story_content,omitempty"`
+	Theme        string `json:"theme,omitempty"`
 }
 
 type StoryBoardParams struct {
-	StoryContent      string
-	Theme             string
-	UserId            string
-	StoryBoardContent string
+	StoryContent      string `json:"story_content,omitempty"`
+	Theme             string `json:"theme,omitempty"`
+	UserId            string `json:"user_id,omitempty"`
+	StoryBoardContent string `json:"story_board_content,omitempty"`
 }
 
 // 只是生图参数
@@ -111,36 +111,36 @@ const (
 
 type Story struct {
 	IDBase
-	Title        string
-	Name         string
-	ShortDesc    string
-	CreatorID    int64
-	OwnerID      int64
-	GroupID      int64
-	Origin       string
-	RootBoardID  int
-	AIGen        bool
-	Avatar       string
-	OriginAvatar string
-	Visable      api.ScopeType
-	Status       StoryStatus
-	IsAchieve    bool
-	IsClose      bool
-	IsPrivate    bool
-	Params       string
-	Style        string
-	StyleDesc    string
-	StyleImage   string
-	Subject      string
-	SubjectDesc  string
+	Title        string        `json:"title,omitempty"`
+	Name         string        `json:"name,omitempty"`
+	ShortDesc    string        `json:"short_desc,omitempty"`
+	CreatorID    int64         `json:"creator_id,omitempty"`
+	OwnerID      int64         `json:"owner_id,omitempty"`
+	GroupID      int64         `json:"group_id,omitempty"`
+	Origin       string        `json:"origin,omitempty"`
+	RootBoardID  int           `json:"root_board_id,omitempty"`
+	AIGen        bool          `json:"ai_gen,omitempty"`
+	Avatar       string        `json:"avatar,omitempty"`
+	OriginAvatar string        `json:"origin_avatar,omitempty"`
+	Visable      api.ScopeType `json:"visable,omitempty"`
+	Status       StoryStatus   `json:"status,omitempty"`
+	IsAchieve    bool          `json:"is_achieve,omitempty"`
+	IsClose      bool          `json:"is_close,omitempty"`
+	IsPrivate    bool          `json:"is_private,omitempty"`
+	Params       string        `json:"params,omitempty"`
+	Style        string        `json:"style,omitempty"`
+	StyleDesc    string        `json:"style_desc,omitempty"`
+	StyleImage   string        `json:"style_image,omitempty"`
+	Subject      string        `json:"subject,omitempty"`
+	SubjectDesc  string        `json:"subject_desc,omitempty"`
 
-	LikeCount    int64
-	CommentCount int64
-	ShareCount   int64
-	FollowCount  int64
-	TotalBoards  int64
-	TotalRoles   int64
-	TotalMembers int64
+	LikeCount    int64 `json:"like_count,omitempty"`
+	CommentCount int64 `json:"comment_count,omitempty"`
+	ShareCount   int64 `json:"share_count,omitempty"`
+	FollowCount  int64 `json:"follow_count,omitempty"`
+	TotalBoards  int64 `json:"total_boards,omitempty"`
+	TotalRoles   int64 `json:"total_roles,omitempty"`
+	TotalMembers int64 `json:"total_members,omitempty"`
 }
 
 func (s *Story) TableName() string {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/google/uuid"
+	"github.com/grapery/grapery/utils/log"
 )
 
 var (
@@ -168,15 +169,15 @@ func (c *AliyunClient) GenerateThumbnailV2(objectKey string, size int) (string, 
 	// 生成目标图片的key
 	pathSlice := strings.Split(objectKey, "/")
 	id := strings.Split(pathSlice[len(pathSlice)-1], ".")[0]
-	targetKey := fmt.Sprintf("thumbnail/%s.jpg", id)
-
+	targetImageName := fmt.Sprintf("thumbnail/%s.jpg", id)
+	log.Log().Sugar().Infof("objectKey %s GenerateThumbnailV2: %s", objectKey, targetImageName)
 	// 构建图片处理参数
 	// 将图片缩放为固定宽高200px
 	style := fmt.Sprintf("image/resize,m_fixed,w_%d,h_%d", size, size)
 	// 使用base64编码目标文件名和bucket名
 	process := fmt.Sprintf("%s|sys/saveas,o_%v,b_%v",
 		style,
-		base64.URLEncoding.EncodeToString([]byte(targetKey)),
+		base64.URLEncoding.EncodeToString([]byte(targetImageName)),
 		base64.URLEncoding.EncodeToString([]byte(Bucket)))
 
 	// 执行图片处理
@@ -186,5 +187,5 @@ func (c *AliyunClient) GenerateThumbnailV2(objectKey string, size int) (string, 
 	}
 
 	// 返回处理后的图片URL
-	return c.GetFileURL(targetKey, 3600)
+	return c.GetFileURL(targetImageName, 3600)
 }
