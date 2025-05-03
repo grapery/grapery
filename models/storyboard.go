@@ -37,6 +37,110 @@ func (board StoryBoard) TableName() string {
 	return "story_board"
 }
 
+func IsForkable(ctx context.Context, id int64) (bool, error) {
+	board, err := GetStoryboard(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	return board.ForkAble, nil
+}
+
+func UpdateStoryBoardForkAble(ctx context.Context, id int64, forkAble bool) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("fork_able = ?", forkAble).Error
+}
+
+func IncrementStoryBoardForkNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("fork_num", gorm.Expr("fork_num + ?", 1)).Error
+}
+
+func IncrementStoryBoardLikeNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("like_num", gorm.Expr("like_num + ?", 1)).Error
+}
+
+func IncrementStoryBoardCommentNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("comment_num", gorm.Expr("comment_num + ?", 1)).Error
+}
+
+func IncrementStoryBoardShareNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("share_num", gorm.Expr("share_num + ?", 1)).Error
+}
+
+func DecrementStoryBoardForkNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("fork_num", gorm.Expr("fork_num - ?", 1)).Error
+}
+
+func DecrementStoryBoardLikeNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("like_num", gorm.Expr("like_num - ?", 1)).Error
+}
+
+func DecrementStoryBoardCommentNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("comment_num", gorm.Expr("comment_num - ?", 1)).Error
+}
+
+func DecrementStoryBoardShareNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("share_num", gorm.Expr("share_num - ?", 1)).Error
+}
+
+func IncrementStoryBoardRoleNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("role_num", gorm.Expr("role_num + ?", 1)).Error
+}
+
+func DecrementStoryBoardRoleNum(ctx context.Context, id int64) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("role_num", gorm.Expr("role_num - ?", 1)).Error
+}
+
+func UpdateStoryBoardStage(ctx context.Context, id int64, stage int) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("stage = ?", stage).Error
+}
+
+func UpdateStoryBoardParams(ctx context.Context, id int64, params string) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("params = ?", params).Error
+}
+
+func UpdateStoryBoardTitle(ctx context.Context, id int64, title string) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("title = ?", title).Error
+}
+
+func UpdateStoryBoardDescription(ctx context.Context, id int64, description string) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("description = ?", description).Error
+}
+
+func UpdateStoryBoardAvatar(ctx context.Context, id int64, avatar string) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", id).
+		Update("avatar = ?", avatar).Error
+}
+
 func CreateStoryBoard(ctx context.Context, board *StoryBoard) (int64, error) {
 	if err := DataBase().Model(board).
 		WithContext(ctx).
