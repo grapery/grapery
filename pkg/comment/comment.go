@@ -138,7 +138,7 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 	for _, comment := range *replies {
 		createrIds = append(createrIds, comment.UserID)
 	}
-	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
 		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
 		return nil, err
@@ -310,7 +310,7 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 	for _, comment := range *comments {
 		createrIds = append(createrIds, comment.UserID)
 	}
-	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
 		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
 		return nil, err
@@ -382,7 +382,7 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 	for _, reply := range *replies {
 		createrIds = append(createrIds, reply.UserID)
 	}
-	createrMap, err := models.GetUsersByIdsMap(createrIds)
+	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
 		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
 		return nil, err
