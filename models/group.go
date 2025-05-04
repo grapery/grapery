@@ -248,25 +248,33 @@ func GetGroupMembers(groupID int, offset, number int) (list []*GroupMember, err 
 	list = make([]*GroupMember, 0)
 	err = DataBase().Table(GroupMember{}.TableName()).
 		Where("group_id = ? and deleted = 0", groupID).
-		Scan(list).
 		Offset(offset).
 		Limit(number).
+		Scan(list).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return list, nil
 }
 
-func GetUserGroups(userID int, offset, number int) (list []*Group, err error) {
+func GetUserGroups(userID int, offset, pageSize int) (list []*Group, err error) {
+	log.Infof("get user groups: %d, offset: %d, pageSize: %d", userID, offset, pageSize)
 	list = make([]*Group, 0)
 	err = DataBase().Model(Group{}).
 		Where("creator_id = ? and deleted = 0", userID).
+		Order("create_at desc").
+		Offset((offset - 1) * pageSize).
+		Limit(pageSize).
 		Scan(&list).
-		Offset(offset).
-		Limit(number).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return list, nil
@@ -285,6 +293,9 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 		Scan(g).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, false, nil
+		}
 		return nil, false, err
 	}
 	if err == gorm.ErrRecordNotFound {
@@ -335,16 +346,20 @@ func GetUserDefaultGroup(userID int) (g *Group, ok bool, err error) {
 }
 
 // GetUserFollowedGroups
-func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err error) {
+func GetUserJoinedGroups(userID int, offset, pageSize int) (list []*Group, err error) {
 	groupIds := make([]int, 0)
 	err = DataBase().Model(&GroupMember{}).
 		Select("group_id").
 		Where("user_id = ? and deleted = 0", userID).
+		Order("create_at desc").
 		Scan(groupIds).
-		Offset(offset).
-		Limit(number).
+		Offset((offset - 1) * pageSize).
+		Limit(pageSize).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	list = make([]*Group, 0)
@@ -353,21 +368,27 @@ func GetUserJoinedGroups(userID int, offset, number int) (list []*Group, err err
 		Where("id in (?)", groupIds).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return list, nil
 }
 
-func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err error) {
-	list := make([]int64, 0, number)
+func GetGroupMemberInfoList(groupID int, offset, pageSize int) (users []*User, err error) {
+	list := make([]int64, 0, pageSize)
 	err = DataBase().Table(GroupMember{}.TableName()).
 		Select("user_id").
 		Where("group_id = ? and deleted = 0", groupID).
 		Scan(&list).
-		Offset(offset).
-		Limit(number).
+		Offset((offset - 1) * pageSize).
+		Limit(pageSize).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	users, err = GetUsersByIds(list)
@@ -377,7 +398,7 @@ func GetGroupMemberInfoList(groupID int, offset, number int) (users []*User, err
 	return users, nil
 }
 
-func GetGroupsByIdsOrderByActive(groupIds []int, offset, number int) (list []*Group, total int64, err error) {
+func GetGroupsByIdsOrderByActive(groupIds []int, offset, pageSize int) (list []*Group, total int64, err error) {
 	total = 0
 	err = DataBase().Model(Group{}).
 		Where("id in (?)", groupIds).
@@ -390,17 +411,20 @@ func GetGroupsByIdsOrderByActive(groupIds []int, offset, number int) (list []*Gr
 	err = DataBase().Model(Group{}).
 		Where("id in (?)", groupIds).
 		Order("update_at desc").
-		Offset(offset).
-		Limit(number).
+		Offset((offset - 1) * pageSize).
+		Limit(pageSize).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		log.Errorf("get groups by ids order by active failed: %s", err.Error())
 		return nil, 0, err
 	}
 	return list, total, nil
 }
 
-func GetUserFollowedGroups(userID int, offset, number int) (list []*Group, total int64, err error) {
+func GetUserFollowedGroups(userID int, offset, pageSize int) (list []*Group, total int64, err error) {
 	groupIds := make([]int, 0)
 	err = DataBase().Model(&WatchItem{}).
 		Select("distinct group_id").
@@ -411,8 +435,11 @@ func GetUserFollowedGroups(userID int, offset, number int) (list []*Group, total
 	if err != nil {
 		return nil, 0, err
 	}
-	list, total, err = GetGroupsByIdsOrderByActive(groupIds, offset, number)
+	list, total, err = GetGroupsByIdsOrderByActive(groupIds, offset, pageSize)
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	return list, total, nil
@@ -427,6 +454,9 @@ func GetUserFollowedGroupIds(ctx context.Context, userID int) ([]int64, int64, e
 		Scan(&groupIds).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		log.Errorf("get user [%d] followed group ids failed: %s", userID, err.Error())
 		return nil, 0, err
 	}
@@ -434,7 +464,7 @@ func GetUserFollowedGroupIds(ctx context.Context, userID int) ([]int64, int64, e
 	return groupIds, int64(len(groupIds)), nil
 }
 
-func GetGroupByName(name string, offset, number int) (groups []*Group, total int64, err error) {
+func GetGroupByName(name string, offset, pageSize int) (groups []*Group, total int64, err error) {
 	groups = make([]*Group, 0)
 	err = DataBase().Model(Group{}).
 		Where("name like ? and deleted = 0", "%"+name+"%").
@@ -445,10 +475,13 @@ func GetGroupByName(name string, offset, number int) (groups []*Group, total int
 	}
 	err = DataBase().Model(Group{}).
 		Where("name like ? and deleted = 0", "%"+name+"%").
-		Offset(offset).
-		Limit(number).
+		Offset((offset - 1) * pageSize).
+		Limit(pageSize).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, 0, nil
+		}
 		return nil, 0, err
 	}
 	return groups, total, nil
@@ -462,6 +495,9 @@ func GetGroupsByIds(groupIds []int64) (groups []*Group, err error) {
 		Scan(&groups).
 		Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return groups, nil
@@ -484,7 +520,14 @@ func (g GroupProfile) TableName() string {
 }
 
 func (g *GroupProfile) GetByGroupID() error {
-	return DataBase().Table(g.TableName()).Where("group_id = ? and deleted = 0", g.GroupID).First(g).Error
+	err := DataBase().Table(g.TableName()).Where("group_id = ? and deleted = 0", g.GroupID).First(g).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func CreateGroupProfile(ctx context.Context, groupID int64, desc string, defaultStoryId int64, isVerified bool, followers int64) error {
@@ -530,49 +573,83 @@ func GetGroupProfiles(ctx context.Context, groupIds []int64) (profiles []*GroupP
 	err = DataBase().Table(GroupProfile{}.TableName()).Where("group_id in (?) and deleted = 0", groupIds).Find(&profiles).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
+			log.Errorf("get group profiles failed: %s", err.Error())
 			return nil, nil
 		}
+		log.Errorf("get group profiles failed: %s", err.Error())
 		return nil, err
 	}
 	if len(profiles) == 0 {
+		log.Errorf("get group profiles failed: %s", err.Error())
 		return nil, nil
 	}
+	log.Infof("get group profiles success: %v", profiles)
 	return profiles, nil
 }
 func IncGroupProfileMembers(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("members", gorm.Expr("members + 1")).Error
+	if err != nil {
+		log.Errorf("inc group profile members failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 func DecGroupProfileMembers(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("members", gorm.Expr("members - 1")).Error
+	if err != nil {
+		log.Errorf("dec group profile members failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 func IncGroupProfileStoryCount(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("story_count", gorm.Expr("story_count + 1")).Error
+	if err != nil {
+		log.Errorf("inc group profile story count failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 func DecGroupProfileStoryCount(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("story_count", gorm.Expr("story_count - 1")).Error
+	if err != nil {
+		log.Errorf("dec group profile story count failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 func IncGroupProfileFollowers(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("followers", gorm.Expr("followers + 1")).Error
+	if err != nil {
+		log.Errorf("inc group profile followers failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 func DecGroupProfileFollowers(ctx context.Context, groupId int64) error {
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Update("followers", gorm.Expr("followers - 1")).Error
+	if err != nil {
+		log.Errorf("dec group profile followers failed: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 // 根据groupId和userId获取用户加入小组的信息
@@ -583,8 +660,10 @@ func GetGroupMemberByGroupAndUser(ctx context.Context, groupId int64, userId int
 		First(member).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
+			log.Errorf("get group member by group and user failed: %s", err.Error())
 			return nil, nil
 		}
+		log.Errorf("get group member by group and user failed: %s", err.Error())
 		return nil, err
 	}
 	return member, nil
@@ -595,7 +674,12 @@ func UpdateGroupProfile(ctx context.Context, groupId int64, desc string, followe
 	if desc != "" {
 		needUpdate["desc"] = desc
 	}
-	return DataBase().Table((&GroupProfile{}).TableName()).
+	err := DataBase().Table((&GroupProfile{}).TableName()).
 		Where("group_id = ? and deleted = 0", groupId).
 		Updates(needUpdate).Error
+	if err != nil {
+		log.Errorf("update group profile failed: %s", err.Error())
+		return err
+	}
+	return nil
 }

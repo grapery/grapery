@@ -234,7 +234,9 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		Code: 0,
 		Msg:  "success",
 		Data: &api.UserGroupResponse_Data{
-			List: groups,
+			List:     groups,
+			Offset:   req.GetOffset(),
+			PageSize: req.GetPageSize(),
 		},
 	}, nil
 }

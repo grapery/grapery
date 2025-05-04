@@ -590,10 +590,13 @@ func GetStoryBoardsByStoryIds(ctx context.Context, storyIds []int64, page int, p
 		Where("story_id in (?)", storyIds).
 		Where("status = ?", 1).
 		Order("create_at desc").
-		Offset(page * pageSize).
+		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&boards).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return boards, nil

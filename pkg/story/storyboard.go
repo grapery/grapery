@@ -2203,7 +2203,7 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		Storyboards: apiStoryboards,
 		Total:       total,
 	}
-	log.Log().Info("get user created storyboards", zap.Any("result", result.String()))
+	log.Log().Info("get user created storyboards", zap.Any("apiStoryboards length", len(apiStoryboards)))
 	return result, nil
 }
 
@@ -2348,6 +2348,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 	if err != nil {
 		return nil, err
 	}
+	log.Log().Info("get user watch story active story boards", zap.Any("boards", len(boards)))
 	targetStoryIds := make([]int64, 0)
 	for _, board := range boards {
 		targetStoryIds = append(targetStoryIds, int64(board.StoryID))
@@ -2438,6 +2439,7 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 		})
 		fmt.Printf("storiesSummary : %+v \n", storiesSummary[int64(board.StoryID)])
 	}
+	log.Log().Info("get user watch story active story boards", zap.Any("boards", len(apiBoards)))
 	resp := &api.GetUserWatchStoryActiveStoryBoardsResponse{
 		Code:        0,
 		Message:     "OK",
