@@ -197,6 +197,24 @@ func GetStoryboardsByStory(ctx context.Context, storyID int64) ([]*StoryBoard, e
 	return boards, nil
 }
 
+func GetStoryboardsByStoryMultiPage(ctx context.Context, storyID int64, page int, pageSize int) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Where("story_id = ? and status >= 0", storyID).
+		Order("create_at desc").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&boards).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return boards, nil
+}
+
 func GetStoryboardsByCreator(ctx context.Context, creatorID int64) ([]*StoryBoard, error) {
 	var boards []*StoryBoard
 	err := DataBase().Model(&StoryBoard{}).

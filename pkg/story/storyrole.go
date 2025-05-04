@@ -146,7 +146,8 @@ func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowS
 
 // 获取用户创建的角色
 func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUserCreatedRolesRequest) (*api.GetUserCreatedRolesResponse, error) {
-	roles, total, err := models.GetUserCreatedRolesWithStoryId(ctx, int(req.GetUserId()), int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
+	roles, total, err := models.GetUserCreatedRolesWithStoryId(ctx, int(req.GetUserId()),
+		int(req.GetStoryId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Log().Error("get user created roles failed", zap.Error(err))
 		return nil, err
@@ -162,10 +163,12 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		apiRoles = append(apiRoles, convert.ConvertStoryRoleToApiStoryRoleInfo(role))
 	}
 	return &api.GetUserCreatedRolesResponse{
-		Code:    0,
-		Message: "OK",
-		Roles:   apiRoles,
-		Total:   total,
+		Code:     0,
+		Message:  "OK",
+		Roles:    apiRoles,
+		Total:    total,
+		Offset:   int64(req.GetOffset()),
+		PageSize: int64(req.GetPageSize()),
 	}, nil
 }
 

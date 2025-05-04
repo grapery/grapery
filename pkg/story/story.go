@@ -865,7 +865,9 @@ func (s *StoryService) TrendingStory(ctx context.Context, req *api.TrendingStory
 		Code:    0,
 		Message: "OK",
 		Data: &api.TrendingStoryResponse_Data{
-			List: apiStories,
+			List:       apiStories,
+			PageSize:   req.GetPageSize(),
+			PageNumber: req.GetPageNumber(),
 		},
 	}, nil
 }
@@ -894,7 +896,9 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 		Code:    0,
 		Message: "OK",
 		Data: &api.TrendingStoryRoleResponse_Data{
-			List: apiRoles,
+			List:       apiRoles,
+			PageSize:   req.GetPageSize(),
+			PageNumber: req.GetPageNumber(),
 		},
 	}, nil
 }

@@ -242,7 +242,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 }
 func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.UserFollowingGroupRequest) (
 	*api.UserFollowingGroupResponse, error) {
-	list, err := models.GetUserJoinedGroups(int(req.GetUserId()), 0, 10)
+	list, err := models.GetUserJoinedGroups(int(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}
@@ -558,7 +558,7 @@ func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequ
 
 func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
 	*api.UserWatchingResponse, error) {
-	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), 0, 10)
+	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Errorf("get user [%d] watching projects failed: %s", req.GetUserId(), err.Error())
 		return nil, err
@@ -590,7 +590,9 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		Code: 0,
 		Msg:  "success",
 		Data: &api.UserWatchingResponse_Data{
-			List: projects,
+			List:     projects,
+			Offset:   req.GetOffset(),
+			PageSize: req.GetPageSize(),
 		},
 	}, nil
 }

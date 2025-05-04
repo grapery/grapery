@@ -189,12 +189,14 @@ func (s *StoryService) UpdateStoryboard(ctx context.Context, req *api.UpdateStor
 }
 
 func (s *StoryService) GetStoryboards(ctx context.Context, req *api.GetStoryboardsRequest) (resp *api.GetStoryboardsResponse, err error) {
-	boardList, err := models.GetStoryboardsByStory(ctx, req.StoryId)
+	boardList, err := models.GetStoryboardsByStoryMultiPage(ctx, req.StoryId, int(req.Page), int(req.PageSize))
 	if err != nil {
+		log.Log().Error("get storyboards by story multi page failed", zap.Error(err))
 		return nil, err
 	}
 	story, err := models.GetStory(ctx, req.StoryId)
 	if err != nil {
+		log.Log().Error("get story failed", zap.Error(err))
 		return nil, err
 	}
 	srcBoardMap := make(map[int64]*models.StoryBoard)
@@ -1439,6 +1441,14 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 	if err != nil {
 		return nil, err
 	}
+	creatorIds := make([]int64, 0)
+	for _, role := range roles {
+		creatorIds = append(creatorIds, role.CreatorID)
+	}
+	creatorsMap, err := models.GetUsersByIdsMap(ctx, creatorIds)
+	if err != nil {
+		return nil, err
+	}
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		apiRole := new(api.StoryRole)
@@ -1457,12 +1467,20 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 		apiRole.CurrentUserStatus = cu
 		apiRoles = append(apiRoles, apiRole)
 	}
-
+	finnalCreators := make([]*api.UserInfo, 0)
+	for _, creator := range creatorsMap {
+		finnalCreators = append(finnalCreators, &api.UserInfo{
+			UserId: int64(creator.ID),
+			Name:   creator.Name,
+			Avatar: creator.Avatar,
+		})
+	}
 	return &api.GetStoryRolesResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.GetStoryRolesResponse_Data{
-			List: apiRoles,
+			List:    apiRoles,
+			Creator: finnalCreators,
 		},
 	}, nil
 }
@@ -1486,6 +1504,14 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 	if err != nil {
 		return nil, err
 	}
+	creatorIds := make([]int64, 0)
+	for _, role := range roles {
+		creatorIds = append(creatorIds, role.CreatorID)
+	}
+	creatorsMap, err := models.GetUsersByIdsMap(ctx, creatorIds)
+	if err != nil {
+		return nil, err
+	}
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		apiRole := new(api.StoryRole)
@@ -1504,12 +1530,20 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 		apiRole.CurrentUserStatus = cu
 		apiRoles = append(apiRoles, apiRole)
 	}
-
+	finnalCreators := make([]*api.UserInfo, 0)
+	for _, creator := range creatorsMap {
+		finnalCreators = append(finnalCreators, &api.UserInfo{
+			UserId: int64(creator.ID),
+			Name:   creator.Name,
+			Avatar: creator.Avatar,
+		})
+	}
 	return &api.GetStoryBoardRolesResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.GetStoryBoardRolesResponse_Data{
-			List: apiRoles,
+			List:    apiRoles,
+			Creator: finnalCreators,
 		},
 	}, nil
 }
@@ -2135,6 +2169,7 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 	}
 	stories, err := models.GetStoriesByIDs(ctx, storyIds)
 	if err != nil {
+		log.Log().Error("get stories by ids failed", zap.Error(err))
 		return nil, err
 	}
 	for _, story := range stories {
@@ -2172,6 +2207,7 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		newApiStoryboard.CurrentUserStatus = cu
 		roles, err := models.GetStoryBoardRolesByBoard(ctx, int64(storyboard.ID))
 		if err != nil {
+			log.Log().Error("get storyboard roles failed", zap.Error(err))
 			return nil, err
 		}
 		newApiStoryboard.Roles = make([]*api.StoryRole, 0)
@@ -2202,6 +2238,8 @@ func (s *StoryService) GetUserCreatedStoryboards(ctx context.Context, req *api.G
 		Message:     "OK",
 		Storyboards: apiStoryboards,
 		Total:       total,
+		Offset:      req.GetOffset(),
+		PageSize:    req.GetPageSize(),
 	}
 	log.Log().Info("get user created storyboards", zap.Any("apiStoryboards length", len(apiStoryboards)))
 	return result, nil
@@ -2445,6 +2483,8 @@ func (s *StoryService) GetUserWatchStoryActiveStoryBoards(ctx context.Context, r
 		Message:     "OK",
 		Storyboards: apiBoards,
 		Total:       int64(len(boards)),
+		Offset:      req.GetOffset(),
+		PageSize:    req.GetPageSize(),
 	}
 	return resp, nil
 }
@@ -2555,6 +2595,8 @@ func (s *StoryService) GetUserWatchRoleActiveStoryBoards(ctx context.Context, re
 		Message:     "OK",
 		Storyboards: apiBoards,
 		Total:       int64(len(boards)),
+		Offset:      req.GetOffset(),
+		PageSize:    req.GetPageSize(),
 	}, nil
 }
 
