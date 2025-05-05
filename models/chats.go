@@ -1,6 +1,11 @@
 package models
 
-import "context"
+import (
+	"context"
+
+	"github.com/grapery/grapery/utils/log"
+	"go.uber.org/zap"
+)
 
 type ChatContext struct {
 	IDBase
@@ -23,8 +28,9 @@ func CreateChatContext(ctx context.Context, chatContext *ChatContext) error {
 
 func GetChatContextByID(ctx context.Context, id int64) (*ChatContext, error) {
 	var chatContext ChatContext
-	err := DataBase().
+	err := DataBase().Model(&ChatContext{}).
 		Where("id = ?", id).
+		Where("status = ?", 1).
 		WithContext(ctx).
 		First(&chatContext).Error
 	return &chatContext, err
@@ -32,14 +38,15 @@ func GetChatContextByID(ctx context.Context, id int64) (*ChatContext, error) {
 
 func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) ([]*ChatContext, int, error) {
 	var chatContexts []*ChatContext
-	err := DataBase().WithContext(ctx).
+	err := DataBase().Model(&ChatContext{}).WithContext(ctx).
 		Where("user_id = ?", userID).
 		Where("status = ?", 1).
 		Order("update_at DESC").
-		Offset((page - 1) * size).
+		Offset((page) * size).
 		Limit(size).
 		Find(&chatContexts).Error
 	if err != nil {
+		log.Log().Error("get chat context by user id failed", zap.Error(err))
 		return nil, 0, err
 	}
 	var total int64

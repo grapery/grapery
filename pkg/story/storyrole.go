@@ -585,6 +585,7 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 
 // 获取角色聊天列表
 func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error) {
+	log.Log().Info("get user with role chat list", zap.Any("req", req.String()))
 	chatCtxs, total, err := models.GetChatContextByUserID(ctx, int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Log().Error("get user chat context failed", zap.Error(err))
