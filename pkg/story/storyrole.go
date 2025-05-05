@@ -590,10 +590,11 @@ func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.Get
 		log.Log().Error("get user chat context failed", zap.Error(err))
 		return nil, err
 	}
-	_ = total
+	log.Log().Info("get user chat context success", zap.Any("total", total), zap.Any("chatCtxs", len(chatCtxs)))
 	apiChatCtxs := make([]*api.ChatContext, 0)
 	for _, chatCtx := range chatCtxs {
 		if chatCtx.UserID == 0 || chatCtx.RoleID == 0 {
+			log.Log().Error("invalid chat context", zap.Any("chatCtx", chatCtx))
 			continue
 		}
 		user, err := models.GetUserById(ctx, int64(chatCtx.UserID))
@@ -629,6 +630,7 @@ func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.Get
 		}
 		apiChatCtxs = append(apiChatCtxs, chatCtx)
 	}
+	log.Log().Info("get user with role chat list success", zap.Any("total", total), zap.Any("apiChatCtxs", len(apiChatCtxs)))
 	return &api.GetUserWithRoleChatListResponse{
 		Code:     0,
 		Message:  "OK",
