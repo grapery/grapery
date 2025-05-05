@@ -585,7 +585,7 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 
 // 获取角色聊天列表
 func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.GetUserWithRoleChatListRequest) (*api.GetUserWithRoleChatListResponse, error) {
-	chatCtxs, total, err := models.GetChatContextByUserID(ctx, int64(req.GetUserId()), 0, 100)
+	chatCtxs, total, err := models.GetChatContextByUserID(ctx, int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		log.Log().Error("get user chat context failed", zap.Error(err))
 		return nil, err
@@ -630,9 +630,12 @@ func (s *StoryService) GetUserWithRoleChatList(ctx context.Context, req *api.Get
 		apiChatCtxs = append(apiChatCtxs, chatCtx)
 	}
 	return &api.GetUserWithRoleChatListResponse{
-		Code:    0,
-		Message: "OK",
-		Chats:   apiChatCtxs,
+		Code:     0,
+		Message:  "OK",
+		Chats:    apiChatCtxs,
+		Total:    int64(total),
+		Offset:   int64(req.GetOffset()),
+		PageSize: int64(req.GetPageSize()),
 	}, nil
 }
 

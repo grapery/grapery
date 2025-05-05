@@ -41,6 +41,11 @@ type UserServer interface {
 	GetUserProfile(ctx context.Context, req *api.GetUserProfileRequest) (*api.GetUserProfileResponse, error)
 	UpdateUserProfile(ctx context.Context, req *api.UpdateUserProfileRequest) (*api.UpdateUserProfileResponse, error)
 	UpdateUserBackgroundImage(ctx context.Context, req *api.UpdateUserBackgroundImageRequest) (*api.UpdateUserBackgroundImageResponse, error)
+
+	FollowUser(ctx context.Context, req *api.FollowUserRequest) (*api.FollowUserResponse, error)
+	UnfollowUser(ctx context.Context, req *api.UnfollowUserRequest) (*api.UnfollowUserResponse, error)
+	GetFollowList(ctx context.Context, req *api.GetFollowListRequest) (*api.GetFollowListResponse, error)
+	GetFollowerList(ctx context.Context, req *api.GetFollowerListRequest) (*api.GetFollowerListResponse, error)
 }
 
 type UserService struct {
@@ -838,4 +843,17 @@ func convertModelUserProfileToApi(profile *models.UserProfile) *api.UserProfileI
 		Ctime:             profile.CreateAt.Unix(),
 		Mtime:             profile.UpdateAt.Unix(),
 	}
+}
+
+func (user *UserService) FollowUser(ctx context.Context, req *api.FollowUserRequest) (*api.FollowUserResponse, error) {
+	return nil, nil
+}
+func (user *UserService) UnfollowUser(ctx context.Context, req *api.UnfollowUserRequest) (*api.UnfollowUserResponse, error) {
+	return nil, nil
+}
+func (user *UserService) GetFollowList(ctx context.Context, req *api.GetFollowListRequest) (*api.GetFollowListResponse, error) {
+	return nil, nil
+}
+func (user *UserService) GetFollowerList(ctx context.Context, req *api.GetFollowerListRequest) (*api.GetFollowerListResponse, error) {
+	return nil, nil
 }

@@ -150,3 +150,43 @@ func (ts *UserService) UpdateUserBackgroundImage(ctx context.Context, req *conne
 		Msg: info,
 	}, nil
 }
+
+func (ts *UserService) FollowUser(ctx context.Context, req *connect.Request[api.FollowUserRequest]) (*connect.Response[api.FollowUserResponse], error) {
+	info, err := userService.GetUserServer().FollowUser(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.FollowUserResponse]{
+		Msg: info,
+	}, nil
+}
+
+func (ts *UserService) UnfollowUser(ctx context.Context, req *connect.Request[api.UnfollowUserRequest]) (*connect.Response[api.UnfollowUserResponse], error) {
+	info, err := userService.GetUserServer().UnfollowUser(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.UnfollowUserResponse]{
+		Msg: info,
+	}, nil
+}
+
+func (ts *UserService) GetFollowList(ctx context.Context, req *connect.Request[api.GetFollowListRequest]) (*connect.Response[api.GetFollowListResponse], error) {
+	info, err := userService.GetUserServer().GetFollowList(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.GetFollowListResponse]{
+		Msg: info,
+	}, nil
+}
+
+func (ts *UserService) GetFollowerList(ctx context.Context, req *connect.Request[api.GetFollowerListRequest]) (*connect.Response[api.GetFollowerListResponse], error) {
+	info, err := userService.GetUserServer().GetFollowerList(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return &connect.Response[api.GetFollowerListResponse]{
+		Msg: info,
+	}, nil
+}

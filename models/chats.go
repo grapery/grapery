@@ -43,7 +43,10 @@ func GetChatContextByUserID(ctx context.Context, userID int64, page, size int) (
 		return nil, 0, err
 	}
 	var total int64
-	err = DataBase().Model(&ChatContext{}).Where("user_id = ?", userID).Count(&total).Error
+	err = DataBase().Model(&ChatContext{}).
+		Where("user_id = ?", userID).
+		Where("status = ?", 1).
+		Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}

@@ -580,7 +580,6 @@ func GetGroupProfiles(ctx context.Context, groupIds []int64) (profiles []*GroupP
 		return nil, err
 	}
 	if len(profiles) == 0 {
-		log.Errorf("get group profiles failed: %s", err.Error())
 		return nil, nil
 	}
 	log.Infof("get group profiles success: %v", profiles)
