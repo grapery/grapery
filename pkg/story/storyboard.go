@@ -1449,6 +1449,14 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 	if err != nil {
 		return nil, err
 	}
+	finnalCreators := make([]*api.UserInfo, 0)
+	for _, creator := range creatorsMap {
+		finnalCreators = append(finnalCreators, &api.UserInfo{
+			UserId: int64(creator.ID),
+			Name:   creator.Name,
+			Avatar: creator.Avatar,
+		})
+	}
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		apiRole := new(api.StoryRole)
@@ -1465,16 +1473,10 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 			log.Log().Error("get story role current user status failed", zap.Error(err))
 		}
 		apiRole.CurrentUserStatus = cu
+		apiRole.Creator = finnalCreators[role.CreatorID]
 		apiRoles = append(apiRoles, apiRole)
 	}
-	finnalCreators := make([]*api.UserInfo, 0)
-	for _, creator := range creatorsMap {
-		finnalCreators = append(finnalCreators, &api.UserInfo{
-			UserId: int64(creator.ID),
-			Name:   creator.Name,
-			Avatar: creator.Avatar,
-		})
-	}
+
 	return &api.GetStoryRolesResponse{
 		Code:    0,
 		Message: "OK",
