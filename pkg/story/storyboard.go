@@ -1479,6 +1479,7 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 			Name:   creatorsMap[int(role.CreatorID)].Name,
 			Avatar: creatorsMap[int(role.CreatorID)].Avatar,
 		}
+		apiRole.CreatorId = int64(role.CreateAt.Unix())
 		apiRoles = append(apiRoles, apiRole)
 	}
 	log.Log().Info("get story roles success", zap.Any("apiRoles", apiRoles))
