@@ -25,6 +25,7 @@ type StoryRole struct {
 	StoryboardNum        int64  `json:"storyboard_num"`
 	Version              int64  `json:"version"`
 	BranchId             int64  `json:"branch_id"`
+	PosterURL            string `json:"poster_url"`
 }
 
 func (s StoryRole) String() string {
@@ -201,4 +202,12 @@ func GetStoryRolesByIDs(ctx context.Context, roleIds []int64) ([]*StoryRole, err
 		return nil, err
 	}
 	return roles, nil
+}
+
+func UpdateStoryRolePosterURL(ctx context.Context, roleID int64, posterURL string) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		Where("status = ?", 1).
+		WithContext(ctx).
+		Update("poster_url", posterURL).Error
 }

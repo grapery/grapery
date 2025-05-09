@@ -104,6 +104,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		mux := http.NewServeMux()
 		path, handler := genconnect.NewTeamsAPIHandler(ts, opts...)
 		mux.Handle(path, handler)
+		logrus.Infof("Starting http server on %s", "0.0.0.0:12305")
 		http.ListenAndServe(
 			"0.0.0.0:12305",
 			h2c.NewHandler(mux, &http2.Server{}),

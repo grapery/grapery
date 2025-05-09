@@ -1120,3 +1120,45 @@ func (s *StoryService) UpdateRolePrompt(ctx context.Context, req *api.UpdateRole
 		Message: "OK",
 	}, nil
 }
+
+func (s *StoryService) UpdateStoryRolePoster(ctx context.Context, req *api.UpdateStoryRolePosterRequest) (*api.UpdateStoryRolePosterResponse, error) {
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get story role by id failed", zap.Error(err))
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		log.Log().Error("have no permission", zap.Any("roleinfo", roleinfo))
+		return nil, errors.New("have no permission")
+	}
+	roleinfo.PosterURL = req.GetImageUrl()
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"poster_url": req.GetImageUrl(),
+	})
+	if err != nil {
+		log.Log().Error("update story role poster failed", zap.Error(err))
+		return nil, err
+	}
+	log.Log().Info("update story role poster success", zap.Any("roleinfo", roleinfo))
+	return &api.UpdateStoryRolePosterResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) GenerateStoryRolePoster(ctx context.Context, req *api.GenerateStoryRolePosterRequest) (*api.GenerateStoryRolePosterResponse, error) {
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		log.Log().Error("get story role by id failed", zap.Error(err))
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		log.Log().Error("have no permission", zap.Any("roleinfo", roleinfo))
+		return nil, errors.New("have no permission")
+	}
+
+	return &api.GenerateStoryRolePosterResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}

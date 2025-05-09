@@ -297,3 +297,27 @@ func (s *StoryRoleService) GetStoryRoleList(ctx context.Context, req *connect.Re
 	}
 	return connect.NewResponse(ret), nil
 }
+
+func (s *StoryRoleService) UpdateStoryRolePoster(ctx context.Context, req *connect.Request[gen.UpdateStoryRolePosterRequest]) (*connect.Response[gen.UpdateStoryRolePosterResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRolePoster(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.UpdateStoryRolePosterResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *StoryRoleService) GenerateStoryRolePoster(ctx context.Context, req *connect.Request[gen.GenerateStoryRolePosterRequest]) (*connect.Response[gen.GenerateStoryRolePosterResponse], error) {
+	ret, err := storyServer.GetStoryServer().GenerateStoryRolePoster(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := &gen.GenerateStoryRolePosterResponse{
+		Code:    ret.Code,
+		Message: "OK",
+	}
+	return connect.NewResponse(resp), nil
+}

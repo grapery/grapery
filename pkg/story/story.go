@@ -112,6 +112,9 @@ type StoryServer interface {
 
 	TrendingStory(ctx context.Context, req *api.TrendingStoryRequest) (*api.TrendingStoryResponse, error)
 	TrendingStoryRole(ctx context.Context, req *api.TrendingStoryRoleRequest) (*api.TrendingStoryRoleResponse, error)
+
+	UpdateStoryRolePoster(ctx context.Context, req *api.UpdateStoryRolePosterRequest) (*api.UpdateStoryRolePosterResponse, error)
+	GenerateStoryRolePoster(ctx context.Context, req *api.GenerateStoryRolePosterRequest) (*api.GenerateStoryRolePosterResponse, error)
 }
 
 type StoryService struct {
