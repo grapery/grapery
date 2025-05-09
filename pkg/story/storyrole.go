@@ -160,7 +160,13 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		if role.Deleted == true {
 			continue
 		}
-		apiRoles = append(apiRoles, convert.ConvertStoryRoleToApiStoryRoleInfo(role))
+		apiRole := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		apiRole.LikeCount = role.LikeCount
+		apiRole.FollowCount = role.FollowCount
+		apiRole.StoryboardNum = role.StoryboardNum
+		apiRole.Ctime = int64(role.CreateAt.Unix())
+		apiRole.Mtime = int64(role.UpdateAt.Unix())
+		apiRoles = append(apiRoles, apiRole)
 	}
 	return &api.GetUserCreatedRolesResponse{
 		Code:     0,

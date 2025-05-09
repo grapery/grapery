@@ -1479,6 +1479,9 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 			Name:   creatorsMap[int(role.CreatorID)].Name,
 			Avatar: creatorsMap[int(role.CreatorID)].Avatar,
 		}
+		apiRole.LikeCount = role.LikeCount
+		apiRole.FollowCount = role.FollowCount
+		apiRole.StoryboardNum = role.StoryboardNum
 		apiRole.Ctime = int64(role.CreateAt.Unix())
 		apiRole.Mtime = int64(role.UpdateAt.Unix())
 		apiRole.PosterImageUrl = role.PosterURL
@@ -1538,6 +1541,17 @@ func (s *StoryService) GetStoryBoardRoles(ctx context.Context, req *api.GetStory
 			log.Log().Error("get story role current user status failed", zap.Error(err))
 		}
 		apiRole.CurrentUserStatus = cu
+		apiRole.LikeCount = role.LikeCount
+		apiRole.FollowCount = role.FollowCount
+		apiRole.StoryboardNum = role.StoryboardNum
+		apiRole.Creator = &api.UserInfo{
+			UserId: int64(role.CreatorID),
+			Name:   creatorsMap[int(role.CreatorID)].Name,
+			Avatar: creatorsMap[int(role.CreatorID)].Avatar,
+		}
+		apiRole.Ctime = int64(role.CreateAt.Unix())
+		apiRole.Mtime = int64(role.UpdateAt.Unix())
+		apiRole.PosterImageUrl = role.PosterURL
 		apiRoles = append(apiRoles, apiRole)
 	}
 	finnalCreators := make([]*api.UserInfo, 0)

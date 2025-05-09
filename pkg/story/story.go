@@ -792,6 +792,9 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 		if err != nil {
 			log.Log().Error("get story role current user status failed", zap.Error(err))
 		}
+		info.LikeCount = role.LikeCount
+		info.FollowCount = role.FollowCount
+		info.StoryboardNum = role.StoryboardNum
 		apiRoles = append(apiRoles, info)
 	}
 	return &api.SearchRolesResponse{
@@ -835,6 +838,9 @@ func (s *StoryService) GetStoryRoleList(ctx context.Context, req *api.GetStoryRo
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		info.LikeCount = role.LikeCount
+		info.FollowCount = role.FollowCount
+		info.StoryboardNum = role.StoryboardNum
 		apiRoles = append(apiRoles, info)
 	}
 	return &api.GetStoryRoleListResponse{
@@ -893,6 +899,9 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 		if err != nil {
 			log.Log().Error("get story role current user status failed", zap.Error(err))
 		}
+		info.LikeCount = role.LikeCount
+		info.FollowCount = role.FollowCount
+		info.StoryboardNum = role.StoryboardNum
 		apiRoles = append(apiRoles, info)
 	}
 	return &api.TrendingStoryRoleResponse{
