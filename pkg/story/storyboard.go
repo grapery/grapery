@@ -1024,6 +1024,7 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 }
 
 func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.ContinueRenderStoryRequest) (*api.ContinueRenderStoryResponse, error) {
+	log.Log().Sugar().Info("continue render story", zap.Any("req", req))
 	if req.PrevBoardId <= 0 {
 		log.Log().Sugar().Info("continue render story is init")
 		return s.InitRenderStory(ctx, req)
@@ -1142,7 +1143,8 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			]
 		}
 		--------
-		以上输出的json结果中，参与人物的 角色id 一定要在 '章节参与的角色信息' 中存在，如果不存在，这个角色就不应该生成。一定不要擅自引入新的故事人物和角色，新的故事人物和角色，只能通过‘章节参与的角色信息’参数中获取。
+		以上输出的json结果中，参与人物的 角色id 一定要在 '章节参与的角色信息' 中存在，如果不存在，这个角色就不应该生成。
+		** 一定不要擅自引入新的故事人物和角色，新的故事人物和角色，只能通过‘章节参与的角色信息’参数中获取。**
 		`
 	if len(req.GetDescription()) > 0 ||
 		len(req.GetBackground()) > 0 ||
@@ -1204,7 +1206,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	fmt.Printf("ret.Content: ", ret.Content)
+	fmt.Printf("ret.Content: %s\n", ret.Content)
 	// 保存生成的故事板
 	cleanResult := utils.CleanLLmJsonResult(ret.Content)
 	err = json.Unmarshal([]byte(cleanResult), &result)

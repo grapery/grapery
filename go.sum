@@ -252,6 +252,8 @@ github.com/grapery/common-protoc/gen v0.0.0-20250509001527-a8a618462c9f h1:/NLPM
 github.com/grapery/common-protoc/gen v0.0.0-20250509001527-a8a618462c9f/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grapery/common-protoc/gen v0.0.0-20250509003100-9b3ad8f26805 h1:MWz9nnk/m4v5tY5kNVIZJevv80TrxsvLN/7TZVTt+s8=
 github.com/grapery/common-protoc/gen v0.0.0-20250509003100-9b3ad8f26805/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
+github.com/grapery/common-protoc/gen v0.0.0-20250510144936-f50abab59798 h1:hnMFkoAhTzQ5MbLL/JHKF78EMLML+FflFg+NZmRf27o=
+github.com/grapery/common-protoc/gen v0.0.0-20250510144936-f50abab59798/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0 h1:FbSCl+KggFl+Ocym490i/EyXF4lPgLoUtcSWquBM0Rs=
