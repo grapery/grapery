@@ -161,23 +161,24 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 			continue
 		}
 		apiRole := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
-
-		roleDetail := &CharacterDetail{}
-		err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
-		if err != nil {
-			log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
-		}
-		apiRole.CharacterDetail = &api.CharacterDetail{
-			Description:     roleDetail.Description,
-			ShortTermGoal:   roleDetail.ShortTermGoal,
-			LongTermGoal:    roleDetail.LongTermGoal,
-			Personality:     roleDetail.Personality,
-			Background:      roleDetail.Background,
-			HandlingStyle:   roleDetail.HandlingStyle,
-			CognitionRange:  roleDetail.CognitionRange,
-			AbilityFeatures: roleDetail.AbilityFeatures,
-			Appearance:      roleDetail.Appearance,
-			DressPreference: roleDetail.DressPreference,
+		if role.CharacterDetail != "" {
+			roleDetail := &CharacterDetail{}
+			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
+			if err != nil {
+				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
+			}
+			apiRole.CharacterDetail = &api.CharacterDetail{
+				Description:     roleDetail.Description,
+				ShortTermGoal:   roleDetail.ShortTermGoal,
+				LongTermGoal:    roleDetail.LongTermGoal,
+				Personality:     roleDetail.Personality,
+				Background:      roleDetail.Background,
+				HandlingStyle:   roleDetail.HandlingStyle,
+				CognitionRange:  roleDetail.CognitionRange,
+				AbilityFeatures: roleDetail.AbilityFeatures,
+				Appearance:      roleDetail.Appearance,
+				DressPreference: roleDetail.DressPreference,
+			}
 		}
 		apiRole.LikeCount = role.LikeCount
 		apiRole.FollowCount = role.FollowCount
