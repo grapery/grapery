@@ -6,7 +6,7 @@ import (
 	"log"
 	"strconv"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 
 	api "github.com/grapery/common-protoc/gen"
 	userService "github.com/grapery/grapery/pkg/user"

@@ -3,7 +3,7 @@ package group
 import (
 	"context"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 
 	api "github.com/grapery/common-protoc/gen"
 	itemService "github.com/grapery/grapery/pkg/item"

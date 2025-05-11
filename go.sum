@@ -69,6 +69,8 @@ github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kd
 github.com/apache/rocketmq-clients/golang/v5 v5.1.1-rc1 h1:/gDpeIGx8bKTBFf6nS5hOwLcpog/utw874GZEMYv/2A=
 github.com/apache/rocketmq-clients/golang/v5 v5.1.1-rc1/go.mod h1:7/YwUJ8EDlOciZNLJlUMKSDjfP8rWiaLs7yYIBq7YQY=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
+github.com/bufbuild/connect-go v1.10.0 h1:QAJ3G9A1OYQW2Jbk3DeoJbkCxuKArrvZgDt47mjdTbg=
+github.com/bufbuild/connect-go v1.10.0/go.mod h1:CAIePUgkDR5pAFaylSMtNK45ANQjp9JvpluG20rhpV8=
 github.com/bytedance/sonic v1.12.10 h1:uVCQr6oS5669E9ZVW0HyksTLfNS7Q/9hV6IVS4nEMsI=
 github.com/bytedance/sonic v1.12.10/go.mod h1:uVvFidNmlt9+wa31S1urfwwthTWteBgG0hWuoKAXTx8=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
@@ -254,6 +256,8 @@ github.com/grapery/common-protoc/gen v0.0.0-20250509003100-9b3ad8f26805 h1:MWz9n
 github.com/grapery/common-protoc/gen v0.0.0-20250509003100-9b3ad8f26805/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grapery/common-protoc/gen v0.0.0-20250510144936-f50abab59798 h1:hnMFkoAhTzQ5MbLL/JHKF78EMLML+FflFg+NZmRf27o=
 github.com/grapery/common-protoc/gen v0.0.0-20250510144936-f50abab59798/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
+github.com/grapery/common-protoc/gen v0.0.0-20250511003042-a28b04060d52 h1:3orqXC8hCF05Cd9KH0Jx9uhnkYupcSZy8j/tfKAiKW0=
+github.com/grapery/common-protoc/gen v0.0.0-20250511003042-a28b04060d52/go.mod h1:nX4t1BN6zqQSN32FigMnIfsSelTPAS5wHCe6tLGCtFw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0 h1:FbSCl+KggFl+Ocym490i/EyXF4lPgLoUtcSWquBM0Rs=

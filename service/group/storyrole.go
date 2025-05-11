@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 
 	"github.com/grapery/common-protoc/gen"
 	api "github.com/grapery/common-protoc/gen"
@@ -320,4 +320,20 @@ func (s *StoryRoleService) GenerateStoryRolePoster(ctx context.Context, req *con
 		Message: "OK",
 	}
 	return connect.NewResponse(resp), nil
+}
+
+func (s *StoryRoleService) UpdateStoryRoleDescription(ctx context.Context, req *connect.Request[gen.UpdateStoryRoleDescriptionRequest]) (*connect.Response[gen.UpdateStoryRoleDescriptionResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRoleDescription(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryRoleService) UpdateStoryRolePrompt(ctx context.Context, req *connect.Request[gen.UpdateStoryRolePromptRequest]) (*connect.Response[gen.UpdateStoryRolePromptResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRolePrompt(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
 }

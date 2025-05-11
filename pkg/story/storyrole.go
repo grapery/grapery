@@ -1061,11 +1061,47 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 			Message: err.Error(),
 		}, nil
 	}
-
+	apiCharacterDetail := &api.CharacterDetail{
+		Description:     genRoleDetail.Description,
+		ShortTermGoal:   genRoleDetail.ShortTermGoal,
+		LongTermGoal:    genRoleDetail.LongTermGoal,
+		Personality:     genRoleDetail.Personality,
+		Background:      genRoleDetail.Background,
+		HandlingStyle:   genRoleDetail.HandlingStyle,
+		CognitionRange:  genRoleDetail.CognitionRange,
+		AbilityFeatures: genRoleDetail.AbilityFeatures,
+		Appearance:      genRoleDetail.Appearance,
+		DressPreference: genRoleDetail.DressPreference,
+	}
 	return &api.GenerateRoleDescriptionResponse{
-		Code:        1,
-		Message:     "OK",
-		Description: genRoleDetail.String(),
+		Code:            1,
+		Message:         "OK",
+		CharacterDetail: apiCharacterDetail,
+	}, nil
+}
+
+func (s *StoryService) UpdateStoryRoleDescription(ctx context.Context, req *api.UpdateStoryRoleDescriptionRequest) (*api.UpdateStoryRoleDescriptionResponse, error) {
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo == nil {
+		return &api.UpdateStoryRoleDescriptionResponse{
+			Code:    -1,
+			Message: "role not exist",
+		}, nil
+	}
+	descStr, _ := json.Marshal(req.GetCharacterDetail())
+	roleinfo.CharacterDescription = string(descStr)
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"character_description": roleinfo.CharacterDescription,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateStoryRoleDescriptionResponse{
+		Code:    0,
+		Message: "OK",
 	}, nil
 }
 
@@ -1085,6 +1121,27 @@ func (s *StoryService) UpdateRoleDescription(ctx context.Context, req *api.Updat
 		return nil, err
 	}
 	return &api.UpdateRoleDescriptionResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) UpdateStoryRolePrompt(ctx context.Context, req *api.UpdateStoryRolePromptRequest) (*api.UpdateStoryRolePromptResponse, error) {
+	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
+	if err != nil {
+		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetRoleId() {
+		return nil, errors.New("have no permission")
+	}
+	roleinfo.CharacterPrompt = req.GetPrompt()
+	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
+		"character_prompt": req.GetPrompt(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateStoryRolePromptResponse{
 		Code:    0,
 		Message: "OK",
 	}, nil

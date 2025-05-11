@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/http"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"

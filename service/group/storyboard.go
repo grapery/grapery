@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 
 	"github.com/grapery/common-protoc/gen"
 	storyServer "github.com/grapery/grapery/pkg/story"

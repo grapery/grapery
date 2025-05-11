@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 
 	api "github.com/grapery/common-protoc/gen"
 	tencentcloud "github.com/grapery/grapery/pkg/cloud/tencentcloud"

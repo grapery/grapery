@@ -115,6 +115,9 @@ type StoryServer interface {
 
 	UpdateStoryRolePoster(ctx context.Context, req *api.UpdateStoryRolePosterRequest) (*api.UpdateStoryRolePosterResponse, error)
 	GenerateStoryRolePoster(ctx context.Context, req *api.GenerateStoryRolePosterRequest) (*api.GenerateStoryRolePosterResponse, error)
+
+	UpdateStoryRoleDescription(ctx context.Context, req *api.UpdateStoryRoleDescriptionRequest) (*api.UpdateStoryRoleDescriptionResponse, error)
+	UpdateStoryRolePrompt(ctx context.Context, req *api.UpdateStoryRolePromptRequest) (*api.UpdateStoryRolePromptResponse, error)
 }
 
 type StoryService struct {

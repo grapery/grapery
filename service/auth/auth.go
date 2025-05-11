@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	"google.golang.org/grpc"

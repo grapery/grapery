@@ -4,7 +4,7 @@ import (
 	// "net/http"
 	"context"
 
-	"connectrpc.com/connect"
+	connect "github.com/bufbuild/connect-go"
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
