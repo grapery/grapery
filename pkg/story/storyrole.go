@@ -161,6 +161,24 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 			continue
 		}
 		apiRole := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+
+		roleDetail := &CharacterDetail{}
+		err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
+		if err != nil {
+			log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
+		}
+		apiRole.CharacterDetail = &api.CharacterDetail{
+			Description:     roleDetail.Description,
+			ShortTermGoal:   roleDetail.ShortTermGoal,
+			LongTermGoal:    roleDetail.LongTermGoal,
+			Personality:     roleDetail.Personality,
+			Background:      roleDetail.Background,
+			HandlingStyle:   roleDetail.HandlingStyle,
+			CognitionRange:  roleDetail.CognitionRange,
+			AbilityFeatures: roleDetail.AbilityFeatures,
+			Appearance:      roleDetail.Appearance,
+			DressPreference: roleDetail.DressPreference,
+		}
 		apiRole.LikeCount = role.LikeCount
 		apiRole.FollowCount = role.FollowCount
 		apiRole.StoryboardNum = role.StoryboardNum
@@ -1098,11 +1116,12 @@ func (s *StoryService) UpdateStoryRoleDescription(ctx context.Context, req *api.
 		return nil, errors.New("have no permission")
 	}
 	descStr, _ := json.Marshal(req.GetCharacterDetail())
-	roleinfo.CharacterDescription = string(descStr)
+	roleinfo.CharacterDetail = string(descStr)
 	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
-		"character_description": roleinfo.CharacterDescription,
+		"character_detail": roleinfo.CharacterDetail,
 	})
 	if err != nil {
+		log.Log().Error("update story role description failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.UpdateStoryRoleDescriptionResponse{

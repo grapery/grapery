@@ -26,6 +26,7 @@ type StoryRole struct {
 	Version              int64  `json:"version"`
 	BranchId             int64  `json:"branch_id"`
 	PosterURL            string `json:"poster_url"`
+	CharacterDetail      string `json:"character_detail"`
 }
 
 func (s StoryRole) String() string {
@@ -210,4 +211,24 @@ func UpdateStoryRolePosterURL(ctx context.Context, roleID int64, posterURL strin
 		Where("status = ?", 1).
 		WithContext(ctx).
 		Update("poster_url", posterURL).Error
+}
+
+func UpdateStoryRoleCharacterDetail(ctx context.Context, roleID int64, characterDetail string) error {
+	return DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		WithContext(ctx).
+		Update("character_detail", characterDetail).Error
+}
+
+func GetStoryRoleCharacterDetail(ctx context.Context, roleID int64) (string, error) {
+	var characterDetail string
+	if err := DataBase().Model(&StoryRole{}).
+		Where("id = ?", roleID).
+		Pluck("character_detail", &characterDetail).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+	return characterDetail, nil
 }

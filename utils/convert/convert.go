@@ -185,7 +185,7 @@ func ConvertApiStoryBoardSceneToStoryBoardScene(scene *api.StoryBoardSence) *mod
 }
 
 func ConvertStoryRoleToApiStoryRoleInfo(role *models.StoryRole) *api.StoryRole {
-	return &api.StoryRole{
+	roleDetail := &api.StoryRole{
 		RoleId:               int64(role.ID),
 		CharacterName:        role.CharacterName,
 		CharacterDescription: role.CharacterDescription,
@@ -199,6 +199,7 @@ func ConvertStoryRoleToApiStoryRoleInfo(role *models.StoryRole) *api.StoryRole {
 		Ctime:                role.CreateAt.Unix(),
 		Mtime:                role.UpdateAt.Unix(),
 	}
+	return roleDetail
 }
 
 func ConvertSummaryStoryRoleToApiStoryRoleInfo(role *models.StoryBoardRole) *api.StoryRole {

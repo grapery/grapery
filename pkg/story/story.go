@@ -791,6 +791,23 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		roleDetail := &CharacterDetail{}
+		err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
+		if err != nil {
+			log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
+		}
+		info.CharacterDetail = &api.CharacterDetail{
+			Description:     roleDetail.Description,
+			ShortTermGoal:   roleDetail.ShortTermGoal,
+			LongTermGoal:    roleDetail.LongTermGoal,
+			Personality:     roleDetail.Personality,
+			Background:      roleDetail.Background,
+			HandlingStyle:   roleDetail.HandlingStyle,
+			CognitionRange:  roleDetail.CognitionRange,
+			AbilityFeatures: roleDetail.AbilityFeatures,
+			Appearance:      roleDetail.Appearance,
+			DressPreference: roleDetail.DressPreference,
+		}
 		info.CurrentUserStatus, err = s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
 		if err != nil {
 			log.Log().Error("get story role current user status failed", zap.Error(err))
@@ -841,6 +858,23 @@ func (s *StoryService) GetStoryRoleList(ctx context.Context, req *api.GetStoryRo
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
+		roleDetail := &CharacterDetail{}
+		err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
+		if err != nil {
+			log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
+		}
+		info.CharacterDetail = &api.CharacterDetail{
+			Description:     roleDetail.Description,
+			ShortTermGoal:   roleDetail.ShortTermGoal,
+			LongTermGoal:    roleDetail.LongTermGoal,
+			Personality:     roleDetail.Personality,
+			Background:      roleDetail.Background,
+			HandlingStyle:   roleDetail.HandlingStyle,
+			CognitionRange:  roleDetail.CognitionRange,
+			AbilityFeatures: roleDetail.AbilityFeatures,
+			Appearance:      roleDetail.Appearance,
+			DressPreference: roleDetail.DressPreference,
+		}
 		info.LikeCount = role.LikeCount
 		info.FollowCount = role.FollowCount
 		info.StoryboardNum = role.StoryboardNum
@@ -901,6 +935,23 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 		info.CurrentUserStatus, err = s.GetStoryRoleCurrentUserStatus(ctx, int64(role.ID))
 		if err != nil {
 			log.Log().Error("get story role current user status failed", zap.Error(err))
+		}
+		roleDetail := &CharacterDetail{}
+		err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
+		if err != nil {
+			log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
+		}
+		info.CharacterDetail = &api.CharacterDetail{
+			Description:     roleDetail.Description,
+			ShortTermGoal:   roleDetail.ShortTermGoal,
+			LongTermGoal:    roleDetail.LongTermGoal,
+			Personality:     roleDetail.Personality,
+			Background:      roleDetail.Background,
+			HandlingStyle:   roleDetail.HandlingStyle,
+			CognitionRange:  roleDetail.CognitionRange,
+			AbilityFeatures: roleDetail.AbilityFeatures,
+			Appearance:      roleDetail.Appearance,
+			DressPreference: roleDetail.DressPreference,
 		}
 		info.LikeCount = role.LikeCount
 		info.FollowCount = role.FollowCount
