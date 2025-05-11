@@ -322,8 +322,8 @@ func (s *StoryRoleService) GenerateStoryRolePoster(ctx context.Context, req *con
 	return connect.NewResponse(resp), nil
 }
 
-func (s *StoryRoleService) UpdateStoryRoleDescription(ctx context.Context, req *connect.Request[gen.UpdateStoryRoleDescriptionRequest]) (*connect.Response[gen.UpdateStoryRoleDescriptionResponse], error) {
-	ret, err := storyServer.GetStoryServer().UpdateStoryRoleDescription(ctx, req.Msg)
+func (s *StoryRoleService) UpdateStoryRoleDescriptionDetail(ctx context.Context, req *connect.Request[gen.UpdateStoryRoleDescriptionDetailRequest]) (*connect.Response[gen.UpdateStoryRoleDescriptionDetailResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryRoleDescriptionDetail(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}

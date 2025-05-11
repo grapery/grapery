@@ -230,6 +230,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 	newRole.FollowCount = 1
 	newRole.LikeCount = 1
 	newRole.Status = 1
+	newRole.CharacterDetail = "{}"
 	roleId, err := models.CreateStoryRole(ctx, newRole)
 	if err != nil {
 		return nil, err
@@ -1101,19 +1102,22 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 	}, nil
 }
 
-func (s *StoryService) UpdateStoryRoleDescription(ctx context.Context, req *api.UpdateStoryRoleDescriptionRequest) (*api.UpdateStoryRoleDescriptionResponse, error) {
+func (s *StoryService) UpdateStoryRoleDescriptionDetail(ctx context.Context, req *api.UpdateStoryRoleDescriptionDetailRequest) (*api.UpdateStoryRoleDescriptionDetailResponse, error) {
 	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
 		return nil, err
 	}
 	if roleinfo == nil {
-		return &api.UpdateStoryRoleDescriptionResponse{
+		return &api.UpdateStoryRoleDescriptionDetailResponse{
 			Code:    -1,
 			Message: "role not exist",
 		}, nil
 	}
 	if roleinfo.CreatorID != req.GetUserId() {
-		return nil, errors.New("have no permission")
+		return &api.UpdateStoryRoleDescriptionDetailResponse{
+			Code:    -1,
+			Message: "have no permission",
+		}, nil
 	}
 	descStr, _ := json.Marshal(req.GetCharacterDetail())
 	roleinfo.CharacterDetail = string(descStr)
@@ -1124,7 +1128,7 @@ func (s *StoryService) UpdateStoryRoleDescription(ctx context.Context, req *api.
 		log.Log().Error("update story role description failed", zap.Error(err))
 		return nil, err
 	}
-	return &api.UpdateStoryRoleDescriptionResponse{
+	return &api.UpdateStoryRoleDescriptionDetailResponse{
 		Code:    0,
 		Message: "OK",
 	}, nil
