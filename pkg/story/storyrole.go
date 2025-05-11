@@ -954,16 +954,18 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 }
 
 func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.GenerateRoleDescriptionRequest) (*api.GenerateRoleDescriptionResponse, error) {
-	storyinfo, err := models.GetStory(ctx, req.GetStoryId())
-	if err != nil {
-		return nil, err
-	}
+
 	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
 		return nil, err
 	}
 	if roleinfo.CreatorID != req.GetUserId() {
 		return nil, errors.New("have no permission")
+	}
+
+	storyinfo, err := models.GetStory(ctx, roleinfo.StoryID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get all roles in the story to provide context
@@ -1073,8 +1075,9 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 		Appearance:      genRoleDetail.Appearance,
 		DressPreference: genRoleDetail.DressPreference,
 	}
+	log.Log().Info("generate role description success", zap.Any("apiCharacterDetail", apiCharacterDetail.String()))
 	return &api.GenerateRoleDescriptionResponse{
-		Code:            1,
+		Code:            0,
 		Message:         "OK",
 		CharacterDetail: apiCharacterDetail,
 	}, nil

@@ -241,7 +241,7 @@ func (ts *AuthService) Register(ctx context.Context, req *connect.Request[api.Re
 	}
 	return &connect.Response[api.RegisterResponse]{
 		Msg: &api.RegisterResponse{
-			Code: 1,
+			Code: 0,
 			Msg:  "register success",
 		},
 	}, nil
