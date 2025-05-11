@@ -16,7 +16,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/generative-ai-go v0.20.1
 	github.com/google/uuid v1.6.0
-	github.com/grapery/common-protoc/gen v0.0.0-20250511003042-a28b04060d52
+	github.com/grapery/common-protoc/gen v0.0.0-20250511015836-f9738c33d3b7
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0
 	github.com/olivere/elastic v6.2.37+incompatible

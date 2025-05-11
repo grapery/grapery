@@ -1091,6 +1091,9 @@ func (s *StoryService) UpdateStoryRoleDescription(ctx context.Context, req *api.
 			Message: "role not exist",
 		}, nil
 	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
 	descStr, _ := json.Marshal(req.GetCharacterDetail())
 	roleinfo.CharacterDescription = string(descStr)
 	err = models.UpdateStoryRole(ctx, int64(roleinfo.ID), map[string]interface{}{
@@ -1109,6 +1112,12 @@ func (s *StoryService) UpdateRoleDescription(ctx context.Context, req *api.Updat
 	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
 		return nil, err
+	}
+	if roleinfo.CreatorID != req.GetUserId() {
+		return nil, errors.New("have no permission")
+	}
+	if roleinfo.Status != 1 {
+		return nil, errors.New("role is not ready")
 	}
 	if roleinfo.CreatorID != req.GetUserId() {
 		return nil, errors.New("have no permission")
