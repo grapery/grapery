@@ -792,7 +792,7 @@ func (s *StoryService) SearchRoles(ctx context.Context, req *api.SearchRolesRequ
 	for _, role := range roles {
 		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
 		if role.CharacterDetail != "" {
-			roleDetail := &CharacterDetail{}
+			roleDetail := &CharacterDetailConverter{}
 			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
 			if err != nil {
 				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
@@ -861,7 +861,7 @@ func (s *StoryService) GetStoryRoleList(ctx context.Context, req *api.GetStoryRo
 	for _, role := range roles {
 		info := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
 		if role.CharacterDetail != "" {
-			roleDetail := &CharacterDetail{}
+			roleDetail := &CharacterDetailConverter{}
 			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
 			if err != nil {
 				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
@@ -940,8 +940,9 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 		if err != nil {
 			log.Log().Error("get story role current user status failed", zap.Error(err))
 		}
+		log.Log().Info("trending story role", zap.Any("role", role.CharacterDetail))
 		if role.CharacterDetail != "" {
-			roleDetail := &CharacterDetail{}
+			roleDetail := &CharacterDetailConverter{}
 			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
 			if err != nil {
 				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
@@ -964,7 +965,8 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 		info.StoryboardNum = role.StoryboardNum
 		apiRoles = append(apiRoles, info)
 	}
-	return &api.TrendingStoryRoleResponse{
+
+	resp := &api.TrendingStoryRoleResponse{
 		Code:    0,
 		Message: "OK",
 		Data: &api.TrendingStoryRoleResponse_Data{
@@ -972,5 +974,7 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 			PageSize:   req.GetPageSize(),
 			PageNumber: req.GetPageNumber(),
 		},
-	}, nil
+	}
+	log.Log().Info("trending story role", zap.Any("resp", resp))
+	return resp, nil
 }

@@ -162,7 +162,7 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		}
 		apiRole := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
 		if role.CharacterDetail != "" {
-			roleDetail := &CharacterDetail{}
+			roleDetail := &CharacterDetailConverter{}
 			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
 			if err != nil {
 				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))

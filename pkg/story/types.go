@@ -38,12 +38,25 @@ type Character struct {
 	Description string `json:"角色描述,omitempty"`
 }
 
+type CharacterDetailConverter struct {
+	Description     string `json:"description,omitempty"`
+	ShortTermGoal   string `json:"short_term_goal,omitempty"`
+	LongTermGoal    string `json:"long_term_goal,omitempty"`
+	Personality     string `json:"personality,omitempty"`
+	Background      string `json:"background,omitempty"`
+	HandlingStyle   string `json:"handling_style,omitempty"`
+	CognitionRange  string `json:"cognition_range,omitempty"`
+	AbilityFeatures string `json:"ability_features,omitempty"`
+	Appearance      string `json:"appearance,omitempty"`
+	DressPreference string `json:"dress_preference,omitempty"`
+}
+
 // CharacterDetail 表示角色的详细信息
 type CharacterDetail struct {
 	Description   string `json:"角色描述,omitempty"`
 	ShortTermGoal string `json:"角色短期目标,omitempty"`
 	LongTermGoal  string `json:"角色长期目标,omitempty"`
-	Personality   string `json:"角色性格,omitempty"`
+	Personality   string `json:"性格特征,omitempty"`
 	Background    string `json:"角色背景,omitempty"`
 	// 处事风格
 	HandlingStyle string `json:"处事风格,omitempty"`
