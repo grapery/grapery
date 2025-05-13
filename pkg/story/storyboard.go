@@ -65,6 +65,8 @@ func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStor
 			roleInfo.StoryId = req.GetBoard().GetStoryId()
 			roleInfo.CreatorId = req.GetBoard().GetCreator()
 			roleInfo.Status = 1
+			roleInfo.IsMain = 0
+			roleInfo.IsPublished = 0
 			_, err = models.CreateStoryBoardRole(ctx, roleInfo)
 			if err != nil {
 				return nil, err

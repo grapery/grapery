@@ -474,17 +474,18 @@ func UpdateStoryBoardSceneGenResult(ctx context.Context, id int64, genResult str
 
 type StoryBoardRole struct {
 	IDBase
-	CreatorId   int64
-	StoryId     int64
-	BoardId     int64
-	RoleId      int64
-	Name        string
-	Avatar      string
-	Desc        string
-	Status      int
-	IsMain      int
+	CreatorId int64
+	StoryId   int64
+	BoardId   int64
+	RoleId    int64
+	Name      string
+	Avatar    string
+	Desc      string
+	Status    int
+	// 0:主线人物，1~* 其他分支人物
+	IsMain int
+	// 1，发布，其他，未发布
 	IsPublished int
-	PublishAt   time.Time
 }
 
 func (board StoryBoardRole) TableName() string {
