@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -473,14 +474,17 @@ func UpdateStoryBoardSceneGenResult(ctx context.Context, id int64, genResult str
 
 type StoryBoardRole struct {
 	IDBase
-	CreatorId int64
-	StoryId   int64
-	BoardId   int64
-	RoleId    int64
-	Name      string
-	Avatar    string
-	Desc      string
-	Status    int
+	CreatorId   int64
+	StoryId     int64
+	BoardId     int64
+	RoleId      int64
+	Name        string
+	Avatar      string
+	Desc        string
+	Status      int
+	IsMain      int
+	IsPublished int
+	PublishAt   time.Time
 }
 
 func (board StoryBoardRole) TableName() string {
@@ -497,6 +501,21 @@ func CreateStoryBoardRole(ctx context.Context, role *StoryBoardRole) (int64, err
 	return int64(role.IDBase.ID), nil
 }
 
+func UpdateStoryBoardRoleDescAndAvatar(ctx context.Context, id int64, desc string, avatar string) error {
+	needUpdate := make(map[string]interface{})
+	if desc != "" {
+		needUpdate["desc"] = desc
+	}
+	if avatar != "" {
+		needUpdate["avatar"] = avatar
+	}
+	return DataBase().Model(&StoryBoardRole{}).
+		WithContext(ctx).
+		Where("id = ?", id).
+		Where("status >= 0").
+		Updates(needUpdate).Error
+}
+
 func GetStoryBoardRoles(ctx context.Context, boardId int64) ([]*StoryBoardRole, error) {
 	role := make([]*StoryBoardRole, 0)
 	err := DataBase().Model(role).
@@ -508,6 +527,20 @@ func GetStoryBoardRoles(ctx context.Context, boardId int64) ([]*StoryBoardRole, 
 		return nil, err
 	}
 	return role, nil
+}
+
+func UpdateStoryBoardRolePublished(ctx context.Context, id int64, published int) error {
+	now := time.Now()
+	needUpdate := make(map[string]interface{})
+	if published == 1 {
+		needUpdate["published"] = published
+		needUpdate["publish_at"] = now
+	}
+	return DataBase().Model(&StoryBoardRole{}).
+		WithContext(ctx).
+		Where("id = ?", id).
+		Where("status >= 0").
+		Updates(needUpdate).Error
 }
 
 func GetStoryBoardRolesByBoard(ctx context.Context, boardId int64) ([]*StoryBoardRole, error) {

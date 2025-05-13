@@ -552,7 +552,8 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 		}
 	--------
 	请保证故事的连贯，以及故事中的各个人物的角色前后一致，同时和故事背景契合，人物的描述清晰，情节人物的性格明显，场景描述详细，图片提示词准确。
-	请注意，如果没有要求 ‘参与人物’ 的输出要求，可以不用输出 ‘参与的人物’ 的 json 数据结构。有些章节是没有故事角色的，这个很正常。所以要遵守这一条，只有当输入有 ‘参与人物’ 的列表时
+	请注意，如果没有要求 ‘参与人物’ 的输出要求，可以不用输出 ‘参与的人物’ 的 json 数据结构。
+	有些章节是没有故事角色的，可以不用为这个章节关联人物。所以要遵守这一条，只有当输入有 ‘参与人物’ 的列表时
 	再输出这些 ’参与人物‘ 信息，这一点很重要，不要自作主张的引入角色或者故事人物。
 	`
 	templatePrompt = strings.Replace(templatePrompt, "story_chapter", board.Title, -1)
@@ -912,12 +913,12 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	boardRequire["章节内容要求"] = req.GetDescription()
 	boardRequire["章节背景简介"] = req.GetBackground()
 	if len(finalRols) != 0 {
-		boardRequire["章节参与的角色信息"] = rolesPrompt
+		boardRequire["章节的角色信息"] = rolesPrompt
 	}
 	templatePrompt := `生成故事 story_name 的第一个章节,故事内容用中文描述,以json格式返回		
-		选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的角色id和角色名称范围。
-		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'不要超出'章节参与的角色信息'里的范围。
-		如果没有 '章节参与的角色信息'，或者 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
+		选择的人员角色，不要超过 章节的角色信息' 规定的角色id和角色名称范围。
+		一定要遵守 章节的角色信息' 的要求，其中'角色id'不要超出'章节的角色信息'里的范围。
+		如果没有 '章节的角色信息'，或者 '章节的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
 		参考如下格式生成内容：
 		--------
 		{
@@ -1109,7 +1110,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	boardRequire["章节内容要求"] = req.GetDescription()
 	boardRequire["章节背景简介"] = req.GetBackground()
 	if len(finalRols) != 0 {
-		boardRequire["章节参与的角色信息"] = rolesPrompt
+		boardRequire["章节的角色信息"] = rolesPrompt
 	}
 
 	boardRequireJson, _ := json.Marshal(boardRequire)
@@ -1119,9 +1120,13 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		--------
 		story_prev_content
 		--------
-		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 ‘章节参与的角色信息' 规定的范围。
-		一定要遵守 ‘章节参与的角色信息' 的要求，其中'角色id'要符合'章节参与的角色信息'里的限制。
-		如果没有 '章节参与的角色信息'，或者 '章节参与的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
+		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 '章节的角色信息' 规定的范围。
+		章节要求：
+		--------
+		story_chapter_require
+		--------
+		一定要遵守 '章节的角色信息' 的要求，其中'角色id'要符合'章节的角色信息'里的限制。
+		如果没有 '章节的角色信息'，或者 '章节的角色信息' 里没有角色id和角色名称的信息，就不要生成角色信息，只需要返回故事内容.
 		参考如下格式生成内容：
 		--------
 		{
@@ -1143,17 +1148,11 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			]
 		}
 		--------
-		以上输出的json结果中，参与人物的 角色id 一定要在 '章节参与的角色信息' 中存在，如果不存在，这个角色就不应该生成。
-		** 一定不要擅自引入新的故事人物和角色，新的故事人物和角色，只能通过‘章节参与的角色信息’参数中获取。**
-		`
-	if len(req.GetDescription()) > 0 ||
-		len(req.GetBackground()) > 0 ||
-		len(rolesPrompt) > 0 {
-		templatePrompt = templatePrompt + `章节要求：
-		-------- \n"` +
-			string(boardRequireJson) +
-			`\n --------\n`
-	}
+		以上输出的json结果中，参与人物的 ""角色id"" 一定要在 '章节的角色信息' 中存在，如果不存在，在这个故事章节中，这个角色不应该参与生成。
+		不要擅自引入新的故事人物和角色，故事的人物和角色，只能通过 '章节的角色信息' 参数中获取。
+	`
+	templatePrompt = strings.Replace(templatePrompt, "story_chapter_require", string(boardRequireJson), -1)
+
 	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
 	story_prev_content := make([]*StoryChapterV2, 0)
 	for idx := len(prevBoards) - 1; idx >= 0; idx-- {
@@ -1219,7 +1218,8 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	renderDetail.RenderType = req.RenderType
 	renderDetail.Timecost = int32(time.Since(start).Seconds())
 	renderDetail.Result = new(api.StoryChapter)
-
+	resultData, err := json.Marshal(result)
+	log.Log().Sugar().Info("result: ", string(resultData))
 	// Convert from StoryChapter to api.StoryChapter
 	storyChapter := &api.StoryChapter{
 		ChapterSummary: &api.ChapterSummary{
@@ -1240,6 +1240,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	renderDetail.Result = storyChapter
 
 	renderDetailData, _ := json.Marshal(renderDetail)
+	log.Log().Sugar().Info("renderDetailData: ", string(renderDetailData))
 	storyGen.Content = string(renderDetailData)
 	storyGen.FinishTime = time.Now().Unix()
 	err = models.UpdateStoryGen(ctx, storyGen)
