@@ -476,7 +476,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	storyParam := new(api.StoryParams)
 	json.Unmarshal([]byte(story.Params), &storyParam)
 	// 故事全局风格
-	imageStyle := storyParam.ComicStyle
+	imageStyle := storyParam.Style
 	if imageStyle == "" {
 		imageStyle = "Ghibli style"
 	}
