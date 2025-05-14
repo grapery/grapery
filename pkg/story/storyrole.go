@@ -152,6 +152,11 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		log.Log().Error("get user created roles failed", zap.Error(err))
 		return nil, err
 	}
+	user, err := models.GetUserById(ctx, int64(req.GetUserId()))
+	if err != nil {
+		log.Log().Error("get user failed", zap.Error(err))
+		return nil, err
+	}
 	apiRoles := make([]*api.StoryRole, 0)
 	for _, role := range roles {
 		if role.Status != 1 {
@@ -162,29 +167,18 @@ func (s *StoryService) GetUserCreatedRoles(ctx context.Context, req *api.GetUser
 		}
 		apiRole := convert.ConvertStoryRoleToApiStoryRoleInfo(role)
 		if role.CharacterDetail != "" {
-			roleDetail := &CharacterDetailConverter{}
-			err = json.Unmarshal([]byte(role.CharacterDetail), &roleDetail)
-			if err != nil {
-				log.Log().Error("unmarshal story role character detail failed", zap.Error(err))
-			}
-			apiRole.CharacterDetail = &api.CharacterDetail{
-				Description:     roleDetail.Description,
-				ShortTermGoal:   roleDetail.ShortTermGoal,
-				LongTermGoal:    roleDetail.LongTermGoal,
-				Personality:     roleDetail.Personality,
-				Background:      roleDetail.Background,
-				HandlingStyle:   roleDetail.HandlingStyle,
-				CognitionRange:  roleDetail.CognitionRange,
-				AbilityFeatures: roleDetail.AbilityFeatures,
-				Appearance:      roleDetail.Appearance,
-				DressPreference: roleDetail.DressPreference,
-			}
+			json.Unmarshal([]byte(role.CharacterDetail), &apiRole.CharacterDetail)
 		}
 		apiRole.LikeCount = role.LikeCount
 		apiRole.FollowCount = role.FollowCount
 		apiRole.StoryboardNum = role.StoryboardNum
 		apiRole.Ctime = int64(role.CreateAt.Unix())
 		apiRole.Mtime = int64(role.UpdateAt.Unix())
+		apiRole.Creator = &api.UserInfo{
+			UserId: int64(user.ID),
+			Name:   user.Name,
+			Avatar: user.Avatar,
+		}
 		apiRoles = append(apiRoles, apiRole)
 	}
 	return &api.GetUserCreatedRolesResponse{

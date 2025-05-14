@@ -1490,6 +1490,7 @@ func (s *StoryService) GetStoryRoles(ctx context.Context, req *api.GetStoryRoles
 		apiRole.Ctime = int64(role.CreateAt.Unix())
 		apiRole.Mtime = int64(role.UpdateAt.Unix())
 		apiRole.PosterImageUrl = role.PosterURL
+		json.Unmarshal([]byte(role.CharacterDetail), &apiRole.CharacterDetail)
 		apiRoles = append(apiRoles, apiRole)
 	}
 	log.Log().Info("get story roles success", zap.Any("apiRoles", apiRoles))
