@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/grapery/common-protoc/gen"
 	"gorm.io/gorm"
 )
 
@@ -249,6 +250,13 @@ func UpdateStoryboard(ctx context.Context, board *StoryBoard) error {
 	return DataBase().Model(board).WithContext(ctx).
 		Where("id = ?", board.IDBase.ID).
 		Updates(board).Error
+}
+
+func UpdateStoryboardPublishedState(ctx context.Context, boardId int64, stage gen.StoryboardStage) error {
+	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+		Where("id = ?", boardId).
+		Update("stage", stage).
+		Error
 }
 
 func UpdateStoryboardMultiColumn(ctx context.Context, id int64, columns map[string]interface{}) error {

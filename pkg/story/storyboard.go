@@ -2373,7 +2373,13 @@ func (s *StoryService) PublishStoryboard(ctx context.Context, req *api.PublishSt
 	}
 	preBoardId := storyboard.PrevId
 	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED)
-	models.UpdateStoryboard(ctx, storyboard)
+	err = models.UpdateStoryboardPublishedState(ctx, req.GetStoryboardId(), api.StoryboardStage_STORYBOARD_STAGE_PUBLISHED)
+	if err != nil {
+		return &api.PublishStoryboardResponse{
+			Code:    500,
+			Message: "err: " + err.Error(),
+		}, nil
+	}
 	if preBoardId > 0 {
 		err = models.IncrementStoryBoardForkNum(ctx, preBoardId)
 		if err != nil {
@@ -2392,7 +2398,13 @@ func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStor
 		return nil, err
 	}
 	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_UNSPECIFIED)
-	models.UpdateStoryboard(ctx, storyboard)
+	err = models.UpdateStoryboardPublishedState(ctx, req.GetStoryboardId(), api.StoryboardStage_STORYBOARD_STAGE_UNSPECIFIED)
+	if err != nil {
+		return &api.CancelStoryboardResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
 	return &api.CancelStoryboardResponse{
 		Code:    0,
 		Message: "OK",
