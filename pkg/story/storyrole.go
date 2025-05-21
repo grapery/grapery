@@ -1220,7 +1220,11 @@ func (s *StoryService) UpdateStoryRolePoster(ctx context.Context, req *api.Updat
 		log.Log().Error("get story role by id failed", zap.Error(err))
 		return nil, err
 	}
-	if roleinfo.CreatorID != req.GetUserId() {
+	userId := req.GetUserId()
+	if userId == 0 {
+		userId = ctx.Value("user_id").(int64)
+	}
+	if roleinfo.CreatorID != userId {
 		log.Log().Error("have no permission", zap.Any("roleinfo", roleinfo))
 		return nil, errors.New("have no permission")
 	}
