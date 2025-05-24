@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/websocket"
+	websocket "github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 )
 

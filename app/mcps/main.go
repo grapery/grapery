@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/metoro-io/mcp-golang"
+	"github.com/metoro-io/mcp-golang/transport/http"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/config"
@@ -34,6 +36,13 @@ func main() {
 		log.Fatal("Validate config failed : ", err)
 	}
 
+	// Create HTTP transport
+	transport := http.NewHTTPTransport("/mcp")
+	transport.WithAddr(*serverAddr)
+
+	// Create MCP server
+	server := mcp.NewServer(transport)
+
 	// Create and initialize MCP service
 	service := mcps.NewMcpService()
 	err = service.Initialize(config.GlobalConfig)
@@ -41,10 +50,27 @@ func main() {
 		log.Fatal("initialize service failed : ", err)
 	}
 
-	// Create and start MCP server
-	server := mcps.NewServer(service)
+	// Register tools
+	err = registerTools(server, service)
+	if err != nil {
+		log.Fatal("register tools failed : ", err)
+	}
+
+	// Register prompts
+	err = registerPrompts(server, service)
+	if err != nil {
+		log.Fatal("register prompts failed : ", err)
+	}
+
+	// Register resources
+	err = registerResources(server, service)
+	if err != nil {
+		log.Fatal("register resources failed : ", err)
+	}
+
+	// Start server
 	go func() {
-		if err := server.Start(*serverAddr); err != nil {
+		if err := server.Serve(); err != nil {
 			log.Fatal("start server failed : ", err)
 		}
 	}()
@@ -60,11 +86,87 @@ func main() {
 	select {
 	case s := <-sc:
 		log.Info("Received signal: ", s.String())
-		if err := server.Stop(); err != nil {
-			log.Error("Error stopping server: ", err)
-		}
 		if err := service.Shutdown(); err != nil {
 			log.Error("Error shutting down service: ", err)
 		}
 	}
+}
+
+func registerTools(server *mcp.Server, service *mcps.McpService) error {
+	// Register story management tools
+	err := server.RegisterTool("create_story", &mcps.CreateStoryTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	err = server.RegisterTool("get_story", &mcps.GetStoryTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	// Register character management tools
+	err = server.RegisterTool("create_character", &mcps.CreateCharacterTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	err = server.RegisterTool("get_character", &mcps.GetCharacterTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	// Register user interaction tools
+	err = server.RegisterTool("follow_character", &mcps.FollowCharacterTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	err = server.RegisterTool("unfollow_character", &mcps.UnfollowCharacterTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	err = server.RegisterTool("like_story", &mcps.LikeStoryTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	err = server.RegisterTool("unlike_story", &mcps.UnlikeStoryTool{Service: service})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func registerPrompts(server *mcp.Server, service *mcps.McpService) error {
+	// Register story generation prompts
+	err := server.RegisterPrompt("generate_story", "Generate a new story", &mcps.GenerateStoryPrompt{Service: service})
+	if err != nil {
+		return err
+	}
+
+	// Register character generation prompts
+	err = server.RegisterPrompt("generate_character", "Generate a new character", &mcps.GenerateCharacterPrompt{Service: service})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func registerResources(server *mcp.Server, service *mcps.McpService) error {
+	// Register story resources
+	err := server.RegisterResource("story://", "story_resource", "Story resource", "application/json", &mcps.StoryResource{Service: service})
+	if err != nil {
+		return err
+	}
+
+	// Register character resources
+	err = server.RegisterResource("character://", "character_resource", "Character resource", "application/json", &mcps.CharacterResource{Service: service})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
