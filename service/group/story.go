@@ -22,6 +22,7 @@ func (s *StoryService) CreateStory(ctx context.Context, req *connect.Request[gen
 		UserId:  req.Msg.OwnerId,
 	})
 	if err != nil {
+		log.Printf("get group info failed: %s", err.Error())
 		return nil, err
 	}
 	// if groupInfo.Data.Info.Status != int32(gen.GroupStatus_Normal) {
@@ -31,9 +32,11 @@ func (s *StoryService) CreateStory(ctx context.Context, req *connect.Request[gen
 
 	ret, err := storyServer.GetStoryServer().CreateStory(ctx, req.Msg)
 	if err != nil {
+		log.Printf("create story failed: %s", err.Error())
 		return nil, err
 	}
 	if ret.Code != 0 {
+		log.Printf("create story failed: %s", ret.Message)
 		return nil, connect.NewError(connect.CodeUnknown, fmt.Errorf(ret.Message))
 	}
 	resp := &gen.CreateStoryResponse{
@@ -43,6 +46,7 @@ func (s *StoryService) CreateStory(ctx context.Context, req *connect.Request[gen
 			StoryId: int32(ret.Data.StoryId),
 		},
 	}
+	log.Printf("create story success: %s", ret.String())
 	return connect.NewResponse(resp), nil
 }
 

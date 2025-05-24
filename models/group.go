@@ -185,7 +185,7 @@ type GroupMember struct {
 	GroupID  int64 `json:"group_id,omitempty"`
 	UserID   int64 `json:"user_id,omitempty"`
 	Nickname string
-	Role     int64
+	Role     int64 // 1: admin, 2: member, 3: viewer
 	Status   int64
 }
 

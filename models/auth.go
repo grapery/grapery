@@ -64,13 +64,13 @@ func IsUserAuthExist(ctx context.Context, account string) bool {
 		log.Log().WithOptions(logFieldModels).Error(
 			fmt.Sprintf("check user auth [%s] failed [%s] ", account, err.Error()),
 		)
-		return false
+		return true
 	}
 	if err != nil && err == gorm.ErrRecordNotFound {
 		log.Log().WithOptions(logFieldModels).Error(
-			fmt.Sprintf("check user auth [%s] failed [%s] ", account, err.Error()),
+			fmt.Sprintf("user auth [%s] not exist", account),
 		)
-		return true
+		return false
 	}
 	if accountInfo.CreateAt.Unix() == 0 {
 		return false

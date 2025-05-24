@@ -109,6 +109,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 	if err != nil {
 		log.Info("get group member by group and user failed: ", err.Error())
 	}
+	log.Info("user is in/not in group: ", req.GetGroupId(), req.GetUserId(), isIn)
 	return &api.GetGroupResponse{
 		Code:    0,
 		Message: "ok",
@@ -204,6 +205,18 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 	err = models.CreateWatchGroupItem(ctx, int(group.CreatorID), int64(group.ID))
 	if err != nil {
 		log.Info("create watch group item failed: ", err.Error())
+	}
+	groupMember := &models.GroupMember{
+		GroupID:  int64(group.ID),
+		UserID:   int64(group.CreatorID),
+		Role:     1,
+		Nickname: creator.Name,
+		Status:   1,
+	}
+	err = groupMember.Create()
+	if err != nil {
+		log.Info("create group member failed: ", err.Error())
+		return nil, err
 	}
 	return &api.CreateGroupResponse{
 		Code:    0,

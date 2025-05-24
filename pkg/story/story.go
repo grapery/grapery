@@ -206,6 +206,7 @@ func (s *StoryService) CreateStory(ctx context.Context, req *api.CreateStoryRequ
 	group.ID = uint(req.GroupId)
 	err = group.GetByID()
 	if err != nil {
+		log.Log().Error("get group by id failed", zap.Error(err))
 		return nil, err
 	}
 	params, _ := json.Marshal(req.Params)
