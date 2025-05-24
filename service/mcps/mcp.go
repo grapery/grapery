@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/grapery/grapery/config"
@@ -80,6 +81,61 @@ type StoryPoint struct {
 	UpdatedAt   int64   `json:"updated_at"`
 }
 
+// MCPResource represents a resource in the MCP protocol
+type MCPResource struct {
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	Data      map[string]interface{} `json:"data"`
+	CreatedAt int64                  `json:"created_at"`
+	UpdatedAt int64                  `json:"updated_at"`
+}
+
+// MCPPrompt represents a prompt in the MCP protocol
+type MCPPrompt struct {
+	ID        string   `json:"id"`
+	Content   string   `json:"content"`
+	Context   []string `json:"context"`
+	Tools     []string `json:"tools"`
+	CreatedAt int64    `json:"created_at"`
+	UpdatedAt int64    `json:"updated_at"`
+}
+
+// MCPTool represents a tool in the MCP protocol
+type MCPTool struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Parameters  []string `json:"parameters"`
+	CreatedAt   int64    `json:"created_at"`
+	UpdatedAt   int64    `json:"updated_at"`
+}
+
+// MCPRoot represents a root in the MCP protocol
+type MCPRoot struct {
+	ID        string   `json:"id"`
+	Type      string   `json:"type"`
+	Resources []string `json:"resources"`
+	CreatedAt int64    `json:"created_at"`
+	UpdatedAt int64    `json:"updated_at"`
+}
+
+// MCPTransport represents a transport in the MCP protocol
+type MCPTransport struct {
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	Config    map[string]interface{} `json:"config"`
+	CreatedAt int64                  `json:"created_at"`
+	UpdatedAt int64                  `json:"updated_at"`
+}
+
+// Response represents a standardized API response
+type Response struct {
+	Status  string      `json:"status"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
 // McpService implements the MCP protocol for story management
 type McpService struct {
 	stories       map[string]*Story
@@ -88,6 +144,11 @@ type McpService struct {
 	users         map[string]*User
 	storyVersions map[string]*StoryVersion
 	storyPoints   map[string]*StoryPoint
+	resources     map[string]*MCPResource
+	prompts       map[string]*MCPPrompt
+	tools         map[string]*MCPTool
+	roots         map[string]*MCPRoot
+	transports    map[string]*MCPTransport
 	mu            sync.RWMutex
 	config        *config.Config
 }
@@ -101,73 +162,166 @@ func NewMcpService() *McpService {
 		users:         make(map[string]*User),
 		storyVersions: make(map[string]*StoryVersion),
 		storyPoints:   make(map[string]*StoryPoint),
+		resources:     make(map[string]*MCPResource),
+		prompts:       make(map[string]*MCPPrompt),
+		tools:         make(map[string]*MCPTool),
+		roots:         make(map[string]*MCPRoot),
+		transports:    make(map[string]*MCPTransport),
 	}
 }
 
-// HandleRequest processes incoming MCP requests
-func (s *McpService) HandleRequest(ctx context.Context, request []byte) ([]byte, error) {
-	var req map[string]interface{}
-	if err := json.Unmarshal(request, &req); err != nil {
-		return nil, fmt.Errorf("invalid request format: %v", err)
+// formatResponse creates a standardized response
+func formatResponse(status string, message string, data interface{}, err error) []byte {
+	resp := Response{
+		Status:  status,
+		Message: message,
+		Data:    data,
+	}
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
-	action, ok := req["action"].(string)
+	response, _ := json.Marshal(resp)
+	return response
+}
+
+// validateRequiredFields checks if all required fields are present in the request
+func validateRequiredFields(req map[string]interface{}, fields ...string) error {
+	for _, field := range fields {
+		if _, ok := req[field]; !ok {
+			return fmt.Errorf("missing required field: %s", field)
+		}
+	}
+	return nil
+}
+
+// validateFieldType checks if a field has the expected type
+func validateFieldType(req map[string]interface{}, field string, expectedType string) error {
+	value, ok := req[field]
 	if !ok {
-		return nil, fmt.Errorf("missing action in request")
+		return fmt.Errorf("missing field: %s", field)
+	}
+
+	switch expectedType {
+	case "string":
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("field %s must be a string", field)
+		}
+	case "int":
+		if _, ok := value.(float64); !ok {
+			return fmt.Errorf("field %s must be a number", field)
+		}
+	case "bool":
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("field %s must be a boolean", field)
+		}
+	case "map":
+		if _, ok := value.(map[string]interface{}); !ok {
+			return fmt.Errorf("field %s must be an object", field)
+		}
+	case "array":
+		if _, ok := value.([]interface{}); !ok {
+			return fmt.Errorf("field %s must be an array", field)
+		}
+	}
+	return nil
+}
+
+// HandleRequest processes incoming MCP requests
+func (s *McpService) HandleRequest(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	// Validate action field
+	if err := validateRequiredFields(req, "action"); err != nil {
+		return formatResponse("error", "", nil, err), nil
+	}
+
+	action, _ := req["action"].(string)
+	var response []byte
+	var err error
+
+	// Use a read lock for get operations
+	if strings.HasPrefix(action, "get_") {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+	} else {
+		// Use a write lock for all other operations
+		s.mu.Lock()
+		defer s.mu.Unlock()
 	}
 
 	switch action {
-	case "create_story":
-		return s.handleCreateStory(ctx, req)
-	case "get_story":
-		return s.handleGetStory(ctx, req)
-	case "create_character":
-		return s.handleCreateCharacter(ctx, req)
-	case "get_character":
-		return s.handleGetCharacter(ctx, req)
-	case "generate_image":
-		return s.handleGenerateImage(ctx, req)
-	case "chat_with_character":
-		return s.handleCharacterChat(ctx, req)
+	case "create_resource":
+		if err := validateRequiredFields(req, "type", "data"); err != nil {
+			return formatResponse("error", "", nil, err), nil
+		}
+		if err := validateFieldType(req, "data", "map"); err != nil {
+			return formatResponse("error", "", nil, err), nil
+		}
+		response, err = s.handleCreateResource(ctx, req)
+	case "get_resource":
+		if err := validateRequiredFields(req, "id"); err != nil {
+			return formatResponse("error", "", nil, err), nil
+		}
+		response, err = s.handleGetResource(ctx, req)
+	case "create_prompt":
+		response, err = s.handleCreatePrompt(ctx, req)
+	case "get_prompt":
+		response, err = s.handleGetPrompt(ctx, req)
+	case "create_tool":
+		response, err = s.handleCreateTool(ctx, req)
+	case "get_tool":
+		response, err = s.handleGetTool(ctx, req)
+	case "create_root":
+		response, err = s.handleCreateRoot(ctx, req)
+	case "get_root":
+		response, err = s.handleGetRoot(ctx, req)
+	case "create_transport":
+		response, err = s.handleCreateTransport(ctx, req)
+	case "get_transport":
+		response, err = s.handleGetTransport(ctx, req)
 	case "follow_character":
-		return s.handleFollowCharacter(ctx, req)
+		response, err = s.handleFollowCharacter(ctx, req)
 	case "unfollow_character":
-		return s.handleUnfollowCharacter(ctx, req)
+		response, err = s.handleUnfollowCharacter(ctx, req)
 	case "like_story":
-		return s.handleLikeStory(ctx, req)
+		response, err = s.handleLikeStory(ctx, req)
 	case "unlike_story":
-		return s.handleUnlikeStory(ctx, req)
+		response, err = s.handleUnlikeStory(ctx, req)
 	case "regenerate_character":
-		return s.handleRegenerateCharacter(ctx, req)
+		response, err = s.handleRegenerateCharacter(ctx, req)
 	case "follow_story":
-		return s.handleFollowStory(ctx, req)
+		response, err = s.handleFollowStory(ctx, req)
 	case "unfollow_story":
-		return s.handleUnfollowStory(ctx, req)
-	case "like_story_version":
-		return s.handleLikeStoryVersion(ctx, req)
-	case "unlike_story_version":
-		return s.handleUnlikeStoryVersion(ctx, req)
+		response, err = s.handleUnfollowStory(ctx, req)
 	case "create_story_version":
-		return s.handleCreateStoryVersion(ctx, req)
+		response, err = s.handleCreateStoryVersion(ctx, req)
 	case "continue_story_version":
-		return s.handleContinueStoryVersion(ctx, req)
+		response, err = s.handleContinueStoryVersion(ctx, req)
 	case "follow_user":
-		return s.handleFollowUser(ctx, req)
+		response, err = s.handleFollowUser(ctx, req)
 	case "unfollow_user":
-		return s.handleUnfollowUser(ctx, req)
+		response, err = s.handleUnfollowUser(ctx, req)
 	case "analyze_character_storyline":
-		return s.handleAnalyzeCharacterStoryline(ctx, req)
+		response, err = s.handleAnalyzeCharacterStoryline(ctx, req)
 	case "subscribe_vip":
-		return s.handleSubscribeVIP(ctx, req)
+		response, err = s.handleSubscribeVIP(ctx, req)
 	case "unsubscribe_vip":
-		return s.handleUnsubscribeVIP(ctx, req)
+		response, err = s.handleUnsubscribeVIP(ctx, req)
 	case "create_story_point":
-		return s.handleCreateStoryPoint(ctx, req)
+		response, err = s.handleCreateStoryPoint(ctx, req)
 	case "set_story_point_reward":
-		return s.handleSetStoryPointReward(ctx, req)
+		response, err = s.handleSetStoryPointReward(ctx, req)
+	case "like_story_version":
+		response, err = s.handleLikeStoryVersion(ctx, req)
+	case "unlike_story_version":
+		response, err = s.handleUnlikeStoryVersion(ctx, req)
 	default:
-		return nil, fmt.Errorf("unknown action: %s", action)
+		err = fmt.Errorf("unknown action: %s", action)
 	}
+
+	if err != nil {
+		return formatResponse("error", "", nil, err), nil
+	}
+	return response, nil
 }
 
 // Initialize sets up the MCP service with configuration

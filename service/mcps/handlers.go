@@ -751,3 +751,258 @@ func (s *McpService) handleUnlikeStoryVersion(ctx context.Context, req map[strin
 		"likes":  version.Likes,
 	})
 }
+
+// handleCreateResource handles creating a new MCP resource
+func (s *McpService) handleCreateResource(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	// Validate required fields
+	if err := validateRequiredFields(req, "type", "data"); err != nil {
+		return formatResponse("error", "", nil, err), nil
+	}
+
+	// Validate field types
+	if err := validateFieldType(req, "type", "string"); err != nil {
+		return formatResponse("error", "", nil, err), nil
+	}
+	if err := validateFieldType(req, "data", "map"); err != nil {
+		return formatResponse("error", "", nil, err), nil
+	}
+
+	resourceType := req["type"].(string)
+	data := req["data"].(map[string]interface{})
+
+	resource := &MCPResource{
+		ID:        uuid.New().String(),
+		Type:      resourceType,
+		Data:      data,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	s.resources[resource.ID] = resource
+
+	return formatResponse("success", "Resource created successfully", resource, nil), nil
+}
+
+// handleGetResource handles retrieving an MCP resource
+func (s *McpService) handleGetResource(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	id, ok := req["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing resource id")
+	}
+
+	s.mu.RLock()
+	resource, exists := s.resources[id]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("resource not found")
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status":   "success",
+		"resource": resource,
+	})
+}
+
+// handleCreatePrompt handles creating a new MCP prompt
+func (s *McpService) handleCreatePrompt(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	content, ok := req["content"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing prompt content")
+	}
+
+	context, _ := req["context"].([]string)
+	tools, _ := req["tools"].([]string)
+
+	prompt := &MCPPrompt{
+		ID:        uuid.New().String(),
+		Content:   content,
+		Context:   context,
+		Tools:     tools,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	s.mu.Lock()
+	s.prompts[prompt.ID] = prompt
+	s.mu.Unlock()
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"prompt": prompt,
+	})
+}
+
+// handleGetPrompt handles retrieving an MCP prompt
+func (s *McpService) handleGetPrompt(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	id, ok := req["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing prompt id")
+	}
+
+	s.mu.RLock()
+	prompt, exists := s.prompts[id]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("prompt not found")
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"prompt": prompt,
+	})
+}
+
+// handleCreateTool handles creating a new MCP tool
+func (s *McpService) handleCreateTool(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	name, ok := req["name"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing tool name")
+	}
+
+	description, ok := req["description"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing tool description")
+	}
+
+	parameters, _ := req["parameters"].([]string)
+
+	tool := &MCPTool{
+		ID:          uuid.New().String(),
+		Name:        name,
+		Description: description,
+		Parameters:  parameters,
+		CreatedAt:   time.Now().Unix(),
+		UpdatedAt:   time.Now().Unix(),
+	}
+
+	s.mu.Lock()
+	s.tools[tool.ID] = tool
+	s.mu.Unlock()
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"tool":   tool,
+	})
+}
+
+// handleGetTool handles retrieving an MCP tool
+func (s *McpService) handleGetTool(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	id, ok := req["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing tool id")
+	}
+
+	s.mu.RLock()
+	tool, exists := s.tools[id]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("tool not found")
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"tool":   tool,
+	})
+}
+
+// handleCreateRoot handles creating a new MCP root
+func (s *McpService) handleCreateRoot(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	rootType, ok := req["type"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing root type")
+	}
+
+	resources, _ := req["resources"].([]string)
+
+	root := &MCPRoot{
+		ID:        uuid.New().String(),
+		Type:      rootType,
+		Resources: resources,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	s.mu.Lock()
+	s.roots[root.ID] = root
+	s.mu.Unlock()
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"root":   root,
+	})
+}
+
+// handleGetRoot handles retrieving an MCP root
+func (s *McpService) handleGetRoot(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	id, ok := req["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing root id")
+	}
+
+	s.mu.RLock()
+	root, exists := s.roots[id]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("root not found")
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status": "success",
+		"root":   root,
+	})
+}
+
+// handleCreateTransport handles creating a new MCP transport
+func (s *McpService) handleCreateTransport(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	transportType, ok := req["type"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing transport type")
+	}
+
+	config, ok := req["config"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("missing transport config")
+	}
+
+	transport := &MCPTransport{
+		ID:        uuid.New().String(),
+		Type:      transportType,
+		Config:    config,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	s.mu.Lock()
+	s.transports[transport.ID] = transport
+	s.mu.Unlock()
+
+	return json.Marshal(map[string]interface{}{
+		"status":    "success",
+		"transport": transport,
+	})
+}
+
+// handleGetTransport handles retrieving an MCP transport
+func (s *McpService) handleGetTransport(ctx context.Context, req map[string]interface{}) ([]byte, error) {
+	id, ok := req["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing transport id")
+	}
+
+	s.mu.RLock()
+	transport, exists := s.transports[id]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("transport not found")
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status":    "success",
+		"transport": transport,
+	})
+}

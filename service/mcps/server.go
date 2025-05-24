@@ -73,7 +73,36 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if messageType == websocket.TextMessage {
-			response, err := s.service.HandleRequest(r.Context(), message)
+			// Unmarshal the message into a map
+			var req map[string]interface{}
+			if err := json.Unmarshal(message, &req); err != nil {
+				errorResponse := map[string]interface{}{
+					"status":  "error",
+					"message": "invalid request format",
+					"error":   err.Error(),
+				}
+				response, _ := json.Marshal(errorResponse)
+				if err := conn.WriteMessage(websocket.TextMessage, response); err != nil {
+					log.Errorf("Failed to write error message: %v", err)
+				}
+				continue
+			}
+
+			// Validate required fields
+			if _, ok := req["action"]; !ok {
+				errorResponse := map[string]interface{}{
+					"status":  "error",
+					"message": "missing required field: action",
+				}
+				response, _ := json.Marshal(errorResponse)
+				if err := conn.WriteMessage(websocket.TextMessage, response); err != nil {
+					log.Errorf("Failed to write error message: %v", err)
+				}
+				continue
+			}
+
+			// Process the request
+			response, err := s.service.HandleRequest(r.Context(), req)
 			if err != nil {
 				errorResponse := map[string]interface{}{
 					"status":  "error",
