@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/metoro-io/mcp-golang"
+	mcp "github.com/metoro-io/mcp-golang"
 	"github.com/metoro-io/mcp-golang/transport/http"
 	log "github.com/sirupsen/logrus"
 
@@ -94,44 +94,76 @@ func main() {
 
 func registerTools(server *mcp.Server, service *mcps.McpService) error {
 	// Register story management tools
-	err := server.RegisterTool("create_story", &mcps.CreateStoryTool{Service: service})
+	err := server.RegisterTool("create_story", "create_story", &mcps.CreateStoryTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	err = server.RegisterTool("get_story", &mcps.GetStoryTool{Service: service})
+	err = server.RegisterTool("get_story", "get_story", &mcps.GetStoryTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
 	// Register character management tools
-	err = server.RegisterTool("create_character", &mcps.CreateCharacterTool{Service: service})
+	err = server.RegisterTool("create_character", "create_character", &mcps.CreateCharacterTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	err = server.RegisterTool("get_character", &mcps.GetCharacterTool{Service: service})
+	err = server.RegisterTool("get_character", "get_character", &mcps.GetCharacterTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
 	// Register user interaction tools
-	err = server.RegisterTool("follow_character", &mcps.FollowCharacterTool{Service: service})
+	err = server.RegisterTool("follow_character", "follow_character", &mcps.FollowCharacterTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	err = server.RegisterTool("unfollow_character", &mcps.UnfollowCharacterTool{Service: service})
+	err = server.RegisterTool("unfollow_character", "unfollow_character", &mcps.UnfollowCharacterTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	err = server.RegisterTool("like_story", &mcps.LikeStoryTool{Service: service})
+	err = server.RegisterTool("like_story", "like_story", &mcps.LikeStoryTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	err = server.RegisterTool("unlike_story", &mcps.UnlikeStoryTool{Service: service})
+	err = server.RegisterTool("unlike_story", "unlike_story", &mcps.UnlikeStoryTool{
+		BaseTool: mcps.BaseTool{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -141,13 +173,21 @@ func registerTools(server *mcp.Server, service *mcps.McpService) error {
 
 func registerPrompts(server *mcp.Server, service *mcps.McpService) error {
 	// Register story generation prompts
-	err := server.RegisterPrompt("generate_story", "Generate a new story", &mcps.GenerateStoryPrompt{Service: service})
+	err := server.RegisterPrompt("generate_story", "Generate a new story", &mcps.GenerateStoryPrompt{
+		BasePrompt: mcps.BasePrompt{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
 	// Register character generation prompts
-	err = server.RegisterPrompt("generate_character", "Generate a new character", &mcps.GenerateCharacterPrompt{Service: service})
+	err = server.RegisterPrompt("generate_character", "Generate a new character", &mcps.GenerateCharacterPrompt{
+		BasePrompt: mcps.BasePrompt{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -157,13 +197,21 @@ func registerPrompts(server *mcp.Server, service *mcps.McpService) error {
 
 func registerResources(server *mcp.Server, service *mcps.McpService) error {
 	// Register story resources
-	err := server.RegisterResource("story://", "story_resource", "Story resource", "application/json", &mcps.StoryResource{Service: service})
+	err := server.RegisterResource("story://", "story_resource", "Story resource", "application/json", &mcps.StoryResource{
+		BaseResource: mcps.BaseResource{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
 	// Register character resources
-	err = server.RegisterResource("character://", "character_resource", "Character resource", "application/json", &mcps.CharacterResource{Service: service})
+	err = server.RegisterResource("character://", "character_resource", "Character resource", "application/json", &mcps.CharacterResource{
+		BaseResource: mcps.BaseResource{
+			Service: service,
+		},
+	})
 	if err != nil {
 		return err
 	}
