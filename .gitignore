@@ -1,5 +1,6 @@
 grapes-app
 grapes-worker
+grapes-mcps
 .idea/*
 .DS_Store
 .vscode

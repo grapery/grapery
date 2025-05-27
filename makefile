@@ -15,10 +15,12 @@ project=github.com/grapery/grapery
 $(TARGETS): 
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
+	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
 
 withpgo: $(TARGETS)
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
+	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)-app

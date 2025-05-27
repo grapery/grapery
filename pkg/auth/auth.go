@@ -84,6 +84,33 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 		log.Log().WithOptions(logFieldModels).Error("create auth failed", zap.Error(err))
 		return err
 	}
+	profile := new(models.UserProfile)
+	profile.IDBase = models.IDBase{
+		Base: models.Base{
+			CreateAt: time.Now(),
+			UpdateAt: time.Now(),
+		},
+	}
+	profile.UserId = info.UID
+	profile.Status = 1
+	profile.Background = ""
+	profile.NumGroup = 0
+	profile.DefaultGroupID = 0
+	profile.MinSameGroup = 0
+	profile.Limit = 0
+	profile.UsedTokens = 0
+	profile.CreatedGroupNum = 0
+	profile.CreatedStoryNum = 0
+	profile.CreatedRoleNum = 0
+	profile.CreatedBoardNum = 0
+	profile.CreatedGenNum = 0
+	profile.WatchingStoryNum = 0
+	profile.WatchingGroupNum = 0
+	profile.WatchingStoryRoleNum = 0
+	err = profile.Create()
+	if err != nil {
+		log.Log().WithOptions(logFieldModels).Error("create profile failed", zap.Error(err))
+	}
 	return
 }
 
