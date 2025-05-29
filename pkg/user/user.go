@@ -57,6 +57,33 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 			fmt.Println("re: ", re)
 		}
 	}()
+	userProfile := &models.UserProfile{
+		UserId: int64(req.GetUserId()),
+	}
+	err := userProfile.GetByUserId()
+	if err != nil {
+		return nil, err
+	}
+	if userProfile.ID == 0 {
+		userProfile.IDBase = models.IDBase{
+			Base: models.Base{
+				CreateAt: time.Now(),
+				UpdateAt: time.Now(),
+			},
+		}
+		userProfile.Background = ""
+		userProfile.NumGroup = 0
+		userProfile.DefaultGroupID = 0
+		userProfile.MinSameGroup = 0
+		userProfile.Limit = 0
+		userProfile.UsedTokens = 0
+		userProfile.CreatedGroupNum = 0
+		userProfile.UserId = int64(req.GetUserId())
+		err = userProfile.Create()
+		if err != nil {
+			return nil, err
+		}
+	}
 	defaultGroup, ok, err := models.GetUserDefaultGroup(int(req.GetUserId()))
 	if err != nil {
 		return nil, err
