@@ -253,7 +253,8 @@ func UpdateStoryboard(ctx context.Context, board *StoryBoard) error {
 }
 
 func UpdateStoryboardPublishedState(ctx context.Context, boardId int64, stage gen.StoryboardStage) error {
-	return DataBase().Model(&StoryBoard{}).WithContext(ctx).
+	return DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
 		Where("id = ?", boardId).
 		Update("stage", stage).
 		Error

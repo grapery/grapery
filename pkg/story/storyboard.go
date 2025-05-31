@@ -2397,14 +2397,23 @@ func (s *StoryService) CancelStoryboard(ctx context.Context, req *api.CancelStor
 	if err != nil {
 		return nil, err
 	}
-	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_UNSPECIFIED)
-	err = models.UpdateStoryboardPublishedState(ctx, req.GetStoryboardId(), api.StoryboardStage_STORYBOARD_STAGE_UNSPECIFIED)
+	preBoardId := storyboard.PrevId
+	storyboard.Stage = int(api.StoryboardStage_STORYBOARD_STAGE_DRAFT)
+	err = models.UpdateStoryboardPublishedState(ctx, req.GetStoryboardId(), api.StoryboardStage_STORYBOARD_STAGE_DRAFT)
 	if err != nil {
+		log.Log().Error("update storyboard published state failed", zap.Error(err))
 		return &api.CancelStoryboardResponse{
 			Code:    0,
 			Message: "OK",
 		}, nil
 	}
+	if preBoardId > 0 {
+		err = models.DecrementStoryBoardForkNum(ctx, preBoardId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	log.Log().Info("cancel storyboard", zap.Any("storyboard", storyboard.ID))
 	return &api.CancelStoryboardResponse{
 		Code:    0,
 		Message: "OK",
