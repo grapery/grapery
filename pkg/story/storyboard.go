@@ -1380,6 +1380,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 	storyGen.BoardID = 0
 	storyGen.GenType = int(api.RenderType_RENDER_TYPE_TEXT_UNSPECIFIED)
 	storyGen.TaskType = int(api.RenderType_RENDER_TYPE_STORYCHARACTERS)
+	storyGen.GenStatus = models.StoryGenStatusInit
 	_, err = models.CreateStoryGen(ctx, storyGen)
 	if err != nil {
 		log.Log().Error("create storyboard gen failed", zap.Error(err))

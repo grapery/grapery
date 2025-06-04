@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -35,6 +36,8 @@ func (s *StoryBoardService) GetStoryboard(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, err
 	}
+	retData, _ := json.Marshal(ret)
+	log.Printf("GetStoryboard: %v", string(retData))
 	resp := &gen.GetStoryboardResponse{
 		Code:    ret.Code,
 		Message: "OK",
@@ -366,6 +369,7 @@ func (s *StoryBoardService) GetUnPublishStoryboard(ctx context.Context, req *con
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("GetUnPublishStoryboard: %v", ret.String())
+	retData, _ := json.Marshal(ret)
+	log.Printf("GetUnPublishStoryboard: %v", string(retData))
 	return connect.NewResponse(ret), nil
 }

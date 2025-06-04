@@ -53,7 +53,8 @@ func NewStoryClient(platform int) *StoryClient {
 }
 
 type StoryInfoParams struct {
-	Content string `json:"content"`
+	RoleDesc string `json:"role_desc"`
+	Content  string `json:"content"`
 }
 
 type StoryInfoResult struct {
@@ -119,11 +120,31 @@ const (
 	Size720x1440  = "720x1440"
 )
 
+type GenStoryPosterParams struct {
+	Title        string  `json:"title"`          // 海报标题
+	SubTitle     string  `json:"sub_title"`      // 海报副标题
+	BodyText     string  `json:"body_text"`      // 海报正文内容
+	PromptTextZh string  `json:"prompt_text_zh"` // 提示词
+	WhRatios     string  `json:"wh_ratios"`      // 图像宽高比
+	LoraName     string  `json:"lora_name"`      // Lora名称
+	LoraWeight   float64 `json:"lora_weight"`    // Lora权重
+	CtrlRatio    float64 `json:"ctrl_ratio"`     // 控制比率
+	CtrlStep     float64 `json:"ctrl_step"`      // 控制步长
+	GenerateMode string  `json:"generate_mode"`  // 生成模式
+	GenerateNum  int     `json:"generate_num"`   // 生成数量
+	UserId       string  `json:"user_id"`        // 用户ID
+	RequestId    string  `json:"request_id"`     // 请求ID
+}
+
 type GenStoryImagesParams struct {
-	Content  string `json:"content"`
-	RefImage string `json:"ref_image"`
-	Size     int    `json:"size"`
-	UserId   string `json:"user_id"`
+	Content        string `json:"content"`
+	RefImage       string `json:"ref_image"`
+	Size           int    `json:"size"`
+	UserId         string `json:"user_id"`
+	RequestId      string `json:"request_id"`
+	Prompt         string `json:"prompt"`          // 额外的提示词
+	NegativePrompt string `json:"negative_prompt"` // 负面提示词
+	MaskImageUrl   string `json:"mask_image_url"`  // 掩码图像
 }
 
 type GenStoryImagesResult struct {
