@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DashScopeAPIKey = ""
+	DashScopeAPIKey = "sk-e3fd3d5b79ab49c5b5e5bec34944e42e"
 )
 
 type AliyunStoryClient struct {
@@ -48,21 +48,41 @@ type DashScopeTextRequestBody struct {
 	Parameters DashScopeTextParameters `json:"parameters"`
 }
 
+func (d DashScopeTextRequestBody) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 type DashScopeTextResponse struct {
 	Output struct {
-		Choices []struct {
+		FinishReason string `json:"finish_reason"`
+		Text         string `json:"text"`
+		Choices      []struct {
 			Message struct {
 				Content string `json:"content"`
 				Role    string `json:"role"`
 			} `json:"message"`
 		} `json:"choices"`
 	} `json:"output"`
+
 	Usage struct {
-		TotalTokens  int `json:"total_tokens"`
-		OutputTokens int `json:"output_tokens"`
-		InputTokens  int `json:"input_tokens"`
+		TotalTokens         int `json:"total_tokens"`
+		OutputTokens        int `json:"output_tokens"`
+		InputTokens         int `json:"input_tokens"`
+		PromptTokensDetails struct {
+			PromptTokens        int `json:"prompt_tokens"`
+			PromptTokensDetails []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"prompt_tokens_details"`
+		} `json:"prompt_tokens_details"`
 	} `json:"usage"`
 	RequestID string `json:"request_id"`
+}
+
+func (d DashScopeTextResponse) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
 }
 
 func (c *AliyunStoryClient) GenStoryInfo(ctx context.Context, params *StoryInfoParams) (*StoryInfoResult, error) {
@@ -116,7 +136,7 @@ func (c *AliyunStoryClient) GenStoryInfo(ctx context.Context, params *StoryInfoP
 		return nil, err
 	}
 	return &StoryInfoResult{
-		Content: ret.Output.Choices[0].Message.Content,
+		Content: ret.Output.Text,
 	}, nil
 }
 
@@ -171,7 +191,7 @@ func (c *AliyunStoryClient) GenStoryBoardInfo(ctx context.Context, params *Story
 		return nil, err
 	}
 	return &StoryInfoResult{
-		Content: ret.Output.Choices[0].Message.Content,
+		Content: ret.Output.Text,
 	}, nil
 }
 
@@ -218,15 +238,20 @@ func (c *AliyunStoryClient) GenStoryRoleInfo(ctx context.Context, params *GenSto
 	// 读取响应体
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Default().Println("Error reading response body:", err)
 		return nil, err
 	}
+	log.Default().Printf("Response body: %s", bodyText)
 	ret := &DashScopeTextResponse{}
 	err = json.Unmarshal(bodyText, ret)
 	if err != nil {
+		log.Default().Println("Error unmarshalling response:", err)
 		return nil, err
 	}
+	log.Default().Printf("Generated character info: %s", ret.String())
+
 	return &GenStoryCharactorResult{
-		Content: ret.Output.Choices[0].Message.Content,
+		Content: ret.Output.Text,
 	}, nil
 }
 
@@ -240,7 +265,7 @@ func (c *AliyunStoryClient) ChatWithRole(ctx context.Context, params *ChatWithRo
 			Messages: []DashScopeTextMessage{
 				{
 					Role:    "system",
-					Content: "你是一个故事中的角色，有自己的角色描述、性格特征、短期目标、长期目标、神态习惯、思想底色",
+					Content: params.Role,
 				},
 				{
 					Role:    "user",
@@ -275,13 +300,16 @@ func (c *AliyunStoryClient) ChatWithRole(ctx context.Context, params *ChatWithRo
 	if err != nil {
 		return nil, err
 	}
+	log.Default().Printf("Response body: %s", bodyText)
 	ret := &DashScopeTextResponse{}
 	err = json.Unmarshal(bodyText, ret)
 	if err != nil {
+		log.Default().Println("Error unmarshalling response:", err)
 		return nil, err
 	}
+	log.Default().Printf("chat message info: %s", ret.String())
 	return &ChatWithRoleResult{
-		Content: ret.Output.Choices[0].Message.Content,
+		Content: ret.Output.Text,
 	}, nil
 }
 
@@ -323,6 +351,11 @@ type DashScopeImageInput struct {
 	MaskImageURL   string `json:"mask_image_url,omitempty"` // 可选字段，用于指定遮罩图像的URL
 }
 
+func (d DashScopeImageInput) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 /*
 "title":"春节快乐",
 "sub_title":"家庭团聚，共享天伦之乐",
@@ -350,6 +383,11 @@ type DashScopePosterImageInput struct {
 	GenerateNum  int     `json:"generate_num"`          // 生成图像的数量
 }
 
+func (d DashScopePosterImageInput) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 type DashScopeGenDescImageInput struct {
 	Title    []string `json:"title"`     // 海报标题
 	SubTitle []string `json:"subtitle"`  // 海报副标题
@@ -359,6 +397,11 @@ type DashScopeGenDescImageInput struct {
 	Logo     string   `json:"logo"`      // 可选字段，用于指定Logo的URL
 }
 
+func (d DashScopeGenDescImageInput) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 type DashScopeImageInputParams struct {
 	Size         string  `json:"size"`
 	N            int     `json:"n"`
@@ -366,6 +409,11 @@ type DashScopeImageInputParams struct {
 	Watermark    bool    `json:"watermark,omitempty"`     // 可选字段，用于添加水印
 	IsSketch     bool    `json:"is_sketch,omitempty"`     // 可选字段，用于指定是否为草图
 	Temperature  float64 `json:"temperature,omitempty"`   // 可选字段，用于控制生成图像的温度
+}
+
+func (d DashScopeImageInputParams) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
 }
 
 type DashScopeImageInputRequest struct {
@@ -386,6 +434,11 @@ type DashScopeGenStoryImagesResponse struct {
 	Message   string              `json:"message"`    // 响应消息
 }
 
+func (d DashScopeGenStoryImagesResponse) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *GenStoryImagesParams) (*DashScopeGenStoryImagesResponse, error) {
 	// 创建 HTTP 客户端
 	client := &http.Client{}
@@ -393,7 +446,7 @@ func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *Gen
 	requestBody := DashScopeImageInputRequest{
 		Model: "wanx2.1-t2i-turbo",
 		Input: DashScopeImageInput{
-			Prompt:         params.Prompt,
+			Prompt:         params.Content,
 			NegativePrompt: params.NegativePrompt,
 		},
 		Parameters: DashScopeImageInputParams{
@@ -407,9 +460,11 @@ func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *Gen
 	if err != nil {
 		return nil, err
 	}
+	log.Default().Printf("Request body: %s", jsonData)
 	// 创建 POST 请求
 	req, err := http.NewRequest("POST", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis", bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Default().Println("Error creating request:", err)
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.DashScopeAPIKey)
@@ -419,11 +474,13 @@ func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *Gen
 	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Default().Println("Error sending request:", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	// 处理异步响应
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		log.Default().Printf("Unexpected status code: %d", resp.StatusCode)
 		return nil, errors.New("failed to start image generation task")
 	}
 	// 读取响应体
@@ -433,6 +490,7 @@ func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *Gen
 		// 如果读取失败，返回原始错误
 		return nil, err
 	}
+	log.Default().Println("Response body:", string(bodyText))
 	ret := &DashScopeGenStoryImagesResponse{}
 	err = json.Unmarshal(bodyText, ret)
 	if err != nil {
@@ -440,8 +498,9 @@ func (c *AliyunStoryClient) GenStoryBoardImages(ctx context.Context, params *Gen
 		// 如果解析失败，返回原始响应体以便调试
 		return nil, err
 	}
-	log.Default().Printf("Image generation task started successfully, Task ID: %s, Status: %s", ret.Output.TaskID, ret.Output.TaskStatus)
+	log.Default().Printf("Image generation task started successfully, Task: %s", ret.String())
 	// 返回任务状态和请求ID
+
 	return ret, nil
 }
 
@@ -485,6 +544,11 @@ type DashScopeTaskStatusResponse struct {
 	Usage struct {
 		ImageCount int `json:"image_count"` // 生成的图像数量
 	} `json:"usage"` // 使用情况
+}
+
+func (d DashScopeTaskStatusResponse) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
 }
 
 func (c *AliyunStoryClient) GetImageGenerationTaskStatus(ctx context.Context, taskID string) (*DashScopeTaskStatusResponse, error) {
@@ -794,6 +858,11 @@ type DashScopeVideoInput struct {
 	RefImagesUrl   []string `json:"ref_images_url,omitempty"`  // 可选字段，用于指定参考图像的URL列表
 }
 
+func (d DashScopeVideoInput) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 type DashScopeVideoParameters struct {
 	Resolution   string   `json:"resolution"`              // 视频分辨率，例如 "720P,480P"
 	PromptExtend bool     `json:"prompt_extend,omitempty"` // 可选字段，用于扩展提示词
@@ -802,10 +871,20 @@ type DashScopeVideoParameters struct {
 	Watermark    bool     `json:"watermark,omitempty"`     // 可选字段，用于添加水印
 }
 
+func (d DashScopeVideoParameters) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
+}
+
 type DashScopeVideoRequestBody struct {
 	Model      string                   `json:"model"`
 	Input      DashScopeVideoInput      `json:"input"`
 	Parameters DashScopeVideoParameters `json:"parameters"`
+}
+
+func (d DashScopeVideoRequestBody) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
 }
 
 // 基于首帧的视频生成
@@ -945,6 +1024,11 @@ type DashScopeVideoTaskStatusResponse struct {
 		VideoRatio    string `json:"video_ratio"`    // 生成的图像数量
 
 	} `json:"usage"` // 使用情况
+}
+
+func (d DashScopeVideoTaskStatusResponse) String() string {
+	data, _ := json.Marshal(d)
+	return string(data)
 }
 
 func (c *AliyunStoryClient) GetVideoGenerationTaskStatus(ctx context.Context, taskID string) (*DashScopeTaskStatusResponse, error) {

@@ -368,6 +368,7 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 		log.Log().Error("unmarshal gen result failed", zap.Error(err))
 		return nil, err
 	}
+	log.Log().Info("cleaned LLM result for role description", zap.String("content", cleanResult))
 	storyGen.Content = cleanResult
 	storyGen.FinishTime = time.Now().Unix()
 	renderDetail.Background = result.Background
@@ -566,9 +567,11 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 				log.Log().Error("get story role by id failed", zap.Error(err))
 				return nil, err
 			}
+			characterDetail := &CharacterDetailConverter{}
+			json.Unmarshal([]byte(roleInfo.CharacterDetail), characterDetail)
 			var chatParams = &client.ChatWithRoleParams{
 				MessageContent: message.GetMessage(),
-				Background:     roleInfo.CharacterDescription,
+				Role:           characterDetail.ToPrompt(),
 				SenseDesc:      "", // sence
 				RolePositive:   "", // 角色的描述
 				RoleNegative:   "",
@@ -946,6 +949,7 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 		log.Log().Error("unmarshal gen result failed", zap.Error(err))
 		return nil, err
 	}
+	log.Log().Info("cleaned LLM result for role description", zap.String("content", cleanResult))
 	storyGen.Content = cleanResult
 	storyGen.FinishTime = time.Now().Unix()
 	renderDetail.RoleCharacter = result.Description

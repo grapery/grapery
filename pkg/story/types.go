@@ -51,6 +51,20 @@ type CharacterDetailConverter struct {
 	DressPreference string `json:"dress_preference,omitempty"`
 }
 
+func (c *CharacterDetailConverter) ToPrompt() string {
+	// 将 CharacterDetailConverter 转换为适合提示的字符串格式
+	return "角色描述: " + c.Description + "\n" +
+		"短期目标: " + c.ShortTermGoal + "\n" +
+		"长期目标: " + c.LongTermGoal + "\n" +
+		"性格特征: " + c.Personality + "\n" +
+		"角色背景: " + c.Background + "\n" +
+		"处事风格: " + c.HandlingStyle + "\n" +
+		"认知范围: " + c.CognitionRange + "\n" +
+		"能力特点: " + c.AbilityFeatures + "\n" +
+		"外貌特征: " + c.Appearance + "\n" +
+		"穿着喜好: " + c.DressPreference
+}
+
 // CharacterDetail 表示角色的详细信息
 type CharacterDetail struct {
 	Description   string `json:"角色描述,omitempty"`
