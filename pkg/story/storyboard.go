@@ -1812,15 +1812,15 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 			Message: "scene is deleted",
 		}, nil
 	}
-	if scene.Status == 0 || scene.Status == 2 {
-		log.Log().Error("scene is generating")
+	if scene.Status == 0 {
+		log.Log().Info("scene is not ready")
 		return &api.RenderStoryBoardSenceResponse{
 			Code:    0,
-			Message: "scene is generating",
+			Message: "scene is not ready",
 		}, nil
 	}
 	scene.GenStatus = int(models.StoryGenStatusInit)
-	scene.Status = 2
+	scene.Status = 1
 	_ = models.UpdateStoryBoardScene(ctx, scene)
 	// 2. 生成指定场景的图片
 	templatePrompt := scene.ImagePrompts
@@ -1953,11 +1953,11 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 				Message: "scene is deleted",
 			}, nil
 		}
-		if scene.Status == 0 || scene.Status == 2 {
-			log.Log().Error("scene is generating")
+		if scene.Status == 0 {
+			log.Log().Error("scene is not ready")
 			return &api.RenderStoryBoardSencesResponse{
 				Code:    0,
-				Message: "scene is generating",
+				Message: "scene is not ready",
 			}, nil
 		}
 	}
@@ -2093,7 +2093,7 @@ func (s *StoryService) GetStoryBoardGenerate(ctx context.Context, req *api.GetSt
 		if scene.Status == 1 {
 			log.Log().Error("scene is already generating")
 		}
-		if scene.Status == 0 || scene.Status == 2 {
+		if scene.Status == 0 {
 			generating++
 		}
 		if scene.Status == -1 {
