@@ -349,13 +349,13 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 		return nil, err
 	}
 	var (
-		ret                   *client.GenStoryRoleInfoResult
-		renderStoryRoleParams = &client.GenStoryRoleInfoParams{
+		ret                   *client.GenStoryCharactorResult
+		renderStoryRoleParams = &client.GenStoryCharactorParams{
 			Content: prompt,
 		}
 	)
 
-	ret, err = s.client.GenStoryRoleInfo(ctx, renderStoryRoleParams)
+	ret, err = s.bailianClient.GenStoryRoleInfo(ctx, renderStoryRoleParams)
 	if err != nil {
 		log.Log().Error("gen story info failed", zap.Error(err))
 		return nil, err
@@ -575,7 +575,7 @@ func (s *StoryService) ChatWithStoryRole(ctx context.Context, req *api.ChatWithS
 				RequestId:      message.GetUuid(),
 				UserId:         fmt.Sprintf("grapery_chat_ctx_%d_user_%d", chatCtx.ID, chatCtx.UserID),
 			}
-			chatResp, err := s.client.ChatWithRole(ctx, chatParams)
+			chatResp, err := s.bailianClient.ChatWithRole(ctx, chatParams)
 			if err != nil {
 				log.Log().Error("chat with role failed", zap.Error(err))
 				return nil, err
@@ -927,13 +927,13 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 		return nil, err
 	}
 	var (
-		ret                   *client.GenStoryRoleInfoResult
-		renderStoryRoleParams = &client.GenStoryRoleInfoParams{
+		ret                   *client.GenStoryCharactorResult
+		renderStoryRoleParams = &client.GenStoryCharactorParams{
 			Content: prompt,
 		}
 	)
 
-	ret, err = s.client.GenStoryRoleInfo(ctx, renderStoryRoleParams)
+	ret, err = s.bailianClient.GenStoryRoleInfo(ctx, renderStoryRoleParams)
 	if err != nil {
 		log.Log().Error("gen story info failed", zap.Error(err))
 		return nil, err
@@ -1056,11 +1056,11 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 	)
 
 	// Call AI client to generate description
-	genParams := &client.GenStoryRoleInfoParams{
+	genParams := &client.GenStoryCharactorParams{
 		Content: prompt,
 	}
 
-	result, err := s.client.GenStoryRoleInfo(ctx, genParams)
+	result, err := s.bailianClient.GenStoryRoleInfo(ctx, genParams)
 	if err != nil {
 		log.Log().Error("generate role description failed", zap.Error(err))
 		return nil, err

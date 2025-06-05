@@ -42,13 +42,13 @@ const (
 	PlatformStep        = 10
 )
 
-type StoryClient struct {
-	Client *zhipu.ZhipuAPI
+type ZhipuStoryClient struct {
+	ZhipuClient *zhipu.ZhipuAPI
 }
 
-func NewStoryClient(platform int) *StoryClient {
-	return &StoryClient{
-		Client: zhipu.NewZhipuAPI(),
+func NewStoryClient(platform int) *ZhipuStoryClient {
+	return &ZhipuStoryClient{
+		ZhipuClient: zhipu.NewZhipuAPI(),
 	}
 }
 
@@ -61,9 +61,9 @@ type StoryInfoResult struct {
 	Content string `json:"content"`
 }
 
-func (c *StoryClient) GenStoryInfo(ctx context.Context, params *StoryInfoParams) (*StoryInfoResult, error) {
+func (c *ZhipuStoryClient) GenStoryInfo(ctx context.Context, params *StoryInfoParams) (*StoryInfoResult, error) {
 	ret := &StoryInfoResult{}
-	chatService := c.Client.ChatCompletion("glm-4-flash")
+	chatService := c.ZhipuClient.ChatCompletion("glm-4-flash")
 	completeMessage := ""
 	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
 		Role:    "user",
@@ -85,9 +85,9 @@ func (c *StoryClient) GenStoryInfo(ctx context.Context, params *StoryInfoParams)
 	return ret, nil
 }
 
-func (c *StoryClient) GenStoryBoardInfo(ctx context.Context, params *StoryInfoParams) (*StoryInfoResult, error) {
+func (c *ZhipuStoryClient) GenStoryBoardInfo(ctx context.Context, params *StoryInfoParams) (*StoryInfoResult, error) {
 	ret := &StoryInfoResult{}
-	chatService := c.Client.ChatCompletion("glm-4-flash")
+	chatService := c.ZhipuClient.ChatCompletion("glm-4-flash")
 	completeMessage := ""
 	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
 		Role:    "user",
@@ -151,8 +151,8 @@ type GenStoryImagesResult struct {
 	ImageUrls []string `json:"image_urls"`
 }
 
-func (c *StoryClient) GenStoryBoardImages(ctx context.Context, params *GenStoryImagesParams) (*GenStoryImagesResult, error) {
-	service := c.Client.ImageGeneration("CogView-3-Plus").
+func (c *ZhipuStoryClient) GenStoryBoardImages(ctx context.Context, params *GenStoryImagesParams) (*GenStoryImagesResult, error) {
+	service := c.ZhipuClient.ImageGeneration("CogView-3-Plus").
 		SetPrompt(params.Content).
 		SetUserID("grapestree")
 	resp, err := service.Do(ctx)
@@ -179,21 +179,21 @@ type ScaleStoryImagesResult struct {
 	TimeCost  int
 }
 
-func (c *StoryClient) ScaleStoryImages(ctx context.Context, params *ScaleStoryImagesParams) (*ScaleStoryImagesResult, error) {
+func (c *ZhipuStoryClient) ScaleStoryImages(ctx context.Context, params *ScaleStoryImagesParams) (*ScaleStoryImagesResult, error) {
 	return nil, nil
 }
 
-type GenStoryPeopleCharactorParams struct {
+type GenStoryCharactorParams struct {
 	Content string `json:"content"`
 }
 
-type GenStoryPeopleCharactorResult struct {
+type GenStoryCharactorResult struct {
 	Content string `json:"content"`
 }
 
-func (c *StoryClient) GenStoryPeopleCharactor(ctx context.Context, params *GenStoryPeopleCharactorParams) (*GenStoryPeopleCharactorResult, error) {
-	ret := &GenStoryPeopleCharactorResult{}
-	chatService := c.Client.ChatCompletion("glm-4-assistant")
+func (c *ZhipuStoryClient) GenStoryPeopleCharactor(ctx context.Context, params *GenStoryCharactorParams) (*GenStoryCharactorResult, error) {
+	ret := &GenStoryCharactorResult{}
+	chatService := c.ZhipuClient.ChatCompletion("glm-4-assistant")
 	completeMessage := ""
 	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
 		Role:    "user",
@@ -230,9 +230,9 @@ type ChatWithRoleResult struct {
 	Content string `json:"content"`
 }
 
-func (c *StoryClient) ChatWithRole(ctx context.Context, params *ChatWithRoleParams) (*ChatWithRoleResult, error) {
+func (c *ZhipuStoryClient) ChatWithRole(ctx context.Context, params *ChatWithRoleParams) (*ChatWithRoleResult, error) {
 	ret := &ChatWithRoleResult{}
-	chatService := c.Client.ChatCompletion("charglm-4")
+	chatService := c.ZhipuClient.ChatCompletion("charglm-4")
 	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
 		Role:    "user",
 		Content: params.MessageContent,
@@ -264,9 +264,9 @@ type GenStoryRoleInfoResult struct {
 	Content string `json:"content"`
 }
 
-func (c *StoryClient) GenStoryRoleInfo(ctx context.Context, params *GenStoryRoleInfoParams) (*GenStoryRoleInfoResult, error) {
+func (c *ZhipuStoryClient) GenStoryRoleInfo(ctx context.Context, params *GenStoryRoleInfoParams) (*GenStoryRoleInfoResult, error) {
 	ret := &GenStoryRoleInfoResult{}
-	chatService := c.Client.ChatCompletion("glm-4-flash")
+	chatService := c.ZhipuClient.ChatCompletion("glm-4-flash")
 	completeMessage := ""
 	chatService.AddMessage(zhipuapi.ChatCompletionMessage{
 		Role:    "user",

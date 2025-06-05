@@ -12,6 +12,10 @@ import (
 	"github.com/grapery/grapery/pkg/cloud/aliyun"
 )
 
+const (
+	DashScopeAPIKey = ""
+)
+
 type AliyunStoryClient struct {
 	Client          *aliyun.AliyunClient
 	DashScopeAPIKey string
@@ -20,7 +24,8 @@ type AliyunStoryClient struct {
 func NewAliyunClient() *AliyunStoryClient {
 	client, _ := aliyun.NewAliyunClient()
 	return &AliyunStoryClient{
-		Client: client,
+		Client:          client,
+		DashScopeAPIKey: DashScopeAPIKey,
 	}
 }
 
@@ -170,7 +175,7 @@ func (c *AliyunStoryClient) GenStoryBoardInfo(ctx context.Context, params *Story
 	}, nil
 }
 
-func (c *AliyunStoryClient) GenStoryPeopleCharactor(ctx context.Context, params *GenStoryPeopleCharactorParams) (*GenStoryPeopleCharactorResult, error) {
+func (c *AliyunStoryClient) GenStoryRoleInfo(ctx context.Context, params *GenStoryCharactorParams) (*GenStoryCharactorResult, error) {
 	// 创建 HTTP 客户端
 	client := &http.Client{}
 	// 构建请求体
@@ -220,7 +225,7 @@ func (c *AliyunStoryClient) GenStoryPeopleCharactor(ctx context.Context, params 
 	if err != nil {
 		return nil, err
 	}
-	return &GenStoryPeopleCharactorResult{
+	return &GenStoryCharactorResult{
 		Content: ret.Output.Choices[0].Message.Content,
 	}, nil
 }
@@ -455,46 +460,6 @@ const (
 	TaskStatusUnknown string = "UNKNOWN"
 )
 
-// GetImageGenerationTaskStatus 获取图像生成任务状态
-// 通过任务ID查询图像生成任务的状态
-/*
-	PENDING：任务排队中
-	RUNNING：任务处理中
-	SUCCEEDED：任务执行成功
-	FAILED：任务执行失败
-	CANCELED：任务取消成功
-	UNKNOWN：任务不存在或状态未知
-*/
-// GET https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}
-// 注意：此方法需要提供有效的任务ID
-
-/*
-	{
-	    "request_id": "f767d108-7d50-908b-a6d9-xxxxxx",
-	    "output": {
-	        "task_id": "d492bffd-10b5-4169-b639-xxxxxx",
-	        "task_status": "SUCCEEDED",
-	        "submit_time": "2025-01-08 16:03:59.840",
-	        "scheduled_time": "2025-01-08 16:03:59.863",
-	        "end_time": "2025-01-08 16:04:10.660",
-	        "results": [
-	            {
-	                "orig_prompt": "一间有着精致窗户的花店，漂亮的木质门，摆放着花朵",
-	                "actual_prompt": "一间有着精致雕花窗户的花店，漂亮的深色木质门上挂着铜制把手。店内摆放着各式各样的鲜花，包括玫瑰、百合和向日葵，色彩鲜艳，生机勃勃。背景是温馨的室内场景，透过窗户可以看到街道。高清写实摄影，中景构图。",
-	                "url": "https://dashscope-result-wlcb.oss-cn-wulanchabu.aliyuncs.com/1.png"
-	            }
-	        ],
-	        "task_metrics": {
-	            "TOTAL": 1,
-	            "SUCCEEDED": 1,
-	            "FAILED": 0
-	        }
-	    },
-	    "usage": {
-	        "image_count": 1
-	    }
-	}
-*/
 type DashScopeTaskStatusResponse struct {
 	RequestID string `json:"request_id"` // 请求ID
 	Output    struct {

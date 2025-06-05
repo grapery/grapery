@@ -35,7 +35,7 @@ type MessageService struct {
 	// 管理活跃的客户端连接
 	clients map[string]*Client
 	mu      sync.RWMutex
-	client  *client.StoryClient
+	client  *client.ZhipuStoryClient
 }
 
 // 添加心跳检测

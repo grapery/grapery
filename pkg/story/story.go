@@ -121,14 +121,16 @@ type StoryServer interface {
 }
 
 type StoryService struct {
-	client *client.StoryClient
+	zhipuClient   *client.ZhipuStoryClient
+	bailianClient *client.AliyunStoryClient
 }
 
 func NewStoryService() *StoryService {
 	return &StoryService{
-		client: client.NewStoryClient(
+		zhipuClient: client.NewStoryClient(
 			client.PlatformZhipu,
 		),
+		bailianClient: client.NewAliyunClient(),
 	}
 }
 
@@ -417,7 +419,7 @@ func ConvertStorySceneToApiScene(scene *models.StoryBoardScene) *api.StoryBoardS
 		ImagePrompts: scene.ImagePrompts,
 		AudioPrompts: scene.AudioPrompts,
 		VideoPrompts: scene.VideoPrompts,
-		IsGenerating: int32(scene.IsGenerating),
+		IsGenerating: int32(scene.GenStatus),
 		GenResult:    scene.GenResult,
 		Status:       int32(scene.Status),
 		Ctime:        scene.CreateAt.Unix(),
@@ -535,7 +537,7 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 	if req.RenderType == api.RenderType_RENDER_TYPE_TEXT_UNSPECIFIED {
 		renderDetail.StoryId = req.StoryId
 		renderDetail.BoardId = req.BoardId
-		ret, err = s.client.GenStoryInfo(ctx, renderStoryParams)
+		ret, err = s.zhipuClient.GenStoryInfo(ctx, renderStoryParams)
 		if err != nil {
 			log.Log().Error("gen story info failed", zap.Error(err))
 			return nil, err

@@ -162,7 +162,7 @@ func ConvertStoryBoardSceneToApiStoryBoardScene(scene *models.StoryBoardScene) *
 		AudioPrompts: scene.AudioPrompts,
 		VideoPrompts: scene.VideoPrompts,
 		GenResult:    scene.GenResult,
-		IsGenerating: int32(scene.IsGenerating),
+		IsGenerating: int32(scene.GenStatus),
 		Status:       int32(scene.Status),
 		Ctime:        scene.CreateAt.Unix(),
 		Mtime:        scene.UpdateAt.Unix(),
@@ -179,7 +179,7 @@ func ConvertApiStoryBoardSceneToStoryBoardScene(scene *api.StoryBoardSence) *mod
 		AudioPrompts: scene.AudioPrompts,
 		VideoPrompts: scene.VideoPrompts,
 		GenResult:    scene.GenResult,
-		IsGenerating: int(scene.IsGenerating),
+		GenStatus:    int(scene.IsGenerating),
 		Status:       int(scene.Status),
 	}
 }

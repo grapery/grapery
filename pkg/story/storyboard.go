@@ -601,7 +601,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	}
 	result := new(StoryChapter)
 	start := time.Now()
-	ret, err := s.client.GenStoryBoardInfo(ctx, renderStoryParams)
+	ret, err := s.bailianClient.GenStoryBoardInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -762,15 +762,43 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 							Content: templatePrompt,
 						}
 
-						ret, err := s.client.GenStoryBoardImages(ctx, renderStoryParams)
+						ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
 						if err != nil {
 							log.Log().Error("gen storyboard info failed", zap.Error(err))
 							return nil, err
 						}
 						aliyunUrls := make([]string, 0)
-						for _, imageUrl := range ret.ImageUrls {
+						var realTaskRet = new(client.DashScopeTaskStatusResponse)
+						tick := time.NewTimer(10 * time.Second)
+						defer tick.Stop()
+					FETCH_GGEN_RESULT:
+						for {
+							select {
+							case <-tick.C:
+								realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
+								if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
+									realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
+									realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
+									storyGen.GenStatus = models.StoryGenStatusRunning
+									continue
+								}
+								if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
+									storyGen.GenStatus = models.StoryGenStatusFinish
+									break FETCH_GGEN_RESULT
+								}
+								if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
+									realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
+									storyGen.GenStatus = models.StoryGenStatusError
+									break FETCH_GGEN_RESULT
+								}
+							case <-ctx.Done():
+								break FETCH_GGEN_RESULT
+							}
+						}
+						log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
+						for _, imageUrl := range realTaskRet.Output.Results {
 							aliyunClient := aliyun.GetGlobalClient()
-							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl.URL)
 							if err != nil {
 								log.Log().Error("upload file from url failed", zap.Error(err))
 								continue
@@ -786,6 +814,8 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
 						storyGen.Content = ""
 						storyGen.FinishTime = time.Now().Unix()
+						storyGen.TaskType = 2
+						storyGen.TaskId = realTaskRet.Output.TaskID
 						err = models.UpdateStoryGen(ctx, storyGen)
 						if err != nil {
 							log.Log().Error("update storyboard image gen failed", zap.Error(err))
@@ -975,7 +1005,7 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	}
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1202,7 +1232,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	}
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1391,7 +1421,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		Content: roleRequirePrompt,
 	}
 	result := new(CharacterDetail)
-	ret, err := s.client.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1632,7 +1662,7 @@ func (s *StoryService) GetStoryboardScene(ctx context.Context, req *api.GetStory
 		apiScene.ImagePrompts = scene.ImagePrompts
 		apiScene.AudioPrompts = scene.AudioPrompts
 		apiScene.VideoPrompts = scene.VideoPrompts
-		apiScene.IsGenerating = int32(scene.IsGenerating)
+		apiScene.IsGenerating = int32(scene.GenStatus)
 		apiScene.GenResult = scene.GenResult
 		apiScene.Status = int32(scene.Status)
 		apiScene.Ctime = scene.CreateAt.Unix()
@@ -1659,7 +1689,7 @@ func (s *StoryService) CreateStoryBoardScene(ctx context.Context, req *api.Creat
 	newScene.AudioPrompts = req.Sence.GetAudioPrompts()
 	newScene.VideoPrompts = req.Sence.GetVideoPrompts()
 	newScene.Status = 1
-	newScene.IsGenerating = 0
+	newScene.GenStatus = int(models.StoryGenStatusInit)
 	newScene.GenResult = req.Sence.GetGenResult()
 	_, err := models.CreateStoryBoardScene(ctx, newScene)
 	if err != nil {
@@ -1695,7 +1725,7 @@ func (s *StoryService) UpdateStoryBoardSence(ctx context.Context, req *api.Updat
 	scene.AudioPrompts = req.Sence.GetAudioPrompts()
 	scene.VideoPrompts = req.Sence.GetVideoPrompts()
 	scene.Status = int(req.Sence.GetStatus())
-	scene.IsGenerating = int(req.Sence.GetIsGenerating())
+	scene.GenStatus = int(req.Sence.GetIsGenerating())
 	scene.GenResult = req.Sence.GetGenResult()
 	err = models.UpdateStoryBoardScene(ctx, scene)
 	if err != nil {
@@ -1789,7 +1819,7 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 			Message: "scene is generating",
 		}, nil
 	}
-	scene.IsGenerating = 1
+	scene.GenStatus = int(models.StoryGenStatusInit)
 	scene.Status = 2
 	_ = models.UpdateStoryBoardScene(ctx, scene)
 	// 2. 生成指定场景的图片
@@ -1800,13 +1830,42 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 		Content: templatePrompt,
 	}
 	log.Log().Sugar().Infof("render storyboard scene, scene: %s, prompt: %s", scene.Content, templatePrompt)
-	ret, err := s.client.GenStoryBoardImages(ctx, renderStoryParams)
+	ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
+	var realTaskRet = new(client.DashScopeTaskStatusResponse)
+	tick := time.NewTimer(10 * time.Second)
+	defer tick.Stop()
+FETCH_GGEN_RESULT:
+	for {
+		select {
+		case <-tick.C:
+			realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
+			if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
+				realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
+				realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
+				scene.GenStatus = int(models.StoryGenStatusRunning)
+				continue
+			}
+			if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
+				scene.GenStatus = int(models.StoryGenStatusFinish)
+				break FETCH_GGEN_RESULT
+			}
+			if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
+				realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
+				scene.GenStatus = int(models.StoryGenStatusError)
+				break FETCH_GGEN_RESULT
+			}
+		case <-ctx.Done():
+			break FETCH_GGEN_RESULT
+		}
+	}
+
 	aliyunUrls := make([]string, 0)
-	for _, imageUrl := range ret.ImageUrls {
+	log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
+	for _, imageUrl := range realTaskRet.Output.ResultsUrls {
 		aliyunClient := aliyun.GetGlobalClient()
 		aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
 		if err != nil {
@@ -1824,8 +1883,8 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 	}
 	retData, _ := json.Marshal(aliyunUrls)
 	scene.GenResult = string(retData)
-	scene.IsGenerating = 0
 	scene.Status = 1
+	scene.TaskId = ret.Output.TaskID
 	err = models.UpdateStoryBoardScene(ctx, scene)
 	if err != nil {
 		log.Log().Error("update storyboard scene failed", zap.Error(err))
@@ -1912,15 +1971,43 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 			Content: templatePrompt,
 		}
 		log.Log().Sugar().Infof("render storyboard scene, scene: %s, prompt: %s", scene.Content, templatePrompt)
-		ret, err := s.client.GenStoryBoardImages(ctx, renderStoryParams)
+		ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
 		if err != nil {
 			log.Log().Error("gen storyboard info failed", zap.Error(err))
 			return nil, err
 		}
 		aliyunUrls := make([]string, 0)
-		for _, imageUrl := range ret.ImageUrls {
+		var realTaskRet = new(client.DashScopeTaskStatusResponse)
+		tick := time.NewTimer(10 * time.Second)
+		defer tick.Stop()
+	FETCH_GGEN_RESULT:
+		for {
+			select {
+			case <-tick.C:
+				realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
+				if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
+					realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
+					realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
+					scene.GenStatus = int(models.StoryGenStatusRunning)
+					continue
+				}
+				if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
+					scene.GenStatus = int(models.StoryGenStatusFinish)
+					break FETCH_GGEN_RESULT
+				}
+				if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
+					realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
+					scene.GenStatus = int(models.StoryGenStatusError)
+					break FETCH_GGEN_RESULT
+				}
+			case <-ctx.Done():
+				break FETCH_GGEN_RESULT
+			}
+		}
+		log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
+		for _, imageUrl := range realTaskRet.Output.Results {
 			aliyunClient := aliyun.GetGlobalClient()
-			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl.URL)
 			if err != nil {
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
@@ -1935,7 +2022,6 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 		}
 		retData, _ := json.Marshal(aliyunUrls)
 		scene.GenResult = string(retData)
-		scene.IsGenerating = 0
 		scene.Status = 1
 		err = models.UpdateStoryBoardScene(ctx, scene)
 		if err != nil {

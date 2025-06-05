@@ -52,6 +52,8 @@ type StoryGen struct {
 	GenType    int
 	// 1:故事，2:故事板,3:角色
 	TaskType int
+	// task id
+	TaskId string
 }
 
 func (s StoryGen) TableName() string {

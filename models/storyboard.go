@@ -321,9 +321,10 @@ type StoryBoardScene struct {
 	ImagePrompts string
 	AudioPrompts string
 	VideoPrompts string
-	IsGenerating int
+	GenStatus    int
 	GenResult    string
 	Status       int
+	TaskId       string
 }
 
 func (board StoryBoardScene) TableName() string {
