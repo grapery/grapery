@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"time"
 
 	connect "github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
@@ -106,9 +107,12 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		mux.Handle(path, handler)
 		serverAddr := "0.0.0.0:12305"
 		logrus.Infof("Starting http server on %s", serverAddr)
+		server := &http2.Server{}
+		server.ReadIdleTimeout = time.Second * 180
+		server.WriteByteTimeout = time.Second * 180
 		http.ListenAndServe(
 			serverAddr,
-			h2c.NewHandler(mux, &http2.Server{}),
+			h2c.NewHandler(mux, server),
 		)
 	}()
 
