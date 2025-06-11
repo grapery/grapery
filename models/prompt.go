@@ -190,16 +190,14 @@ var PreDefineTemplateChVersion = []PromptTemplate{
 	},
 }
 
+// Prompt 提示词/生成参数
 type Prompt struct {
 	IDBase
-	Name           string
-	NegativePrompt string
-	PositivePrompt string
-	TemplateId     int64
-	Platform       string
-	GroupID        int64
-	UserID         int64
-	PromptType     string
+	UserID      int64  `gorm:"column:user_id" json:"user_id,omitempty"`         // 用户ID
+	Type        int    `gorm:"column:type" json:"type,omitempty"`               // 类型
+	Content     string `gorm:"column:content" json:"content,omitempty"`         // 内容
+	Status      int    `gorm:"column:status" json:"status,omitempty"`           // 状态
+	Description string `gorm:"column:description" json:"description,omitempty"` // 描述
 }
 
 func NewPrompt() *Prompt {
@@ -283,4 +281,32 @@ func ListPromptName(ctx context.Context, promptType PromptType) ([]string, error
 		return nil, err
 	}
 	return prompts, nil
+}
+
+// 新增：分页获取Prompt列表
+func GetPromptList(ctx context.Context, offset, limit int) ([]*Prompt, error) {
+	var prompts []*Prompt
+	err := DataBase().Model(&Prompt{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&prompts).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return prompts, nil
+}
+
+// 新增：通过主键唯一查询
+func GetPromptByID(ctx context.Context, id int64) (*Prompt, error) {
+	prompt := &Prompt{}
+	err := DataBase().Model(prompt).
+		WithContext(ctx).
+		Where("id = ?", id).
+		First(prompt).Error
+	if err != nil {
+		return nil, err
+	}
+	return prompt, nil
 }

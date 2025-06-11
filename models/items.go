@@ -6,30 +6,32 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/grapery/common-protoc/gen"
+	"gorm.io/gorm"
 )
 
 /*
 内容承载的item:
 图片，文字,视频，音乐
 */
+// StoryItem 内容承载的item（图片、文字、视频、音乐等）
 type StoryItem struct {
 	IDBase
-	ProjectID     int64         `json:"project_id,omitempty"`
-	UserID        int64         `json:"user_id,omitempty"`
-	Visable       api.ScopeType `json:"visable,omitempty"`
-	Title         string        `json:"title,omitempty"`
-	Description   string        `json:"description,omitempty"`
-	ItemType      api.ItemType  `json:"item_type,omitempty"`
-	Content       string        `json:"content,omitempty"`
-	Url           string        `json:"url,omitempty"`
-	Size          string        `json:"size,omitempty"`
-	PrevId        int64         `json:"prev_id,omitempty"`
-	NextId        int64         `json:"next_id,omitempty"`
-	Token         string        `json:"token,omitempty"`
-	IsHiddenToken bool          `json:"is_hidden_token,omitempty"`
-	Tags          string        `json:"tags,omitempty"`
-	LikeCount     int64         `json:"like_count,omitempty"`
-	IsAIGenerate  bool          `json:"is_ai_generate,omitempty"`
+	ProjectID     int64         `gorm:"column:project_id" json:"project_id,omitempty"`           // 项目ID
+	UserID        int64         `gorm:"column:user_id" json:"user_id,omitempty"`                 // 用户ID
+	Visable       api.ScopeType `gorm:"column:visable" json:"visable,omitempty"`                 // 可见性
+	Title         string        `gorm:"column:title" json:"title,omitempty"`                     // 标题
+	Description   string        `gorm:"column:description" json:"description,omitempty"`         // 描述
+	ItemType      api.ItemType  `gorm:"column:item_type" json:"item_type,omitempty"`             // 类型
+	Content       string        `gorm:"column:content" json:"content,omitempty"`                 // 内容
+	Url           string        `gorm:"column:url" json:"url,omitempty"`                         // 资源URL
+	Size          string        `gorm:"column:size" json:"size,omitempty"`                       // 大小
+	PrevId        int64         `gorm:"column:prev_id" json:"prev_id,omitempty"`                 // 上一项ID
+	NextId        int64         `gorm:"column:next_id" json:"next_id,omitempty"`                 // 下一项ID
+	Token         string        `gorm:"column:token" json:"token,omitempty"`                     // token
+	IsHiddenToken bool          `gorm:"column:is_hidden_token" json:"is_hidden_token,omitempty"` // 是否隐藏token
+	Tags          string        `gorm:"column:tags" json:"tags,omitempty"`                       // 标签
+	LikeCount     int64         `gorm:"column:like_count" json:"like_count,omitempty"`           // 点赞数
+	IsAIGenerate  bool          `gorm:"column:is_ai_generate" json:"is_ai_generate,omitempty"`   // 是否AI生成
 }
 
 func (i StoryItem) TableName() string {
@@ -223,4 +225,32 @@ type Timeline struct {
 
 func (timeline Timeline) TableName() string {
 	return "timeline"
+}
+
+// 新增：分页获取StoryItem列表
+func GetStoryItemList(ctx context.Context, offset, limit int) ([]*StoryItem, error) {
+	var items []*StoryItem
+	err := DataBase().Model(&StoryItem{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&items).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return items, nil
+}
+
+// 新增：通过主键唯一查询
+func GetStoryItemByID(ctx context.Context, id int64) (*StoryItem, error) {
+	item := &StoryItem{}
+	err := DataBase().Model(item).
+		WithContext(ctx).
+		Where("id = ?", id).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
 }

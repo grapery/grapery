@@ -5,6 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"context"
+
 	api "github.com/grapery/common-protoc/gen"
 )
 
@@ -19,25 +21,27 @@ const (
 1.包含多种内容
 2.项目里可以开放问题(暂时可以不做)
 */
+// Project 项目/事件流
 type Project struct {
 	IDBase
-	Name        string `json:"name,omitempty"`
-	Tilte       string `json:"tilte,omitempty"`
-	ShortDesc   string `json:"short_desc,omitempty"`
-	ProjectType int    `json:"project_type,omitempty"`
-	CreatorID   int64  `json:"creator_id,omitempty"`
-	OwnerID     int64  `json:"owner_id,omitempty"`
-	GroupID     int64  `json:"group_id,omitempty"`
+	Name        string `gorm:"column:name" json:"name,omitempty"`                 // 项目名
+	Tilte       string `gorm:"column:tilte" json:"tilte,omitempty"`               // 标题（疑似拼写错误，建议Title）
+	ShortDesc   string `gorm:"column:short_desc" json:"short_desc,omitempty"`     // 简短描述
+	ProjectType int    `gorm:"column:project_type" json:"project_type,omitempty"` // 项目类型
+	CreatorID   int64  `gorm:"column:creator_id" json:"creator_id,omitempty"`     // 创建者ID
+	OwnerID     int64  `gorm:"column:owner_id" json:"owner_id,omitempty"`         // 拥有者ID
+	GroupID     int64  `gorm:"column:group_id" json:"group_id,omitempty"`         // 群组ID
 	ProjectSetting
 }
 
+// ProjectSetting 项目扩展设置
 type ProjectSetting struct {
-	Description string        `json:"description,omitempty"`
-	Avatar      string        `json:"avatar,omitempty"`
-	Visable     api.ScopeType `json:"visable,omitempty"`
-	IsAchieve   bool          `json:"is_achieve,omitempty"`
-	IsClose     bool          `json:"is_close,omitempty"`
-	IsPrivate   bool          `json:"is_private,omitempty"`
+	Description string        `gorm:"column:description" json:"description,omitempty"` // 描述
+	Avatar      string        `gorm:"column:avatar" json:"avatar,omitempty"`           // 头像
+	Visable     api.ScopeType `gorm:"column:visable" json:"visable,omitempty"`         // 可见性
+	IsAchieve   bool          `gorm:"column:is_achieve" json:"is_achieve,omitempty"`   // 是否达成
+	IsClose     bool          `gorm:"column:is_close" json:"is_close,omitempty"`       // 是否关闭
+	IsPrivate   bool          `gorm:"column:is_private" json:"is_private,omitempty"`   // 是否私有
 }
 
 func (p Project) TableName() string {
@@ -379,4 +383,32 @@ func StopWatchingProject(userID, groupID, projectId int64) error {
 type ProjectProfile struct {
 	IDBase
 	ProjectID int64 `json:"project_id,omitempty"`
+}
+
+// 新增：分页获取Project列表
+func GetProjectList(ctx context.Context, offset, limit int) ([]*Project, error) {
+	var projects []*Project
+	err := DataBase().Model(&Project{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&projects).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return projects, nil
+}
+
+// 新增：通过Name唯一查询
+func GetProjectByNameUnique(ctx context.Context, name string) (*Project, error) {
+	project := &Project{}
+	err := DataBase().Model(project).
+		WithContext(ctx).
+		Where("name = ?", name).
+		First(project).Error
+	if err != nil {
+		return nil, err
+	}
+	return project, nil
 }

@@ -109,38 +109,38 @@ const (
 	StoryStatusClose        StoryStatus = 3
 )
 
+// Story 故事主表
 type Story struct {
 	IDBase
-	Title        string        `json:"title,omitempty"`
-	Name         string        `json:"name,omitempty"`
-	ShortDesc    string        `json:"short_desc,omitempty"`
-	CreatorID    int64         `json:"creator_id,omitempty"`
-	OwnerID      int64         `json:"owner_id,omitempty"`
-	GroupID      int64         `json:"group_id,omitempty"`
-	Origin       string        `json:"origin,omitempty"`
-	RootBoardID  int           `json:"root_board_id,omitempty"`
-	AIGen        bool          `json:"ai_gen,omitempty"`
-	Avatar       string        `json:"avatar,omitempty"`
-	OriginAvatar string        `json:"origin_avatar,omitempty"`
-	Visable      api.ScopeType `json:"visable,omitempty"`
-	Status       StoryStatus   `json:"status,omitempty"`
-	IsAchieve    bool          `json:"is_achieve,omitempty"`
-	IsClose      bool          `json:"is_close,omitempty"`
-	IsPrivate    bool          `json:"is_private,omitempty"`
-	Params       string        `json:"params,omitempty"`
-	Style        string        `json:"style,omitempty"`
-	StyleDesc    string        `json:"style_desc,omitempty"`
-	StyleImage   string        `json:"style_image,omitempty"`
-	Subject      string        `json:"subject,omitempty"`
-	SubjectDesc  string        `json:"subject_desc,omitempty"`
-
-	LikeCount    int64 `json:"like_count,omitempty"`
-	CommentCount int64 `json:"comment_count,omitempty"`
-	ShareCount   int64 `json:"share_count,omitempty"`
-	FollowCount  int64 `json:"follow_count,omitempty"`
-	TotalBoards  int64 `json:"total_boards,omitempty"`
-	TotalRoles   int64 `json:"total_roles,omitempty"`
-	TotalMembers int64 `json:"total_members,omitempty"`
+	Title        string        `gorm:"column:title" json:"title,omitempty"`                 // 故事标题
+	Name         string        `gorm:"column:name" json:"name,omitempty"`                   // 故事名
+	ShortDesc    string        `gorm:"column:short_desc" json:"short_desc,omitempty"`       // 简短描述
+	CreatorID    int64         `gorm:"column:creator_id" json:"creator_id,omitempty"`       // 创建者ID
+	OwnerID      int64         `gorm:"column:owner_id" json:"owner_id,omitempty"`           // 拥有者ID
+	GroupID      int64         `gorm:"column:group_id" json:"group_id,omitempty"`           // 所属群组ID
+	Origin       string        `gorm:"column:origin" json:"origin,omitempty"`               // 来源
+	RootBoardID  int           `gorm:"column:root_board_id" json:"root_board_id,omitempty"` // 根故事板ID
+	AIGen        bool          `gorm:"column:ai_gen" json:"ai_gen,omitempty"`               // 是否AI生成
+	Avatar       string        `gorm:"column:avatar" json:"avatar,omitempty"`               // 封面
+	OriginAvatar string        `gorm:"column:origin_avatar" json:"origin_avatar,omitempty"` // 原始封面
+	Visable      api.ScopeType `gorm:"column:visable" json:"visable,omitempty"`             // 可见性
+	Status       StoryStatus   `gorm:"column:status" json:"status,omitempty"`               // 状态
+	IsAchieve    bool          `gorm:"column:is_achieve" json:"is_achieve,omitempty"`       // 是否达成
+	IsClose      bool          `gorm:"column:is_close" json:"is_close,omitempty"`           // 是否关闭
+	IsPrivate    bool          `gorm:"column:is_private" json:"is_private,omitempty"`       // 是否私有
+	Params       string        `gorm:"column:params" json:"params,omitempty"`               // 生成参数
+	Style        string        `gorm:"column:style" json:"style,omitempty"`                 // 风格
+	StyleDesc    string        `gorm:"column:style_desc" json:"style_desc,omitempty"`       // 风格描述
+	StyleImage   string        `gorm:"column:style_image" json:"style_image,omitempty"`     // 风格图片
+	Subject      string        `gorm:"column:subject" json:"subject,omitempty"`             // 主题
+	SubjectDesc  string        `gorm:"column:subject_desc" json:"subject_desc,omitempty"`   // 主题描述
+	LikeCount    int64         `gorm:"column:like_count" json:"like_count,omitempty"`       // 点赞数
+	CommentCount int64         `gorm:"column:comment_count" json:"comment_count,omitempty"` // 评论数
+	ShareCount   int64         `gorm:"column:share_count" json:"share_count,omitempty"`     // 分享数
+	FollowCount  int64         `gorm:"column:follow_count" json:"follow_count,omitempty"`   // 关注数
+	TotalBoards  int64         `gorm:"column:total_boards" json:"total_boards,omitempty"`   // 故事板总数
+	TotalRoles   int64         `gorm:"column:total_roles" json:"total_roles,omitempty"`     // 角色总数
+	TotalMembers int64         `gorm:"column:total_members" json:"total_members,omitempty"` // 成员总数
 }
 
 func (s *Story) TableName() string {
@@ -382,4 +382,32 @@ func GetTrendingStoryRoles(ctx context.Context, offset, pageSize int, starttime,
 		return nil, err
 	}
 	return roles, nil
+}
+
+// 新增：分页获取Story列表
+func GetStoryList(ctx context.Context, offset, limit int) ([]*Story, error) {
+	var stories []*Story
+	err := DataBase().Model(&Story{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&stories).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return stories, nil
+}
+
+// 新增：通过Title唯一查询
+func GetStoryByTitleUnique(ctx context.Context, title string) (*Story, error) {
+	story := &Story{}
+	err := DataBase().Model(story).
+		WithContext(ctx).
+		Where("title = ?", title).
+		First(story).Error
+	if err != nil {
+		return nil, err
+	}
+	return story, nil
 }

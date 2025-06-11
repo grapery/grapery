@@ -9,30 +9,26 @@ import (
 )
 
 // 场景，剧情，故事板
+// StoryBoard 代表一个故事板（漫画/剧情单元）
 type StoryBoard struct {
 	IDBase
-	Title       string
-	Description string
-	CreatorID   int64
-	StoryID     int64
-	PrevId      int64
-	Avatar      string
-	// 是否删除
-	Status int
-	// 0: 初始化，1：生成中，2：生成完成，3：生成失败
-	Stage int
-
-	Params string
-
-	ForkAble   bool
-	ForkNum    int
-	LikeNum    int
-	CommentNum int
-	RoleNum    int
-	ShareNum   int
-
-	Level   int
-	IsAiGen bool
+	Title       string `gorm:"column:title" json:"title,omitempty"`             // 故事板标题
+	Description string `gorm:"column:description" json:"description,omitempty"` // 描述
+	CreatorID   int64  `gorm:"column:creator_id" json:"creator_id,omitempty"`   // 创建者ID
+	StoryID     int64  `gorm:"column:story_id" json:"story_id,omitempty"`       // 所属故事ID
+	PrevId      int64  `gorm:"column:prev_id" json:"prev_id,omitempty"`         // 上一个故事板ID
+	Avatar      string `gorm:"column:avatar" json:"avatar,omitempty"`           // 封面
+	Status      int    `gorm:"column:status" json:"status,omitempty"`           // 是否删除（1:有效, 0:无效）
+	Stage       int    `gorm:"column:stage" json:"stage,omitempty"`             // 0:初始化,1:生成中,2:完成,3:失败
+	Params      string `gorm:"column:params" json:"params,omitempty"`           // 生成参数
+	ForkAble    bool   `gorm:"column:fork_able" json:"fork_able,omitempty"`     // 是否可被fork
+	ForkNum     int    `gorm:"column:fork_num" json:"fork_num,omitempty"`       // fork数
+	LikeNum     int    `gorm:"column:like_num" json:"like_num,omitempty"`       // 点赞数
+	CommentNum  int    `gorm:"column:comment_num" json:"comment_num,omitempty"` // 评论数
+	RoleNum     int    `gorm:"column:role_num" json:"role_num,omitempty"`       // 角色数
+	ShareNum    int    `gorm:"column:share_num" json:"share_num,omitempty"`     // 分享数
+	Level       int    `gorm:"column:level" json:"level,omitempty"`             // 层级
+	IsAiGen     bool   `gorm:"column:is_ai_gen" json:"is_ai_gen,omitempty"`     // 是否AI生成
 }
 
 func (board StoryBoard) TableName() string {
@@ -311,20 +307,29 @@ func GetStoryBoardByStoryAndPrevId(ctx context.Context, storyID int64, prevId in
 	return boards, nil
 }
 
+// StoryBoardScene 代表故事板中的一个场景
+// status: 1-有效, 0-无效
+// gen_status: 0-未生成, 1-生成中, 2-完成, 3-失败
+// task_id: 生成任务ID
+// content: 场景文本内容
+// character_ids: 角色ID列表
+// image_prompts/audio_prompts/video_prompts: 多模态生成提示
+// gen_result: 生成结果
+// ...
 type StoryBoardScene struct {
 	IDBase
-	Content      string
-	CharacterIds string
-	CreatorId    int64
-	StoryId      int64
-	BoardId      int64
-	ImagePrompts string
-	AudioPrompts string
-	VideoPrompts string
-	GenStatus    int
-	GenResult    string
-	Status       int
-	TaskId       string
+	Content      string `gorm:"column:content" json:"content,omitempty"`             // 场景内容
+	CharacterIds string `gorm:"column:character_ids" json:"character_ids,omitempty"` // 角色ID列表
+	CreatorId    int64  `gorm:"column:creator_id" json:"creator_id,omitempty"`       // 创建者ID
+	StoryId      int64  `gorm:"column:story_id" json:"story_id,omitempty"`           // 故事ID
+	BoardId      int64  `gorm:"column:board_id" json:"board_id,omitempty"`           // 故事板ID
+	ImagePrompts string `gorm:"column:image_prompts" json:"image_prompts,omitempty"` // 图像生成提示
+	AudioPrompts string `gorm:"column:audio_prompts" json:"audio_prompts,omitempty"` // 音频生成提示
+	VideoPrompts string `gorm:"column:video_prompts" json:"video_prompts,omitempty"` // 视频生成提示
+	GenStatus    int    `gorm:"column:gen_status" json:"gen_status,omitempty"`       // 生成状态
+	GenResult    string `gorm:"column:gen_result" json:"gen_result,omitempty"`       // 生成结果
+	Status       int    `gorm:"column:status" json:"status,omitempty"`               // 记录状态
+	TaskId       string `gorm:"column:task_id" json:"task_id,omitempty"`             // 任务ID
 }
 
 func (board StoryBoardScene) TableName() string {
@@ -482,20 +487,21 @@ func UpdateStoryBoardSceneGenResult(ctx context.Context, id int64, genResult str
 		Update("gen_result = ?", genResult).Error
 }
 
+// StoryBoardRole 代表故事板中的角色
+// is_main: 0-主线人物, 1~* 其他分支人物
+// is_published: 1-发布, 其他-未发布
 type StoryBoardRole struct {
 	IDBase
-	CreatorId int64
-	StoryId   int64
-	BoardId   int64
-	RoleId    int64
-	Name      string
-	Avatar    string
-	Desc      string
-	Status    int
-	// 0:主线人物，1~* 其他分支人物
-	IsMain int
-	// 1，发布，其他，未发布
-	IsPublished int
+	CreatorId   int64  `gorm:"column:creator_id" json:"creator_id,omitempty"`     // 创建者ID
+	StoryId     int64  `gorm:"column:story_id" json:"story_id,omitempty"`         // 故事ID
+	BoardId     int64  `gorm:"column:board_id" json:"board_id,omitempty"`         // 故事板ID
+	RoleId      int64  `gorm:"column:role_id" json:"role_id,omitempty"`           // 角色ID
+	Name        string `gorm:"column:name" json:"name,omitempty"`                 // 角色名
+	Avatar      string `gorm:"column:avatar" json:"avatar,omitempty"`             // 头像
+	Desc        string `gorm:"column:desc" json:"desc,omitempty"`                 // 角色描述
+	Status      int    `gorm:"column:status" json:"status,omitempty"`             // 状态
+	IsMain      int    `gorm:"column:is_main" json:"is_main,omitempty"`           // 是否主线
+	IsPublished int    `gorm:"column:is_published" json:"is_published,omitempty"` // 是否发布
 }
 
 func (board StoryBoardRole) TableName() string {
@@ -709,4 +715,32 @@ func GetUnPublishedStoryBoardsByUserId(ctx context.Context, userId int64, page i
 		return nil, err
 	}
 	return boards, nil
+}
+
+// 新增：分页获取StoryBoard列表
+func GetStoryBoardList(ctx context.Context, offset, limit int) ([]*StoryBoard, error) {
+	var boards []*StoryBoard
+	err := DataBase().Model(&StoryBoard{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&boards).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return boards, nil
+}
+
+// 新增：通过Title唯一查询
+func GetStoryBoardByTitle(ctx context.Context, title string) (*StoryBoard, error) {
+	board := &StoryBoard{}
+	err := DataBase().Model(board).
+		WithContext(ctx).
+		Where("title = ?", title).
+		First(board).Error
+	if err != nil {
+		return nil, err
+	}
+	return board, nil
 }

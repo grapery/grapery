@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -16,23 +17,24 @@ const (
 
 // pic/wold/emoji
 // 可以是普通的评论，或者是讨论中的回复
+// Comment 评论/讨论内容
 type Comment struct {
 	IDBase
-	UserID        int64  `json:"user_id,omitempty"`
-	StoryID       int64  `json:"story_id,omitempty"`
-	GroupID       int64  `json:"group_id,omitempty"`
-	RoleID        int64  `json:"role_id,omitempty"`
-	TimelineID    int64  `json:"timeline_id,omitempty"`
-	StoryboardID  int64  `json:"storyboard_id,omitempty"`
-	ItemType      int64  `json:"item_type,omitempty"`
-	PreID         int64  `json:"pre_id,omitempty"`
-	Content       []byte `json:"content,omitempty"`
-	RootCommentID int64  `json:"root_comment_id,omitempty"`
-	LikeCount     int64  `json:"like_count,omitempty"`
-	DislikeCount  int64  `json:"dislike_count,omitempty"`
-	CommentType   int64  `json:"comment_type,omitempty"`
-	ReplyCount    int64  `json:"reply_count,omitempty"`
-	Status        int64  `json:"status,omitempty"`
+	UserID        int64  `gorm:"column:user_id" json:"user_id,omitempty"`                 // 用户ID
+	StoryID       int64  `gorm:"column:story_id" json:"story_id,omitempty"`               // 故事ID
+	GroupID       int64  `gorm:"column:group_id" json:"group_id,omitempty"`               // 群组ID
+	RoleID        int64  `gorm:"column:role_id" json:"role_id,omitempty"`                 // 角色ID
+	TimelineID    int64  `gorm:"column:timeline_id" json:"timeline_id,omitempty"`         // 时间线ID
+	StoryboardID  int64  `gorm:"column:storyboard_id" json:"storyboard_id,omitempty"`     // 故事板ID
+	ItemType      int64  `gorm:"column:item_type" json:"item_type,omitempty"`             // 评论类型
+	PreID         int64  `gorm:"column:pre_id" json:"pre_id,omitempty"`                   // 上一条评论ID
+	Content       []byte `gorm:"column:content" json:"content,omitempty"`                 // 评论内容
+	RootCommentID int64  `gorm:"column:root_comment_id" json:"root_comment_id,omitempty"` // 根评论ID
+	LikeCount     int64  `gorm:"column:like_count" json:"like_count,omitempty"`           // 点赞数
+	DislikeCount  int64  `gorm:"column:dislike_count" json:"dislike_count,omitempty"`     // 点踩数
+	CommentType   int64  `gorm:"column:comment_type" json:"comment_type,omitempty"`       // 评论类型
+	ReplyCount    int64  `gorm:"column:reply_count" json:"reply_count,omitempty"`         // 回复数
+	Status        int64  `gorm:"column:status" json:"status,omitempty"`                   // 状态
 }
 
 func (c Comment) TableName() string {
@@ -311,4 +313,32 @@ func GetCommentLike(commentID uint64, userId uint64) (*CommentLike, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// 新增：分页获取Comment列表
+func GetCommentList(ctx context.Context, offset, limit int) ([]*Comment, error) {
+	var comments []*Comment
+	err := DataBase().Model(&Comment{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&comments).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return comments, nil
+}
+
+// 新增：通过主键唯一查询
+func GetCommentByID(ctx context.Context, id int64) (*Comment, error) {
+	comment := &Comment{}
+	err := DataBase().Model(comment).
+		WithContext(ctx).
+		Where("id = ?", id).
+		First(comment).Error
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
 }

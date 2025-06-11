@@ -23,16 +23,17 @@ const (
 	LikeItemTypeComment
 )
 
+// LikeItem 点赞/点踩/收藏等行为记录
 type LikeItem struct {
 	IDBase
-	UserID       int64 `json:"user_id,omitempty"`
-	GroupID      int64 `json:"group_id,omitempty"`
-	TimelineID   int64 `json:"timeline_id,omitempty"`
-	StoryID      int64 `json:"story_id,omitempty"`
-	StoryboardId int64 `json:"storyboard_id,omitempty"`
-	RoleID       int64 `json:"role_id,omitempty"`
-	LikeType     int64 `json:"like_type,omitempty"`
-	LikeItemType int64 `json:"like_item_type,omitempty"`
+	UserID       int64 `gorm:"column:user_id" json:"user_id,omitempty"`               // 用户ID
+	GroupID      int64 `gorm:"column:group_id" json:"group_id,omitempty"`             // 群组ID
+	TimelineID   int64 `gorm:"column:timeline_id" json:"timeline_id,omitempty"`       // 时间线ID
+	StoryID      int64 `gorm:"column:story_id" json:"story_id,omitempty"`             // 故事ID
+	StoryboardId int64 `gorm:"column:storyboard_id" json:"storyboard_id,omitempty"`   // 故事板ID
+	RoleID       int64 `gorm:"column:role_id" json:"role_id,omitempty"`               // 角色ID
+	LikeType     int64 `gorm:"column:like_type" json:"like_type,omitempty"`           // 点赞类型
+	LikeItemType int64 `gorm:"column:like_item_type" json:"like_item_type,omitempty"` // 点赞对象类型
 }
 
 func (l LikeItem) TableName() string {
@@ -655,4 +656,32 @@ func GetStoryRolesIDByUserFollow(ctx context.Context, userId int64) ([]int64, er
 		}
 	}
 	return rolesIds, nil
+}
+
+// 新增：分页获取LikeItem列表
+func GetLikeItemList(ctx context.Context, offset, limit int) ([]*LikeItem, error) {
+	var items []*LikeItem
+	err := DataBase().Model(&LikeItem{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&items).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return items, nil
+}
+
+// 新增：通过主键唯一查询
+func GetLikeItemByID(ctx context.Context, id int64) (*LikeItem, error) {
+	item := &LikeItem{}
+	err := DataBase().Model(item).
+		WithContext(ctx).
+		Where("id = ?", id).
+		First(item).Error
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
 }

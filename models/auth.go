@@ -12,17 +12,18 @@ import (
 	"github.com/grapery/grapery/utils/log"
 )
 
+// Auth 用户认证信息
 type Auth struct {
 	IDBase
-	UID      int64        `json:"uid,omitempty" gorm:"unique_index,column:uid"`
-	Email    string       `json:"email,omitempty" gorm:"unique_index"`
-	Phone    string       `json:"phone,omitempty" gorm:"unique_index"`
-	Password string       `json:"password,omitempty" gorm:"password"`
-	Token    string       `json:"token,omitempty" gorm:"token"`
-	Salt     string       `json:"salt,omitempty" gorm:"salt"`
-	IsValid  bool         `json:"is_valid,omitempty"`
-	AuthType api.AuthType `json:"auth_type,omitempty" gorm:"authtype"`
-	Expired  int64        `json:"expired,omitempty"`
+	UID      int64        `gorm:"column:uid;uniqueIndex" json:"uid,omitempty"`     // 用户ID
+	Email    string       `gorm:"column:email;uniqueIndex" json:"email,omitempty"` // 邮箱
+	Phone    string       `gorm:"column:phone;uniqueIndex" json:"phone,omitempty"` // 手机号
+	Password string       `gorm:"column:password" json:"password,omitempty"`       // 密码
+	Token    string       `gorm:"column:token" json:"token,omitempty"`             // token
+	Salt     string       `gorm:"column:salt" json:"salt,omitempty"`               // 盐
+	IsValid  bool         `gorm:"column:is_valid" json:"is_valid,omitempty"`       // 是否有效
+	AuthType api.AuthType `gorm:"column:auth_type" json:"auth_type,omitempty"`     // 认证类型
+	Expired  int64        `gorm:"column:expired" json:"expired,omitempty"`         // 过期时间
 }
 
 func (a Auth) TableName() string {
@@ -149,4 +150,32 @@ func GetByUID(ctx context.Context, uid int) (*Auth, error) {
 		return nil, fmt.Errorf("get auth [%d] info failed ", uid)
 	}
 	return a, nil
+}
+
+// 新增：分页获取Auth列表
+func GetAuthList(ctx context.Context, offset, limit int) ([]*Auth, error) {
+	var auths []*Auth
+	err := DataBase().Model(&Auth{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&auths).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return auths, nil
+}
+
+// 新增：通过Email唯一查询
+func GetAuthByEmailUnique(ctx context.Context, email string) (*Auth, error) {
+	auth := &Auth{}
+	err := DataBase().Model(auth).
+		WithContext(ctx).
+		Where("email = ?", email).
+		First(auth).Error
+	if err != nil {
+		return nil, err
+	}
+	return auth, nil
 }

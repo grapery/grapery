@@ -14,21 +14,26 @@ import (
 
 type GroupType int
 
+// Group 代表一个用户组/社群
+// status: 1-有效, 0-无效
+// is_default: 是否为默认组
+// visable_type: 可见性
+// ...
 type Group struct {
 	IDBase
-	Name        string        `json:"name,omitempty"`
-	ShortDesc   string        `json:"short_desc,omitempty"`
-	Gtype       string        `json:"gtype,omitempty"`
-	CreatorID   int64         `json:"creator_id,omitempty"`
-	OwnerID     int64         `json:"owner_id,omitempty"`
-	Members     int64         `json:"members,omitempty"`
-	VisableType api.ScopeType `json:"visable_type,omitempty"`
-	Description string        `json:"description,omitempty"`
-	Avatar      string        `json:"avatar,omitempty"`
-	IsDefault   bool          `json:"is_default,omitempty"`
-	Status      int64         `json:"status,omitempty"`
-	Tags        string        `json:"tags,omitempty"`
-	Location    string        `json:"location,omitempty"`
+	Name        string        `gorm:"column:name;index" json:"name,omitempty"`           // 组名
+	ShortDesc   string        `gorm:"column:short_desc" json:"short_desc,omitempty"`     // 简短描述
+	Gtype       string        `gorm:"column:gtype" json:"gtype,omitempty"`               // 组类型
+	CreatorID   int64         `gorm:"column:creator_id" json:"creator_id,omitempty"`     // 创建者ID
+	OwnerID     int64         `gorm:"column:owner_id" json:"owner_id,omitempty"`         // 拥有者ID
+	Members     int64         `gorm:"column:members" json:"members,omitempty"`           // 成员数
+	VisableType api.ScopeType `gorm:"column:visable_type" json:"visable_type,omitempty"` // 可见性
+	Description string        `gorm:"column:description" json:"description,omitempty"`   // 详细描述
+	Avatar      string        `gorm:"column:avatar" json:"avatar,omitempty"`             // 头像
+	IsDefault   bool          `gorm:"column:is_default" json:"is_default,omitempty"`     // 是否默认组
+	Status      int64         `gorm:"column:status" json:"status,omitempty"`             // 状态
+	Tags        string        `gorm:"column:tags" json:"tags,omitempty"`                 // 标签
+	Location    string        `gorm:"column:location" json:"location,omitempty"`         // 位置
 }
 
 func (g Group) TableName() string {
@@ -180,13 +185,16 @@ func (g *Group) Delete() error {
 	return nil
 }
 
+// GroupMember 代表组成员
+// role: 1-admin, 2-member, 3-viewer
+// status: 1-有效, 0-无效
 type GroupMember struct {
 	IDBase
-	GroupID  int64 `json:"group_id,omitempty"`
-	UserID   int64 `json:"user_id,omitempty"`
-	Nickname string
-	Role     int64 // 1: admin, 2: member, 3: viewer
-	Status   int64
+	GroupID  int64  `gorm:"column:group_id" json:"group_id,omitempty"` // 组ID
+	UserID   int64  `gorm:"column:user_id" json:"user_id,omitempty"`   // 用户ID
+	Nickname string `gorm:"column:nickname" json:"nickname,omitempty"` // 昵称
+	Role     int64  `gorm:"column:role" json:"role,omitempty"`         // 角色
+	Status   int64  `gorm:"column:status" json:"status,omitempty"`     // 状态
 }
 
 func (g GroupMember) TableName() string {
@@ -503,16 +511,17 @@ func GetGroupsByIds(groupIds []int64) (groups []*Group, err error) {
 	return groups, nil
 }
 
+// GroupProfile 代表组的统计信息和扩展信息
 type GroupProfile struct {
 	IDBase
-	GroupID        int64  `json:"group_id,omitempty"`
-	Desc           string `json:"desc,omitempty"`
-	Members        int64  `json:"members,omitempty"`
-	DefaultStoryId int64  `json:"default_story_id,omitempty"`
-	StoryCount     int64  `json:"story_count,omitempty"`
-	IsVerified     bool   `json:"is_verified,omitempty"`
-	Followers      int64  `json:"followers,omitempty"`
-	BackgroundUrl  string `json:"background_url,omitempty"`
+	GroupID        int64  `gorm:"column:group_id" json:"group_id,omitempty"`                 // 组ID
+	Desc           string `gorm:"column:desc" json:"desc,omitempty"`                         // 组简介
+	Members        int64  `gorm:"column:members" json:"members,omitempty"`                   // 成员数
+	DefaultStoryId int64  `gorm:"column:default_story_id" json:"default_story_id,omitempty"` // 默认故事ID
+	StoryCount     int64  `gorm:"column:story_count" json:"story_count,omitempty"`           // 故事数
+	IsVerified     bool   `gorm:"column:is_verified" json:"is_verified,omitempty"`           // 是否认证
+	Followers      int64  `gorm:"column:followers" json:"followers,omitempty"`               // 关注数
+	BackgroundUrl  string `gorm:"column:background_url" json:"background_url,omitempty"`     // 背景图
 }
 
 func (g GroupProfile) TableName() string {
@@ -681,4 +690,32 @@ func UpdateGroupProfile(ctx context.Context, groupId int64, desc string, followe
 		return err
 	}
 	return nil
+}
+
+// 新增：分页获取Group列表
+func GetGroupList(ctx context.Context, offset, limit int) ([]*Group, error) {
+	var groups []*Group
+	err := DataBase().Model(&Group{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&groups).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return groups, nil
+}
+
+// 新增：通过Name唯一查询
+func GetGroupByNameUnique(ctx context.Context, name string) (*Group, error) {
+	group := &Group{}
+	err := DataBase().Model(group).
+		WithContext(ctx).
+		Where("name = ?", name).
+		First(group).Error
+	if err != nil {
+		return nil, err
+	}
+	return group, nil
 }

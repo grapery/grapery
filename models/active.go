@@ -1,24 +1,27 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/utils/log"
+	"gorm.io/gorm"
 )
 
+// Active 用户活跃/动态记录
 type Active struct {
 	IDBase
-	UserId            int64          `json:"user_id,omitempty"`
-	ActiveType        api.ActiveType `json:"active_type,omitempty"`
-	GroupId           int64          `json:"group_id,omitempty"`
-	StoryId           int64          `json:"story_id,omitempty"`
-	StoryBoardId      int64          `json:"storyboard_id,omitempty"`
-	StoryBoardSceneId int64          `json:"storyboard_scene_id,omitempty"`
-	StoryRoleId       int64          `json:"story_role_id,omitempty"`
-	Content           string         `json:"content,omitempty"`
-	Status            int64          `json:"status,omitempty"`
+	UserId            int64          `gorm:"column:user_id" json:"user_id,omitempty"`                         // 用户ID
+	ActiveType        api.ActiveType `gorm:"column:active_type" json:"active_type,omitempty"`                 // 活跃类型
+	GroupId           int64          `gorm:"column:group_id" json:"group_id,omitempty"`                       // 群组ID
+	StoryId           int64          `gorm:"column:story_id" json:"story_id,omitempty"`                       // 故事ID
+	StoryBoardId      int64          `gorm:"column:storyboard_id" json:"storyboard_id,omitempty"`             // 故事板ID
+	StoryBoardSceneId int64          `gorm:"column:storyboard_scene_id" json:"storyboard_scene_id,omitempty"` // 场景ID
+	StoryRoleId       int64          `gorm:"column:story_role_id" json:"story_role_id,omitempty"`             // 角色ID
+	Content           string         `gorm:"column:content" json:"content,omitempty"`                         // 内容
+	Status            int64          `gorm:"column:status" json:"status,omitempty"`                           // 状态
 }
 
 func (a Active) TableName() string {
@@ -237,4 +240,32 @@ func GetActiveByFollowingStoryRoleID(userID int64, storyRoleIds []int64, page, p
 		return nil, 0, err
 	}
 	return ret, total, nil
+}
+
+// 新增：分页获取Active列表
+func GetActiveList(ctx context.Context, offset, limit int) ([]*Active, error) {
+	var actives []*Active
+	err := DataBase().Model(&Active{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&actives).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return actives, nil
+}
+
+// 新增：通过主键唯一查询
+func GetActiveByID(ctx context.Context, id int64) (*Active, error) {
+	active := &Active{}
+	err := DataBase().Model(active).
+		WithContext(ctx).
+		Where("id = ?", id).
+		First(active).Error
+	if err != nil {
+		return nil, err
+	}
+	return active, nil
 }

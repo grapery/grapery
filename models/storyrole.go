@@ -8,25 +8,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// StoryRole 代表故事中的角色
+// status: 1-有效, 0-无效
 type StoryRole struct {
 	IDBase
-	StoryID              int64  `json:"story_id"`
-	CharacterName        string `json:"character_name"`
-	CharacterAvatar      string `json:"character_avatar"`
-	CharacterID          string `json:"character_id"`
-	CharacterType        string `json:"character_type"`
-	CharacterPrompt      string `json:"character_prompt"`
-	CharacterRefImages   string `json:"character_ref_images"`
-	CharacterDescription string `json:"character_description"`
-	CreatorID            int64  `json:"creator_id"`
-	Status               int    `json:"status"`
-	LikeCount            int64  `json:"like_count"`
-	FollowCount          int64  `json:"follow_count"`
-	StoryboardNum        int64  `json:"storyboard_num"`
-	Version              int64  `json:"version"`
-	BranchId             int64  `json:"branch_id"`
-	PosterURL            string `json:"poster_url"`
-	CharacterDetail      string `json:"character_detail"`
+	StoryID              int64  `gorm:"column:story_id" json:"story_id,omitempty"`                           // 故事ID
+	CharacterName        string `gorm:"column:character_name" json:"character_name,omitempty"`               // 角色名
+	CharacterAvatar      string `gorm:"column:character_avatar" json:"character_avatar,omitempty"`           // 角色头像
+	CharacterID          string `gorm:"column:character_id" json:"character_id,omitempty"`                   // 角色唯一ID
+	CharacterType        string `gorm:"column:character_type" json:"character_type,omitempty"`               // 角色类型
+	CharacterPrompt      string `gorm:"column:character_prompt" json:"character_prompt,omitempty"`           // 角色生成提示词
+	CharacterRefImages   string `gorm:"column:character_ref_images" json:"character_ref_images,omitempty"`   // 角色参考图片
+	CharacterDescription string `gorm:"column:character_description" json:"character_description,omitempty"` // 角色描述
+	CreatorID            int64  `gorm:"column:creator_id" json:"creator_id,omitempty"`                       // 创建者ID
+	Status               int    `gorm:"column:status" json:"status,omitempty"`                               // 状态
+	LikeCount            int64  `gorm:"column:like_count" json:"like_count,omitempty"`                       // 点赞数
+	FollowCount          int64  `gorm:"column:follow_count" json:"follow_count,omitempty"`                   // 关注数
+	StoryboardNum        int64  `gorm:"column:storyboard_num" json:"storyboard_num,omitempty"`               // 参与故事板数
+	Version              int64  `gorm:"column:version" json:"version,omitempty"`                             // 版本号
+	BranchId             int64  `gorm:"column:branch_id" json:"branch_id,omitempty"`                         // 分支ID
+	PosterURL            string `gorm:"column:poster_url" json:"poster_url,omitempty"`                       // 角色海报
+	CharacterDetail      string `gorm:"column:character_detail" json:"character_detail,omitempty"`           // 角色详细信息
 }
 
 func (s StoryRole) String() string {
@@ -231,4 +233,32 @@ func GetStoryRoleCharacterDetail(ctx context.Context, roleID int64) (string, err
 		return "", err
 	}
 	return characterDetail, nil
+}
+
+// 新增：分页获取StoryRole列表
+func GetStoryRoleList(ctx context.Context, offset, limit int) ([]*StoryRole, error) {
+	var roles []*StoryRole
+	err := DataBase().Model(&StoryRole{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&roles).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return roles, nil
+}
+
+// 新增：通过CharacterName唯一查询
+func GetStoryRoleByCharacterName(ctx context.Context, name string, storyId int64) (*StoryRole, error) {
+	role := &StoryRole{}
+	err := DataBase().Model(role).
+		WithContext(ctx).
+		Where("character_name = ? and story_id = ?", name, storyId).
+		First(role).Error
+	if err != nil {
+		return nil, err
+	}
+	return role, nil
 }

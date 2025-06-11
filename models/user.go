@@ -24,17 +24,18 @@ const (
 
 /*
  */
+// User 用户基础信息
 type User struct {
 	IDBase
-	Name      string `json:"name,omitempty" gorm:"index"`
-	Email     string `json:"email,omitempty" gorm:"index"`
-	Phone     string `json:"phone,omitempty" gorm:"index"`
-	Gender    int
-	BioID     string
-	Status    api.UserStatus
-	Location  string
-	Avatar    string
-	ShortDesc string
+	Name      string         `gorm:"column:name;index" json:"name,omitempty"`       // 用户名
+	Email     string         `gorm:"column:email;index" json:"email,omitempty"`     // 邮箱
+	Phone     string         `gorm:"column:phone;index" json:"phone,omitempty"`     // 手机号
+	Gender    int            `gorm:"column:gender" json:"gender,omitempty"`         // 性别
+	BioID     string         `gorm:"column:bio_id" json:"bio_id,omitempty"`         // 简介ID
+	Status    api.UserStatus `gorm:"column:status" json:"status,omitempty"`         // 用户状态
+	Location  string         `gorm:"column:location" json:"location,omitempty"`     // 位置
+	Avatar    string         `gorm:"column:avatar" json:"avatar,omitempty"`         // 头像
+	ShortDesc string         `gorm:"column:short_desc" json:"short_desc,omitempty"` // 简短描述
 }
 
 func (u User) TableName() string {
@@ -265,32 +266,29 @@ func GetUserByName(ctx context.Context, name string) (*User, error) {
 	return user, nil
 }
 
+// UserProfile 用户扩展信息
 type UserProfile struct {
 	IDBase
-	UserId         int64  `json:"user_id,omitempty"`
-	Background     string `json:"background,omitempty"`
-	NumGroup       int    `json:"num_group,omitempty"`
-	DefaultGroupID int64  `json:"default_group_id,omitempty"`
-	MinSameGroup   int    `json:"min_same_group,omitempty"`
-
-	Limit      int `json:"limit,omitempty"`
-	UsedTokens int `json:"used_tokens,omitempty"`
-	Status     int `json:"status,omitempty"`
-
-	CreatedGroupNum      int `json:"created_group_num,omitempty"`
-	CreatedStoryNum      int `json:"created_story_num,omitempty"`
-	CreatedRoleNum       int `json:"created_role_num,omitempty"`
-	CreatedBoardNum      int `json:"created_board_num,omitempty"`
-	CreatedGenNum        int `json:"created_gen_num,omitempty"`
-	WatchingStoryNum     int `json:"watching_story_num,omitempty"`
-	WatchingGroupNum     int `json:"watching_group_num,omitempty"`
-	WatchingStoryRoleNum int `json:"watching_story_role_num,omitempty"`
-
-	ContributStoryNum int `json:"contribut_story_num,omitempty"`
-	ContributRoleNum  int `json:"contribut_role_num,omitempty"`
-
-	LikedStoryNum int `json:"liked_story_num,omitempty"`
-	LikedRoleNum  int `json:"liked_role_num,omitempty"`
+	UserId               int64  `gorm:"column:user_id" json:"user_id,omitempty"`                                 // 用户ID
+	Background           string `gorm:"column:background" json:"background,omitempty"`                           // 背景
+	NumGroup             int    `gorm:"column:num_group" json:"num_group,omitempty"`                             // 加入群组数
+	DefaultGroupID       int64  `gorm:"column:default_group_id" json:"default_group_id,omitempty"`               // 默认群组ID
+	MinSameGroup         int    `gorm:"column:min_same_group" json:"min_same_group,omitempty"`                   // 最小同群组数
+	Limit                int    `gorm:"column:limit" json:"limit,omitempty"`                                     // 限制
+	UsedTokens           int    `gorm:"column:used_tokens" json:"used_tokens,omitempty"`                         // 已用token
+	Status               int    `gorm:"column:status" json:"status,omitempty"`                                   // 状态
+	CreatedGroupNum      int    `gorm:"column:created_group_num" json:"created_group_num,omitempty"`             // 创建群组数
+	CreatedStoryNum      int    `gorm:"column:created_story_num" json:"created_story_num,omitempty"`             // 创建故事数
+	CreatedRoleNum       int    `gorm:"column:created_role_num" json:"created_role_num,omitempty"`               // 创建角色数
+	CreatedBoardNum      int    `gorm:"column:created_board_num" json:"created_board_num,omitempty"`             // 创建故事板数
+	CreatedGenNum        int    `gorm:"column:created_gen_num" json:"created_gen_num,omitempty"`                 // 创建生成数
+	WatchingStoryNum     int    `gorm:"column:watching_story_num" json:"watching_story_num,omitempty"`           // 关注故事数
+	WatchingGroupNum     int    `gorm:"column:watching_group_num" json:"watching_group_num,omitempty"`           // 关注群组数
+	WatchingStoryRoleNum int    `gorm:"column:watching_story_role_num" json:"watching_story_role_num,omitempty"` // 关注角色数
+	ContributStoryNum    int    `gorm:"column:contribut_story_num" json:"contribut_story_num,omitempty"`         // 贡献故事数
+	ContributRoleNum     int    `gorm:"column:contribut_role_num" json:"contribut_role_num,omitempty"`           // 贡献角色数
+	LikedStoryNum        int    `gorm:"column:liked_story_num" json:"liked_story_num,omitempty"`                 // 点赞故事数
+	LikedRoleNum         int    `gorm:"column:liked_role_num" json:"liked_role_num,omitempty"`                   // 点赞角色数
 }
 
 func (u *UserProfile) TableName() string {
@@ -468,4 +466,32 @@ func (u *UserProfile) DecrementLikedStoryNum() error {
 func (u *UserProfile) DecrementLikedRoleNum() error {
 	return DataBase().Model(u).Where("user_id = ?", u.UserId).
 		Update("liked_role_num", gorm.Expr("liked_role_num - ?", 1)).Error
+}
+
+// 新增：分页获取User列表
+func GetUserList(ctx context.Context, offset, limit int) ([]*User, error) {
+	var users []*User
+	err := DataBase().Model(&User{}).
+		WithContext(ctx).
+		Offset(offset).
+		Limit(limit).
+		Order("create_at desc").
+		Find(&users).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return users, nil
+}
+
+// 新增：通过Name唯一查询
+func GetUserByNameUnique(ctx context.Context, name string) (*User, error) {
+	user := &User{}
+	err := DataBase().Model(user).
+		WithContext(ctx).
+		Where("name = ?", name).
+		First(user).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }
