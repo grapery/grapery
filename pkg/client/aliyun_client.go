@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DashScopeAPIKey = "sk-e3fd3d5b79ab49c5b5e5bec34944e42e"
+	DashScopeAPIKey = ""
 )
 
 type AliyunStoryClient struct {
