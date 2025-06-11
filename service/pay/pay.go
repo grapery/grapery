@@ -83,8 +83,8 @@ func (s *PayServiceImpl) Pay(userId, orderId string, amount float64) error {
 	// Create order record
 	order := &models.Order{
 		UserID:      userID,
-		Amount:      amount,
-		Status:      models.OrderStatusPending,
+		Amount:      int64(amount),
+		Status:      int(models.OrderStatusPending),
 		Description: "Payment for order " + orderId,
 		Metadata:    pi.ID,
 	}
@@ -105,7 +105,7 @@ func (s *PayServiceImpl) Refund(userId, orderId string, amount float64) error {
 		return ErrOrderNotFound
 	}
 
-	if order.Status != models.OrderStatusPaid {
+	if order.Status != int(models.OrderStatusPaid) {
 		return errors.New("order is not paid")
 	}
 
@@ -144,7 +144,7 @@ func (s *PayServiceImpl) GetOrder(userId, orderId string) (Order, error) {
 
 	return Order{
 		Id:        orderId,
-		Amount:    order.Amount,
+		Amount:    float64(order.Amount),
 		Status:    string(order.Status),
 		CreatedAt: order.CreateAt.Unix(),
 		UpdatedAt: order.UpdateAt.Unix(),
@@ -167,7 +167,7 @@ func (s *PayServiceImpl) GetOrders(userId string) ([]Order, error) {
 	for _, o := range orders {
 		result = append(result, Order{
 			Id:        strconv.FormatUint(uint64(o.ID), 10),
-			Amount:    o.Amount,
+			Amount:    float64(o.Amount),
 			Status:    string(o.Status),
 			CreatedAt: o.CreateAt.Unix(),
 			UpdatedAt: o.UpdateAt.Unix(),
@@ -203,8 +203,8 @@ func (s *PayServiceImpl) SetBond(userId string, bond float64, storyId int64) err
 	// Create a bond payment
 	order := &models.Order{
 		UserID:      userID,
-		Amount:      bond,
-		Status:      models.OrderStatusPending,
+		Amount:      int64(bond),
+		Status:      int(models.OrderStatusPending),
 		Description: "Bond for story " + strconv.FormatInt(storyId, 10),
 		Metadata:    string(metadataBytes),
 	}
