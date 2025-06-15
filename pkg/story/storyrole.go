@@ -69,11 +69,6 @@ func (s *StoryService) UnLikeStoryRole(ctx context.Context, req *api.UnLikeStory
 }
 
 func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStoryRoleRequest) (*api.FollowStoryRoleResponse, error) {
-	story, err := models.GetStory(ctx, req.GetStoryId())
-	if err != nil {
-		log.Log().Error("get story failed", zap.Error(err))
-		return nil, err
-	}
 	isWatch, err := models.GetWatchItemByStoryRoleAndUser(ctx, req.GetRoleId(), int64(req.GetUserId()))
 	if err != nil {
 		log.Log().Error("get watch item by story role and user failed", zap.Error(err))
@@ -85,7 +80,7 @@ func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStory
 			Message: "OK",
 		}, nil
 	}
-	err = models.WatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId(), story.GroupID)
+	err = models.WatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
 	if err != nil {
 		log.Log().Error("watch story role failed", zap.Error(err))
 		return nil, err
@@ -109,11 +104,6 @@ func (s *StoryService) FollowStoryRole(ctx context.Context, req *api.FollowStory
 }
 
 func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowStoryRoleRequest) (*api.UnFollowStoryRoleResponse, error) {
-	story, err := models.GetStory(ctx, req.GetStoryId())
-	if err != nil {
-		log.Log().Error("get story failed", zap.Error(err))
-		return nil, err
-	}
 	isWatch, err := models.GetWatchItemByStoryRoleAndUser(ctx, req.GetRoleId(), int64(req.GetUserId()))
 	if err != nil {
 		log.Log().Error("get watch item by story role and user failed", zap.Error(err))
@@ -125,7 +115,7 @@ func (s *StoryService) UnFollowStoryRole(ctx context.Context, req *api.UnFollowS
 			Message: "OK",
 		}, nil
 	}
-	err = models.UnWatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId(), story.GroupID)
+	err = models.UnWatchStoryRole(ctx, int(req.GetUserId()), req.GetStoryId(), req.GetRoleId())
 	err = models.DecreaseStoryRoleFollowCount(ctx, req.GetRoleId(), 1)
 	if err != nil {
 		log.Log().Error("decrease story role follow count failed", zap.Error(err))
@@ -237,7 +227,7 @@ func (s *StoryService) CreateStoryRole(ctx context.Context, req *api.CreateStory
 		log.Log().Error("update user profile error: ", zap.Error(err))
 		return nil, err
 	}
-	err = models.CreateWatchRoleItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(roleId), int64(story.GroupID))
+	err = models.CreateWatchRoleItem(ctx, int(req.GetRole().GetCreatorId()), int64(story.ID), int64(roleId))
 	if err != nil {
 		log.Log().Error("create watch story item failed", zap.Error(err))
 		return nil, err
@@ -259,28 +249,34 @@ func (s *StoryService) GetStoryRoleDetail(ctx context.Context, req *api.GetStory
 	if err != nil {
 		log.Log().Error("get story role current user status failed", zap.Error(err))
 	}
+	detail := &api.StoryRole{
+		RoleId:               int64(role.ID),
+		CharacterDescription: role.CharacterDescription,
+		CharacterName:        role.CharacterName,
+		CharacterAvatar:      role.CharacterAvatar,
+		CharacterId:          role.CharacterID,
+		StoryId:              int64(role.StoryID),
+		CharacterType:        role.CharacterType,
+		CharacterPrompt:      role.CharacterPrompt,
+		CharacterRefImages:   strings.Split(role.CharacterRefImages, ","),
+		Ctime:                role.CreateAt.Unix(),
+		Mtime:                role.UpdateAt.Unix(),
+		CreatorId:            role.CreatorID,
+		FollowCount:          role.FollowCount,
+		LikeCount:            role.LikeCount,
+		Status:               int32(role.Status),
+		StoryboardNum:        role.StoryboardNum,
+		CurrentUserStatus:    cu,
+	}
+	err = json.Unmarshal([]byte(role.CharacterDetail), &detail.CharacterDetail)
+	if err != nil {
+		log.Log().Error("unmarshal character detail failed", zap.Error(err))
+		return nil, err
+	}
 	return &api.GetStoryRoleDetailResponse{
 		Code:    0,
 		Message: "OK",
-		Info: &api.StoryRole{
-			RoleId:               int64(role.ID),
-			CharacterDescription: role.CharacterDescription,
-			CharacterName:        role.CharacterName,
-			CharacterAvatar:      role.CharacterAvatar,
-			CharacterId:          role.CharacterID,
-			StoryId:              int64(role.StoryID),
-			CharacterType:        role.CharacterType,
-			CharacterPrompt:      role.CharacterPrompt,
-			CharacterRefImages:   strings.Split(role.CharacterRefImages, ","),
-			Ctime:                role.CreateAt.Unix(),
-			Mtime:                role.UpdateAt.Unix(),
-			CreatorId:            role.CreatorID,
-			FollowCount:          role.FollowCount,
-			LikeCount:            role.LikeCount,
-			Status:               int32(role.Status),
-			StoryboardNum:        role.StoryboardNum,
-			CurrentUserStatus:    cu,
-		},
+		Info:    detail,
 	}, nil
 }
 

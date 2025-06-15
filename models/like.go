@@ -452,7 +452,7 @@ func UnWatchGroupItem(ctx context.Context, userId int, groupId int64) error {
 	return err
 }
 
-func CreateWatchRoleItem(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
+func CreateWatchRoleItem(ctx context.Context, userId int, storyId int64, roleId int64) error {
 	var num int64
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
 		Where("user_id = ? and role_id = ?",
@@ -468,7 +468,6 @@ func CreateWatchRoleItem(ctx context.Context, userId int, storyId int64, roleId 
 	}
 	err = DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
 		UserID:        int64(userId),
-		GroupID:       groupId,
 		StoryID:       storyId,
 		RoleID:        roleId,
 		WatchType:     WatchTypeIsWatch,
@@ -481,10 +480,9 @@ func CreateWatchRoleItem(ctx context.Context, userId int, storyId int64, roleId 
 	return nil
 }
 
-func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
+func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).Create(&WatchItem{
 		UserID:        int64(userId),
-		GroupID:       groupId,
 		StoryID:       storyId,
 		RoleID:        roleId,
 		WatchType:     WatchTypeIsWatch,
@@ -493,10 +491,10 @@ func WatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64
 	return err
 }
 
-func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64, groupId int64) error {
+func UnWatchStoryRole(ctx context.Context, userId int, storyId int64, roleId int64) error {
 	err := DataBase().WithContext(ctx).Model(&WatchItem{}).
-		Where("user_id = ? and story_id = ? and role_id = ? and group_id = ?",
-			userId, storyId, roleId, groupId).
+		Where("user_id = ? and story_id = ? and role_id = ?",
+			userId, storyId, roleId).
 		Update("deleted", 1).Error
 	return err
 }
