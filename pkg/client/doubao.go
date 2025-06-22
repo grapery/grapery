@@ -553,3 +553,72 @@ func (c *DoubaoClient) QueryStoryboardVideoTaskStatus(ctx context.Context, taskI
 		VideoUrl: result.Content.VideoUrl,
 	}, nil
 }
+
+func (d DoubaoClient) ChatWithRole(ctx context.Context, params *ChatWithRoleParams) (*ChatWithRoleResult, error) {
+	realParams := &DoubaoGenStoryInfoParams{
+		Model: "doubao-seed-1-6-flash-250615",
+		Messages: []DoubaoChatCompletionMessage{
+			{
+				Role: "user",
+				Content: []DoubaoChatCompletionMessageContent{
+					{
+						Type: "text",
+						Text: params.MessageContent,
+					},
+				},
+			},
+			{
+				Role: "system",
+				Content: []DoubaoChatCompletionMessageContent{
+					{
+						Type: "text",
+						Text: params.Role,
+					},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(realParams)
+	if err != nil {
+		return nil, err
+	}
+
+	url := "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+d.DoubaoAPIKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http status: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result DoubaoGenStoryInfoResult
+	err = json.Unmarshal(respBody, &result)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("doubao return empty choices")
+	}
+
+	ret := &ChatWithRoleResult{
+		Content: result.Choices[0].Message.Content,
+	}
+	return ret, nil
+}
