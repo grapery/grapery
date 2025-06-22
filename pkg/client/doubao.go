@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DoubaoAPIKey = "d0db6d55-c46c-44d3-b604-66f45f2f5688"
+	DoubaoAPIKey = "doubao"
 )
 
 type DoubaoClient struct {
@@ -26,7 +26,7 @@ func NewDoubaoClient() *DoubaoClient {
 /*
 	curl -X POST https://ark.cn-beijing.volces.com/api/v3/images/generations \
 	  -H "Content-Type: application/json" \
-	  -H "Authorization: Bearer d0db6d55-c46c-44d3-b604-66f45f2f5688" \
+	  -H "Authorization: Bearer doubao" \
 	  -d '{
 	    "model": "doubao-seedream-3-0-t2i-250415",
 	    "prompt": "一只可爱小猫咪",
@@ -478,7 +478,7 @@ func (c *DoubaoClient) GenStoryboardVideo(ctx context.Context, params *GenStoryb
 /*
 	curl -X GET https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/cgt-20250622134237-plkgw \
 	  -H "Content-Type: application/json" \
-	  -H "Authorization: Bearer d0db6d55-c46c-44d3-b604-66f45f2f5688"
+	  -H "Authorization: Bearer doubao"
 */
 
 /*
