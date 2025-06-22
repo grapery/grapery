@@ -554,9 +554,9 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 		}
 	--------
 	请保证故事的连贯，以及故事中的各个人物的角色前后一致，同时和故事背景契合，人物的描述清晰，情节人物的性格明显，场景描述详细，图片提示词准确。
-	请注意，如果没有要求 ‘参与人物’ 的输出要求，可以不用输出 ‘参与的人物’ 的 json 数据结构。
-	有些章节是没有故事角色的，可以不用为这个章节关联人物。所以要遵守这一条，只有当输入有 ‘参与人物’ 的列表时
-	再输出这些 ’参与人物‘ 信息，这一点很重要，不要自作主张的引入角色或者故事人物。
+	请注意，如果没有要求 ‘参与人物' 的输出要求，可以不用输出 '参与的人物' 的 json 数据结构。
+	有些章节是没有故事角色的，可以不用为这个章节关联人物。所以要遵守这一条，只有当输入有 '参与人物' 的列表时
+	再输出这些 '参与人物' 信息，这一点很重要，不要自作主张的引入角色或者故事人物。
 	`
 	templatePrompt = strings.Replace(templatePrompt, "story_chapter", board.Title, -1)
 	templatePrompt = strings.Replace(templatePrompt, "imageStyle", imageStyle, -1)
@@ -579,7 +579,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	} else {
 		templatePrompt = strings.Replace(templatePrompt, ",上一章节的故事情节为: story_backgroup ", "", -1)
 	}
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "Doubao"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = templatePrompt
 	storyGen.Regen = 0
@@ -601,7 +601,7 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	}
 	result := new(StoryChapter)
 	start := time.Now()
-	ret, err := s.bailianClient.GenStoryBoardInfo(ctx, renderStoryParams)
+	ret, err := s.doubaoClient.GenStoryBoardInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -743,7 +743,7 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 						storyGen := new(models.StoryGen)
 						storyGen.Uuid = uuid.New().String()
 						storyGenData, _ := json.Marshal(genParams)
-						storyGen.LLmPlatform = "Zhipu"
+						storyGen.LLmPlatform = "Doubao"
 						storyGen.NegativePrompt = prompt.ZhipuNegativePrompt
 						storyGen.PositivePrompt = templatePrompt
 						storyGen.Regen = 0
@@ -762,60 +762,33 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 							Content: templatePrompt,
 						}
 
-						ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
+						ret, err := s.doubaoClient.GenStoryBoardImage(ctx, renderStoryParams)
 						if err != nil {
 							log.Log().Error("gen storyboard info failed", zap.Error(err))
 							return nil, err
 						}
 						aliyunUrls := make([]string, 0)
-						var realTaskRet = new(client.DashScopeTaskStatusResponse)
-						tick := time.NewTimer(10 * time.Second)
-						defer tick.Stop()
-					FETCH_GGEN_RESULT:
-						for {
-							select {
-							case <-tick.C:
-								realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
-								if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
-									realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
-									realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
-									storyGen.GenStatus = models.StoryGenStatusRunning
-									continue
-								}
-								if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
-									storyGen.GenStatus = models.StoryGenStatusFinish
-									break FETCH_GGEN_RESULT
-								}
-								if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
-									realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
-									storyGen.GenStatus = models.StoryGenStatusError
-									break FETCH_GGEN_RESULT
-								}
-							case <-ctx.Done():
-								break FETCH_GGEN_RESULT
-							}
-						}
-						log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
-						for _, imageUrl := range realTaskRet.Output.Results {
+
+						for _, imageUrl := range ret.ImageUrls {
 							aliyunClient := aliyun.GetGlobalClient()
-							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl.URL)
+							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
 							if err != nil {
 								log.Log().Error("upload file from url failed", zap.Error(err))
 								continue
 							}
-							// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-							// if err != nil {
-							// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
-							// 	continue
-							// }
-							// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+							aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+							if err != nil {
+								log.Log().Error("generate thumbnail failed", zap.Error(err))
+								continue
+							}
+							aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 							aliyunUrls = append(aliyunUrls, aliyunUrl)
 						}
 						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
 						storyGen.Content = ""
 						storyGen.FinishTime = time.Now().Unix()
 						storyGen.TaskType = 2
-						storyGen.TaskId = realTaskRet.Output.TaskID
+						storyGen.TaskId = uuid.New().String()
 						err = models.UpdateStoryGen(ctx, storyGen)
 						if err != nil {
 							log.Log().Error("update storyboard image gen failed", zap.Error(err))
@@ -984,7 +957,7 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	}
 	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
 	templatePrompt = strings.Replace(templatePrompt, "story_name", story.Title, -1)
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "Doubao"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = templatePrompt
 	storyGen.Regen = 1
@@ -1005,7 +978,7 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 	}
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.doubaoClient.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1211,7 +1184,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	templatePrompt = strings.Replace(templatePrompt, "story_name", story.Name, -1)
 	templatePrompt = strings.Replace(templatePrompt, "story_prev_content", string(story_prev_content_json), -1)
 
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "doubao"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = templatePrompt
 	storyGen.Regen = 1
@@ -1232,7 +1205,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	}
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.doubaoClient.GenStoryInfo(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1400,7 +1373,7 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 	storyGen.Uuid = uuid.New().String()
 	reqData, _ := json.Marshal(req)
 	storyGenData, _ := json.Marshal(reqData)
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "doubao"
 	storyGen.NegativePrompt = ""
 	storyGen.PositivePrompt = roleRequirePrompt
 	storyGen.Regen = 1
@@ -1417,11 +1390,11 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		return nil, err
 	}
 	log.Log().Sugar().Info("gen storyboard prompt: ", roleRequirePrompt)
-	renderStoryParams := &client.StoryInfoParams{
+	renderStoryParams := &client.GenStoryCharactorParams{
 		Content: roleRequirePrompt,
 	}
 	result := new(CharacterDetail)
-	ret, err := s.bailianClient.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.doubaoClient.GenStoryRole(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
@@ -1830,42 +1803,13 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 		Content: templatePrompt,
 	}
 	log.Log().Sugar().Infof("render storyboard scene, scene: %s, prompt: %s", scene.Content, templatePrompt)
-	ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
+	ret, err := s.doubaoClient.GenStoryBoardImage(ctx, renderStoryParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	var realTaskRet = new(client.DashScopeTaskStatusResponse)
-	tick := time.NewTimer(10 * time.Second)
-	defer tick.Stop()
-FETCH_GGEN_RESULT:
-	for {
-		select {
-		case <-tick.C:
-			realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
-			if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
-				realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
-				realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
-				scene.GenStatus = int(models.StoryGenStatusRunning)
-				continue
-			}
-			if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
-				scene.GenStatus = int(models.StoryGenStatusFinish)
-				break FETCH_GGEN_RESULT
-			}
-			if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
-				realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
-				scene.GenStatus = int(models.StoryGenStatusError)
-				break FETCH_GGEN_RESULT
-			}
-		case <-ctx.Done():
-			break FETCH_GGEN_RESULT
-		}
-	}
-
 	aliyunUrls := make([]string, 0)
-	log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
-	for _, imageUrl := range realTaskRet.Output.ResultsUrls {
+	for _, imageUrl := range ret.ImageUrls {
 		aliyunClient := aliyun.GetGlobalClient()
 		aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
 		if err != nil {
@@ -1884,7 +1828,7 @@ FETCH_GGEN_RESULT:
 	retData, _ := json.Marshal(aliyunUrls)
 	scene.GenResult = string(retData)
 	scene.Status = 1
-	scene.TaskId = ret.Output.TaskID
+	scene.TaskId = uuid.New().String()
 	err = models.UpdateStoryBoardScene(ctx, scene)
 	if err != nil {
 		log.Log().Error("update storyboard scene failed", zap.Error(err))
@@ -1900,6 +1844,7 @@ FETCH_GGEN_RESULT:
 }
 
 func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.RenderStoryBoardSencesRequest) (*api.RenderStoryBoardSencesResponse, error) {
+	// 参数校验
 	if req.GetBoardId() <= 0 {
 		log.Log().Error("board id is 0")
 		return &api.RenderStoryBoardSencesResponse{
@@ -1932,7 +1877,7 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 			Message: "story is deleted",
 		}, nil
 	}
-	// 1. 获取场景描述
+	// 获取所有场景
 	scenes, err := models.GetStoryBoardScenesByBoard(ctx, int64(req.GetBoardId()))
 	if err != nil {
 		log.Log().Error("get storyboard scene failed", zap.Error(err))
@@ -1945,6 +1890,7 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 			Message: "scene not found",
 		}, nil
 	}
+	// 检查场景状态
 	for _, scene := range scenes {
 		if scene.Status == -1 {
 			log.Log().Error("scene is deleted")
@@ -1961,73 +1907,47 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 			}, nil
 		}
 	}
-	// 2. 生成每个场景的图片
+
+	// 用于返回的API场景列表
 	apiScenes := make([]*api.StoryBoardSence, 0)
+
+	// 顺序遍历每个场景，依次发起图片生成任务
 	for _, scene := range scenes {
+		// 1. 生成图片prompt
 		templatePrompt := scene.ImagePrompts
 		preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", templatePrompt, -1)
 		templatePrompt = preDefineTemplate + ",人物: " + scene.CharacterIds
+
+		// 2. 调用GenStoryBoardImages，获取task_id
 		renderStoryParams := &client.GenStoryImagesParams{
 			Content: templatePrompt,
 		}
 		log.Log().Sugar().Infof("render storyboard scene, scene: %s, prompt: %s", scene.Content, templatePrompt)
-		ret, err := s.bailianClient.GenStoryBoardImages(ctx, renderStoryParams)
+		ret, err := s.doubaoClient.GenStoryBoardImage(ctx, renderStoryParams)
 		if err != nil {
 			log.Log().Error("gen storyboard info failed", zap.Error(err))
 			return nil, err
 		}
 		aliyunUrls := make([]string, 0)
-		var realTaskRet = new(client.DashScopeTaskStatusResponse)
-		tick := time.NewTimer(10 * time.Second)
-		defer tick.Stop()
-	FETCH_GGEN_RESULT:
-		for {
-			select {
-			case <-tick.C:
-				realTaskRet, err = s.bailianClient.GetImageGenerationTaskStatus(ctx, ret.Output.TaskID)
-				if realTaskRet.Output.TaskStatus == client.TaskStatusPending ||
-					realTaskRet.Output.TaskStatus == client.TaskStatusRunning ||
-					realTaskRet.Output.TaskStatus == client.TaskStatusUnknown {
-					scene.GenStatus = int(models.StoryGenStatusRunning)
-					continue
-				}
-				if realTaskRet.Output.TaskStatus == client.TaskStatusSucceeded {
-					scene.GenStatus = int(models.StoryGenStatusFinish)
-					break FETCH_GGEN_RESULT
-				}
-				if realTaskRet.Output.TaskStatus == client.TaskStatusCanceled ||
-					realTaskRet.Output.TaskStatus == client.TaskStatusFailed {
-					scene.GenStatus = int(models.StoryGenStatusError)
-					break FETCH_GGEN_RESULT
-				}
-			case <-ctx.Done():
-				break FETCH_GGEN_RESULT
-			}
-		}
-		log.Log().Info("bailiang task info: ", zap.Any("bailian", realTaskRet))
-		for _, imageUrl := range realTaskRet.Output.Results {
+		for _, imageUrl := range ret.ImageUrls {
 			aliyunClient := aliyun.GetGlobalClient()
-			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl.URL)
+			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
 			if err != nil {
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
 			}
-			// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-			// if err != nil {
-			// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
-			// 	continue
-			// }
-			// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 			aliyunUrls = append(aliyunUrls, aliyunUrl)
 		}
 		retData, _ := json.Marshal(aliyunUrls)
 		scene.GenResult = string(retData)
 		scene.Status = 1
+		scene.TaskId = uuid.New().String()
 		err = models.UpdateStoryBoardScene(ctx, scene)
 		if err != nil {
 			log.Log().Error("update storyboard scene failed", zap.Error(err))
 			return nil, err
 		}
+		log.Log().Sugar().Infof("render storyboard scene success, scene: %s", scene.GenResult)
 		apiScenes = append(apiScenes, convert.ConvertStoryBoardSceneToApiStoryBoardScene(scene))
 	}
 	return &api.RenderStoryBoardSencesResponse{
