@@ -27,30 +27,47 @@ func init() {
 	server = NewAuthService()
 }
 
+// GetAuthService returns the singleton instance of the AuthServer.
 func GetAuthService() AuthServer {
 	return server
 }
 
+// NewAuthService creates a new instance of AuthService.
 func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
+// AuthServer defines the interface for authentication operations.
 type AuthServer interface {
+	// Register creates a new user account.
 	Register(ctx context.Context, name string, account string, pwd string) error
+	// Login authenticates a user and returns user information upon success.
 	Login(ctx context.Context, account string, pwd string) (*api.UserInfo, error)
+	// Logout handles user logout.
+	// Note: Current implementation is a stub.
 	Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error)
+	// ResetPassword allows a user to reset their password.
 	ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error)
+	// Confirm handles account confirmation, typically via a token.
+	// Note: Current implementation is a stub.
 	Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error)
+	// GetUserInfo retrieves user information.
+	// Note: The 'uid' parameter is currently unused in the implementation.
 	GetUserInfo(ctx context.Context, uid int64, account string) (*api.UserInfo, error)
 }
 
-// auth service
+// AuthService implements the AuthServer interface.
 type AuthService struct {
 }
 
+// Register handles new user registration.
+// It creates a user, an authentication record, and a user profile.
 func (auth *AuthService) Register(ctx context.Context, name string, account string, pwd string) (err error) {
 	info := new(models.Auth)
 
+	// TODO: Password should be hashed before storing.
+	// Example: hashedPassword, err := HashPassword(pwd); if err != nil { return err }
+	// info.Password = hashedPassword
 	info.Password = pwd
 	if models.IsUserAuthExist(ctx, account) {
 		return errors.ErrAuthIsExist
@@ -67,8 +84,8 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	user.UpdateAt = time.Now()
 	err = user.Create()
 	if err != nil {
-		log.Log().WithOptions(logFieldModels).Error("create auth failed", zap.Error(err))
-		return nil
+		log.Log().WithOptions(logFieldModels).Error("create user failed", zap.Error(err))
+		return err // Return the error
 	}
 	info.UID = int64(user.ID)
 	info.CreateAt = time.Now()
@@ -110,10 +127,13 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	err = profile.Create()
 	if err != nil {
 		log.Log().WithOptions(logFieldModels).Error("create profile failed", zap.Error(err))
+		return err // Return the error
 	}
-	return
+	return nil
 }
 
+// Login handles user authentication.
+// It retrieves user auth info by account (email or phone) and verifies the password.
 func (auth *AuthService) Login(ctx context.Context, account string, pwd string) (*api.UserInfo, error) {
 	info := new(models.Auth)
 	var err error
@@ -125,7 +145,9 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 	if err != nil {
 		return nil, err
 	}
-	if info.Password != pwd {
+	// TODO: CRITICAL SECURITY: Passwords must be compared using a secure hash comparison.
+	// Example: if !CheckPasswordHash(pwd, info.Password) { return nil, errors.ErrAuthPasswordIsWrong }
+	if info.Password != pwd { // This is insecure
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	return &api.UserInfo{
@@ -134,10 +156,13 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 	}, nil
 }
 
+// Logout handles user logout.
+// Currently, this is a stub and does not perform any server-side session invalidation.
 func (auth *AuthService) Logout(ctx context.Context, req *api.LogoutRequest) (*api.LogoutResponse, error) {
 	return &api.LogoutResponse{}, nil
 }
 
+// ResetPassword allows a user to change their password after verifying the old one.
 func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswordRequest) (*api.ResetPasswordResponse, error) {
 	info := new(models.Auth)
 	var err error
@@ -145,26 +170,28 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 		info, err = models.GetByEmail(ctx, req.GetAccount())
 	} else {
 		info, err = models.GetByPhone(ctx, req.GetAccount())
-
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	if info.Password == req.GetOldPwd() {
+	// TODO: CRITICAL SECURITY: Old password must be compared using a secure hash comparison.
+	// Example: if !CheckPasswordHash(req.GetOldPwd(), info.Password) { return nil, errors.ErrAuthPasswordIsWrong }
+	if info.Password == req.GetOldPwd() { // This is insecure for comparison
+		// TODO: New password should be hashed before storing.
+		// Example: hashedPassword, err := HashPassword(req.GetNewPwd()); if err != nil { return appropriate error response }
+		// info.Password = hashedPassword
 		info.Password = req.GetNewPwd()
 	} else {
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	err = models.UpdatePwd(ctx, info)
 	if err != nil {
-		if err != nil {
-			return &api.ResetPasswordResponse{
-				Account:   req.GetAccount(),
-				Status:    -1,
-				Timestamp: time.Now().Unix(),
-			}, err
-		}
+		return &api.ResetPasswordResponse{
+			Account:   req.GetAccount(),
+			Status:    -1, // Indicate failure
+			Timestamp: time.Now().Unix(),
+		}, err
 	}
 	return &api.ResetPasswordResponse{
 		Account:   req.GetAccount(),
@@ -173,14 +200,19 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	}, nil
 }
 
+// Confirm handles account confirmation, typically using a token.
+// Currently, this is a stub and needs implementation for token validation and account activation.
 func (auth *AuthService) Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error) {
 	if req.GetToken() == "" {
 		return nil, fmt.Errorf("token is empty")
 	}
-
-	return nil, nil
+	// TODO: Implement token validation and account confirmation logic.
+	// For now, returning a placeholder success response or an error if not implemented.
+	return nil, fmt.Errorf("confirmation feature not implemented") // Or a specific error
 }
 
+// GetUserInfo retrieves user information based on account (email or phone).
+// Note: The 'uid' parameter is passed but not currently used in the lookup logic.
 func (auth *AuthService) GetUserInfo(ctx context.Context, uid int64, account string) (*api.UserInfo, error) {
 	info := new(models.Auth)
 	var err error
