@@ -77,3 +77,8 @@ var (
 	ErrInvalidUserID            = NewSysError(int(api.ResponseCode_INVALID_PARAMETER), "invalid user id")
 	ErrInvalidActiveType        = NewSysError(int(api.ResponseCode_INVALID_PARAMETER), "invalid active type")
 )
+
+var (
+	ErrMissingParameter = NewSysError(int(api.ResponseCode_MISSING_PARAMETER), "missing parameter")
+	ErrInvalidParameter = NewSysError(int(api.ResponseCode_INVALID_PARAMETER), "invalid parameter")
+)

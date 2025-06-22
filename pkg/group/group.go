@@ -3,10 +3,7 @@ package group
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 
 	api "github.com/grapery/common-protoc/gen"
@@ -14,27 +11,26 @@ import (
 	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
+	"github.com/grapery/grapery/utils/errors"
 )
 
 var (
-	server         GroupServer
-	logFieldModels = zap.Fields(
-		zap.String("module", "pkg"))
+	groupServer GroupServer
+	logger, _   = zap.NewDevelopment()
 )
 
 func init() {
-	server = NewGroupService()
+	groupServer = NewGroupService()
 }
 
 func GetGroupServer() GroupServer {
-	return server
+	return groupServer
 }
 
 func NewGroupService() *GroupService {
 	return &GroupService{}
 }
 
-// need do some log
 type GroupServer interface {
 	GetGroup(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error)
 	GetByName(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error)
@@ -46,13 +42,11 @@ type GroupServer interface {
 	FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsRequest) (resp *api.FetchGroupProjectsResponse, err error)
 	JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error)
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
+	GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (resp *api.GetGroupProfileResponse, err error)
+	UpdateGroupProfile(ctx context.Context, req *api.UpdateGroupProfileRequest) (resp *api.UpdateGroupProfileResponse, err error)
 	SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error)
-
 	QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error)
 	FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error)
-
-	GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (*api.GetGroupProfileResponse, error)
-	UpdateGroupProfile(ctx context.Context, req *api.UpdateGroupProfileRequest) (*api.UpdateGroupProfileResponse, error)
 }
 
 type GroupService struct {
@@ -63,21 +57,21 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	if err != nil {
-		log.Error("get group by id error: ", err.Error())
+		logger.Error("get group by id error", zap.Error(err))
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(req.GetUserId())
 	err = creator.GetById()
 	if err != nil {
-		log.Error("get user info by id failed:", err.Error())
+		logger.Error("get user info by id failed", zap.Error(err))
 		return nil, err
 	}
 	profile := &models.GroupProfile{}
 	profile.GroupID = int64(group.ID)
 	profile, err = models.GetGroupProfile(ctx, profile.GroupID)
 	if err != nil {
-		log.Error("get group profile failed: ", err.Error())
+		logger.Error("get group profile failed", zap.Error(err))
 		return nil, err
 	}
 	var apiProfile *api.GroupProfileInfo
@@ -87,7 +81,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 	}
 	likeItems, err := models.GetLikeItemByGroup(ctx, []int64{req.GetGroupId()}, int(req.GetUserId()))
 	if err != nil {
-		log.Info("get like item by group failed: ", err.Error())
+		logger.Info("get like item by group failed", zap.Error(err))
 	}
 	likeMap := make(map[int64]bool)
 	for _, val := range likeItems {
@@ -96,7 +90,7 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 	watchMap := make(map[int64]bool)
 	watchItem, err := models.GetWatchItemByGroupAndUser(ctx, req.GetGroupId(), req.GetUserId())
 	if err != nil {
-		log.Info("get watch item by group and user failed: ", err.Error())
+		logger.Info("get watch item by group and user failed", zap.Error(err))
 	} else {
 		watchMap[int64(watchItem.GroupID)] = true
 	}
@@ -107,11 +101,11 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 	}
 	isIn, err = groupMember.IsInGroup()
 	if err != nil {
-		log.Info("get group member by group and user failed: ", err.Error())
+		logger.Info("get group member by group and user failed", zap.Error(err))
 	}
-	log.Info("user is in/not in group: ", req.GetGroupId(), req.GetUserId(), isIn)
+	logger.Info("user is in/not in group", zap.Int64("group_id", req.GetGroupId()), zap.Int64("user_id", req.GetUserId()), zap.Bool("is_in", isIn))
 	return &api.GetGroupResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.GetGroupResponse_Data{
 			Info: &api.GroupInfo{
@@ -139,18 +133,18 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupRequest) 
 	group.Name = req.GetName()
 	err = group.GetByName()
 	if err != nil {
-		log.Error("get group by name error: ", err.Error())
+		logger.Error("get group by name error", zap.Error(err))
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
-		log.Error("get user info by id failed:", err.Error())
+		logger.Error("get user info by id failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.GetGroupResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.GetGroupResponse_Data{
 			Info: &api.GroupInfo{
@@ -184,17 +178,17 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 	}
 	err = group.Create()
 	if err != nil {
-		log.Info("create group error: ", err.Error())
+		logger.Info("create group error", zap.Error(err))
 		return nil, err
 	}
 	creator := &models.User{}
 	creator.ID = uint(group.CreatorID)
 	err = creator.GetById()
 	if err != nil {
-		log.Info("get user info by id failed:", err.Error())
+		logger.Info("get user info by id failed", zap.Error(err))
 		return nil, err
 	}
-	log.Info("create group success: ", group.ID, group.Name, group.CreatorID)
+	logger.Info("create group success", zap.Uint("group_id", group.ID), zap.String("group_name", group.Name), zap.Int64("creator_id", group.CreatorID))
 	err = models.CreateGroupProfile(ctx,
 		int64(group.ID),
 		desc,
@@ -204,7 +198,7 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 	}
 	err = models.CreateWatchGroupItem(ctx, int(group.CreatorID), int64(group.ID))
 	if err != nil {
-		log.Info("create watch group item failed: ", err.Error())
+		logger.Info("create watch group item failed", zap.Error(err))
 	}
 	groupMember := &models.GroupMember{
 		GroupID:  int64(group.ID),
@@ -215,11 +209,11 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 	}
 	err = groupMember.Create()
 	if err != nil {
-		log.Info("create group member failed: ", err.Error())
+		logger.Info("create group member failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.CreateGroupResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.CreateGroupResponse_Data{
 			Info: &api.GroupInfo{
@@ -239,10 +233,10 @@ func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequ
 	group.ID = uint(req.GetGroupId())
 	err = group.Delete()
 	if err != nil {
-		return nil, err
+		return &api.DeleteGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
 	return &api.DeleteGroupResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data:    &api.DeleteGroupResponse_Data{},
 	}, nil
@@ -254,12 +248,12 @@ func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupAct
 		return nil, err
 	}
 	var list = make([]*api.ActiveInfo, len(*actives), len(*actives))
-	for idx, _ := range *actives {
-		log.Info((*actives)[idx])
+	for _, active := range *actives {
+		logger.Info("active item", zap.Any("active", active))
 		//list[idx]....
 	}
 	return &api.GetGroupActivesResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.GetGroupActivesResponse_Data{
 			List: list,
@@ -272,11 +266,11 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	groupData, _ := json.Marshal(group)
-	fmt.Printf("update group %d info: %s \n", group.ID, string(groupData))
+	logger.Debug("update group info", zap.Uint("group_id", group.ID), zap.String("data", string(groupData)))
 	if err != nil {
-		return &api.UpdateGroupInfoResponse{}, err
+		return &api.UpdateGroupInfoResponse{Code: api.ResponseCode_GROUP_NOT_FOUND, Message: err.Error()}, err
 	}
-	fmt.Println("UpdateGroupInfo params: ", req.String())
+	logger.Debug("UpdateGroupInfo params", zap.String("req", req.String()))
 	if req.GetInfo().GetAvatar() != "" {
 		group.Avatar = req.GetInfo().GetAvatar()
 	}
@@ -292,10 +286,10 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 
 	err = group.UpdateAll(req.GetGroupId())
 	if err != nil {
-		return nil, err
+		return &api.UpdateGroupInfoResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, err
 	}
 	return &api.UpdateGroupInfoResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data:    &api.UpdateGroupInfoResponse_Data{},
 	}, nil
@@ -312,7 +306,7 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 	}
 
 	return &api.FetchGroupMembersResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.FetchGroupMembersResponse_Data{
 			List:   usersInfo,
@@ -332,7 +326,7 @@ func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGro
 		list[idx] = convert.ConvertProjectToApiProjectInfo(val)
 	}
 	return &api.FetchGroupProjectsResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.FetchGroupProjectsResponse_Data{
 			List:     list,
@@ -347,7 +341,7 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	if err != nil {
-		return nil, err
+		return &api.JoinGroupResponse{Code: api.ResponseCode_GROUP_NOT_FOUND, Message: err.Error()}, nil
 	}
 	groupMember := &models.GroupMember{
 		GroupID: req.GetGroupId(),
@@ -355,22 +349,22 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 	}
 	isIn, err := groupMember.IsInGroup()
 	if err != nil {
-		return nil, err
+		return &api.JoinGroupResponse{Code: api.ResponseCode_DATABASE_ERROR, Message: err.Error()}, nil
 	}
 	if isIn {
-		return &api.JoinGroupResponse{}, nil
+		return &api.JoinGroupResponse{Code: api.ResponseCode_GROUP_ALREADY_EXISTS, Message: "user already in group"}, nil
 	}
 	err = groupMember.Create()
 	if err != nil {
-		return nil, err
+		return &api.JoinGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
 	err = models.IncGroupProfileMembers(ctx, req.GetGroupId())
 	if err != nil {
-		return nil, err
+		return &api.JoinGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
 
 	active.GetActiveServer().WriteGroupActive(ctx, group, nil, nil, req.GetUserId(), api.ActiveType_JoinGroup)
-	return &api.JoinGroupResponse{}, nil
+	return &api.JoinGroupResponse{Code: api.ResponseCode_OK, Message: "ok"}, nil
 }
 
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
@@ -380,20 +374,20 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupReques
 	}
 	isIn, err := groupMember.IsInGroup()
 	if err != nil {
-		return nil, err
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_DATABASE_ERROR, Message: err.Error()}, nil
 	}
 	if !isIn {
-		return &api.LeaveGroupResponse{}, nil
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_NOT_GROUP_MEMBER, Message: "user not in group"}, nil
 	}
 	err = groupMember.Delete()
 	if err != nil {
-		return nil, err
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
 	err = models.DecGroupProfileMembers(ctx, req.GetGroupId())
 	if err != nil {
-		return nil, err
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
-	return &api.LeaveGroupResponse{}, nil
+	return &api.LeaveGroupResponse{Code: api.ResponseCode_OK, Message: "ok"}, nil
 }
 
 func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (resp *api.GetGroupProfileResponse, err error) {
@@ -401,13 +395,13 @@ func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupPro
 	profile.GroupID = req.GetGroupId()
 	profile, err = models.GetGroupProfile(ctx, profile.GroupID)
 	if err != nil {
-		log.Info("get group profile failed: ", err.Error())
+		logger.Info("get group profile failed", zap.Error(err))
 		return nil, err
 	}
 	if profile == nil {
-		log.Info("group profile is nil")
+		logger.Info("group profile is nil")
 		return &api.GetGroupProfileResponse{
-			Code:    0,
+			Code:    api.ResponseCode_OK,
 			Message: "ok",
 			Data: &api.GetGroupProfileResponse_Data{
 				Info: &api.GroupProfileInfo{
@@ -421,7 +415,7 @@ func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupPro
 		}, nil
 	}
 	return &api.GetGroupProfileResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.GetGroupProfileResponse_Data{
 			Info: convert.ConvertGroupProfileToApiGroupProfile(profile),
@@ -437,18 +431,18 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.UpdateGr
 		int64(profile.GetGroupFollowerNum()),
 	)
 	if err != nil {
-		return nil, err
+		return &api.UpdateGroupProfileResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, err
 	}
-	return nil, nil
+	return &api.UpdateGroupProfileResponse{Code: api.ResponseCode_OK, Message: "ok"}, nil
 }
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error) {
 	name := req.GetName()
 	if name == "" {
-		return nil, errors.New("params is empty")
+		return nil, errors.ErrMissingParameter
 	}
 	if req.GetOffset() < 0 || req.GetPageSize() < 0 {
-		return nil, errors.New("params is invalid")
+		return nil, errors.ErrInvalidParameter
 	}
 	groups, total, err := models.GetGroupByName(name, int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
@@ -459,7 +453,7 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequ
 		list[idx] = convert.ConvertGroupToApiGroupInfo(val)
 	}
 	return &api.SearchGroupResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "ok",
 		Data: &api.SearchGroupResponse_Data{
 			List:     list,
@@ -471,14 +465,14 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequ
 
 func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
 	// TODO: 实现群组项目搜索
-	return nil, fmt.Errorf("not implemented")
+	return nil, errors.ErrFeatureNotImplemented
 }
 
 func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error) {
 	// TODO: 实现获取群组的故事列表
 	storys, err := models.GetStoryByGroupID(ctx, req.GetGroupId(), int(req.GetPage()), int(req.GetPageSize()))
 	if err != nil {
-		log.Info("get story by group id failed: ", err.Error())
+		logger.Info("get story by group id failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -488,7 +482,7 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 	}
 	likeItems, err := models.GetLikeItemByStoriesAndUser(ctx, storysIds, int(req.GetUserId()))
 	if err != nil {
-		log.Info("get like item by stories and user failed: ", err.Error())
+		logger.Info("get like item by stories and user failed", zap.Error(err))
 	}
 	likeMap := make(map[int64]bool)
 	for _, val := range likeItems {
@@ -496,7 +490,7 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 	}
 	watchItems, err := models.GetWatchItemByStoriesAndUser(ctx, storysIds, int(req.GetUserId()))
 	if err != nil {
-		log.Info("get watch item by stories and user failed: ", err.Error())
+		logger.Info("get watch item by stories and user failed", zap.Error(err))
 	}
 	watchMap := make(map[int64]bool)
 	for _, val := range watchItems {
@@ -519,7 +513,7 @@ func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroup
 		list[idx] = storyItem
 	}
 	return &api.FetchGroupStorysResponse{
-		Code:    0,
+		Code:    int32(api.ResponseCode_OK),
 		Message: "ok",
 		Data: &api.FetchGroupStorysResponse_Data{
 			List: list,
