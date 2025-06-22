@@ -57,7 +57,7 @@ func (d DoubaoGenImageParams) String() string {
     "created": 1750120047,
     "data": [
         {
-            "url": "https://ark-content-generation-v2-cn-beijing.tos-cn-beijing.volces.com/doubao-seedream-3-0-t2i/021750120044144dc87d5c0bd7e5c3843b3e0463d849f775c7af7.jpeg?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYjg3ZjNlOGM0YzQyNGE1MmI2MDFiOTM3Y2IwMTY3OTE%2F20250617%2Fcn-beijing%2Ftos%2Frequest&X-Tos-Date=20250617T002727Z&X-Tos-Expires=86400&X-Tos-Signature=8840db2d4275c64e110bcd8cd5700446bc2d2fed2bc0a6d75b9ad6b589d26a8b&X-Tos-SignedHeaders=host&x-tos-process=image%2Fwatermark%2Cimage_YXNzZXRzL3dhdGVybWFyay5wbmc_eC10b3MtcHJvY2Vzcz1pbWFnZS9yZXNpemUsUF8xNg%3D%3D"
+            "url": "https://ar"
         }
     ],
     "usage": {
@@ -487,7 +487,7 @@ func (c *DoubaoClient) GenStoryboardVideo(ctx context.Context, params *GenStoryb
 	    "model": "doubao-seedance-1-0-pro-250528",
 	    "status": "succeeded",
 	    "content": {
-	        "video_url": "https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com/doubao-seedance-1-0-pro/02175057095857900000000000000000000ffffac15900cd8a63e.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYjg3ZjNlOGM0YzQyNGE1MmI2MDFiOTM3Y2IwMTY3OTE%2F20250622%2Fcn-beijing%2Ftos%2Frequest&X-Tos-Date=20250622T054325Z&X-Tos-Expires=86400&X-Tos-Signature=fe3e93933f06097372274c5404cbb8f26d778b871515e2048f1825cae58c8ba3&X-Tos-SignedHeaders=host"
+	        "video_url": "https://"
 	    },
 	    "usage": {
 	        "completion_tokens": 246840,

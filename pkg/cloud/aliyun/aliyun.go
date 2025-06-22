@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	APIKey       = "LTAI5t95GBYydUnB9kfZ4UJa"
-	SecretKey    = "dvRIbNaDeIN94ItdtFKqpNm7JC2CJF"
+	APIKey       = ""
+	SecretKey    = ""
 	Endpoint     = "oss-cn-shanghai.aliyuncs.com" // 比如: oss-cn-hangzhou.aliyuncs.com
 	Bucket       = "grapery-dev"
 	GlobalClient *AliyunClient
