@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -189,13 +188,13 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 	if err != nil {
 		return &api.ResetPasswordResponse{
 			Account:   req.GetAccount(),
-			Status:    -1, // Indicate failure
+			Status:    int64(api.ResponseCode_OPERATION_FAILED), // Indicate failure
 			Timestamp: time.Now().Unix(),
 		}, err
 	}
 	return &api.ResetPasswordResponse{
 		Account:   req.GetAccount(),
-		Status:    0,
+		Status:    int64(api.ResponseCode_OK),
 		Timestamp: time.Now().Unix(),
 	}, nil
 }
@@ -204,11 +203,11 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 // Currently, this is a stub and needs implementation for token validation and account activation.
 func (auth *AuthService) Confirm(ctx context.Context, req *api.ConfirmRequest) (*api.ConfirmResponse, error) {
 	if req.GetToken() == "" {
-		return nil, fmt.Errorf("token is empty")
+		return nil, errors.ErrTokenIsEmpty
 	}
 	// TODO: Implement token validation and account confirmation logic.
 	// For now, returning a placeholder success response or an error if not implemented.
-	return nil, fmt.Errorf("confirmation feature not implemented") // Or a specific error
+	return nil, errors.ErrFeatureNotImplemented // Or a specific error
 }
 
 // GetUserInfo retrieves user information based on account (email or phone).

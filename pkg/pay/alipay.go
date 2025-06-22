@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-pay/gopay"
 	"github.com/go-pay/gopay/alipay"
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 )
 
@@ -27,7 +28,7 @@ func (a *AlipayPay) Subscribe(userID int64, planID string) (string, error) {
 		return "", err
 	}
 	// 生成唯一订单号
-	outTradeNo := fmt.Sprintf("sub_%d_%d", userID, time.Now().UnixNano())
+	outTradeNo := fmt.Sprintf("%s_%d", uuid.New().String(), time.Now().UnixNano())
 	// 这里的 subject/total_amount/product_code 需根据你的订阅套餐配置
 	bm := make(gopay.BodyMap)
 	bm.Set("subject", "订阅服务").

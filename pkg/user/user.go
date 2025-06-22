@@ -7,14 +7,18 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils"
+	"github.com/grapery/grapery/utils/errors"
 )
 
-var userServer UserServer
+var (
+	logger, _  = zap.NewDevelopment()
+	userServer UserServer
+)
 
 func init() {
 	userServer = NewUserSerivce()
@@ -90,10 +94,10 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 	}
 	if ok {
 		if defaultGroup.OwnerID != req.GetUserId() {
-			return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
+			return nil, errors.ErrUserDefaultGroupMismatch
 		}
 		return &api.UserInitResponse{
-			Code: 0,
+			Code: api.ResponseCode_OK,
 			Msg:  "success",
 			Data: &api.UserInitResponse_Data{
 				UserId: req.GetUserId(),
@@ -115,14 +119,15 @@ func (user *UserService) UserInit(ctx context.Context, req *api.UserInitRequest)
 	if !ok {
 		defaultGroup, ok, err = models.GetUserDefaultGroup(int(req.GetUserId()))
 		if !ok {
-			return nil, fmt.Errorf("create default group failed: %+v", err)
+			logger.Error("create default group failed", zap.Error(err))
+			return nil, errors.ErrCreateDefaultGroupFailed
 		}
 	}
 	if defaultGroup.OwnerID != req.GetUserId() {
-		return nil, fmt.Errorf("user %d default group info not match", req.GetUserId())
+		return nil, errors.ErrUserDefaultGroupMismatch
 	}
 	return &api.UserInitResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UserInitResponse_Data{
 			UserId: req.GetUserId(),
@@ -146,7 +151,7 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	u.ID = uint(req.GetUserId())
 	err := u.GetById()
 	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
+		logger.Error("get user failed", zap.Error(err))
 		return nil, err
 	}
 	userProfile := &models.UserProfile{
@@ -154,11 +159,11 @@ func (user *UserService) GetUserInfo(ctx context.Context, req *api.UserInfoReque
 	}
 	err = userProfile.GetByUserId()
 	if err != nil {
-		log.Errorf("get user profile failed : %s", err.Error())
+		logger.Error("get user profile failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.UserInfoResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UserInfoResponse_Data{
 			Info: &api.UserInfo{
@@ -183,11 +188,11 @@ func (user *UserService) UpdateAvator(ctx context.Context, req *api.UpdateUserAv
 	u.Avatar = req.GetAvatar()
 	err := u.UpdateAvatar()
 	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
+		logger.Error("get user failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.UpdateUserAvatorResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UpdateUserAvatorResponse_Data{
 			Info: &api.UserInfo{
@@ -207,14 +212,17 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		return nil, err
 	}
 	if len(list) == 0 {
-		return &api.UserGroupResponse{}, nil
+		return &api.UserGroupResponse{
+			Code: api.ResponseCode_OK,
+			Msg:  "success",
+		}, nil
 	}
 	var groups = make([]*api.GroupInfo, len(list), len(list))
 	var u = new(models.User)
 	u.ID = uint(req.GetUserId())
 	err = u.GetById()
 	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
+		logger.Error("get user failed", zap.Error(err))
 		return nil, err
 	}
 	info := &api.UserInfo{
@@ -226,7 +234,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 	}
 	profiles, err := models.GetGroupProfiles(ctx, groupIds)
 	if err != nil {
-		log.Errorf("get group profiles failed : %s", err.Error())
+		logger.Error("get group profiles failed", zap.Error(err))
 		return nil, err
 	}
 	groupProfileMap := make(map[int64]*models.GroupProfile)
@@ -234,7 +242,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		groupProfileMap[profile.GroupID] = profile
 	}
 	groupProfileMapData, _ := json.Marshal(groupProfileMap)
-	log.Infof("groupProfileMap: %s", string(groupProfileMapData))
+	logger.Info("groupProfileMap", zap.String("groupProfileMap", string(groupProfileMapData)))
 	for idx, _ := range list {
 		groups[idx] = &api.GroupInfo{}
 		groups[idx].Avatar = list[idx].Avatar
@@ -263,7 +271,7 @@ func (user *UserService) GetUserGroup(ctx context.Context, req *api.UserGroupReq
 		groups[idx].Mtime = list[idx].UpdateAt.Unix()
 	}
 	return &api.UserGroupResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UserGroupResponse_Data{
 			List:     groups,
@@ -283,7 +291,7 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 	u.ID = uint(req.GetUserId())
 	err = u.GetById()
 	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
+		logger.Error("get user failed", zap.Error(err))
 		return nil, err
 	}
 	info := &api.UserInfo{
@@ -303,7 +311,7 @@ func (user *UserService) GetUserFollowingGroup(ctx context.Context, req *api.Use
 		groups[idx].Creator = info.GetUserId()
 	}
 	return &api.UserFollowingGroupResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UserFollowingGroupResponse_Data{
 			List: groups,
@@ -320,20 +328,24 @@ func (user *UserService) UpdateUser(ctx context.Context, req *api.UserUpdateRequ
 	}
 	err := u.UpdateAvatar()
 	if err != nil {
-		return nil, err
+		return &api.UserUpdateResponse{
+			Code: api.ResponseCode_OPERATION_FAILED,
+		}, nil
 	}
-	return &api.UserUpdateResponse{}, nil
+	return &api.UserUpdateResponse{
+		Code: api.ResponseCode_OK,
+	}, nil
 }
 
 func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActivesRequest) (
 	*api.FetchActivesResponse, error) {
 	// TODO: fetch user actives
-	log.Println("FetchActives req: ", req.String())
+	logger.Info("FetchActives req", zap.String("req", req.String()))
 	if req.GetUserId() <= 0 {
-		return nil, fmt.Errorf("invalid user id")
+		return nil, errors.ErrInvalidUserID
 	}
 	if req.GetAtype() > api.ActiveFlowType_GroupFlowType || req.GetAtype() < api.ActiveFlowType_AllFlowType {
-		return nil, fmt.Errorf("invalid active type %d", req.GetAtype())
+		return nil, errors.ErrInvalidActiveType
 	}
 	var (
 		groupIds, storyIds, roleIds []int64
@@ -346,13 +358,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_GroupFlowType {
 		groupIds, _, err = models.GetUserFollowedGroupIds(ctx, int(req.GetUserId()))
 		if err != nil {
-			log.Errorf("get user [%d] followed group ids failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed group ids failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(groupIds) == 0 {
-			log.Infof("user [%d] has no followed group", req.GetUserId())
+			logger.Info("user has no followed group", zap.Int64("user_id", req.GetUserId()))
 			return &api.FetchActivesResponse{
-				Code: 0,
+				Code: api.ResponseCode_OK,
 				Msg:  "success",
 				Data: &api.FetchActivesResponse_Data{
 					List:      nil,
@@ -367,13 +379,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_StoryFlowType {
 		storyIds, err = models.GetUserFollowedStoryIds(ctx, int(req.GetUserId()))
 		if err != nil {
-			log.Errorf("get user [%d] followed story ids failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story ids failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(storyIds) == 0 {
-			log.Infof("user [%d] has no followed story", req.GetUserId())
+			logger.Info("user has no followed story", zap.Int64("user_id", req.GetUserId()))
 			return &api.FetchActivesResponse{
-				Code: 0,
+				Code: api.ResponseCode_OK,
 				Msg:  "success",
 				Data: &api.FetchActivesResponse_Data{
 					List:      nil,
@@ -388,13 +400,13 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if req.GetAtype() == api.ActiveFlowType_RoleFlowType {
 		roleIds, err = models.GetUserFollowedStoryRoleIds(ctx, int(req.GetUserId()))
 		if err != nil {
-			log.Errorf("get user [%d] followed story role ids failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story role ids failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(roleIds) == 0 {
-			log.Infof("user [%d] has no followed story role", req.GetUserId())
+			logger.Info("user has no followed story role", zap.Int64("user_id", req.GetUserId()))
 			return &api.FetchActivesResponse{
-				Code: 0,
+				Code: api.ResponseCode_OK,
 				Msg:  "success",
 				Data: &api.FetchActivesResponse_Data{
 					List:      nil,
@@ -412,7 +424,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(groupIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingGroupID(req.GetUserId(), groupIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
-			log.Errorf("get user [%d] followed group actives failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed group actives failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(actives) != 0 {
@@ -425,7 +437,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		groups, err := models.GetGroupsByIds(targetGroupIds)
 		if err != nil {
-			log.Errorf("get user [%d] followed group failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed group failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		for _, group := range groups {
@@ -435,7 +447,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(storyIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingStoryID(req.GetUserId(), storyIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
-			log.Errorf("get user [%d] followed story actives failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story actives failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(*actives) != 0 {
@@ -448,7 +460,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		stories, err := models.GetStoriesByIDs(ctx, targetStoryIds)
 		if err != nil {
-			log.Errorf("get user [%d] followed story failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		for _, story := range stories {
@@ -458,7 +470,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	if len(roleIds) != 0 {
 		actives, _, err := models.GetActiveByFollowingStoryRoleID(req.GetUserId(), roleIds, int(req.GetOffset()), int(req.GetPageSize()))
 		if err != nil {
-			log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story role failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		if len(*actives) != 0 {
@@ -471,7 +483,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 		}
 		roles, err := models.GetStoryRolesByIDs(ctx, targetStoryroleIds)
 		if err != nil {
-			log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
+			logger.Error("get user followed story role failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 			return nil, err
 		}
 		for _, role := range roles {
@@ -486,7 +498,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	}
 	users, err := models.GetUsersByIds(userIds)
 	if err != nil {
-		log.Errorf("get user [%d] followed story role failed: %s", req.GetUserId(), err.Error())
+		logger.Error("get user from active users failed", zap.Error(err))
 		return nil, err
 	}
 	if len(users) != 0 {
@@ -494,7 +506,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 			activeUsers[int64(user.ID)] = user
 		}
 	} else {
-		log.Infof("user [%d] has no followed story role", req.GetUserId())
+		logger.Info("user has no followed story role", zap.Int64("user_id", req.GetUserId()))
 		return &api.FetchActivesResponse{
 			Code: api.ResponseCode_USER_PROFILE_INCOMPLETE,
 			Msg:  "failed",
@@ -571,7 +583,7 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 	}
 
 	return &api.FetchActivesResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.FetchActivesResponse_Data{
 			List:      apiActives,
@@ -585,14 +597,14 @@ func (user *UserService) FetchActives(ctx context.Context, req *api.FetchActives
 // 组织内搜索指定用户
 func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequest) (
 	*api.SearchUserResponse, error) {
-	return nil, nil
+	return nil, errors.ErrFeatureNotImplemented
 }
 
 func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
 	*api.UserWatchingResponse, error) {
 	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
-		log.Errorf("get user [%d] watching projects failed: %s", req.GetUserId(), err.Error())
+		logger.Error("get user watching projects failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
 		return nil, err
 	}
 	var projects = make([]*api.ProjectInfo, 0, len(list))
@@ -600,7 +612,7 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 	u.ID = uint(req.GetUserId())
 	err = u.GetById()
 	if err != nil {
-		log.Errorf("get user failed : %s", err.Error())
+		logger.Error("get user failed", zap.Error(err))
 		return nil, err
 	}
 	info := &api.UserInfo{
@@ -619,7 +631,7 @@ func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatching
 		projects[idx].Creator = info.GetUserId()
 	}
 	return &api.UserWatchingResponse{
-		Code: 0,
+		Code: api.ResponseCode_OK,
 		Msg:  "success",
 		Data: &api.UserWatchingResponse_Data{
 			List:     projects,
@@ -636,11 +648,11 @@ func (user *UserService) GetUserProfile(ctx context.Context, req *api.GetUserPro
 	}
 	err := profile.GetByUserId()
 	if err != nil {
-		log.Errorf("get user profile failed : %s", err.Error())
+		logger.Error("get user profile failed", zap.Error(err))
 		return nil, err
 	}
 	return &api.GetUserProfileResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 		Info:    convertModelUserProfileToApi(profile),
 	}, nil
@@ -653,7 +665,7 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 	}
 	err := profile.GetByUserId()
 	if err != nil {
-		log.Errorf("get user profile failed : %s", err.Error())
+		logger.Error("get user profile failed", zap.Error(err))
 		return nil, err
 	}
 	if req.GetBackgroundImage() != "" {
@@ -661,7 +673,7 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 		profile.Background = req.GetBackgroundImage()
 		err = profile.Update()
 		if err != nil {
-			log.Errorf("update user profile backgroud image failed : %s", err.Error())
+			logger.Error("update user profile backgroud image failed", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -685,13 +697,13 @@ func (user *UserService) UpdateUserProfile(ctx context.Context, req *api.UpdateU
 	err = models.UpdateUserInfo(ctx, req.GetUserId(), needUpdates)
 	if err != nil {
 		return &api.UpdateUserProfileResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "user info err:" + err.Error(),
 		}, nil
 	}
 
 	return &api.UpdateUserProfileResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -702,19 +714,19 @@ func (user *UserService) UpdateUserBackgroundImage(ctx context.Context, req *api
 	}
 	err := profile.GetByUserId()
 	if err != nil {
-		log.Errorf("get user profile failed : %s", err.Error())
+		logger.Error("get user profile failed", zap.Error(err))
 		return nil, err
 	}
 	profile.Background = req.GetBackgroundImage()
 	err = profile.Update()
 	if err != nil {
 		return &api.UpdateUserBackgroundImageResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "update user background image failed : " + err.Error(),
 		}, nil
 	}
 	return &api.UpdateUserBackgroundImageResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "OK",
 	}, nil
 }
@@ -873,14 +885,14 @@ func convertModelUserProfileToApi(profile *models.UserProfile) *api.UserProfileI
 }
 
 func (user *UserService) FollowUser(ctx context.Context, req *api.FollowUserRequest) (*api.FollowUserResponse, error) {
-	return nil, nil
+	return nil, errors.ErrFeatureNotImplemented
 }
 func (user *UserService) UnfollowUser(ctx context.Context, req *api.UnfollowUserRequest) (*api.UnfollowUserResponse, error) {
-	return nil, nil
+	return nil, errors.ErrFeatureNotImplemented
 }
 func (user *UserService) GetFollowList(ctx context.Context, req *api.GetFollowListRequest) (*api.GetFollowListResponse, error) {
-	return nil, nil
+	return nil, errors.ErrFeatureNotImplemented
 }
 func (user *UserService) GetFollowerList(ctx context.Context, req *api.GetFollowerListRequest) (*api.GetFollowerListResponse, error) {
-	return nil, nil
+	return nil, errors.ErrFeatureNotImplemented
 }

@@ -2,6 +2,8 @@ package errors
 
 import (
 	"fmt"
+
+	api "github.com/grapery/common-protoc/gen"
 )
 
 type SysError struct {
@@ -21,10 +23,10 @@ func (e SysError) Error() string {
 }
 
 var (
-	ErrAuthNotFound        = NewSysError(1001, "auth info is not exist")
-	ErrAuthExpired         = NewSysError(1002, "auth info is expired")
-	ErrAuthIsExist         = NewSysError(1003, "auth info is exist")
-	ErrAuthPasswordIsWrong = NewSysError(1003, "auth password is wrong")
+	ErrAuthNotFound        = NewSysError(int(api.ResponseCode_ACCOUNT_NOT_FOUND), "auth info is not exist")
+	ErrAuthExpired         = NewSysError(int(api.ResponseCode_ACCOUNT_EXPIRED), "auth info is expired")
+	ErrAuthIsExist         = NewSysError(int(api.ResponseCode_USER_ALREADY_EXISTS), "auth info is exist")
+	ErrAuthPasswordIsWrong = NewSysError(int(api.ResponseCode_WRONG_PASSWORD), "auth password is wrong")
 )
 
 var (
@@ -62,4 +64,16 @@ var (
 	ErrStoryIsClosed   = NewSysError(6002, "Story is closed")
 	ErrStoryIsInvalid  = NewSysError(6003, "Story is invalid")
 	ErrStoryIsExpired  = NewSysError(6004, "Story is expired")
+)
+
+var (
+	ErrTokenIsEmpty          = NewSysError(int(api.ResponseCode_MISSING_PARAMETER), "token is empty")
+	ErrFeatureNotImplemented = NewSysError(int(api.ResponseCode_OPERATION_NOT_SUPPORTED), "feature not implemented")
+)
+
+var (
+	ErrUserDefaultGroupMismatch = NewSysError(int(api.ResponseCode_USER_STATUS_ERROR), "user default group info not match")
+	ErrCreateDefaultGroupFailed = NewSysError(int(api.ResponseCode_GROUP_OPERATION_DENIED), "create default group failed")
+	ErrInvalidUserID            = NewSysError(int(api.ResponseCode_INVALID_PARAMETER), "invalid user id")
+	ErrInvalidActiveType        = NewSysError(int(api.ResponseCode_INVALID_PARAMETER), "invalid active type")
 )
