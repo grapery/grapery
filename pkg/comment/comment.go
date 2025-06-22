@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 
+	"go.uber.org/zap"
+
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
-	"github.com/grapery/grapery/utils/log"
 )
+
+var logger, _ = zap.NewDevelopment()
 
 var commentServer CommentServer
 
@@ -57,7 +60,7 @@ func (s *CommentService) CreateStoryComment(ctx context.Context, req *api.Create
 	story, err := models.GetStory(ctx, req.GetStoryId())
 	if err != nil {
 		return &api.CreateStoryCommentResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_STORY_NOT_FOUND,
 			Message: "get story failed",
 		}, nil
 	}
@@ -65,12 +68,12 @@ func (s *CommentService) CreateStoryComment(ctx context.Context, req *api.Create
 	err = models.UpdateStory(ctx, story)
 	if err != nil {
 		return &api.CreateStoryCommentResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "update story comment count failed",
 		}, nil
 	}
 	return &api.CreateStoryCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -83,7 +86,7 @@ func (s *CommentService) GetStoryComments(ctx context.Context, req *api.GetStory
 	}
 	if len(*comments) == 0 {
 		return &api.GetStoryCommentsResponse{
-			Code:     0,
+			Code:     api.ResponseCode_OK,
 			Message:  "success",
 			Total:    0,
 			Comments: []*api.StoryComment{},
@@ -102,7 +105,7 @@ func (s *CommentService) GetStoryComments(ctx context.Context, req *api.GetStory
 		})
 	}
 	return &api.GetStoryCommentsResponse{
-		Code:     0,
+		Code:     api.ResponseCode_OK,
 		Message:  "success",
 		Total:    int64(len(*comments)),
 		Comments: apiComments,
@@ -112,11 +115,14 @@ func (s *CommentService) GetStoryComments(ctx context.Context, req *api.GetStory
 func (s *CommentService) DeleteStoryComment(ctx context.Context, req *api.DeleteStoryCommentRequest) (*api.DeleteStoryCommentResponse, error) {
 	err := models.DeleteComment(uint64(req.GetCommentId()))
 	if err != nil {
-		return nil, err
+		return &api.DeleteStoryCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
 
 	return &api.DeleteStoryCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -128,7 +134,7 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 	}
 	if len(*replies) == 0 {
 		return &api.GetStoryCommentRepliesResponse{
-			Code:    0,
+			Code:    api.ResponseCode_OK,
 			Message: "success",
 			Total:   0,
 			Replies: []*api.StoryComment{},
@@ -140,7 +146,7 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 	}
 	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
-		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		logger.Error("get user by ids map error", zap.Error(err))
 		return nil, err
 	}
 	apiReplies := make([]*api.StoryComment, 0)
@@ -162,7 +168,7 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 		})
 	}
 	return &api.GetStoryCommentRepliesResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 		Total:   int64(len(*replies)),
 		Replies: apiReplies,
@@ -177,7 +183,10 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	}
 	err := rootComment.GetComment()
 	if err != nil {
-		return nil, err
+		return &api.CreateStoryCommentReplyResponse{
+			Code:    api.ResponseCode_COMMENT_NOT_FOUND,
+			Message: err.Error(),
+		}, nil
 	}
 	comment := &models.Comment{
 		UserID:       req.GetUserId(),
@@ -200,10 +209,10 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	}
 	err = models.IncreaseReplyCount(uint64(rootComment.ID))
 	if err != nil {
-		log.Log().Sugar().Info("increase story comment reply count failed: %s", err.Error())
+		logger.Error("increase story comment reply count failed", zap.Error(err))
 	}
 	return &api.CreateStoryCommentReplyResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -211,7 +220,10 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.DeleteStoryCommentReplyRequest) (*api.DeleteStoryCommentReplyResponse, error) {
 	err := models.DeleteStoryCommentReply(uint64(req.GetReplyId()))
 	if err != nil {
-		return nil, err
+		return &api.DeleteStoryCommentReplyResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
 	targetComment := &models.Comment{
 		IDBase: models.IDBase{
@@ -220,14 +232,17 @@ func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.D
 	}
 	err = targetComment.GetComment()
 	if err != nil {
-		return nil, err
+		return &api.DeleteStoryCommentReplyResponse{
+			Code:    api.ResponseCode_COMMENT_NOT_FOUND,
+			Message: err.Error(),
+		}, nil
 	}
 	err = models.DecreaseReplyCount(uint64(targetComment.RootCommentID))
 	if err != nil {
-		log.Log().Sugar().Info("decrease story comment reply count failed: %s", err.Error())
+		logger.Error("decrease story comment reply count failed", zap.Error(err))
 	}
 	return &api.DeleteStoryCommentReplyResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -250,7 +265,7 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
 	if err != nil {
 		return &api.CreateStoryBoardCommentResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_STORYBOARD_NOT_FOUND,
 			Message: "get storyboard failed",
 		}, nil
 	}
@@ -258,12 +273,12 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 	err = models.UpdateStoryboard(ctx, storyBoard)
 	if err != nil {
 		return &api.CreateStoryBoardCommentResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "update storyboard comment count failed",
 		}, nil
 	}
 	return &api.CreateStoryBoardCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -271,18 +286,21 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 func (s *CommentService) DeleteStoryBoardComment(ctx context.Context, req *api.DeleteStoryBoardCommentRequest) (*api.DeleteStoryBoardCommentResponse, error) {
 	err := models.DeleteComment(uint64(req.GetCommentId()))
 	if err != nil {
-		return nil, err
+		return &api.DeleteStoryBoardCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
 	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
 	if err != nil {
 		return &api.DeleteStoryBoardCommentResponse{
-			Code:    -1,
+			Code:    api.ResponseCode_STORYBOARD_NOT_FOUND,
 			Message: "get storyboard failed",
 		}, nil
 	}
 	storyBoard.CommentNum--
 	return &api.DeleteStoryBoardCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -291,16 +309,16 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 		uint64(req.GetBoardId()), int64(req.GetOffset()), int64(req.GetPageSize()))
 	if err != nil {
 		return &api.GetStoryBoardCommentsResponse{
-			Code:     -1,
+			Code:     api.ResponseCode_DATABASE_ERROR,
 			Message:  "get comments error",
 			Total:    0,
 			Comments: []*api.StoryComment{},
 		}, nil
 	}
 	if len(*comments) == 0 {
-		log.Log().Info("get comment list by story board empty")
+		logger.Info("get comment list by story board empty")
 		return &api.GetStoryBoardCommentsResponse{
-			Code:     0,
+			Code:     api.ResponseCode_OK,
 			Message:  "success",
 			Total:    0,
 			Comments: []*api.StoryComment{},
@@ -312,11 +330,11 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 	}
 	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
-		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		logger.Error("get user by ids map error", zap.Error(err))
 		return nil, err
 	}
 	createrMapData, _ := json.Marshal(createrMap)
-	log.Log().Info("get user by ids map success: " + string(createrMapData))
+	logger.Info("get user by ids map success", zap.String("creater_map", string(createrMapData)))
 	apiComments := make([]*api.StoryComment, 0)
 	for _, comment := range *comments {
 		apiComments = append(apiComments, &api.StoryComment{
@@ -335,9 +353,9 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 			},
 		})
 	}
-	log.Log().Info("get comment list by story board success")
+	logger.Info("get comment list by story board success")
 	return &api.GetStoryBoardCommentsResponse{
-		Code:     0,
+		Code:     api.ResponseCode_OK,
 		Message:  "success",
 		Total:    int64(len(*comments)),
 		Comments: apiComments,
@@ -347,20 +365,26 @@ func (s *CommentService) GetStoryBoardComments(ctx context.Context, req *api.Get
 func (s *CommentService) LikeComment(ctx context.Context, req *api.LikeCommentRequest) (*api.LikeCommentResponse, error) {
 	err := models.LikeComment(uint64(req.GetCommentId()), uint64(req.GetUserId()))
 	if err != nil {
-		return nil, err
+		return &api.LikeCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
 	return &api.LikeCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
 func (s *CommentService) DislikeComment(ctx context.Context, req *api.DislikeCommentRequest) (*api.DislikeCommentResponse, error) {
 	err := models.DislikeComment(uint64(req.GetCommentId()), uint64(req.GetUserId()))
 	if err != nil {
-		return nil, err
+		return &api.DislikeCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
 	return &api.DislikeCommentResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 	}, nil
 }
@@ -372,7 +396,7 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 	}
 	if len(*replies) == 0 {
 		return &api.GetStoryBoardCommentRepliesResponse{
-			Code:    0,
+			Code:    api.ResponseCode_OK,
 			Message: "success",
 			Total:   0,
 			Replies: []*api.StoryComment{},
@@ -384,11 +408,11 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 	}
 	createrMap, err := models.GetUsersByIdsMap(ctx, createrIds)
 	if err != nil {
-		log.Log().Sugar().Info("get user by ids map error: %s", err.Error())
+		logger.Error("get user by ids map error", zap.Error(err))
 		return nil, err
 	}
 	createrMapData, _ := json.Marshal(createrMap)
-	log.Log().Info("get user by ids map success: " + string(createrMapData))
+	logger.Info("get user by ids map success", zap.String("creater_map", string(createrMapData)))
 	apiReplies := make([]*api.StoryComment, 0)
 	for _, reply := range *replies {
 		apiReplies = append(apiReplies, &api.StoryComment{
@@ -408,7 +432,7 @@ func (s *CommentService) GetStoryBoardCommentReplies(ctx context.Context, req *a
 		})
 	}
 	return &api.GetStoryBoardCommentRepliesResponse{
-		Code:    0,
+		Code:    api.ResponseCode_OK,
 		Message: "success",
 		Total:   int64(len(*replies)),
 		Replies: apiReplies,
