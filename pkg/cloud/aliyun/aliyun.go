@@ -2,6 +2,7 @@ package aliyun
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -38,6 +39,9 @@ type AliyunClient struct {
 }
 
 func NewAliyunClient() (*AliyunClient, error) {
+	if APIKey == "" || SecretKey == "" || Bucket == "" {
+		return nil, errors.New("ALIYUN_API_KEY, ALIYUN_SECRET_KEY, ALIYUN_BUCKET is not set")
+	}
 	client, err := oss.New(Endpoint, APIKey, SecretKey)
 	if err != nil {
 		return nil, err

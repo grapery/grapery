@@ -19,6 +19,9 @@ type DoubaoClient struct {
 }
 
 func NewDoubaoClient() *DoubaoClient {
+	if DoubaoAPIKey == "" {
+		panic("DOUBAO_API_KEY is not set")
+	}
 	return &DoubaoClient{
 		DoubaoAPIKey: DoubaoAPIKey,
 	}

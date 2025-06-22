@@ -24,6 +24,10 @@ type AliyunStoryClient struct {
 
 func NewAliyunClient() *AliyunStoryClient {
 	client, _ := aliyun.NewAliyunClient()
+	DashScopeAPIKey = os.Getenv("DASHSCOPE_API_KEY")
+	if DashScopeAPIKey == "" {
+		panic("DASHSCOPE_API_KEY is not set")
+	}
 	return &AliyunStoryClient{
 		Client:          client,
 		DashScopeAPIKey: DashScopeAPIKey,
