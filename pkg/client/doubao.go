@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 )
 
-const (
-	DoubaoAPIKey = "doubao"
+var (
+	DoubaoAPIKey = os.Getenv("DOUBAO_API_KEY")
 )
 
 type DoubaoClient struct {

@@ -8,12 +8,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/grapery/grapery/pkg/cloud/aliyun"
 )
 
-const (
-	DashScopeAPIKey = ""
+var (
+	DashScopeAPIKey = os.Getenv("DASHSCOPE_API_KEY")
 )
 
 type AliyunStoryClient struct {

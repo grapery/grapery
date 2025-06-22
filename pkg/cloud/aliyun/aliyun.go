@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/jpeg"
 	"net/http"
+	"os"
 	"strings"
 
 	"encoding/base64"
@@ -16,8 +17,8 @@ import (
 )
 
 var (
-	APIKey       = ""
-	SecretKey    = ""
+	APIKey       = os.Getenv("ALIYUN_API_KEY")
+	SecretKey    = os.Getenv("ALIYUN_SECRET_KEY")
 	Endpoint     = "oss-cn-shanghai.aliyuncs.com" // 比如: oss-cn-hangzhou.aliyuncs.com
 	Bucket       = "grapery-dev"
 	GlobalClient *AliyunClient
