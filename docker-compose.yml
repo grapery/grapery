@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  # 主应用服务
+  grapes:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.grapes
+    container_name: grapery-grapes
+    ports:
+      - "8080:8080"
+    environment:
+      - ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=grapery
+      - DB_PASSWORD=grapery123
+      - DB_NAME=grapery
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # 同步工作服务
+  syncworker:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.syncworker
+    container_name: grapery-syncworker
+    environment:
+      - ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=grapery
+      - DB_PASSWORD=grapery123
+      - DB_NAME=grapery
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # MCP服务
+  mcps:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.mcps
+    container_name: grapery-mcps
+    ports:
+      - "8081:8081"
+    environment:
+      - ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=grapery
+      - DB_PASSWORD=grapery123
+      - DB_NAME=grapery
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # VIP支付服务
+  vippay:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.vippay
+    container_name: grapery-vippay
+    ports:
+      - "8082:8082"
+    environment:
+      - ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=grapery
+      - DB_PASSWORD=grapery123
+      - DB_NAME=grapery
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: grapery-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=grapery
+      - MYSQL_USER=grapery
+      - MYSQL_PASSWORD=grapery123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: grapery-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: grapery-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - grapes
+      - mcps
+      - vippay
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  grapery-network:
+    driver: bridge 

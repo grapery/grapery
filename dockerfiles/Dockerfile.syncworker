@@ -1,0 +1,14 @@
+FROM golang:1.21-alpine AS builder
+WORKDIR /app
+COPY . .
+ENV GO111MODULE=on GOPROXY=https://goproxy.cn,direct CGO_ENABLED=0 GOOS=linux
+RUN go build -o grapes-syncworker ./app/syncworker
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata
+ENV TZ=Asia/Shanghai
+WORKDIR /app
+COPY --from=builder /app/grapes-syncworker .
+COPY configs/ /app/configs/
+EXPOSE 8080
+CMD ["./grapes-syncworker"] 
