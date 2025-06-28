@@ -16,17 +16,31 @@ $(TARGETS):
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
+	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-pay  $(project)/app/vippay/
 
 withpgo: $(TARGETS)
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
+	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-pay  $(project)/app/vippay/
 
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)-app
 	docker build -f dockerfiles/Dockerfile -t $(IMAGE) .
 	rm -f build.tar 
 	@echo "image: $(IMAGE)"
+
+image-grapes:
+	docker build -f dockerfiles/Dockerfile.grapes -t grapes-app:$(VERSION)-$(BUILD) .
+
+image-syncworker:
+	docker build -f dockerfiles/Dockerfile.syncworker -t grapes-syncworker:$(VERSION)-$(BUILD) .
+
+image-mcps:
+	docker build -f dockerfiles/Dockerfile.mcps -t grapes-mcps:$(VERSION)-$(BUILD) .
+
+image-vippay:
+	docker build -f dockerfiles/Dockerfile.vippay -t grapes-vippay:$(VERSION)-$(BUILD) .
 
 check:
 	@$(GO) tool vet ${SRC}

@@ -1,0 +1,33 @@
+{
+  "payment_config": {
+    "stripe_config": {
+      "secret_key": "sk_test_your_stripe_secret_key_here",
+      "publishable_key": "pk_test_your_stripe_publishable_key_here",
+      "webhook_secret": "whsec_your_webhook_secret_here"
+    },
+    "alipay_config": {
+      "app_id": "your_alipay_app_id",
+      "private_key": "your_alipay_private_key",
+      "public_key": "alipay_public_key"
+    },
+    "wechat_pay_config": {
+      "app_id": "your_wechat_app_id",
+      "mch_id": "your_merchant_id",
+      "api_key": "your_api_key",
+      "cert_path": "/path/to/wechat_cert.pem",
+      "key_path": "/path/to/wechat_key.pem"
+    },
+    "apple_pay_config": {
+      "bundle_id": "com.yourcompany.yourapp",
+      "key_id": "your_key_id",
+      "key_path": "/path/to/apple_pay_key.p8"
+    },
+    "google_pay_config": {
+      "merchant_id": "your_merchant_id",
+      "key_path": "/path/to/google_pay_key.json"
+    },
+    "default_currency": "CNY",
+    "return_url": "https://yourdomain.com/payment/return",
+    "notify_url": "https://yourdomain.com/payment/notify"
+  }
+} 
