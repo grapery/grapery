@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 var (
@@ -88,6 +91,7 @@ func (c *HuoShanCozeClient) WorkflowRun(ctx context.Context, workflowID string, 
 	if err != nil {
 		return "", err
 	}
+	log.Printf("WorkflowRun params: %s\n", string(jsonData))
 	// 创建HTTP请求
 	req, err := http.NewRequestWithContext(ctx, "POST", Endpoint+"/v1/workflow/run", bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -122,7 +126,12 @@ func (c *HuoShanCozeClient) WorkflowRun(ctx context.Context, workflowID string, 
 	if apiResp.Code != 0 {
 		return "", errors.New(apiResp.Msg)
 	}
-	return apiResp.Data, nil
+	ret, err := ParseCozeOutput(apiResp.Data)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("coze return: ", ret)
+	return ret["output"], nil
 }
 
 func (c *HuoShanCozeClient) InitStoryboard(ctx context.Context, params CozeInitStoryboardParams) (string, error) {
@@ -438,7 +447,7 @@ func (c *HuoShanCozeClient) StoryRoleDetail(ctx context.Context, params CozeStor
 			"app_id":      APPID,
 			"story_name":  params.StoryName,
 			"story_desc":  params.StoryDesc,
-			"role_name":   params.RoleName,
+			"name":        params.RoleName,
 			"description": params.Description,
 			"other_roles": params.OtherRoles, // 可选，其他角色信息
 		},
@@ -598,4 +607,28 @@ func (c *HuoShanCozeClient) ContinueChatWithRoleStream(ctx context.Context, para
 // ContinueChatWithAssistantStream 流式：继续与助手对话
 func (c *HuoShanCozeClient) ContinueChatWithAssistantStream(ctx context.Context, params CozeChatWithRoleParams) (string, error) {
 	return c.ChatWithRoleStream(ctx, params)
+}
+
+// ParseCozeOutput 解析Coze返回的output字符串为map
+// 输入示例：output 字符串
+// 返回：map[string]string 或 error
+func ParseCozeOutput(output string) (map[string]string, error) {
+	// 1. 去掉前后的 --- 分隔符和多余空白
+	start := strings.Index(output, "{")
+	end := strings.LastIndex(output, "}")
+	if start == -1 || end == -1 || end <= start {
+		return nil, errors.New("output格式不正确，未找到json对象")
+	}
+	jsonStr := output[start : end+1]
+
+	// 2. 去掉多余的换行符
+	jsonStr = strings.ReplaceAll(jsonStr, "\n", "")
+
+	// 3. 反序列化
+	var result map[string]string
+	err := json.Unmarshal([]byte(jsonStr), &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

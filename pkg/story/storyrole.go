@@ -302,6 +302,9 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 		RoleName:    role.CharacterName,
 		Description: req.GetPrompt(),
 	}
+	if roleParams.Description == "" {
+		roleParams.Description = role.CharacterDescription
+	}
 	roleContent, err := s.cozeClient.StoryRoleDetail(ctx, roleParams)
 	if err != nil {
 		log.Log().Error("get story role detail prompt failed", zap.Error(err))
@@ -970,6 +973,9 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 		StoryName:   storyinfo.Title,
 		StoryDesc:   storyinfo.ShortDesc,
 	}
+	if storyroleParams.Description == "" {
+		storyroleParams.Description = roleinfo.CharacterDescription
+	}
 	if len(roles) > 0 {
 		storyroleParams.OtherRoles = otherRolesInfo.String()
 	} else {
@@ -979,7 +985,7 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 	result, err := s.cozeClient.StoryRoleDetail(ctx, storyroleParams)
 	if err != nil {
 		log.Log().Error("generate role description failed", zap.Error(err))
-		return nil, err
+		return nil, errors.New("failed to generate role description")
 	}
 
 	// Clean and parse the AI response
@@ -988,6 +994,7 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 	var genRoleDetail = new(CharacterDetail)
 	err = json.Unmarshal([]byte(cleanResult), &genRoleDetail)
 	if err != nil {
+		log.Log().Error("unmarshal gen result failed", zap.Error(err))
 		return &api.GenerateRoleDescriptionResponse{
 			Code:    -1,
 			Message: err.Error(),
