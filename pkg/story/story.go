@@ -14,6 +14,7 @@ import (
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/pkg/client"
+	"github.com/grapery/grapery/pkg/cloud/coze"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/compliance"
 	"github.com/grapery/grapery/utils/convert"
@@ -124,6 +125,7 @@ type StoryService struct {
 	zhipuClient   *client.ZhipuStoryClient
 	bailianClient *client.AliyunStoryClient
 	doubaoClient  *client.DoubaoClient
+	cozeClient    *coze.HuoShanCozeClient
 }
 
 func NewStoryService() *StoryService {
@@ -460,7 +462,7 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
 	storyGenData, _ := json.Marshal(genParams)
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = prompt.ZhipuNegativePrompt
 	storyGen.PositivePrompt = prompt.ZhipuPositivePrompt
 	storyGen.Regen = 0
@@ -487,59 +489,19 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 		return nil, err
 	}
 	renderDetail := new(api.RenderStoryDetail)
-	renderStoryParams := &client.StoryInfoParams{
-		Content: `生成一个 story_name 的故事,故事内容用中文描述,以json格式返回
-		可以参考如下例子：
-		--------
-		{
-			"故事名称和主题":{
-				"故事名称": "火星绿洲",
-				"故事主题": "人类在火星上的生存",
-				"故事简介": "在2023年，国际火星探索任务成功地将首批人类送至火星。美国宇航员马克·沃特斯（Mark Watney）作为唯一的幸存者，面临着生死存亡的挑战。以下是他在火星上的求生记。"
-			},
-			
-			"故事章节": [
-				{
-					"章节ID": "1",
-					"章节题目": "火星上的孤岛",
-					"章节内容": "马克在火星表面执行任务时，遭遇了一场突如其来的沙尘暴。他与同伴们在撤离过程中不幸与团队失去了联系。马克在沙尘暴中迷失方向，被火星表面的沙丘覆盖，最终昏迷。醒来后，他发现自己成为了火星上的孤岛求生者。"
-				},
-				{
-					"章节ID": "2",
-					"章节题目": "生存挑战",
-					"章节内容": "马克意识到自己必须生存下去。他利用有限的资源，包括宇航服、食物和水，开始寻找生存的方法。他尝试修复通讯设备，但收到的只有静默。马克在火星上种菜、收集雨水，并研究如何利用太阳能来延长他的生存时间。"
-				},
-				{
-					"章节ID": "3",
-					"章节题目": "生存挑战",
-					"章节内容": "马克意识到自己必须生存下去。他利用有限的资源，包括宇航服、食物和水，开始寻找生存的方法。他尝试修复通讯设备，但收到的只有静默。马克在火星上种菜、收集雨水，并研究如何利用太阳能来延长他的生存时间。"
-				},
-				{
-					"章节ID": "4",
-					"章节题目": "火星救援行动",
-					"章节内容": "地球上接收到马克发出的信号后，立刻组织了救援行动。由于距离遥远，救援需要数月时间。马克在这期间不断改善自己的生存条件，甚至尝试与地球上的科学家进行通讯，寻求他们的帮助。"
-				},
-				{
-					"章节ID": "x",
-					"章节题目": "最终救援",
-					"章节内容": "在漫长的等待中，马克终于等来了救援团队。他们利用火星漫游车抵达了马克的藏身之处。在地球上团队的努力下，马克被成功救回。"
-				}
-			]
-		}
-		--------
-		请保证故事的连贯，以及故事中的各个人物的角色前后一致
-		`,
+	renderStoryParams := coze.CozeStoryWriteParams{
+		StoryTitle: story.Title,
+		StoryDesc:  story.Origin,
 	}
 	start := time.Now()
-	renderStoryParams.Content = strings.Replace(renderStoryParams.Content, "story_name", story.Origin, -1)
 	var (
-		ret  *client.StoryInfoResult
-		resp = &api.RenderStoryResponse{}
+		resp         = &api.RenderStoryResponse{}
+		storyContent string
 	)
 	if req.RenderType == api.RenderType_RENDER_TYPE_TEXT_UNSPECIFIED {
 		renderDetail.StoryId = req.StoryId
 		renderDetail.BoardId = req.BoardId
-		ret, err = s.doubaoClient.GenStoryInfo(ctx, renderStoryParams)
+		storyContent, err = s.cozeClient.StoryWrite(ctx, renderStoryParams)
 		if err != nil {
 			log.Log().Error("gen story info failed", zap.Error(err))
 			return nil, err
@@ -563,13 +525,13 @@ func (s *StoryService) RenderStory(ctx context.Context, req *api.RenderStoryRequ
 
 	// 渲染剧情
 	result := new(StoryInfo)
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(storyContent)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
 		return nil, err
 	}
-	renderDetail.Text = ret.Content
+	renderDetail.Text = storyContent
 	renderDetail.RenderType = req.RenderType
 	renderDetail.Timecost = int32(time.Since(start).Seconds())
 	renderDetail.Result = new(api.StoryInfo)

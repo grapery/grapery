@@ -15,6 +15,7 @@ import (
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/pkg/client"
+	"github.com/grapery/grapery/pkg/cloud/coze"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
 	"github.com/grapery/grapery/utils/log"
@@ -295,43 +296,23 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	if err != nil {
 		return nil, err
 	}
-	templatePrompt := `
-	为故事的角色生成性格描述，穿着描述，以及行为描述、角色的目标。我会提供这个角色参与的故事的背景。同时，也会输入我认为的这个角色的特点。
-	故事角色姓名:"""story_role_name"""
-	故事背景:"""story_background"""
-`
-
-	templatePrompt2 := `
-	返回的角色描述信息，请按照json格式返回，以下是返回样例：
-	--------
-		{
-			"角色背景": "xxxxxx",
-			"性格特征": "xxxxxx",
-			"处事风格": "xxxxxx",
-			"认知范围": "xxxxxx",
-			"能力特点": "xxxxxx",
-			"外貌特征": "xxxxxx",
-			"穿着喜好": "xxxxxx",
-			"角色描述": "xxxxxx",
-			"角色短期目标": "xxxxxx",
-			"角色长期目标": "xxxxxx"
-		}
-	--------
-	请不要生成过于色情、暴力、恶心的内容，或者一直重复的内容，请不要出现任何违反法律法规的内容，保证角色贴合故事背景，同时遵循用户的输入的角色性格特点要求。
-	`
-	prompt := templatePrompt
-	prompt = strings.Replace(prompt, "story_role_name", role.CharacterName, -1)
-	prompt = strings.Replace(prompt, "story_background", story.ShortDesc, -1)
-	if req.GetPrompt() != "" {
-		prompt = prompt + `我建议这个角色的特征包括："""` + req.GetPrompt() + `"""。\n`
+	roleParams := coze.CozeStoryRoleDetailParams{
+		StoryName:   story.Name,
+		StoryDesc:   story.ShortDesc,
+		RoleName:    role.CharacterName,
+		Description: req.GetPrompt(),
 	}
-	prompt = prompt + templatePrompt2
+	roleContent, err := s.cozeClient.StoryRoleDetail(ctx, roleParams)
+	if err != nil {
+		log.Log().Error("get story role detail prompt failed", zap.Error(err))
+		return nil, err
+	}
 	// 调用生成器
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = prompt
+	storyGen.PositivePrompt = req.GetPrompt()
 	storyGen.Regen = 0
 	storyGen.Params = req.String()
 	storyGen.OriginID = req.GetRoleId()
@@ -344,21 +325,9 @@ func (s *StoryService) RenderStoryRole(ctx context.Context, req *api.RenderStory
 	if err != nil {
 		return nil, err
 	}
-	var (
-		ret                   *client.GenStoryCharactorResult
-		renderStoryRoleParams = &client.GenStoryCharactorParams{
-			Content: prompt,
-		}
-	)
-
-	ret, err = s.bailianClient.GenStoryRoleInfo(ctx, renderStoryRoleParams)
-	if err != nil {
-		log.Log().Error("gen story info failed", zap.Error(err))
-		return nil, err
-	}
 	var renderDetail = new(api.RenderStoryRoleDetail)
 	result := new(CharacterDetail)
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(roleContent)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal gen result failed", zap.Error(err))
@@ -995,79 +964,26 @@ func (s *StoryService) GenerateRoleDescription(ctx context.Context, req *api.Gen
 			otherRolesInfo.WriteString(fmt.Sprintf("角色名称: %s\n角色描述: %s\n\n", role.CharacterName, role.CharacterDescription))
 		}
 	}
-
-	// Build the prompt template
-	promptTemplate := `
-		请为一个故事中的角色生成详细的角色设定。以下是相关背景信息：
-
-		故事背景：
-		%s
-
-		故事简介：
-		%s
-
-		当前角色基本信息：
-		角色名称：%s
-		%s
-
-		故事中的其他角色：
-		%s
-
-		请根据以上信息，生成一个详细的角色设定描述，包含以下方面：
-		1. 角色背景
-		2. 性格特征
-		3. 处事风格
-		4. 认知范围
-		5. 能力特点
-		6. 外貌特征
-		7. 穿着喜好
-		8. 角色描述
-		9. 角色短期目标
-		10. 角色长期目标
-
-		请以JSON格式返回，格式如下：
-		{
-			"角色背景": "xxxxxx",
-			"性格特征": "xxxxxx",
-			"处事风格": "xxxxxx",
-			"认知范围": "xxxxxx",
-			"能力特点": "xxxxxx",
-			"外貌特征": "xxxxxx",
-			"穿着喜好": "xxxxxx",
-			"角色描述": "xxxxxx",
-			"角色短期目标": "xxxxxx",
-			"角色长期目标": "xxxxxx"
-		}
-
-		注意：
-		1. 描述要符合故事背景和整体设定
-		2. 避免矛盾的人设
-		3. 确保描述合理且具体
-		4. 不要包含任何暴力、色情或违法的内容
-		`
-
-	// Format the prompt with actual data
-	prompt := fmt.Sprintf(promptTemplate,
-		storyinfo.ShortDesc,           // 故事背景
-		storyinfo.Params,              // 故事简介
-		roleinfo.CharacterName,        // 角色名称
-		roleinfo.CharacterDescription, // 当前角色描述
-		otherRolesInfo.String(),       // 其他角色信息
-	)
-
-	// Call AI client to generate description
-	genParams := &client.GenStoryCharactorParams{
-		Content: prompt,
+	var storyroleParams = coze.CozeStoryRoleDetailParams{
+		RoleName:    roleinfo.CharacterName,
+		Description: req.GetDescription(),
+		StoryName:   storyinfo.Title,
+		StoryDesc:   storyinfo.ShortDesc,
+	}
+	if len(roles) > 0 {
+		storyroleParams.OtherRoles = otherRolesInfo.String()
+	} else {
+		storyroleParams.OtherRoles = "没有其他角色信息"
 	}
 
-	result, err := s.bailianClient.GenStoryRoleInfo(ctx, genParams)
+	result, err := s.cozeClient.StoryRoleDetail(ctx, storyroleParams)
 	if err != nil {
 		log.Log().Error("generate role description failed", zap.Error(err))
 		return nil, err
 	}
 
 	// Clean and parse the AI response
-	cleanResult := utils.CleanLLmJsonResult(result.Content)
+	cleanResult := utils.CleanLLmJsonResult(result)
 	log.Log().Info("cleaned LLM result for role description", zap.String("content", cleanResult))
 	var genRoleDetail = new(CharacterDetail)
 	err = json.Unmarshal([]byte(cleanResult), &genRoleDetail)
@@ -1244,6 +1160,11 @@ func (s *StoryService) UpdateStoryRolePoster(ctx context.Context, req *api.Updat
 }
 
 func (s *StoryService) GenerateStoryRolePoster(ctx context.Context, req *api.GenerateStoryRolePosterRequest) (*api.GenerateStoryRolePosterResponse, error) {
+	storyinfo, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		log.Log().Error("get story by id failed", zap.Error(err))
+		return nil, err
+	}
 	roleinfo, err := models.GetStoryRoleByID(ctx, req.GetRoleId())
 	if err != nil {
 		log.Log().Error("get story role by id failed", zap.Error(err))
@@ -1253,9 +1174,22 @@ func (s *StoryService) GenerateStoryRolePoster(ctx context.Context, req *api.Gen
 		log.Log().Error("have no permission", zap.Any("roleinfo", roleinfo))
 		return nil, errors.New("have no permission")
 	}
-
+	rolePosterParams := coze.CozeStoryRoleBackgroundImageParams{
+		RoleName:   roleinfo.CharacterName,
+		RoleDesc:   roleinfo.CharacterDetail,
+		RoleImage:  roleinfo.CharacterAvatar,
+		StoryDesc:  storyinfo.Origin,
+		StoryTitle: storyinfo.Title,
+		Style:      "吉卜力",
+	}
+	imageUrl, err := s.cozeClient.StoryRoleBackgroundImage(ctx, rolePosterParams)
+	if err != nil {
+		log.Log().Error("generate story role poster failed", zap.Error(err))
+		return nil, err
+	}
 	return &api.GenerateStoryRolePosterResponse{
-		Code:    0,
-		Message: "OK",
+		Code:     0,
+		Message:  "OK",
+		ImageUrl: imageUrl,
 	}, nil
 }

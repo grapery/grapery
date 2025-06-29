@@ -17,6 +17,7 @@ import (
 	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/pkg/client"
 	"github.com/grapery/grapery/pkg/cloud/aliyun"
+	"github.com/grapery/grapery/pkg/cloud/coze"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
 	"github.com/grapery/grapery/utils/log"
@@ -502,86 +503,26 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 	} else {
 		log.Log().Error("get story board roles failed", zap.Error(err))
 	}
-	storyCharacters := strings.Replace(`参与人物为: """story_characters"""。`, "story_characters", storyRolesStr, -1)
 
-	templatePrompt := `
-	为故事章节的 """story_chapter""" 章节的生成详细故事情节细节，请参考故事剧情: """story_content"""。
-	故事背景为: """story_background"""。`
-	if len(storyRoles) != 0 {
-		templatePrompt = storyCharacters + templatePrompt
+	var storyboardParams = coze.CozeStoryboardWriterParams{
+		StoryCharacters: storyRolesStr,
+		StoryContent:    "",
+		StoryBackground: story.Origin,
+		StoryChapter:    story.Title,
 	}
-	templatePrompt = templatePrompt +
-		`同时衔接前后章节的情节,上一章节的故事情节为: """story_content"""，生成符合上下文的、合理的、更详细的情节，
-	可以生成4-6个故事的细节，以及生成可以展示这些故事剧情的图片 prompt 提示词，图片提示词的风格统一为"""imageStyle"""。
-	以json格式返回格式可以参考如下例子:
-	--------
-		{
-			"章节情节简述": {
-				"章节题目": "地球生存环境恶化",
-				"章节内容": "地球资源日益枯竭，人类将目光投向了火星。我国成功组建了一支马克为首的精英宇航员队伍，肩负起在火星建立基地的重任，为地球移民做准备"
-			},
-			"章节详细情节": [
-				{
-					"情节id": "1",
-					"情节内容": "气候变化，温室效应加剧，全球平均气温上升超过2摄氏度，极端天气事件频发，如飓风、干旱、洪水等",
-					"参与人物": [
-						{
-							"角色id": "1",
-							"角色姓名": "马克",
-							"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-						},
-						{
-							"角色id": "2",
-							"角色姓名": "飞云",
-							"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-						},
-					],
-					"图片提示词": "一个城市被严重的雾霾笼罩，天空灰暗，远处的高楼大厦若隐若现，人们戴着口罩匆匆行走，街道上的车辆行驶缓慢，整个场景透露出压抑和不安。"
-				},
-				{
-					"情节id": "2",
-					"情节内容": "资源枯竭，可耕地减少，粮食产量下降，粮食危机日益严重；淡资源匮乏，多地出现用水紧张状况；矿产资源开采难度加大，能源供应紧张。",
-					"参与人物": [
-						{
-							"角色id": "1",
-							"角色姓名": "马克",
-							"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-						},
-					],
-					"图片提示词": "一片荒芜的农田，土壤干裂，庄稼枯萎，农民面露愁容地看着土地，天空中没有云彩，烈日炎炎，展现出粮食危机的严峻景象"
-				}
-			]
-		}
-	--------
-	请保证故事的连贯，以及故事中的各个人物的角色前后一致，同时和故事背景契合，人物的描述清晰，情节人物的性格明显，场景描述详细，图片提示词准确。
-	请注意，如果没有要求 ‘参与人物' 的输出要求，可以不用输出 '参与的人物' 的 json 数据结构。
-	有些章节是没有故事角色的，可以不用为这个章节关联人物。所以要遵守这一条，只有当输入有 '参与人物' 的列表时
-	再输出这些 '参与人物' 信息，这一点很重要，不要自作主张的引入角色或者故事人物。
-	`
-	templatePrompt = strings.Replace(templatePrompt, "story_chapter", board.Title, -1)
-	templatePrompt = strings.Replace(templatePrompt, "imageStyle", imageStyle, -1)
-	if storyParam.Background != "" {
-		templatePrompt = strings.Replace(templatePrompt, "story_background", storyParam.Background, -1)
-	} else {
-		templatePrompt = strings.Replace(templatePrompt, "story_background", story.Origin, -1)
-	}
-
-	templatePrompt = strings.Replace(templatePrompt, "story_content", board.Description, -1)
-	var storyBackgroup string
 	if board.PrevId != -1 && board.PrevId != 0 {
 		prevBoard, err := models.GetStoryboard(ctx, board.PrevId)
 		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			log.Log().Error("get prev storyboard failed", zap.Error(err))
 			return nil, err
 		}
-		storyBackgroup = prevBoard.Description
-		templatePrompt = strings.Replace(templatePrompt, "story_backgroup ", storyBackgroup, -1)
+		storyboardParams.PrevContent = prevBoard.Description
 	} else {
-		templatePrompt = strings.Replace(templatePrompt, ",上一章节的故事情节为: story_backgroup ", "", -1)
+		storyboardParams.PrevContent = ""
 	}
-	storyGen.LLmPlatform = "Doubao"
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = templatePrompt
+	storyGen.PositivePrompt = storyboardParams.String()
 	storyGen.Regen = 0
 	storyGen.Params = string(storyGenData)
 	storyGen.OriginID = int64(story.ID)
@@ -594,19 +535,14 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 		log.Log().Error("create storyboard gen failed", zap.Error(err))
 		return nil, err
 	}
-
-	log.Log().Sugar().Info("gen storyboard prompt: ", templatePrompt)
-	renderStoryParams := &client.StoryInfoParams{
-		Content: templatePrompt,
-	}
 	result := new(StoryChapter)
 	start := time.Now()
-	ret, err := s.doubaoClient.GenStoryBoardInfo(ctx, renderStoryParams)
+	ret, err := s.cozeClient.StoryboardWriter(ctx, storyboardParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(ret)
 	fmt.Println("render storyboard cleanResult: ", cleanResult)
 	// 保存生成的故事板
 
@@ -743,7 +679,7 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 						storyGen := new(models.StoryGen)
 						storyGen.Uuid = uuid.New().String()
 						storyGenData, _ := json.Marshal(genParams)
-						storyGen.LLmPlatform = "Doubao"
+						storyGen.LLmPlatform = "coze"
 						storyGen.NegativePrompt = prompt.ZhipuNegativePrompt
 						storyGen.PositivePrompt = templatePrompt
 						storyGen.Regen = 0
@@ -902,64 +838,28 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 			finalRols[role.CharacterName] = realRole
 		}
 	}
-	var rolesPrompt = make([]Character, 0)
+	var rolesPrompt = make([]coze.CozeRoleInfo, 0)
 	for _, role := range finalRols {
-		rolePrompt := Character{
-			ID:          fmt.Sprintf("%d", role.ID),
-			Name:        role.CharacterName,
-			Description: role.CharacterDescription,
+		rolePrompt := coze.CozeRoleInfo{
+			RoleID:          fmt.Sprintf("%d", role.ID),
+			RoleName:        role.CharacterName,
+			RoleImage:       role.CharacterAvatar,
+			RoleDescription: role.CharacterDescription,
 		}
 		rolesPrompt = append(rolesPrompt, rolePrompt)
 	}
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
-	boardRequire := make(map[string]interface{})
-	boardRequire["章节题目要求"] = req.GetTitle()
-	boardRequire["章节内容要求"] = req.GetDescription()
-	boardRequire["章节背景简介"] = req.GetBackground()
-	if len(finalRols) != 0 {
-		boardRequire["章节的角色信息"] = rolesPrompt
+	var storyboardParams = coze.CozeInitStoryboardParams{
+		Title:       story.Title,
+		Description: req.GetDescription(),
+		Background:  req.GetBackground(),
+		Roles:       rolesPrompt,
 	}
-	templatePrompt := `生成故事 story_name 的第一个章节,故事内容用中文描述,以json格式返回		
-		选择的人员角色，不要超过 章节的角色信息' 规定的角色id和角色名称范围。
-		一定要遵守 章节的角色信息' 的要求，其中'角色id'不要超出'章节的角色信息'里的范围。
-		如果没有 '章节的角色信息'，或者 '章节的角色信息' 里没有角色id和角色名称的信息，那么就不要生成角色信息，直接返回故事内容，这一点很重要，不要自作主张的引入角色或者故事人物。
-		参考如下格式生成内容：
-		--------
-		{
-			"章节情节简述": {
-				"章节题目": "地球生存环境恶化",
-				"章节内容": "地球资源日益枯竭，人类将目光投向了火星。我国成功组建了一支马克为首的精英宇航员队伍，肩负起在火星建立基地的重任，为地球移民做准备"
-			},
-			"参与人物": [
-					{
-						"角色id": "1",
-						"角色姓名": "马克",
-						"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-					},
-					{
-						"角色id": "2",
-						"角色姓名": "飞云",
-						"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-					},
-			]
-		}
-		--------
-		`
-	boardRequireJson, _ := json.Marshal(boardRequire)
-	if len(req.GetDescription()) > 0 ||
-		len(req.GetBackground()) > 0 ||
-		len(rolesPrompt) > 0 {
-		templatePrompt = templatePrompt + `请一定要按照章节要求：
-		-------- \n"` +
-			string(boardRequireJson) +
-			`\n --------\n`
-	}
-	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
-	templatePrompt = strings.Replace(templatePrompt, "story_name", story.Title, -1)
-	storyGen.LLmPlatform = "Doubao"
+
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = templatePrompt
+	storyGen.PositivePrompt = storyboardParams.String()
 	storyGen.Regen = 1
 	storyGen.Params = ""
 	storyGen.OriginID = req.GetStoryId()
@@ -972,19 +872,17 @@ func (s *StoryService) InitRenderStory(ctx context.Context, req *api.ContinueRen
 		log.Log().Error("create storyboard gen failed", zap.Error(err))
 		return nil, err
 	}
-	log.Log().Sugar().Info("gen storyboard prompt: ", templatePrompt)
-	renderStoryParams := &client.StoryInfoParams{
-		Content: templatePrompt,
-	}
+	log.Log().Sugar().Info("gen storyboard prompt: ", storyboardParams.String())
+
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.doubaoClient.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.cozeClient.InitStoryboard(ctx, storyboardParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
 	// 保存生成的故事板
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(ret)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
@@ -1070,18 +968,13 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			finalRols[role.CharacterName] = realRole
 		}
 	}
-	originRolesMapData, _ := json.Marshal(originRolesMap)
-	fmt.Printf("originRolesMap roles: %v \n", string(originRolesMapData))
-	rolesMapData, _ := json.Marshal(rolesMap)
-	fmt.Printf("rolesMap roles: %v \n", string(rolesMapData))
-	finalRolsData, err := json.Marshal(finalRols)
-	fmt.Printf("finalRols roles: %v \n", string(finalRolsData))
-	var rolesPrompt = make([]Character, 0)
+	var rolesPrompt = make([]coze.CozeRoleInfo, 0)
 	for _, role := range finalRols {
-		rolePrompt := Character{
-			ID:          fmt.Sprintf("%d", role.ID),
-			Name:        role.CharacterName,
-			Description: role.CharacterDescription,
+		rolePrompt := coze.CozeRoleInfo{
+			RoleID:          fmt.Sprintf("%d", role.ID),
+			RoleName:        role.CharacterName,
+			RoleImage:       role.CharacterAvatar,
+			RoleDescription: role.CharacterDescription,
 		}
 		rolesPrompt = append(rolesPrompt, rolePrompt)
 	}
@@ -1110,55 +1003,13 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
 	storyGenData, _ := json.Marshal(genParams)
-	boardRequire := make(map[string]interface{})
-	boardRequire["章节题目要求"] = req.GetTitle()
-	boardRequire["章节内容要求"] = req.GetDescription()
-	boardRequire["章节背景简介"] = req.GetBackground()
-	if len(finalRols) != 0 {
-		boardRequire["章节的角色信息"] = rolesPrompt
+	var storyboardParams = coze.CozeStoryboardContinueParams{
+		Title:       req.GetTitle(),
+		Description: req.GetDescription(),
+		Background:  req.GetBackground(),
+		Roles:       rolesPrompt,
 	}
-
-	boardRequireJson, _ := json.Marshal(boardRequire)
-	fmt.Printf("boardRequireJson: %v \n", string(boardRequireJson))
-	templatePrompt := `生成故事 story_name 的下一个章节,故事内容用中文描述,以json格式返回		
-		之前的故事章节:
-		--------
-		story_prev_content
-		--------
-		请参考以上故事章节，生成故事的下一个章节。所选择的人员角色，不要超过 '章节的角色信息' 规定的范围。
-		章节要求：
-		--------
-		story_chapter_require
-		--------
-		一定要遵守 '章节的角色信息' 的要求，其中'角色id'要符合'章节的角色信息'里的限制。
-		如果没有 '章节的角色信息'，或者 '章节的角色信息' 里没有角色id和角色名称的信息，就不要生成角色信息，只需要返回故事内容.
-		参考如下格式生成内容：
-		--------
-		{
-			"章节情节简述": {
-				"章节题目": "地球生存环境恶化",
-				"章节内容": "地球资源日益枯竭，人类将目光投向了火星。我国成功组建了一支马克为首的精英宇航员队伍，肩负起在火星建立基地的重任，为地球移民做准备"
-			},
-			"参与人物": [
-					{
-						"角色id": "1",
-						"角色姓名": "马克",
-						"角色描述": "马克是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-					},
-					{
-						"角色id": "2",
-						"角色姓名": "飞云",
-						"角色描述": "飞云是一名经验丰富的宇航员，曾多次执行太空任务，对火星环境有深入了解。"
-					},
-			]
-		}
-		--------
-		以上输出的json结果中，参与人物的 ""角色id"" 一定要在 '章节的角色信息' 中存在，如果不存在，在这个故事章节中，这个角色不应该参与生成。
-		不要擅自引入新的故事人物和角色，故事的人物和角色，只能通过 '章节的角色信息' 参数中获取。
-	`
-	templatePrompt = strings.Replace(templatePrompt, "story_chapter_require", string(boardRequireJson), -1)
-
-	templatePrompt = templatePrompt + `请保证故事的连贯，以及故事中的各个人物的角色前后一致,行为描述一致。输出的数据结构和输入的保持一致`
+	hasPrevContent := false
 	story_prev_content := make([]*StoryChapterV2, 0)
 	for idx := len(prevBoards) - 1; idx >= 0; idx-- {
 		prevBoard := prevBoards[idx]
@@ -1171,6 +1022,7 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 			log.Log().Error("get story board roles failed", zap.Error(err))
 			return nil, err
 		}
+		hasPrevContent = true
 		for _, role := range storyRoles {
 			roleInfo := new(Character)
 			roleInfo.ID = fmt.Sprintf("%d", role.RoleId)
@@ -1180,13 +1032,16 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		}
 		story_prev_content = append(story_prev_content, content)
 	}
-	story_prev_content_json, _ := json.Marshal(story_prev_content)
-	templatePrompt = strings.Replace(templatePrompt, "story_name", story.Name, -1)
-	templatePrompt = strings.Replace(templatePrompt, "story_prev_content", string(story_prev_content_json), -1)
+	if hasPrevContent {
+		story_prev_content_json, _ := json.Marshal(story_prev_content)
+		storyboardParams.StoryPrevContent = string(story_prev_content_json)
+	} else {
+		storyboardParams.StoryPrevContent = "{{暂无上一章节}}"
+	}
 
-	storyGen.LLmPlatform = "doubao"
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = templatePrompt
+	storyGen.PositivePrompt = storyboardParams.String()
 	storyGen.Regen = 1
 	storyGen.Params = string(storyGenData)
 	storyGen.OriginID = req.GetStoryId()
@@ -1199,20 +1054,15 @@ func (s *StoryService) ContinueRenderStory(ctx context.Context, req *api.Continu
 		log.Log().Error("create storyboard gen failed", zap.Error(err))
 		return nil, err
 	}
-	log.Log().Sugar().Info("gen storyboard prompt: ", templatePrompt)
-	renderStoryParams := &client.StoryInfoParams{
-		Content: templatePrompt,
-	}
 	result := new(StoryChapterV2)
 	start := time.Now()
-	ret, err := s.doubaoClient.GenStoryInfo(ctx, renderStoryParams)
+	ret, err := s.cozeClient.StoryboardContinue(ctx, storyboardParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
-	fmt.Printf("ret.Content: %s\n", ret.Content)
 	// 保存生成的故事板
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(ret)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
@@ -1347,35 +1197,20 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 			Message: "story is closed",
 		}, nil
 	}
-	// 根据角色参与的故事背景，以及这个角色的描述，使用AI生成一个角色描述
-	roleRequirePrompt := `生成故事 story_name 的角色,故事内容用中文描述,以json格式返回		
-		角色名称:` + role.CharacterName + `
-		角色描述:` + role.CharacterDescription + `
-		故事背景:` + story.ShortDesc + `
-		请参考以上输入,生成[角色描述,角色短期目标,角色长期目标,角色性格,角色背景],返回格式如下：
-		---
-		{
-			"角色背景": "xxxxxx",
-			"性格特征": "xxxxxx",
-			"处事风格": "xxxxxx",
-			"认知范围": "xxxxxx",
-			"能力特点": "xxxxxx",
-			"外貌特征": "xxxxxx",
-			"穿着喜好": "xxxxxx",
-			"角色描述": "xxxxxx",
-			"角色短期目标": "xxxxxx",
-			"角色长期目标": "xxxxxx"
-		}
-		---
-		请返回json格式，不要返回其他内容。角色的描述，短期目标，长期目标，性格，背景，请用中文描述。
-		`
+	var storyroleParams = coze.CozeStoryRoleDetailParams{
+		RoleName:    role.CharacterName,
+		Description: role.CharacterDescription,
+		StoryDesc:   story.ShortDesc,
+		StoryName:   story.Title,
+	}
+
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
 	reqData, _ := json.Marshal(req)
 	storyGenData, _ := json.Marshal(reqData)
 	storyGen.LLmPlatform = "doubao"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = roleRequirePrompt
+	storyGen.PositivePrompt = storyroleParams.String()
 	storyGen.Regen = 1
 	storyGen.Params = string(storyGenData)
 	storyGen.OriginID = int64(role.ID)
@@ -1389,18 +1224,14 @@ func (s *StoryService) RenderStoryRoleDetail(ctx context.Context, req *api.Rende
 		log.Log().Error("create storyboard gen failed", zap.Error(err))
 		return nil, err
 	}
-	log.Log().Sugar().Info("gen storyboard prompt: ", roleRequirePrompt)
-	renderStoryParams := &client.GenStoryCharactorParams{
-		Content: roleRequirePrompt,
-	}
 	result := new(CharacterDetail)
-	ret, err := s.doubaoClient.GenStoryRole(ctx, renderStoryParams)
+	ret, err := s.cozeClient.StoryRoleDetail(ctx, storyroleParams)
 	if err != nil {
 		log.Log().Error("gen storyboard info failed", zap.Error(err))
 		return nil, err
 	}
 	// 保存生成的故事板
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(ret)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal story gen result failed", zap.Error(err))
