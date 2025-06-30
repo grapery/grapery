@@ -516,9 +516,9 @@ func (s *StoryService) RenderStoryboard(ctx context.Context, req *api.RenderStor
 			log.Log().Error("get prev storyboard failed", zap.Error(err))
 			return nil, err
 		}
-		storyboardParams.PrevContent = prevBoard.Description
+		storyboardParams.StoryContent = prevBoard.Description
 	} else {
-		storyboardParams.PrevContent = ""
+		storyboardParams.PrevContent = "{{暂无上一章节}}"
 	}
 	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
