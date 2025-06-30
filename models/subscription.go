@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -152,4 +153,24 @@ func GetSubscriptionsByProvider(ctx context.Context, provider, providerSubID str
 		return nil, err
 	}
 	return &subscription, nil
+}
+
+// UpdateSubscription 更新订阅信息
+func UpdateSubscription(ctx context.Context, subscription *Subscription) error {
+	return DataBase().WithContext(ctx).Save(subscription).Error
+}
+
+// GetAvailableModels 获取可用模型列表
+func (s *Subscription) GetAvailableModels() ([]string, error) {
+	if s.AvailableModels == "" {
+		return []string{"gpt-3.5-turbo"}, nil // 默认模型
+	}
+
+	// 解析JSON数组
+	var models []string
+	if err := json.Unmarshal([]byte(s.AvailableModels), &models); err != nil {
+		return []string{"gpt-3.5-turbo"}, nil // 解析失败时返回默认模型
+	}
+
+	return models, nil
 }

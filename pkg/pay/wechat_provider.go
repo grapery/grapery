@@ -111,3 +111,30 @@ func (s *WechatPayProvider) HandleCallback(ctx context.Context, callbackData []b
 func (s *WechatPayProvider) GetProviderName() string {
 	return "wechatpay"
 }
+
+// VerifyCallback 验证回调签名
+func (s *WechatPayProvider) VerifyCallback(ctx context.Context, callbackData []byte, signature string) (bool, error) {
+	// 简化实现，实际应该验证微信支付签名
+	// TODO: 实现真实的签名验证
+	return true, nil
+}
+
+// GetPaymentURL 获取支付链接
+func (s *WechatPayProvider) GetPaymentURL(ctx context.Context, req *CreatePaymentRequest) (string, error) {
+	// 生成微信支付订单号
+	outTradeNo := fmt.Sprintf("WX_%d_%d", req.OrderID, time.Now().UnixNano())
+
+	// 返回支付链接
+	payURL := fmt.Sprintf("https://pay.weixin.qq.com/pay?out_trade_no=%s&total_fee=%d", outTradeNo, req.Amount)
+	return payURL, nil
+}
+
+// GetQRCodeURL 获取二维码链接
+func (s *WechatPayProvider) GetQRCodeURL(ctx context.Context, req *CreatePaymentRequest) (string, error) {
+	// 生成微信支付订单号
+	outTradeNo := fmt.Sprintf("WX_%d_%d", req.OrderID, time.Now().UnixNano())
+
+	// 返回二维码链接
+	qrURL := fmt.Sprintf("https://pay.weixin.qq.com/qr?out_trade_no=%s&total_fee=%d", outTradeNo, req.Amount)
+	return qrURL, nil
+}

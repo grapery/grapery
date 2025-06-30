@@ -2,6 +2,7 @@ package pay
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -63,14 +64,28 @@ func (h *PaymentHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 创建订单
-	order, err := h.paymentService.CreateOrder(r.Context(), userID, req.ProductID, req.PaymentMethod)
+	order, err := h.paymentService.CreateOrder(r.Context(), userID, req.ProductID, nil, 1, req.PaymentMethod)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// 创建支付请求
+	paymentReq := &pay.CreatePaymentRequest{
+		UserID:        userID,
+		OrderID:       order.ID,
+		Amount:        order.Amount,
+		Currency:      "CNY",
+		PaymentMethod: req.PaymentMethod,
+		Description:   order.Description,
+		ReturnURL:     "https://your-domain.com/payment/success",
+		NotifyURL:     "https://your-domain.com/api/payment/callback",
+		IPAddress:     r.RemoteAddr,
+		UserAgent:     r.UserAgent(),
+	}
+
 	// 创建支付
-	payment, err := h.paymentService.CreatePayment(r.Context(), order.ID, req.PaymentMethod)
+	payment, err := h.paymentService.CreatePayment(r.Context(), order.ID, req.PaymentMethod, paymentReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -387,15 +402,28 @@ type PaymentCallbackResponse struct {
 
 // HandlePaymentCallback 处理支付回调
 func (h *PaymentHandler) HandlePaymentCallback(w http.ResponseWriter, r *http.Request) {
+	// 获取回调数据
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// 获取签名（从请求头或查询参数中）
+	signature := r.Header.Get("X-Signature")
+	if signature == "" {
+		signature = r.URL.Query().Get("signature")
+	}
+
 	// 解析请求
 	var req PaymentCallbackRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// 处理回调
-	err := h.paymentService.ProcessPaymentCallback(r.Context(), req.Provider, req.Data)
+	err = h.paymentService.ProcessPaymentCallback(r.Context(), req.Provider, body, signature)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
