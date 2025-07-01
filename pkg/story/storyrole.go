@@ -836,55 +836,36 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 		}, nil
 	}
 
-	templatePrompt := `
-			为故事的角色生成性格描述，穿着描述，以及行为描述、角色的目标等信息。我会提供这个角色参与的故事的背景。同时，也会输入我认为的这个角色的特点。
-			故事角色姓名:"""story_role_name"""
-			故事背景:"""story_background"""
+	storyroleParams := coze.CozeStoryRoleDetailContinueParams{
+		RoleName:    role.CharacterName,
+		Description: role.CharacterDescription,
+		StoryDesc:   story.ShortDesc,
+		StoryName:   story.Title,
+		OtherRoles:  "",
+		History:     "",
+	}
 
-	故事中的这个角色按照时间顺序，所经历的故事场景:"""story_history"""
-`
 	histroryStoryBoardSences, err := models.GetStoryBoardSencesByRoleID(ctx, role.StoryID)
 	if err != nil {
+		log.Log().Error("get story board sences by role id failed", zap.Error(err))
 		return nil, err
 	}
-	var historySenceStr = ""
-	for _, histrorySence := range histroryStoryBoardSences {
-		historySenceStr = historySenceStr + histrorySence.Content + "\n"
-	}
-	templatePrompt = strings.Replace(templatePrompt, "story_history", historySenceStr, -1)
-	templatePrompt = strings.Replace(templatePrompt, "story_background", story.ShortDesc, -1)
-	templatePrompt = strings.Replace(templatePrompt, "story_role_name", role.CharacterName, -1)
-	templatePrompt2 := `
-	返回的角色描述信息，请按照json格式返回，以下是返回样例：
-	--------
-		{
-			"角色背景": "xxxxxx",
-			"性格特征": "xxxxxx",
-			"处事风格": "xxxxxx",
-			"认知范围": "xxxxxx",
-			"能力特点": "xxxxxx",
-			"外貌特征": "xxxxxx",
-			"穿着喜好": "xxxxxx",
-			"角色描述": "xxxxxx",
-			"角色短期目标": "xxxxxx",
-			"角色长期目标": "xxxxxx"
+	if req.GetPrompt() == "" {
+		var historySenceStr = ""
+		for _, histrorySence := range histroryStoryBoardSences {
+			historySenceStr = historySenceStr + histrorySence.Content + "\n"
 		}
-	--------
-	请不要生成过于色情、暴力、恶心的内容，或者一直重复的内容，请不要出现任何违反法律法规的内容，保证角色贴合故事背景，同时遵循用户的输入的角色性格特点要求。
-	`
-	prompt := templatePrompt
-	prompt = strings.Replace(prompt, "story_role_name", role.CharacterName, -1)
-	prompt = strings.Replace(prompt, "story_background", story.ShortDesc, -1)
-	if req.GetPrompt() != "" {
-		prompt = prompt + `我建议这个角色的特征包括："""` + req.GetPrompt() + `"""。\n`
+		storyroleParams.History = historySenceStr
+	} else {
+		storyroleParams.History = req.GetPrompt()
 	}
-	prompt = prompt + templatePrompt2
+
 	// 调用生成器
 	storyGen := new(models.StoryGen)
 	storyGen.Uuid = uuid.New().String()
-	storyGen.LLmPlatform = "Zhipu"
+	storyGen.LLmPlatform = "coze"
 	storyGen.NegativePrompt = ""
-	storyGen.PositivePrompt = prompt
+	storyGen.PositivePrompt = storyroleParams.String()
 	storyGen.Regen = 2
 	storyGen.Params = req.String()
 	storyGen.OriginID = req.GetRoleId()
@@ -895,23 +876,18 @@ func (s *StoryService) RenderStoryRoleContinuously(ctx context.Context, req *api
 	storyGen.Status = 1
 	_, err = models.CreateStoryGen(ctx, storyGen)
 	if err != nil {
+		log.Log().Error("create story gen failed", zap.Error(err))
 		return nil, err
 	}
-	var (
-		ret                   *client.GenStoryCharactorResult
-		renderStoryRoleParams = &client.GenStoryCharactorParams{
-			Content: prompt,
-		}
-	)
 
-	ret, err = s.bailianClient.GenStoryRoleInfo(ctx, renderStoryRoleParams)
+	ret, err := s.cozeClient.StoryRoleDetailContinue(ctx, storyroleParams)
 	if err != nil {
 		log.Log().Error("gen story info failed", zap.Error(err))
 		return nil, err
 	}
 	var renderDetail = new(api.RenderStoryRoleDetail)
 	result := new(CharacterDetail)
-	cleanResult := utils.CleanLLmJsonResult(ret.Content)
+	cleanResult := utils.CleanLLmJsonResult(ret)
 	err = json.Unmarshal([]byte(cleanResult), &result)
 	if err != nil {
 		log.Log().Error("unmarshal gen result failed", zap.Error(err))

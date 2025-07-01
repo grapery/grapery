@@ -459,6 +459,41 @@ func (c *HuoShanCozeClient) StoryRoleDetail(ctx context.Context, params CozeStor
 	return ret, nil
 }
 
+type CozeStoryRoleDetailContinueParams struct {
+	StoryName   string
+	StoryDesc   string
+	RoleName    string
+	Description string
+	OtherRoles  string
+	History     string
+}
+
+func (c CozeStoryRoleDetailContinueParams) String() string {
+	data, _ := json.Marshal(c)
+	return string(data)
+}
+
+func (c *HuoShanCozeClient) StoryRoleDetailContinue(ctx context.Context, params CozeStoryRoleDetailContinueParams) (string, error) {
+	workflowID := "7521894522772996111"
+	apiParams := CozeWorkflowRunParams{
+		WorkflowID: workflowID,
+		Parameters: map[string]interface{}{
+			"app_id":      APPID,
+			"story_name":  params.StoryName,
+			"story_desc":  params.StoryDesc,
+			"name":        params.RoleName,
+			"description": params.Description,
+			"other_roles": params.OtherRoles, // 可选，其他角色信息
+			"history":     params.History,    // 可选，历史信息
+		},
+	}
+	ret, err := c.WorkflowRun(ctx, workflowID, apiParams)
+	if err != nil {
+		return "", err
+	}
+	return ret, nil
+}
+
 ///////////////////////////////////////////////////
 
 // CozeChatRequest 定义chat_v3 API的请求参数结构体
