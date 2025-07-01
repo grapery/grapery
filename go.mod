@@ -3,7 +3,6 @@ module github.com/grapery/grapery
 go 1.24.0
 
 require (
-	connectrpc.com/connect v1.18.1
 	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.7.2
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
@@ -55,7 +54,7 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.0 // indirect
-	github.com/bufbuild/connect-go v1.10.0 // indirect
+	github.com/bufbuild/connect-go v1.10.0
 	github.com/bytedance/sonic v1.12.10 // indirect
 	github.com/bytedance/sonic/loader v0.2.3 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
@@ -71,7 +70,7 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-pay/crypto v0.0.1 // indirect
-	github.com/go-pay/gopay v1.5.112 // indirect
+	github.com/go-pay/gopay v1.5.112
 	github.com/go-pay/xlog v0.0.3 // indirect
 	github.com/go-pay/xtime v0.0.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
