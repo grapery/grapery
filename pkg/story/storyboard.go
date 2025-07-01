@@ -24,6 +24,25 @@ import (
 	"github.com/grapery/grapery/utils/prompt"
 )
 
+// 定义结构体用于解析章节生成结果
+// StoryboardGenResult 表示整个返回结构
+// ChapterSummary: 章节情节简述
+// ChapterDetails: 章节详细情节（章节名->章节内容）
+type StoryboardGenResult struct {
+	ChapterSummary string                       `json:"章节情节简述"`
+	ChapterDetails map[string]StoryboardChapter `json:"章节详细情节"`
+}
+
+// StoryboardChapter 表示每一章节的详细内容
+// Content: 情节内容
+// Characters: 参与人物
+// ImagePrompt: 图片提示词
+type StoryboardChapter struct {
+	Content     string `json:"情节内容"`
+	Characters  string `json:"参与人物"`
+	ImagePrompt string `json:"图片提示词"`
+}
+
 func (s *StoryService) CreateStoryboard(ctx context.Context, req *api.CreateStoryboardRequest) (resp *api.CreateStoryboardResponse, err error) {
 	newStroyBoard := ConvertApiStoryBoardToStoryBoard(req.GetBoard())
 
@@ -650,88 +669,74 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 		return nil, err
 	}
 
-	result := make(map[string]map[string]interface{})
+	// 使用结构体解析 JSON
+	var result StoryboardGenResult
 	err = json.Unmarshal([]byte(stroyboardGen[0].Content), &result)
 	if err != nil {
 		log.Log().Error("unmarshal storyboard gen result failed", zap.Error(err))
 		return nil, err
 	}
-	for key, value := range result {
-		if key == "章节情节简述" {
-			log.Log().Sugar().Info("chapter: ", value)
-		} else if key == "章节详细情节" {
-			for chapter, va := range value {
-				log.Log().Sugar().Info("章节详细情节: ", chapter)
-				charactorNum := 0
-				for subchapter, subva := range va.(map[string]interface{}) {
-					if subchapter == "情节内容" {
-						log.Log().Sugar().Info("情节内容: ", subva.(string))
-					} else if subchapter == "参与人物" {
-						charactors := strings.Split(subva.(string), ",")
-						charactorNum = len(charactors)
-						log.Log().Sugar().Info("参与人物: ", subva.(string))
-					}
-				}
-				for subchapter, subva := range va.(map[string]interface{}) {
-					if subchapter == "图片提示词" {
-						preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", subva.(string), -1)
-						templatePrompt := preDefineTemplate + ",人物数量:" + strconv.Itoa(charactorNum)
-						storyGen := new(models.StoryGen)
-						storyGen.Uuid = uuid.New().String()
-						storyGenData, _ := json.Marshal(genParams)
-						storyGen.LLmPlatform = "coze"
-						storyGen.NegativePrompt = prompt.ZhipuNegativePrompt
-						storyGen.PositivePrompt = templatePrompt
-						storyGen.Regen = 0
-						storyGen.Params = string(storyGenData)
-						storyGen.OriginID = int64(story.ID)
-						storyGen.StartTime = time.Now().Unix()
-						storyGen.BoardID = req.GetBoardId()
-						storyGen.GenType = int(api.RenderType_RENDER_TYPE_STORYSENCE)
-						_, err = models.CreateStoryGen(ctx, storyGen)
-						if err != nil {
-							log.Log().Error("create storyboard gen failed", zap.Error(err))
-							return nil, err
-						}
+	log.Log().Sugar().Info("章节情节简述: ", result.ChapterSummary)
+	for chapterName, chapter := range result.ChapterDetails {
+		log.Log().Sugar().Info("章节详细情节: ", chapterName)
+		charactors := strings.Split(chapter.Characters, ",")
+		charactorNum := len(charactors)
+		log.Log().Sugar().Info("参与人物: ", chapter.Characters)
+		log.Log().Sugar().Info("情节内容: ", chapter.Content)
+		preDefineTemplate := strings.Replace(models.PreDefineTemplateEnVersion[1].Prompt, "prompt", chapter.ImagePrompt, -1)
+		templatePrompt := preDefineTemplate + ",人物数量:" + strconv.Itoa(charactorNum)
+		storyGen := new(models.StoryGen)
+		storyGen.Uuid = uuid.New().String()
+		storyGenData, _ := json.Marshal(genParams)
+		storyGen.LLmPlatform = "coze"
+		storyGen.NegativePrompt = prompt.ZhipuNegativePrompt
+		storyGen.PositivePrompt = templatePrompt
+		storyGen.Regen = 0
+		storyGen.Params = string(storyGenData)
+		storyGen.OriginID = int64(story.ID)
+		storyGen.StartTime = time.Now().Unix()
+		storyGen.BoardID = req.GetBoardId()
+		storyGen.GenType = int(api.RenderType_RENDER_TYPE_STORYSENCE)
+		_, err = models.CreateStoryGen(ctx, storyGen)
+		if err != nil {
+			log.Log().Error("create storyboard gen failed", zap.Error(err))
+			return nil, err
+		}
 
-						renderStoryParams := &client.GenStoryImagesParams{
-							Content: templatePrompt,
-						}
+		renderStoryParams := &client.GenStoryImagesParams{
+			Content: templatePrompt,
+		}
 
-						ret, err := s.doubaoClient.GenStoryBoardImage(ctx, renderStoryParams)
-						if err != nil {
-							log.Log().Error("gen storyboard info failed", zap.Error(err))
-							return nil, err
-						}
-						aliyunUrls := make([]string, 0)
+		ret, err := s.doubaoClient.GenStoryBoardImage(ctx, renderStoryParams)
+		if err != nil {
+			log.Log().Error("gen storyboard info failed", zap.Error(err))
+			return nil, err
+		}
+		aliyunUrls := make([]string, 0)
 
-						for _, imageUrl := range ret.ImageUrls {
-							aliyunClient := aliyun.GetGlobalClient()
-							aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
-							if err != nil {
-								log.Log().Error("upload file from url failed", zap.Error(err))
-								continue
-							}
-							aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-							if err != nil {
-								log.Log().Error("generate thumbnail failed", zap.Error(err))
-								continue
-							}
-							aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
-							aliyunUrls = append(aliyunUrls, aliyunUrl)
-						}
-						storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
-						storyGen.Content = ""
-						storyGen.FinishTime = time.Now().Unix()
-						storyGen.TaskType = 2
-						storyGen.TaskId = uuid.New().String()
-						err = models.UpdateStoryGen(ctx, storyGen)
-						if err != nil {
-							log.Log().Error("update storyboard image gen failed", zap.Error(err))
-						}
-					}
-				}
+		for _, imageUrl := range ret.ImageUrls {
+			aliyunClient := aliyun.GetGlobalClient()
+			aliyunUrl, err := aliyunClient.UploadFileFromURL("", imageUrl)
+			if err != nil {
+				log.Log().Error("upload file from url failed", zap.Error(err))
+				continue
 			}
+			aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
+			if err != nil {
+				log.Log().Error("generate thumbnail failed", zap.Error(err))
+				continue
+			}
+			aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+			aliyunUrls = append(aliyunUrls, aliyunUrl)
+		}
+		storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
+		storyGen.Content = ""
+		storyGen.FinishTime = time.Now().Unix()
+		storyGen.TaskType = 2
+		storyGen.TaskId = uuid.New().String()
+		err = models.UpdateStoryGen(ctx, storyGen)
+		if err != nil {
+			log.Log().Error("update storyboard image gen failed", zap.Error(err))
 		}
 	}
 
