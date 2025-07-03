@@ -721,12 +721,6 @@ func (s *StoryService) GenStoryboardImages(ctx context.Context, req *api.GenStor
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
 			}
-			aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-			if err != nil {
-				log.Log().Error("generate thumbnail failed", zap.Error(err))
-				continue
-			}
-			aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
 			aliyunUrls = append(aliyunUrls, aliyunUrl)
 		}
 		storyGen.ImageUrls = strings.Join(aliyunUrls, ",")
@@ -1652,13 +1646,7 @@ func (s *StoryService) RenderStoryBoardSence(ctx context.Context, req *api.Rende
 			log.Log().Error("upload file from url failed", zap.Error(err))
 			continue
 		}
-		// aliyunThumbnailUrl, err := aliyunClient.GenerateThumbnailV2(aliyunUrl, 200)
-		// log.Log().Sugar().Infof("aliyunThumbnailUrl: %s", aliyunThumbnailUrl)
-		// if err != nil {
-		// 	log.Log().Error("generate thumbnail failed", zap.Error(err))
-		// 	continue
-		// }
-		// aliyunUrls = append(aliyunUrls, aliyunUrl, aliyunThumbnailUrl)
+
 		aliyunUrls = append(aliyunUrls, aliyunUrl)
 	}
 	retData, _ := json.Marshal(aliyunUrls)
@@ -1772,6 +1760,7 @@ func (s *StoryService) RenderStoryBoardSences(ctx context.Context, req *api.Rend
 				log.Log().Error("upload file from url failed", zap.Error(err))
 				continue
 			}
+			// 你可以将 imageLevels 结构体存储到数据库，或返回给前端
 			aliyunUrls = append(aliyunUrls, aliyunUrl)
 		}
 		retData, _ := json.Marshal(aliyunUrls)

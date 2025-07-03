@@ -52,10 +52,11 @@ func NewAliyunClient() (*AliyunClient, error) {
 		return nil, err
 	}
 
-	return &AliyunClient{
+	aliyunClient := &AliyunClient{
 		client: client,
 		bucket: bucket,
-	}, nil
+	}
+	return aliyunClient, nil
 }
 
 // UploadFile 上传文件到阿里云 OSS
@@ -96,6 +97,11 @@ func (c *AliyunClient) UploadFileFromURL(objectKey string, url string) (string, 
 	if err != nil {
 		return "", err
 	}
+	imageLevels, err := c.PersistMultiLevelImages(objectKey)
+	if err != nil {
+		return "", err
+	}
+	log.Log().Sugar().Infof("imageLevels: %v", imageLevels)
 	// 去除掉url中的Expires和Signature
 	newUrl = strings.Split(newUrl, "?")[0]
 	newUrl = strings.ReplaceAll(newUrl, "http://", "https://")
@@ -169,28 +175,112 @@ func (c *AliyunClient) GenerateThumbnail(objectKey string) (string, error) {
 	return c.GetFileURL(thumbnailKey, 3600)
 }
 
-// 处理阿里云oss bucket的图片，生成对应的缩略图
-func (c *AliyunClient) GenerateThumbnailV2(objectKey string, size int) (string, error) {
-	// 生成目标图片的key
-	pathSlice := strings.Split(objectKey, "/")
-	id := strings.Split(pathSlice[len(pathSlice)-1], ".")[0]
-	targetImageName := fmt.Sprintf("thumbnail/%s.jpg", id)
-	log.Log().Sugar().Infof("objectKey %s GenerateThumbnailV2: %s", objectKey, targetImageName)
-	// 构建图片处理参数
-	// 将图片缩放为固定宽高200px
-	style := fmt.Sprintf("image/resize,m_fixed,w_%d,h_%d", size, size)
-	// 使用base64编码目标文件名和bucket名
-	process := fmt.Sprintf("%s|sys/saveas,o_%v,b_%v",
-		style,
-		base64.URLEncoding.EncodeToString([]byte(targetImageName)),
-		base64.URLEncoding.EncodeToString([]byte(Bucket)))
+// GenerateImageLevels 根据原始 OSS 图片 URL 生成不同等级的图片 URL
+func GenerateImageLevels(originalURL string) ImageLevels {
+	// 阿里云 OSS 图片处理参数
+	// 参考：https://help.aliyun.com/zh/oss/user-guide/resize-images-4
+	return ImageLevels{
+		Original:  originalURL,
+		Content:   originalURL + "?x-oss-process=image/resize,m_lfit,w_1280,h_1280",
+		Preview:   originalURL + "?x-oss-process=image/resize,m_lfit,w_512,h_512",
+		Thumbnail: originalURL + "?x-oss-process=image/resize,m_lfit,w_200,h_200",
+		Small:     originalURL + "?x-oss-process=image/resize,m_lfit,w_64,h_64",
+	}
+}
 
-	// 执行图片处理
-	_, err := c.bucket.ProcessObject(objectKey, process)
-	if err != nil {
-		return "", err
+// ImageLevels 表示不同等级的图片 OSS 直链
+// 用于多级图片持久化和访问
+// original: 原图
+// content: 内容展示
+// preview: 预览
+// thumbnail: 头像
+// small: 小图
+type ImageLevels struct {
+	Original  string // 原图
+	Content   string // 内容展示
+	Preview   string // 预览
+	Thumbnail string // 头像
+	Small     string // 小图
+}
+
+// PersistMultiLevelImages 持久化多级图片到 OSS，并返回各级图片的直链
+// objectKey: 原图在 OSS 的 object key（如 images/xxx.jpg）
+// 返回 ImageLevels 结构体，包含所有等级图片的直链
+func (c *AliyunClient) PersistMultiLevelImages(objectKey string) (ImageLevels, error) {
+	// 生成目标图片名（去除.jpg后缀，拼接不同等级后缀）
+	baseName := strings.TrimSuffix(objectKey, ".jpg")
+	contentObj := fmt.Sprintf("%s_content.jpg", baseName)
+	previewObj := fmt.Sprintf("%s_preview.jpg", baseName)
+	thumbnailObj := fmt.Sprintf("%s_thumbnail.jpg", baseName)
+	smallObj := fmt.Sprintf("%s_small.jpg", baseName)
+
+	// 定义各级图片的处理参数和目标 object key
+	levels := []struct {
+		Style     string
+		TargetObj string
+	}{
+		{"image/resize,m_lfit,w_1280,h_1280", contentObj},
+		{"image/resize,m_lfit,w_512,h_512", previewObj},
+		{"image/resize,m_lfit,w_200,h_200", thumbnailObj},
+		{"image/resize,m_lfit,w_64,h_64", smallObj},
 	}
 
-	// 返回处理后的图片URL
-	return c.GetFileURL(targetImageName, 3600)
+	// 获取原图直链
+	originalUrl, _ := c.GetFileURL(objectKey, 3600)
+	originalUrl = strings.Split(originalUrl, "?")[0]
+	originalUrl = strings.ReplaceAll(originalUrl, "http://", "https://")
+	result := ImageLevels{Original: originalUrl}
+
+	// 持久化每一级图片
+	for _, lv := range levels {
+		process := fmt.Sprintf("%s|sys/saveas,o_%s,b_%s",
+			lv.Style,
+			base64.URLEncoding.EncodeToString([]byte(lv.TargetObj)),
+			base64.URLEncoding.EncodeToString([]byte(Bucket)),
+		)
+		_, err := c.bucket.ProcessObject(objectKey, process)
+		if err != nil {
+			return result, err
+		}
+		url, _ := c.GetFileURL(lv.TargetObj, 3600)
+		url = strings.Split(url, "?")[0]
+		url = strings.ReplaceAll(url, "http://", "https://")
+		switch lv.TargetObj {
+		case contentObj:
+			result.Content = url
+		case previewObj:
+			result.Preview = url
+		case thumbnailObj:
+			result.Thumbnail = url
+		case smallObj:
+			result.Small = url
+		}
+	}
+	return result, nil
+}
+
+// ListAllObjects 遍历 bucket 下所有目录和文件，返回所有文件的 object key 列表
+// prefix: 指定前缀（如 "original/"），为空则遍历整个 bucket
+// 返回所有文件（非目录）的 object key 列表
+func (c *AliyunClient) ListAllObjects(prefix string) ([]string, error) {
+	var allKeys []string
+	marker := ""
+	for {
+		lsRes, err := c.bucket.ListObjects(oss.Prefix(prefix), oss.Marker(marker), oss.MaxKeys(1000))
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range lsRes.Objects {
+			// 过滤掉"目录"，只处理文件
+			if !strings.HasSuffix(obj.Key, "/") {
+				allKeys = append(allKeys, obj.Key)
+			}
+		}
+		if lsRes.IsTruncated {
+			marker = lsRes.NextMarker
+		} else {
+			break
+		}
+	}
+	return allKeys, nil
 }
