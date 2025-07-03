@@ -2,12 +2,14 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	mcp "github.com/metoro-io/mcp-golang"
-	"github.com/metoro-io/mcp-golang/transport/http"
+	mcphttp "github.com/metoro-io/mcp-golang/transport/http"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/grapery/grapery/config"
@@ -37,13 +39,13 @@ func main() {
 	}
 
 	// Create HTTP transport
-	transport := http.NewHTTPTransport("/mcp")
+	transport := mcphttp.NewHTTPTransport("/mcp")
 	transport.WithAddr(*serverAddr)
 
 	// Create MCP server
 	server := mcp.NewServer(transport)
 
-	// Create and initialize MCP service
+	// Create MCP service
 	service := mcps.NewMcpService()
 	err = service.Initialize(config.GlobalConfig)
 	if err != nil {
@@ -74,6 +76,13 @@ func main() {
 			log.Fatal("start server failed : ", err)
 		}
 	}()
+
+	// Add health check endpoint
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
+	})
 
 	// Handle shutdown signals
 	sc := make(chan os.Signal, 1)

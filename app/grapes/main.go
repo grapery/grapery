@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -30,6 +32,14 @@ func main() {
 	if err != nil {
 		log.Fatal("Valied config failed : ", err)
 	}
+
+	// 添加健康检查端点
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
+	})
+
 	srv := service.NewTeamsService()
 	err = service.Run(srv, config.GlobalConfig)
 	if err != nil {

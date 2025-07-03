@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Grapery 容器部署脚本
-# 使用方法: ./deploy.sh [start|stop|restart|logs|status]
+# 使用方法: ./deploy.sh [start|stop|restart|logs|status|ssl]
 
 set -e
 
@@ -33,46 +33,21 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 检查Docker和Docker Compose
+# 检查依赖
 check_dependencies() {
     log_info "检查依赖..."
     
     if ! command -v docker &> /dev/null; then
-        log_error "Docker 未安装，请先安装 Docker"
+        log_error "Docker 未安装"
         exit 1
     fi
     
     if ! command -v docker-compose &> /dev/null; then
-        log_error "Docker Compose 未安装，请先安装 Docker Compose"
+        log_error "Docker Compose 未安装"
         exit 1
     fi
     
     log_success "依赖检查完成"
-}
-
-# 创建必要的目录和文件
-setup_environment() {
-    log_info "设置环境..."
-    
-    # 创建SSL目录
-    mkdir -p ssl
-    
-    # 创建日志目录
-    mkdir -p logs
-    
-    # 设置文件权限
-    chmod +x deploy.sh
-    
-    log_success "环境设置完成"
-}
-
-# 构建镜像
-build_images() {
-    log_info "构建Docker镜像..."
-    
-    docker-compose -f $COMPOSE_FILE build --no-cache
-    
-    log_success "镜像构建完成"
 }
 
 # 启动服务
@@ -85,7 +60,7 @@ start_services() {
     
     # 等待服务启动
     log_info "等待服务启动..."
-    sleep 10
+    sleep 15
     
     # 检查服务状态
     check_services_status
@@ -94,16 +69,13 @@ start_services() {
 # 停止服务
 stop_services() {
     log_info "停止服务..."
-    
     docker-compose -f $COMPOSE_FILE down
-    
     log_success "服务停止完成"
 }
 
 # 重启服务
 restart_services() {
     log_info "重启服务..."
-    
     docker-compose -f $COMPOSE_FILE down
     docker-compose -f $COMPOSE_FILE up -d
     
@@ -111,7 +83,7 @@ restart_services() {
     
     # 等待服务启动
     log_info "等待服务启动..."
-    sleep 10
+    sleep 15
     
     # 检查服务状态
     check_services_status
@@ -119,17 +91,14 @@ restart_services() {
 
 # 查看日志
 show_logs() {
-    log_info "显示服务日志..."
-    
-    docker-compose -f $COMPOSE_FILE logs -f
-}
-
-# 查看特定服务日志
-show_service_logs() {
     local service_name=$1
-    log_info "显示 $service_name 服务日志..."
-    
-    docker-compose -f $COMPOSE_FILE logs -f $service_name
+    if [ -n "$service_name" ]; then
+        log_info "显示 $service_name 服务日志..."
+        docker-compose -f $COMPOSE_FILE logs -f $service_name
+    else
+        log_info "显示所有服务日志..."
+        docker-compose -f $COMPOSE_FILE logs -f
+    fi
 }
 
 # 检查服务状态
@@ -142,7 +111,7 @@ check_services_status() {
     echo ""
     log_info "容器健康状态:"
     
-    local containers=("grapery-grapes" "grapery-syncworker" "grapery-mcps" "grapery-vippay" "grapery-mysql" "grapery-redis" "grapery-nginx")
+    local containers=("grapery-grapes" "grapery-syncworker" "grapery-mcps" "grapery-vippay" "grapery-nginx" "grapery-mysql" "grapery-redis")
     
     for container in "${containers[@]}"; do
         if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "$container"; then
@@ -154,20 +123,40 @@ check_services_status() {
     done
 }
 
-# 清理资源
-cleanup() {
-    log_info "清理资源..."
+# 配置SSL证书
+setup_ssl() {
+    local domain_name=$1
+    local email=$2
     
-    # 停止并删除容器
-    docker-compose -f $COMPOSE_FILE down
+    if [ -z "$domain_name" ] || [ -z "$email" ]; then
+        log_error "请提供域名和邮箱"
+        echo "用法: $0 ssl <域名> <邮箱>"
+        echo "示例: $0 ssl grapery.com admin@grapery.com"
+        exit 1
+    fi
     
-    # 删除未使用的镜像
-    docker image prune -f
+    log_info "配置SSL证书..."
     
-    # 删除未使用的网络
-    docker network prune -f
+    # 停止nginx容器
+    docker-compose -f $COMPOSE_FILE stop nginx
     
-    log_success "资源清理完成"
+    # 申请SSL证书
+    sudo certbot certonly --standalone \
+        -d $domain_name \
+        -d api.$domain_name \
+        -d mcp.$domain_name \
+        -d pay.$domain_name \
+        --email $email \
+        --agree-tos \
+        --non-interactive
+    
+    # 设置证书权限
+    sudo chown -R $USER:$USER /etc/letsencrypt
+    
+    # 重启nginx容器
+    docker-compose -f $COMPOSE_FILE up -d nginx
+    
+    log_success "SSL证书配置完成！"
 }
 
 # 备份数据
@@ -178,80 +167,69 @@ backup_data() {
     mkdir -p $backup_dir
     
     # 备份MySQL数据
-    docker exec grapery-mysql mysqldump -u root -proot123 grapery > $backup_dir/mysql_backup.sql
+    docker exec grapery-mysql mysqldump -u root -p$MYSQL_ROOT_PASSWORD grapery > $backup_dir/mysql_backup.sql
     
     # 备份Redis数据
     docker exec grapery-redis redis-cli BGSAVE
     sleep 2
     docker cp grapery-redis:/data/dump.rdb $backup_dir/redis_backup.rdb
     
+    # 备份配置文件
+    cp .env $backup_dir/env_backup
+    cp docker-compose.yml $backup_dir/docker-compose_backup.yml
+    
+    # 备份SSL证书
+    sudo cp -r /etc/letsencrypt $backup_dir/ssl_backup
+    
     log_success "数据备份完成: $backup_dir"
 }
 
-# 恢复数据
-restore_data() {
-    local backup_dir=$1
+# 清理资源
+cleanup() {
+    log_info "清理资源..."
     
-    if [ -z "$backup_dir" ]; then
-        log_error "请指定备份目录"
-        exit 1
-    fi
+    # 停止并删除容器
+    docker-compose -f $COMPOSE_FILE down
     
-    if [ ! -d "$backup_dir" ]; then
-        log_error "备份目录不存在: $backup_dir"
-        exit 1
-    fi
+    # 删除未使用的镜像和网络
+    docker system prune -f
     
-    log_info "恢复数据..."
-    
-    # 恢复MySQL数据
-    if [ -f "$backup_dir/mysql_backup.sql" ]; then
-        docker exec -i grapery-mysql mysql -u root -proot123 grapery < $backup_dir/mysql_backup.sql
-        log_success "MySQL数据恢复完成"
-    fi
-    
-    # 恢复Redis数据
-    if [ -f "$backup_dir/redis_backup.rdb" ]; then
-        docker cp $backup_dir/redis_backup.rdb grapery-redis:/data/dump.rdb
-        docker exec grapery-redis redis-cli BGREWRITEAOF
-        log_success "Redis数据恢复完成"
-    fi
+    log_success "资源清理完成"
 }
 
 # 显示帮助信息
 show_help() {
     echo "Grapery 容器部署脚本"
     echo ""
-    echo "使用方法: $0 [命令]"
+    echo "使用方法: $0 [命令] [参数]"
     echo ""
     echo "命令:"
     echo "  start          启动所有服务"
     echo "  stop           停止所有服务"
     echo "  restart        重启所有服务"
-    echo "  logs           查看所有服务日志"
-    echo "  logs [服务名]  查看特定服务日志"
+    echo "  logs [服务名]  查看服务日志"
     echo "  status         查看服务状态"
-    echo "  build          构建Docker镜像"
-    echo "  cleanup        清理资源"
+    echo "  ssl <域名> <邮箱> 配置SSL证书"
     echo "  backup         备份数据"
-    echo "  restore [目录] 恢复数据"
+    echo "  cleanup        清理资源"
     echo "  help           显示此帮助信息"
     echo ""
     echo "示例:"
     echo "  $0 start"
     echo "  $0 logs grapes"
+    echo "  $0 ssl grapery.com admin@grapery.com"
     echo "  $0 backup"
-    echo "  $0 restore backup/20231201_120000"
 }
 
 # 主函数
 main() {
     local command=$1
+    local arg1=$2
+    local arg2=$3
     
     case $command in
         "start")
             check_dependencies
-            setup_environment
             start_services
             ;;
         "stop")
@@ -262,29 +240,19 @@ main() {
             restart_services
             ;;
         "logs")
-            local service_name=$2
-            if [ -n "$service_name" ]; then
-                show_service_logs $service_name
-            else
-                show_logs
-            fi
+            show_logs $arg1
             ;;
         "status")
             check_services_status
             ;;
-        "build")
-            check_dependencies
-            build_images
-            ;;
-        "cleanup")
-            cleanup
+        "ssl")
+            setup_ssl $arg1 $arg2
             ;;
         "backup")
             backup_data
             ;;
-        "restore")
-            local backup_dir=$2
-            restore_data $backup_dir
+        "cleanup")
+            cleanup
             ;;
         "help"|"--help"|"-h"|"")
             show_help
