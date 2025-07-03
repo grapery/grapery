@@ -4,7 +4,7 @@ import (
 	// "net/http"
 	"context"
 
-	connect "github.com/bufbuild/connect-go"
+	connect "connectrpc.com/connect"
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 
@@ -79,15 +79,7 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *connect.Request[api
 		Msg: ret,
 	}, nil
 }
-func (g *GroupService) FetchGroupProjects(ctx context.Context, req *connect.Request[api.FetchGroupProjectsRequest]) (*connect.Response[api.FetchGroupProjectsResponse], error) {
-	ret, err := groupService.GetGroupServer().FetchGroupProjects(ctx, req.Msg)
-	if err != nil {
-		return nil, err
-	}
-	return &connect.Response[api.FetchGroupProjectsResponse]{
-		Msg: ret,
-	}, nil
-}
+
 func (g *GroupService) JoinGroup(ctx context.Context, req *connect.Request[api.JoinGroupRequest]) (*connect.Response[api.JoinGroupResponse], error) {
 	ret, err := groupService.GetGroupServer().JoinGroup(ctx, req.Msg)
 	if err != nil {
@@ -103,16 +95,6 @@ func (g *GroupService) LeaveGroup(ctx context.Context, req *connect.Request[api.
 		return nil, err
 	}
 	return &connect.Response[api.LeaveGroupResponse]{
-		Msg: ret,
-	}, nil
-}
-
-func (g *GroupService) SearchGroupProject(ctx context.Context, req *connect.Request[api.SearchProjectRequest]) (*connect.Response[api.SearchProjectResponse], error) {
-	ret, err := groupService.GetGroupServer().QueryGroupProject(ctx, req.Msg)
-	if err != nil {
-		return nil, err
-	}
-	return &connect.Response[api.SearchProjectResponse]{
 		Msg: ret,
 	}, nil
 }

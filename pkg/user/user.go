@@ -602,43 +602,7 @@ func (user *UserService) SearchUser(ctx context.Context, req *api.SearchUserRequ
 
 func (user *UserService) UserWatching(ctx context.Context, req *api.UserWatchingRequest) (
 	*api.UserWatchingResponse, error) {
-	list, err := models.GetUserWatchingProjects(int64(req.GetUserId()), int(req.GetOffset()), int(req.GetPageSize()))
-	if err != nil {
-		logger.Error("get user watching projects failed", zap.Int64("user_id", req.GetUserId()), zap.Error(err))
-		return nil, err
-	}
-	var projects = make([]*api.ProjectInfo, 0, len(list))
-	var u = new(models.User)
-	u.ID = uint(req.GetUserId())
-	err = u.GetById()
-	if err != nil {
-		logger.Error("get user failed", zap.Error(err))
-		return nil, err
-	}
-	info := &api.UserInfo{
-		UserId:   int64(u.ID),
-		Name:     u.Name,
-		Avatar:   u.Avatar,
-		Email:    u.Email,
-		Location: u.Location,
-	}
-	for idx, _ := range list {
-		projects[idx] = &api.ProjectInfo{}
-		projects[idx].Avatar = list[idx].Avatar
-		projects[idx].Name = list[idx].Name
-		projects[idx].ProjectId = uint64(list[idx].ID)
-		projects[idx].Owner = info.GetUserId()
-		projects[idx].Creator = info.GetUserId()
-	}
-	return &api.UserWatchingResponse{
-		Code: api.ResponseCode_OK,
-		Msg:  "success",
-		Data: &api.UserWatchingResponse_Data{
-			List:     projects,
-			Offset:   req.GetOffset(),
-			PageSize: req.GetPageSize(),
-		},
-	}, nil
+	return nil, errors.ErrFeatureNotImplemented
 }
 
 func (user *UserService) GetUserProfile(ctx context.Context, req *api.GetUserProfileRequest) (

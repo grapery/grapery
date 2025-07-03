@@ -23,7 +23,6 @@ func NewItemService() *ItemService {
 }
 
 type ItemServer interface {
-	GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error)
 	GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error)
 	GetUserItems(ctx context.Context, req *api.GetUserItemsRequest) (resp *api.GetUserItemsResponse, err error)
 	GetItem(ctx context.Context, req *api.GetItemRequest) (resp *api.GetItemResponse, err error)
@@ -36,52 +35,6 @@ type ItemServer interface {
 
 type ItemService struct {
 	IsReady bool
-}
-
-func (it *ItemService) GetProjectItems(ctx context.Context, req *api.GetProjectItemsRequest) (resp *api.GetProjectItemsResponse, err error) {
-	list, err := models.GetStoryItemByProject(ctx,
-		int64(req.GetProjectId()),
-		int(req.GetOffset()),
-		int(req.GetPageSize()))
-	if err != nil {
-		return nil, err
-	}
-	if len(list) != 0 {
-		return &api.GetProjectItemsResponse{
-			Code: 0,
-			Msg:  "success",
-			Data: &api.GetProjectItemsResponse_Data{
-				GroupId:   req.GetGroupId(),
-				ProjectId: req.GetProjectId(),
-				UserId:    req.GetUserId(),
-				List:      nil,
-				PageSize:  0,
-				Offset:    req.GetOffset(),
-			},
-		}, nil
-	}
-	result := make([]*api.ItemInfo, 0, len(list))
-	for idx := range list {
-		item := new(api.ItemInfo)
-		item.UserId = int64(list[idx].UserID)
-		item.Content = nil
-		item.ProjectId = int64(list[idx].ProjectID)
-		item.Itype = list[idx].ItemType
-		item.Title = list[idx].Description
-		result = append(result, item)
-	}
-	return &api.GetProjectItemsResponse{
-		Code: 0,
-		Msg:  "success",
-		Data: &api.GetProjectItemsResponse_Data{
-			GroupId:   req.GetGroupId(),
-			ProjectId: req.GetProjectId(),
-			UserId:    req.GetUserId(),
-			List:      result,
-			PageSize:  int64(len(result)),
-			Offset:    req.GetOffset() + int64(len(result)),
-		},
-	}, nil
 }
 
 func (it *ItemService) GetGroupItems(ctx context.Context, req *api.GetGroupItemsRequest) (resp *api.GetGroupItemsResponse, err error) {

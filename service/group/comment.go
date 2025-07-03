@@ -4,7 +4,7 @@ import (
 	// "net/http"
 	"context"
 
-	connect "github.com/bufbuild/connect-go"
+	connect "connectrpc.com/connect"
 	_ "github.com/gin-contrib/sessions"
 	_ "github.com/gin-contrib/sessions/redis"
 	api "github.com/grapery/common-protoc/gen"

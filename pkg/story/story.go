@@ -3,6 +3,7 @@ package story
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -119,6 +120,9 @@ type StoryServer interface {
 
 	UpdateStoryRoleDescriptionDetail(ctx context.Context, req *api.UpdateStoryRoleDescriptionDetailRequest) (*api.UpdateStoryRoleDescriptionDetailResponse, error)
 	UpdateStoryRolePrompt(ctx context.Context, req *api.UpdateStoryRolePromptRequest) (*api.UpdateStoryRolePromptResponse, error)
+	GetStoryImageStyle(ctx context.Context, req *api.GetStoryImageStyleRequest) (*api.GetStoryImageStyleResponse, error)
+	UpdateStoryImageStyle(ctx context.Context, req *api.UpdateStoryImageStyleRequest) (*api.UpdateStoryImageStyleResponse, error)
+	UpdateStorySenceMaxNumber(ctx context.Context, req *api.UpdateStorySenceMaxNumberRequest) (*api.UpdateStorySenceMaxNumberResponse, error)
 }
 
 type StoryService struct {
@@ -944,4 +948,114 @@ func (s *StoryService) TrendingStoryRole(ctx context.Context, req *api.TrendingS
 	}
 	log.Log().Info("trending story role", zap.Any("resp", resp))
 	return resp, nil
+}
+
+func (s *StoryService) GetStoryImageStyle(ctx context.Context, req *api.GetStoryImageStyleRequest) (*api.GetStoryImageStyleResponse, error) {
+	styles := []*api.StoryStyleDesc{
+		{Id: 1, Style: "写实风格", Description: "高度还原真实细节，适用于产品设计、人物肖像等场景。"},
+		{Id: 2, Style: "像素艺术", Description: "以方块化像素为特征的复古游戏风格，适合怀旧主题创作。"},
+		{Id: 3, Style: "蒸汽朋克", Description: "融合工业革命元素与科幻设定，以齿轮、铜管为视觉核心。"},
+		{Id: 4, Style: "水墨画", Description: "中国传统绘画风格，强调笔触与墨色层次的意境表达。"},
+		{Id: 5, Style: "赛博格美学", Description: "机械与生物体的结合，突出金属质感与未来人体改造特征。"},
+		{Id: 6, Style: "低多边形", Description: "几何切割的立体抽象风格，通过多边形拼接形成数字化质感。"},
+		{Id: 7, Style: "霓虹灯艺术", Description: "高饱和度发光效果，营造夜店、城市夜景等炫目氛围。"},
+		{Id: 8, Style: "手绘线稿", Description: "保留铅笔或墨线勾勒痕迹，突出创作过程的原始艺术感。"},
+		{Id: 9, Style: "浮世绘", Description: "日本传统木版画风格，以平面色块与流畅曲线为特征。"},
+		{Id: 10, Style: "故障艺术", Description: "模拟数字信号干扰效果，通过色块错位表现科技失真感。"},
+		{Id: 11, Style: "超现实主义", Description: "突破物理规律的奇幻场景，融合梦境与现实的矛盾统一。"},
+		{Id: 12, Style: "蒸汽波", Description: "90年代复古电子美学，结合大理石纹理与荧光渐变色彩。"},
+		{Id: 13, Style: "剪纸艺术", Description: "平面镂空造型风格，模拟手工剪裁的民俗艺术特征。"},
+		{Id: 14, Style: "微距摄影", Description: "放大微观世界的细节表现，强调纹理与景深的科学美感。"},
+		{Id: 15, Style: "蒸汽机时代", Description: "19世纪工业风格，突出黄铜机械与皮革材质的怀旧质感。"},
+		{Id: 16, Style: "故障像素", Description: "结合像素化与数据损坏效果，形成独特的数字艺术语言。"},
+		{Id: 17, Style: "极光渲染", Description: "模拟自然光波流动，创造宇宙星空与气体云的动态效果。"},
+		{Id: 18, Style: "黏土动画", Description: "定格动画的材质表现，突出手工塑形的立体质感与动态模糊。"},
+		{Id: 19, Style: "拜占庭风格", Description: "金色镶嵌与宗教符号的华丽装饰，体现中世纪宫廷艺术特征。"},
+		{Id: 20, Style: "流体动力学", Description: "模拟液体运动轨迹，表现烟雾、水流等自然现象的物理规律。"},
+		{Id: 21, Style: "霓虹朋克", Description: "暗黑背景与荧光色对比，构建未来都市的赛博空间氛围。"},
+		{Id: 22, Style: "折纸艺术", Description: "平面材料立体化造型，通过几何折叠展现东方手工智慧。"},
+		{Id: 23, Style: "量子抽象", Description: "基于科学概念的艺术化表达，用粒子与波形表现不确定性。"},
+		{Id: 24, Style: "维多利亚时代", Description: "繁复雕花与蒸汽机械结合，呈现工业革命时期的复古未来感。"},
+		{Id: 25, Style: "全息投影", Description: "透明介质上的光影折射效果，打造科技展览与虚拟界面场景。"},
+		{Id: 26, Style: "岩画风格", Description: "史前洞穴壁画的粗犷线条，表现原始人类对自然的观察。"},
+		{Id: 27, Style: "生物机械", Description: "有机生命体与机械结构的共生，突出液压管道与肌肉纹理。"},
+		{Id: 28, Style: "印象派", Description: "捕捉光影瞬间变化，通过松散笔触表现视觉感知的主观体验。"},
+		{Id: 29, Style: "未来主义建筑", Description: "突破重力限制的几何构造，探索悬浮与曲面空间的可能性。"},
+		{Id: 30, Style: "荧光涂鸦", Description: "霓虹喷漆效果的街头艺术，强调夜间发光与动态笔触。"},
+		{Id: 31, Style: "珐琅彩绘", Description: "金属胎体上的彩色釉料装饰，体现传统工艺的精细质感。"},
+		{Id: 32, Style: "数据可视化", Description: "将抽象信息转化为图形，通过图表与拓扑结构传递科学内涵。"},
+		{Id: 33, Style: "蒸汽幻想", Description: "架空历史中的科技幻想，融合飞艇、机械义肢等维多利亚元素。"},
+		{Id: 34, Style: "光绘摄影", Description: "长曝光下的光线轨迹捕捉，用移动光源创造抽象光之雕塑。"},
+		{Id: 35, Style: "赛璐璐动画", Description: "传统手绘动画风格，突出清晰轮廓线与平涂色彩的分层效果。"},
+		{Id: 36, Style: "量子纠缠", Description: "用视觉符号表现微观粒子关联，通过纠缠光线与概率云形态。"},
+		{Id: 37, Style: "洛可可装饰", Description: "繁复曲线与金色装饰，再现18世纪欧洲宫廷的奢华艺术风格。"},
+		{Id: 38, Style: "纳米科技", Description: "微观尺度的物质操控表现，通过分子结构与量子点阵构图。"},
+		{Id: 39, Style: "蒸汽朋克机械", Description: "黄铜齿轮与蒸汽阀门的精密组合，展现工业革命巅峰的机械美学。"},
+		{Id: 40, Style: "全息星空", Description: "三维星云与星系分布的投影，模拟天文观测中的宇宙深空效果。"},
+		{Id: 41, Style: "故障艺术2.0", Description: "升级版数字失真效果，融合Glitch与AI生成的随机性艺术表达。"},
+		{Id: 42, Style: "文艺复兴肖像", Description: "古典油画技法与光影处理，突出人物面部的立体感与神态刻画。"},
+		{Id: 43, Style: "生物荧光", Description: "自然界发光生物的表现，通过冷色调与有机形态模拟生命光效。"},
+		{Id: 44, Style: "未来城市", Description: "垂直交通与悬浮建筑的都市构想，展现高密度聚居的科技景观。"},
+		{Id: 45, Style: "数字水墨", Description: "传统水墨技法的数字化再现，保留笔触韵味并增强色彩表现力。"},
+		{Id: 46, Style: "量子隧穿", Description: "微观粒子穿越势垒的视觉化，用虚实渐变表现概率波的穿透特性。"},
+		{Id: 47, Style: "巴洛克装饰", Description: "复杂雕刻与镀金装饰，体现欧洲17世纪艺术的戏剧性与动感。"},
+		{Id: 48, Style: "纳米机器人", Description: "微观尺度机械群体的表现，通过几何单元与能量网络构图。"},
+		{Id: 49, Style: "全息机械", Description: "透明投影中的动态机械结构，展示内部齿轮运转与能量流动。"},
+		{Id: 50, Style: "未来主义服装", Description: "突破传统材质的服饰设计，融合智能材料与生物形态的剪裁。"},
+	}
+	return &api.GetStoryImageStyleResponse{
+		Code:    0,
+		Message: "OK",
+		Style:   styles,
+	}, nil
+}
+
+func (s *StoryService) UpdateStoryImageStyle(ctx context.Context, req *api.UpdateStoryImageStyleRequest) (*api.UpdateStoryImageStyleResponse, error) {
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	if story.CreatorID != req.GetUserId() {
+		return nil, errors.New("not allowed")
+	}
+	if story.Style == req.GetStyle() {
+		return &api.UpdateStoryImageStyleResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	story.Style = req.GetStyle()
+	err = models.UpdateStoryStyle(ctx, req.GetStoryId(), req.GetStyle())
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateStoryImageStyleResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
+}
+
+func (s *StoryService) UpdateStorySenceMaxNumber(ctx context.Context, req *api.UpdateStorySenceMaxNumberRequest) (*api.UpdateStorySenceMaxNumberResponse, error) {
+	story, err := models.GetStory(ctx, req.GetStoryId())
+	if err != nil {
+		return nil, err
+	}
+	if story.CreatorID != req.GetUserId() {
+		return nil, errors.New("not allowed")
+	}
+	if story.SenceMaxNumber == int64(req.GetMaxNumber()) {
+		return &api.UpdateStorySenceMaxNumberResponse{
+			Code:    0,
+			Message: "OK",
+		}, nil
+	}
+	story.SenceMaxNumber = int64(req.GetMaxNumber())
+	err = models.UpdateStorySenceMaxNumber(ctx, req.GetStoryId(), int64(req.GetMaxNumber()))
+	if err != nil {
+		return nil, err
+	}
+	return &api.UpdateStorySenceMaxNumberResponse{
+		Code:    0,
+		Message: "OK",
+	}, nil
 }

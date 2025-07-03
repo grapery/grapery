@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	connect "github.com/bufbuild/connect-go"
+	connect "connectrpc.com/connect"
 
 	"github.com/grapery/common-protoc/gen"
 	groupService "github.com/grapery/grapery/pkg/group"
@@ -256,6 +256,30 @@ func (s *StoryService) TrendingStory(ctx context.Context, req *connect.Request[g
 
 func (s *StoryService) TrendingStoryRole(ctx context.Context, req *connect.Request[gen.TrendingStoryRoleRequest]) (*connect.Response[gen.TrendingStoryRoleResponse], error) {
 	ret, err := storyServer.GetStoryServer().TrendingStoryRole(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryService) GetStoryImageStyle(ctx context.Context, req *connect.Request[gen.GetStoryImageStyleRequest]) (*connect.Response[gen.GetStoryImageStyleResponse], error) {
+	ret, err := storyServer.GetStoryServer().GetStoryImageStyle(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryService) UpdateStoryImageStyle(ctx context.Context, req *connect.Request[gen.UpdateStoryImageStyleRequest]) (*connect.Response[gen.UpdateStoryImageStyleResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStoryImageStyle(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(ret), nil
+}
+
+func (s *StoryService) UpdateStorySenceMaxNumber(ctx context.Context, req *connect.Request[gen.UpdateStorySenceMaxNumberRequest]) (*connect.Response[gen.UpdateStorySenceMaxNumberResponse], error) {
+	ret, err := storyServer.GetStoryServer().UpdateStorySenceMaxNumber(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}

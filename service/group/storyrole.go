@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	connect "github.com/bufbuild/connect-go"
+	connect "connectrpc.com/connect"
 
 	"github.com/grapery/common-protoc/gen"
 	api "github.com/grapery/common-protoc/gen"

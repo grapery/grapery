@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	connect "github.com/bufbuild/connect-go"
+	connect "connectrpc.com/connect"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -34,7 +34,6 @@ type TeamsService struct {
 	*auth.AuthService
 	*user.UserService
 	*group.GroupService
-	*group.ProjectService
 	*group.StoryItemService
 	*group.CommentService
 	*common.CommonService
@@ -75,7 +74,6 @@ func NewTeamsService() *TeamsService {
 	}
 	ts.UserService = &user.UserService{}
 	ts.GroupService = &group.GroupService{}
-	ts.ProjectService = &group.ProjectService{}
 	ts.StoryItemService = &group.StoryItemService{}
 	ts.CommentService = &group.CommentService{}
 	ts.CommonService = &common.CommonService{}

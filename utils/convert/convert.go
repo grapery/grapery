@@ -52,15 +52,6 @@ func ConvertGroupToApiGroupInfo(g *models.Group) *api.GroupInfo {
 	}
 }
 
-func ConvertProjectToApiProjectInfo(p *models.Project) *api.ProjectInfo {
-	return &api.ProjectInfo{
-		ProjectId: uint64(p.ID),
-		Name:      p.Name,
-		Avatar:    p.Avatar,
-		Owner:     p.OwnerID,
-	}
-}
-
 func ConvertItemToApiItemInfo(i *models.StoryItem) *api.ItemInfo {
 	info := &api.ItemInfo{
 		ProjectId: int64(i.ProjectID),

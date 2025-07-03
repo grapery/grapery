@@ -39,13 +39,11 @@ type GroupServer interface {
 	GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error)
 	UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (resp *api.UpdateGroupInfoResponse, err error)
 	FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error)
-	FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsRequest) (resp *api.FetchGroupProjectsResponse, err error)
 	JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error)
 	LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error)
 	GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (resp *api.GetGroupProfileResponse, err error)
 	UpdateGroupProfile(ctx context.Context, req *api.UpdateGroupProfileRequest) (resp *api.UpdateGroupProfileResponse, err error)
 	SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error)
-	QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error)
 	FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error)
 }
 
@@ -316,26 +314,6 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 	}, nil
 }
 
-func (g *GroupService) FetchGroupProjects(ctx context.Context, req *api.FetchGroupProjectsRequest) (resp *api.FetchGroupProjectsResponse, err error) {
-	projects, err := models.GetGroupProjects(int64(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*api.ProjectInfo, len(projects), len(projects))
-	for idx, val := range projects {
-		list[idx] = convert.ConvertProjectToApiProjectInfo(val)
-	}
-	return &api.FetchGroupProjectsResponse{
-		Code:    api.ResponseCode_OK,
-		Message: "ok",
-		Data: &api.FetchGroupProjectsResponse_Data{
-			List:     list,
-			Offset:   req.GetOffset() + int64(len(list)),
-			PageSize: int64(len(list)),
-		},
-	}, nil
-}
-
 func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error) {
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
@@ -461,11 +439,6 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequ
 			PageSize: int64(len(list)),
 		},
 	}, nil
-}
-
-func (g *GroupService) QueryGroupProject(ctx context.Context, req *api.SearchProjectRequest) (*api.SearchProjectResponse, error) {
-	// TODO: 实现群组项目搜索
-	return nil, errors.ErrFeatureNotImplemented
 }
 
 func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error) {
