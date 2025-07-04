@@ -1,206 +1,44 @@
-name: Deploy to Cloud Server
+name: CI/CD Deploy
 
 on:
   push:
-    branches: [ main, develop, staging ]  # 支持多个分支触发
-    paths-ignore:  # 忽略文档和配置文件变更
-      - '**.md'
-      - '.github/workflows/**.yml'
-      - 'docs/**'
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: '部署分支'
-        required: true
-        default: 'main'
-        type: choice
-        options:
-          - main
-          - develop
-          - staging
+    branches: [main, develop,feature/coze]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
+    env:
+      REGISTRY: ${{ secrets.ACR_REGISTRY }}
+      IMAGE_NAME: grapery-app
+      TAG: ${{ github.sha }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.inputs.branch || github.ref }}
-      
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.8.0
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        
-    - name: Add server to known hosts
-      run: |
-        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-        
-    - name: Deploy to server
-      env:
-        SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-        SERVER_PORT: ${{ secrets.SERVER_PORT }}
-        DEPLOY_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
-      run: |
-        ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST << 'EOF'
-        # 设置环境变量
-        export DB_USER="${{ secrets.DB_USER }}"
-        export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-        export DB_NAME="${{ secrets.DB_NAME }}"
-        export MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}"
-        export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
-        export JWT_SECRET="${{ secrets.JWT_SECRET }}"
-        export STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}"
-        export STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}"
-        export STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}"
-        export ALIPAY_APP_ID="${{ secrets.ALIPAY_APP_ID }}"
-        export ALIPAY_PRIVATE_KEY="${{ secrets.ALIPAY_PRIVATE_KEY }}"
-        export ALIPAY_PUBLIC_KEY="${{ secrets.ALIPAY_PUBLIC_KEY }}"
-        export ALIPAY_NOTIFY_URL="${{ secrets.ALIPAY_NOTIFY_URL }}"
-        export ALIPAY_RETURN_URL="${{ secrets.ALIPAY_RETURN_URL }}"
-        export WECHAT_APP_ID="${{ secrets.WECHAT_APP_ID }}"
-        export WECHAT_MCH_ID="${{ secrets.WECHAT_MCH_ID }}"
-        export WECHAT_API_KEY="${{ secrets.WECHAT_API_KEY }}"
-        export WECHAT_NOTIFY_URL="${{ secrets.WECHAT_NOTIFY_URL }}"
-        export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-        export OPENAI_BASE_URL="${{ secrets.OPENAI_BASE_URL }}"
-        export ALIYUN_ACCESS_KEY_ID="${{ secrets.ALIYUN_ACCESS_KEY_ID }}"
-        export ALIYUN_ACCESS_KEY_SECRET="${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}"
-        export ALIYUN_REGION="${{ secrets.ALIYUN_REGION }}"
-        export ALIYUN_OSS_BUCKET="${{ secrets.ALIYUN_OSS_BUCKET }}"
-        export ALIYUN_OSS_ENDPOINT="${{ secrets.ALIYUN_OSS_ENDPOINT }}"
-        export COZE_API_KEY="${{ secrets.COZE_API_KEY }}"
-        export COZE_BOT_ID="${{ secrets.COZE_BOT_ID }}"
-        export COZE_WORKSPACE_ID="${{ secrets.COZE_WORKSPACE_ID }}"
-        export TENCENT_SECRET_ID="${{ secrets.TENCENT_SECRET_ID }}"
-        export TENCENT_SECRET_KEY="${{ secrets.TENCENT_SECRET_KEY }}"
-        export TENCENT_REGION="${{ secrets.TENCENT_REGION }}"
-        export ZHIPU_API_KEY="${{ secrets.ZHIPU_API_KEY }}"
-        export SMTP_HOST="${{ secrets.SMTP_HOST }}"
-        export SMTP_PORT="${{ secrets.SMTP_PORT }}"
-        export SMTP_USERNAME="${{ secrets.SMTP_USERNAME }}"
-        export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
-        export CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS }}"
-        export DOMAIN_NAME="${{ secrets.DOMAIN_NAME }}"
-        export SSL_EMAIL="${{ secrets.SSL_EMAIL }}"
-        
-        # 进入项目目录
-        cd /opt/grapery
-        
-        # 拉取指定分支的最新代码
-        git fetch origin
-        git checkout $DEPLOY_BRANCH
-        git pull origin $DEPLOY_BRANCH
-        
-        # 生成环境变量文件
-        cat > .env << 'ENV_EOF'
-        # 数据库配置
-        DB_HOST=mysql
-        DB_PORT=3306
-        DB_USER=$DB_USER
-        DB_PASSWORD=$DB_PASSWORD
-        DB_NAME=$DB_NAME
-        MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
-        
-        # Redis配置
-        REDIS_HOST=redis
-        REDIS_PORT=6379
-        REDIS_PASSWORD=$REDIS_PASSWORD
-        
-        # 应用配置
-        ENV=production
-        APP_PORT=8080
-        MCP_PORT=8081
-        VIPPAY_PORT=8082
-        
-        # JWT配置
-        JWT_SECRET=$JWT_SECRET
-        JWT_EXPIRE_HOURS=24
-        
-        # 支付配置
-        STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY
-        STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
-        STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET
-        
-        ALIPAY_APP_ID=$ALIPAY_APP_ID
-        ALIPAY_PRIVATE_KEY=$ALIPAY_PRIVATE_KEY
-        ALIPAY_PUBLIC_KEY=$ALIPAY_PUBLIC_KEY
-        ALIPAY_NOTIFY_URL=$ALIPAY_NOTIFY_URL
-        ALIPAY_RETURN_URL=$ALIPAY_RETURN_URL
-        
-        WECHAT_APP_ID=$WECHAT_APP_ID
-        WECHAT_MCH_ID=$WECHAT_MCH_ID
-        WECHAT_API_KEY=$WECHAT_API_KEY
-        WECHAT_NOTIFY_URL=$WECHAT_NOTIFY_URL
-        
-        # 第三方服务配置
-        OPENAI_API_KEY=$OPENAI_API_KEY
-        OPENAI_BASE_URL=$OPENAI_BASE_URL
-        
-        # 阿里云配置
-        ALIYUN_ACCESS_KEY_ID=$ALIYUN_ACCESS_KEY_ID
-        ALIYUN_ACCESS_KEY_SECRET=$ALIYUN_ACCESS_KEY_SECRET
-        ALIYUN_REGION=$ALIYUN_REGION
-        ALIYUN_OSS_BUCKET=$ALIYUN_OSS_BUCKET
-        ALIYUN_OSS_ENDPOINT=$ALIYUN_OSS_ENDPOINT
-        
-        # Coze配置
-        COZE_API_KEY=$COZE_API_KEY
-        COZE_BOT_ID=$COZE_BOT_ID
-        COZE_WORKSPACE_ID=$COZE_WORKSPACE_ID
-        
-        # 腾讯云配置
-        TENCENT_SECRET_ID=$TENCENT_SECRET_ID
-        TENCENT_SECRET_KEY=$TENCENT_SECRET_KEY
-        TENCENT_REGION=$TENCENT_REGION
-        
-        # 智谱AI配置
-        ZHIPU_API_KEY=$ZHIPU_API_KEY
-        
-        # 邮件配置
-        SMTP_HOST=$SMTP_HOST
-        SMTP_PORT=$SMTP_PORT
-        SMTP_USERNAME=$SMTP_USERNAME
-        SMTP_PASSWORD=$SMTP_PASSWORD
-        
-        # 日志配置
-        LOG_LEVEL=info
-        LOG_FILE=/var/log/grapery/app.log
-        
-        # 缓存配置
-        CACHE_TTL=3600
-        
-        # 安全配置
-        CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS
-        RATE_LIMIT_REQUESTS=100
-        RATE_LIMIT_WINDOW=60
-        
-        # 监控配置
-        METRICS_ENABLED=true
-        METRICS_PORT=9090
-        ENV_EOF
-        
-        # 停止现有服务
-        docker-compose down || true
-        
-        # 构建并启动服务
-        docker-compose up -d --build
-        
-        # 等待服务启动
-        echo "等待服务启动..."
-        sleep 30
-        
-        # 检查服务状态
-        docker-compose ps
-        
-        # 自动配置SSL证书（如果域名已配置）
-        if [ -n "$DOMAIN_NAME" ] && [ -n "$SSL_EMAIL" ]; then
-            echo "配置SSL证书..."
-            sudo certbot --nginx -d $DOMAIN_NAME -d api.$DOMAIN_NAME -d mcp.$DOMAIN_NAME -d pay.$DOMAIN_NAME --email $SSL_EMAIL --agree-tos --non-interactive || true
-        fi
-        
-        echo "部署完成！"
-        EOF 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate .env file with secrets
+        run: |
+          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          export JWT_SECRET=${{ secrets.JWT_SECRET }}
+          export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
+          export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          bash generate_env.sh
+
+      - name: Login to Aliyun ACR
+        run: echo ${{ secrets.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build -f dockerfiles/Dockerfile.grapes -t $REGISTRY/$IMAGE_NAME:$TAG .
+
+      - name: Push Docker image
+        run: |
+          docker push $REGISTRY/$IMAGE_NAME:$TAG
+
+      - name: Remote Deploy (Aliyun ECS/ACK/Serverless)
+        env:
+          ALIYUN_ACCESS_KEY: ${{ secrets.ALIYUN_ACCESS_KEY }}
+          ALIYUN_SECRET_KEY: ${{ secrets.ALIYUN_SECRET_KEY }}
+        run: |
+          # 这里可以用 aliyuncli/ossutil/自定义 webhook/云助手等方式远程触发部署
+          # 示例：curl -X POST https://your-ecs-api/deploy?image=$REGISTRY/$IMAGE_NAME:$TAG 
