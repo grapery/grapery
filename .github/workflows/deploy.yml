@@ -85,4 +85,4 @@ jobs:
             docker pull $REGISTRY/grapery-dev/$IMAGE_NAME:latest
             docker stop grapery-app || true
             docker rm grapery-app || true
-            docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env -p 8080:8080 $REGISTRY/grapery-dev/$IMAGE_NAME:latest
+            docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env/.env -p 8080:8080 $REGISTRY/grapery-dev/$IMAGE_NAME:latest
