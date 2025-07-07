@@ -3,10 +3,14 @@ version: '3.8'
 services:
   # 主应用服务
   grapes:
-    image: your-registry/grapery-app:${TAG}   # 镜像名和tag由CI/CD注入
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
     container_name: grapery-app
     ports:
-      - "8080:8080"
+      - "12305:8080"
+      - "12306:8081"
     env_file:
       - .env
+    volumes:
+      - ./config.json:/app/config.json
+    command: ["./grapes-app", "--config", "/app/config.json"]
     restart: unless-stopped
