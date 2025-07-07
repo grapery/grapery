@@ -7,6 +7,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: GRAPERYDEV
     env:
       REGISTRY: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com
       IMAGE_NAME: grapery-app
