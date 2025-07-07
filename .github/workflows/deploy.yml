@@ -21,13 +21,11 @@ jobs:
           export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           export DB_USER=${{ secrets.DB_USER }}
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
-          export REDIS_PASSWORD=${{ env.REDIS_PASSWORD }}
-          export ACR_PASSWORD=${{ env.ACR_PASSWORD }}
-          export ACR_USERNAME=${{ env.ACR_USERNAME }}
-          echo "DB_PASSWORD=$DB_PASSWORD"
-          echo "DB_USER=$DB_USER"
-          echo "JWT_SECRET=$JWT_SECRET"
-          echo "REDIS_PASSWORD=$REDIS_PASSWORD"
+          export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
+          export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          export ALIYUN_OSS_BUCKET=${{ secrets.ALIYUN_OSS_BUCKET }}
+          export ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}
           bash generate_env.sh
           cat .env
 
