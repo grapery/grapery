@@ -44,7 +44,6 @@ jobs:
           export SMTP_PASSWORD=${{ vars.SMTP_PASSWORD }}
           export SMTP_PORT=${{ vars.SMTP_PORT }}
           export SMTP_USERNAME=${{ vars.SMTP_USERNAME }}
-          export SSH_PRIVATE_KEY=${{ vars.SSH_PRIVATE_KEY }}
           export SSL_EMAIL=${{ vars.SSL_EMAIL }}
           export STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
           export STRIPE_SECRET_KEY=${{ vars.STRIPE_SECRET_KEY }}
