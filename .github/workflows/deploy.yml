@@ -23,7 +23,12 @@ jobs:
           export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
           export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
           export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          echo "DB_PASSWORD=$DB_PASSWORD"
+          echo "DB_USER=$DB_USER"
+          echo "JWT_SECRET=$JWT_SECRET"
+          echo "REDIS_PASSWORD=$REDIS_PASSWORD"
           bash generate_env.sh
+          cat .env
 
       - name: Login to Aliyun ACR
         run: echo ${{ secrets.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ secrets.ACR_USERNAME }} --password-stdin
