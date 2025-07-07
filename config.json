@@ -15,6 +15,6 @@
     "schema": "explore"
   },
   "log_level": "info",
-  "rpc_port": "12306",
-  "http_port": "12305"
+  "rpc_port": "8090",
+  "http_port": "8080"
 }

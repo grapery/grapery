@@ -6,8 +6,8 @@ services:
     image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
     container_name: grapery-app
     ports:
-      - "12305:8080"
-      - "12306:8081"
+      - "8080:8080"
+      - "8090:8090"
     env_file:
       - .env
     volumes:

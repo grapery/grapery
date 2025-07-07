@@ -103,7 +103,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		mux := http.NewServeMux()
 		path, handler := genconnect.NewTeamsAPIHandler(ts, opts...)
 		mux.Handle(path, handler)
-		serverAddr := "0.0.0.0:12305"
+		serverAddr := "0.0.0.0:8080"
 		logrus.Infof("Starting http server on %s", serverAddr)
 		server := &http2.Server{}
 		server.ReadIdleTimeout = time.Second * 180
@@ -116,7 +116,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 
 	// 启动 gRPC 聊天服务器
 	go func() {
-		chatAddr := "0.0.0.0:12307"
+		chatAddr := "0.0.0.0:8090"
 		logrus.Infof("Starting gRPC chat server on %s", chatAddr)
 
 		// 创建 TCP 监听器
