@@ -83,6 +83,4 @@ jobs:
           script: |
             docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
             docker pull $REGISTRY/grapery-dev/$IMAGE_NAME:latest
-            docker stop grapery-app || true
-            docker rm grapery-app || true
             docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env/.env -p 8080:8080 $REGISTRY/grapery-dev/$IMAGE_NAME:latest
