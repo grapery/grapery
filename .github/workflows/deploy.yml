@@ -18,14 +18,37 @@ jobs:
 
       - name: Generate .env file with secrets
         run: |
-          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          export DB_USER=${{ secrets.DB_USER }}
-          export JWT_SECRET=${{ secrets.JWT_SECRET }}
-          export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
-          export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          export ALIPAY_APP_ID=${{ vars.ALIPAY_APP_ID }}
+          export ALIPAY_NOTIFY_URL=${{ vars.ALIPAY_NOTIFY_URL }}
+          export ALIPAY_PRIVATE_KEY=${{ vars.ALIPAY_PRIVATE_KEY }}
+          export ALIPAY_PUBLIC_KEY=${{ vars.ALIPAY_PUBLIC_KEY }}
+          export ALIPAY_RETURN_URL=${{ vars.ALIPAY_RETURN_URL }}
+          export ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
+          export ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           export ALIYUN_OSS_BUCKET=${{ vars.ALIYUN_OSS_BUCKET }}
           export ALIYUN_OSS_ENDPOINT=${{ vars.ALIYUN_OSS_ENDPOINT }}
+          export ALIYUN_REGION=${{ vars.ALIYUN_REGION }}
+          export COZE_API_KEY=${{ vars.COZE_API_KEY }}
+          export COZE_WORKSPACE_ID=${{ vars.COZE_WORKSPACE_ID }}
+          export DB_NAME=${{ vars.DB_NAME }}
+          export DB_PASSWORD=${{ vars.DB_PASSWORD }}
+          export DB_USER=${{ vars.DB_USER }}
+          export DOCKERHUB_TOKEN=${{ vars.DOCKERHUB_TOKEN }}
+          export DOCKERHUB_USERNAME=${{ vars.DOCKERHUB_USERNAME }}
+          export DOMAIN_NAME=${{ vars.DOMAIN_NAME }}
+          export JWT_SECRET=${{ vars.JWT_SECRET }}
+          export REDIS_PASSWORD=${{ vars.REDIS_PASSWORD }}
+          export SERVER_HOST=${{ vars.SERVER_HOST }}
+          export SERVER_PORT=${{ vars.SERVER_PORT }}
+          export SMTP_HOST=${{ vars.SMTP_HOST }}
+          export SMTP_PASSWORD=${{ vars.SMTP_PASSWORD }}
+          export SMTP_PORT=${{ vars.SMTP_PORT }}
+          export SMTP_USERNAME=${{ vars.SMTP_USERNAME }}
+          export SSH_PRIVATE_KEY=${{ vars.SSH_PRIVATE_KEY }}
+          export SSL_EMAIL=${{ vars.SSL_EMAIL }}
+          export STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
+          export STRIPE_SECRET_KEY=${{ vars.STRIPE_SECRET_KEY }}
+          export STRIPE_WEBHOOK_SECRET=${{ vars.STRIPE_WEBHOOK_SECRET }}
           bash generate_env.sh
           cat .env
 
@@ -40,10 +63,26 @@ jobs:
         run: |
           docker push $REGISTRY/$IMAGE_NAME:$TAG
 
-      - name: Remote Deploy (Aliyun ECS/ACK/Serverless)
-        env:
-          ALIYUN_ACCESS_KEY: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_SECRET_KEY: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
-        run: |
-          # 这里可以用 aliyuncli/ossutil/自定义 webhook/云助手等方式远程触发部署
-          # 示例：curl -X POST https://your-ecs-api/deploy?image=$REGISTRY/$IMAGE_NAME:$TAG 
+      - name: Upload .env to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: ".env"
+          target: "/home/ubuntu/grapery/.env"
+
+      - name: Remote Deploy to Aliyun ECS
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+            docker stop grapery-app || true
+            docker rm grapery-app || true
+            docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env -p 8080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} 
