@@ -82,5 +82,5 @@ jobs:
           port: 22
           script: |
             docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
-            docker pull $REGISTRY/grapery-dev/$IMAGE_NAME:latest
-            docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env/.env -p 8080:8080 $REGISTRY/grapery-dev/$IMAGE_NAME:latest
+            docker pull crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
+            docker run -d --name grapery-app --env-file /home/ubuntu/grapery/.env/.env -p 8080:8080 crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
