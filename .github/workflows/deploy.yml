@@ -8,7 +8,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      REGISTRY: ${{ secrets.ACR_REGISTRY }}
+      REGISTRY: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com
       IMAGE_NAME: grapery-app
       TAG: ${{ github.sha }}
     steps:
@@ -17,15 +17,16 @@ jobs:
 
       - name: Generate .env file with secrets
         run: |
-          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          export JWT_SECRET=${{ secrets.JWT_SECRET }}
-          export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
-          export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          export DB_PASSWORD=${{ env.DB_PASSWORD }}
+          export DB_USER=${{ env.DB_USER }}
+          export JWT_SECRET=${{ env.JWT_SECRET }}
+          export REDIS_PASSWORD=${{ env.REDIS_PASSWORD }}
+          export ACR_PASSWORD=${{ env.ACR_PASSWORD }}
+          export ACR_USERNAME=${{ env.ACR_USERNAME }}
           bash generate_env.sh
 
       - name: Login to Aliyun ACR
-        run: echo ${{ secrets.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ secrets.ACR_USERNAME }} --password-stdin
+        run: echo ${{ env.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ env.ACR_USERNAME }} --password-stdin
 
       - name: Build Docker image
         run: |
@@ -37,8 +38,8 @@ jobs:
 
       - name: Remote Deploy (Aliyun ECS/ACK/Serverless)
         env:
-          ALIYUN_ACCESS_KEY: ${{ secrets.ALIYUN_ACCESS_KEY }}
-          ALIYUN_SECRET_KEY: ${{ secrets.ALIYUN_SECRET_KEY }}
+          ALIYUN_ACCESS_KEY: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_SECRET_KEY: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
         run: |
           # 这里可以用 aliyuncli/ossutil/自定义 webhook/云助手等方式远程触发部署
           # 示例：curl -X POST https://your-ecs-api/deploy?image=$REGISTRY/$IMAGE_NAME:$TAG 
