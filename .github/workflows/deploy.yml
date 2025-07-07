@@ -68,7 +68,7 @@ jobs:
         with:
           host: 121.40.176.39
           username: ${{ vars.SSH_USER }}
-          key: ${{ vars.SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           port: 22
           source: ".env"
           target: "/home/ubuntu/grapery/.env"
@@ -78,7 +78,7 @@ jobs:
         with:
           host: 121.40.176.39
           username: ${{ vars.SSH_USER }}
-          key: ${{ vars.SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           port: 22
           script: |
             docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
