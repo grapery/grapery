@@ -7,7 +7,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: GRAPERYDEV
+    environment: env
     env:
       REGISTRY: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com
       IMAGE_NAME: grapery-app
@@ -21,9 +21,9 @@ jobs:
           export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           export DB_USER=${{ secrets.DB_USER }}
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
-          export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
-          export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+          export REDIS_PASSWORD=${{ env.REDIS_PASSWORD }}
+          export ACR_PASSWORD=${{ env.ACR_PASSWORD }}
+          export ACR_USERNAME=${{ env.ACR_USERNAME }}
           echo "DB_PASSWORD=$DB_PASSWORD"
           echo "DB_USER=$DB_USER"
           echo "JWT_SECRET=$JWT_SECRET"
