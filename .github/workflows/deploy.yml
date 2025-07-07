@@ -24,8 +24,8 @@ jobs:
           export REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
           export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
           export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
-          export ALIYUN_OSS_BUCKET=${{ secrets.ALIYUN_OSS_BUCKET }}
-          export ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}
+          export ALIYUN_OSS_BUCKET=${{ variables.ALIYUN_OSS_BUCKET }}
+          export ALIYUN_OSS_ENDPOINT=${{ vars.ALIYUN_OSS_ENDPOINT }}
           bash generate_env.sh
           cat .env
 
