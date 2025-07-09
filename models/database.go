@@ -94,7 +94,7 @@ func Init(uname, pwd, dbname string) error {
 	database.AutoMigrate(&CommentLike{})
 
 	database.AutoMigrate(&Order{})
-	database.AutoMigrate(&Session{})
+	database.AutoMigrate(&UserSession{})
 	database.AutoMigrate(&LLMChatMsg{})
 	database.AutoMigrate(&LLMMsgFeedback{})
 	return nil

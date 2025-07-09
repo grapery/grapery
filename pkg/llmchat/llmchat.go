@@ -3,54 +3,139 @@ package llmchat
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapery/grapery/models"
+	"github.com/grapery/grapery/pkg/cloud/coze"
+	"github.com/grapery/grapery/utils/log"
+	"go.uber.org/zap"
 )
 
+// LLMChatEngine 封装LLM流式推理相关逻辑
+// 声明类型！
+type LLMChatEngine struct {
+}
+
+// NewLLMChatEngine 初始化LLMChatEngine
+func NewLLMChatEngine() *LLMChatEngine {
+	return &LLMChatEngine{}
+}
+
+var llmEngine *LLMChatEngine
+
+func init() {
+	llmEngine = NewLLMChatEngine()
+}
+
+func GetLLMChatEngine() *LLMChatEngine {
+	return llmEngine
+}
+
 // CreateSession 创建会话
-func CreateSession(ctx context.Context, userID int64, name string) (*models.Session, error) {
-	s := &models.Session{
-		UserID: userID,
-		Name:   name,
-	}
-	if err := s.Create(ctx); err != nil {
+func (e *LLMChatEngine) CreateSession(ctx context.Context, userID int64, name, sessionId, roleId, botId string) (*models.UserSession, error) {
+	log.Log().Info("[CreateSession] 开始创建会话", zap.Int64("userID", userID), zap.String("sessionId", sessionId), zap.String("roleId", roleId), zap.String("botId", botId), zap.String("name", name))
+	conversationId, err := coze.GetCozeClient().ConversationCreate(ctx, coze.CozeConversationCreateParams{
+		BotID: "7525037470162141226",
+		MetaData: map[string]string{
+			"uuid": sessionId,
+		},
+		Messages: []coze.EnterMessage{
+			{
+				Role:        "user",
+				Content:     "你好",
+				ContentType: "text",
+			},
+		},
+	})
+	if err != nil {
+		log.Log().Error("[CreateSession] 创建会话失败", zap.Error(err), zap.Int64("userID", userID), zap.String("sessionId", sessionId))
 		return nil, err
 	}
+	log.Log().Info("[CreateSession] 创建会话成功", zap.String("conversationId", conversationId))
+	s := &models.UserSession{
+		UserID:         userID,
+		Name:           name,
+		SessionId:      sessionId,
+		ConversationId: conversationId,
+		RoleId:         roleId,
+		BotId:          botId,
+		MsgCount:       0,
+		StartTime:      time.Now().Unix(),
+		EndTime:        time.Now().Unix(),
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	if err := s.Create(ctx); err != nil {
+		log.Log().Error("[CreateSession] 创建会话失败", zap.Error(err), zap.Int64("userID", userID), zap.String("sessionId", sessionId))
+		return nil, err
+	}
+	log.Log().Info("[CreateSession] 创建会话成功", zap.Int64("userID", userID), zap.String("sessionId", sessionId))
 	return s, nil
 }
 
 // SendMessage 在会话中发送消息
-func SendMessage(ctx context.Context, sessionID, userID int64, content string, parentID *int64) (*models.LLMChatMsg, error) {
-	msg := &models.LLMChatMsg{
-		SessionID: sessionID,
-		UserID:    userID,
-		Content:   content,
-		MsgType:   "user",
-		Status:    "pending",
-		ParentID:  parentID,
-	}
-	if err := msg.Create(ctx); err != nil {
+func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userID int64, content string) (*models.LLMChatMsg, error) {
+	log.Log().Info("[SendMessage] 用户发送消息", zap.Int64("userID", userID), zap.String("sessionID", sessionID), zap.String("content", content))
+	var session models.UserSession
+	if err := session.GetBySessionId(ctx, sessionID); err != nil {
+		log.Log().Error("[SendMessage] 获取会话失败", zap.Error(err), zap.String("sessionID", sessionID))
 		return nil, err
 	}
+	session.MsgCount++
+	session.UpdatedAt = time.Now()
+	if err := session.UpdateBySessionId(ctx, sessionID, map[string]interface{}{
+		"msg_count":  session.MsgCount,
+		"updated_at": time.Now(),
+	}); err != nil {
+		log.Log().Error("[SendMessage] 更新会话失败", zap.Error(err), zap.String("sessionID", sessionID))
+		return nil, err
+	}
+	msg := &models.LLMChatMsg{
+		MessageId:      uuid.New().String(),
+		SessionID:      sessionID,
+		UserID:         userID,
+		Content:        content,
+		MsgType:        "user",
+		Status:         "pending",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Deleted:        false,
+		ConversationId: session.ConversationId,
+	}
+	if err := msg.Create(ctx); err != nil {
+		log.Log().Error("[SendMessage] 消息写入失败", zap.Error(err), zap.Int64("userID", userID), zap.String("sessionID", sessionID))
+		return nil, err
+	}
+	log.Log().Info("[SendMessage] 消息写入成功", zap.Int64("userID", userID), zap.String("sessionID", sessionID), zap.Int64("msgID", msg.ID))
 	return msg, nil
 }
 
-// RetryMessage 重试用户消息（复制原消息内容，parentID指向原消息）
-func RetryMessage(ctx context.Context, msgID int64) (*models.LLMChatMsg, error) {
+// RetryMessage 重试用户消息（复制原消息内容）
+func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*models.LLMChatMsg, error) {
+	log.Log().Info("[RetryMessage] 开始重试消息", zap.Int64("msgID", msgID))
 	var oldMsg models.LLMChatMsg
 	if err := oldMsg.GetById(ctx, msgID); err != nil {
+		log.Log().Error("[RetryMessage] 获取原消息失败", zap.Error(err), zap.Int64("msgID", msgID))
 		return nil, err
 	}
 	if oldMsg.MsgType != "user" {
+		log.Log().Warn("[RetryMessage] 只能重试用户消息", zap.Int64("msgID", msgID))
 		return nil, errors.New("只能重试用户消息")
 	}
-	return SendMessage(ctx, oldMsg.SessionID, oldMsg.UserID, oldMsg.Content, &oldMsg.ID)
+	msg, err := e.SendMessage(ctx, oldMsg.SessionID, oldMsg.UserID, oldMsg.Content)
+	if err != nil {
+		log.Log().Error("[RetryMessage] 重试消息失败", zap.Error(err), zap.Int64("msgID", msgID))
+		return nil, err
+	}
+	log.Log().Info("[RetryMessage] 重试消息成功", zap.Int64("msgID", msgID), zap.Int64("newMsgID", msg.ID))
+	return msg, nil
 }
 
 // FeedbackMessage 对消息进行反馈
-func FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, content string) (*models.LLMMsgFeedback, error) {
+func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, content string) (*models.LLMMsgFeedback, error) {
+	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.Int64("msgID", msgID), zap.Int64("userID", userID), zap.String("type", feedbackType))
 	fb := &models.LLMMsgFeedback{
 		MsgID:   msgID,
 		UserID:  userID,
@@ -58,37 +143,120 @@ func FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, con
 		Content: content,
 	}
 	if err := fb.Create(ctx); err != nil {
+		log.Log().Error("[FeedbackMessage] 反馈写入失败", zap.Error(err), zap.Int64("msgID", msgID), zap.Int64("userID", userID))
 		return nil, err
 	}
+	log.Log().Info("[FeedbackMessage] 反馈写入成功", zap.Int64("msgID", msgID), zap.Int64("userID", userID))
 	return fb, nil
 }
 
 // InterruptMessage 中断消息（将状态置为interrupted）
-func InterruptMessage(ctx context.Context, msgID int64) error {
+func (e *LLMChatEngine) InterruptMessage(ctx context.Context, msgID int64) error {
+	log.Log().Info("[InterruptMessage] 开始中断消息", zap.Int64("msgID", msgID))
 	var msg models.LLMChatMsg
 	if err := msg.GetById(ctx, msgID); err != nil {
+		log.Log().Error("[InterruptMessage] 获取消息失败", zap.Error(err), zap.Int64("msgID", msgID))
 		return err
 	}
-	return msg.UpdateStatus(ctx, "interrupted")
+	err := msg.UpdateStatus(ctx, "interrupted")
+	if err != nil {
+		log.Log().Error("[InterruptMessage] 更新消息状态失败", zap.Error(err), zap.Int64("msgID", msgID))
+		return err
+	}
+	log.Log().Info("[InterruptMessage] 消息已中断", zap.Int64("msgID", msgID))
+	return nil
 }
 
-// LLMStreamCallback 回调类型
-// 每生成一段内容就调用一次
-// 声明类型！
-type LLMStreamCallback func(chunk string) error
+// SendMessageStream 流式发送消息，实时返回AI回复内容
+// 返回：流式内容channel，error
+func (e *LLMChatEngine) SendMessageStream(ctx context.Context, sessionID string, messageId string, userID int64, content string, msgChan chan string, answerMap map[string][]coze.AnswerOrFollowUp) error {
+	log.Log().Info("[SendMessageStream] 入口参数", zap.Int64("userID", userID), zap.String("sessionID", sessionID), zap.String("content", content))
 
-// LLMStreamChat 流式推理，支持context中断
-func LLMStreamChat(ctx context.Context, prompt string, cb LLMStreamCallback) error {
-	for i := 1; i <= 5; i++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if err := cb(fmt.Sprintf("AI响应片段%d", i)); err != nil {
-				return err
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
+	realMsg := &models.LLMChatMsg{
+		MessageId: messageId,
 	}
+	err := realMsg.GetByMessageId(ctx, messageId)
+	if err != nil {
+		log.Log().Error("[SendMessageStream] 获取消息失败", zap.Error(err), zap.String("messageId", messageId))
+		return err
+	}
+	if realMsg.Status != "pending" {
+		log.Log().Error("[SendMessageStream] 消息状态错误", zap.String("messageId", messageId), zap.String("status", realMsg.Status))
+		return errors.New("消息状态错误")
+	}
+	// 2. 构造Coze流式参数（此处RoleName等可根据业务调整）
+	cozeClient := coze.GetCozeClient()
+	params := coze.CozeChatWithRoleStreamParams{
+		ConversationID: realMsg.ConversationId,
+		BotID:          "7525037470162141226",
+		AdditionalMessages: []coze.CozeAdditionalMessage{
+			{
+				Content:     content,
+				ContentType: "text",
+				Role:        "user",
+				Type:        "question",
+			},
+		},
+		Stream:          true,
+		AutoSaveHistory: true,
+		UserID:          realMsg.MessageId,
+	}
+	log.Log().Info("[SendMessageStream] 构造Coze流式参数", zap.Any("params", params))
+	go func(ctx context.Context) {
+		// 3. 调用Coze流式API
+		defer close(msgChan)
+		log.Log().Info("[SendMessageStream] 调用Coze流式API", zap.String("sessionID", sessionID))
+		err := cozeClient.ContinueChatWithAssistantStream(ctx, params, msgChan, answerMap)
+		if err != nil {
+			log.Log().Error("[SendMessageStream] Coze流式API调用失败", zap.Error(err), zap.Int64("userID", userID), zap.String("sessionID", sessionID))
+			return
+		}
+		realMsg.Status = "sent"
+		if len(answerMap["answer"]) > 0 {
+			realMsg.LLmContent = answerMap["answer"][0].Content
+		} else {
+			realMsg.LLmContent = "AI回复内容为空"
+		}
+		err = realMsg.UpdateByMessageId(ctx, realMsg.MessageId, map[string]interface{}{
+			"status":      realMsg.Status,
+			"llm_content": realMsg.LLmContent,
+		})
+		if err != nil {
+			log.Log().Error("[SendMessageStream] 更新消息失败", zap.Error(err), zap.Int64("msgID", realMsg.ID))
+		}
+	}(ctx)
+	log.Log().Info("[SendMessageStream] 流式发送消息启动成功", zap.Int64("userID", userID), zap.String("sessionID", sessionID))
 	return nil
+}
+
+func (e *LLMChatEngine) ConversationClear(ctx context.Context, sessionID string) error {
+	log.Log().Info("[ConversationClear] 开始清空会话", zap.String("sessionID", sessionID))
+	err := coze.GetCozeClient().ConversationClear(ctx, sessionID)
+	if err != nil {
+		log.Log().Error("[ConversationClear] 清空会话失败", zap.Error(err), zap.String("sessionID", sessionID))
+		return err
+	}
+	log.Log().Info("[ConversationClear] 清空会话成功", zap.String("sessionID", sessionID))
+	return nil
+}
+
+func (e *LLMChatEngine) SessionMessages(ctx context.Context, sessionID string, page, pageSize int) ([]*models.LLMChatMsg, bool, error) {
+	log.Log().Info("[SessionMessages] 开始获取会话消息", zap.String("sessionID", sessionID), zap.Int("page", page), zap.Int("pageSize", pageSize))
+	msgs, total, err := models.ListLLMChatMsgsBySessionIDWithPage(ctx, sessionID, page, pageSize)
+	if err != nil {
+		log.Log().Error("[SessionMessages] 获取会话消息失败", zap.Error(err), zap.String("sessionID", sessionID), zap.Int("page", page), zap.Int("pageSize", pageSize))
+		return nil, false, err
+	}
+	return msgs, total > int64(page*pageSize), nil
+}
+
+// parseSSEData 解析SSE格式的data字段
+// 输入示例："data: hello world\n\n"，返回"hello world"
+func parseSSEData(chunk string) string {
+	prefix := "data: "
+	if strings.HasPrefix(chunk, prefix) {
+		// 去除前缀和结尾换行
+		return strings.TrimSpace(strings.TrimPrefix(chunk, prefix))
+	}
+	return ""
 }

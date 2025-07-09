@@ -12,7 +12,7 @@ import (
 	memoryStore "github.com/ulule/limiter/v3/drivers/store/memory"
 )
 
-var jwtSecret = []byte("your_jwt_secret") // TODO: 替换为实际密钥
+var jwtSecret = []byte("grapery_jwt_secret") // TODO: 替换为实际密钥
 
 // AuthMiddleware JWT鉴权中间件，解析userId并查库
 func AuthMiddleware() gin.HandlerFunc {

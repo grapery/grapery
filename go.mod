@@ -36,7 +36,7 @@ require (
 	google.golang.org/grpc v1.73.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.25.12
+	gorm.io/gorm v1.30.0
 )
 
 replace github.com/bufbuild/connect-go => connectrpc.com/connect v1.14.0
@@ -47,6 +47,7 @@ require (
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/ulule/limiter/v3 v3.11.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	gorm.io/datatypes v1.2.6 // indirect
 )
 
 require (

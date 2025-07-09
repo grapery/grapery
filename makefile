@@ -17,13 +17,15 @@ $(TARGETS):
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
 	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-pay  $(project)/app/vippay/
+	$(GO) build  -ldflags  '$(LDFLAGS)' -o grapes-llmchat  $(project)/app/llmchat/
 
 withpgo: $(TARGETS)
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-pay  $(project)/app/vippay/
-
+	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-llmchat  $(project)/app/llmchat/
+	
 image: $(TARGETS)
 	tar cvf build.tar $(TARGETS)-app
 	docker build -f dockerfiles/Dockerfile -t $(IMAGE) .
@@ -41,6 +43,9 @@ image-mcps:
 
 image-vippay:
 	docker build -f dockerfiles/Dockerfile.vippay -t grapes-vippay:$(VERSION)-$(BUILD) .
+
+image-llmchat:
+	docker build -f dockerfiles/Dockerfile.llmchat -t grapes-llmchat:$(VERSION)-$(BUILD) .
 
 check:
 	@$(GO) tool vet ${SRC}
