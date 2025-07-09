@@ -42,11 +42,15 @@ require (
 replace github.com/bufbuild/connect-go => connectrpc.com/connect v1.14.0
 
 require (
+	github.com/aliyun/alibaba-cloud-sdk-go v1.63.107 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
 	github.com/ulule/limiter/v3 v3.11.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
 	gorm.io/datatypes v1.2.6 // indirect
 )
 

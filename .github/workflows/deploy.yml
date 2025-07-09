@@ -63,6 +63,17 @@ jobs:
           docker tag $REGISTRY/$IMAGE_NAME:$TAG $REGISTRY/grapery-dev/$IMAGE_NAME:latest
           docker push $REGISTRY/grapery-dev/$IMAGE_NAME:latest
 
+      # 构建 grapes-llmchat 服务镜像
+      - name: Build llmchat Docker image
+        run: |
+          docker build -f dockerfiles/Dockerfile.llmchat -t $REGISTRY/grapes-llmchat:${{ github.sha }} .
+
+      # 推送 grapes-llmchat 服务镜像到阿里云 ACR
+      - name: Push llmchat Docker image
+        run: |
+          docker tag $REGISTRY/grapes-llmchat:${{ github.sha }} $REGISTRY/grapery-dev/grapes-llmchat:latest
+          docker push $REGISTRY/grapery-dev/grapes-llmchat:latest
+
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4
         with:

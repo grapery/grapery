@@ -12,6 +12,7 @@ import (
 
 	"encoding/base64"
 
+	stssdk "github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/google/uuid"
 	"github.com/grapery/grapery/utils/log"
@@ -283,4 +284,47 @@ func (c *AliyunClient) ListAllObjects(prefix string) ([]string, error) {
 		}
 	}
 	return allKeys, nil
+}
+
+// STSCredentials 表示 STS 临时凭证
+type STSCredentials struct {
+	AccessKeyId     string `json:"accessKeyId"`
+	AccessKeySecret string `json:"accessKeySecret"`
+	SecurityToken   string `json:"securityToken"`
+	Expiration      string `json:"expiration"`
+}
+
+// GetSTSToken 获取阿里云 STS 临时凭证
+func (c *AliyunClient) GetSTSToken() (*STSCredentials, error) {
+	roleArn := os.Getenv("ALIYUN_ROLE_ARN")
+	if roleArn == "" {
+		return nil, errors.New("ALIYUN_ROLE_ARN is not set")
+	}
+
+	// 创建 STS 客户端
+	client, err := stssdk.NewClientWithAccessKey("cn-shanghai", APIKey, SecretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构造 AssumeRole 请求
+	req := stssdk.CreateAssumeRoleRequest()
+	req.Scheme = "https"
+	req.RoleArn = roleArn
+	req.RoleSessionName = "grapery-dev"
+	req.DurationSeconds = "1200" // 2分钟
+
+	// 调用 AssumeRole 获取临时凭证
+	resp, err := client.AssumeRole(req)
+	if err != nil {
+		return nil, err
+	}
+
+	cred := resp.Credentials
+	return &STSCredentials{
+		AccessKeyId:     cred.AccessKeyId,
+		AccessKeySecret: cred.AccessKeySecret,
+		SecurityToken:   cred.SecurityToken,
+		Expiration:      cred.Expiration,
+	}, nil
 }

@@ -1,0 +1,28 @@
+# 使用 Go 官方轻量级镜像作为构建阶段
+FROM golang:1.24 AS builder
+
+WORKDIR /app
+
+# 复制 go.mod 和 go.sum 并下载依赖
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 复制全部源代码
+COPY . .
+
+# 构建 llmchat 可执行文件
+RUN CGO_ENABLED=0 GOOS=linux go build -o grapes-llmchat ./app/llmchat/main.go
+
+# 使用更小的基础镜像进行生产部署
+FROM alpine:latest
+
+WORKDIR /app
+
+# 只拷贝最终可执行文件
+COPY --from=builder /app/grapes-llmchat .
+
+# 拷贝配置文件（如有需要）
+COPY config.json .
+
+# 启动命令
+CMD ["./grapes-llmchat", "--config", "/app/config.json"] 
