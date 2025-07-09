@@ -3,6 +3,7 @@ module github.com/grapery/grapery
 go 1.24.0
 
 require (
+	connectrpc.com/connect v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.7.2
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
@@ -12,6 +13,7 @@ require (
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/go-sql-driver/mysql v1.9.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/generative-ai-go v0.20.1
 	github.com/google/uuid v1.6.0
@@ -35,7 +37,6 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
-	connectrpc.com/connect v1.14.0
 )
 
 replace github.com/bufbuild/connect-go => connectrpc.com/connect v1.14.0
@@ -44,6 +45,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
+	github.com/ulule/limiter/v3 v3.11.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 )
 
@@ -68,7 +70,7 @@ require (
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.0.0 // indirect
-	github.com/gin-gonic/gin v1.10.0 // indirect
+	github.com/gin-gonic/gin v1.10.0
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-pay/crypto v0.0.1 // indirect
