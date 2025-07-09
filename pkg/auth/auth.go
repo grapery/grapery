@@ -12,6 +12,7 @@ import (
 	api "github.com/grapery/common-protoc/gen"
 	"github.com/grapery/grapery/models"
 	"github.com/grapery/grapery/utils/errors"
+	"github.com/grapery/grapery/utils/jwt"
 	"github.com/grapery/grapery/utils/log"
 )
 
@@ -64,11 +65,11 @@ type AuthService struct {
 func (auth *AuthService) Register(ctx context.Context, name string, account string, pwd string) (err error) {
 	info := new(models.Auth)
 
-	// TODO: Password should be hashed before storing.
-	// Example: hashedPassword, err := HashPassword(pwd); if err != nil { return err }
-	// info.Password = hashedPassword
-	info.Password = pwd
+	// 使用 bcrypt 对密码进行哈希存储，提升安全性
+	hashedPassword := jwt.HashPassword(pwd)
+	info.Password = hashedPassword
 	if models.IsUserAuthExist(ctx, account) {
+		log.Log().WithOptions(logFieldModels).Warn("register failed: account already exists", zap.String("account", account))
 		return errors.ErrAuthIsExist
 	}
 
@@ -83,7 +84,7 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	user.UpdateAt = time.Now()
 	err = user.Create()
 	if err != nil {
-		log.Log().WithOptions(logFieldModels).Error("create user failed", zap.Error(err))
+		log.Log().WithOptions(logFieldModels).Error("create user failed", zap.Error(err), zap.String("account", account))
 		return err // Return the error
 	}
 	info.UID = int64(user.ID)
@@ -97,7 +98,7 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 		err = models.CreateWithPhone(ctx, info)
 	}
 	if err != nil {
-		log.Log().WithOptions(logFieldModels).Error("create auth failed", zap.Error(err))
+		log.Log().WithOptions(logFieldModels).Error("create auth failed", zap.Error(err), zap.String("account", account))
 		return err
 	}
 	profile := new(models.UserProfile)
@@ -125,9 +126,10 @@ func (auth *AuthService) Register(ctx context.Context, name string, account stri
 	profile.WatchingStoryRoleNum = 0
 	err = profile.Create()
 	if err != nil {
-		log.Log().WithOptions(logFieldModels).Error("create profile failed", zap.Error(err))
+		log.Log().WithOptions(logFieldModels).Error("create profile failed", zap.Error(err), zap.String("account", account))
 		return err // Return the error
 	}
+	log.Log().WithOptions(logFieldModels).Info("register success", zap.String("account", account), zap.Int64("uid", info.UID))
 	return nil
 }
 
@@ -142,13 +144,15 @@ func (auth *AuthService) Login(ctx context.Context, account string, pwd string) 
 		info, err = models.GetByPhone(ctx, account)
 	}
 	if err != nil {
+		log.Log().WithOptions(logFieldModels).Warn("login failed: account not found", zap.String("account", account), zap.Error(err))
 		return nil, err
 	}
-	// TODO: CRITICAL SECURITY: Passwords must be compared using a secure hash comparison.
-	// Example: if !CheckPasswordHash(pwd, info.Password) { return nil, errors.ErrAuthPasswordIsWrong }
-	if info.Password != pwd { // This is insecure
+	// 使用 bcrypt 进行安全的密码哈希比对
+	if !jwt.CheckPasswordHash(pwd, info.Password) {
+		log.Log().WithOptions(logFieldModels).Warn("login failed: wrong password", zap.String("account", account))
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
+	log.Log().WithOptions(logFieldModels).Info("login success", zap.String("account", account), zap.Int64("uid", int64(info.ID)))
 	return &api.UserInfo{
 		UserId: int64(info.ID),
 		Email:  info.Email,
@@ -171,27 +175,29 @@ func (auth *AuthService) ResetPassword(ctx context.Context, req *api.ResetPasswo
 		info, err = models.GetByPhone(ctx, req.GetAccount())
 	}
 	if err != nil {
+		log.Log().WithOptions(logFieldModels).Warn("reset password failed: account not found", zap.String("account", req.GetAccount()), zap.Error(err))
 		return nil, err
 	}
 
-	// TODO: CRITICAL SECURITY: Old password must be compared using a secure hash comparison.
-	// Example: if !CheckPasswordHash(req.GetOldPwd(), info.Password) { return nil, errors.ErrAuthPasswordIsWrong }
-	if info.Password == req.GetOldPwd() { // This is insecure for comparison
-		// TODO: New password should be hashed before storing.
-		// Example: hashedPassword, err := HashPassword(req.GetNewPwd()); if err != nil { return appropriate error response }
-		// info.Password = hashedPassword
-		info.Password = req.GetNewPwd()
+	// 使用 bcrypt 进行安全的密码哈希比对
+	if jwt.CheckPasswordHash(req.GetOldPwd(), info.Password) {
+		// 新密码也要哈希存储
+		hashedPassword := jwt.HashPassword(req.GetNewPwd())
+		info.Password = hashedPassword
 	} else {
+		log.Log().WithOptions(logFieldModels).Warn("reset password failed: wrong old password", zap.String("account", req.GetAccount()))
 		return nil, errors.ErrAuthPasswordIsWrong
 	}
 	err = models.UpdatePwd(ctx, info)
 	if err != nil {
+		log.Log().WithOptions(logFieldModels).Error("reset password failed: update error", zap.String("account", req.GetAccount()), zap.Error(err))
 		return &api.ResetPasswordResponse{
 			Account:   req.GetAccount(),
 			Status:    int64(api.ResponseCode_OPERATION_FAILED), // Indicate failure
 			Timestamp: time.Now().Unix(),
 		}, err
 	}
+	log.Log().WithOptions(logFieldModels).Info("reset password success", zap.String("account", req.GetAccount()), zap.Int64("uid", int64(info.ID)))
 	return &api.ResetPasswordResponse{
 		Account:   req.GetAccount(),
 		Status:    int64(api.ResponseCode_OK),

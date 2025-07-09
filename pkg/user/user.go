@@ -843,20 +843,123 @@ func convertModelUserProfileToApi(profile *models.UserProfile) *api.UserProfileI
 		UsedTokens:        int32(profile.UsedTokens),
 		Status:            int32(profile.Status),
 		BackgroundImage:   profile.Background,
+		NumFollowers:      int32(profile.FollowersNum),
+		NumFollowing:      int32(profile.FollowingNum),
 		Ctime:             profile.CreateAt.Unix(),
 		Mtime:             profile.UpdateAt.Unix(),
 	}
 }
 
 func (user *UserService) FollowUser(ctx context.Context, req *api.FollowUserRequest) (*api.FollowUserResponse, error) {
-	return nil, errors.ErrFeatureNotImplemented
+	logger.Info("FollowUser called", zap.Any("req", req))
+	if req.GetUserId() <= 0 || req.GetFollowerId() <= 0 {
+		logger.Error("FollowUser failed: invalid user id", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+		return &api.FollowUserResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
+	if req.GetUserId() == req.GetFollowerId() {
+		logger.Error("FollowUser failed: cannot follow self", zap.Int64("user_id", req.GetUserId()))
+		return &api.FollowUserResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "cannot follow self"}, nil
+	}
+	isFollow, err := models.IsFollowing(req.GetUserId(), req.GetFollowerId())
+	if err != nil {
+		logger.Error("FollowUser failed: check following error", zap.Error(err))
+		return &api.FollowUserResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	if isFollow {
+		logger.Info("FollowUser refused: already following", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+		return &api.FollowUserResponse{Code: api.ResponseCode_OK, Message: "already following"}, nil
+	}
+	err = models.CreateUserFollow(req.GetUserId(), req.GetFollowerId())
+	if err != nil {
+		logger.Error("FollowUser failed: create follow error", zap.Error(err))
+		return &api.FollowUserResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	logger.Info("FollowUser success", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+	return &api.FollowUserResponse{Code: api.ResponseCode_OK, Message: "success"}, nil
 }
+
 func (user *UserService) UnfollowUser(ctx context.Context, req *api.UnfollowUserRequest) (*api.UnfollowUserResponse, error) {
-	return nil, errors.ErrFeatureNotImplemented
+	logger.Info("UnfollowUser called", zap.Any("req", req))
+	if req.GetUserId() <= 0 || req.GetFollowerId() <= 0 {
+		logger.Error("UnfollowUser failed: invalid user id", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+		return &api.UnfollowUserResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
+	if req.GetUserId() == req.GetFollowerId() {
+		logger.Error("UnfollowUser failed: cannot unfollow self", zap.Int64("user_id", req.GetUserId()))
+		return &api.UnfollowUserResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "cannot unfollow self"}, nil
+	}
+	isFollow, err := models.IsFollowing(req.GetUserId(), req.GetFollowerId())
+	if err != nil {
+		logger.Error("UnfollowUser failed: check following error", zap.Error(err))
+		return &api.UnfollowUserResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	if !isFollow {
+		logger.Info("UnfollowUser refused: not following", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+		return &api.UnfollowUserResponse{Code: api.ResponseCode_OK, Message: "not following"}, nil
+	}
+	err = models.DeleteUserFollow(req.GetUserId(), req.GetFollowerId())
+	if err != nil {
+		logger.Error("UnfollowUser failed: delete follow error", zap.Error(err))
+		return &api.UnfollowUserResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	logger.Info("UnfollowUser success", zap.Int64("user_id", req.GetUserId()), zap.Int64("follower_id", req.GetFollowerId()))
+	return &api.UnfollowUserResponse{Code: api.ResponseCode_OK, Message: "success"}, nil
 }
+
 func (user *UserService) GetFollowList(ctx context.Context, req *api.GetFollowListRequest) (*api.GetFollowListResponse, error) {
-	return nil, errors.ErrFeatureNotImplemented
+	logger.Info("GetFollowList called", zap.Any("req", req))
+	if req.GetUserId() <= 0 {
+		logger.Error("GetFollowList failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.GetFollowListResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
+	users, err := models.GetFollowList(req.GetUserId(), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		logger.Error("GetFollowList failed: get follow list error", zap.Error(err))
+		return &api.GetFollowListResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	apiUsers := make([]*api.UserInfo, 0, len(users))
+	for _, u := range users {
+		apiUsers = append(apiUsers, &api.UserInfo{
+			UserId:   int64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
+		})
+	}
+	logger.Info("GetFollowList success", zap.Int64("user_id", req.GetUserId()), zap.Int("count", len(apiUsers)))
+	return &api.GetFollowListResponse{
+		Code:      api.ResponseCode_OK,
+		Message:   "success",
+		Followers: apiUsers,
+	}, nil
 }
+
 func (user *UserService) GetFollowerList(ctx context.Context, req *api.GetFollowerListRequest) (*api.GetFollowerListResponse, error) {
-	return nil, errors.ErrFeatureNotImplemented
+	logger.Info("GetFollowerList called", zap.Any("req", req))
+	if req.GetUserId() <= 0 {
+		logger.Error("GetFollowerList failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.GetFollowerListResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
+	users, err := models.GetFollowerList(req.GetUserId(), int(req.GetOffset()), int(req.GetPageSize()))
+	if err != nil {
+		logger.Error("GetFollowerList failed: get follower list error", zap.Error(err))
+		return &api.GetFollowerListResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+	}
+	apiUsers := make([]*api.UserInfo, 0, len(users))
+	for _, u := range users {
+		apiUsers = append(apiUsers, &api.UserInfo{
+			UserId:   int64(u.ID),
+			Name:     u.Name,
+			Avatar:   u.Avatar,
+			Email:    u.Email,
+			Location: u.Location,
+		})
+	}
+	logger.Info("GetFollowerList success", zap.Int64("user_id", req.GetUserId()), zap.Int("count", len(apiUsers)))
+	return &api.GetFollowerListResponse{
+		Code:      api.ResponseCode_OK,
+		Message:   "success",
+		Followers: apiUsers,
+	}, nil
 }

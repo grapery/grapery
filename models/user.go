@@ -289,6 +289,8 @@ type UserProfile struct {
 	ContributRoleNum     int    `gorm:"column:contribut_role_num" json:"contribut_role_num,omitempty"`           // 贡献角色数
 	LikedStoryNum        int    `gorm:"column:liked_story_num" json:"liked_story_num,omitempty"`                 // 点赞故事数
 	LikedRoleNum         int    `gorm:"column:liked_role_num" json:"liked_role_num,omitempty"`                   // 点赞角色数
+	FollowersNum         int    `gorm:"column:followers_num" json:"followers_num,omitempty"`                     // 粉丝数
+	FollowingNum         int    `gorm:"column:following_num" json:"following_num,omitempty"`                     // 关注数
 }
 
 func (u *UserProfile) TableName() string {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 )
@@ -81,7 +82,29 @@ type DoubaoGenImageResult struct {
 	} `json:"usage"`
 }
 
+// 通用日志函数，打印请求参数
+func logRequest(methodName string, params interface{}) {
+	log.Printf("[Doubao] %s 请求参数: %+v", methodName, params)
+}
+
+// 通用日志函数，打印HTTP请求体
+func logRequestBody(methodName string, body []byte) {
+	log.Printf("[Doubao] %s HTTP请求体: %s", methodName, string(body))
+}
+
+// 通用日志函数，打印HTTP响应体
+func logResponseBody(methodName string, statusCode int, body []byte) {
+	log.Printf("[Doubao] %s HTTP响应: 状态码=%d, 响应体=%s", methodName, statusCode, string(body))
+}
+
+// 通用日志函数，打印错误
+func logError(methodName string, err error) {
+	log.Printf("[Doubao] %s 错误: %v", methodName, err)
+}
+
 func (c *DoubaoClient) GenStoryBoardImage(ctx context.Context, params *GenStoryImagesParams) (*GenStoryImagesResult, error) {
+	const methodName = "GenStoryBoardImage"
+	logRequest(methodName, params)
 	realParams := new(DoubaoGenImageParams)
 	realParams.Prompt = params.Content
 	realParams.Watermark = true
@@ -89,46 +112,41 @@ func (c *DoubaoClient) GenStoryBoardImage(ctx context.Context, params *GenStoryI
 	realParams.Size = "1024x1024"
 	realParams.GuidanceScale = 3
 	realParams.ResponseFormat = "url"
-	// 1. 序列化请求参数为 JSON
 	body, err := json.Marshal(realParams)
 	if err != nil {
+		logError(methodName, err)
 		return nil, err
 	}
-
-	// 2. 构造 HTTP 请求
+	logRequestBody(methodName, body)
 	url := "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
+		logError(methodName, err)
 		return nil, err
 	}
-
-	// 3. 设置请求头
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.DoubaoAPIKey)
-
-	// 4. 发送请求
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		logError(methodName, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	// 5. 读取响应体
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logError(methodName, err)
 		return nil, err
 	}
-
-	// 6. 检查HTTP状态码
+	logResponseBody(methodName, resp.StatusCode, respBody)
 	if resp.StatusCode != http.StatusOK {
+		logError(methodName, fmt.Errorf("http status: %d, body: %s", resp.StatusCode, string(respBody)))
 		return nil, fmt.Errorf("http status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
-
-	// 7. 解析响应体为 DoubaoGenImageResult
 	var result DoubaoGenImageResult
 	err = json.Unmarshal(respBody, &result)
 	if err != nil {
+		logError(methodName, err)
 		return nil, err
 	}
 	ret := new(GenStoryImagesResult)
@@ -136,6 +154,7 @@ func (c *DoubaoClient) GenStoryBoardImage(ctx context.Context, params *GenStoryI
 		ret.ImageUrls = make([]string, 0)
 		ret.ImageUrls = append(ret.ImageUrls, result.Data[0].URL)
 	}
+	log.Printf("[Doubao] %s 返回结果: %+v", methodName, ret)
 	return ret, nil
 }
 

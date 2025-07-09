@@ -44,21 +44,43 @@ func NewCommentService() *CommentService {
 }
 
 func (s *CommentService) CreateStoryComment(ctx context.Context, req *api.CreateStoryCommentRequest) (*api.CreateStoryCommentResponse, error) {
+	logger.Info("CreateStoryComment called", zap.Any("req", req))
+	// 参数校验：内容判空，StoryId合法性
+	if req.GetContent() == "" {
+		logger.Error("CreateStoryComment failed: content is empty")
+		return &api.CreateStoryCommentResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "content is empty",
+		}, nil
+	}
+	if req.GetStoryId() <= 0 {
+		logger.Error("CreateStoryComment failed: invalid story id", zap.Int64("story_id", req.GetStoryId()))
+		return &api.CreateStoryCommentResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "invalid story id",
+		}, nil
+	}
 	comment := &models.Comment{
 		UserID:       req.GetUserId(),
 		StoryID:      req.GetStoryId(),
 		Content:      []byte(req.GetContent()),
 		CommentType:  models.CommentTypeComment,
-		Status:       1,
+		Status:       1, // 建议用常量
 		LikeCount:    0,
 		DislikeCount: 0,
 	}
 	err := comment.Create()
 	if err != nil {
-		return nil, err
+		logger.Error("CreateStoryComment failed: create comment error", zap.Error(err))
+		return &api.CreateStoryCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
+	logger.Info("CreateStoryComment: comment created", zap.Any("comment", comment))
 	story, err := models.GetStory(ctx, req.GetStoryId())
 	if err != nil {
+		logger.Error("CreateStoryComment failed: get story error", zap.Error(err))
 		return &api.CreateStoryCommentResponse{
 			Code:    api.ResponseCode_STORY_NOT_FOUND,
 			Message: "get story failed",
@@ -67,11 +89,13 @@ func (s *CommentService) CreateStoryComment(ctx context.Context, req *api.Create
 	story.CommentCount++
 	err = models.UpdateStory(ctx, story)
 	if err != nil {
+		logger.Error("CreateStoryComment failed: update story comment count error", zap.Error(err))
 		return &api.CreateStoryCommentResponse{
 			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "update story comment count failed",
 		}, nil
 	}
+	logger.Info("CreateStoryComment success", zap.Int64("story_id", req.GetStoryId()), zap.Int64("user_id", req.GetUserId()))
 	return &api.CreateStoryCommentResponse{
 		Code:    api.ResponseCode_OK,
 		Message: "success",
@@ -176,6 +200,22 @@ func (s *CommentService) GetStoryCommentReplies(ctx context.Context, req *api.Ge
 }
 
 func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.CreateStoryCommentReplyRequest) (*api.CreateStoryCommentReplyResponse, error) {
+	logger.Info("CreateStoryCommentReply called", zap.Any("req", req))
+	// 参数校验：内容判空，CommentId合法性
+	if req.GetContent() == "" {
+		logger.Error("CreateStoryCommentReply failed: content is empty")
+		return &api.CreateStoryCommentReplyResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "content is empty",
+		}, nil
+	}
+	if req.GetCommentId() <= 0 {
+		logger.Error("CreateStoryCommentReply failed: invalid comment id", zap.Int64("comment_id", req.GetCommentId()))
+		return &api.CreateStoryCommentReplyResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "invalid comment id",
+		}, nil
+	}
 	rootComment := &models.Comment{
 		IDBase: models.IDBase{
 			ID: uint(req.GetCommentId()),
@@ -183,6 +223,7 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	}
 	err := rootComment.GetComment()
 	if err != nil {
+		logger.Error("CreateStoryCommentReply failed: root comment not found", zap.Error(err))
 		return &api.CreateStoryCommentReplyResponse{
 			Code:    api.ResponseCode_COMMENT_NOT_FOUND,
 			Message: err.Error(),
@@ -195,7 +236,7 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 		PreID:        req.GetCommentId(),
 		Content:      []byte(req.GetContent()),
 		CommentType:  models.CommentTypeReply,
-		Status:       1,
+		Status:       1, // 建议用常量
 		ReplyCount:   0,
 	}
 	if rootComment.RootCommentID == 0 {
@@ -205,12 +246,18 @@ func (s *CommentService) CreateStoryCommentReply(ctx context.Context, req *api.C
 	}
 	err = comment.Create()
 	if err != nil {
-		return nil, err
+		logger.Error("CreateStoryCommentReply failed: create reply error", zap.Error(err))
+		return &api.CreateStoryCommentReplyResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
+	logger.Info("CreateStoryCommentReply: reply created", zap.Any("reply", comment))
 	err = models.IncreaseReplyCount(uint64(rootComment.ID))
 	if err != nil {
 		logger.Error("increase story comment reply count failed", zap.Error(err))
 	}
+	logger.Info("CreateStoryCommentReply success", zap.Int64("comment_id", req.GetCommentId()), zap.Int64("user_id", req.GetUserId()))
 	return &api.CreateStoryCommentReplyResponse{
 		Code:    api.ResponseCode_OK,
 		Message: "success",
@@ -248,6 +295,22 @@ func (s *CommentService) DeleteStoryCommentReply(ctx context.Context, req *api.D
 }
 
 func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.CreateStoryBoardCommentRequest) (*api.CreateStoryBoardCommentResponse, error) {
+	logger.Info("CreateStoryBoardComment called", zap.Any("req", req))
+	// 参数校验：内容判空，BoardId合法性
+	if req.GetContent() == "" {
+		logger.Error("CreateStoryBoardComment failed: content is empty")
+		return &api.CreateStoryBoardCommentResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "content is empty",
+		}, nil
+	}
+	if req.GetBoardId() <= 0 {
+		logger.Error("CreateStoryBoardComment failed: invalid board id", zap.Int64("board_id", req.GetBoardId()))
+		return &api.CreateStoryBoardCommentResponse{
+			Code:    api.ResponseCode_INVALID_PARAMETER,
+			Message: "invalid board id",
+		}, nil
+	}
 	comment := &models.Comment{
 		UserID:        req.GetUserId(),
 		StoryboardID:  req.GetBoardId(),
@@ -255,15 +318,21 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 		CommentType:   models.CommentTypeComment,
 		RootCommentID: 0,
 		PreID:         0,
-		Status:        1,
+		Status:        1, // 建议用常量
 		LikeCount:     0,
 	}
 	err := comment.Create()
 	if err != nil {
-		return nil, err
+		logger.Error("CreateStoryBoardComment failed: create comment error", zap.Error(err))
+		return &api.CreateStoryBoardCommentResponse{
+			Code:    api.ResponseCode_OPERATION_FAILED,
+			Message: err.Error(),
+		}, nil
 	}
+	logger.Info("CreateStoryBoardComment: comment created", zap.Any("comment", comment))
 	storyBoard, err := models.GetStoryboard(ctx, req.GetBoardId())
 	if err != nil {
+		logger.Error("CreateStoryBoardComment failed: get storyboard error", zap.Error(err))
 		return &api.CreateStoryBoardCommentResponse{
 			Code:    api.ResponseCode_STORYBOARD_NOT_FOUND,
 			Message: "get storyboard failed",
@@ -272,11 +341,13 @@ func (s *CommentService) CreateStoryBoardComment(ctx context.Context, req *api.C
 	storyBoard.CommentNum++
 	err = models.UpdateStoryboard(ctx, storyBoard)
 	if err != nil {
+		logger.Error("CreateStoryBoardComment failed: update storyboard comment count error", zap.Error(err))
 		return &api.CreateStoryBoardCommentResponse{
 			Code:    api.ResponseCode_OPERATION_FAILED,
 			Message: "update storyboard comment count failed",
 		}, nil
 	}
+	logger.Info("CreateStoryBoardComment success", zap.Int64("board_id", req.GetBoardId()), zap.Int64("user_id", req.GetUserId()))
 	return &api.CreateStoryBoardCommentResponse{
 		Code:    api.ResponseCode_OK,
 		Message: "success",

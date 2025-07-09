@@ -11,7 +11,6 @@ import (
 	"github.com/grapery/grapery/pkg/active"
 	"github.com/grapery/grapery/utils"
 	"github.com/grapery/grapery/utils/convert"
-	"github.com/grapery/grapery/utils/errors"
 )
 
 var (
@@ -51,6 +50,16 @@ type GroupService struct {
 }
 
 func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error) {
+	logger.Info("GetGroup called", zap.Any("req", req))
+	// 参数校验
+	if req.GetGroupId() <= 0 {
+		logger.Error("GetGroup failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.GetGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
+	if req.GetUserId() <= 0 {
+		logger.Error("GetGroup failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.GetGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
@@ -127,6 +136,11 @@ func (g *GroupService) GetGroup(ctx context.Context, req *api.GetGroupRequest) (
 }
 
 func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupRequest) (resp *api.GetGroupResponse, err error) {
+	logger.Info("GetByName called", zap.Any("req", req))
+	if req.GetName() == "" {
+		logger.Error("GetByName failed: name is empty")
+		return &api.GetGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "name is empty"}, nil
+	}
 	group := &models.Group{}
 	group.Name = req.GetName()
 	err = group.GetByName()
@@ -158,6 +172,15 @@ func (g *GroupService) GetByName(ctx context.Context, req *api.GetGroupRequest) 
 }
 
 func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequest) (resp *api.CreateGroupResponse, err error) {
+	logger.Info("CreateGroup called", zap.Any("req", req))
+	if req.GetName() == "" {
+		logger.Error("CreateGroup failed: name is empty")
+		return &api.CreateGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "name is empty"}, nil
+	}
+	if req.GetUserId() <= 0 {
+		logger.Error("CreateGroup failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.CreateGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
 	group := &models.Group{}
 	group.Name = req.Name
 	group.CreatorID = req.GetUserId()
@@ -227,6 +250,11 @@ func (g *GroupService) CreateGroup(ctx context.Context, req *api.CreateGroupRequ
 }
 
 func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequest) (resp *api.DeleteGroupResponse, err error) {
+	logger.Info("DeleteGroup called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("DeleteGroup failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.DeleteGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
 	err = group.Delete()
@@ -241,6 +269,11 @@ func (g *GroupService) DeleteGroup(ctx context.Context, req *api.DeleteGroupRequ
 }
 
 func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupActivesRequest) (resp *api.GetGroupActivesResponse, err error) {
+	logger.Info("GetGroupActives called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("GetGroupActives failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.GetGroupActivesResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	actives, err := models.GetActiveByGroupID(req.GetGroupId())
 	if err != nil {
 		return nil, err
@@ -260,6 +293,11 @@ func (g *GroupService) GetGroupActives(ctx context.Context, req *api.GetGroupAct
 }
 
 func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroupInfoRequest) (resp *api.UpdateGroupInfoResponse, err error) {
+	logger.Info("UpdateGroupInfo called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("UpdateGroupInfo failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.UpdateGroupInfoResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	group := new(models.Group)
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
@@ -294,6 +332,11 @@ func (g *GroupService) UpdateGroupInfo(ctx context.Context, req *api.UpdateGroup
 }
 
 func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGroupMembersRequest) (resp *api.FetchGroupMembersResponse, err error) {
+	logger.Info("FetchGroupMembers called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("FetchGroupMembers failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.FetchGroupMembersResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	users, err := models.GetGroupMemberInfoList(int(req.GetGroupId()), int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
@@ -315,10 +358,20 @@ func (g *GroupService) FetchGroupMembers(ctx context.Context, req *api.FetchGrou
 }
 
 func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest) (resp *api.JoinGroupResponse, err error) {
+	logger.Info("JoinGroup called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("JoinGroup failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.JoinGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
+	if req.GetUserId() <= 0 {
+		logger.Error("JoinGroup failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.JoinGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
 	group := &models.Group{}
 	group.ID = uint(req.GetGroupId())
 	err = group.GetByID()
 	if err != nil {
+		logger.Error("JoinGroup failed: group not found", zap.Error(err))
 		return &api.JoinGroupResponse{Code: api.ResponseCode_GROUP_NOT_FOUND, Message: err.Error()}, nil
 	}
 	groupMember := &models.GroupMember{
@@ -327,48 +380,75 @@ func (g *GroupService) JoinGroup(ctx context.Context, req *api.JoinGroupRequest)
 	}
 	isIn, err := groupMember.IsInGroup()
 	if err != nil {
+		logger.Error("JoinGroup failed: check IsInGroup error", zap.Error(err))
 		return &api.JoinGroupResponse{Code: api.ResponseCode_DATABASE_ERROR, Message: err.Error()}, nil
 	}
 	if isIn {
+		logger.Info("JoinGroup refused: user already in group", zap.Int64("group_id", req.GetGroupId()), zap.Int64("user_id", req.GetUserId()))
 		return &api.JoinGroupResponse{Code: api.ResponseCode_GROUP_ALREADY_EXISTS, Message: "user already in group"}, nil
 	}
 	err = groupMember.Create()
 	if err != nil {
+		logger.Error("JoinGroup failed: create group member error", zap.Error(err))
 		return &api.JoinGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
+	// 成员数+1
 	err = models.IncGroupProfileMembers(ctx, req.GetGroupId())
 	if err != nil {
-		return &api.JoinGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+		logger.Error("JoinGroup warning: increase group member count failed", zap.Error(err))
+	} else {
+		logger.Info("JoinGroup: group member count increased", zap.Int64("group_id", req.GetGroupId()))
 	}
-
 	active.GetActiveServer().WriteGroupActive(ctx, group, nil, nil, req.GetUserId(), api.ActiveType_JoinGroup)
+	logger.Info("JoinGroup success", zap.Int64("group_id", req.GetGroupId()), zap.Int64("user_id", req.GetUserId()))
 	return &api.JoinGroupResponse{Code: api.ResponseCode_OK, Message: "ok"}, nil
 }
 
 func (g *GroupService) LeaveGroup(ctx context.Context, req *api.LeaveGroupRequest) (resp *api.LeaveGroupResponse, err error) {
+	logger.Info("LeaveGroup called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("LeaveGroup failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
+	if req.GetUserId() <= 0 {
+		logger.Error("LeaveGroup failed: invalid user id", zap.Int64("user_id", req.GetUserId()))
+		return &api.LeaveGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid user id"}, nil
+	}
 	groupMember := &models.GroupMember{
 		GroupID: int64(req.GetGroupId()),
 		UserID:  req.GetUserId(),
 	}
 	isIn, err := groupMember.IsInGroup()
 	if err != nil {
+		logger.Error("LeaveGroup failed: check IsInGroup error", zap.Error(err))
 		return &api.LeaveGroupResponse{Code: api.ResponseCode_DATABASE_ERROR, Message: err.Error()}, nil
 	}
 	if !isIn {
+		logger.Info("LeaveGroup refused: user not in group", zap.Int64("group_id", req.GetGroupId()), zap.Int64("user_id", req.GetUserId()))
 		return &api.LeaveGroupResponse{Code: api.ResponseCode_NOT_GROUP_MEMBER, Message: "user not in group"}, nil
 	}
 	err = groupMember.Delete()
 	if err != nil {
+		logger.Error("LeaveGroup failed: delete group member error", zap.Error(err))
 		return &api.LeaveGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
 	}
+	// 成员数-1
 	err = models.DecGroupProfileMembers(ctx, req.GetGroupId())
 	if err != nil {
-		return &api.LeaveGroupResponse{Code: api.ResponseCode_OPERATION_FAILED, Message: err.Error()}, nil
+		logger.Error("LeaveGroup warning: decrease group member count failed", zap.Error(err))
+	} else {
+		logger.Info("LeaveGroup: group member count decreased", zap.Int64("group_id", req.GetGroupId()))
 	}
+	logger.Info("LeaveGroup success", zap.Int64("group_id", req.GetGroupId()), zap.Int64("user_id", req.GetUserId()))
 	return &api.LeaveGroupResponse{Code: api.ResponseCode_OK, Message: "ok"}, nil
 }
 
 func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupProfileRequest) (resp *api.GetGroupProfileResponse, err error) {
+	logger.Info("GetGroupProfile called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("GetGroupProfile failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.GetGroupProfileResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	profile := &models.GroupProfile{}
 	profile.GroupID = req.GetGroupId()
 	profile, err = models.GetGroupProfile(ctx, profile.GroupID)
@@ -402,6 +482,11 @@ func (g *GroupService) GetGroupProfile(ctx context.Context, req *api.GetGroupPro
 }
 
 func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.UpdateGroupProfileRequest) (resp *api.UpdateGroupProfileResponse, err error) {
+	logger.Info("UpdateGroupProfile called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("UpdateGroupProfile failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.UpdateGroupProfileResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "invalid group id"}, nil
+	}
 	profile := req.GetInfo()
 	err = models.UpdateGroupProfile(ctx,
 		req.GetGroupId(),
@@ -415,13 +500,16 @@ func (g *GroupService) UpdateGroupProfile(ctx context.Context, req *api.UpdateGr
 }
 
 func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequest) (resp *api.SearchGroupResponse, err error) {
-	name := req.GetName()
-	if name == "" {
-		return nil, errors.ErrMissingParameter
+	logger.Info("SearchGroup called", zap.Any("req", req))
+	if req.GetName() == "" {
+		logger.Error("SearchGroup failed: name is empty")
+		return &api.SearchGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "name is empty"}, nil
 	}
 	if req.GetOffset() < 0 || req.GetPageSize() < 0 {
-		return nil, errors.ErrInvalidParameter
+		logger.Error("SearchGroup failed: offset or pageSize < 0", zap.Int64("offset", req.GetOffset()), zap.Int64("pageSize", req.GetPageSize()))
+		return &api.SearchGroupResponse{Code: api.ResponseCode_INVALID_PARAMETER, Message: "offset or pageSize < 0"}, nil
 	}
+	name := req.GetName()
 	groups, total, err := models.GetGroupByName(name, int(req.GetOffset()), int(req.GetPageSize()))
 	if err != nil {
 		return nil, err
@@ -442,6 +530,11 @@ func (g *GroupService) SearchGroup(ctx context.Context, req *api.SearchGroupRequ
 }
 
 func (g *GroupService) FetchGroupStorys(ctx context.Context, req *api.FetchGroupStorysRequest) (*api.FetchGroupStorysResponse, error) {
+	logger.Info("FetchGroupStorys called", zap.Any("req", req))
+	if req.GetGroupId() <= 0 {
+		logger.Error("FetchGroupStorys failed: invalid group id", zap.Int64("group_id", req.GetGroupId()))
+		return &api.FetchGroupStorysResponse{Code: int32(api.ResponseCode_INVALID_PARAMETER), Message: "invalid group id"}, nil
+	}
 	// TODO: 实现获取群组的故事列表
 	storys, err := models.GetStoryByGroupID(ctx, req.GetGroupId(), int(req.GetPage()), int(req.GetPageSize()))
 	if err != nil {
