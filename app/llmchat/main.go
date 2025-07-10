@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -43,7 +44,7 @@ func main() {
 	llmchathandler.RegisterLLMChatRoutes(r)
 
 	// 启动服务
-	r.Run(":8060")
+	r.Run(fmt.Sprintf(":%s", config.GlobalConfig.LLMchat.HttpPort))
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
 		syscall.SIGINT,

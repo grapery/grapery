@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -103,7 +104,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 		mux := http.NewServeMux()
 		path, handler := genconnect.NewTeamsAPIHandler(ts, opts...)
 		mux.Handle(path, handler)
-		serverAddr := "0.0.0.0:8080"
+		serverAddr := fmt.Sprintf("0.0.0.0:%s", cfg.HttpPort)
 		logrus.Infof("Starting http server on %s", serverAddr)
 		server := &http2.Server{}
 		server.ReadIdleTimeout = time.Second * 180
@@ -116,7 +117,7 @@ func Run(ts *TeamsService, cfg *config.Config) error {
 
 	// 启动 gRPC 聊天服务器
 	go func() {
-		chatAddr := "0.0.0.0:8090"
+		chatAddr := fmt.Sprintf("0.0.0.0:%s", cfg.RpcPort)
 		logrus.Infof("Starting gRPC chat server on %s", chatAddr)
 
 		// 创建 TCP 监听器
