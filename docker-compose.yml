@@ -9,8 +9,8 @@ services:
     env_file:
       - .env
     volumes:
-      - ./config.json:/app/config.json
-    command: ["./grapes-app", "--config", "/app/config.json"]
+      - ./app.json:/app/app.json
+    command: ["./grapes-app", "--config", "/app/app.json"]
     restart: unless-stopped
 
   # llmchat 服务
@@ -22,6 +22,6 @@ services:
     env_file:
       - .env
     volumes:
-      - ./config.json:/app/config.json
-    command: ["./grapes-llmchat", "--config", "/app/config.json"]
+      - ./llmchat.json:/app/llmchat.json
+    command: ["./grapes-llmchat", "--config", "/app/llmchat.json"]
     restart: unless-stopped

@@ -17,7 +17,7 @@ import (
 )
 
 var printVersion = flag.Bool("version", false, "app build version")
-var configPath = flag.String("config", "config.json", "config file")
+var configPath = flag.String("config", "llmchat.json", "config file")
 
 func main() {
 	flag.Parse()
