@@ -105,6 +105,6 @@ jobs:
             cd /home/ubuntu/grapery
             docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
             docker-compose version
-            sudo docker-compose pull
-            sudo docker-compose down || true
-            sudo docker-compose up -d --remove-orphans
+            docker-compose pull
+            docker-compose down || true
+            docker-compose up -d --remove-orphans
