@@ -42,7 +42,17 @@ func RegisterLLMChatRoutes(r *gin.Engine) {
 		api.POST("/message/:id/retry", RetryMessageHandler)
 		api.POST("/message/:id/feedback", FeedbackMessageHandler)
 		api.POST("/message/:id/interrupt", InterruptMessageHandler)
+		api.GET("/health", HealthHandler)
 	}
+}
+
+func HealthHandler(c *gin.Context) {
+	// 健康检查接口，返回200 OK
+	c.JSON(http.StatusOK, APIResponse{
+		Code:    http.StatusOK,
+		Message: "OK",
+		Data:    struct{}{},
+	})
 }
 
 // CreateSessionHandler 创建会话
