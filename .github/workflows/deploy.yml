@@ -28,11 +28,13 @@ jobs:
           export ALIYUN_OSS_BUCKET=${{ vars.ALIYUN_OSS_BUCKET }}
           export ALIYUN_OSS_ENDPOINT=${{ vars.ALIYUN_OSS_ENDPOINT }}
           export ALIYUN_REGION=${{ vars.ALIYUN_REGION }}
+          export ALIYUN_ROLE_ARN=${{ vars.ALIYUN_ROLE_ARN }}
           export COZE_API_KEY=${{ vars.COZE_API_KEY }}
           export COZE_WORKSPACE_ID=${{ vars.COZE_WORKSPACE_ID }}
           export DB_NAME=${{ vars.DB_NAME }}
           export DB_PASSWORD=${{ vars.DB_PASSWORD }}
           export DB_USER=${{ vars.DB_USER }}
+          export DB_ADDR=${{ vars.DB_ADDR }}
           export DOCKERHUB_TOKEN=${{ vars.DOCKERHUB_TOKEN }}
           export DOCKERHUB_USERNAME=${{ vars.DOCKERHUB_USERNAME }}
           export DOMAIN_NAME=${{ vars.DOMAIN_NAME }}
@@ -48,6 +50,7 @@ jobs:
           export STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
           export STRIPE_SECRET_KEY=${{ vars.STRIPE_SECRET_KEY }}
           export STRIPE_WEBHOOK_SECRET=${{ vars.STRIPE_WEBHOOK_SECRET }}
+          
           bash generate_env.sh
           cat .env
 
