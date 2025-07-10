@@ -82,7 +82,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: 22
           source: ".env"
-          target: "/home/ubuntu/grapery/.env"
+          target: "/home/ubuntu/grapery/"
 
       - name: Upload docker-compose.yml to ECS
         uses: appleboy/scp-action@v0.1.4
