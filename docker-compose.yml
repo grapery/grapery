@@ -8,8 +8,6 @@ services:
       - "8090:8090"
     env_file:
       - .env
-    volumes:
-      - ./app.json:/app/
     command: ["./grapes-app", "--config", "/app/app.json"]
     restart: unless-stopped
 
@@ -21,7 +19,5 @@ services:
       - "8070:8070"  # 如有需要可调整
     env_file:
       - .env
-    volumes:
-      - ./llmchat.json:/app/
     command: ["./grapes-llmchat", "--config", "/app/llmchat.json"]
     restart: unless-stopped
