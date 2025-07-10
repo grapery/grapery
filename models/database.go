@@ -43,7 +43,7 @@ func Init(uname, pwd, address, dbname string) error {
 		},
 	)
 	sqldbUrl := fmt.Sprintf("%s:%s@(%s:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, address, dbname)
-
+	log.Infof("sqldbUrl: %s", sqldbUrl)
 	sqlDB, err := sql.Open("mysql", sqldbUrl)
 
 	if err != nil {
