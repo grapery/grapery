@@ -44,7 +44,7 @@ func main() {
 	llmchathandler.RegisterLLMChatRoutes(r)
 
 	// 启动服务
-	r.Run(fmt.Sprintf(":%s", config.GlobalConfig.LLMchat.HttpPort))
+	r.Run(fmt.Sprintf("0.0.0.0:%s", config.GlobalConfig.LLMchat.HttpPort))
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
 		syscall.SIGINT,
