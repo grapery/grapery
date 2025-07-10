@@ -23,7 +23,7 @@ var (
 	Domain     = ""
 	// for 7 day
 	CookieMaxAge = 60 * 60 * 24 * 7
-	CookiePath   = "grapery.xyz"
+	CookiePath   = "rankquantity.xyz"
 )
 
 func GetUserInfoFromMetadata(ctx context.Context) int64 {
