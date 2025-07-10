@@ -119,7 +119,7 @@ jobs:
           script: |
             cd /home/ubuntu/grapery
             docker login ${{ env.REGISTRY }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
+            docker-compose version
+            docker-compose pull
             docker-compose down || true
-            docker rm -f grapery-app || true
-            docker rm -f grapes-llmchat || true
             docker-compose up -d --remove-orphans
