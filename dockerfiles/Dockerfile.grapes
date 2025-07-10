@@ -11,4 +11,4 @@ WORKDIR /app
 COPY --from=builder /app/grapes-app .
 COPY app.json /app/app.json
 EXPOSE 8080
-CMD ["./grapes-app"] 
+CMD ["./grapes-app", "--config", "/app/app.json"] 
