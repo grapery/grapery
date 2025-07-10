@@ -22,7 +22,7 @@ WORKDIR /app
 COPY --from=builder /app/grapes-llmchat .
 
 # 拷贝配置文件（如有需要）
-COPY config.json .
+COPY llmchat.json .
 
 # 启动命令
-CMD ["./grapes-llmchat", "--config", "/app/config.json"] 
+CMD ["./grapes-llmchat", "--config", "/app/llmchat.json"] 
