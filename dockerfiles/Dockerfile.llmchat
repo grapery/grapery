@@ -17,12 +17,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o grapes-llmchat ./app/llmchat/main.go
 FROM alpine:latest
 
 WORKDIR /app
-
+RUN echo "====COPY前 /app 目录内容 ====" && ls -l /app
 # 只拷贝最终可执行文件
 COPY --from=builder /app/grapes-llmchat .
 
 # 拷贝配置文件（如有需要）
 COPY llmchat.json .
-
+RUN echo "====COPY后 /app 目录内容 ====" && ls -l /app
 # 启动命令
 CMD ["./grapes-llmchat", "--config", "/app/llmchat.json"] 
