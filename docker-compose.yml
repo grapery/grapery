@@ -32,7 +32,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - grapes
       - grapes-llmchat

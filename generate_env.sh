@@ -76,7 +76,7 @@ LOG_FILE=/var/log/grapery/app.log
 CACHE_TTL=3600
 
 # 安全配置
-CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME}
+CORS_ALLOWED_ORIGINS=https://rankquantity.xyz
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
 
