@@ -3,6 +3,7 @@ grapes-worker
 grapes-mcps
 grapes-vippay
 grapes-pay
+grapes-llmchat
 .idea/*
 .DS_Store
 .vscode

@@ -88,7 +88,7 @@ func NewTeamsService() *TeamsService {
 
 func Run(ts *TeamsService, cfg *config.Config) error {
 	cache.NewRedisClient(cfg)
-	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
+	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Address, cfg.SqlDB.Database)
 	if err != nil {
 		logrus.Errorf("init sql database failed : [%s]", err.Error())
 		return err
