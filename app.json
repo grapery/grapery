@@ -2,17 +2,14 @@
   "sql_db": {
     "database": "grapery",
     "username": "root",
-    "password": "123456789"
+    "password": "123456789",
+    "address": "localhost"
   },
   "redis": {
     "address": "localhost:6379",
     "password": "",
     "database": "0",
     "ping_interval": 30
-  },
-  "graphdb": {
-    "address": "127.0.0.1:8088",
-    "schema": "explore"
   },
   "llmchat": {
     "http_port": "8070"

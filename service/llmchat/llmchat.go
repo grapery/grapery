@@ -14,7 +14,7 @@ import (
 func Init(cfg *config.Config) error {
 	llmchatpkg.GetLLMChatEngine()
 	cache.NewRedisClient(cfg)
-	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Database)
+	err := models.Init(cfg.SqlDB.Username, cfg.SqlDB.Password, cfg.SqlDB.Address, cfg.SqlDB.Database)
 	if err != nil {
 		logrus.Errorf("init sql database failed : [%s]", err.Error())
 		return err

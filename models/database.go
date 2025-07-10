@@ -28,7 +28,7 @@ const (
 )
 
 // Init ...
-func Init(uname, pwd, dbname string) error {
+func Init(uname, pwd, address, dbname string) error {
 	var err error
 	if database != nil {
 		log.Warn("database already init")
@@ -42,7 +42,7 @@ func Init(uname, pwd, dbname string) error {
 			Colorful:      true,
 		},
 	)
-	sqldbUrl := fmt.Sprintf("%s:%s@(localhost:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, dbname)
+	sqldbUrl := fmt.Sprintf("%s:%s@(%s:3306)/%s?charset=utf8&parseTime=True&loc=Local", uname, pwd, address, dbname)
 
 	sqlDB, err := sql.Open("mysql", sqldbUrl)
 

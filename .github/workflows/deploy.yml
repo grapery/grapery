@@ -39,7 +39,7 @@ jobs:
           export DOCKERHUB_USERNAME=${{ vars.DOCKERHUB_USERNAME }}
           export DOMAIN_NAME=${{ vars.DOMAIN_NAME }}
           export JWT_SECRET=${{ vars.JWT_SECRET }}
-          export REDIS_PASSWORD=${{ vars.REDIS_PASSWORD }}
+         
           export SERVER_HOST=${{ vars.SERVER_HOST }}
           export SERVER_PORT=${{ vars.SERVER_PORT }}
           export SMTP_HOST=${{ vars.SMTP_HOST }}
@@ -50,7 +50,10 @@ jobs:
           export STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
           export STRIPE_SECRET_KEY=${{ vars.STRIPE_SECRET_KEY }}
           export STRIPE_WEBHOOK_SECRET=${{ vars.STRIPE_WEBHOOK_SECRET }}
-          
+          export DEPLOY_ENV=${{ vars.DEPLOY_ENV }}
+          export REDIS_PASSWORD=${{ vars.REDIS_PASSWORD }}
+          export REDIS_SERVER=${{ vars.REDIS_SERVER }}
+
           bash generate_env.sh
           cat .env
 

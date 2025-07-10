@@ -14,6 +14,7 @@ type DBConfig struct {
 	Database string `json:"database,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	Address  string `json:"address,omitempty"`
 }
 
 type RedisConfig struct {
@@ -47,6 +48,11 @@ type Config struct {
 	VipPay   *VipPayConfig  `json:"vippay,omitempty"`
 }
 
+func (c *Config) String() string {
+	json, _ := json.Marshal(c)
+	return string(json)
+}
+
 func ValiedConfig(cfg *Config) error {
 	if cfg.RpcPort == "" {
 		return fmt.Errorf("server rpc port not set")
@@ -75,5 +81,16 @@ func LoadConfig(configPath string) error {
 		log.Errorf("config file format wrong :%v", err)
 		return err
 	}
+	deployEnv := os.Getenv("DEPLOY_ENV")
+	log.Infof("deployEnv: %s", deployEnv)
+	log.Infof("before update GlobalConfig: %+v", GlobalConfig.String())
+	if deployEnv == "pre" {
+		GlobalConfig.Redis.Address = os.Getenv("REDIS_SERVER")
+		GlobalConfig.SqlDB.Database = os.Getenv("DB_NAME")
+		GlobalConfig.SqlDB.Username = os.Getenv("DB_USER")
+		GlobalConfig.SqlDB.Password = os.Getenv("DB_PASSWORD")
+		GlobalConfig.SqlDB.Database = os.Getenv("DB_ADDR")
+	}
+	log.Infof("after update GlobalConfig: %+v", GlobalConfig.String())
 	return nil
 }

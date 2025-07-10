@@ -18,7 +18,7 @@ services:
     image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-llmchat:latest
     container_name: grapes-llmchat
     ports:
-      - "8081:8081"  # 如有需要可调整
+      - "8070:8070"  # 如有需要可调整
     env_file:
       - .env
     volumes:
