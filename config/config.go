@@ -85,11 +85,16 @@ func LoadConfig(configPath string) error {
 	log.Infof("deployEnv: %s", deployEnv)
 	log.Infof("before update GlobalConfig: %+v", GlobalConfig.String())
 	if deployEnv == "pre" {
+		log.Infof("update GlobalConfig: %+v", os.Getenv("REDIS_SERVER"))
+		log.Infof("update GlobalConfig: %+v", os.Getenv("DB_NAME"))
+		log.Infof("update GlobalConfig: %+v", os.Getenv("DB_USER"))
+		log.Infof("update GlobalConfig: %+v", os.Getenv("DB_PASSWORD"))
+		log.Infof("update GlobalConfig: %+v", os.Getenv("DB_ADDR"))
 		GlobalConfig.Redis.Address = os.Getenv("REDIS_SERVER")
 		GlobalConfig.SqlDB.Database = os.Getenv("DB_NAME")
 		GlobalConfig.SqlDB.Username = os.Getenv("DB_USER")
 		GlobalConfig.SqlDB.Password = os.Getenv("DB_PASSWORD")
-		GlobalConfig.SqlDB.Database = os.Getenv("DB_ADDR")
+		GlobalConfig.SqlDB.Address = os.Getenv("DB_ADDR")
 	}
 	log.Infof("after update GlobalConfig: %+v", GlobalConfig.String())
 	return nil
