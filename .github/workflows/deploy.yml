@@ -37,7 +37,7 @@ jobs:
           export COZE_WORKSPACE_ID=${{ vars.COZE_WORKSPACE_ID }}
 
           export DB_NAME=${{ vars.DB_NAME }}
-          export DB_PASSWORD=${{ vars.DB_PASSWORD }}
+          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           export DB_USER=${{ vars.DB_USER }}
           export DB_ADDR=${{ vars.DB_ADDR }}
 
