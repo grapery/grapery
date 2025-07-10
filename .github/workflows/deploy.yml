@@ -109,6 +109,16 @@ jobs:
           source: "docker-compose.yml"
           target: "/home/ubuntu/grapery/"
 
+      - name: Upload nginx.conf to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "nginx.conf"
+          target: "/home/ubuntu/grapery/"
+
       - name: Remote Deploy to Aliyun ECS (docker-compose)
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -123,3 +133,18 @@ jobs:
             docker-compose pull
             docker-compose down || true
             docker-compose up -d --remove-orphans
+            
+            # 配置SSL证书（如果域名已配置）
+            if [ -n "${{ vars.DOMAIN_NAME }}" ] && [ -n "${{ vars.SSL_EMAIL }}" ]; then
+              echo "配置SSL证书..."
+              
+              # 申请证书（使用单域名证书）
+              sudo certbot certonly --standalone \
+                -d api.${{ vars.DOMAIN_NAME }} \
+                --email ${{ vars.SSL_EMAIL }} \
+                --agree-tos \
+                --non-interactive || true
+              
+              # 设置证书权限
+              sudo chown -R ubuntu:ubuntu /etc/letsencrypt || true
+            fi

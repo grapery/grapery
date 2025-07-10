@@ -3,21 +3,43 @@ services:
   grapes:
     image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
     container_name: grapery-app
-    ports:
-      - "8080:8080"
-      - "8090:8090"
+    # 移除端口暴露，只通过nginx访问
     env_file:
       - .env
     command: ["./grapes-app", "--config", "/app/app.json"]
     restart: unless-stopped
+    networks:
+      - grapery-network
 
   # llmchat 服务
   grapes-llmchat:
     image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-llmchat:latest
     container_name: grapes-llmchat
-    ports:
-      - "8070:8070"  # 如有需要可调整
+    # 移除端口暴露，只通过nginx访问
     env_file:
       - .env
     command: ["./grapes-llmchat", "--config", "/app/llmchat.json"]
     restart: unless-stopped
+    networks:
+      - grapery-network
+
+  # Nginx 反向代理服务
+  nginx:
+    image: nginx:alpine
+    container_name: grapery-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - grapes
+      - grapes-llmchat
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+networks:
+  grapery-network:
+    driver: bridge
