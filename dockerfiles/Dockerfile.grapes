@@ -1,5 +1,7 @@
 FROM golang:1.24 AS builder
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
 ENV GO111MODULE=on GOPROXY=https://goproxy.cn,direct CGO_ENABLED=0 GOOS=linux
 RUN go build -o grapes-app ./app/grapes
@@ -10,7 +12,7 @@ ENV TZ=Asia/Shanghai
 WORKDIR /app
 RUN echo "====COPY前 /app 目录内容 ====" && ls -l /app
 COPY --from=builder /app/grapes-app .
-COPY app.json /app/app.json
+COPY app.json .
 RUN echo "====COPY后 /app 目录内容 ====" && ls -l /app
 
 CMD ["./grapes-app", "--config", "/app/app.json"] 

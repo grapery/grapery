@@ -146,5 +146,10 @@ jobs:
             
             # 设置证书文件权限
             echo "设置SSL证书权限..."
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.key
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.pem
+            openssl x509 -in /home/ubuntu/grapery/certs/rankquantity.xyz.pem -text -noout
             chmod 600 /home/ubuntu/grapery/certs/rankquantity.xyz.key
             chmod 644 /home/ubuntu/grapery/certs/rankquantity.xyz.pem
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.key
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.pem
