@@ -69,11 +69,11 @@ jobs:
       - name: Login to Aliyun ACR
         run: echo ${{ secrets.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ secrets.ACR_USERNAME }} --password-stdin
 
-      - name: Build Docker image
+      - name: Build app Docker image
         run: |
           docker build -f dockerfiles/Dockerfile.grapes -t $REGISTRY/$IMAGE_NAME:$TAG .
 
-      - name: Push Docker image
+      - name: Push app Docker image
         run: |
           docker tag $REGISTRY/$IMAGE_NAME:$TAG $REGISTRY/grapery-dev/$IMAGE_NAME:latest
           docker push $REGISTRY/grapery-dev/$IMAGE_NAME:latest
