@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,6 +76,8 @@ func (f AuthInterceptorFunc) WrapStreamingHandler(next connect.StreamingHandlerF
 }
 
 func ConnectAuthFuncfunc(ctx context.Context, spec connect.Spec, header http.Header, a any) (context.Context, error) {
+	log.Printf("实际请求路径: %s", spec.Procedure)
+	log.Printf("实际请求路径: %s", spec.Schema)
 	cookieInfo := header.Get(utils.GrpcGateWayCookie)
 	if len(cookieInfo) == 0 {
 		return nil, status.Errorf(codes.Unauthenticated, "empty auth from md: %s", utils.GrpcGateWayCookie)

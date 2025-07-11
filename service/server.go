@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -58,6 +59,8 @@ func (ts *TeamsService) Version(ctx context.Context, req *connect.Request[api.Ve
 }
 
 func (ts *TeamsService) About(ctx context.Context, req *connect.Request[api.AboutRequest]) (*connect.Response[api.AboutResponse], error) {
+	log.Printf("实际请求路径: %s", req.Spec().Procedure)
+	log.Printf("实际请求路径: %s", req.Spec().Schema)
 	return &connect.Response[api.AboutResponse]{
 		Msg: &api.AboutResponse{
 			Content: "Grapery",
