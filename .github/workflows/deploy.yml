@@ -119,6 +119,16 @@ jobs:
           source: "nginx.conf"
           target: "/home/ubuntu/grapery/"
 
+      - name: Upload SSL certificates to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "certs/"
+          target: "/home/ubuntu/grapery/"
+
       - name: Remote Deploy to Aliyun ECS (docker-compose)
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -139,3 +149,7 @@ jobs:
             ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.key
             ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.pem
             openssl x509 -in /home/ubuntu/grapery/certs/rankquantity.xyz.pem -text -noout
+            chmod 600 /home/ubuntu/grapery/certs/rankquantity.xyz.key
+            chmod 644 /home/ubuntu/grapery/certs/rankquantity.xyz.pem
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.key
+            ls -l /home/ubuntu/grapery/certs/rankquantity.xyz.pem
