@@ -12,7 +12,7 @@
       "ping_interval": 30
     },
     "llmchat": {
-      "http_port": "8070"
+      "http_port": "8081"
     },
     "vippay": {
       "http_port": "8088"

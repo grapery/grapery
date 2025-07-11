@@ -33,8 +33,118 @@ func GetLLMChatEngine() *LLMChatEngine {
 	return llmEngine
 }
 
+// ================= 对外暴露结构体定义 =================
+// LLMChatSession 对外暴露的会话结构体，避免直接暴露 models.UserSession
+// 仅包含业务需要的字段
+// 声明类型！
+type LLMChatSession struct {
+	UserID         int64     `json:"user_id"`
+	Name           string    `json:"name"`
+	SessionId      string    `json:"session_id"`
+	ConversationId string    `json:"conversation_id"`
+	RoleId         string    `json:"role_id"`
+	BotId          string    `json:"bot_id"`
+	MsgCount       int       `json:"msg_count"`
+	StartTime      int64     `json:"start_time"`
+	EndTime        int64     `json:"end_time"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// LLMChatMessage 对外暴露的消息结构体，避免直接暴露 models.LLMChatMsg
+// 声明类型！
+type LLMChatMessage struct {
+	ID             int64     `json:"id"`
+	MessageId      string    `json:"message_id"`
+	SessionID      string    `json:"session_id"`
+	UserID         int64     `json:"user_id"`
+	Content        string    `json:"content"`
+	MsgType        string    `json:"msg_type"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Deleted        bool      `json:"deleted"`
+	ConversationId string    `json:"conversation_id"`
+	LLmContent     string    `json:"llm_content"`
+}
+
+// LLMMsgFeedbackResp 对外暴露的反馈结构体，避免直接暴露 models.LLMMsgFeedback
+// 声明类型！
+type LLMMsgFeedbackResp struct {
+	ID      int64  `json:"id"`
+	MsgID   int64  `json:"msg_id"`
+	UserID  int64  `json:"user_id"`
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+// ================= 工具函数：models -> 对外结构体转换 =================
+// toLLMChatSession 将 models.UserSession 转为 LLMChatSession
+func toLLMChatSession(s *models.UserSession) *LLMChatSession {
+	if s == nil {
+		return nil
+	}
+	return &LLMChatSession{
+		UserID:         s.UserID,
+		Name:           s.Name,
+		SessionId:      s.SessionId,
+		ConversationId: s.ConversationId,
+		RoleId:         s.RoleId,
+		BotId:          s.BotId,
+		MsgCount:       s.MsgCount,
+		StartTime:      s.StartTime,
+		EndTime:        s.EndTime,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+	}
+}
+
+// toLLMChatMessage 将 models.LLMChatMsg 转为 LLMChatMessage
+func toLLMChatMessage(m *models.LLMChatMsg) *LLMChatMessage {
+	if m == nil {
+		return nil
+	}
+	return &LLMChatMessage{
+		ID:             m.ID,
+		MessageId:      m.MessageId,
+		SessionID:      m.SessionID,
+		UserID:         m.UserID,
+		Content:        m.Content,
+		MsgType:        m.MsgType,
+		Status:         m.Status,
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
+		Deleted:        m.Deleted,
+		ConversationId: m.ConversationId,
+		LLmContent:     m.LLmContent,
+	}
+}
+
+// toLLMMsgFeedbackResp 将 models.LLMMsgFeedback 转为 LLMMsgFeedbackResp
+func toLLMMsgFeedbackResp(f *models.LLMMsgFeedback) *LLMMsgFeedbackResp {
+	if f == nil {
+		return nil
+	}
+	return &LLMMsgFeedbackResp{
+		ID:      f.ID,
+		MsgID:   f.MsgID,
+		UserID:  f.UserID,
+		Type:    f.Type,
+		Content: f.Content,
+	}
+}
+
+// toLLMChatMessageSlice 批量转换
+func toLLMChatMessageSlice(msgs []*models.LLMChatMsg) []*LLMChatMessage {
+	res := make([]*LLMChatMessage, 0, len(msgs))
+	for _, m := range msgs {
+		res = append(res, toLLMChatMessage(m))
+	}
+	return res
+}
+
 // CreateSession 创建会话
-func (e *LLMChatEngine) CreateSession(ctx context.Context, userID int64, name, sessionId, roleId, botId string) (*models.UserSession, error) {
+func (e *LLMChatEngine) CreateSession(ctx context.Context, userID int64, name, sessionId, roleId, botId string) (*LLMChatSession, error) {
 	log.Log().Info("[CreateSession] 开始创建会话", zap.Int64("userID", userID), zap.String("sessionId", sessionId), zap.String("roleId", roleId), zap.String("botId", botId), zap.String("name", name))
 	conversationId, err := coze.GetCozeClient().ConversationCreate(ctx, coze.CozeConversationCreateParams{
 		BotID: "7525037470162141226",
@@ -72,11 +182,11 @@ func (e *LLMChatEngine) CreateSession(ctx context.Context, userID int64, name, s
 		return nil, err
 	}
 	log.Log().Info("[CreateSession] 创建会话成功", zap.Int64("userID", userID), zap.String("sessionId", sessionId))
-	return s, nil
+	return toLLMChatSession(s), nil
 }
 
 // SendMessage 在会话中发送消息
-func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userID int64, content string) (*models.LLMChatMsg, error) {
+func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userID int64, content string) (*LLMChatMessage, error) {
 	log.Log().Info("[SendMessage] 用户发送消息", zap.Int64("userID", userID), zap.String("sessionID", sessionID), zap.String("content", content))
 	var session models.UserSession
 	if err := session.GetBySessionId(ctx, sessionID); err != nil {
@@ -109,11 +219,11 @@ func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userI
 		return nil, err
 	}
 	log.Log().Info("[SendMessage] 消息写入成功", zap.Int64("userID", userID), zap.String("sessionID", sessionID), zap.Int64("msgID", msg.ID))
-	return msg, nil
+	return toLLMChatMessage(msg), nil
 }
 
 // RetryMessage 重试用户消息（复制原消息内容）
-func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*models.LLMChatMsg, error) {
+func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*LLMChatMessage, error) {
 	log.Log().Info("[RetryMessage] 开始重试消息", zap.Int64("msgID", msgID))
 	var oldMsg models.LLMChatMsg
 	if err := oldMsg.GetById(ctx, msgID); err != nil {
@@ -134,7 +244,7 @@ func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*models.
 }
 
 // FeedbackMessage 对消息进行反馈
-func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, content string) (*models.LLMMsgFeedback, error) {
+func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, content string) (*LLMMsgFeedbackResp, error) {
 	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.Int64("msgID", msgID), zap.Int64("userID", userID), zap.String("type", feedbackType))
 	fb := &models.LLMMsgFeedback{
 		MsgID:   msgID,
@@ -147,7 +257,7 @@ func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64
 		return nil, err
 	}
 	log.Log().Info("[FeedbackMessage] 反馈写入成功", zap.Int64("msgID", msgID), zap.Int64("userID", userID))
-	return fb, nil
+	return toLLMMsgFeedbackResp(fb), nil
 }
 
 // InterruptMessage 中断消息（将状态置为interrupted）
@@ -240,14 +350,14 @@ func (e *LLMChatEngine) ConversationClear(ctx context.Context, sessionID string)
 	return nil
 }
 
-func (e *LLMChatEngine) SessionMessages(ctx context.Context, sessionID string, page, pageSize int) ([]*models.LLMChatMsg, bool, error) {
+func (e *LLMChatEngine) SessionMessages(ctx context.Context, sessionID string, page, pageSize int) ([]*LLMChatMessage, bool, error) {
 	log.Log().Info("[SessionMessages] 开始获取会话消息", zap.String("sessionID", sessionID), zap.Int("page", page), zap.Int("pageSize", pageSize))
 	msgs, total, err := models.ListLLMChatMsgsBySessionIDWithPage(ctx, sessionID, page, pageSize)
 	if err != nil {
 		log.Log().Error("[SessionMessages] 获取会话消息失败", zap.Error(err), zap.String("sessionID", sessionID), zap.Int("page", page), zap.Int("pageSize", pageSize))
 		return nil, false, err
 	}
-	return msgs, total > int64(page*pageSize), nil
+	return toLLMChatMessageSlice(msgs), total > int64(page*pageSize), nil
 }
 
 // parseSSEData 解析SSE格式的data字段
