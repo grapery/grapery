@@ -23,6 +23,17 @@ services:
     networks:
       - grapery-network
 
+  # vippay 服务
+  grapes-vippay:
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-vippay:latest
+    container_name: grapes-vippay
+    env_file:
+      - .env
+    command: ["./grapes-vippay", "--config", "/app/vippay.json"]
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
   # Nginx 反向代理服务
   nginx:
     image: nginx:alpine
