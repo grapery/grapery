@@ -3,6 +3,7 @@ package llmchat
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -145,6 +146,19 @@ func toLLMChatMessageSlice(msgs []*models.LLMChatMsg) []*LLMChatMessage {
 
 // CreateSession 创建会话
 func (e *LLMChatEngine) CreateSession(ctx context.Context, userID int64, name, sessionId, roleId, botId string) (*LLMChatSession, error) {
+	roleIdInt, err := strconv.ParseInt(roleId, 10, 64)
+	if err != nil {
+		log.Log().Error("[CreateSession] 转换roleId失败", zap.Error(err), zap.String("roleId", roleId))
+		return nil, err
+	}
+	isExist, err := models.GetUserSessionByUserIDAndRoleID(ctx, userID, roleIdInt)
+	if err != nil {
+		log.Log().Error("[CreateSession] 获取会话失败", zap.Error(err), zap.Int64("userID", userID), zap.String("roleId", roleId))
+		return nil, err
+	}
+	if isExist != nil {
+		return toLLMChatSession(isExist), nil
+	}
 	log.Log().Info("[CreateSession] 开始创建会话", zap.Int64("userID", userID), zap.String("sessionId", sessionId), zap.String("roleId", roleId), zap.String("botId", botId), zap.String("name", name))
 	conversationId, err := coze.GetCozeClient().ConversationCreate(ctx, coze.CozeConversationCreateParams{
 		BotID: "7525037470162141226",
