@@ -88,6 +88,15 @@ jobs:
         run: |
           docker tag $REGISTRY/grapes-llmchat:${{ github.sha }} $REGISTRY/grapery-dev/grapes-llmchat:latest
           docker push $REGISTRY/grapery-dev/grapes-llmchat:latest
+      
+      - name: Build grapes-vippay Docker image
+        run: |
+          docker build -f dockerfiles/Dockerfile.vippay -t $REGISTRY/grapes-vippay:${{ github.sha }} .
+
+      - name: Push grapes-vippay Docker image
+        run: |
+          docker tag $REGISTRY/grapes-vippay:${{ github.sha }} $REGISTRY/grapery-dev/grapes-vippay:latest
+          docker push $REGISTRY/grapery-dev/grapes-vippay:latest
 
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4
