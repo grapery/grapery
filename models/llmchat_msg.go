@@ -32,6 +32,14 @@ func (m LLMChatMsg) TableName() string {
 	return "llmchat_msgs"
 }
 
+func UpdateLike(ctx context.Context, msgID int64, like int) error {
+	err := DataBase().WithContext(ctx).Model(&LLMChatMsg{}).Where("id = ?", msgID).Update("like", like).Error
+	if err != nil {
+		return fmt.Errorf("update like failed: %w", err)
+	}
+	return nil
+}
+
 // Create 创建消息
 func (m *LLMChatMsg) Create(ctx context.Context) error {
 	err := DataBase().WithContext(ctx).Model(m).Create(m).Error

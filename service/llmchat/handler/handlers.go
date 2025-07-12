@@ -312,15 +312,14 @@ func FeedbackMessageHandler(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Type    string `json:"type" binding:"required"` // like/dislike/complaint
-		Content string `json:"content"`
+		Type   int   `json:"type" binding:"required"` // like/dislike/complaint
+		UserID int64 `json:"user_id" binding:"required"`
 	}
-	userID := c.GetInt64("userID")
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, APIResponse{Code: http.StatusBadRequest, Message: err.Error(), Data: struct{}{}})
 		return
 	}
-	res, err := llmchatservice.FeedbackMessageService(c.Request.Context(), msgID, userID, req.Type, req.Content)
+	res, err := llmchatservice.FeedbackMessageService(c.Request.Context(), msgID, req.UserID, req.Type)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{Code: http.StatusInternalServerError, Message: err.Error(), Data: struct{}{}})
 		return

@@ -12,6 +12,7 @@ import (
 	"github.com/grapery/grapery/pkg/cloud/coze"
 	"github.com/grapery/grapery/utils/log"
 	"go.uber.org/zap"
+	"gorm.io/datatypes"
 )
 
 // LLMChatEngine 封装LLM流式推理相关逻辑
@@ -55,18 +56,20 @@ type LLMChatSession struct {
 // LLMChatMessage 对外暴露的消息结构体，避免直接暴露 models.LLMChatMsg
 // 声明类型！
 type LLMChatMessage struct {
-	ID             int64     `json:"id"`
-	MessageId      string    `json:"message_id"`
-	SessionID      string    `json:"session_id"`
-	UserID         int64     `json:"user_id"`
-	Content        string    `json:"content"`
-	MsgType        string    `json:"msg_type"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Deleted        bool      `json:"deleted"`
-	ConversationId string    `json:"conversation_id"`
-	LLmContent     string    `json:"llm_content"`
+	ID             int64          `json:"id"`
+	MessageId      string         `json:"message_id"`
+	SessionID      string         `json:"session_id"`
+	UserID         int64          `json:"user_id"`
+	Content        string         `json:"content"`
+	MsgType        string         `json:"msg_type"`
+	Status         string         `json:"status"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	Deleted        bool           `json:"deleted"`
+	ConversationId string         `json:"conversation_id"`
+	LLmContent     string         `json:"llm_content"`
+	Like           int            `json:"like"`
+	Attachments    datatypes.JSON `json:"attachments"`
 }
 
 // LLMMsgFeedbackResp 对外暴露的反馈结构体，避免直接暴露 models.LLMMsgFeedback
@@ -75,7 +78,7 @@ type LLMMsgFeedbackResp struct {
 	ID      int64  `json:"id"`
 	MsgID   int64  `json:"msg_id"`
 	UserID  int64  `json:"user_id"`
-	Type    string `json:"type"`
+	Type    int    `json:"type"`
 	Content string `json:"content"`
 }
 
@@ -118,6 +121,8 @@ func toLLMChatMessage(m *models.LLMChatMsg) *LLMChatMessage {
 		Deleted:        m.Deleted,
 		ConversationId: m.ConversationId,
 		LLmContent:     m.LLmContent,
+		Like:           m.Like,
+		Attachments:    m.Attachments,
 	}
 }
 
@@ -223,6 +228,8 @@ func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userI
 		Content:        content,
 		MsgType:        "user",
 		Status:         "pending",
+		Like:           0,
+		Attachments:    datatypes.JSON{},
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		Deleted:        false,
@@ -258,13 +265,33 @@ func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*LLMChat
 }
 
 // FeedbackMessage 对消息进行反馈
-func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType, content string) (*LLMMsgFeedbackResp, error) {
-	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.Int64("msgID", msgID), zap.Int64("userID", userID), zap.String("type", feedbackType))
+func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType int) (*LLMMsgFeedbackResp, error) {
+	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.Int64("msgID", msgID), zap.Int64("userID", userID), zap.Int("type", feedbackType))
+	msg := &models.LLMChatMsg{}
+	if err := msg.GetById(ctx, msgID); err != nil {
+		log.Log().Error("[FeedbackMessage] 获取消息失败", zap.Error(err), zap.Int64("msgID", msgID))
+		return nil, err
+	}
+	if msg.Like != feedbackType {
+		msg.Like = feedbackType
+		if err := msg.UpdateByMessageId(ctx, msg.MessageId, map[string]interface{}{
+			"like": feedbackType,
+		}); err != nil {
+			log.Log().Error("[FeedbackMessage] 更新消息失败", zap.Error(err), zap.Int64("msgID", msgID))
+			return nil, err
+		}
+	}
 	fb := &models.LLMMsgFeedback{
-		MsgID:   msgID,
-		UserID:  userID,
-		Type:    feedbackType, // like/dislike/complaint
-		Content: content,
+		MsgID:  msgID,
+		UserID: userID,
+		Type:   feedbackType, // like/dislike/complaint
+	}
+	if feedbackType == 1 {
+		fb.Content = "like"
+	} else if feedbackType == 2 {
+		fb.Content = "dislike"
+	} else {
+		fb.Content = ""
 	}
 	if err := fb.Create(ctx); err != nil {
 		log.Log().Error("[FeedbackMessage] 反馈写入失败", zap.Error(err), zap.Int64("msgID", msgID), zap.Int64("userID", userID))

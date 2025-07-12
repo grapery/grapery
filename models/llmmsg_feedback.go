@@ -12,7 +12,7 @@ type LLMMsgFeedback struct {
 	ID        int64     `gorm:"primaryKey;column:id" json:"id,omitempty"`
 	MsgID     int64     `gorm:"column:msg_id;index" json:"msg_id,omitempty"`
 	UserID    int64     `gorm:"column:user_id;index" json:"user_id,omitempty"`
-	Type      string    `gorm:"column:type;size:16" json:"type,omitempty"` // like/dislike/complaint
+	Type      int       `gorm:"column:type;size:16" json:"type,omitempty"` // like/dislike/complaint
 	Content   string    `gorm:"column:content;type:text" json:"content,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at,omitempty"`
 	Deleted   bool      `gorm:"column:deleted" json:"deleted,omitempty"`
