@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	connect "connectrpc.com/connect"
 
 	"github.com/grapery/common-protoc/gen"
 	api "github.com/grapery/common-protoc/gen"
 	storyServer "github.com/grapery/grapery/pkg/story"
 )
+
+// 移除本文件顶部的 getTraceID 和 maskContent 的重复定义
 
 type StoryRoleService struct {
 }
@@ -19,14 +23,18 @@ func (s *StoryRoleService) RenderStoryRoleContinuouslyCancel(ctx context.Context
 }
 
 func (s *StoryRoleService) RenderStoryRoles(ctx context.Context, req *connect.Request[gen.RenderStoryRolesRequest]) (*connect.Response[gen.RenderStoryRolesResponse], error) {
+	traceId := getTraceID(ctx)
+	zap.L().Info("RenderStoryRoles called", zap.String("traceId", traceId), zap.Int64("storyId", req.Msg.GetStoryId()))
 	ret, err := storyServer.GetStoryServer().RenderStoryRoles(ctx, req.Msg)
 	if err != nil {
+		zap.L().Error("RenderStoryRoles failed", zap.String("traceId", traceId), zap.Error(err))
 		return nil, err
 	}
 	resp := &gen.RenderStoryRolesResponse{
 		Code:    ret.Code,
 		Message: "OK",
 	}
+	zap.L().Info("RenderStoryRoles success", zap.String("traceId", traceId), zap.Int64("storyId", req.Msg.GetStoryId()))
 	return connect.NewResponse(resp), nil
 }
 

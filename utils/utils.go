@@ -109,3 +109,21 @@ func GetUserIDFromContext(ctx context.Context) (int64, error) {
 	}
 	return userID, nil
 }
+
+// getTraceID 从 context 获取 traceId，没有则生成
+func GetTraceID(ctx context.Context) string {
+	if v := ctx.Value("traceId"); v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return uuid.New().String()
+}
+
+// maskContent 内容脱敏，只显示前20字
+func MaskContent(content string) string {
+	if len(content) > 20 {
+		return content[:20] + "..."
+	}
+	return content
+}
