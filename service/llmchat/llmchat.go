@@ -45,7 +45,7 @@ func RetryMessageService(ctx context.Context, msgID int64) (interface{}, error) 
 }
 
 // FeedbackMessageService 消息反馈，供handler调用
-func FeedbackMessageService(ctx context.Context, msgID, userID int64, feedbackType int) (interface{}, error) {
+func FeedbackMessageService(ctx context.Context, msgID string, userID int64, feedbackType int) (interface{}, error) {
 	logrus.Infof("FeedbackMessageService: msgID: %d, userID: %d, feedbackType: %s, content: %s", msgID, userID, feedbackType)
 	return llmchatpkg.GetLLMChatEngine().FeedbackMessage(ctx, msgID, userID, feedbackType)
 }

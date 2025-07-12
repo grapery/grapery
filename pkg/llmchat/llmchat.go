@@ -76,7 +76,7 @@ type LLMChatMessage struct {
 // 声明类型！
 type LLMMsgFeedbackResp struct {
 	ID      int64  `json:"id"`
-	MsgID   int64  `json:"msg_id"`
+	MsgID   string `json:"msg_id"`
 	UserID  int64  `json:"user_id"`
 	Type    int    `json:"type"`
 	Content string `json:"content"`
@@ -224,7 +224,7 @@ func (e *LLMChatEngine) SendMessage(ctx context.Context, sessionID string, userI
 	msg := &models.LLMChatMsg{
 		MessageId:      uuid.New().String(),
 		SessionID:      sessionID,
-		UserID:         userID,
+		UserID:         session.UserID,
 		Content:        content,
 		MsgType:        "user",
 		Status:         "pending",
@@ -265,11 +265,11 @@ func (e *LLMChatEngine) RetryMessage(ctx context.Context, msgID int64) (*LLMChat
 }
 
 // FeedbackMessage 对消息进行反馈
-func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64, feedbackType int) (*LLMMsgFeedbackResp, error) {
-	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.Int64("msgID", msgID), zap.Int64("userID", userID), zap.Int("type", feedbackType))
+func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID string, userID int64, feedbackType int) (*LLMMsgFeedbackResp, error) {
+	log.Log().Info("[FeedbackMessage] 用户反馈消息", zap.String("msgID", msgID), zap.Int64("userID", userID), zap.Int("type", feedbackType))
 	msg := &models.LLMChatMsg{}
-	if err := msg.GetById(ctx, msgID); err != nil {
-		log.Log().Error("[FeedbackMessage] 获取消息失败", zap.Error(err), zap.Int64("msgID", msgID))
+	if err := msg.GetByMessageId(ctx, msgID); err != nil {
+		log.Log().Error("[FeedbackMessage] 获取消息失败", zap.Error(err), zap.String("msgID", msgID))
 		return nil, err
 	}
 	if msg.Like != feedbackType {
@@ -277,7 +277,7 @@ func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64
 		if err := msg.UpdateByMessageId(ctx, msg.MessageId, map[string]interface{}{
 			"like": feedbackType,
 		}); err != nil {
-			log.Log().Error("[FeedbackMessage] 更新消息失败", zap.Error(err), zap.Int64("msgID", msgID))
+			log.Log().Error("[FeedbackMessage] 更新消息失败", zap.Error(err), zap.String("msgID", msgID))
 			return nil, err
 		}
 	}
@@ -294,10 +294,10 @@ func (e *LLMChatEngine) FeedbackMessage(ctx context.Context, msgID, userID int64
 		fb.Content = ""
 	}
 	if err := fb.Create(ctx); err != nil {
-		log.Log().Error("[FeedbackMessage] 反馈写入失败", zap.Error(err), zap.Int64("msgID", msgID), zap.Int64("userID", userID))
+		log.Log().Error("[FeedbackMessage] 反馈写入失败", zap.Error(err), zap.String("msgID", msgID), zap.Int64("userID", userID))
 		return nil, err
 	}
-	log.Log().Info("[FeedbackMessage] 反馈写入成功", zap.Int64("msgID", msgID), zap.Int64("userID", userID))
+	log.Log().Info("[FeedbackMessage] 反馈写入成功", zap.String("msgID", msgID), zap.Int64("userID", userID))
 	return toLLMMsgFeedbackResp(fb), nil
 }
 

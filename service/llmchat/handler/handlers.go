@@ -306,13 +306,9 @@ func RetryMessageHandler(c *gin.Context) {
 
 // FeedbackMessageHandler 消息反馈
 func FeedbackMessageHandler(c *gin.Context) {
-	msgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, APIResponse{Code: http.StatusBadRequest, Message: "invalid message id", Data: struct{}{}})
-		return
-	}
+	msgID := c.Param("id")
 	var req struct {
-		Type   int   `json:"type" binding:"required"` // like/dislike/complaint
+		Type   int   `json:"type"` // like/dislike/complaint
 		UserID int64 `json:"user_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {

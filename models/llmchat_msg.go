@@ -185,7 +185,7 @@ func ListLLMChatMsgsBySessionIDWithPage(ctx context.Context, sessionID string, p
 	var total int64
 	db := DataBase().WithContext(ctx).Model(&LLMChatMsg{}).Where("session_id = ? AND deleted = 0", sessionID)
 	db.Count(&total)
-	err := db.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&msgs).Error
+	err := db.Order("created_at asc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&msgs).Error
 	if err != nil {
 		return nil, 0, fmt.Errorf("list llmchat_msgs by session_id with page failed: %w", err)
 	}
