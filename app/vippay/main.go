@@ -158,15 +158,28 @@ func registerRoutes(router *gin.Engine) {
 	// API 路由组
 	api := router.Group("/api/v1")
 	{
+		// 商品相关路由
+		products := api.Group("/products")
+		{
+			products.GET("", paymentHandler.GetProducts)    // 获取商品列表
+			products.GET("/:id", paymentHandler.GetProduct) // 获取单个商品
+		}
+
 		// 支付相关路由
 		payment := api.Group("/payment")
 		{
 			// 订单管理
-			payment.POST("/orders", paymentHandler.CreateOrder)
-			payment.GET("/orders", paymentHandler.GetUserOrders)
+			payment.POST("/orders", paymentHandler.CreateOrder)  // 创建订单
+			payment.GET("/orders", paymentHandler.GetUserOrders) // 获取用户订单
 
 			// 支付状态查询
-			payment.POST("/query", paymentHandler.QueryPayment)
+			payment.POST("/query", paymentHandler.QueryPayment) // 查询支付状态
+
+			// 退款
+			payment.POST("/refund", paymentHandler.RefundPayment) // 退款
+
+			// 支付记录
+			payment.GET("/records", paymentHandler.GetPaymentRecords) // 获取支付记录
 
 			// 支付回调
 			payment.POST("/callback", paymentHandler.HandlePaymentCallback)
@@ -175,13 +188,29 @@ func registerRoutes(router *gin.Engine) {
 		// VIP 会员相关路由
 		vip := api.Group("/vip")
 		{
-			vip.GET("/info", paymentHandler.GetUserVIPInfo)
+			vip.GET("/info", paymentHandler.GetUserVIPInfo)             // 获取VIP信息
+			vip.GET("/check", paymentHandler.IsUserVIP)                 // 检查是否为VIP
+			vip.GET("/quota", paymentHandler.GetUserQuota)              // 获取用户额度
+			vip.POST("/quota/consume", paymentHandler.ConsumeUserQuota) // 消费用户额度
+			vip.GET("/max-roles", paymentHandler.GetUserMaxRoles)       // 获取最大角色数
+			vip.GET("/max-contexts", paymentHandler.GetUserMaxContexts) // 获取最大上下文数
+			vip.GET("/models", paymentHandler.GetUserAvailableModels)   // 获取可用模型
+			vip.GET("/permission", paymentHandler.CheckUserPermission)  // 检查用户权限
 		}
 
 		// 订阅管理路由
 		subscription := api.Group("/subscription")
 		{
-			subscription.POST("/cancel", paymentHandler.CancelSubscription)
+			subscription.GET("", paymentHandler.GetUserSubscriptions)          // 获取用户订阅
+			subscription.POST("/cancel", paymentHandler.CancelSubscription)    // 取消订阅
+			subscription.PUT("/quota", paymentHandler.UpdateSubscriptionQuota) // 更新订阅额度
+		}
+
+		// 统计相关路由
+		stats := api.Group("/stats")
+		{
+			stats.GET("/payment", paymentHandler.GetPaymentStats) // 支付统计
+			stats.GET("/order", paymentHandler.GetOrderStats)     // 订单统计
 		}
 	}
 
