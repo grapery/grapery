@@ -369,7 +369,7 @@ func (h *GinPaymentHandler) GetProducts(c *gin.Context) {
 			limit = l
 		}
 	}
-
+	_ = limit
 	var products []*models.Product
 	var err error
 
@@ -481,7 +481,7 @@ func (h *GinPaymentHandler) RefundPayment(c *gin.Context) {
 		})
 		return
 	}
-
+	_ = userID
 	// 解析请求
 	var req struct {
 		OrderID      uint   `json:"order_id"`
@@ -684,7 +684,7 @@ func (h *GinPaymentHandler) UpdateSubscriptionQuota(c *gin.Context) {
 		})
 		return
 	}
-
+	_ = userID
 	// 解析请求
 	var req struct {
 		SubscriptionID uint `json:"subscription_id"`
