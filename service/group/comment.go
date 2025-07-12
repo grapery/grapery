@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	connect "connectrpc.com/connect"
@@ -23,23 +22,6 @@ type CommentService struct {
 }
 
 // 从 context 获取 traceId，没有则生成
-func getTraceID(ctx context.Context) string {
-	if v := ctx.Value("traceId"); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	id := uuid.NewString()
-	return id
-}
-
-// 内容脱敏，只显示前20字
-func maskContent(content string) string {
-	if len(content) > 20 {
-		return content[:20] + "..."
-	}
-	return content
-}
 
 func (ts *CommentService) CreateStoryComment(ctx context.Context, req *connect.Request[api.CreateStoryCommentRequest]) (*connect.Response[api.CreateStoryCommentResponse], error) {
 	traceId := getTraceID(ctx)
