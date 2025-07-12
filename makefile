@@ -23,7 +23,7 @@ withpgo: $(TARGETS)
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-app  $(project)/app/grapes/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-worker  $(project)/app/syncworker/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-mcps  $(project)/app/mcps/
-	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-pay  $(project)/app/vippay/
+	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-vippay  $(project)/app/vippay/
 	$(GO) build  -pgo=./sample.pgo -ldflags  '$(LDFLAGS)' -o grapes-llmchat  $(project)/app/llmchat/
 	
 image: $(TARGETS)
@@ -54,12 +54,21 @@ test:
 	@$(GO) test -race `$(GO) list ./... 
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(TARGETS)-*
 
 cov:
 	gocov test -timeout=20m -race -v `$(GO) list ./... |egrep -v "app"`
 
 cert:
 	sh ./certs/gen.sh
+
+build-all:
+	$(MAKE) build-grapes
+	$(MAKE) build-syncworker
+	$(MAKE) build-mcps
+	$(MAKE) build-vippay
+	$(MAKE) build-llmchat
+
+
 
 	
