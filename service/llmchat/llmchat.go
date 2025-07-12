@@ -132,7 +132,7 @@ func GetSessionService(ctx context.Context, userID int64, roleID int64) (*llmcha
 
 // SessionMessagePageByMessageID 根据message_id倒序分页获取消息
 func SessionMessagePageByMessageID(ctx context.Context, sessionID, messageID string, pageSize int) ([]*llmchatpkg.LLMChatMessage, bool, error) {
-	msgs, hasMore, err := llmchatpkg.GetLLMChatEngine().SessionMessages(ctx, sessionID, 1, pageSize+1)
+	msgs, hasMore, err := llmchatpkg.GetLLMChatEngine().SessionMessagesByMessageID(ctx, sessionID, messageID, pageSize)
 	if err != nil {
 		return nil, false, err
 	}
@@ -145,12 +145,19 @@ func SessionMessagePageByMessageID(ctx context.Context, sessionID, messageID str
 	llmMsgs := make([]*llmchatpkg.LLMChatMessage, 0, len(msgs))
 	for _, msg := range msgs {
 		llmMsgs = append(llmMsgs, &llmchatpkg.LLMChatMessage{
-			MessageId:   msg.MessageId,
-			Content:     msg.Content,
-			CreatedAt:   msg.CreatedAt,
-			UpdatedAt:   msg.UpdatedAt,
-			Like:        msg.Like,
-			Attachments: msg.Attachments,
+			MessageId:      msg.MessageId,
+			SessionID:      msg.SessionID,
+			UserID:         msg.UserID,
+			Content:        msg.Content,
+			MsgType:        msg.MsgType,
+			Status:         msg.Status,
+			CreatedAt:      msg.CreatedAt,
+			UpdatedAt:      msg.UpdatedAt,
+			Deleted:        msg.Deleted,
+			ConversationId: msg.ConversationId,
+			LLmContent:     msg.LLmContent,
+			Like:           msg.Like,
+			Attachments:    msg.Attachments,
 		})
 	}
 	return llmMsgs, hasMore, nil

@@ -3,6 +3,7 @@ package llmchat
 import (
 	"context"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -146,6 +147,9 @@ func toLLMChatMessageSlice(msgs []*models.LLMChatMsg) []*LLMChatMessage {
 	for _, m := range msgs {
 		res = append(res, toLLMChatMessage(m))
 	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].CreatedAt.Before(res[j].CreatedAt)
+	})
 	return res
 }
 
