@@ -185,7 +185,7 @@ func ListLLMChatMsgsBySessionIDWithPage(ctx context.Context, sessionID string, p
 	var total int64
 	db := DataBase().WithContext(ctx).Model(&LLMChatMsg{}).Where("session_id = ? AND deleted = 0", sessionID)
 	db.Count(&total)
-	err := db.Order("created_at asc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&msgs).Error
+	err := db.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&msgs).Error
 	if err != nil {
 		return nil, 0, fmt.Errorf("list llmchat_msgs by session_id with page failed: %w", err)
 	}
@@ -247,4 +247,23 @@ func (m *LLMChatMsg) DeleteByMessageId(ctx context.Context, messageId string) er
 		return fmt.Errorf("delete llmchat_msg by message_id [%s] failed: %w", messageId, err)
 	}
 	return nil
+}
+
+// ListMsgsBySessionIdBeforeMessageId 获取session_id下比message_id更早的消息，按created_at倒序分页
+func ListMsgsBySessionIdBeforeMessageId(ctx context.Context, sessionID, messageID string, pageSize int) ([]*LLMChatMsg, error) {
+	var anchorMsg LLMChatMsg
+	err := DataBase().WithContext(ctx).Model(&LLMChatMsg{}).Where("message_id = ? AND deleted = 0", messageID).First(&anchorMsg).Error
+	if err != nil {
+		return nil, fmt.Errorf("get anchor message failed: %w", err)
+	}
+	var msgs []*LLMChatMsg
+	err = DataBase().WithContext(ctx).Model(&LLMChatMsg{}).
+		Where("session_id = ? AND deleted = 0 AND created_at < ?", sessionID, anchorMsg.CreatedAt).
+		Order("created_at desc").
+		Limit(pageSize).
+		Find(&msgs).Error
+	if err != nil {
+		return nil, fmt.Errorf("list msgs by session before message_id failed: %w", err)
+	}
+	return msgs, nil
 }

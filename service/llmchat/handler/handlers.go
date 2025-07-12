@@ -23,8 +23,9 @@ type APIResponse struct {
 
 // SSEPayload 用于SSE推送的结构体，包含event和data字段，便于前端解析
 type SSEPayload struct {
-	Event string `json:"event"`
-	Data  string `json:"data"`
+	Event     string `json:"event"`
+	Data      string `json:"data"`
+	MessageId string `json:"message_id"`
 }
 
 // RegisterLLMChatRoutes 注册llmchat相关路由，使用鉴权和限流中间件
@@ -198,8 +199,9 @@ func SendMessageHandler(c *gin.Context) {
 			log.Info("[SendMessageHandler] streamChan已关闭，结束SSE推送")
 			// 推送结束事件，event为done，data为[DONE]
 			payload := SSEPayload{
-				Event: "done",
-				Data:  "[DONE]",
+				MessageId: msg.MessageId,
+				Event:     "done",
+				Data:      "[DONE]",
 			}
 			b, _ := json.Marshal(payload)
 			c.Writer.Write(b) // SSE事件块分隔
@@ -343,13 +345,21 @@ func SessionMessageHandler(c *gin.Context) {
 	params := c.Request.URL.Query()
 	page, _ := strconv.Atoi(params.Get("page"))
 	pageSize, _ := strconv.Atoi(params.Get("page_size"))
+	messageID := params.Get("message_id")
 	if page == 0 {
 		page = 1
 	}
 	if pageSize == 0 {
 		pageSize = 10
 	}
-	msgs, hasMore, err := llmchatservice.SessionMessageService(c.Request.Context(), sessionID, page, pageSize)
+	var msgs []*llmchatpkg.LLMChatMessage
+	var hasMore bool
+	var err error
+	if messageID != "" {
+		msgs, hasMore, err = llmchatservice.SessionMessagePageByMessageID(c.Request.Context(), sessionID, messageID, pageSize)
+	} else {
+		msgs, hasMore, err = llmchatservice.SessionMessageService(c.Request.Context(), sessionID, page, pageSize)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{Code: http.StatusInternalServerError, Message: err.Error(), Data: struct{}{}})
 		return

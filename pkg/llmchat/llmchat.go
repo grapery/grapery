@@ -401,6 +401,23 @@ func (e *LLMChatEngine) SessionMessages(ctx context.Context, sessionID string, p
 	return toLLMChatMessageSlice(msgs), total > int64(page*pageSize), nil
 }
 
+func (e *LLMChatEngine) SessionMessagesByMessageID(ctx context.Context, sessionID string, messageID string, pageSize int) ([]*LLMChatMessage, bool, error) {
+	log.Log().Info("[SessionMessagesByMessageID] 开始获取会话消息", zap.String("sessionID", sessionID), zap.String("messageID", messageID), zap.Int("pageSize", pageSize))
+	msgs, err := models.ListMsgsBySessionIdBeforeMessageId(ctx, sessionID, messageID, pageSize+1)
+	if err != nil {
+		log.Log().Error("[SessionMessagesByMessageID] 获取会话消息失败", zap.Error(err), zap.String("sessionID", sessionID), zap.String("messageID", messageID), zap.Int("pageSize", pageSize))
+		return nil, false, err
+	}
+	var hasMore bool
+	if len(msgs) > pageSize {
+		msgs = msgs[:pageSize]
+		hasMore = true
+	} else {
+		hasMore = false
+	}
+	return toLLMChatMessageSlice(msgs), hasMore, nil
+}
+
 // parseSSEData 解析SSE格式的data字段
 // 输入示例："data: hello world\n\n"，返回"hello world"
 func parseSSEData(chunk string) string {
