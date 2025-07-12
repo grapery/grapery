@@ -47,6 +47,7 @@ services:
     depends_on:
       - grapes
       - grapes-llmchat
+      - grapes-vippay
     restart: unless-stopped
     networks:
       - grapery-network
