@@ -156,7 +156,7 @@ func registerRoutes(router *gin.Engine) {
 	})
 
 	// API 路由组
-	api := router.Group("/api/v1")
+	api := router.Group("/api/v1/pay")
 	{
 		// 商品相关路由
 		products := api.Group("/products")
