@@ -14,7 +14,7 @@ on:
       - '.github/workflows/grapery-ci.yml'
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.24'
   REGISTRY: ghcr.io
   IMAGE_BASE: ${{ github.repository_owner }}/grapery
   
