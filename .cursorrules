@@ -1,0 +1,131 @@
+# Grapery Backend - Cursor Rules
+
+## Project Overview
+This is the Go backend service for Grapery, a story creation platform. It provides RESTful APIs using Gin framework, MySQL database, and Redis cache.
+
+## Technology Stack
+- **Language**: Go 1.22+
+- **Framework**: Gin
+- **ORM**: GORM
+- **Database**: MySQL 8.0
+- **Cache**: Redis 7.0
+- **Authentication**: JWT
+
+## Code Style & Conventions
+
+### General Rules
+- Follow Go standard formatting (`gofmt`)
+- Use `golangci-lint` for linting
+- Write clear, self-documenting code
+- Prefer composition over inheritance
+- Keep functions small and focused (max 50 lines when possible)
+- Use meaningful variable and function names
+
+### Package Structure
+- `cmd/` - Application entry points (server, chatmcp, vippay)
+- `internal/domain/` - Domain models and business entities
+- `internal/repository/` - Data access layer (MySQL, Redis)
+- `internal/service/` - Business logic layer
+- `internal/transport/` - HTTP handlers and routing
+- `internal/config/` - Configuration management
+
+### Error Handling
+- Always handle errors explicitly, never ignore them
+- Use structured errors with context: `fmt.Errorf("failed to create story: %w", err)`
+- Log errors with context using Zap logger
+- Return errors from functions, don't panic (except in main)
+
+### Logging
+- Use structured logging with Zap
+- Include relevant context in log messages
+- Use appropriate log levels:
+  - `Debug`: Detailed information for debugging
+  - `Info`: General informational messages
+  - `Warn`: Warning messages for recoverable issues
+  - `Error`: Error messages for failures
+
+### Database
+- Use GORM for database operations
+- Always use transactions for multi-step operations
+- Use prepared statements for queries with user input
+- Implement proper indexes for frequently queried fields
+- Use connection pooling
+
+### API Design
+- Follow RESTful conventions
+- Use consistent response format: `{code, message, data}`
+- Validate all input data
+- Return appropriate HTTP status codes
+- Document API endpoints
+
+### Testing
+- Write unit tests for business logic
+- Use table-driven tests when appropriate
+- Mock external dependencies
+- Aim for >80% code coverage
+
+### Security
+- Never log sensitive information (passwords, tokens)
+- Use JWT for authentication
+- Validate and sanitize all user inputs
+- Use parameterized queries to prevent SQL injection
+- Implement rate limiting for API endpoints
+
+## Common Patterns
+
+### Service Layer Pattern
+```go
+type Service struct {
+    repo Repository
+    log  *zap.Logger
+}
+
+func (s *Service) CreateStory(ctx context.Context, req *CreateRequest) (*Story, error) {
+    // Validation
+    if err := validate(req); err != nil {
+        return nil, err
+    }
+    
+    // Business logic
+    story := &Story{...}
+    
+    // Persist
+    if err := s.repo.Create(ctx, story); err != nil {
+        s.log.Error("failed to create story", zap.Error(err))
+        return nil, err
+    }
+    
+    return story, nil
+}
+```
+
+### Repository Pattern
+```go
+type Repository interface {
+    Create(ctx context.Context, story *Story) error
+    GetByID(ctx context.Context, id string) (*Story, error)
+    List(ctx context.Context, filter *Filter) ([]*Story, error)
+}
+```
+
+## When Adding New Features
+1. Define domain models in `internal/domain/`
+2. Create database models in `internal/repository/mysql/`
+3. Implement repository methods
+4. Add business logic in `internal/service/`
+5. Create HTTP handlers in `internal/transport/http/`
+6. Add routes in `internal/transport/http/handler.go`
+7. Write tests
+8. Update API documentation
+
+## Dependencies
+- Use `go mod` for dependency management
+- Pin dependency versions in `go.mod`
+- Regularly update dependencies for security patches
+
+## Performance
+- Use connection pooling for database and Redis
+- Implement caching for frequently accessed data
+- Use goroutines for concurrent operations when appropriate
+- Profile code to identify bottlenecks
+

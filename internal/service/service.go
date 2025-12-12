@@ -1,0 +1,79 @@
+package service
+
+import (
+	"context"
+
+	"github.com/grapestree/fgrapery/grapery/internal/config"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
+	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"go.uber.org/zap"
+)
+
+// Service exposes business logic
+type Service struct {
+	repo          domain.Repository
+	log           *zap.Logger
+	logger        *zap.Logger // 别名，用于新代码
+	cache         interface{} // Cache 接口
+	genAPI        *genapi.GenAPI
+	geminiClient  *gemini.Client
+	aiGenService  *AIGenerationService // AI生成服务（统一管理AI能力使用）
+	imageProvider string               // Provider for image generation (gemini, huoshan)
+	videoProvider string               // Provider for video generation (gemini, huoshan, hailuo)
+}
+
+// New creates a new service instance
+func New(repo domain.Repository, log *zap.Logger) *Service {
+	return &Service{
+		repo:          repo,
+		log:           log,
+		logger:        log,
+		cache:         nil,      // 稍后通过 SetCache 设置
+		imageProvider: "huoshan", // Default image provider
+		videoProvider: "hailuo", // Default video provider
+	}
+}
+
+// SetAIConfig sets the AI provider configuration
+func (s *Service) SetAIConfig(cfg config.AIConfig) {
+	if cfg.ImageProvider != "" {
+		s.imageProvider = cfg.ImageProvider
+	}
+	if cfg.VideoProvider != "" {
+		s.videoProvider = cfg.VideoProvider
+	}
+	s.logger.Info("AI provider configuration set",
+		zap.String("imageProvider", s.imageProvider),
+		zap.String("videoProvider", s.videoProvider))
+}
+
+// SetCache 设置缓存实例
+func (s *Service) SetCache(cache interface{}) {
+	s.cache = cache
+}
+
+// SetAIClients 设置 AI 客户端
+func (s *Service) SetAIClients(genAPI *genapi.GenAPI, geminiClient *gemini.Client) {
+	s.genAPI = genAPI
+	s.geminiClient = geminiClient
+
+	// 初始化AI生成服务
+	if genAPI != nil || geminiClient != nil {
+		s.aiGenService = NewAIGenerationService(s.repo, geminiClient, genAPI, s.logger)
+		s.logger.Info("AI generation service initialized")
+		
+		// 恢复未完成的视频生成任务
+		go s.RecoverPendingVideoGenerations(context.Background())
+	}
+}
+
+// AIGenerationService 获取AI生成服务
+func (s *Service) AIGenerationService() *AIGenerationService {
+	return s.aiGenService
+}
+
+// Health returns service health status
+func (s *Service) Health() map[string]string {
+	return map[string]string{"status": "ok", "service": "grapery-api"}
+}

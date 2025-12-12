@@ -1,0 +1,242 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/gin-contrib/cors"
+	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
+	"github.com/grapestree/fgrapery/grapery/internal/config"
+	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
+	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
+	"github.com/grapestree/fgrapery/grapery/internal/server"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
+	transport "github.com/grapestree/fgrapery/grapery/internal/transport/http"
+	"go.uber.org/zap"
+)
+
+func main() {
+	// Parse command line flags
+	configPath := flag.String("config", "", "Path to configuration file (YAML)")
+	version := flag.Bool("version", false, "Print version information")
+	flag.Parse()
+
+	// Print version and exit if requested
+	if *version {
+		fmt.Println("Grapery Server v1.0.0")
+		os.Exit(0)
+	}
+
+	// Load configuration
+	var cfg config.Config
+	var err error
+
+	if *configPath != "" {
+		cfg, err = config.LoadFromFile(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// Fallback to environment variables only
+		cfg = config.Load()
+	}
+
+	// Initialize logger
+	logger, err := telemetry.NewLogger(cfg.LogLevel)
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	logger.Info("starting grapery api",
+		zap.String("env", cfg.Env),
+		zap.String("addr", cfg.Addr()),
+	)
+
+	// Initialize Aliyun OSS client (optional, graceful degradation to local storage)
+	if cfg.Aliyun.APIKey != "" && cfg.Aliyun.SecretKey != "" {
+		aliyunCfg := &aliyun.Config{
+			APIKey:    cfg.Aliyun.APIKey,
+			SecretKey: cfg.Aliyun.SecretKey,
+			Endpoint:  cfg.Aliyun.Endpoint,
+			Bucket:    cfg.Aliyun.Bucket,
+			RoleARN:   cfg.Aliyun.RoleARN,
+		}
+		if err := aliyun.InitGlobalClient(aliyunCfg, logger); err != nil {
+			logger.Warn("failed to initialize Aliyun OSS client, falling back to local storage", zap.Error(err))
+		} else {
+			logger.Info("Aliyun OSS client initialized",
+				zap.String("bucket", cfg.Aliyun.Bucket),
+				zap.String("endpoint", cfg.Aliyun.Endpoint),
+			)
+		}
+	} else {
+		logger.Info("Aliyun OSS not configured, using local storage")
+	}
+
+	// Initialize MySQL repository
+	repo, err := mysql.NewRepository(cfg.Database.DSN(), logger)
+	if err != nil {
+		logger.Fatal("failed to initialize repository", zap.Error(err))
+	}
+
+	// Initialize service
+	svc := service.New(repo, logger)
+
+	// Initialize AI clients
+	initAIClients(cfg, svc, logger)
+
+	// Initialize HTTP handler
+	handler := transport.NewHandler(svc, nil, logger)
+	router := transport.SetupRouter(handler, logger)
+
+	// Configure CORS
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     cfg.AllowOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * 3600,
+	}))
+
+	// Initialize server
+	srv := server.New(cfg, router)
+
+	// Setup graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Start server in goroutine
+	go func() {
+		logger.Info("server listening", zap.String("addr", cfg.Addr()))
+		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("server error", zap.Error(err))
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-ctx.Done()
+	logger.Info("shutdown signal received")
+
+	// Graceful shutdown
+	if err := srv.Shutdown(context.Background()); err != nil {
+		logger.Error("graceful shutdown failed", zap.Error(err))
+	}
+
+	logger.Info("server stopped")
+}
+
+// initAIClients initializes AI generation clients based on configuration
+func initAIClients(cfg config.Config, svc *service.Service, logger *zap.Logger) {
+	logger.Info("========== AI Configuration Check ==========")
+
+	genAPI := genapi.NewGenAPI()
+	var geminiClient *gemini.Client
+	hasProvider := false
+	var configuredProviders []string
+	var missingProviders []string
+
+	// Check and register Huoshan provider (火山引擎/豆包)
+	if cfg.AI.HuoshanAPIKey != "" {
+		huoshanCfg := &genapi.Config{
+			Provider: genapi.ProviderHuoshan,
+			APIKey:   cfg.AI.HuoshanAPIKey,
+			BaseURL:  cfg.AI.HuoshanBaseURL,
+		}
+		if _, err := genAPI.RegisterProviderConfig(huoshanCfg); err != nil {
+			logger.Error("❌ Huoshan provider registration failed",
+				zap.Error(err),
+				zap.String("baseURL", cfg.AI.HuoshanBaseURL),
+			)
+		} else {
+			logger.Info("✅ Huoshan provider registered",
+				zap.String("baseURL", cfg.AI.HuoshanBaseURL),
+				zap.Int("apiKeyLength", len(cfg.AI.HuoshanAPIKey)),
+			)
+			configuredProviders = append(configuredProviders, "huoshan")
+			hasProvider = true
+		}
+	} else {
+		missingProviders = append(missingProviders, "huoshan (HUOSHAN_API_KEY)")
+	}
+
+	// Check and register Gemini provider
+	if cfg.AI.GeminiAPIKey != "" {
+		geminiCfg := &genapi.Config{
+			Provider: genapi.ProviderGemini,
+			APIKey:   cfg.AI.GeminiAPIKey,
+			BaseURL:  cfg.AI.GeminiBaseURL,
+		}
+		if _, err := genAPI.RegisterProviderConfig(geminiCfg); err != nil {
+			logger.Error("❌ Gemini provider registration failed",
+				zap.Error(err),
+				zap.String("baseURL", cfg.AI.GeminiBaseURL),
+			)
+		} else {
+			baseURL := cfg.AI.GeminiBaseURL
+			if baseURL == "" {
+				baseURL = "(default)"
+			}
+			logger.Info("✅ Gemini provider registered",
+				zap.String("baseURL", baseURL),
+				zap.Int("apiKeyLength", len(cfg.AI.GeminiAPIKey)),
+			)
+			configuredProviders = append(configuredProviders, "gemini")
+			hasProvider = true
+
+			// Create direct Gemini client for AIGenerationService
+			var err error
+			geminiClient, err = gemini.New(gemini.Config{
+				APIKey:  cfg.AI.GeminiAPIKey,
+				BaseURL: cfg.AI.GeminiBaseURL,
+			})
+			if err != nil {
+				logger.Error("❌ Failed to create Gemini client",
+					zap.Error(err),
+				)
+				geminiClient = nil
+			} else {
+				logger.Info("✅ Gemini client created for AI generation service")
+			}
+		}
+	} else {
+		missingProviders = append(missingProviders, "gemini (GEMINI_API_KEY)")
+	}
+
+	// Summary log
+	logger.Info("========== AI Configuration Summary ==========")
+
+	if len(missingProviders) > 0 {
+		logger.Warn("⚠️  Missing AI provider configurations",
+			zap.Strings("missing", missingProviders),
+		)
+	}
+
+	// Set AI clients on service
+	if hasProvider {
+		svc.SetAIClients(genAPI, geminiClient)
+		svc.SetAIConfig(cfg.AI) // Set image/video provider configuration
+		logger.Info("✅ AI generation service initialized",
+			zap.Strings("providers", configuredProviders),
+			zap.String("defaultProvider", cfg.AI.DefaultProvider),
+			zap.String("imageProvider", cfg.AI.ImageProvider),
+			zap.String("videoProvider", cfg.AI.VideoProvider),
+			zap.Bool("geminiClientAvailable", geminiClient != nil),
+		)
+	} else {
+		logger.Error("❌ No AI providers configured - AI features will be DISABLED",
+			zap.String("action", "Set at least one of: GEMINI_API_KEY, HUOSHAN_API_KEY"),
+		)
+	}
+
+	logger.Info("==============================================")
+}

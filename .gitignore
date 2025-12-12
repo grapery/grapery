@@ -1,0 +1,95 @@
+# Grapery Backend - .gitignore
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+cmd/server/server
+cmd/server/main
+cmd/chatmcp/chatmcp
+cmd/chatmcp/main
+cmd/vippay/vippay
+cmd/vippay/main
+
+# Test binary, built with `go test -c`
+*.test
+*.test.exe
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+coverage.xml
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# Go build cache
+.cache/
+.gocache/
+
+# Configuration files
+config.yaml
+config.*.yaml
+!config.yaml.example
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.sql.bak
+*.dump
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.iml
+
+# Air live reload
+tmp/
+
+# Compiled templates
+*.tpl.go
+
+# Test results
+test-results/
+junit.xml
+
+# Secrets
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx

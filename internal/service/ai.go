@@ -1,0 +1,717 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"go.uber.org/zap"
+	"google.golang.org/genai"
+
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
+	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+)
+
+// AIService AI 生成服务
+type AIService struct {
+	genAPI       *genapi.GenAPI // 用于图片/视频生成
+	geminiClient *gemini.Client // 用于文本生成
+	repo         domain.Repository
+	logger       *zap.Logger
+}
+
+// NewAIService 创建 AI 服务
+func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, repo domain.Repository, logger *zap.Logger) *AIService {
+	return &AIService{
+		genAPI:       genAPI,
+		geminiClient: geminiClient,
+		repo:         repo,
+		logger:       logger,
+	}
+}
+
+// ============== 故事生成 ==============
+
+// GenerateStory 生成故事内容
+func (s *AIService) GenerateStory(ctx context.Context, userID string, req *domain.AIStoryGenerationRequest) (*domain.AITask, error) {
+	// 创建 AI 任务
+	task := &domain.AITask{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Type:      domain.AITaskGenerateStory,
+		Status:    domain.AITaskStatusPending,
+		Provider:  "", // 使用默认提供商
+		Progress:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	// 序列化输入参数
+	inputJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal input: %w", err)
+	}
+	task.Input = string(inputJSON)
+
+	// 保存任务到数据库
+	if err := s.repo.CreateAITask(ctx, task); err != nil {
+		return nil, fmt.Errorf("create task: %w", err)
+	}
+
+	// 启动异步生成
+	go s.processStoryGeneration(context.Background(), task, req)
+
+	return task, nil
+}
+
+// processStoryGeneration 处理故事生成（异步）
+func (s *AIService) processStoryGeneration(ctx context.Context, task *domain.AITask, req *domain.AIStoryGenerationRequest) {
+	// 更新任务状态为处理中
+	task.Status = domain.AITaskStatusProcessing
+	task.Progress = 10
+	startTime := time.Now().Unix()
+	task.StartedAt = &startTime
+	task.UpdatedAt = time.Now().Unix()
+	if err := s.repo.UpdateAITask(ctx, task); err != nil {
+		s.logger.Error("更新任务状态失败", zap.String("taskId", task.ID), zap.Error(err))
+	}
+
+	s.logger.Info("开始生成故事",
+		zap.String("taskId", task.ID),
+		zap.String("userId", task.UserID),
+		zap.String("prompt", req.Prompt),
+	)
+
+	// 构建 AI 提示词
+	prompt := s.buildStoryPrompt(req)
+
+	// 配置生成参数
+	temperature := req.Temperature
+	if temperature == 0 {
+		temperature = 0.7 // 默认温度
+	}
+	tempFloat32 := float32(temperature)
+	maxTokens := int32(2000)
+
+	genConfig := &genai.GenerateContentConfig{
+		Temperature:     &tempFloat32,
+		MaxOutputTokens: maxTokens,
+	}
+
+	task.Progress = 30
+	task.UpdatedAt = time.Now().Unix()
+	_ = s.repo.UpdateAITaskProgress(ctx, task.ID, task.Progress)
+
+	// 调用 Gemini 生成文本
+	text, geminiResp, err := s.geminiClient.GenerateText(ctx, "", prompt, genConfig)
+	if err != nil {
+		s.logger.Error("AI 生成失败",
+			zap.String("taskId", task.ID),
+			zap.Error(err),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = err.Error()
+		task.Progress = 0
+		task.UpdatedAt = time.Now().Unix()
+		_ = s.repo.UpdateAITask(ctx, task)
+		return
+	}
+
+	task.Progress = 80
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if geminiResp != nil && geminiResp.UsageMetadata != nil {
+		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
+	}
+
+	// 解析生成结果
+	result := s.parseStoryResult(text, req)
+	result.TokensUsed = tokensUsed
+
+	// 序列化输出结果
+	outputJSON, err := json.Marshal(result)
+	if err != nil {
+		s.logger.Error("序列化输出失败",
+			zap.String("taskId", task.ID),
+			zap.Error(err),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = fmt.Sprintf("marshal output: %v", err)
+		task.UpdatedAt = time.Now().Unix()
+		_ = s.repo.UpdateAITask(ctx, task)
+		return
+	}
+
+	// 更新任务完成
+	task.Status = domain.AITaskStatusCompleted
+	task.Progress = 100
+	task.Output = string(outputJSON)
+	task.TokensUsed = tokensUsed
+	completedTime := time.Now().Unix()
+	task.CompletedAt = &completedTime
+	task.UpdatedAt = time.Now().Unix()
+	_ = s.repo.UpdateAITask(ctx, task)
+
+	s.logger.Info("故事生成完成",
+		zap.String("taskId", task.ID),
+		zap.Int("tokensUsed", tokensUsed),
+		zap.Duration("duration", time.Duration(time.Now().Unix()-startTime)*time.Second),
+	)
+}
+
+// buildStoryPrompt 构建故事生成提示词
+func (s *AIService) buildStoryPrompt(req *domain.AIStoryGenerationRequest) string {
+	prompt := "作为一位专业的故事创作者，请根据以下要求创作一个精彩的故事：\n\n"
+	prompt += fmt.Sprintf("核心提示: %s\n\n", req.Prompt)
+
+	if req.Context != "" {
+		prompt += fmt.Sprintf("背景信息: %s\n\n", req.Context)
+	}
+
+	if len(req.Characters) > 0 {
+		prompt += fmt.Sprintf("涉及角色: %v\n\n", req.Characters)
+	}
+
+	if req.Style != "" {
+		prompt += fmt.Sprintf("风格: %s\n", req.Style)
+	}
+
+	lengthGuide := map[string]string{
+		"short":  "简短（500-800字）",
+		"medium": "中等（1000-1500字）",
+		"long":   "长篇（2000-3000字）",
+	}
+	if guide, ok := lengthGuide[req.Length]; ok {
+		prompt += fmt.Sprintf("长度要求: %s\n", guide)
+	}
+
+	prompt += "\n请以JSON格式返回，包含以下字段：\n"
+	prompt += "- title: 故事标题\n"
+	prompt += "- content: 完整的故事内容\n"
+	prompt += "- summary: 故事摘要（100字以内）\n"
+	prompt += "- scenes: 场景列表（每个场景包含title, description, location, timeOfDay）\n"
+	prompt += "- suggestedTags: 建议的标签（3-5个）\n"
+
+	return prompt
+}
+
+// parseStoryResult 解析故事生成结果
+func (s *AIService) parseStoryResult(text string, req *domain.AIStoryGenerationRequest) *domain.AIStoryGenerationResult {
+	var result domain.AIStoryGenerationResult
+
+	// 尝试解析 JSON
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		// 如果不是 JSON，使用原始文本
+		result.Title = "生成的故事"
+		result.Content = text
+		result.Summary = s.extractSummary(text)
+	}
+
+	return &result
+}
+
+// extractSummary 从文本中提取摘要
+func (s *AIService) extractSummary(text string) string {
+	if len(text) <= 100 {
+		return text
+	}
+	return text[:100] + "..."
+}
+
+// ============== 提示词增强 ==============
+
+// EnhancePrompt 增强提示词
+func (s *AIService) EnhancePrompt(ctx context.Context, userID string, req *domain.AIPromptEnhanceRequest) (*domain.AITask, error) {
+	// 创建 AI 任务
+	task := &domain.AITask{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Type:      domain.AITaskEnhancePrompt,
+		Status:    domain.AITaskStatusPending,
+		Provider:  "",
+		Progress:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	// 序列化输入参数
+	inputJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal input: %w", err)
+	}
+	task.Input = string(inputJSON)
+
+	// 启动异步处理
+	go s.processPromptEnhancement(context.Background(), task, req)
+
+	return task, nil
+}
+
+// processPromptEnhancement 处理提示词增强（异步）
+func (s *AIService) processPromptEnhancement(ctx context.Context, task *domain.AITask, req *domain.AIPromptEnhanceRequest) {
+	task.Status = domain.AITaskStatusProcessing
+	task.Progress = 20
+	startTime := time.Now().Unix()
+	task.StartedAt = &startTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("开始增强提示词",
+		zap.String("taskId", task.ID),
+		zap.String("originalPrompt", req.OriginalPrompt),
+	)
+
+	// 构建增强提示词
+	prompt := s.buildEnhancePrompt(req)
+
+	temperature := float32(0.5) // 提示词增强使用较低温度
+	maxTokens := int32(500)
+	genConfig := &genai.GenerateContentConfig{
+		Temperature:     &temperature,
+		MaxOutputTokens: maxTokens,
+	}
+
+	task.Progress = 50
+
+	// 调用 Gemini 生成文本
+	text, geminiResp, err := s.geminiClient.GenerateText(ctx, "", prompt, genConfig)
+	if err != nil {
+		s.logger.Error("提示词增强失败",
+			zap.String("taskId", task.ID),
+			zap.Error(err),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = err.Error()
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if geminiResp != nil && geminiResp.UsageMetadata != nil {
+		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
+	}
+
+	// 解析结果
+	result := &domain.AIPromptEnhanceResult{
+		EnhancedPrompt: s.extractEnhancedPrompt(text),
+		Improvements:   s.extractImprovements(text),
+		TokensUsed:     tokensUsed,
+	}
+
+	outputJSON, err := json.Marshal(result)
+	if err != nil {
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = fmt.Sprintf("marshal output: %v", err)
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	task.Status = domain.AITaskStatusCompleted
+	task.Progress = 100
+	task.Output = string(outputJSON)
+	task.TokensUsed = tokensUsed
+	completedTime := time.Now().Unix()
+	task.CompletedAt = &completedTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("提示词增强完成",
+		zap.String("taskId", task.ID),
+		zap.Int("tokensUsed", tokensUsed),
+	)
+}
+
+// buildEnhancePrompt 构建增强提示词的提示
+func (s *AIService) buildEnhancePrompt(req *domain.AIPromptEnhanceRequest) string {
+	targetTypeDesc := map[string]string{
+		"image": "图片生成",
+		"video": "视频生成",
+	}
+
+	prompt := "作为专业的AI提示词工程师，请帮我优化以下提示词：\n\n"
+	prompt += fmt.Sprintf("原始提示词: %s\n\n", req.OriginalPrompt)
+	prompt += fmt.Sprintf("目标用途: %s\n", targetTypeDesc[req.TargetType])
+
+	if req.Style != "" {
+		prompt += fmt.Sprintf("期望风格: %s\n", req.Style)
+	}
+
+	detailLevelDesc := map[string]string{
+		"low":    "简洁明了，关注核心要素",
+		"medium": "中等细节，平衡描述",
+		"high":   "极致细节，包含环境、光影、氛围等",
+	}
+	if desc, ok := detailLevelDesc[req.DetailLevel]; ok {
+		prompt += fmt.Sprintf("细节程度: %s\n", desc)
+	}
+
+	prompt += "\n请返回JSON格式：\n"
+	prompt += "{\n"
+	prompt += "  \"enhancedPrompt\": \"增强后的提示词\",\n"
+	prompt += "  \"improvements\": \"改进说明\"\n"
+	prompt += "}\n"
+
+	return prompt
+}
+
+// extractEnhancedPrompt 提取增强后的提示词
+func (s *AIService) extractEnhancedPrompt(text string) string {
+	var result struct {
+		EnhancedPrompt string `json:"enhancedPrompt"`
+	}
+	if err := json.Unmarshal([]byte(text), &result); err == nil {
+		return result.EnhancedPrompt
+	}
+	// 如果解析失败，返回原文
+	return text
+}
+
+// extractImprovements 提取改进说明
+func (s *AIService) extractImprovements(text string) string {
+	var result struct {
+		Improvements string `json:"improvements"`
+	}
+	if err := json.Unmarshal([]byte(text), &result); err == nil {
+		return result.Improvements
+	}
+	return ""
+}
+
+// ============== 图片生成 ==============
+
+// GenerateImage 生成图片
+func (s *AIService) GenerateImage(ctx context.Context, userID string, req *domain.AIImageGenerationRequest) (*domain.AITask, error) {
+	// 创建 AI 任务
+	task := &domain.AITask{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Type:      domain.AITaskGenerateImage,
+		Status:    domain.AITaskStatusPending,
+		Provider:  "",
+		Progress:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	inputJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal input: %w", err)
+	}
+	task.Input = string(inputJSON)
+
+	// 启动异步处理
+	go s.processImageGeneration(context.Background(), task, req)
+
+	return task, nil
+}
+
+// processImageGeneration 处理图片生成（异步）
+func (s *AIService) processImageGeneration(ctx context.Context, task *domain.AITask, req *domain.AIImageGenerationRequest) {
+	task.Status = domain.AITaskStatusProcessing
+	task.Progress = 20
+	startTime := time.Now().Unix()
+	task.StartedAt = &startTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("开始生成图片",
+		zap.String("taskId", task.ID),
+		zap.String("prompt", req.Prompt),
+	)
+
+	// 构建图片生成请求
+	genReq := &genapi.GenerateRequest{
+		Operation:   genapi.OperationTextToImage,
+		Prompt:      req.Prompt,
+		Size:        req.Size,
+		Quality:     req.Quality,
+		Style:       req.Style,
+		OutputCount: req.N,
+	}
+
+	if genReq.OutputCount == 0 {
+		genReq.OutputCount = 1 // 默认生成1张
+	}
+
+	task.Progress = 50
+
+	// 使用默认的图片提供商（需要事先注册）
+	providerName := "gemini" // 或 "hailuo", "huoshan"
+	if task.Provider != "" {
+		providerName = task.Provider
+	}
+
+	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
+	if err != nil {
+		s.logger.Error("图片生成失败",
+			zap.String("taskId", task.ID),
+			zap.Error(err),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = err.Error()
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	// 检查响应错误
+	if resp.Error != "" {
+		s.logger.Error("图片生成返回错误",
+			zap.String("taskId", task.ID),
+			zap.String("error", resp.Error),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = resp.Error
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if resp.Usage != nil {
+		tokensUsed = resp.Usage.TotalTokens
+	}
+
+	// 构建结果
+	result := &domain.AIImageGenerationResult{
+		URLs:       resp.ImageURLs,
+		TokensUsed: tokensUsed,
+	}
+
+	outputJSON, err := json.Marshal(result)
+	if err != nil {
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = fmt.Sprintf("marshal output: %v", err)
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	task.Status = domain.AITaskStatusCompleted
+	task.Progress = 100
+	task.Output = string(outputJSON)
+	task.TokensUsed = tokensUsed
+	completedTime := time.Now().Unix()
+	task.CompletedAt = &completedTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("图片生成完成",
+		zap.String("taskId", task.ID),
+		zap.Int("imagesCount", len(resp.ImageURLs)),
+		zap.Int("tokensUsed", tokensUsed),
+	)
+}
+
+// ============== 视频生成 ==============
+
+// GenerateVideo 生成视频
+func (s *AIService) GenerateVideo(ctx context.Context, userID string, req *domain.AIVideoGenerationRequest) (*domain.AITask, error) {
+	// 创建 AI 任务
+	task := &domain.AITask{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Type:      domain.AITaskGenerateVideo,
+		Status:    domain.AITaskStatusPending,
+		Provider:  "",
+		Progress:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	inputJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal input: %w", err)
+	}
+	task.Input = string(inputJSON)
+
+	// 启动异步处理
+	go s.processVideoGeneration(context.Background(), task, req)
+
+	return task, nil
+}
+
+// processVideoGeneration 处理视频生成（异步）
+func (s *AIService) processVideoGeneration(ctx context.Context, task *domain.AITask, req *domain.AIVideoGenerationRequest) {
+	task.Status = domain.AITaskStatusProcessing
+	task.Progress = 10
+	startTime := time.Now().Unix()
+	task.StartedAt = &startTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("开始生成视频",
+		zap.String("taskId", task.ID),
+		zap.String("prompt", req.Prompt),
+		zap.Int("duration", req.Duration),
+	)
+
+	// 构建视频生成请求
+	genReq := &genapi.GenerateRequest{
+		Operation:       genapi.OperationTextToVideo,
+		Prompt:          req.Prompt,
+		DurationSeconds: req.Duration,
+		Resolution:      req.Resolution,
+		Style:           req.Style,
+	}
+
+	// 设置默认值
+	if genReq.DurationSeconds == 0 {
+		genReq.DurationSeconds = 6 // 默认6秒
+	}
+	if genReq.Resolution == "" {
+		genReq.Resolution = "1080p"
+	}
+
+	task.Progress = 30
+
+	// 使用默认的视频提供商（需要事先注册）
+	providerName := "hailuo" // 或 "huoshan", "gemini"
+	if task.Provider != "" {
+		providerName = task.Provider
+	}
+
+	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
+	if err != nil {
+		s.logger.Error("视频生成失败",
+			zap.String("taskId", task.ID),
+			zap.Error(err),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = err.Error()
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	// 检查响应错误
+	if resp.Error != "" {
+		s.logger.Error("视频生成返回错误",
+			zap.String("taskId", task.ID),
+			zap.String("error", resp.Error),
+		)
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = resp.Error
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	task.Progress = 90
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if resp.Usage != nil {
+		tokensUsed = resp.Usage.TotalTokens
+	}
+
+	// 构建生成结果
+	result := &domain.AIVideoGenerationResult{
+		VideoURL:     resp.VideoURL,
+		ThumbnailURL: resp.ThumbnailURL,
+		Duration:     req.Duration,
+		TokensUsed:   tokensUsed,
+	}
+
+	outputJSON, err := json.Marshal(result)
+	if err != nil {
+		task.Status = domain.AITaskStatusFailed
+		task.ErrorMessage = fmt.Sprintf("marshal output: %v", err)
+		task.UpdatedAt = time.Now().Unix()
+		return
+	}
+
+	task.Status = domain.AITaskStatusCompleted
+	task.Progress = 100
+	task.Output = string(outputJSON)
+	task.TokensUsed = result.TokensUsed
+	completedTime := time.Now().Unix()
+	task.CompletedAt = &completedTime
+	task.UpdatedAt = time.Now().Unix()
+
+	s.logger.Info("视频生成完成",
+		zap.String("taskId", task.ID),
+		zap.Int("tokensUsed", result.TokensUsed),
+		zap.Duration("duration", time.Duration(time.Now().Unix()-startTime)*time.Second),
+	)
+}
+
+// ============== 任务查询 ==============
+
+// GetTaskStatus 获取任务状态
+func (s *AIService) GetTaskStatus(ctx context.Context, taskID string) (*domain.AITask, error) {
+	task, err := s.repo.GetAITask(ctx, taskID)
+	if err != nil {
+		s.logger.Error("获取任务状态失败",
+			zap.String("taskId", taskID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("get task: %w", err)
+	}
+
+	if task == nil {
+		return nil, fmt.Errorf("task not found: %s", taskID)
+	}
+
+	return task, nil
+}
+
+// GetTaskResult 获取任务结果
+func (s *AIService) GetTaskResult(ctx context.Context, taskID string) (*domain.AITask, error) {
+	task, err := s.GetTaskStatus(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	if task.Status != domain.AITaskStatusCompleted {
+		return nil, fmt.Errorf("task not completed yet, current status: %s", task.Status)
+	}
+
+	return task, nil
+}
+
+// CancelTask 取消任务
+func (s *AIService) CancelTask(ctx context.Context, taskID, userID string) error {
+	// 获取任务
+	task, err := s.repo.GetAITask(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	// 验证用户权限
+	if task.UserID != userID {
+		return fmt.Errorf("unauthorized: task belongs to another user")
+	}
+
+	// 只能取消等待中或处理中的任务
+	if task.Status != domain.AITaskStatusPending && task.Status != domain.AITaskStatusProcessing {
+		return fmt.Errorf("cannot cancel task with status: %s", task.Status)
+	}
+
+	// 更新任务状态为已取消
+	task.Status = domain.AITaskStatusCancelled
+	task.UpdatedAt = time.Now().Unix()
+	completedTime := time.Now().Unix()
+	task.CompletedAt = &completedTime
+
+	if err := s.repo.UpdateAITask(ctx, task); err != nil {
+		s.logger.Error("取消任务失败",
+			zap.String("taskId", taskID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("update task: %w", err)
+	}
+
+	s.logger.Info("任务已取消",
+		zap.String("taskId", taskID),
+		zap.String("userId", userID),
+	)
+
+	return nil
+}
+
+// ptrInt32 返回 int32 指针
+func ptrInt32(v int) *int32 {
+	i := int32(v)
+	return &i
+}
