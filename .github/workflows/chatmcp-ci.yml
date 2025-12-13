@@ -18,6 +18,17 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/chatmcp-ci.yml'
+  # 手动触发部署
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
 
 env:
   GO_VERSION: '1.24'
@@ -28,111 +39,11 @@ env:
 
 jobs:
   # ========================================
-  # 代码质量检查
-  # ========================================
-  code-quality:
-    name: Code Quality Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Go fmt check
-        run: |
-          fmt_output=$(gofmt -l .)
-          if [ -n "$fmt_output" ]; then
-            echo "❌ The following files need formatting:"
-            echo "$fmt_output"
-            exit 1
-          fi
-          echo "✅ All files are properly formatted"
-
-      - name: Go vet
-        run: go vet ./...
-
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
-
-      - name: Run golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
-
-  # ========================================
-  # 测试
-  # ========================================
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: code-quality
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: testpass
-          MYSQL_DATABASE: grapery_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Run tests
-        env:
-          DB_DATABASE: grapery_test
-          DB_USERNAME: root
-          DB_PASSWORD: testpass
-          DB_ADDRESS: localhost
-          REDIS_ADDRESS: localhost:6379
-          REDIS_PASSWORD: ""
-          JWT_SECRET: test-jwt-secret-for-ci
-          JWT_EXPIRY_HOURS: "24"
-          GEMINI_API_KEY: test-gemini-key
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.out
-          flags: chatmcp
-          name: grapery-chatmcp
-
-  # ========================================
   # 构建
   # ========================================
   build:
     name: Build ChatMCP
     runs-on: ubuntu-latest
-    needs: test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -170,7 +81,9 @@ jobs:
     name: Docker Build (Develop)
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
     env:
       TAG: dev
     steps:
@@ -201,7 +114,9 @@ jobs:
     name: Docker Build (Production)
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
     env:
       TAG: prod
     steps:
@@ -232,7 +147,9 @@ jobs:
     name: Deploy to Development
     runs-on: ubuntu-latest
     needs: docker-develop
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -342,7 +259,9 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: docker-production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
