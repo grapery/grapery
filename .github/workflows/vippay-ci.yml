@@ -21,8 +21,8 @@ on:
 
 env:
   GO_VERSION: '1.24'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/grapery-vippay
+  REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com' }}
+  IMAGE_NAME: grapery-vippay
   SERVICE_NAME: vippay
   SERVICE_PORT: 8081
 
@@ -160,47 +160,28 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    permissions:
-      contents: read
-      packages: write
+    env:
+      TAG: dev
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Login to Aliyun ACR
+        run: echo ${{ vars.ACR_PASSWORD }} | docker login ${{ env.REGISTRY }} -u ${{ vars.ACR_USERNAME }} --password-stdin
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f ./cmd/${{ env.SERVICE_NAME }}/Dockerfile \
+            -t ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
+            --build-arg VERSION=develop-${{ github.sha }} \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            --build-arg BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+            .
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=develop
-            type=sha,prefix=dev-,format=short
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./cmd/${{ env.SERVICE_NAME }}/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=develop-${{ github.sha }}
-            COMMIT_SHA=${{ github.sha }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
   # ========================================
   # Docker 构建 - Main 分支
@@ -210,47 +191,28 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
+    env:
+      TAG: prod
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Login to Aliyun ACR
+        run: echo ${{ vars.ACR_PASSWORD }} | docker login ${{ env.REGISTRY }} -u ${{ vars.ACR_USERNAME }} --password-stdin
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f ./cmd/${{ env.SERVICE_NAME }}/Dockerfile \
+            -t ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
+            --build-arg VERSION=${{ github.sha }} \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            --build-arg BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+            .
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=,format=short
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./cmd/${{ env.SERVICE_NAME }}/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ github.sha }}
-            COMMIT_SHA=${{ github.sha }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
   # ========================================
   # 部署到开发环境 - Develop 分支
@@ -260,19 +222,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker-develop
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    environment: development
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create deployment config
+      - name: Generate .env file
         run: |
-          echo "📦 Creating development deployment configuration..."
-          cat > deploy-config.env << 'EOF'
+          echo "📦 Generating development .env file..."
+          cat > .env << EOF
           # ========== Environment ==========
           ENVIRONMENT=development
           SERVICE_NAME=${{ env.SERVICE_NAME }}
-          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop
+          IMAGE=${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
           
           # ========== Server Configuration ==========
           VIPPAY_PORT=${{ env.SERVICE_PORT }}
@@ -281,25 +242,26 @@ jobs:
           
           # ========== Database Configuration ==========
           DB_DATABASE=${{ vars.DB_DATABASE || 'grapery_dev' }}
-          DB_USERNAME=${{ secrets.DB_USERNAME }}
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          DB_ADDRESS=${{ secrets.DB_ADDRESS }}
+          DB_USERNAME=${{ vars.DB_USERNAME }}
+          DB_PASSWORD=${{ vars.DB_PASSWORD }}
+          DB_ADDRESS=${{ vars.DB_ADDRESS }}
           
           # ========== JWT Configuration ==========
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
           
           # ========== Apple IAP Configuration ==========
-          APPLE_BUNDLE_ID=${{ secrets.APPLE_BUNDLE_ID }}
-          APPLE_ISSUER_ID=${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_KEY_ID=${{ secrets.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
+          APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
           
           # ========== Google IAP Configuration ==========
-          GOOGLE_PACKAGE_NAME=${{ secrets.GOOGLE_PACKAGE_NAME }}
-          GOOGLE_SERVICE_ACCOUNT_KEY=${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          GOOGLE_PACKAGE_NAME=${{ vars.GOOGLE_PACKAGE_NAME }}
+          GOOGLE_SERVICE_ACCOUNT_KEY=${{ vars.GOOGLE_SERVICE_ACCOUNT_KEY }}
           EOF
-          echo "✅ Development deployment config created"
+          echo "✅ Development .env file generated"
+          cat .env
 
       - name: Deploy notification
         run: |
@@ -309,22 +271,58 @@ jobs:
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Service | ${{ env.SERVICE_NAME }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Port | ${{ env.SERVICE_PORT }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | development |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
 
-      # 添加实际部署步骤
-      # - name: Deploy to development server
-      #   uses: appleboy/ssh-action@v1.0.0
-      #   with:
-      #     host: ${{ secrets.DEV_DEPLOY_HOST }}
-      #     username: ${{ secrets.DEV_DEPLOY_USER }}
-      #     key: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
-      #     script: |
-      #       cd /opt/grapery
-      #       docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop
-      #       docker compose up -d vippay
-      #       docker system prune -f
+      - name: Upload .env to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.DEV_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: ".env"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Remote Deploy to Development Server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ vars.DEV_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/ubuntu/grapery
+            
+            # 设置环境变量
+            export REGISTRY=${{ env.REGISTRY }}
+            export ACR_USERNAME=${{ vars.ACR_USERNAME }}
+            export ACR_PASSWORD=${{ vars.ACR_PASSWORD }}
+            
+            # 登录阿里云 ACR
+            echo "$ACR_PASSWORD" | docker login $REGISTRY -u "$ACR_USERNAME" --password-stdin
+            
+            # 拉取最新镜像并部署
+            docker pull ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
+            
+            # 如果存在 docker-compose.yml，使用 docker compose 部署
+            if [ -f docker-compose.yml ]; then
+              docker compose up -d ${{ env.SERVICE_NAME }}
+            else
+              # 否则直接运行容器
+              docker stop ${{ env.SERVICE_NAME }} || true
+              docker rm ${{ env.SERVICE_NAME }} || true
+              docker run -d \
+                --name ${{ env.SERVICE_NAME }} \
+                --restart unless-stopped \
+                -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
+                --env-file .env \
+                ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
+            fi
+            
+            # 清理未使用的镜像
+            docker system prune -f
 
   # ========================================
   # 部署到生产环境 - Main 分支
@@ -334,19 +332,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker-production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create deployment config
+      - name: Generate .env file
         run: |
-          echo "📦 Creating production deployment configuration..."
-          cat > deploy-config.env << 'EOF'
+          echo "📦 Generating production .env file..."
+          cat > .env << EOF
           # ========== Environment ==========
           ENVIRONMENT=production
           SERVICE_NAME=${{ env.SERVICE_NAME }}
-          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          IMAGE=${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
           
           # ========== Server Configuration ==========
           VIPPAY_PORT=${{ env.SERVICE_PORT }}
@@ -355,25 +352,26 @@ jobs:
           
           # ========== Database Configuration ==========
           DB_DATABASE=${{ vars.DB_DATABASE || 'grapery' }}
-          DB_USERNAME=${{ secrets.DB_USERNAME }}
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          DB_ADDRESS=${{ secrets.DB_ADDRESS }}
+          DB_USERNAME=${{ vars.DB_USERNAME }}
+          DB_PASSWORD=${{ vars.DB_PASSWORD }}
+          DB_ADDRESS=${{ vars.DB_ADDRESS }}
           
           # ========== JWT Configuration ==========
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
           
           # ========== Apple IAP Configuration ==========
-          APPLE_BUNDLE_ID=${{ secrets.APPLE_BUNDLE_ID }}
-          APPLE_ISSUER_ID=${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_KEY_ID=${{ secrets.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
+          APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
           
           # ========== Google IAP Configuration ==========
-          GOOGLE_PACKAGE_NAME=${{ secrets.GOOGLE_PACKAGE_NAME }}
-          GOOGLE_SERVICE_ACCOUNT_KEY=${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          GOOGLE_PACKAGE_NAME=${{ vars.GOOGLE_PACKAGE_NAME }}
+          GOOGLE_SERVICE_ACCOUNT_KEY=${{ vars.GOOGLE_SERVICE_ACCOUNT_KEY }}
           EOF
-          echo "✅ Production deployment config created"
+          echo "✅ Production .env file generated"
+          cat .env
 
       - name: Deploy notification
         run: |
@@ -383,28 +381,64 @@ jobs:
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Service | ${{ env.SERVICE_NAME }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Port | ${{ env.SERVICE_PORT }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | production |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Secrets Status" >> $GITHUB_STEP_SUMMARY
-          echo "- DB_PASSWORD: ${{ secrets.DB_PASSWORD && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- JWT_SECRET: ${{ secrets.JWT_SECRET && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- GOOGLE_PACKAGE_NAME: ${{ secrets.GOOGLE_PACKAGE_NAME && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- DB_PASSWORD: ${{ vars.DB_PASSWORD && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- JWT_SECRET: ${{ vars.JWT_SECRET && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- GOOGLE_PACKAGE_NAME: ${{ vars.GOOGLE_PACKAGE_NAME && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- GOOGLE_SERVICE_ACCOUNT_KEY: ${{ vars.GOOGLE_SERVICE_ACCOUNT_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
 
-      # 添加实际部署步骤
-      # - name: Deploy to production server
-      #   uses: appleboy/ssh-action@v1.0.0
-      #   with:
-      #     host: ${{ secrets.PROD_DEPLOY_HOST }}
-      #     username: ${{ secrets.PROD_DEPLOY_USER }}
-      #     key: ${{ secrets.PROD_DEPLOY_SSH_KEY }}
-      #     script: |
-      #       cd /opt/grapery
-      #       docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-      #       docker compose up -d vippay
-      #       docker system prune -f
+      - name: Upload .env to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: ".env"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Remote Deploy to Production Server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/ubuntu/grapery
+            
+            # 设置环境变量
+            export REGISTRY=${{ env.REGISTRY }}
+            export ACR_USERNAME=${{ vars.ACR_USERNAME }}
+            export ACR_PASSWORD=${{ vars.ACR_PASSWORD }}
+            
+            # 登录阿里云 ACR
+            echo "$ACR_PASSWORD" | docker login $REGISTRY -u "$ACR_USERNAME" --password-stdin
+            
+            # 拉取最新镜像并部署
+            docker pull ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
+            
+            # 如果存在 docker-compose.yml，使用 docker compose 部署
+            if [ -f docker-compose.yml ]; then
+              docker compose up -d ${{ env.SERVICE_NAME }}
+            else
+              # 否则直接运行容器
+              docker stop ${{ env.SERVICE_NAME }} || true
+              docker rm ${{ env.SERVICE_NAME }} || true
+              docker run -d \
+                --name ${{ env.SERVICE_NAME }} \
+                --restart unless-stopped \
+                -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
+                --env-file .env \
+                ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
+            fi
+            
+            # 清理未使用的镜像
+            docker system prune -f
 
