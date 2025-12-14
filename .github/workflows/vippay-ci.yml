@@ -213,6 +213,16 @@ jobs:
           source: ".env"
           target: "/home/ubuntu/grapery/"
 
+      - name: Upload docker-compose.vippay.yml to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.DEV_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: "docker-compose.vippay.yml"
+          target: "/home/ubuntu/grapery/"
+
       - name: Remote Deploy to Development Server
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -227,23 +237,31 @@ jobs:
             export REGISTRY=${{ env.REGISTRY }}
             export ACR_USERNAME=${{ vars.ACR_USERNAME }}
             export ACR_PASSWORD=${{ vars.ACR_PASSWORD }}
+            export IMAGE=${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
             
             # 登录阿里云 ACR
             echo "$ACR_PASSWORD" | docker login $REGISTRY -u "$ACR_USERNAME" --password-stdin
             
             # 拉取最新镜像并部署
-            docker pull ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
+            docker pull $IMAGE
             
-            # 如果存在 docker-compose.yml，使用 docker compose 部署
-            if [ -f docker-compose.yml ]; then
-              docker compose up -d ${{ env.SERVICE_NAME }}
+            # 确保 grapery-network 网络存在（用于与其他服务通信）
+            echo "🔗 Checking grapery-network..."
+            docker network create grapery-network 2>/dev/null || echo "   (network already exists)"
+            
+            # 如果存在 docker-compose.vippay.yml，使用 docker compose 部署
+            if [ -f docker-compose.vippay.yml ]; then
+              echo "📦 Deploying via docker-compose.vippay.yml..."
+              docker compose -f docker-compose.vippay.yml up -d --remove-orphans
             else
-              # 否则直接运行容器
+              # 否则直接运行容器，连接到 grapery-network 网络
+              echo "🚀 Deploying container directly..."
               docker stop ${{ env.SERVICE_NAME }} || true
               docker rm ${{ env.SERVICE_NAME }} || true
               docker run -d \
                 --name ${{ env.SERVICE_NAME }} \
                 --restart unless-stopped \
+                --network grapery-network \
                 -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
                 --env-file .env \
                 ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
@@ -333,6 +351,16 @@ jobs:
           source: ".env"
           target: "/home/ubuntu/grapery/"
 
+      - name: Upload docker-compose.vippay.yml to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: "docker-compose.vippay.yml"
+          target: "/home/ubuntu/grapery/"
+
       - name: Remote Deploy to Production Server
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -347,23 +375,31 @@ jobs:
             export REGISTRY=${{ env.REGISTRY }}
             export ACR_USERNAME=${{ vars.ACR_USERNAME }}
             export ACR_PASSWORD=${{ vars.ACR_PASSWORD }}
+            export IMAGE=${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
             
             # 登录阿里云 ACR
             echo "$ACR_PASSWORD" | docker login $REGISTRY -u "$ACR_USERNAME" --password-stdin
             
             # 拉取最新镜像并部署
-            docker pull ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
+            docker pull $IMAGE
             
-            # 如果存在 docker-compose.yml，使用 docker compose 部署
-            if [ -f docker-compose.yml ]; then
-              docker compose up -d ${{ env.SERVICE_NAME }}
+            # 确保 grapery-network 网络存在（用于与其他服务通信）
+            echo "🔗 Checking grapery-network..."
+            docker network create grapery-network 2>/dev/null || echo "   (network already exists)"
+            
+            # 如果存在 docker-compose.vippay.yml，使用 docker compose 部署
+            if [ -f docker-compose.vippay.yml ]; then
+              echo "📦 Deploying via docker-compose.vippay.yml..."
+              docker compose -f docker-compose.vippay.yml up -d --remove-orphans
             else
-              # 否则直接运行容器
+              # 否则直接运行容器，连接到 grapery-network 网络
+              echo "🚀 Deploying container directly..."
               docker stop ${{ env.SERVICE_NAME }} || true
               docker rm ${{ env.SERVICE_NAME }} || true
               docker run -d \
                 --name ${{ env.SERVICE_NAME }} \
                 --restart unless-stopped \
+                --network grapery-network \
                 -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
                 --env-file .env \
                 ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
