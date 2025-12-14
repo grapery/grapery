@@ -259,10 +259,18 @@ jobs:
               TEMP_DIR=$(mktemp -d)
               cp docker-compose.chatmcp.yml "$TEMP_DIR/docker-compose.yml"
               cp .env "$TEMP_DIR/.env" 2>/dev/null || true
+              # 验证临时目录中的文件
+              echo "📋 Verifying compose file in temp directory..."
+              ls -la "$TEMP_DIR"
+              echo "--- docker-compose.yml content ---"
+              cat "$TEMP_DIR/docker-compose.yml"
               # 使用临时目录运行 docker compose，确保只使用指定的文件
-              cd "$TEMP_DIR"
-              # 使用 -f 参数显式指定 compose 文件，避免扫描其他文件
-              docker compose -f docker-compose.yml -p grapery-chatmcp up -d chatmcp
+              # 使用 --project-directory 和 -f 参数确保只使用指定文件
+              docker compose \
+                --project-directory "$TEMP_DIR" \
+                -f "$TEMP_DIR/docker-compose.yml" \
+                -p grapery-chatmcp \
+                up -d chatmcp
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
@@ -406,10 +414,18 @@ jobs:
               TEMP_DIR=$(mktemp -d)
               cp docker-compose.chatmcp.yml "$TEMP_DIR/docker-compose.yml"
               cp .env "$TEMP_DIR/.env" 2>/dev/null || true
+              # 验证临时目录中的文件
+              echo "📋 Verifying compose file in temp directory..."
+              ls -la "$TEMP_DIR"
+              echo "--- docker-compose.yml content ---"
+              cat "$TEMP_DIR/docker-compose.yml"
               # 使用临时目录运行 docker compose，确保只使用指定的文件
-              cd "$TEMP_DIR"
-              # 使用 -f 参数显式指定 compose 文件，避免扫描其他文件
-              docker compose -f docker-compose.yml -p grapery-chatmcp up -d chatmcp
+              # 使用 --project-directory 和 -f 参数确保只使用指定文件
+              docker compose \
+                --project-directory "$TEMP_DIR" \
+                -f "$TEMP_DIR/docker-compose.yml" \
+                -p grapery-chatmcp \
+                up -d chatmcp
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
