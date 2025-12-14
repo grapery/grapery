@@ -271,7 +271,8 @@ jobs:
               cp .env "$TEMP_DIR/.env" 2>/dev/null || true
               # 使用临时目录运行 docker compose，确保只使用指定的文件
               cd "$TEMP_DIR"
-              docker compose -p grapery-server up -d server
+              # 使用 -f 参数显式指定 compose 文件，避免扫描其他文件
+              docker compose -f docker-compose.yml -p grapery-server up -d server
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
@@ -428,7 +429,8 @@ jobs:
               cp .env "$TEMP_DIR/.env" 2>/dev/null || true
               # 使用临时目录运行 docker compose，确保只使用指定的文件
               cd "$TEMP_DIR"
-              docker compose -p grapery-server up -d server
+              # 使用 -f 参数显式指定 compose 文件，避免扫描其他文件
+              docker compose -f docker-compose.yml -p grapery-server up -d server
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
