@@ -262,7 +262,11 @@ jobs:
             # 如果存在 docker-compose.server.yml，使用 docker compose 部署
             if [ -f docker-compose.server.yml ]; then
               echo "📦 Deploying via docker-compose.server.yml..."
-              docker compose -f docker-compose.server.yml up -d --remove-orphans
+              # 先停止并删除当前服务的旧容器（避免影响其他服务）
+              docker stop ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (no existing container)"
+              docker rm ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (container already removed)"
+              # 使用 docker compose 启动服务
+              docker compose -f docker-compose.server.yml up -d
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
@@ -408,7 +412,11 @@ jobs:
             # 如果存在 docker-compose.server.yml，使用 docker compose 部署
             if [ -f docker-compose.server.yml ]; then
               echo "📦 Deploying via docker-compose.server.yml..."
-              docker compose -f docker-compose.server.yml up -d --remove-orphans
+              # 先停止并删除当前服务的旧容器（避免影响其他服务）
+              docker stop ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (no existing container)"
+              docker rm ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (container already removed)"
+              # 使用 docker compose 启动服务
+              docker compose -f docker-compose.server.yml up -d
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
