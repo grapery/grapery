@@ -146,7 +146,7 @@ func registerRoutes(router *gin.Engine) {
 	// 获取配置的域名，如果未配置则使用默认值
 	domain := getVipPayDomain()
 	if domain == "" {
-		domain = "https://www.grapery.xyz"
+		domain = "https://www.rankquantity.xyz"
 	}
 
 	// 创建 IAP 配置
