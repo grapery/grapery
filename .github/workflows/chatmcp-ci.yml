@@ -211,7 +211,7 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: ".env"
-          target: "/home/ubuntu/grapery/"
+          target: "/home/ubuntu/grapery/chatmcp/"
 
       - name: Upload docker-compose.chatmcp.yml to ECS
         uses: appleboy/scp-action@v0.1.4
@@ -221,7 +221,7 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: "docker-compose.chatmcp.yml"
-          target: "/home/ubuntu/grapery/"
+          target: "/home/ubuntu/grapery/chatmcp/"
 
       - name: Remote Deploy to Development Server
         uses: appleboy/ssh-action@v0.1.10
@@ -231,7 +231,10 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           script: |
-            cd /home/ubuntu/grapery
+            # 创建服务专用目录
+            SERVICE_DIR="/home/ubuntu/grapery/chatmcp"
+            mkdir -p "$SERVICE_DIR"
+            cd "$SERVICE_DIR"
             
             # 设置环境变量
             export REGISTRY=${{ env.REGISTRY }}
@@ -267,7 +270,10 @@ jobs:
               # 使用临时目录运行 docker compose，确保只使用指定的文件
               # 切换到临时目录，确保 Docker Compose 不会扫描其他文件
               cd "$TEMP_DIR"
-              docker compose -p grapery-chatmcp up -d chatmcp
+              # 先停止并清理可能存在的旧容器（使用项目名称隔离）
+              docker compose -f docker-compose.yml -p grapery-chatmcp down 2>/dev/null || true
+              # 显式指定 compose 文件，确保只使用当前服务的配置
+              docker compose -f docker-compose.yml -p grapery-chatmcp up -d chatmcp
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
@@ -363,7 +369,7 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: ".env"
-          target: "/home/ubuntu/grapery/"
+          target: "/home/ubuntu/grapery/chatmcp/"
 
       - name: Upload docker-compose.chatmcp.yml to ECS
         uses: appleboy/scp-action@v0.1.4
@@ -373,7 +379,7 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: "docker-compose.chatmcp.yml"
-          target: "/home/ubuntu/grapery/"
+          target: "/home/ubuntu/grapery/chatmcp/"
 
       - name: Remote Deploy to Production Server
         uses: appleboy/ssh-action@v0.1.10
@@ -383,7 +389,10 @@ jobs:
           key: ${{ vars.SSH_KEY }}
           port: 22
           script: |
-            cd /home/ubuntu/grapery
+            # 创建服务专用目录
+            SERVICE_DIR="/home/ubuntu/grapery/chatmcp"
+            mkdir -p "$SERVICE_DIR"
+            cd "$SERVICE_DIR"
             
             # 设置环境变量
             export REGISTRY=${{ env.REGISTRY }}
@@ -404,24 +413,15 @@ jobs:
             # 如果存在 docker-compose.chatmcp.yml，使用 docker compose 部署
             if [ -f docker-compose.chatmcp.yml ]; then
               echo "📦 Deploying via docker-compose.chatmcp.yml..."
-              # 先停止并删除当前服务的旧容器（避免影响其他服务）
-              docker stop ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (no existing container)"
-              docker rm ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (container already removed)"
-              # 创建临时目录并复制 compose 文件，避免 Docker Compose 扫描其他文件
-              TEMP_DIR=$(mktemp -d)
-              cp docker-compose.chatmcp.yml "$TEMP_DIR/docker-compose.yml"
-              cp .env "$TEMP_DIR/.env" 2>/dev/null || true
-              # 验证临时目录中的文件
-              echo "📋 Verifying compose file in temp directory..."
-              ls -la "$TEMP_DIR"
+              # 在当前服务目录中直接使用 docker compose（目录已隔离）
+              echo "📋 Verifying compose file in service directory..."
+              ls -la "$SERVICE_DIR"
               echo "--- docker-compose.yml content ---"
-              cat "$TEMP_DIR/docker-compose.yml"
-              # 使用临时目录运行 docker compose，确保只使用指定的文件
-              # 切换到临时目录，确保 Docker Compose 不会扫描其他文件
-              cd "$TEMP_DIR"
-              docker compose -p grapery-chatmcp up -d chatmcp
-              cd /home/ubuntu/grapery
-              rm -rf "$TEMP_DIR"
+              cat docker-compose.chatmcp.yml
+              # 先停止并清理可能存在的旧容器（使用项目名称隔离）
+              docker compose -f docker-compose.chatmcp.yml -p grapery-chatmcp down 2>/dev/null || true
+              # 显式指定 compose 文件，确保只使用当前服务的配置
+              docker compose -f docker-compose.chatmcp.yml -p grapery-chatmcp up -d chatmcp
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
