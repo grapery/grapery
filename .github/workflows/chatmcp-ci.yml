@@ -255,8 +255,8 @@ jobs:
               # 先停止并删除当前服务的旧容器（避免影响其他服务）
               docker stop ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (no existing container)"
               docker rm ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (container already removed)"
-              # 使用 docker compose 启动服务（显式指定服务名称，确保只操作当前服务）
-              docker compose -f docker-compose.chatmcp.yml up -d chatmcp
+              # 使用 docker compose 启动服务（指定项目名称，避免与其他服务的 compose 文件冲突）
+              docker compose -f docker-compose.chatmcp.yml -p grapery-chatmcp up -d chatmcp
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
@@ -394,8 +394,8 @@ jobs:
               # 先停止并删除当前服务的旧容器（避免影响其他服务）
               docker stop ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (no existing container)"
               docker rm ${{ env.SERVICE_NAME }} 2>/dev/null || echo "   (container already removed)"
-              # 使用 docker compose 启动服务（显式指定服务名称，确保只操作当前服务）
-              docker compose -f docker-compose.chatmcp.yml up -d chatmcp
+              # 使用 docker compose 启动服务（指定项目名称，避免与其他服务的 compose 文件冲突）
+              docker compose -f docker-compose.chatmcp.yml -p grapery-chatmcp up -d chatmcp
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
