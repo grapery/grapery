@@ -275,12 +275,9 @@ jobs:
               echo "--- docker-compose.yml content ---"
               cat "$TEMP_DIR/docker-compose.yml"
               # 使用临时目录运行 docker compose，确保只使用指定的文件
-              # 使用 --project-directory 和 -f 参数确保只使用指定文件
-              docker compose \
-                --project-directory "$TEMP_DIR" \
-                -f "$TEMP_DIR/docker-compose.yml" \
-                -p grapery-server \
-                up -d server
+              # 切换到临时目录，确保 Docker Compose 不会扫描其他文件
+              cd "$TEMP_DIR"
+              docker compose -p grapery-server up -d server
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
@@ -441,12 +438,9 @@ jobs:
               echo "--- docker-compose.yml content ---"
               cat "$TEMP_DIR/docker-compose.yml"
               # 使用临时目录运行 docker compose，确保只使用指定的文件
-              # 使用 --project-directory 和 -f 参数确保只使用指定文件
-              docker compose \
-                --project-directory "$TEMP_DIR" \
-                -f "$TEMP_DIR/docker-compose.yml" \
-                -p grapery-server \
-                up -d server
+              # 切换到临时目录，确保 Docker Compose 不会扫描其他文件
+              cd "$TEMP_DIR"
+              docker compose -p grapery-server up -d server
               cd /home/ubuntu/grapery
               rm -rf "$TEMP_DIR"
             else
