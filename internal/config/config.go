@@ -75,6 +75,7 @@ type AliyunConfig struct {
 type TelemetryConfig struct {
 	SLS        SLSConfig        `yaml:"sls"`
 	Prometheus PrometheusConfig `yaml:"prometheus"`
+	Tracing    TracingConfig    `yaml:"tracing"`
 }
 
 // SLSConfig holds Alibaba Cloud Log Service configuration
@@ -96,6 +97,18 @@ type PrometheusConfig struct {
 	PushGateway  string `yaml:"push_gateway"`  // Alibaba Cloud Prometheus push gateway URL
 	PushInterval int    `yaml:"push_interval"` // push interval in seconds
 	JobName      string `yaml:"job_name"`      // job name for push gateway
+}
+
+// TracingConfig holds distributed tracing configuration
+type TracingConfig struct {
+	Enabled        bool              `yaml:"enabled"`
+	ServiceName    string            `yaml:"service_name"`
+	ServiceVersion string            `yaml:"service_version"`
+	Environment    string            `yaml:"environment"`
+	JaegerEndpoint string            `yaml:"jaeger_endpoint"`
+	OTLPEndpoint   string            `yaml:"otlp_endpoint"`
+	SamplingRatio  float64           `yaml:"sampling_ratio"`
+	Headers        map[string]string `yaml:"headers"`
 }
 
 // LoadFromFile loads configuration from a YAML file
@@ -191,6 +204,15 @@ func Load() Config {
 				PushInterval: getEnvInt("TELEMETRY_PROMETHEUS_PUSH_INTERVAL", 15),
 				JobName:      getEnv("TELEMETRY_PROMETHEUS_JOB_NAME", "grapery"),
 			},
+			Tracing: TracingConfig{
+				Enabled:        getEnv("TELEMETRY_TRACING_ENABLED", "false") == "true",
+				ServiceName:    getEnv("TELEMETRY_TRACING_SERVICE_NAME", "grapery-api"),
+				ServiceVersion: getEnv("TELEMETRY_TRACING_SERVICE_VERSION", "1.0.0"),
+				Environment:    getEnv("TELEMETRY_TRACING_ENVIRONMENT", "development"),
+				JaegerEndpoint: getEnv("TELEMETRY_TRACING_JAEGER_ENDPOINT", ""),
+				OTLPEndpoint:   getEnv("TELEMETRY_TRACING_OTLP_ENDPOINT", ""),
+				SamplingRatio:  getEnvFloat("TELEMETRY_TRACING_SAMPLING_RATIO", 1.0),
+			},
 		},
 	}
 
@@ -226,6 +248,15 @@ func getEnvInt(key string, fallback int) int {
 func getEnvBool(key string, fallback bool) bool {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		return v == "true" || v == "1" || v == "yes"
+	}
+	return fallback
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
 	}
 	return fallback
 }
@@ -274,14 +305,31 @@ func getDefaultConfig() Config {
 		},
 		Telemetry: TelemetryConfig{
 			SLS: SLSConfig{
-				Enabled: false,
-				Topic:   "grapery",
+				Enabled:         false,
+				Endpoint:        "",
+				AccessKeyID:     "",
+				AccessKeySecret: "",
+				Project:         "",
+				Logstore:        "",
+				Topic:           "grapery",
+				Source:          "",
 			},
 			Prometheus: PrometheusConfig{
 				Enabled:      false,
 				Path:         "/metrics",
+				PushGateway:  "",
 				PushInterval: 15,
 				JobName:      "grapery",
+			},
+			Tracing: TracingConfig{
+				Enabled:        false,
+				ServiceName:    "grapery-api",
+				ServiceVersion: "1.0.0",
+				Environment:    "development",
+				SamplingRatio:  1.0,
+				Headers:        make(map[string]string),
+				JaegerEndpoint: "",
+				OTLPEndpoint:   "",
 			},
 		},
 	}
@@ -350,6 +398,15 @@ func overrideWithEnv(cfg Config) Config {
 	cfg.Telemetry.Prometheus.PushGateway = getEnv("TELEMETRY_PROMETHEUS_PUSH_GATEWAY", cfg.Telemetry.Prometheus.PushGateway)
 	cfg.Telemetry.Prometheus.PushInterval = getEnvInt("TELEMETRY_PROMETHEUS_PUSH_INTERVAL", cfg.Telemetry.Prometheus.PushInterval)
 	cfg.Telemetry.Prometheus.JobName = getEnv("TELEMETRY_PROMETHEUS_JOB_NAME", cfg.Telemetry.Prometheus.JobName)
+
+	// Telemetry Tracing config
+	cfg.Telemetry.Tracing.Enabled = getEnvBool("TELEMETRY_TRACING_ENABLED", cfg.Telemetry.Tracing.Enabled)
+	cfg.Telemetry.Tracing.ServiceName = getEnv("TELEMETRY_TRACING_SERVICE_NAME", cfg.Telemetry.Tracing.ServiceName)
+	cfg.Telemetry.Tracing.ServiceVersion = getEnv("TELEMETRY_TRACING_SERVICE_VERSION", cfg.Telemetry.Tracing.ServiceVersion)
+	cfg.Telemetry.Tracing.Environment = getEnv("TELEMETRY_TRACING_ENVIRONMENT", cfg.Telemetry.Tracing.Environment)
+	cfg.Telemetry.Tracing.JaegerEndpoint = getEnv("TELEMETRY_TRACING_JAEGER_ENDPOINT", cfg.Telemetry.Tracing.JaegerEndpoint)
+	cfg.Telemetry.Tracing.OTLPEndpoint = getEnv("TELEMETRY_TRACING_OTLP_ENDPOINT", cfg.Telemetry.Tracing.OTLPEndpoint)
+	cfg.Telemetry.Tracing.SamplingRatio = getEnvFloat("TELEMETRY_TRACING_SAMPLING_RATIO", cfg.Telemetry.Tracing.SamplingRatio)
 
 	return cfg
 }

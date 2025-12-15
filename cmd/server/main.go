@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
@@ -49,12 +50,55 @@ func main() {
 		cfg = config.Load()
 	}
 
-	// Initialize logger
-	logger, err := telemetry.NewLogger(cfg.LogLevel)
+	// Initialize telemetry manager
+	telemetryConfig := telemetry.TelemetryManagerConfig{
+		LogLevel: cfg.LogLevel,
+	}
+
+	// Configure SLS if enabled
+	if cfg.Telemetry.SLS.Enabled {
+		telemetryConfig.SLS = &telemetry.SLSConfig{
+			Endpoint:        cfg.Telemetry.SLS.Endpoint,
+			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,
+			AccessKeySecret: cfg.Telemetry.SLS.AccessKeySecret,
+			Project:         cfg.Telemetry.SLS.Project,
+			Logstore:        cfg.Telemetry.SLS.Logstore,
+			Topic:           cfg.Telemetry.SLS.Topic,
+			Source:          cfg.Telemetry.SLS.Source,
+		}
+	}
+
+	// Configure Prometheus if enabled
+	if cfg.Telemetry.Prometheus.Enabled {
+		telemetryConfig.Prometheus = &telemetry.PrometheusConfig{
+			Enabled:      cfg.Telemetry.Prometheus.Enabled,
+			Path:         cfg.Telemetry.Prometheus.Path,
+			PushGateway:  cfg.Telemetry.Prometheus.PushGateway,
+			PushInterval: cfg.Telemetry.Prometheus.PushInterval,
+			JobName:      cfg.Telemetry.Prometheus.JobName,
+		}
+	}
+
+	// Configure tracing if enabled
+	if cfg.Telemetry.Tracing.Enabled {
+		telemetryConfig.Tracing = &telemetry.TracingConfig{
+			Enabled:        cfg.Telemetry.Tracing.Enabled,
+			ServiceName:    cfg.Telemetry.Tracing.ServiceName,
+			ServiceVersion: cfg.Telemetry.Tracing.ServiceVersion,
+			Environment:    cfg.Telemetry.Tracing.Environment,
+			JaegerEndpoint: cfg.Telemetry.Tracing.JaegerEndpoint,
+			OTLPEndpoint:   cfg.Telemetry.Tracing.OTLPEndpoint,
+			SamplingRatio:  cfg.Telemetry.Tracing.SamplingRatio,
+		}
+	}
+
+	telemetryManager, err := telemetry.NewTelemetryManager(telemetryConfig)
 	if err != nil {
 		panic(err)
 	}
-	defer logger.Sync()
+	defer telemetryManager.Close()
+
+	logger := telemetryManager.Logger
 
 	logger.Info("starting grapery api",
 		zap.String("env", cfg.Env),
@@ -102,11 +146,27 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", telemetry.CorrelationIDHeader},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * 3600,
 	}))
+
+	// Add telemetry middleware
+	router.Use(telemetry.GinCorrelationMiddleware(logger))
+	router.Use(telemetry.GinRequestIDMiddleware(logger))
+	if telemetryManager.Tracer != nil {
+		router.Use(telemetryManager.Tracer.GinTraceMiddleware())
+	}
+	if telemetryManager.Metrics != nil {
+		router.Use(telemetry.GinHTTPMiddleware(logger, telemetryManager.Metrics))
+	}
+
+	// Add metrics endpoint if Prometheus is enabled
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.Enabled {
+		router.GET(cfg.Telemetry.Prometheus.Path, gin.WrapH(telemetryManager.Metrics.Handler()))
+		logger.Info("Metrics endpoint registered", zap.String("path", cfg.Telemetry.Prometheus.Path))
+	}
 
 	// Initialize server
 	srv := server.New(cfg, router)
@@ -114,6 +174,15 @@ func main() {
 	// Setup graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Start metrics pusher if configured
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.PushGateway != "" {
+		go telemetryManager.Metrics.Start(context.Background())
+		logger.Info("Metrics pusher started",
+			zap.String("gateway", cfg.Telemetry.Prometheus.PushGateway),
+			zap.Int("interval", cfg.Telemetry.Prometheus.PushInterval),
+		)
+	}
 
 	// Start server in goroutine
 	go func() {
