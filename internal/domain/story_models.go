@@ -12,7 +12,7 @@ type Story struct {
 	Followers         int    `json:"followers"`
 	Panels            int    `json:"panels"`
 	StoryboardCount   int    `json:"storyboardCount"`   // Number of storyboards in this story
-	CharacterCount    int    `json:"characterCount"`     // Number of characters in the story
+	CharacterCount    int    `json:"characterCount"`    // Number of characters in the story
 	DefaultSceneCount int    `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
 	Genre             string `json:"genre"`
 	Status            string `json:"status"` // draft, published, rendering

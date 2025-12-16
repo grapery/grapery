@@ -29,9 +29,9 @@ func New(repo domain.Repository, log *zap.Logger) *Service {
 		repo:          repo,
 		log:           log,
 		logger:        log,
-		cache:         nil,      // 稍后通过 SetCache 设置
+		cache:         nil,       // 稍后通过 SetCache 设置
 		imageProvider: "huoshan", // Default image provider
-		videoProvider: "hailuo", // Default video provider
+		videoProvider: "hailuo",  // Default video provider
 	}
 }
 
@@ -62,7 +62,7 @@ func (s *Service) SetAIClients(genAPI *genapi.GenAPI, geminiClient *gemini.Clien
 	if genAPI != nil || geminiClient != nil {
 		s.aiGenService = NewAIGenerationService(s.repo, geminiClient, genAPI, s.logger)
 		s.logger.Info("AI generation service initialized")
-		
+
 		// 恢复未完成的视频生成任务
 		go s.RecoverPendingVideoGenerations(context.Background())
 	}

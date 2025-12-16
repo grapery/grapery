@@ -47,7 +47,7 @@ func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment)
 	// 如果是回复，设置 ParentID 和 RootID
 	if comment.ParentID != "" {
 		dbComment.ParentID = &comment.ParentID
-		
+
 		// 获取父评论
 		var parent Comment
 		if err := r.db.WithContext(ctx).Where("id = ?", comment.ParentID).First(&parent).Error; err != nil {
@@ -321,7 +321,7 @@ func (r *Repository) IsCommentLiked(ctx context.Context, userID, commentID strin
 // commentToDomain converts database model to domain model
 func (r *Repository) commentToDomain(c Comment) domain.Comment {
 	refAuthor := r.userToDomain(c.Author)
-	
+
 	// Handle nullable pointer fields
 	var parentID, rootID string
 	if c.ParentID != nil {
@@ -330,7 +330,7 @@ func (r *Repository) commentToDomain(c Comment) domain.Comment {
 	if c.RootID != nil {
 		rootID = *c.RootID
 	}
-	
+
 	return domain.Comment{
 		ID:         c.ID,
 		AuthorID:   c.AuthorID,

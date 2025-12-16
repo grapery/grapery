@@ -489,7 +489,7 @@ func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.Storyb
 		zap.String("referenceImageURL", gen.ReferenceImageURL),
 		zap.String("endFrameURL", gen.EndFrameURL),
 		zap.String("inputDescription", gen.InputDescription))
-	
+
 	gen.Status = domain.GenerationStatusProcessing
 	_ = s.repo.UpdateVideoGeneration(ctx, gen)
 
@@ -532,7 +532,7 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
 		}
-		
+
 		s.logger.Info("video prompt generated successfully",
 			zap.String("sceneId", gen.SceneID),
 			zap.String("generatedPrompt", gen.GeneratedPrompt),
@@ -631,7 +631,7 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 				s.logger.Info("received video URL from provider",
 					zap.String("sceneId", gen.SceneID),
 					zap.String("originalVideoURL", resp.VideoURL))
-				
+
 				// 上传视频到OSS并替换URL
 				originalVideoURL := resp.VideoURL
 				ossClient := aliyun.GetGlobalClient()
@@ -693,15 +693,15 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 					zap.String("taskId", resp.TaskID),
 					zap.String("status", resp.Status),
 					zap.String("message", resp.Message))
-				
+
 				// Save taskId and provider name to database for recovery
 				gen.ProviderTaskID = resp.TaskID
 				gen.ProviderName = videoProvider
-				
+
 				// Start background polling goroutine
 				// Keep status as processing, polling will update it when done
 				go s.pollVideoGenerationStatus(context.Background(), gen, videoProvider, resp.TaskID)
-				
+
 				// Don't mark as completed here - let polling update the status
 				// Just update the record to keep it in processing state with taskId saved
 				_ = s.repo.UpdateVideoGeneration(ctx, gen)
@@ -1085,8 +1085,20 @@ processResult:
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("provider", providerName),
 			zap.String("taskId", taskID),
-			zap.String("status", func() string { if resp != nil { return resp.Status } else { return "nil" } }()),
-			zap.String("error", func() string { if resp != nil { return resp.Error } else { return "response is nil" } }()))
+			zap.String("status", func() string {
+				if resp != nil {
+					return resp.Status
+				} else {
+					return "nil"
+				}
+			}()),
+			zap.String("error", func() string {
+				if resp != nil {
+					return resp.Error
+				} else {
+					return "response is nil"
+				}
+			}()))
 
 		gen.Status = domain.GenerationStatusFailed
 		gen.ErrorMessage = errMsg

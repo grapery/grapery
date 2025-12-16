@@ -775,22 +775,33 @@ type UserActivity struct {
 
 // CharacterPoster 角色海报
 type CharacterPoster struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	CharacterID string         `gorm:"size:36;not null;index"`
-	Character   Character      `gorm:"foreignKey:CharacterID"`
-	AuthorID    string         `gorm:"size:36;not null;index"`
-	Author      User           `gorm:"foreignKey:AuthorID"`
-	Type        string         `gorm:"size:20;not null;default:'image';index"` // image, video
-	Title       string         `gorm:"size:200;not null"`
-	Image       string         `gorm:"size:500;not null"` // Poster image URL (for image type)
-	Video       string         `gorm:"size:500"`          // Video URL (for video type)
-	Thumbnail   string         `gorm:"size:500"`          // Video thumbnail URL
-	Duration    int            `gorm:"default:0"`         // Video duration in seconds
-	Prompt      string         `gorm:"type:text"`
-	Likes       int            `gorm:"default:0;index"`
-	Shares      int            `gorm:"default:0"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	ID          string    `gorm:"primaryKey;size:36"`
+	CharacterID string    `gorm:"size:36;not null;index"`
+	Character   Character `gorm:"foreignKey:CharacterID"`
+	AuthorID    string    `gorm:"size:36;not null;index"`
+	Author      User      `gorm:"foreignKey:AuthorID"`
+	Type        string    `gorm:"size:20;not null;default:'image';index"` // image, video
+	Title       string    `gorm:"size:200;not null"`
+	Image       string    `gorm:"size:1000"`                              // Poster image URL (for image type)
+	Video       string    `gorm:"size:1000"`                              // Video URL (for video type)
+	Thumbnail   string    `gorm:"size:1000"`                              // Video thumbnail URL
+	Duration    int       `gorm:"default:0"`                              // Video duration in seconds
+	Prompt      string    `gorm:"type:text"`                              // User's original prompt/description
+	Status      string    `gorm:"size:20;not null;default:'draft';index"` // draft, generating, generated, published, failed
+
+	// AI Generation fields
+	ReferenceStoryEnabled bool   `gorm:"default:false"` // Whether to reference recent story plots
+	PosterConceptJSON     string `gorm:"type:text"`     // LLM generated poster concept JSON
+	FinalImagePrompt      string `gorm:"type:text"`     // Final assembled prompt for image generation
+	ErrorMessage          string `gorm:"type:text"`     // Error message if generation failed
+	ConceptGenerationID   string `gorm:"size:36;index"` // AI record for concept generation (Step 1)
+	ImageGenerationID     string `gorm:"size:36;index"` // AI record for image generation (Step 2)
+
+	Likes     int            `gorm:"default:0;index"`
+	Shares    int            `gorm:"default:0"`
+	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 // ========== 角色分析 ==========

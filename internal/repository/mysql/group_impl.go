@@ -309,7 +309,7 @@ func (r *Repository) GetPendingInvitation(ctx context.Context, groupID, inviteeI
 // GetPendingInvitationsForUser retrieves all pending invitations for a user
 func (r *Repository) GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*domain.GroupInvitation, error) {
 	var invitations []GroupInvitation
-	
+
 	if err := r.db.WithContext(ctx).
 		Preload("Group").
 		Preload("Inviter").
@@ -333,7 +333,7 @@ func (r *Repository) GetPendingInvitationsForUser(ctx context.Context, userID st
 			CreatedAt: inv.CreatedAt.Unix(),
 			ExpiresAt: inv.ExpiresAt.Unix(),
 		}
-		
+
 		if inv.Group.ID != "" {
 			result[i].Group = &domain.Group{
 				ID:          inv.Group.ID,
@@ -344,7 +344,7 @@ func (r *Repository) GetPendingInvitationsForUser(ctx context.Context, userID st
 				Public:      inv.Group.Public,
 			}
 		}
-		
+
 		if inv.Inviter.ID != "" {
 			result[i].Inviter = &domain.User{
 				ID:          inv.Inviter.ID,

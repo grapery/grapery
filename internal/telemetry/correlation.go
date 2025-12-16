@@ -50,17 +50,17 @@ func LoggerWithCorrelationID(logger *zap.Logger, correlationID string) *zap.Logg
 // LoggerFromContextWithCorrelation extracts the logger from context and adds correlation ID
 func LoggerFromContextWithCorrelation(ctx context.Context, defaultLogger *zap.Logger) *zap.Logger {
 	logger := defaultLogger
-	
+
 	// Try to get logger from context first
 	if ctxLogger := LoggerFromContext(ctx); ctxLogger != nil {
 		logger = ctxLogger
 	}
-	
+
 	// Add correlation ID if available
 	if correlationID := CorrelationIDFromContext(ctx); correlationID != "" {
 		logger = logger.With(zap.String("correlation_id", correlationID))
 	}
-	
+
 	return logger
 }
 
@@ -75,23 +75,23 @@ type ServiceContext struct {
 // LoggerWithServiceContext adds service context to the logger
 func LoggerWithServiceContext(logger *zap.Logger, ctx ServiceContext) *zap.Logger {
 	fields := []zap.Field{}
-	
+
 	if ctx.ServiceName != "" {
 		fields = append(fields, zap.String("service_name", ctx.ServiceName))
 	}
-	
+
 	if ctx.ServiceVersion != "" {
 		fields = append(fields, zap.String("service_version", ctx.ServiceVersion))
 	}
-	
+
 	if ctx.Environment != "" {
 		fields = append(fields, zap.String("environment", ctx.Environment))
 	}
-	
+
 	if ctx.InstanceID != "" {
 		fields = append(fields, zap.String("instance_id", ctx.InstanceID))
 	}
-	
+
 	return logger.With(fields...)
 }
 
@@ -105,18 +105,18 @@ type UserContext struct {
 // LoggerWithUserContext adds user context to the logger
 func LoggerWithUserContext(logger *zap.Logger, ctx UserContext) *zap.Logger {
 	fields := []zap.Field{}
-	
+
 	if ctx.UserID != "" {
 		fields = append(fields, zap.String("user_id", ctx.UserID))
 	}
-	
+
 	if ctx.Username != "" {
 		fields = append(fields, zap.String("username", ctx.Username))
 	}
-	
+
 	if ctx.Role != "" {
 		fields = append(fields, zap.String("user_role", ctx.Role))
 	}
-	
+
 	return logger.With(fields...)
 }

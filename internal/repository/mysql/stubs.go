@@ -464,11 +464,11 @@ func (r *Repository) GroupMembers(ctx context.Context, groupID string) ([]*domai
 
 func (r *Repository) CreateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
-	
+
 	if dbRecord.ID == "" {
 		dbRecord.ID = uuid.New().String()
 	}
-	
+
 	if dbRecord.CreatedAt.IsZero() {
 		dbRecord.CreatedAt = time.Now()
 	}
@@ -476,7 +476,7 @@ func (r *Repository) CreateAIGenerationRecord(ctx context.Context, record *domai
 	if err := r.db.WithContext(ctx).Create(dbRecord).Error; err != nil {
 		return err
 	}
-	
+
 	// 更新 record ID
 	record.ID = dbRecord.ID
 	return nil
@@ -498,7 +498,7 @@ func (r *Repository) GetAIGenerationRecord(ctx context.Context, recordID string)
 
 func (r *Repository) UpdateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
-	
+
 	result := r.db.WithContext(ctx).
 		Model(&AIGenerationRecord{}).
 		Where("id = ?", record.ID).
@@ -547,7 +547,7 @@ func (r *Repository) ListAIGenerationRecordsByTimeRange(ctx context.Context, use
 	var records []AIGenerationRecord
 	start := unixToTime(startTime)
 	end := unixToTime(endTime)
-	
+
 	err := r.db.WithContext(ctx).
 		Preload("User").
 		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, start, end).

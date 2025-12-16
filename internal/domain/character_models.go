@@ -54,21 +54,45 @@ type CharacterFollow struct {
 	Character *Character `json:"character,omitempty"`
 }
 
+// PosterStatus 海报状态
+type PosterStatus string
+
+const (
+	PosterStatusDraft      PosterStatus = "draft"      // 草稿，用户创建但未生成
+	PosterStatusGenerating PosterStatus = "generating" // 正在生成
+	PosterStatusGenerated  PosterStatus = "generated"  // 生成完成
+	PosterStatusPublished  PosterStatus = "published"  // 已发布
+	PosterStatusFailed     PosterStatus = "failed"     // 生成失败
+)
+
 // CharacterPoster 角色海报
 type CharacterPoster struct {
-	ID          string `json:"id"`
-	CharacterID string `json:"characterId"`
-	AuthorID    string `json:"-"`
-	Type        string `json:"type"`            // image, video
-	Title       string `json:"title"`
-	Image       string `json:"image"`           // Poster image URL (for image type)
-	Video       string `json:"video,omitempty"` // Video URL (for video type)
-	Thumbnail   string `json:"thumbnail,omitempty"` // Video thumbnail URL
-	Duration    int    `json:"duration,omitempty"`  // Video duration in seconds
-	Prompt      string `json:"prompt,omitempty"`
-	Likes       int    `json:"likes"`
-	Shares      int    `json:"shares"`
-	CreatedAt   int64  `json:"createdAt"`
+	ID          string       `json:"id"`
+	CharacterID string       `json:"characterId"`
+	AuthorID    string       `json:"-"`
+	Type        string       `json:"type"` // image, video
+	Title       string       `json:"title"`
+	Image       string       `json:"image"`               // Poster image URL (for image type)
+	Video       string       `json:"video,omitempty"`     // Video URL (for video type)
+	Thumbnail   string       `json:"thumbnail,omitempty"` // Video thumbnail URL
+	Duration    int          `json:"duration,omitempty"`  // Video duration in seconds
+	Prompt      string       `json:"prompt,omitempty"`    // User's original prompt/description
+	Status      PosterStatus `json:"status"`              // draft, generating, generated, published, failed
+
+	// AI Generation fields
+	ReferenceStoryEnabled bool   `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
+	PosterConceptJSON     string `json:"posterConceptJson,omitempty"`     // LLM generated poster concept JSON
+	FinalImagePrompt      string `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
+	ErrorMessage          string `json:"errorMessage,omitempty"`          // Error message if generation failed
+
+	// AI Generation Record IDs (for tracking both AI steps)
+	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)
+	ImageGenerationID   string `json:"imageGenerationId,omitempty"`   // AI record for image generation (Step 2)
+
+	Likes     int   `json:"likes"`
+	Shares    int   `json:"shares"`
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt,omitempty"`
 
 	// Relations
 	Character *Character `json:"character,omitempty"`

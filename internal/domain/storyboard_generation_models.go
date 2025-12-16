@@ -91,17 +91,17 @@ type StoryboardImageGeneration struct {
 type StoryboardVideoGeneration struct {
 	ID                string `json:"id"`
 	StoryboardID      string `json:"storyboardId"`
-	SceneID           string `json:"sceneId"`           // Reference to StoryScene
-	SceneTitle        string `json:"sceneTitle"`        // Snapshot of scene title
-	InputDescription  string `json:"inputDescription"`  // Scene description for video
-	ReferenceImageURL string `json:"referenceImageUrl"` // Start keyframe image (reference image for video generation)
-	EndFrameURL       string `json:"endFrameUrl"`       // End keyframe image for video transitions
-	GeneratedPrompt   string `json:"generatedPrompt"`   // AI-generated video prompt
-	GeneratedVideoURL string `json:"generatedVideoUrl"` // Final generated video URL
+	SceneID           string `json:"sceneId"`                  // Reference to StoryScene
+	SceneTitle        string `json:"sceneTitle"`               // Snapshot of scene title
+	InputDescription  string `json:"inputDescription"`         // Scene description for video
+	ReferenceImageURL string `json:"referenceImageUrl"`        // Start keyframe image (reference image for video generation)
+	EndFrameURL       string `json:"endFrameUrl"`              // End keyframe image for video transitions
+	GeneratedPrompt   string `json:"generatedPrompt"`          // AI-generated video prompt
+	GeneratedVideoURL string `json:"generatedVideoUrl"`        // Final generated video URL
 	ProviderTaskID    string `json:"providerTaskId,omitempty"` // Provider's task ID for async video generation (for recovery)
 	ProviderName      string `json:"providerName,omitempty"`   // Provider name (huoshan, hailuo, etc.) for recovery
-	Duration          int    `json:"duration"`          // Video duration in seconds
-	Status            string `json:"status"`            // pending, processing, completed, failed
+	Duration          int    `json:"duration"`                 // Video duration in seconds
+	Status            string `json:"status"`                   // pending, processing, completed, failed
 	InputTokens       int    `json:"inputTokens"`
 	OutputTokens      int    `json:"outputTokens"`
 	TotalTokens       int    `json:"totalTokens"`

@@ -12,16 +12,37 @@ import (
 
 // CreateCharacterPoster 创建角色海报
 func (r *Repository) CreateCharacterPoster(ctx context.Context, poster *domain.CharacterPoster) error {
+	status := string(poster.Status)
+	if status == "" {
+		status = string(domain.PosterStatusDraft)
+	}
+
 	dbPoster := &CharacterPoster{
-		ID:          uuid.New().String(),
-		CharacterID: poster.CharacterID,
-		AuthorID:    poster.Author.ID,
-		Title:       poster.Title,
-		Image:       poster.Image,
-		Prompt:      poster.Prompt,
-		Likes:       0,
-		Shares:      0,
-		CreatedAt:   time.Now(),
+		ID:                    uuid.New().String(),
+		CharacterID:           poster.CharacterID,
+		AuthorID:              poster.Author.ID,
+		Type:                  poster.Type,
+		Title:                 poster.Title,
+		Image:                 poster.Image,
+		Video:                 poster.Video,
+		Thumbnail:             poster.Thumbnail,
+		Duration:              poster.Duration,
+		Prompt:                poster.Prompt,
+		Status:                status,
+		ReferenceStoryEnabled: poster.ReferenceStoryEnabled,
+		PosterConceptJSON:     poster.PosterConceptJSON,
+		FinalImagePrompt:      poster.FinalImagePrompt,
+		ErrorMessage:          poster.ErrorMessage,
+		ConceptGenerationID:   poster.ConceptGenerationID,
+		ImageGenerationID:     poster.ImageGenerationID,
+		Likes:                 0,
+		Shares:                0,
+		CreatedAt:             time.Now(),
+		UpdatedAt:             time.Now(),
+	}
+
+	if dbPoster.Type == "" {
+		dbPoster.Type = "image"
 	}
 
 	if err := r.db.WithContext(ctx).Create(dbPoster).Error; err != nil {
@@ -29,7 +50,9 @@ func (r *Repository) CreateCharacterPoster(ctx context.Context, poster *domain.C
 	}
 
 	poster.ID = dbPoster.ID
+	poster.Status = domain.PosterStatus(dbPoster.Status)
 	poster.CreatedAt = dbPoster.CreatedAt.Unix()
+	poster.UpdatedAt = dbPoster.UpdatedAt.Unix()
 	return nil
 }
 
@@ -72,11 +95,22 @@ func (r *Repository) CharacterPostersByCharacterID(ctx context.Context, characte
 // UpdateCharacterPoster 更新海报
 func (r *Repository) UpdateCharacterPoster(ctx context.Context, poster *domain.CharacterPoster) error {
 	updates := map[string]interface{}{
-		"title":  poster.Title,
-		"image":  poster.Image,
-		"prompt": poster.Prompt,
-		"likes":  poster.Likes,
-		"shares": poster.Shares,
+		"title":                   poster.Title,
+		"image":                   poster.Image,
+		"video":                   poster.Video,
+		"thumbnail":               poster.Thumbnail,
+		"duration":                poster.Duration,
+		"prompt":                  poster.Prompt,
+		"status":                  string(poster.Status),
+		"reference_story_enabled": poster.ReferenceStoryEnabled,
+		"poster_concept_json":     poster.PosterConceptJSON,
+		"final_image_prompt":      poster.FinalImagePrompt,
+		"error_message":           poster.ErrorMessage,
+		"concept_generation_id":   poster.ConceptGenerationID,
+		"image_generation_id":     poster.ImageGenerationID,
+		"likes":                   poster.Likes,
+		"shares":                  poster.Shares,
+		"updated_at":              time.Now(),
 	}
 
 	return r.db.WithContext(ctx).
@@ -109,14 +143,26 @@ func (r *Repository) IncrementPosterShares(ctx context.Context, posterID string)
 // characterPosterToDomain 转换海报到 domain
 func (r *Repository) characterPosterToDomain(poster *CharacterPoster) *domain.CharacterPoster {
 	result := &domain.CharacterPoster{
-		ID:          poster.ID,
-		CharacterID: poster.CharacterID,
-		Title:       poster.Title,
-		Image:       poster.Image,
-		Prompt:      poster.Prompt,
-		Likes:       poster.Likes,
-		Shares:      poster.Shares,
-		CreatedAt:   poster.CreatedAt.Unix(),
+		ID:                    poster.ID,
+		CharacterID:           poster.CharacterID,
+		Type:                  poster.Type,
+		Title:                 poster.Title,
+		Image:                 poster.Image,
+		Video:                 poster.Video,
+		Thumbnail:             poster.Thumbnail,
+		Duration:              poster.Duration,
+		Prompt:                poster.Prompt,
+		Status:                domain.PosterStatus(poster.Status),
+		ReferenceStoryEnabled: poster.ReferenceStoryEnabled,
+		PosterConceptJSON:     poster.PosterConceptJSON,
+		FinalImagePrompt:      poster.FinalImagePrompt,
+		ErrorMessage:          poster.ErrorMessage,
+		ConceptGenerationID:   poster.ConceptGenerationID,
+		ImageGenerationID:     poster.ImageGenerationID,
+		Likes:                 poster.Likes,
+		Shares:                poster.Shares,
+		CreatedAt:             poster.CreatedAt.Unix(),
+		UpdatedAt:             poster.UpdatedAt.Unix(),
 	}
 
 	if poster.Author.ID != "" {
@@ -130,4 +176,3 @@ func (r *Repository) characterPosterToDomain(poster *CharacterPoster) *domain.Ch
 
 	return result
 }
-

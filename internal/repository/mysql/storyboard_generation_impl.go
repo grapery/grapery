@@ -219,4 +219,3 @@ func (r *Repository) UpdateStoryboardWorkflow(ctx context.Context, storyboardID 
 		Where("id = ?", storyboardID).
 		Updates(updates).Error
 }
-

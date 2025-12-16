@@ -106,7 +106,7 @@ func (h *Handler) ListComments(c *gin.Context) {
 	if targetType == "" {
 		targetType = c.Query("target_type")
 	}
-	
+
 	targetID := c.Query("targetId")
 	if targetID == "" {
 		targetID = c.Query("target_id")

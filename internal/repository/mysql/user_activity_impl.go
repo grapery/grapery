@@ -190,4 +190,3 @@ func (r *Repository) userActivityToDomain(activity *UserActivity) *domain.UserAc
 
 	return result
 }
-

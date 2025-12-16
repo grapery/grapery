@@ -14,7 +14,7 @@ import (
 func (r *Repository) GetOrCreateCharacterAnalytics(ctx context.Context, characterID string) (*domain.CharacterAnalytics, error) {
 	var analytics CharacterAnalytics
 	err := r.db.WithContext(ctx).Where("character_id = ?", characterID).First(&analytics).Error
-	
+
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 创建新的分析记录
@@ -111,4 +111,3 @@ func (r *Repository) characterAnalyticsToDomain(analytics *CharacterAnalytics) *
 		UpdatedAt:            analytics.UpdatedAt.Unix(),
 	}
 }
-

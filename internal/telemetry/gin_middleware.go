@@ -82,13 +82,13 @@ func GinRequestIDMiddleware(logger *zap.Logger) gin.HandlerFunc {
 		if requestID == "" {
 			requestID = c.Request.Header.Get("X-Request-ID")
 		}
-		
+
 		// Add request ID to logger
 		log := logger.With(zap.String("request_id", requestID))
-		
+
 		// Store logger in context
 		c.Set("logger", log)
-		
+
 		// Continue
 		c.Next()
 	}
@@ -104,10 +104,10 @@ func (tp *TracerProvider) GinTraceMiddleware() gin.HandlerFunc {
 
 		// Extract context from incoming headers
 		ctx := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
-		
+
 		// Get tracer
 		tracer := tp.Tracer("http-server")
-		
+
 		// Start span
 		spanName := c.Request.Method + " " + c.FullPath()
 		if c.FullPath() == "" {
@@ -115,7 +115,7 @@ func (tp *TracerProvider) GinTraceMiddleware() gin.HandlerFunc {
 		}
 		ctx, span := tracer.Start(ctx, spanName)
 		defer span.End()
-		
+
 		// Add attributes
 		span.SetAttributes(
 			attribute.String("http.method", c.Request.Method),
@@ -125,18 +125,18 @@ func (tp *TracerProvider) GinTraceMiddleware() gin.HandlerFunc {
 			attribute.String("http.user_agent", c.Request.UserAgent()),
 			attribute.String("http.remote_addr", c.Request.RemoteAddr),
 		)
-		
+
 		// Update request context
 		c.Request = c.Request.WithContext(ctx)
-		
+
 		// Process request
 		c.Next()
-		
+
 		// Add status code attribute
 		span.SetAttributes(
 			attribute.Int("http.status_code", c.Writer.Status()),
 		)
-		
+
 		// Set status based on status code
 		if c.Writer.Status() >= 400 {
 			span.SetStatus(codes.Error, http.StatusText(c.Writer.Status()))
@@ -162,18 +162,18 @@ func GinCorrelationMiddleware(logger *zap.Logger) gin.HandlerFunc {
 		if correlationID == "" {
 			correlationID = NewCorrelationID()
 		}
-		
+
 		// Add to response header
 		c.Header(CorrelationIDHeader, correlationID)
-		
+
 		// Add to context
 		ctx := ContextWithCorrelationID(c.Request.Context(), correlationID)
 		c.Request = c.Request.WithContext(ctx)
-		
+
 		// Add to logger
 		log := logger.With(zap.String("correlation_id", correlationID))
 		c.Set("logger", log)
-		
+
 		c.Next()
 	}
 }

@@ -136,7 +136,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 // GetStoryboard 获取 storyboard 详情
 func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storyboard, error) {
 	s.logger.Info("GetStoryboard called", zap.String("storyboardId", id))
-	
+
 	storyboard, err := s.repo.StoryboardByID(ctx, id)
 	if err != nil {
 		s.logger.Error("GetStoryboard: StoryboardByID failed", zap.String("storyboardId", id), zap.Error(err))
@@ -164,10 +164,10 @@ func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storybo
 
 	// Populate missing scene images from image generation records
 	s.populateMissingSceneImages(ctx, storyboard)
-	
+
 	// Populate missing scene videos from video generation records
 	s.populateMissingSceneVideos(ctx, storyboard)
-	
+
 	// Log final scene state
 	for i, scene := range storyboard.StoryboardScenes {
 		s.logger.Info("GetStoryboard: final scene state",

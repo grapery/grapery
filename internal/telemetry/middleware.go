@@ -98,13 +98,13 @@ func RequestIDMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 			if requestID == "" {
 				requestID = generateRequestID()
 			}
-			
+
 			// Add request ID to logger
 			log := logger.With(zap.String("request_id", requestID))
-			
+
 			// Store logger in context
 			ctx := context.WithValue(r.Context(), "logger", log)
-			
+
 			// Continue with new context
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

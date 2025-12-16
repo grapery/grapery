@@ -453,6 +453,96 @@ func (h *Handler) DeleteCharacterPoster(c *gin.Context) {
 	Success(c, gin.H{"message": "poster deleted successfully"})
 }
 
+// GenerateCharacterPoster 生成角色海报（AI两步工作流）
+// POST /api/posters/:id/generate
+// 步骤1：使用LLM生成海报概念JSON（包含视觉主体、场景、构图、灯光、艺术风格、排版指令）
+// 步骤2：组装最终提示词，使用图像生成AI创建海报
+func (h *Handler) GenerateCharacterPoster(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	posterID := c.Param("id")
+	if posterID == "" {
+		InvalidParams(c, "poster id is required")
+		return
+	}
+
+	var req service.GeneratePosterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 允许空请求体，使用默认参数
+		req = service.GeneratePosterRequest{
+			AspectRatio: "16:9",
+		}
+	}
+
+	result, err := h.svc.GenerateCharacterPoster(c.Request.Context(), userID, posterID, req)
+	if err != nil {
+		if err.Error() == "poster not found" {
+			NotFound(c, "poster not found")
+			return
+		}
+		if err.Error() == "unauthorized: you can only generate your own posters" {
+			Forbidden(c, err.Error())
+			return
+		}
+		if err.Error() == "poster is already generating or generated" {
+			Error(c, CodeError, err.Error())
+			return
+		}
+		if err.Error() == "AI generation service not configured" {
+			Error(c, CodeError, "AI service temporarily unavailable")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, result)
+}
+
+// PublishCharacterPoster 发布角色海报
+// POST /api/posters/:id/publish
+func (h *Handler) PublishCharacterPoster(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	posterID := c.Param("id")
+	if posterID == "" {
+		InvalidParams(c, "poster id is required")
+		return
+	}
+
+	poster, err := h.svc.PublishCharacterPoster(c.Request.Context(), userID, posterID)
+	if err != nil {
+		if err.Error() == "poster not found" {
+			NotFound(c, "poster not found")
+			return
+		}
+		if err.Error() == "unauthorized: you can only publish your own posters" {
+			Forbidden(c, err.Error())
+			return
+		}
+		if err.Error() == "poster must be generated before publishing" {
+			Error(c, CodeError, err.Error())
+			return
+		}
+		if err.Error() == "poster has no image" {
+			Error(c, CodeError, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, poster)
+}
+
 // GetCharacterStoryboards 获取角色参与的故事板列表
 // GET /api/characters/:id/storyboards
 func (h *Handler) GetCharacterStoryboards(c *gin.Context) {

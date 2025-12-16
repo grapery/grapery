@@ -38,7 +38,7 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		Panels:      story.Panels,
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	if story.GroupID == "" {
 		dbStory.GroupID = nil
 	}

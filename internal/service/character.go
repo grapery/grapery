@@ -520,12 +520,13 @@ func (s *Service) IncrementCharacterChatters(ctx context.Context, characterID st
 
 // CreatePosterRequest 创建海报请求
 type CreatePosterRequest struct {
-	Title  string `json:"title" binding:"required,min=1,max=200"`
-	Prompt string `json:"prompt" binding:"max=2000"`
-	Image  string `json:"image" binding:"omitempty,url"`
+	Title                 string `json:"title" binding:"required,min=1,max=200"`
+	Prompt                string `json:"prompt" binding:"max=2000"` // User's description for AI generation
+	Image                 string `json:"image" binding:"omitempty,url"`
+	ReferenceStoryEnabled bool   `json:"referenceStoryEnabled"` // Whether to reference recent story plots
 }
 
-// CreateCharacterPoster 创建角色海报
+// CreateCharacterPoster 创建角色海报（草稿状态）
 func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID string, req CreatePosterRequest) (*domain.CharacterPoster, error) {
 	s.logger.Info("creating character poster",
 		zap.String("userID", userID),
@@ -586,13 +587,16 @@ func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID
 		return nil, errors.New("author not found")
 	}
 
-	// 创建海报
+	// 创建海报（草稿状态）
 	poster := &domain.CharacterPoster{
-		CharacterID: characterID,
-		Author:      author,
-		Title:       req.Title,
-		Image:       req.Image,
-		Prompt:      req.Prompt,
+		CharacterID:           characterID,
+		Author:                author,
+		Type:                  "image",
+		Title:                 req.Title,
+		Image:                 req.Image,
+		Prompt:                req.Prompt,
+		Status:                domain.PosterStatusDraft,
+		ReferenceStoryEnabled: req.ReferenceStoryEnabled,
 	}
 
 	if err := s.repo.CreateCharacterPoster(ctx, poster); err != nil {
@@ -677,6 +681,513 @@ func (s *Service) DeleteCharacterPoster(ctx context.Context, userID, posterID st
 
 	s.logger.Info("poster deleted successfully")
 	return nil
+}
+
+// ========== Character Poster Generation ==========
+
+// GeneratePosterRequest 生成海报请求
+type GeneratePosterRequest struct {
+	AspectRatio string `json:"aspectRatio"` // 16:9, 9:16, 1:1
+}
+
+// GeneratePosterResult 生成海报结果
+type GeneratePosterResult struct {
+	Poster              *domain.CharacterPoster `json:"poster"`
+	ConceptGenerationID string                  `json:"conceptGenerationId"` // Step 1 AI record
+	ImageGenerationID   string                  `json:"imageGenerationId"`   // Step 2 AI record
+}
+
+// PosterConcept LLM生成的海报概念结构
+type PosterConcept struct {
+	PosterConcept struct {
+		VisualSubject      string `json:"visual_subject"`
+		SceneEnvironment   string `json:"scene_environment"`
+		CompositionCamera  string `json:"composition_camera"`
+		LightingAtmosphere string `json:"lighting_atmosphere"`
+		ArtStyle           string `json:"art_style"`
+	} `json:"poster_concept"`
+	TypographyInstruction struct {
+		TitleContent    string `json:"title_content"`
+		TitleStyle      string `json:"title_style"`
+		TitlePosition   string `json:"title_position"`
+		SubtitleContent string `json:"subtitle_content"`
+		SubtitleStyle   string `json:"subtitle_style"`
+	} `json:"typography_instruction"`
+}
+
+// GenerateCharacterPoster 生成角色海报（两步AI工作流）
+// Step 1: 使用LLM生成海报概念JSON
+// Step 2: 组装最终提示词，使用图像生成AI创建海报
+func (s *Service) GenerateCharacterPoster(ctx context.Context, userID, posterID string, req GeneratePosterRequest) (*GeneratePosterResult, error) {
+	s.logger.Info("generating character poster",
+		zap.String("userID", userID),
+		zap.String("posterID", posterID),
+	)
+
+	// 1. 验证输入参数
+	if posterID == "" {
+		return nil, errors.New("poster id is required")
+	}
+
+	// 2. 获取海报信息
+	poster, err := s.repo.CharacterPosterByID(ctx, posterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("poster not found")
+		}
+		return nil, errors.New("failed to get poster")
+	}
+
+	// 3. 验证权限
+	if poster.Author == nil || poster.Author.ID != userID {
+		return nil, errors.New("unauthorized: you can only generate your own posters")
+	}
+
+	// 4. 验证海报状态（只有草稿或失败的海报可以重新生成）
+	if poster.Status != domain.PosterStatusDraft && poster.Status != domain.PosterStatusFailed {
+		return nil, errors.New("poster is already generating or generated")
+	}
+
+	// 5. 检查AI服务是否可用
+	if s.aiGenService == nil {
+		return nil, errors.New("AI generation service not configured")
+	}
+
+	// 6. 获取角色详细信息
+	character, err := s.repo.CharacterByID(ctx, poster.CharacterID)
+	if err != nil {
+		return nil, errors.New("failed to get character")
+	}
+
+	// 7. 更新海报状态为生成中
+	poster.Status = domain.PosterStatusGenerating
+	if err := s.repo.UpdateCharacterPoster(ctx, poster); err != nil {
+		s.logger.Error("failed to update poster status", zap.Error(err))
+		return nil, errors.New("failed to update poster status")
+	}
+
+	// 8. 构建上下文信息
+	plotContext := ""
+	if poster.ReferenceStoryEnabled {
+		plotContext = s.buildPlotContext(ctx, userID, character.StoryID)
+	}
+
+	// 9. Step 1: 使用LLM生成海报概念
+	conceptResult, err := s.generatePosterConcept(ctx, userID, poster, character, plotContext)
+	if err != nil {
+		s.logger.Error("failed to generate poster concept", zap.Error(err))
+		poster.Status = domain.PosterStatusFailed
+		poster.ErrorMessage = "Failed to generate poster concept: " + err.Error()
+		_ = s.repo.UpdateCharacterPoster(ctx, poster)
+		return nil, errors.New("failed to generate poster concept: " + err.Error())
+	}
+
+	poster.ConceptGenerationID = conceptResult.RecordID
+	poster.PosterConceptJSON = conceptResult.ConceptJSON
+
+	// 10. Step 2: 组装最终提示词并生成图像
+	imageResult, err := s.generatePosterImage(ctx, userID, poster, conceptResult.Concept, req.AspectRatio)
+	if err != nil {
+		s.logger.Error("failed to generate poster image", zap.Error(err))
+		poster.Status = domain.PosterStatusFailed
+		poster.ErrorMessage = "Failed to generate poster image: " + err.Error()
+		_ = s.repo.UpdateCharacterPoster(ctx, poster)
+		return nil, errors.New("failed to generate poster image: " + err.Error())
+	}
+
+	// 11. 更新海报信息
+	poster.ImageGenerationID = imageResult.RecordID
+	poster.FinalImagePrompt = imageResult.FinalPrompt
+	poster.Image = imageResult.ImageURL
+	poster.Status = domain.PosterStatusGenerated
+	poster.ErrorMessage = ""
+
+	if err := s.repo.UpdateCharacterPoster(ctx, poster); err != nil {
+		s.logger.Error("failed to update poster with generated image", zap.Error(err))
+		return nil, errors.New("failed to save generated poster")
+	}
+
+	s.logger.Info("character poster generated successfully",
+		zap.String("posterID", posterID),
+		zap.String("conceptRecordID", conceptResult.RecordID),
+		zap.String("imageRecordID", imageResult.RecordID),
+	)
+
+	return &GeneratePosterResult{
+		Poster:              poster,
+		ConceptGenerationID: conceptResult.RecordID,
+		ImageGenerationID:   imageResult.RecordID,
+	}, nil
+}
+
+// conceptGenerationResult Step 1 结果
+type conceptGenerationResult struct {
+	RecordID    string
+	ConceptJSON string
+	Concept     *PosterConcept
+	TokensUsed  int
+}
+
+// imageGenerationResult Step 2 结果
+type imageGenerationResult struct {
+	RecordID    string
+	FinalPrompt string
+	ImageURL    string
+}
+
+// buildPlotContext 构建剧情上下文
+func (s *Service) buildPlotContext(ctx context.Context, userID, storyID string) string {
+	var plotContext strings.Builder
+
+	// 获取用户最近参与的故事板（最多5个）
+	storyboards, err := s.repo.StoryboardsByCreator(ctx, userID, 5, 0)
+	if err != nil {
+		s.logger.Warn("failed to get user storyboards for plot context", zap.Error(err))
+		return ""
+	}
+
+	if len(storyboards) == 0 {
+		return ""
+	}
+
+	plotContext.WriteString("Recent Story Context:\n")
+	for i, sb := range storyboards {
+		if sb.Content != "" {
+			plotContext.WriteString(strings.Repeat("-", 40))
+			plotContext.WriteString("\n")
+			plotContext.WriteString("Scene ")
+			plotContext.WriteString(strings.TrimSpace(string(rune(i + 1))))
+			plotContext.WriteString(": ")
+			plotContext.WriteString(sb.Title)
+			plotContext.WriteString("\n")
+			// 截取内容，避免过长
+			content := sb.Content
+			if len(content) > 500 {
+				content = content[:500] + "..."
+			}
+			plotContext.WriteString(content)
+			plotContext.WriteString("\n")
+		}
+	}
+
+	return plotContext.String()
+}
+
+// generatePosterConcept Step 1: 使用LLM生成海报概念
+func (s *Service) generatePosterConcept(ctx context.Context, userID string, poster *domain.CharacterPoster, character *domain.Character, plotContext string) (*conceptGenerationResult, error) {
+	// 构建System Prompt
+	systemPrompt := `# Role
+You are an expert AI Poster Designer. Your task is to generate a structured image generation prompt (JSON) based on User Input, Character Profile, and Plot Context.
+
+# Goal
+Create a movie-quality poster where the AI generation model renders BOTH the visual scene AND the text typography perfectly in one shot.
+
+# Steps
+1. **Analyze Context**:
+   * Combine [Character Profile] + [User Instruction] to define the Main Subject.
+   * Use [Plot Context] (if enabled) to define the Background and Mood.
+2. **Design Composition**:
+   * Determine the best camera_angle (e.g., Low angle for heroism, High angle for vulnerability).
+   * Define the spatial relationship between the character and the background elements.
+3. **Design Typography (CRITICAL)**:
+   * Invent a SHORT, IMPACTFUL English title based on the story.
+   * Choose a font style that matches the genre (e.g., "Gothic serif" for horror, "Sleek sans-serif" for sci-fi).
+   * Specify a clear position where the text won't cover the character's face.
+
+# JSON Output Schema
+You must output ONLY valid JSON with no markdown code blocks:
+{
+  "poster_concept": {
+    "visual_subject": "string (Detailed character + action)",
+    "scene_environment": "string (Background + weather + props)",
+    "composition_camera": "string (Angle + framing + depth of field)",
+    "lighting_atmosphere": "string (Lighting type + color palette + mood)",
+    "art_style": "string (Medium + render engine + style keywords)"
+  },
+  "typography_instruction": {
+    "title_content": "string (THE EXACT TEXT IN UPPERCASE)",
+    "title_style": "string (Font type + material + color)",
+    "title_position": "string (Exact placement e.g., 'at the top center')",
+    "subtitle_content": "string (Short tagline or 'NONE')",
+    "subtitle_style": "string (Font style + placement or 'NONE')"
+  }
+}`
+
+	// 构建User Prompt
+	var userPrompt strings.Builder
+	userPrompt.WriteString("Please create a poster concept based on the following information:\n\n")
+
+	// 角色信息
+	userPrompt.WriteString("[Character Profile]\n")
+	userPrompt.WriteString("Name: ")
+	userPrompt.WriteString(character.Name)
+	userPrompt.WriteString("\n")
+	if character.Description != "" {
+		userPrompt.WriteString("Description: ")
+		userPrompt.WriteString(character.Description)
+		userPrompt.WriteString("\n")
+	}
+	if character.Appearance != "" {
+		userPrompt.WriteString("Appearance: ")
+		userPrompt.WriteString(character.Appearance)
+		userPrompt.WriteString("\n")
+	}
+	if character.DressPreference != "" {
+		userPrompt.WriteString("Dress Style: ")
+		userPrompt.WriteString(character.DressPreference)
+		userPrompt.WriteString("\n")
+	}
+	if character.Personality != "" {
+		userPrompt.WriteString("Personality: ")
+		userPrompt.WriteString(character.Personality)
+		userPrompt.WriteString("\n")
+	}
+	if character.Background != "" {
+		userPrompt.WriteString("Background: ")
+		userPrompt.WriteString(character.Background)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString("\n")
+
+	// 用户指令
+	userPrompt.WriteString("[User Instruction]\n")
+	userPrompt.WriteString("Poster Title: ")
+	userPrompt.WriteString(poster.Title)
+	userPrompt.WriteString("\n")
+	if poster.Prompt != "" {
+		userPrompt.WriteString("Description: ")
+		userPrompt.WriteString(poster.Prompt)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString("\n")
+
+	// 剧情上下文
+	if plotContext != "" {
+		userPrompt.WriteString("[Plot Context - Reference for mood and background]\n")
+		userPrompt.WriteString(plotContext)
+		userPrompt.WriteString("\n")
+	}
+
+	// 调用AI生成服务
+	genReq := &GenerateTextRequest{
+		UserID:            userID,
+		OriginalPrompt:    userPrompt.String(),
+		SystemPrompt:      systemPrompt,
+		Model:             "gemini-2.5-flash",
+		Temperature:       0.8,
+		MaxTokens:         2000,
+		RelatedEntityID:   poster.ID,
+		RelatedEntityType: "character_poster",
+		Metadata: map[string]interface{}{
+			"operation":   "poster_concept_generation",
+			"characterId": poster.CharacterID,
+			"step":        1,
+		},
+	}
+
+	result, err := s.aiGenService.GenerateText(ctx, genReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析生成的JSON
+	concept, err := s.parsePosterConcept(result.Text)
+	if err != nil {
+		s.logger.Warn("failed to parse poster concept JSON, using raw text",
+			zap.Error(err),
+			zap.String("rawText", truncateForLog(result.Text, 500)))
+	}
+
+	return &conceptGenerationResult{
+		RecordID:    result.RecordID,
+		ConceptJSON: result.Text,
+		Concept:     concept,
+		TokensUsed:  result.TokensUsed,
+	}, nil
+}
+
+// parsePosterConcept 解析海报概念JSON
+func (s *Service) parsePosterConcept(text string) (*PosterConcept, error) {
+	// 清理JSON文本
+	cleanedText := strings.TrimSpace(text)
+
+	// 处理markdown代码块
+	if strings.HasPrefix(cleanedText, "```") {
+		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
+			cleanedText = cleanedText[idx+1:]
+		}
+		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
+			cleanedText = strings.TrimSpace(cleanedText[:idx])
+		}
+	}
+
+	// 提取JSON对象
+	cleanedText = extractJSONFromText(cleanedText)
+
+	var concept PosterConcept
+	if err := json.Unmarshal([]byte(cleanedText), &concept); err != nil {
+		return nil, err
+	}
+
+	return &concept, nil
+}
+
+// generatePosterImage Step 2: 组装最终提示词并生成图像
+func (s *Service) generatePosterImage(ctx context.Context, userID string, poster *domain.CharacterPoster, concept *PosterConcept, aspectRatio string) (*imageGenerationResult, error) {
+	// 组装最终图像提示词
+	finalPrompt := s.assembleFinalImagePrompt(concept, poster)
+
+	// 设置默认宽高比
+	if aspectRatio == "" {
+		aspectRatio = "16:9"
+	}
+
+	// 调用AI图像生成服务
+	imageReq := &GenerateImageRequest{
+		UserID:            userID,
+		Prompt:            finalPrompt,
+		Provider:          "gemini",
+		Model:             "imagen-3.0-generate-001",
+		AspectRatio:       aspectRatio,
+		Quality:           "high",
+		OutputCount:       1,
+		RelatedEntityID:   poster.ID,
+		RelatedEntityType: "character_poster",
+		Metadata: map[string]interface{}{
+			"operation":   "poster_image_generation",
+			"characterId": poster.CharacterID,
+			"step":        2,
+		},
+	}
+
+	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.ImageURLs) == 0 {
+		return nil, errors.New("no image generated")
+	}
+
+	return &imageGenerationResult{
+		RecordID:    result.RecordID,
+		FinalPrompt: finalPrompt,
+		ImageURL:    result.ImageURLs[0],
+	}, nil
+}
+
+// assembleFinalImagePrompt 组装最终图像生成提示词
+func (s *Service) assembleFinalImagePrompt(concept *PosterConcept, poster *domain.CharacterPoster) string {
+	var prompt strings.Builder
+
+	if concept != nil && concept.PosterConcept.VisualSubject != "" {
+		// 使用结构化概念组装提示词
+		p := concept.PosterConcept
+		t := concept.TypographyInstruction
+
+		prompt.WriteString("A movie poster design of ")
+		prompt.WriteString(p.VisualSubject)
+		prompt.WriteString(".\n")
+
+		if p.SceneEnvironment != "" {
+			prompt.WriteString("The scene is set in ")
+			prompt.WriteString(p.SceneEnvironment)
+			prompt.WriteString(".\n\n")
+		}
+
+		if p.CompositionCamera != "" {
+			prompt.WriteString("COMPOSITION & ANGLE:\n")
+			prompt.WriteString(p.CompositionCamera)
+			prompt.WriteString(".\n\n")
+		}
+
+		if p.LightingAtmosphere != "" {
+			prompt.WriteString("LIGHTING & MOOD:\n")
+			prompt.WriteString(p.LightingAtmosphere)
+			prompt.WriteString(".\n\n")
+		}
+
+		if p.ArtStyle != "" {
+			prompt.WriteString("ART STYLE:\n")
+			prompt.WriteString(p.ArtStyle)
+			prompt.WriteString(".\n\n")
+		}
+
+		// 排版指令
+		if t.TitleContent != "" && t.TitleContent != "NONE" {
+			prompt.WriteString("TYPOGRAPHY & TEXT GENERATION:\n")
+			prompt.WriteString("The image must feature the title text \"")
+			prompt.WriteString(t.TitleContent)
+			prompt.WriteString("\" written in ")
+			prompt.WriteString(t.TitleStyle)
+			prompt.WriteString(".\n")
+			prompt.WriteString("The title is placed ")
+			prompt.WriteString(t.TitlePosition)
+			prompt.WriteString(".\n")
+
+			if t.SubtitleContent != "" && t.SubtitleContent != "NONE" {
+				prompt.WriteString("Additionally, include the subtitle text \"")
+				prompt.WriteString(t.SubtitleContent)
+				prompt.WriteString("\" written in ")
+				prompt.WriteString(t.SubtitleStyle)
+				prompt.WriteString(".\n")
+			}
+		}
+	} else {
+		// 降级：使用基础提示词
+		prompt.WriteString("A professional movie poster design for \"")
+		prompt.WriteString(poster.Title)
+		prompt.WriteString("\".\n")
+		if poster.Prompt != "" {
+			prompt.WriteString(poster.Prompt)
+			prompt.WriteString("\n")
+		}
+		prompt.WriteString("High quality, cinematic lighting, professional composition, dramatic atmosphere.")
+	}
+
+	return prompt.String()
+}
+
+// PublishCharacterPoster 发布角色海报
+func (s *Service) PublishCharacterPoster(ctx context.Context, userID, posterID string) (*domain.CharacterPoster, error) {
+	s.logger.Info("publishing character poster",
+		zap.String("userID", userID),
+		zap.String("posterID", posterID),
+	)
+
+	// 获取海报
+	poster, err := s.repo.CharacterPosterByID(ctx, posterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("poster not found")
+		}
+		return nil, errors.New("failed to get poster")
+	}
+
+	// 验证权限
+	if poster.Author == nil || poster.Author.ID != userID {
+		return nil, errors.New("unauthorized: you can only publish your own posters")
+	}
+
+	// 验证海报状态（只有生成完成的海报可以发布）
+	if poster.Status != domain.PosterStatusGenerated {
+		return nil, errors.New("poster must be generated before publishing")
+	}
+
+	// 验证海报有图片
+	if poster.Image == "" {
+		return nil, errors.New("poster has no image")
+	}
+
+	// 更新状态为已发布
+	poster.Status = domain.PosterStatusPublished
+	if err := s.repo.UpdateCharacterPoster(ctx, poster); err != nil {
+		s.logger.Error("failed to publish poster", zap.Error(err))
+		return nil, errors.New("failed to publish poster")
+	}
+
+	s.logger.Info("character poster published successfully", zap.String("posterID", posterID))
+	return poster, nil
 }
 
 // GetCharacterStoryboards 获取角色参与的故事板列表

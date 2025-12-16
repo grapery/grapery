@@ -167,6 +167,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/characters/:id/skills", h.AddCharacterSkill)
 			authenticated.DELETE("/characters/:id/skills/:skill", h.RemoveCharacterSkill)
 			authenticated.POST("/characters/:id/posters", h.CreateCharacterPoster)
+			authenticated.POST("/posters/:id/generate", h.GenerateCharacterPoster) // AI两步生成海报
+			authenticated.POST("/posters/:id/publish", h.PublishCharacterPoster)   // 发布海报
 			authenticated.POST("/posters/:id/like", h.LikeCharacterPoster)
 			authenticated.POST("/posters/:id/share", h.ShareCharacterPoster)
 			authenticated.DELETE("/posters/:id", h.DeleteCharacterPoster)

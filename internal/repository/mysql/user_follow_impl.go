@@ -14,7 +14,7 @@ func (r *Repository) FollowUser(ctx context.Context, followerID, followeeID stri
 	if followerID == followeeID {
 		return fmt.Errorf("cannot follow yourself")
 	}
-	
+
 	var existing UserFollow
 	err := r.db.WithContext(ctx).Where("follower_id = ? AND followee_id = ?", followerID, followeeID).First(&existing).Error
 	if err == nil {
@@ -29,7 +29,7 @@ func (r *Repository) FollowUser(ctx context.Context, followerID, followeeID stri
 		FollowerID: followerID,
 		FolloweeID: followeeID,
 	}
-	
+
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
 		return fmt.Errorf("failed to create follow: %w", err)
 	}
@@ -110,15 +110,15 @@ func (r *Repository) LikedStories(ctx context.Context, userID string, limit, off
 		Preload("Story.Author").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&likes).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked stories: %w", err)
 	}
-	
+
 	result := make([]*domain.Story, len(likes))
 	for i, like := range likes {
 		story := r.storyToDomain(like.Story)
@@ -134,15 +134,15 @@ func (r *Repository) LikedCharacters(ctx context.Context, userID string, limit, 
 		Preload("Character.Author").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&follows).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked characters: %w", err)
 	}
-	
+
 	result := make([]*domain.Character, len(follows))
 	for i, follow := range follows {
 		character := r.characterToDomain(follow.Character)
@@ -158,15 +158,15 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 		Preload("Storyboard.Creator").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&likes).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked storyboards: %w", err)
 	}
-	
+
 	result := make([]*domain.Storyboard, len(likes))
 	for i, like := range likes {
 		storyboard, err := r.storyboardToDomain(ctx, like.Storyboard)
@@ -177,4 +177,3 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 	}
 	return result, nil
 }
-

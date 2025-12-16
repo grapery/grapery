@@ -22,14 +22,14 @@ import (
 
 // TracingConfig holds tracing configuration
 type TracingConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	ServiceName     string `yaml:"service_name"`
-	ServiceVersion  string `yaml:"service_version"`
-	Environment     string `yaml:"environment"`
-	JaegerEndpoint  string `yaml:"jaeger_endpoint"`
-	OTLPEndpoint    string `yaml:"otlp_endpoint"`
-	SamplingRatio   float64 `yaml:"sampling_ratio"`
-	Headers         map[string]string `yaml:"headers"`
+	Enabled        bool              `yaml:"enabled"`
+	ServiceName    string            `yaml:"service_name"`
+	ServiceVersion string            `yaml:"service_version"`
+	Environment    string            `yaml:"environment"`
+	JaegerEndpoint string            `yaml:"jaeger_endpoint"`
+	OTLPEndpoint   string            `yaml:"otlp_endpoint"`
+	SamplingRatio  float64           `yaml:"sampling_ratio"`
+	Headers        map[string]string `yaml:"headers"`
 }
 
 // TracerProvider wraps the OpenTelemetry TracerProvider
@@ -158,15 +158,15 @@ func (tp *TracerProvider) TraceMiddleware() func(http.Handler) http.Handler {
 
 			// Extract context from incoming headers
 			ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-			
+
 			// Get tracer
 			tracer := tp.Tracer("http-server")
-			
+
 			// Start span
 			spanName := fmt.Sprintf("%s %s", r.Method, r.URL.Path)
 			ctx, span := tracer.Start(ctx, spanName)
 			defer span.End()
-			
+
 			// Add attributes
 			span.SetAttributes(
 				attribute.String("http.method", r.Method),
@@ -176,18 +176,18 @@ func (tp *TracerProvider) TraceMiddleware() func(http.Handler) http.Handler {
 				attribute.String("http.user_agent", r.UserAgent()),
 				attribute.String("http.remote_addr", r.RemoteAddr),
 			)
-			
+
 			// Wrap response writer to capture status code
 			wrapped := &tracingResponseWriter{ResponseWriter: w, statusCode: 200}
-			
+
 			// Continue with traced context
 			next.ServeHTTP(wrapped, r.WithContext(ctx))
-			
+
 			// Add status code attribute
 			span.SetAttributes(
 				attribute.Int("http.status_code", wrapped.statusCode),
 			)
-			
+
 			// Set status based on status code
 			if wrapped.statusCode >= 400 {
 				span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", wrapped.statusCode))

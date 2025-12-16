@@ -17,7 +17,7 @@ type User struct {
 	Followers           int    `json:"followers"`
 	Following           int    `json:"following"`
 	StoryboardCount     int    `json:"storyboardCount"` // Number of storyboards created by this user
-	Status              string `json:"status"`         // active, suspended, deleted
+	Status              string `json:"status"`          // active, suspended, deleted
 	EmailVerified       bool   `json:"emailVerified"`
 	LastLoginAt         *int64 `json:"lastLoginAt,omitempty"`
 	CreatedAt           int64  `json:"createdAt"`
