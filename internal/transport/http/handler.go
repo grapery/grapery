@@ -76,20 +76,27 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
+
+			// 评论相关
 			authenticated.GET("/comments", h.ListComments)
 			authenticated.GET("/comments/:id", h.GetComment)
 			authenticated.GET("/comments/:id/replies", h.GetCommentReplies)
 			authenticated.GET("/comments/:id/tree", h.GetCommentTree)
+
+			// 角色相关
 			authenticated.GET("/characters", h.ListCharacters)
 			authenticated.GET("/characters/:id", h.GetCharacter)
 			authenticated.GET("/characters/:id/analytics", h.GetCharacterAnalytics)
 			authenticated.GET("/characters/:id/posters", h.GetCharacterPosters)
 			authenticated.GET("/characters/:id/storyboards", h.GetCharacterStoryboards)
+
+			// 群组相关
 			authenticated.GET("/groups", h.ListGroups)
 			authenticated.GET("/groups/:id", h.GetGroup)
 			authenticated.GET("/groups/:id/members", h.GetGroupMembers)
 			authenticated.GET("/groups/:id/activities", h.GetGroupActivities)
 			authenticated.GET("/groups/:id/activities/heatmap", h.GetGroupActivityHeatmap)
+			// 获取全局活动
 			authenticated.GET("/activities/global", h.GetGlobalActivities)
 
 			// 用户相关
@@ -263,6 +270,20 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.PUT("/styles/:id", h.UpdateStyleConfig)
 			authenticated.DELETE("/styles/:id", h.DeleteStyleConfig)
 			authenticated.POST("/styles/initialize", h.InitializeDefaultStyles)
+
+			// 邀请码管理
+			authenticated.POST("/invitation-codes", h.CreateInvitationCode)
+			authenticated.GET("/invitation-codes", h.ListInvitationCodes)
+			authenticated.GET("/invitation-codes/:id", h.GetInvitationCode)
+			authenticated.PUT("/invitation-codes/:id", h.UpdateInvitationCode)
+			authenticated.DELETE("/invitation-codes/:id", h.DeleteInvitationCode)
+			authenticated.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 公开接口，验证邀请码
+		}
+
+		// 公开接口（无需认证）
+		public := api.Group("")
+		{
+			public.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 验证邀请码（注册前验证）
 		}
 
 	}

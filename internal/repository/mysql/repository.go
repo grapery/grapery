@@ -107,6 +107,7 @@ func (r *Repository) migrate() error {
 		&StoryTag{},
 		&CharacterTag{},
 		&StyleConfig{},
+		&InvitationCode{},
 		&SearchHistory{},
 		&ViewHistory{},
 		&Report{},

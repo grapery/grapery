@@ -1067,6 +1067,25 @@ type TokenTransaction struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
+// InvitationCode 邀请码表
+type InvitationCode struct {
+	ID          string         `gorm:"primaryKey;size:36"`
+	Code        string         `gorm:"size:50;not null;uniqueIndex;index"` // 邀请码（唯一）
+	CreatedBy   string         `gorm:"size:36;not null;index"`
+	Creator     User           `gorm:"foreignKey:CreatedBy"`
+	UsedBy      string         `gorm:"size:36;index"` // 使用者用户ID（如果已使用）
+	User        User           `gorm:"foreignKey:UsedBy"`
+	UsedAt      time.Time      // 使用时间
+	IsActive    bool           `gorm:"default:true;index"` // 是否启用
+	MaxUses     int            `gorm:"default:1"`          // 最大使用次数（0表示无限制）
+	CurrentUses int            `gorm:"default:0"`          // 当前使用次数
+	ExpiresAt   time.Time      `gorm:"index"`             // 过期时间（零值表示永不过期）
+	Description string         `gorm:"type:text"`          // 描述信息
+	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt   time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
 // migrate runs database migrations
 func migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -1140,5 +1159,8 @@ func migrate(db *gorm.DB) error {
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&TokenTransaction{},
+
+		// 邀请码系统
+		&InvitationCode{},
 	)
 }

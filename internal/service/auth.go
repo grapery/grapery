@@ -105,12 +105,13 @@ func (s *Service) deletePasswordResetToken(ctx context.Context, token string) {
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	Username    string `json:"username" binding:"required,min=3,max=50"`
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,min=6"`
-	DisplayName string `json:"displayName" binding:"required,min=1,max=100"`
-	DateOfBirth string `json:"dateOfBirth,omitempty"` // YYYY-MM-DD
-	AgreeTerms  bool   `json:"agreeTerms" binding:"required"`
+	Username       string `json:"username" binding:"required,min=3,max=50"`
+	Email          string `json:"email" binding:"required,email"`
+	Password       string `json:"password" binding:"required,min=6"`
+	DisplayName    string `json:"displayName" binding:"required,min=1,max=100"`
+	DateOfBirth    string `json:"dateOfBirth,omitempty"` // YYYY-MM-DD
+	AgreeTerms     bool   `json:"agreeTerms" binding:"required"`
+	InvitationCode string `json:"invitationCode,omitempty"` // 邀请码（可选）
 }
 
 // LoginRequest 登录请求
@@ -151,6 +152,14 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	// 验证用户协议
 	if !req.AgreeTerms {
 		return nil, errors.New("must agree to terms and conditions")
+	}
+
+	// 验证邀请码（如果提供）
+	if req.InvitationCode != "" {
+		if err := s.repo.ValidateInvitationCode(ctx, req.InvitationCode); err != nil {
+			s.logger.Warn("invalid invitation code", zap.String("code", req.InvitationCode), zap.Error(err))
+			return nil, errors.New("invalid or expired invitation code")
+		}
 	}
 
 	// 检查用户名是否已存在
@@ -201,6 +210,14 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	if err := s.repo.CreateUser(ctx, user); err != nil {
 		s.logger.Error("failed to create user", zap.Error(err))
 		return nil, errors.New("failed to create user account")
+	}
+
+	// 标记邀请码已使用（如果提供了邀请码）
+	if req.InvitationCode != "" {
+		if err := s.repo.UseInvitationCode(ctx, req.InvitationCode, user.ID); err != nil {
+			s.logger.Warn("failed to mark invitation code as used", zap.String("code", req.InvitationCode), zap.Error(err))
+			// 不阻塞注册流程，但记录警告
+		}
 	}
 
 	// 创建默认用户设置

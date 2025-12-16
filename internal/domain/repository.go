@@ -427,4 +427,14 @@ type Repository interface {
 	UpdateAgentMemory(ctx context.Context, memory *AgentMemory) error
 	DeleteAgentMemory(ctx context.Context, id string) error
 	IncrementMemoryAccess(ctx context.Context, memoryID string) error
+
+	// ========== Invitation Code operations ==========
+	CreateInvitationCode(ctx context.Context, code *InvitationCode) error
+	GetInvitationCodeByCode(ctx context.Context, code string) (*InvitationCode, error)
+	GetInvitationCodeByID(ctx context.Context, id string) (*InvitationCode, error)
+	ListInvitationCodes(ctx context.Context, createdBy string, limit, offset int) ([]*InvitationCode, error)
+	UpdateInvitationCode(ctx context.Context, code *InvitationCode) error
+	DeleteInvitationCode(ctx context.Context, id string) error
+	UseInvitationCode(ctx context.Context, code string, userID string) error
+	ValidateInvitationCode(ctx context.Context, code string) error
 }
