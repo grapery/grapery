@@ -127,8 +127,13 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	// 记录用户活动
 	go s.RecordStoryboardCreated(context.Background(), storyboard.CreatorID, storyboard.ID, storyboard.Title)
 
-	// 更新故事的 panels 计数
-	_ = story // 暂时不更新
+	// 更新故事的故事板数量
+	if err := s.repo.IncrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
+		s.logger.Warn("failed to increment story storyboard count",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+		// 不返回错误，因为故事板已经创建成功
+	}
 
 	return nil
 }
@@ -403,6 +408,14 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 	// 删除
 	if err := s.repo.DeleteStoryboard(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete storyboard: %w", err)
+	}
+
+	// 更新故事的故事板数量
+	if err := s.repo.DecrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
+		s.logger.Warn("failed to decrement story storyboard count",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+		// 不返回错误，因为故事板已经删除成功
 	}
 
 	s.logger.Info("storyboard deleted",

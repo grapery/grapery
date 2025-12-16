@@ -92,15 +92,21 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 	_ = s.repo.UpdateContentGeneration(ctx, gen)
 
 	// Build context from characters and scenes
-	contextStr := s.buildGenerationContext(ctx, gen.CharacterIDs, gen.SceneIDs, storyboard.StoryID)
+	contextStr := s.buildGenerationContext(ctx, storyboard, gen.CharacterIDs, gen.SceneIDs)
 
-	// Determine style: use provided style, or fallback to story's genre
+	// Determine style: use provided style, or fallback to story's genre or style
 	style := gen.Style
 	if style == "" {
-		// Try to get story's genre as the default style
+		// Try to get story's genre or style as the default style
 		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
-		if err == nil && story.Genre != "" {
-			style = story.Genre
+		if err == nil {
+			if story.Genre != "" {
+				style = story.Genre
+			} else if story.Style != "" {
+				style = story.Style
+			} else {
+				style = "drama" // Ultimate fallback
+			}
 		} else {
 			style = "drama" // Ultimate fallback
 		}
@@ -876,25 +882,151 @@ func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) er
 	return nil
 }
 
-// buildGenerationContext builds context string from characters and scenes
-func (s *Service) buildGenerationContext(ctx context.Context, characterIDs, sceneIDs []string, storyID string) string {
-	var context string
+// buildGenerationContext builds comprehensive context string for storyboard generation
+func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain.Storyboard, characterIDs, sceneIDs []string) string {
+	var parts []string
 
-	// Add character information
-	for _, charID := range characterIDs {
-		if char, err := s.repo.CharacterByID(ctx, charID); err == nil {
-			context += fmt.Sprintf("Character: %s - %s\n", char.Name, char.Description)
+	// 1. Get ancestor storyboards (up to 5) along the parent chain
+	ancestors := s.getAncestorStoryboards(ctx, storyboard, 5)
+
+	// Get story information for root storyboard
+	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+	if err != nil {
+		s.logger.Warn("failed to get story", zap.String("storyId", storyboard.StoryID), zap.Error(err))
+	}
+
+	// 2. Add previous storyboard context (chronological order)
+	if len(ancestors) > 0 {
+		parts = append(parts, "## Previous Storyboards Context")
+
+		for i, ancestor := range ancestors {
+			parts = append(parts, fmt.Sprintf("\n### Storyboard %d: %s", i+1, ancestor.Title))
+
+			// If this is the first storyboard (root), add story description
+			if i == 0 {
+				isRoot := ancestor.ParentID == "" || ancestor.ParentID == domain.StoryboardRootMarker
+				if isRoot && story != nil && story.Description != "" {
+					parts = append(parts, fmt.Sprintf("Story Background: %s", story.Description))
+				}
+			}
+
+			// Add storyboard content
+			if ancestor.Content != "" {
+				parts = append(parts, fmt.Sprintf("Content: %s", ancestor.Content))
+			} else if ancestor.RawInput != "" {
+				parts = append(parts, fmt.Sprintf("Raw Input: %s", ancestor.RawInput))
+			}
+
+			// Add characters that participated in this storyboard
+			if len(ancestor.CharacterRefs) > 0 {
+				var charNames []string
+				for _, ref := range ancestor.CharacterRefs {
+					if ref.Character != nil {
+						charNames = append(charNames, ref.Character.Name)
+					} else if ref.CharacterID != "" {
+						// Try to get character name by ID
+						if char, err := s.repo.CharacterByID(ctx, ref.CharacterID); err == nil {
+							charNames = append(charNames, char.Name)
+						}
+					}
+				}
+				if len(charNames) > 0 {
+					parts = append(parts, fmt.Sprintf("Participating Characters: %s", strings.Join(charNames, ", ")))
+				}
+			}
+		}
+	} else if story != nil && story.Description != "" {
+		// If no ancestors, this is the first storyboard - use story description
+		parts = append(parts, "## Story Background")
+		parts = append(parts, story.Description)
+	}
+
+	// 3. Add current storyboard's participating characters with detailed information
+	if len(characterIDs) > 0 {
+		parts = append(parts, "\n## Current Storyboard Characters")
+
+		for _, charID := range characterIDs {
+			char, err := s.repo.CharacterByID(ctx, charID)
+			if err != nil {
+				s.logger.Warn("failed to get character", zap.String("characterId", charID), zap.Error(err))
+				continue
+			}
+
+			var charInfo []string
+			charInfo = append(charInfo, fmt.Sprintf("Character ID: %s", char.ID))
+			charInfo = append(charInfo, fmt.Sprintf("Name: %s", char.Name))
+
+			if char.Description != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Description: %s", char.Description))
+			}
+			if char.Personality != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Personality: %s", char.Personality))
+			}
+			if char.Appearance != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Appearance: %s", char.Appearance))
+			}
+			if char.DressPreference != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Dress Preference: %s", char.DressPreference))
+			}
+			if char.Background != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Background: %s", char.Background))
+			}
+			if char.HandlingStyle != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Handling Style: %s", char.HandlingStyle))
+			}
+			if char.CognitionRange != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Cognition Range: %s", char.CognitionRange))
+			}
+			if char.AbilityFeatures != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Ability Features: %s", char.AbilityFeatures))
+			}
+			if char.ShortTermGoal != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Short-term Goal: %s", char.ShortTermGoal))
+			}
+			if char.LongTermGoal != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Long-term Goal: %s", char.LongTermGoal))
+			}
+			if len(char.Traits) > 0 {
+				charInfo = append(charInfo, fmt.Sprintf("Traits: %s", strings.Join(char.Traits, ", ")))
+			}
+			if len(char.Skills) > 0 {
+				charInfo = append(charInfo, fmt.Sprintf("Skills: %s", strings.Join(char.Skills, ", ")))
+			}
+
+			parts = append(parts, strings.Join(charInfo, "\n"))
+			parts = append(parts, "") // Empty line between characters
 		}
 	}
 
-	// Add scene information
-	for _, sceneID := range sceneIDs {
-		if scene, err := s.repo.StorySceneByID(ctx, storyID, sceneID); err == nil {
-			context += fmt.Sprintf("Scene: %s at %s - %s\n", scene.Title, scene.Location, scene.Description)
+	// 4. Add scene information
+	if len(sceneIDs) > 0 {
+		parts = append(parts, "\n## Storyboard Scenes")
+
+		for _, sceneID := range sceneIDs {
+			scene, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, sceneID)
+			if err != nil {
+				s.logger.Warn("failed to get scene", zap.String("sceneId", sceneID), zap.Error(err))
+				continue
+			}
+
+			var sceneInfo []string
+			sceneInfo = append(sceneInfo, fmt.Sprintf("Scene: %s", scene.Title))
+			if scene.Location != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Location: %s", scene.Location))
+			}
+			if scene.TimeOfDay != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Time of Day: %s", scene.TimeOfDay))
+			}
+			if scene.Description != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Description: %s", scene.Description))
+			}
+
+			parts = append(parts, strings.Join(sceneInfo, "\n"))
+			parts = append(parts, "") // Empty line between scenes
 		}
 	}
 
-	return context
+	return strings.Join(parts, "\n")
 }
 
 // updateStoryboardTokens aggregates and updates token consumption

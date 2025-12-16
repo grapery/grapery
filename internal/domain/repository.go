@@ -203,6 +203,8 @@ type Repository interface {
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
 	ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *Storyboard) error
 	IncrementStoryboardViews(ctx context.Context, id string) error
+	IncrementStoryStoryboardCount(ctx context.Context, storyID string) error
+	DecrementStoryStoryboardCount(ctx context.Context, storyID string) error
 	UpdateStoryboardTokens(ctx context.Context, storyboardID string, tokens int) error
 	UpdateStoryboardWorkflow(ctx context.Context, storyboardID string, status string, step int) error
 

@@ -382,6 +382,28 @@ func (r *Repository) IncrementStoryboardViews(ctx context.Context, id string) er
 	return nil
 }
 
+// IncrementStoryStoryboardCount increments the storyboard count for a story
+func (r *Repository) IncrementStoryStoryboardCount(ctx context.Context, storyID string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Story{}).
+		Where("id = ?", storyID).
+		UpdateColumn("storyboard_count", gorm.Expr("storyboard_count + ?", 1)).Error; err != nil {
+		return fmt.Errorf("failed to increment story storyboard count: %w", err)
+	}
+	return nil
+}
+
+// DecrementStoryStoryboardCount decrements the storyboard count for a story
+func (r *Repository) DecrementStoryStoryboardCount(ctx context.Context, storyID string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Story{}).
+		Where("id = ?", storyID).
+		UpdateColumn("storyboard_count", gorm.Expr("GREATEST(storyboard_count - ?, 0)", 1)).Error; err != nil {
+		return fmt.Errorf("failed to decrement story storyboard count: %w", err)
+	}
+	return nil
+}
+
 // storyboardToDomain converts database model to domain model
 func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (domain.Storyboard, error) {
 	// 获取子节点 IDs
