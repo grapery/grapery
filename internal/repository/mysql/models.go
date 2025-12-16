@@ -478,6 +478,17 @@ type CharacterFollow struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
+// GroupRole 群组角色定义表
+type GroupRole struct {
+	ID          string    `gorm:"primaryKey;size:36"`
+	Code        string    `gorm:"size:50;not null;uniqueIndex;index"` // creator, admin, member, outsider
+	Name        string    `gorm:"size:100;not null"`                  // 小组创建者、小组管理员、小组成员、小组外部人员
+	Description string    `gorm:"type:text"`
+	IsSystem    bool      `gorm:"default:true;index"` // 是否为系统内置角色
+	CreatedAt   time.Time `gorm:"autoCreateTime"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
+}
+
 // GroupMember 群组成员
 type GroupMember struct {
 	ID        string         `gorm:"primaryKey;size:36"`
@@ -485,7 +496,9 @@ type GroupMember struct {
 	Group     Group          `gorm:"foreignKey:GroupID"`
 	UserID    string         `gorm:"size:36;not null;index:idx_group_user,unique;index"`
 	User      User           `gorm:"foreignKey:UserID"`
-	Role      string         `gorm:"size:20;not null"` // owner, admin, moderator, member
+	Role      string         `gorm:"size:20;not null"` // owner, admin, moderator, member (保留用于向后兼容)
+	RoleID    string         `gorm:"size:36;index"`   // 关联到GroupRole表
+	RoleRef   GroupRole      `gorm:"foreignKey:RoleID"`
 	InvitedBy string         `gorm:"size:36"`
 	JoinedAt  time.Time      `gorm:"autoCreateTime"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -1082,6 +1095,7 @@ func migrate(db *gorm.DB) error {
 		&StoryContributor{},
 		&CharacterFollow{},
 		&GroupMember{},
+		&GroupRole{},
 		&GroupInvitation{},
 		&CommentLike{},
 		&StoryboardLike{},

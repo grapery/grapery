@@ -207,6 +207,161 @@ func (r *Repository) IsGroupMember(ctx context.Context, groupID, userID string) 
 	return count > 0, nil
 }
 
+// ========== Group Roles Management ==========
+
+// CreateGroupRole 创建群组角色
+func (r *Repository) CreateGroupRole(ctx context.Context, role *domain.GroupRole) error {
+	model := &GroupRole{
+		ID:          role.ID,
+		Code:        role.Code,
+		Name:        role.Name,
+		Description: role.Description,
+		IsSystem:    role.IsSystem,
+		CreatedAt:    time.Unix(role.CreatedAt, 0),
+		UpdatedAt:    time.Unix(role.UpdatedAt, 0),
+	}
+	return r.db.WithContext(ctx).Create(model).Error
+}
+
+// GetGroupRoleByCode 根据代码获取群组角色
+func (r *Repository) GetGroupRoleByCode(ctx context.Context, code string) (*domain.GroupRole, error) {
+	var model GroupRole
+	if err := r.db.WithContext(ctx).Where("code = ?", code).First(&model).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.groupRoleToDomain(&model), nil
+}
+
+// GetGroupRoleByID 根据ID获取群组角色
+func (r *Repository) GetGroupRoleByID(ctx context.Context, id string) (*domain.GroupRole, error) {
+	var model GroupRole
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&model).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.groupRoleToDomain(&model), nil
+}
+
+// ListGroupRoles 列出所有群组角色
+func (r *Repository) ListGroupRoles(ctx context.Context) ([]*domain.GroupRole, error) {
+	var models []GroupRole
+	if err := r.db.WithContext(ctx).Order("created_at ASC").Find(&models).Error; err != nil {
+		return nil, err
+	}
+	roles := make([]*domain.GroupRole, len(models))
+	for i, m := range models {
+		roles[i] = r.groupRoleToDomain(&m)
+	}
+	return roles, nil
+}
+
+// InitializeGroupRoles 初始化系统内置角色
+func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
+	roles := []*domain.GroupRole{
+		{
+			ID:          uuid.New().String(),
+			Code:        domain.RoleCodeCreator,
+			Name:        "小组创建者",
+			Description: "小组的创建者，拥有所有权限",
+			IsSystem:    true,
+			CreatedAt:   time.Now().Unix(),
+			UpdatedAt:   time.Now().Unix(),
+		},
+		{
+			ID:          uuid.New().String(),
+			Code:        domain.RoleCodeAdmin,
+			Name:        "小组管理员",
+			Description: "小组的管理员，可以管理成员和内容",
+			IsSystem:    true,
+			CreatedAt:   time.Now().Unix(),
+			UpdatedAt:   time.Now().Unix(),
+		},
+		{
+			ID:          uuid.New().String(),
+			Code:        domain.RoleCodeMember,
+			Name:        "小组成员",
+			Description: "小组的普通成员，可以创建和查看内容",
+			IsSystem:    true,
+			CreatedAt:   time.Now().Unix(),
+			UpdatedAt:   time.Now().Unix(),
+		},
+		{
+			ID:          uuid.New().String(),
+			Code:        domain.RoleCodeOutsider,
+			Name:        "小组外部人员",
+			Description: "小组外部人员，无权限访问小组内容",
+			IsSystem:    true,
+			CreatedAt:   time.Now().Unix(),
+			UpdatedAt:   time.Now().Unix(),
+		},
+	}
+
+	for _, role := range roles {
+		// 检查角色是否已存在
+		existing, err := r.GetGroupRoleByCode(ctx, role.Code)
+		if err != nil && err != domain.ErrNotFound {
+			return err
+		}
+		if existing != nil {
+			continue // 角色已存在，跳过
+		}
+		// 创建角色
+		if err := r.CreateGroupRole(ctx, role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateMemberRoleID 更新成员的角色ID
+func (r *Repository) UpdateMemberRoleID(ctx context.Context, groupID, userID, roleID string) error {
+	result := r.db.WithContext(ctx).Model(&GroupMember{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Update("role_id", roleID)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("member not found")
+	}
+
+	return nil
+}
+
+// GetMemberRoleID 获取成员的角色ID
+func (r *Repository) GetMemberRoleID(ctx context.Context, groupID, userID string) (string, error) {
+	var member GroupMember
+	if err := r.db.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("member not found")
+		}
+		return "", err
+	}
+	return member.RoleID, nil
+}
+
+// groupRoleToDomain 将数据库模型转换为domain模型
+func (r *Repository) groupRoleToDomain(m *GroupRole) *domain.GroupRole {
+	return &domain.GroupRole{
+		ID:          m.ID,
+		Code:        m.Code,
+		Name:        m.Name,
+		Description: m.Description,
+		IsSystem:    m.IsSystem,
+		CreatedAt:   m.CreatedAt.Unix(),
+		UpdatedAt:   m.UpdatedAt.Unix(),
+	}
+}
+
 // CreateGroupInvitation creates a group invitation
 func (r *Repository) CreateGroupInvitation(ctx context.Context, groupID, inviterID, inviteeID, message string) (*domain.GroupInvitation, error) {
 	invitation := GroupInvitation{

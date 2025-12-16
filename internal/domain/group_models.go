@@ -1,6 +1,6 @@
 package domain
 
-// GroupMemberRole 群组成员角色
+// GroupMemberRole 群组成员角色（保留用于向后兼容）
 type GroupMemberRole string
 
 const (
@@ -9,6 +9,31 @@ const (
 	RoleModerator GroupMemberRole = "moderator" // 协管
 	RoleMember    GroupMemberRole = "member"    // 普通成员
 )
+
+// GroupRole 群组角色定义表
+type GroupRole struct {
+	ID          string `json:"id"`
+	Code        string `json:"code"`        // 角色代码：creator, admin, member, outsider
+	Name        string `json:"name"`        // 角色名称：小组创建者、小组管理员、小组成员、小组外部人员
+	Description string `json:"description"` // 角色描述
+	IsSystem    bool   `json:"isSystem"`    // 是否为系统内置角色
+	CreatedAt   int64  `json:"createdAt"`
+	UpdatedAt   int64  `json:"updatedAt"`
+}
+
+// GroupRolePermission 群组角色权限关联（权限固定，存储在代码中）
+type GroupRolePermission struct {
+	RoleCode           string `json:"roleCode"`
+	CanInviteMembers   bool   `json:"canInviteMembers"`
+	CanRemoveMembers   bool   `json:"canRemoveMembers"`
+	CanEditGroup       bool   `json:"canEditGroup"`
+	CanDeleteGroup     bool   `json:"canDeleteGroup"`
+	CanCreateStories   bool   `json:"canCreateStories"`
+	CanEditStories      bool   `json:"canEditStories"`
+	CanDeleteStories    bool   `json:"canDeleteStories"`
+	CanManageRoles      bool   `json:"canManageRoles"`
+	CanViewGroupContent bool   `json:"canViewGroupContent"` // 查看群组内容（外部人员可能没有此权限）
+}
 
 // Group represents a collaboration group
 type Group struct {
@@ -137,7 +162,7 @@ type GroupPermission struct {
 	CanManageRoles   bool
 }
 
-// GetPermissions 获取角色权限
+// GetPermissions 获取角色权限（基于GroupMemberRole，保留用于向后兼容）
 func GetPermissions(role GroupMemberRole) GroupPermission {
 	switch role {
 	case RoleOwner:
@@ -188,5 +213,74 @@ func GetPermissions(role GroupMemberRole) GroupPermission {
 			CanDeleteStories: false,
 			CanManageRoles:   false,
 		}
+	}
+}
+
+// 角色代码常量
+const (
+	RoleCodeCreator  = "creator"  // 小组创建者
+	RoleCodeAdmin    = "admin"    // 小组管理员
+	RoleCodeMember   = "member"   // 小组成员
+	RoleCodeOutsider = "outsider" // 小组外部人员
+)
+
+// GetRolePermissions 根据角色代码获取权限（新的权限系统）
+func GetRolePermissions(roleCode string) GroupRolePermission {
+	switch roleCode {
+	case RoleCodeCreator:
+		return GroupRolePermission{
+			RoleCode:           RoleCodeCreator,
+			CanInviteMembers:   true,
+			CanRemoveMembers:   true,
+			CanEditGroup:       true,
+			CanDeleteGroup:     true,
+			CanCreateStories:   true,
+			CanEditStories:     true,
+			CanDeleteStories:   true,
+			CanManageRoles:     true,
+			CanViewGroupContent: true,
+		}
+	case RoleCodeAdmin:
+		return GroupRolePermission{
+			RoleCode:           RoleCodeAdmin,
+			CanInviteMembers:   true,
+			CanRemoveMembers:   true,
+			CanEditGroup:       true,
+			CanDeleteGroup:     false,
+			CanCreateStories:   true,
+			CanEditStories:     true,
+			CanDeleteStories:   true,
+			CanManageRoles:     true,
+			CanViewGroupContent: true,
+		}
+	case RoleCodeMember:
+		return GroupRolePermission{
+			RoleCode:           RoleCodeMember,
+			CanInviteMembers:   false,
+			CanRemoveMembers:   false,
+			CanEditGroup:       false,
+			CanDeleteGroup:     false,
+			CanCreateStories:   true,
+			CanEditStories:     false,
+			CanDeleteStories:   false,
+			CanManageRoles:     false,
+			CanViewGroupContent: true,
+		}
+	case RoleCodeOutsider:
+		return GroupRolePermission{
+			RoleCode:           RoleCodeOutsider,
+			CanInviteMembers:   false,
+			CanRemoveMembers:   false,
+			CanEditGroup:       false,
+			CanDeleteGroup:     false,
+			CanCreateStories:   false,
+			CanEditStories:     false,
+			CanDeleteStories:   false,
+			CanManageRoles:     false,
+			CanViewGroupContent: false,
+		}
+	default:
+		// 默认返回外部人员权限（最严格）
+		return GetRolePermissions(RoleCodeOutsider)
 	}
 }

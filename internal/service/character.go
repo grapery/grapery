@@ -58,6 +58,17 @@ type GenerateCharacterRequest struct {
 	Name   string `json:"name" binding:"omitempty,max=100"` // Optional: include character name for context
 }
 
+// GenerateCharacterAvatarRequest AI生成角色头像请求
+type GenerateCharacterAvatarRequest struct {
+	AspectRatio string `json:"aspectRatio"` // 1:1, 16:9, 9:16
+}
+
+// GenerateCharacterAvatarResult 生成角色头像结果
+type GenerateCharacterAvatarResult struct {
+	AvatarURL string `json:"avatarUrl"`
+	RecordID  string `json:"recordId"`
+}
+
 // GeneratedCharacterAttributes AI生成的角色属性
 type GeneratedCharacterAttributes struct {
 	Description     string `json:"description"`
@@ -1432,4 +1443,145 @@ func extractFieldValue(text, fieldName string) string {
 	}
 
 	return ""
+}
+
+// GenerateCharacterAvatar 使用AI生成角色头像
+func (s *Service) GenerateCharacterAvatar(ctx context.Context, userID, characterID string, req GenerateCharacterAvatarRequest) (*GenerateCharacterAvatarResult, error) {
+	s.logger.Info("generating character avatar",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+	)
+
+	// 1. 获取角色信息
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+
+	// 2. 验证权限（只有角色创建者可以生成角色头像）
+	if character.Author == nil || character.Author.ID != userID {
+		return nil, errors.New("unauthorized")
+	}
+
+	// 3. 检查AI服务是否可用
+	if s.aiGenService == nil {
+		return nil, errors.New("AI generation service not configured")
+	}
+
+	// 4. 构建头像生成提示词
+	prompt := s.buildAvatarPrompt(character)
+
+	// 5. 设置默认宽高比
+	aspectRatio := req.AspectRatio
+	if aspectRatio == "" {
+		aspectRatio = "1:1" // 默认正方形头像
+	}
+
+	// 6. 调用AI图像生成服务
+	imageReq := &GenerateImageRequest{
+		UserID:            userID,
+		Prompt:            prompt,
+		Provider:          "gemini",
+		Model:             "imagen-3.0-generate-001",
+		AspectRatio:       aspectRatio,
+		Quality:           "high",
+		OutputCount:       1,
+		RelatedEntityID:   characterID,
+		RelatedEntityType: "character",
+		Metadata: map[string]interface{}{
+			"operation":   "character_avatar_generation",
+			"characterId": characterID,
+		},
+	}
+
+	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
+	if err != nil {
+		s.logger.Error("failed to generate character avatar", zap.Error(err))
+		return nil, errors.New("failed to generate avatar: " + err.Error())
+	}
+
+	if len(result.ImageURLs) == 0 {
+		return nil, errors.New("no image generated")
+	}
+
+	s.logger.Info("character avatar generated successfully",
+		zap.String("characterID", characterID),
+		zap.String("recordID", result.RecordID),
+	)
+
+	return &GenerateCharacterAvatarResult{
+		AvatarURL: result.ImageURLs[0],
+		RecordID:  result.RecordID,
+	}, nil
+}
+
+// buildAvatarPrompt 构建角色头像生成提示词
+func (s *Service) buildAvatarPrompt(character *domain.Character) string {
+	var prompt strings.Builder
+
+	prompt.WriteString("A professional character portrait avatar of ")
+	prompt.WriteString(character.Name)
+	prompt.WriteString(".\n\n")
+
+	if character.Appearance != "" {
+		prompt.WriteString("Appearance: ")
+		prompt.WriteString(character.Appearance)
+		prompt.WriteString(".\n")
+	}
+
+	if character.DressPreference != "" {
+		prompt.WriteString("Dress style: ")
+		prompt.WriteString(character.DressPreference)
+		prompt.WriteString(".\n")
+	}
+
+	if character.Personality != "" {
+		prompt.WriteString("Personality traits: ")
+		prompt.WriteString(character.Personality)
+		prompt.WriteString(".\n")
+	}
+
+	prompt.WriteString("\n")
+	prompt.WriteString("Style: Professional character portrait, centered composition, clear facial features, high quality, detailed, character design art, clean background or subtle environment that matches the character's background.\n")
+	prompt.WriteString("The image should be suitable for use as a character avatar icon.")
+
+	return prompt.String()
+}
+
+// UpdateCharacterAvatar 更新角色头像
+func (s *Service) UpdateCharacterAvatar(ctx context.Context, userID, characterID, avatarURL string) (*domain.Character, error) {
+	s.logger.Info("updating character avatar",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+	)
+
+	// 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+
+	// 验证权限（只有角色创建者可以更新角色头像）
+	if character.Author == nil || character.Author.ID != userID {
+		return nil, errors.New("unauthorized")
+	}
+
+	// 更新头像
+	character.Avatar = avatarURL
+	character.LastEditedBy = userID
+	character.UpdatedAt = time.Now().Unix()
+
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Error("failed to update character avatar", zap.Error(err))
+		return nil, errors.New("failed to update character avatar")
+	}
+
+	s.logger.Info("character avatar updated successfully", zap.String("characterID", characterID))
+	return character, nil
 }

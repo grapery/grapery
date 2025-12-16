@@ -166,6 +166,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.DELETE("/characters/:id/follow", h.UnfollowCharacter)
 			authenticated.POST("/characters/:id/skills", h.AddCharacterSkill)
 			authenticated.DELETE("/characters/:id/skills/:skill", h.RemoveCharacterSkill)
+			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar) // AI生成角色头像
+			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)             // 更新角色头像
 			authenticated.POST("/characters/:id/posters", h.CreateCharacterPoster)
 			authenticated.POST("/posters/:id/generate", h.GenerateCharacterPoster) // AI两步生成海报
 			authenticated.POST("/posters/:id/publish", h.PublishCharacterPoster)   // 发布海报
@@ -181,7 +183,12 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/groups/:id/invite", h.InviteMember)
 			authenticated.DELETE("/groups/:id/members/:userId", h.RemoveMember)
 			authenticated.POST("/groups/:id/members/:userId/role", h.UpdateMemberRole)
+			authenticated.POST("/groups/:id/members/:userId/role-by-code", h.UpdateMemberRoleByCode) // 使用角色代码更新角色
 			authenticated.POST("/groups/:id/leave", h.LeaveGroup)
+			authenticated.GET("/groups/roles", h.ListGroupRoles)                       // 获取所有角色列表
+			authenticated.GET("/groups/roles/:code", h.GetGroupRoleByCode)             // 根据代码获取角色
+			authenticated.GET("/groups/roles/:code/permissions", h.GetRolePermissions) // 获取角色权限
+			authenticated.POST("/groups/roles/initialize", h.InitializeGroupRoles)     // 初始化系统角色
 
 			// 邀请相关
 			authenticated.GET("/invitations/pending", h.GetPendingInvitations)

@@ -463,3 +463,150 @@ func (h *Handler) LeaveGroup(c *gin.Context) {
 
 	Success(c, gin.H{"message": "left group successfully"})
 }
+
+// ========== Group Roles Management ==========
+
+// InitializeGroupRoles 初始化系统内置角色
+// POST /api/groups/roles/initialize
+func (h *Handler) InitializeGroupRoles(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	// TODO: 可以添加管理员权限检查
+	err := h.svc.InitializeGroupRoles(c.Request.Context())
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "group roles initialized successfully"})
+}
+
+// ListGroupRoles 获取所有群组角色列表
+// GET /api/groups/roles
+func (h *Handler) ListGroupRoles(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	roles, err := h.svc.ListGroupRoles(c.Request.Context())
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"roles": roles,
+		"count": len(roles),
+	})
+}
+
+// GetGroupRoleByCode 根据代码获取群组角色
+// GET /api/groups/roles/:code
+func (h *Handler) GetGroupRoleByCode(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	code := c.Param("code")
+	if code == "" {
+		InvalidParams(c, "role code is required")
+		return
+	}
+
+	role, err := h.svc.GetGroupRoleByCode(c.Request.Context(), code)
+	if err != nil {
+		if err.Error() == "role not found" {
+			NotFound(c, "role not found")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, role)
+}
+
+// GetRolePermissions 获取角色权限
+// GET /api/groups/roles/:code/permissions
+func (h *Handler) GetRolePermissions(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	code := c.Param("code")
+	if code == "" {
+		InvalidParams(c, "role code is required")
+		return
+	}
+
+	permissions, err := h.svc.GetGroupRolePermissions(c.Request.Context(), code)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, permissions)
+}
+
+// UpdateMemberRoleByCode 根据角色代码更新成员角色
+// POST /api/groups/:id/members/:userId/role-by-code
+func (h *Handler) UpdateMemberRoleByCode(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	groupID := c.Param("id")
+	memberID := c.Param("userId")
+	if groupID == "" || memberID == "" {
+		InvalidParams(c, "group id and user id are required")
+		return
+	}
+
+	var req struct {
+		RoleCode string `json:"roleCode" binding:"required,oneof=creator admin member outsider"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	err := h.svc.UpdateMemberRoleByCode(c.Request.Context(), userID, groupID, memberID, req.RoleCode)
+	if err != nil {
+		if err.Error() == "you are not a member of this group" {
+			Forbidden(c, err.Error())
+			return
+		}
+		if err.Error() == "you do not have permission to manage roles" {
+			Forbidden(c, err.Error())
+			return
+		}
+		if err.Error() == "member not found" {
+			NotFound(c, err.Error())
+			return
+		}
+		if err.Error() == "cannot change owner role" {
+			Forbidden(c, err.Error())
+			return
+		}
+		if err.Error() == "invalid role code" {
+			InvalidParams(c, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "member role updated successfully"})
+}

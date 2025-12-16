@@ -596,3 +596,87 @@ func (h *Handler) GenerateCharacterAttributes(c *gin.Context) {
 
 	Success(c, attributes)
 }
+
+// GenerateCharacterAvatar 使用AI生成角色头像
+// POST /api/characters/:id/generate-avatar
+func (h *Handler) GenerateCharacterAvatar(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req service.GenerateCharacterAvatarRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 允许空请求体，使用默认参数
+		req = service.GenerateCharacterAvatarRequest{
+			AspectRatio: "1:1",
+		}
+	}
+
+	result, err := h.svc.GenerateCharacterAvatar(c.Request.Context(), userID, characterID, req)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized" {
+			Forbidden(c, "you can only generate avatars for your own characters")
+			return
+		}
+		if err.Error() == "AI generation service not configured" {
+			Error(c, CodeError, "AI service temporarily unavailable")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, result)
+}
+
+// UpdateCharacterAvatar 更新角色头像
+// PUT /api/characters/:id/avatar
+func (h *Handler) UpdateCharacterAvatar(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req struct {
+		AvatarURL string `json:"avatarUrl" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	character, err := h.svc.UpdateCharacterAvatar(c.Request.Context(), userID, characterID, req.AvatarURL)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized" {
+			Forbidden(c, "you can only update your own characters")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, character)
+}

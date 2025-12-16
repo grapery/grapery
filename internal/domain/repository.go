@@ -180,6 +180,15 @@ type Repository interface {
 	UpdateMemberRole(ctx context.Context, groupID, userID string, role GroupMemberRole) error
 	IsGroupMember(ctx context.Context, groupID, userID string) (bool, error)
 
+	// Group roles
+	CreateGroupRole(ctx context.Context, role *GroupRole) error
+	GetGroupRoleByCode(ctx context.Context, code string) (*GroupRole, error)
+	GetGroupRoleByID(ctx context.Context, id string) (*GroupRole, error)
+	ListGroupRoles(ctx context.Context) ([]*GroupRole, error)
+	InitializeGroupRoles(ctx context.Context) error
+	UpdateMemberRoleID(ctx context.Context, groupID, userID, roleID string) error
+	GetMemberRoleID(ctx context.Context, groupID, userID string) (string, error)
+
 	// Group invitations
 	CreateGroupInvitation(ctx context.Context, groupID, inviterID, inviteeID, message string) (*GroupInvitation, error)
 	GetInvitationByID(ctx context.Context, id string) (*GroupInvitation, error)

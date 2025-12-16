@@ -93,6 +93,7 @@ func (r *Repository) migrate() error {
 		&StoryContributor{},
 		&CharacterFollow{},
 		&GroupMember{},
+		&GroupRole{},
 		&GroupInvitation{},
 		&CommentLike{},
 		&StoryboardLike{},

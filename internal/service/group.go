@@ -558,3 +558,114 @@ func (s *Service) checkGroupPermission(ctx context.Context, userID, groupID, act
 		return false
 	}
 }
+
+// ========== Group Roles Management ==========
+
+// InitializeGroupRoles 初始化系统内置角色
+func (s *Service) InitializeGroupRoles(ctx context.Context) error {
+	s.logger.Info("initializing group roles")
+	return s.repo.InitializeGroupRoles(ctx)
+}
+
+// GetGroupRoleByCode 根据代码获取群组角色
+func (s *Service) GetGroupRoleByCode(ctx context.Context, code string) (*domain.GroupRole, error) {
+	role, err := s.repo.GetGroupRoleByCode(ctx, code)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("role not found")
+		}
+		return nil, errors.New("failed to get role")
+	}
+	return role, nil
+}
+
+// GetGroupRoleByID 根据ID获取群组角色
+func (s *Service) GetGroupRoleByID(ctx context.Context, id string) (*domain.GroupRole, error) {
+	role, err := s.repo.GetGroupRoleByID(ctx, id)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("role not found")
+		}
+		return nil, errors.New("failed to get role")
+	}
+	return role, nil
+}
+
+// ListGroupRoles 列出所有群组角色
+func (s *Service) ListGroupRoles(ctx context.Context) ([]*domain.GroupRole, error) {
+	roles, err := s.repo.ListGroupRoles(ctx)
+	if err != nil {
+		s.logger.Error("failed to list group roles", zap.Error(err))
+		return nil, errors.New("failed to list roles")
+	}
+	return roles, nil
+}
+
+// GetGroupRolePermissions 获取角色的权限
+func (s *Service) GetGroupRolePermissions(ctx context.Context, roleCode string) (*domain.GroupRolePermission, error) {
+	permissions := domain.GetRolePermissions(roleCode)
+	return &permissions, nil
+}
+
+// UpdateMemberRoleByCode 根据角色代码更新成员角色
+func (s *Service) UpdateMemberRoleByCode(ctx context.Context, operatorID, groupID, memberID, roleCode string) error {
+	s.logger.Info("updating member role by code",
+		zap.String("operatorID", operatorID),
+		zap.String("groupID", groupID),
+		zap.String("memberID", memberID),
+		zap.String("roleCode", roleCode),
+	)
+
+	// 验证操作者权限
+	operatorRole, err := s.repo.GetMemberRole(ctx, groupID, operatorID)
+	if err != nil {
+		return errors.New("you are not a member of this group")
+	}
+
+	operatorPerm := domain.GetPermissions(operatorRole)
+	if !operatorPerm.CanManageRoles {
+		return errors.New("you do not have permission to manage roles")
+	}
+
+	// 获取目标成员当前角色
+	memberRole, err := s.repo.GetMemberRole(ctx, groupID, memberID)
+	if err != nil {
+		return errors.New("member not found")
+	}
+
+	// 不能修改群主角色
+	if memberRole == domain.RoleOwner {
+		return errors.New("cannot change owner role")
+	}
+
+	// 获取角色ID
+	role, err := s.repo.GetGroupRoleByCode(ctx, roleCode)
+	if err != nil {
+		return errors.New("invalid role code")
+	}
+
+	// 更新角色ID
+	if err := s.repo.UpdateMemberRoleID(ctx, groupID, memberID, role.ID); err != nil {
+		s.logger.Error("failed to update member role ID", zap.Error(err))
+		return errors.New("failed to update member role")
+	}
+
+	// 同时更新旧的Role字段以保持兼容性
+	var newRole domain.GroupMemberRole
+	switch roleCode {
+	case domain.RoleCodeCreator:
+		newRole = domain.RoleOwner
+	case domain.RoleCodeAdmin:
+		newRole = domain.RoleAdmin
+	case domain.RoleCodeMember:
+		newRole = domain.RoleMember
+	default:
+		newRole = domain.RoleMember
+	}
+	if err := s.repo.UpdateMemberRole(ctx, groupID, memberID, newRole); err != nil {
+		s.logger.Warn("failed to update legacy role field", zap.Error(err))
+	}
+
+	s.logger.Info("member role updated successfully")
+	return nil
+}
