@@ -52,11 +52,26 @@ type VideoGenerationRequest struct {
 
 // StartContentGeneration starts the AI content generation process (Step 1)
 func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenerationRequest) (*domain.StoryboardContentGeneration, error) {
+	s.logger.Info("starting content generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
+		zap.Int("characterCount", len(req.CharacterIDs)),
+		zap.Int("sceneCount", len(req.SceneIDs)),
+		zap.String("style", req.Style))
+
 	// Verify storyboard exists
 	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for content generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for content generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("title", storyboard.Title))
 
 	// Create generation record
 	gen := &domain.StoryboardContentGeneration{
@@ -70,16 +85,39 @@ func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenera
 		CreatedAt:    time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating content generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("status", string(gen.Status)))
+
 	if err := s.repo.CreateContentGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create content generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create content generation record: %w", err)
 	}
 
+	s.logger.Info("content generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID))
+
 	// Update storyboard workflow status
 	if err := s.repo.UpdateStoryboardWorkflow(ctx, req.StoryboardID, domain.WorkflowStatusDraft, 2); err != nil {
-		s.logger.Warn("failed to update storyboard workflow", zap.Error(err))
+		s.logger.Warn("failed to update storyboard workflow",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow status updated",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("workflowStatus", string(domain.WorkflowStatusDraft)),
+			zap.Int("currentStep", 2))
 	}
 
 	// Start async AI generation
+	s.logger.Info("starting async content generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID))
 	go s.processContentGeneration(context.Background(), gen, storyboard)
 
 	return gen, nil
@@ -87,34 +125,80 @@ func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenera
 
 // processContentGeneration processes the content generation in background
 func (s *Service) processContentGeneration(ctx context.Context, gen *domain.StoryboardContentGeneration, storyboard *domain.Storyboard) {
+	s.logger.Info("processing content generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("rawInput", truncateForLog(gen.RawInput, 200)),
+		zap.String("style", gen.Style))
+
 	// Update status to processing
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateContentGeneration(ctx, gen)
+	if err := s.repo.UpdateContentGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update content generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("content generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Build context from characters and scenes
+	s.logger.Debug("building generation context",
+		zap.String("generationId", gen.ID),
+		zap.Int("characterCount", len(gen.CharacterIDs)),
+		zap.Int("sceneCount", len(gen.SceneIDs)))
 	contextStr := s.buildGenerationContext(ctx, storyboard, gen.CharacterIDs, gen.SceneIDs)
+	s.logger.Debug("generation context built",
+		zap.String("generationId", gen.ID),
+		zap.Int("contextLength", len(contextStr)))
 
 	// Determine style: use provided style, or fallback to story's genre or style
 	style := gen.Style
 	if style == "" {
+		s.logger.Debug("style not provided, attempting to get from story",
+			zap.String("generationId", gen.ID),
+			zap.String("storyId", storyboard.StoryID))
 		// Try to get story's genre or style as the default style
 		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
 		if err == nil {
 			if story.Genre != "" {
 				style = story.Genre
+				s.logger.Debug("using story genre as style",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
 			} else if story.Style != "" {
 				style = story.Style
+				s.logger.Debug("using story style as style",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
 			} else {
 				style = "drama" // Ultimate fallback
+				s.logger.Debug("using default style fallback",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
 			}
 		} else {
 			style = "drama" // Ultimate fallback
+			s.logger.Warn("failed to get story for style fallback, using default",
+				zap.String("generationId", gen.ID),
+				zap.String("storyId", storyboard.StoryID),
+				zap.String("style", style),
+				zap.Error(err))
 		}
+	} else {
+		s.logger.Debug("using provided style",
+			zap.String("generationId", gen.ID),
+			zap.String("style", style))
 	}
 
 	// Generate content using AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardContentGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
+		s.logger.Info("generating content with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("style", style),
+			zap.Int("contextLength", len(contextStr)),
+			zap.Int("rawInputLength", len(gen.RawInput)))
 		// Fallback to direct gemini client if aiGenService not available
 		prompt := fmt.Sprintf(`You are a creative story writer. Based on the following context and user input, generate an engaging story chapter.
 
@@ -126,11 +210,23 @@ Style: %s
 
 Generate a compelling narrative that continues the story naturally. Keep the tone consistent with the style requested.`, contextStr, gen.RawInput, style)
 
+		s.logger.Debug("calling gemini client for content generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(prompt)))
+
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
 		if err != nil {
+			s.logger.Error("AI content generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateContentGeneration(ctx, gen)
+			if updateErr := s.repo.UpdateContentGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update content generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
 			return
 		}
 
@@ -139,9 +235,25 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("content generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.logger.Info("content generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.Int("contentLength", len(gen.GeneratedContent)),
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// If no AI client, use raw input as content
+		s.logger.Warn("no AI client available, using raw input as content",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID))
 		gen.GeneratedContent = gen.RawInput
 	}
 
@@ -149,30 +261,74 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 	gen.Status = domain.GenerationStatusCompleted
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateContentGeneration(ctx, gen)
+	if err := s.repo.UpdateContentGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update content generation status to completed",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("content generation status updated to completed",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Update storyboard content and token consumption
 	storyboard.Content = gen.GeneratedContent
 	storyboard.IsAIGenerated = true
-	_ = s.repo.UpdateStoryboard(ctx, storyboard)
+	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+		s.logger.Error("failed to update storyboard content",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard content updated",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Int("contentLength", len(storyboard.Content)))
+	}
 
 	// Aggregate and update token consumption
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
 	// Update workflow status
-	_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusContentReady, 2)
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusContentReady, 2); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to content ready",
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to content ready",
+			zap.String("storyboardId", gen.StoryboardID))
+	}
 
-	s.logger.Info("content generation completed",
+	s.logger.Info("content generation completed successfully",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
-		zap.Int("tokens", gen.TotalTokens))
+		zap.Int("tokens", gen.TotalTokens),
+		zap.Int("contentLength", len(gen.GeneratedContent)))
 }
 
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequest) (*domain.StoryboardSceneGeneration, error) {
+	s.logger.Info("starting scene detail generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("sceneLocation", req.SceneLocation),
+		zap.String("inputDescription", truncateForLog(req.InputDescription, 200)))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for scene detail generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for scene detail generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
 
 	// Create generation record
 	gen := &domain.StoryboardSceneGeneration{
@@ -186,11 +342,29 @@ func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequ
 		CreatedAt:        time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating scene generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	if err := s.repo.CreateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create scene generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create scene generation record: %w", err)
 	}
 
+	s.logger.Info("scene generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	// Start async AI generation
+	s.logger.Info("starting async scene detail generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processSceneGeneration(context.Background(), gen)
 
 	return gen, nil
@@ -198,11 +372,29 @@ func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequ
 
 // processSceneGeneration processes scene detail generation in background
 func (s *Service) processSceneGeneration(ctx context.Context, gen *domain.StoryboardSceneGeneration) {
+	s.logger.Info("processing scene detail generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.String("sceneTitle", gen.SceneTitle),
+		zap.String("sceneLocation", gen.SceneLocation))
+
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateSceneGeneration(ctx, gen)
+	if err := s.repo.UpdateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update scene generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("scene generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// 直接调用 geminiClient，将结果记录到 StoryboardSceneGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
+		s.logger.Info("generating scene details with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("sceneTitle", gen.SceneTitle))
 		// Fallback to direct gemini client if aiGenService not available
 		prompt := fmt.Sprintf(`Enhance and expand the following scene description with vivid details:
 
@@ -216,11 +408,24 @@ Provide a rich, detailed description that includes:
 - Character positions and actions
 - Emotional tone and mood`, gen.SceneTitle, gen.SceneLocation, gen.InputDescription)
 
+		s.logger.Debug("calling gemini client for scene detail generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(prompt)))
+
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
 		if err != nil {
+			s.logger.Error("AI scene detail generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateSceneGeneration(ctx, gen)
+			if updateErr := s.repo.UpdateSceneGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update scene generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
 			return
 		}
 
@@ -229,29 +434,73 @@ Provide a rich, detailed description that includes:
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("scene generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.logger.Info("scene details generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.Int("detailLength", len(gen.GeneratedDetail)),
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
+		s.logger.Warn("no AI client available, using input description as generated detail",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
 		gen.GeneratedDetail = gen.InputDescription
 	}
 
 	gen.Status = domain.GenerationStatusCompleted
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateSceneGeneration(ctx, gen)
+	if err := s.repo.UpdateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update scene generation status to completed",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("scene generation status updated to completed",
+			zap.String("generationId", gen.ID))
+	}
 
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
-	s.logger.Info("scene generation completed",
+	s.logger.Info("scene generation completed successfully",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
-		zap.String("sceneId", gen.SceneID))
+		zap.String("sceneId", gen.SceneID),
+		zap.Int("totalTokens", gen.TotalTokens))
 }
 
 // GenerateSceneImage generates an image for a scene (Step 3)
 func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRequest) (*domain.StoryboardImageGeneration, error) {
+	s.logger.Info("starting scene image generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("sceneDescription", truncateForLog(req.SceneDescription, 200)),
+		zap.Int("referenceImageCount", len(req.ReferenceImages)))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for image generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for image generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
 
 	// Create generation record
 	gen := &domain.StoryboardImageGeneration{
@@ -265,11 +514,29 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		CreatedAt:        time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating image generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	if err := s.repo.CreateImageGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create image generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create image generation record: %w", err)
 	}
 
+	s.logger.Info("image generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	// Start async generation
+	s.logger.Info("starting async image generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processImageGeneration(context.Background(), gen)
 
 	return gen, nil
@@ -277,12 +544,30 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 
 // processImageGeneration processes image generation in background
 func (s *Service) processImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration) {
+	s.logger.Info("processing image generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.String("sceneTitle", gen.SceneTitle),
+		zap.Int("referenceImageCount", len(gen.ReferenceImages)))
+
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateImageGeneration(ctx, gen)
+	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update image generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("image generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// First, generate image prompt using text AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
+		s.logger.Info("generating image prompt with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("sceneTitle", gen.SceneTitle))
 		// Fallback to direct gemini client if aiGenService not available
 		promptGen := fmt.Sprintf(`Create a detailed image generation prompt for the following scene:
 
@@ -298,11 +583,24 @@ Generate a prompt that would create a visually stunning image. Include:
 
 Keep the prompt concise but descriptive, suitable for an image generation AI. Output ONLY the prompt, no explanations.`, gen.SceneTitle, gen.SceneDescription)
 
+		s.logger.Debug("calling gemini client for image prompt generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(promptGen)))
+
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", promptGen, nil)
 		if err != nil {
+			s.logger.Error("AI image prompt generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateImageGeneration(ctx, gen)
+			if updateErr := s.repo.UpdateImageGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update image generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
 			return
 		}
 
@@ -311,9 +609,25 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("image prompt generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.logger.Info("image prompt generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 	} else {
 		// If no AI client, use scene description as prompt
+		s.logger.Warn("no AI client available, using scene description as prompt",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
 		gen.GeneratedPrompt = gen.SceneDescription
 	}
 
@@ -333,28 +647,49 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 			genReq.Operation = genapi.OperationImageToImage
 			// Use first reference image as the primary reference
 			genReq.ReferenceImageURL = gen.ReferenceImages[0]
+			s.logger.Debug("using image-to-image operation",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("referenceImageURL", genReq.ReferenceImageURL))
 		} else {
 			genReq.Operation = genapi.OperationTextToImage
+			s.logger.Debug("using text-to-image operation",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID))
 		}
 
 		// Use configured image provider (default: huoshan)
 		imageProvider := s.imageProvider
 		if imageProvider == "" {
 			imageProvider = "huoshan"
+			s.logger.Debug("using default image provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", imageProvider))
 		}
 
 		s.logger.Info("generating scene image",
+			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("provider", imageProvider))
+			zap.String("provider", imageProvider),
+			zap.String("operation", string(genReq.Operation)),
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
 			s.logger.Warn("AI image generation failed, keeping prompt only",
+				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
+				zap.String("storyboardId", gen.StoryboardID),
 				zap.String("provider", imageProvider),
+				zap.String("operation", string(genReq.Operation)),
 				zap.Error(err))
 			// Don't fail completely, just mark as completed without image
 		} else if resp != nil && len(resp.ImageURLs) > 0 {
+			s.logger.Info("image generation API call succeeded",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("provider", imageProvider),
+				zap.Int("imageCount", len(resp.ImageURLs)))
 			// 上传图片到OSS并替换URL
 			originalImageURL := resp.ImageURLs[0]
 			ossClient := aliyun.GetGlobalClient()
@@ -396,8 +731,15 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 				zap.String("provider", imageProvider),
 				zap.String("imageURL", gen.GeneratedImageURL))
 		} else if resp != nil && resp.Metadata != nil {
+			s.logger.Debug("checking for image bytes in metadata",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID))
 			// Check for image bytes in metadata (for conversational image generation)
 			if imageBytes, ok := resp.Metadata["image_bytes"].([][]byte); ok && len(imageBytes) > 0 {
+				s.logger.Info("found image bytes in metadata",
+					zap.String("generationId", gen.ID),
+					zap.String("sceneId", gen.SceneID),
+					zap.Int("imageByteCount", len(imageBytes)))
 				// Upload image bytes to OSS
 				ossClient := aliyun.GetGlobalClient()
 				if ossClient != nil {
@@ -434,34 +776,85 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 	gen.Status = domain.GenerationStatusCompleted
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateImageGeneration(ctx, gen)
+	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update image generation status to completed",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("image generation status updated to completed",
+			zap.String("generationId", gen.ID))
+	}
 
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
 	// Sync generated image URL to storyboard scene
 	if gen.GeneratedImageURL != "" && gen.SceneID != "" {
+		s.logger.Debug("syncing image URL to storyboard scene",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("imageURL", gen.GeneratedImageURL))
 		if err := s.repo.UpdateStoryboardSceneImage(ctx, gen.SceneID, gen.GeneratedImageURL); err != nil {
 			s.logger.Warn("failed to sync image to storyboard scene",
+				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
+				zap.String("imageURL", gen.GeneratedImageURL),
 				zap.Error(err))
+		} else {
+			s.logger.Info("image URL synced to storyboard scene",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("imageURL", gen.GeneratedImageURL))
 		}
+	} else {
+		s.logger.Debug("skipping image URL sync - missing image URL or scene ID",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("imageURL", gen.GeneratedImageURL))
 	}
 
 	// Update workflow status
-	_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3)
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to images ready",
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to images ready",
+			zap.String("storyboardId", gen.StoryboardID))
+	}
 
-	s.logger.Info("image generation completed",
+	s.logger.Info("image generation completed successfully",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
 		zap.String("sceneId", gen.SceneID),
-		zap.String("imageURL", gen.GeneratedImageURL))
+		zap.String("imageURL", gen.GeneratedImageURL),
+		zap.Int("totalTokens", gen.TotalTokens))
 }
 
 // GenerateSceneVideo generates a video for a scene (Step 4)
 func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRequest) (*domain.StoryboardVideoGeneration, error) {
+	s.logger.Info("starting scene video generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("inputDescription", truncateForLog(req.InputDescription, 200)),
+		zap.String("referenceImageURL", req.ReferenceImageURL),
+		zap.String("endFrameURL", req.EndFrameURL))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for video generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for video generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
 
 	// Create generation record
 	gen := &domain.StoryboardVideoGeneration{
@@ -476,11 +869,29 @@ func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRe
 		CreatedAt:         time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating video generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	if err := s.repo.CreateVideoGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create video generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create video generation record: %w", err)
 	}
 
+	s.logger.Info("video generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	// Start async generation
+	s.logger.Info("starting async video generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processVideoGeneration(context.Background(), gen)
 
 	return gen, nil
@@ -497,7 +908,14 @@ func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.Storyb
 		zap.String("inputDescription", gen.InputDescription))
 
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateVideoGeneration(ctx, gen)
+	if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update video generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("video generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Generate video prompt using text AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardVideoGeneration 表，不创建 AIGenerationRecord
@@ -547,15 +965,28 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// If no AI client, use scene description as prompt
+		s.logger.Warn("no AI client available, using input description as video prompt",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("storyboardId", gen.StoryboardID))
 		gen.GeneratedPrompt = gen.InputDescription
 		s.logger.Info("using input description as video prompt (no AI client)",
+			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("prompt", gen.GeneratedPrompt))
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 	}
 
 	// Generate actual video using genAPI directly
 	// 直接调用 genAPI，将结果记录到 StoryboardVideoGeneration 表，不创建 AIGenerationRecord
-	if s.genAPI != nil && gen.GeneratedPrompt != "" {
+	if s.genAPI == nil {
+		s.logger.Warn("genAPI not available, cannot generate video",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
+	} else if gen.GeneratedPrompt == "" {
+		s.logger.Warn("generated prompt is empty, cannot generate video",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
+	} else if s.genAPI != nil && gen.GeneratedPrompt != "" {
 		// Log all input parameters
 		s.logger.Info("preparing video generation request",
 			zap.String("sceneId", gen.SceneID),
@@ -598,6 +1029,13 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 		videoProvider := s.videoProvider
 		if videoProvider == "" {
 			videoProvider = "hailuo"
+			s.logger.Debug("using default video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
+		} else {
+			s.logger.Debug("using configured video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
 		}
 
 		// Log final request details
@@ -732,47 +1170,89 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 	// Only mark as completed if we have a video URL (synchronous case)
 	// For async tasks, polling will handle completion
 	if gen.GeneratedVideoURL != "" {
+		s.logger.Info("video generation completed synchronously",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("videoURL", gen.GeneratedVideoURL))
 		gen.Status = domain.GenerationStatusCompleted
 		now := time.Now().Unix()
 		gen.CompletedAt = &now
 		if gen.Duration == 0 {
 			gen.Duration = 5 // Default duration if not set
+			s.logger.Debug("setting default video duration",
+				zap.String("generationId", gen.ID),
+				zap.Int("duration", gen.Duration))
 		}
-		_ = s.repo.UpdateVideoGeneration(ctx, gen)
+		if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+			s.logger.Error("failed to update video generation status to completed",
+				zap.String("generationId", gen.ID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("video generation status updated to completed",
+				zap.String("generationId", gen.ID))
+		}
 
+		s.logger.Debug("updating storyboard token consumption",
+			zap.String("storyboardId", gen.StoryboardID))
 		s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
 		// Update workflow status
-		_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusVideoReady, 4)
+		if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusVideoReady, 4); err != nil {
+			s.logger.Warn("failed to update storyboard workflow to video ready",
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboard workflow updated to video ready",
+				zap.String("storyboardId", gen.StoryboardID))
+		}
 
-		s.logger.Info("video generation process completed",
+		s.logger.Info("video generation process completed successfully",
+			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("sceneId", gen.SceneID),
 			zap.String("status", string(gen.Status)),
 			zap.String("videoURL", gen.GeneratedVideoURL),
-			zap.String("generatedPrompt", gen.GeneratedPrompt),
 			zap.Int("duration", gen.Duration),
-			zap.Int("totalTokens", gen.TotalTokens),
-			zap.String("errorMessage", gen.ErrorMessage))
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// No video URL and no task ID - mark as failed
-		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = "video generation failed: no video URL or task ID returned"
-		_ = s.repo.UpdateVideoGeneration(ctx, gen)
-		s.logger.Warn("video generation process failed - no video URL or task ID",
+		s.logger.Warn("video generation failed - no video URL or task ID",
+			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("status", string(gen.Status)),
-			zap.String("errorMessage", gen.ErrorMessage))
+			zap.String("providerTaskID", gen.ProviderTaskID))
+		gen.Status = domain.GenerationStatusFailed
+		gen.ErrorMessage = "video generation failed: no video URL or task ID returned"
+		if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+			s.logger.Error("failed to update video generation status to failed",
+				zap.String("generationId", gen.ID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("video generation status updated to failed",
+				zap.String("generationId", gen.ID),
+				zap.String("errorMessage", gen.ErrorMessage))
+		}
 	}
 }
 
 // GetGenerationProgress returns the complete generation progress for a storyboard
 func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string) (*domain.StoryboardGenerationProgress, error) {
+	s.logger.Info("getting generation progress",
+		zap.String("storyboardId", storyboardID))
+
 	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for generation progress",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard retrieved for generation progress",
+		zap.String("storyboardId", storyboardID),
+		zap.String("workflowStatus", storyboard.WorkflowStatus),
+		zap.Int("currentStep", storyboard.CurrentStep))
 
 	progress := &domain.StoryboardGenerationProgress{
 		StoryboardID:   storyboardID,
@@ -787,6 +1267,9 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 
 	// Get content generation
 	if contentGen, err := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID); err == nil {
+		s.logger.Debug("content generation found",
+			zap.String("storyboardId", storyboardID),
+			zap.String("status", string(contentGen.Status)))
 		progress.ContentGeneration = contentGen
 		if contentGen.Status == domain.GenerationStatusProcessing {
 			isGenerating = true
@@ -795,10 +1278,17 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			hasPending = true
 			statusMessages = append(statusMessages, "内容生成待处理")
 		}
+	} else {
+		s.logger.Debug("no content generation found",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get scene generations
 	if sceneGens, err := s.repo.ListSceneGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("scene generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(sceneGens)))
 		progress.SceneGenerations = sceneGens
 		for _, gen := range sceneGens {
 			if gen.Status == domain.GenerationStatusProcessing {
@@ -809,10 +1299,17 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 				hasPending = true
 			}
 		}
+	} else {
+		s.logger.Debug("failed to list scene generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get image generations
 	if imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("image generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(imageGens)))
 		progress.ImageGenerations = imageGens
 		processingCount := 0
 		for _, gen := range imageGens {
@@ -826,10 +1323,17 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成图片 (%d)", processingCount))
 		}
+	} else {
+		s.logger.Debug("failed to list image generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get video generations
 	if videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("video generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(videoGens)))
 		progress.VideoGenerations = videoGens
 		processingCount := 0
 		for _, gen := range videoGens {
@@ -843,6 +1347,10 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成视频 (%d)", processingCount))
 		}
+	} else {
+		s.logger.Debug("failed to list video generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Set final status
@@ -860,22 +1368,44 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.GenerationMessage = "所有生成任务已完成"
 	}
 
+	s.logger.Info("generation progress retrieved",
+		zap.String("storyboardId", storyboardID),
+		zap.Bool("isGenerating", progress.IsGenerating),
+		zap.Bool("hasPendingTasks", progress.HasPendingTasks),
+		zap.String("generationMessage", progress.GenerationMessage),
+		zap.Int("totalTokens", progress.TotalTokens))
+
 	return progress, nil
 }
 
 // PublishStoryboard publishes a storyboard (Step 5)
 func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) error {
+	s.logger.Info("publishing storyboard",
+		zap.String("storyboardId", storyboardID))
+
 	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for publishing",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return fmt.Errorf("storyboard not found: %w", err)
 	}
 
+	s.logger.Debug("storyboard retrieved for publishing",
+		zap.String("storyboardId", storyboardID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("currentWorkflowStatus", storyboard.WorkflowStatus),
+		zap.Int("currentStep", storyboard.CurrentStep))
+
 	// Update workflow status to published using the dedicated workflow update method
 	if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusPublished, 5); err != nil {
+		s.logger.Error("failed to publish storyboard",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return fmt.Errorf("failed to publish storyboard: %w", err)
 	}
 
-	s.logger.Info("storyboard published",
+	s.logger.Info("storyboard published successfully",
 		zap.String("storyboardId", storyboardID),
 		zap.String("storyId", storyboard.StoryID))
 
@@ -884,15 +1414,35 @@ func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) er
 
 // buildGenerationContext builds comprehensive context string for storyboard generation
 func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain.Storyboard, characterIDs, sceneIDs []string) string {
+	s.logger.Debug("building generation context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.Int("characterCount", len(characterIDs)),
+		zap.Int("sceneCount", len(sceneIDs)))
+
 	var parts []string
 
 	// 1. Get ancestor storyboards (up to 5) along the parent chain
+	s.logger.Debug("fetching ancestor storyboards for context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("parentId", storyboard.ParentID))
 	ancestors := s.getAncestorStoryboards(ctx, storyboard, 5)
+	s.logger.Debug("ancestor storyboards fetched",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("ancestorCount", len(ancestors)))
 
 	// Get story information for root storyboard
 	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
 	if err != nil {
-		s.logger.Warn("failed to get story", zap.String("storyId", storyboard.StoryID), zap.Error(err))
+		s.logger.Warn("failed to get story for context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("story retrieved for context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", story.ID),
+			zap.String("storyTitle", story.Title))
 	}
 
 	// 2. Add previous storyboard context (chronological order)
@@ -927,6 +1477,11 @@ func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain
 						// Try to get character name by ID
 						if char, err := s.repo.CharacterByID(ctx, ref.CharacterID); err == nil {
 							charNames = append(charNames, char.Name)
+						} else {
+							s.logger.Debug("failed to get character by ID for ancestor context",
+								zap.String("storyboardId", storyboard.ID),
+								zap.String("characterId", ref.CharacterID),
+								zap.Error(err))
 						}
 					}
 				}
@@ -943,14 +1498,25 @@ func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain
 
 	// 3. Add current storyboard's participating characters with detailed information
 	if len(characterIDs) > 0 {
+		s.logger.Debug("adding current storyboard characters to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("characterCount", len(characterIDs)))
 		parts = append(parts, "\n## Current Storyboard Characters")
 
 		for _, charID := range characterIDs {
 			char, err := s.repo.CharacterByID(ctx, charID)
 			if err != nil {
-				s.logger.Warn("failed to get character", zap.String("characterId", charID), zap.Error(err))
+				s.logger.Warn("failed to get character for context",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("characterId", charID),
+					zap.Error(err))
 				continue
 			}
+
+			s.logger.Debug("adding character to context",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("characterId", charID),
+				zap.String("characterName", char.Name))
 
 			var charInfo []string
 			charInfo = append(charInfo, fmt.Sprintf("Character ID: %s", char.ID))
@@ -1000,14 +1566,26 @@ func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain
 
 	// 4. Add scene information
 	if len(sceneIDs) > 0 {
+		s.logger.Debug("adding scenes to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(sceneIDs)))
 		parts = append(parts, "\n## Storyboard Scenes")
 
 		for _, sceneID := range sceneIDs {
 			scene, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, sceneID)
 			if err != nil {
-				s.logger.Warn("failed to get scene", zap.String("sceneId", sceneID), zap.Error(err))
+				s.logger.Warn("failed to get scene for context",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("storyId", storyboard.StoryID),
+					zap.String("sceneId", sceneID),
+					zap.Error(err))
 				continue
 			}
+
+			s.logger.Debug("adding scene to context",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("sceneId", sceneID),
+				zap.String("sceneTitle", scene.Title))
 
 			var sceneInfo []string
 			sceneInfo = append(sceneInfo, fmt.Sprintf("Scene: %s", scene.Title))
@@ -1026,18 +1604,41 @@ func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain
 		}
 	}
 
-	return strings.Join(parts, "\n")
+	contextStr := strings.Join(parts, "\n")
+	s.logger.Debug("generation context built",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("contextLength", len(contextStr)),
+		zap.Int("partCount", len(parts)))
+
+	return contextStr
 }
 
 // updateStoryboardTokens aggregates and updates token consumption
 func (s *Service) updateStoryboardTokens(ctx context.Context, storyboardID string) {
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", storyboardID))
+
 	tokens, err := s.repo.GetStoryboardTotalTokens(ctx, storyboardID)
 	if err != nil {
-		s.logger.Warn("failed to get total tokens", zap.Error(err))
+		s.logger.Warn("failed to get total tokens",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return
 	}
+
+	s.logger.Debug("total tokens retrieved",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("totalTokens", tokens))
+
 	if err := s.repo.UpdateStoryboardTokens(ctx, storyboardID, tokens); err != nil {
-		s.logger.Warn("failed to update storyboard tokens", zap.Error(err))
+		s.logger.Warn("failed to update storyboard tokens",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("tokens", tokens),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard tokens updated successfully",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("tokens", tokens))
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -78,16 +79,29 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	)
 
 	// 获取作者信息
+	s.logger.Debug("fetching author information",
+		zap.String("userID", userID))
 	author, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
-		s.logger.Error("failed to get author", zap.Error(err))
+		s.logger.Error("failed to get author",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, errors.New("author not found")
 	}
+
+	s.logger.Debug("author retrieved",
+		zap.String("userID", userID),
+		zap.String("authorName", author.DisplayName))
 
 	// 设置默认状态
 	status := req.Status
 	if status == "" {
 		status = "draft"
+		s.logger.Debug("using default status",
+			zap.String("status", status))
+	} else {
+		s.logger.Debug("using provided status",
+			zap.String("status", status))
 	}
 
 	now := time.Now().Unix()
@@ -96,6 +110,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	defaultSceneCount := req.DefaultSceneCount
 	if defaultSceneCount < 2 || defaultSceneCount > 8 {
 		defaultSceneCount = 3
+		s.logger.Debug("using default scene count",
+			zap.Int("requested", req.DefaultSceneCount),
+			zap.Int("adjusted", defaultSceneCount))
+	} else {
+		s.logger.Debug("using provided scene count",
+			zap.Int("sceneCount", defaultSceneCount))
 	}
 
 	// 创建故事基本信息
@@ -117,19 +137,36 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	}
 
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
+	s.logger.Debug("saving story to database",
+		zap.String("storyID", story.ID),
+		zap.String("title", story.Title),
+		zap.String("genre", story.Genre),
+		zap.String("status", story.Status))
 	if err := s.repo.CreateStory(ctx, story); err != nil {
-		s.logger.Error("failed to create story", zap.Error(err))
+		s.logger.Error("failed to create story in database",
+			zap.String("storyID", story.ID),
+			zap.String("title", story.Title),
+			zap.Error(err))
 		return nil, errors.New("failed to create story")
 	}
 
-	s.logger.Info("story created successfully", zap.String("storyID", story.ID))
+	s.logger.Info("story created successfully",
+		zap.String("storyID", story.ID),
+		zap.String("title", story.Title),
+		zap.String("genre", story.Genre),
+		zap.String("status", story.Status),
+		zap.Int("defaultSceneCount", defaultSceneCount))
 
 	// 如果用户选择使用AI丰富描述
 	if req.UseAIEnrich && req.Description != "" {
+		s.logger.Debug("AI enrichment requested",
+			zap.String("storyID", story.ID),
+			zap.Int("descriptionLength", len(req.Description)))
 		enrichResp, err := s.EnrichStoryDescription(ctx, userID, story.ID, req.Description, req.Genre, req.AIStyle)
 		if err != nil {
 			s.logger.Warn("failed to enrich story description with AI, continuing with original",
 				zap.String("storyID", story.ID),
+				zap.String("userID", userID),
 				zap.Error(err))
 		} else {
 			story.EnrichedDescription = enrichResp.EnrichedDescription
@@ -138,11 +175,28 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			story.AIEnrichedAt = &now
 			story.TextTokensUsed = enrichResp.TokensUsed
 			story.TokensUsed += enrichResp.TokensUsed
+			s.logger.Info("story description enriched successfully",
+				zap.String("storyID", story.ID),
+				zap.Int("originalLength", len(req.Description)),
+				zap.Int("enrichedLength", len(enrichResp.EnrichedDescription)),
+				zap.Int("tokensUsed", enrichResp.TokensUsed))
 		}
+	} else {
+		s.logger.Debug("AI enrichment not requested or description is empty",
+			zap.String("storyID", story.ID),
+			zap.Bool("useAIEnrich", req.UseAIEnrich),
+			zap.Bool("hasDescription", req.Description != ""))
 	}
 
 	// 如果用户选择使用AI生成封面/海报/背景
 	if req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
+		s.logger.Debug("AI cover generation requested",
+			zap.String("storyID", story.ID),
+			zap.Bool("generateCover", req.GenerateCover),
+			zap.Bool("generatePoster", req.GeneratePoster),
+			zap.Bool("generateBackground", req.GenerateBackground),
+			zap.String("style", req.AIStyle),
+			zap.String("aspectRatio", req.CoverAspectRatio))
 		coverResp, err := s.GenerateStoryCover(ctx, userID, story.ID, GenerateStoryCoverRequest{
 			Title:              req.Title,
 			Description:        story.Description,
@@ -156,49 +210,102 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		if err != nil {
 			s.logger.Warn("failed to generate story cover with AI, continuing without cover",
 				zap.String("storyID", story.ID),
+				zap.String("userID", userID),
 				zap.Error(err))
 		} else {
+			imagesGenerated := 0
 			if coverResp.CoverURL != "" {
 				story.CoverImage = coverResp.CoverURL
 				story.CoverGeneratedByAI = true
+				imagesGenerated++
+				s.logger.Debug("cover image assigned",
+					zap.String("storyID", story.ID),
+					zap.String("coverURL", coverResp.CoverURL))
 			}
 			if coverResp.PosterURL != "" {
 				story.PosterImage = coverResp.PosterURL
+				imagesGenerated++
+				s.logger.Debug("poster image assigned",
+					zap.String("storyID", story.ID),
+					zap.String("posterURL", coverResp.PosterURL))
 			}
 			if coverResp.BackgroundURL != "" {
 				story.BackgroundImage = coverResp.BackgroundURL
+				imagesGenerated++
+				s.logger.Debug("background image assigned",
+					zap.String("storyID", story.ID),
+					zap.String("backgroundURL", coverResp.BackgroundURL))
 			}
 			story.ImageTokensUsed = coverResp.TokensUsed
 			story.TokensUsed += coverResp.TokensUsed
+			s.logger.Info("story cover generation completed",
+				zap.String("storyID", story.ID),
+				zap.Int("imagesGenerated", imagesGenerated),
+				zap.Int("tokensUsed", coverResp.TokensUsed))
 		}
+	} else {
+		s.logger.Debug("AI cover generation not requested",
+			zap.String("storyID", story.ID))
 	}
 
 	// 更新故事（如果有AI丰富的内容）
 	if story.IsAIEnriched || story.CoverGeneratedByAI {
+		s.logger.Debug("updating story with AI enriched content",
+			zap.String("storyID", story.ID),
+			zap.Bool("isAIEnriched", story.IsAIEnriched),
+			zap.Bool("coverGeneratedByAI", story.CoverGeneratedByAI),
+			zap.Int("totalTokensUsed", story.TokensUsed))
 		story.UpdatedAt = time.Now().Unix()
 		if err := s.repo.UpdateStory(ctx, story); err != nil {
 			s.logger.Warn("failed to update story with AI enriched content",
 				zap.String("storyID", story.ID),
 				zap.Error(err))
+		} else {
+			s.logger.Debug("story updated with AI enriched content",
+				zap.String("storyID", story.ID))
 		}
 
 		// 更新用户的token使用量
 		if story.TokensUsed > 0 {
+			s.logger.Debug("updating user token usage",
+				zap.String("userID", userID),
+				zap.Int("tokensUsed", story.TokensUsed))
 			if err := s.updateUserTokenUsage(ctx, userID, story.TokensUsed); err != nil {
 				s.logger.Warn("failed to update user token usage",
 					zap.String("userID", userID),
+					zap.String("storyID", story.ID),
 					zap.Int("tokensUsed", story.TokensUsed),
 					zap.Error(err))
+			} else {
+				s.logger.Debug("user token usage updated",
+					zap.String("userID", userID),
+					zap.Int("tokensUsed", story.TokensUsed))
 			}
+		} else {
+			s.logger.Debug("no tokens used, skipping token usage update",
+				zap.String("userID", userID),
+				zap.String("storyID", story.ID))
 		}
+	} else {
+		s.logger.Debug("no AI enriched content to update",
+			zap.String("storyID", story.ID))
 	}
 
 	// 如果故事属于群组，记录群组活动
 	if req.GroupID != "" {
+		s.logger.Debug("recording group activity for story creation",
+			zap.String("storyID", story.ID),
+			zap.String("groupId", req.GroupID))
 		go s.RecordGroupStoryCreated(context.Background(), req.GroupID, userID, story.ID, story.Title)
+	} else {
+		s.logger.Debug("story not in group, skipping group activity",
+			zap.String("storyID", story.ID))
 	}
 
 	// 记录用户活动
+	s.logger.Debug("recording user activity for story creation",
+		zap.String("userID", userID),
+		zap.String("storyID", story.ID))
 	go s.RecordStoryCreated(context.Background(), userID, story.ID, story.Title)
 
 	return story, nil
@@ -206,37 +313,66 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 
 // GetStory 获取故事详情
 func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, error) {
-	s.logger.Info("getting story", zap.String("storyID", storyID))
+	s.logger.Info("getting story",
+		zap.String("storyID", storyID))
 
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found",
+				zap.String("storyID", storyID))
 			return nil, errors.New("story not found")
 		}
-		s.logger.Error("failed to get story", zap.Error(err))
+		s.logger.Error("failed to get story",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return nil, errors.New("failed to get story")
 	}
 
+	s.logger.Debug("story retrieved",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title),
+		zap.String("status", story.Status),
+		zap.String("genre", story.Genre))
+
 	// Fetch story characters
+	s.logger.Debug("fetching story characters",
+		zap.String("storyID", storyID))
 	characters, err := s.repo.CharactersByStory(ctx, storyID)
 	if err != nil {
-		s.logger.Warn("failed to fetch story characters", zap.Error(err), zap.String("storyID", storyID))
+		s.logger.Warn("failed to fetch story characters",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 	} else {
 		story.Characters = characters
+		s.logger.Debug("story characters fetched",
+			zap.String("storyID", storyID),
+			zap.Int("characterCount", len(characters)))
 	}
 
 	// Fetch story scenes
+	s.logger.Debug("fetching story scenes",
+		zap.String("storyID", storyID))
 	scenes, err := s.repo.StoryScenes(ctx, storyID, 100, 0)
 	if err != nil {
-		s.logger.Warn("failed to fetch story scenes", zap.Error(err), zap.String("storyID", storyID))
+		s.logger.Warn("failed to fetch story scenes",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 	} else {
 		story.Scenes = scenes
+		s.logger.Debug("story scenes fetched",
+			zap.String("storyID", storyID),
+			zap.Int("sceneCount", len(scenes)))
 	}
 
 	// Fetch contributors
+	s.logger.Debug("fetching story contributors",
+		zap.String("storyID", storyID))
 	contributors, err := s.repo.GetStoryContributors(ctx, storyID, 100, 0)
 	if err != nil {
-		s.logger.Warn("failed to fetch story contributors", zap.Error(err), zap.String("storyID", storyID))
+		s.logger.Warn("failed to fetch story contributors",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 	} else {
 		// Populate flattened fields for client display
 		for _, contributor := range contributors {
@@ -251,7 +387,16 @@ func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, 
 			contributor.BadgeStyle = contributor.Role
 		}
 		story.Contributors = contributors
+		s.logger.Debug("story contributors fetched",
+			zap.String("storyID", storyID),
+			zap.Int("contributorCount", len(contributors)))
 	}
+
+	s.logger.Info("story retrieved successfully",
+		zap.String("storyID", storyID),
+		zap.Int("characterCount", len(story.Characters)),
+		zap.Int("sceneCount", len(story.Scenes)),
+		zap.Int("contributorCount", len(story.Contributors)))
 
 	return story, nil
 }
@@ -261,12 +406,17 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 	s.logger.Info("listing stories",
 		zap.String("status", req.Status),
 		zap.String("genre", req.Genre),
+		zap.String("authorID", req.AuthorID),
+		zap.String("groupId", req.GroupID),
+		zap.String("search", req.Search),
 		zap.Int("limit", req.Limit),
-	)
+		zap.Int("offset", req.Offset))
 
 	// 设置默认分页参数
 	if req.Limit == 0 {
 		req.Limit = 20
+		s.logger.Debug("using default limit",
+			zap.Int("limit", req.Limit))
 	}
 
 	filter := domain.StoryFilter{
@@ -279,13 +429,27 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 		Offset:   req.Offset,
 	}
 
+	s.logger.Debug("querying stories with filter",
+		zap.String("status", filter.Status),
+		zap.String("genre", filter.Genre),
+		zap.Int("limit", filter.Limit),
+		zap.Int("offset", filter.Offset))
+
 	stories, total, err := s.repo.ListStories(ctx, filter)
 	if err != nil {
-		s.logger.Error("failed to list stories", zap.Error(err))
+		s.logger.Error("failed to list stories",
+			zap.String("status", req.Status),
+			zap.String("genre", req.Genre),
+			zap.Error(err))
 		return nil, 0, errors.New("failed to list stories")
 	}
 
-	s.logger.Info("stories listed successfully", zap.Int64("total", total))
+	s.logger.Info("stories listed successfully",
+		zap.Int("count", len(stories)),
+		zap.Int64("total", total),
+		zap.Int("limit", req.Limit),
+		zap.Int("offset", req.Offset))
+
 	return stories, total, nil
 }
 
@@ -294,51 +458,111 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 	s.logger.Info("updating story",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID),
-	)
+		zap.Bool("hasTitle", req.Title != nil),
+		zap.Bool("hasDescription", req.Description != nil),
+		zap.Bool("hasCoverImage", req.CoverImage != nil),
+		zap.Bool("hasGenre", req.Genre != nil),
+		zap.Bool("hasStatus", req.Status != nil))
 
 	// 获取故事
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for update",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return nil, errors.New("story not found")
 		}
+		s.logger.Error("failed to get story for update",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return nil, errors.New("failed to get story")
 	}
+
+	s.logger.Debug("story retrieved for update",
+		zap.String("storyID", storyID),
+		zap.String("currentTitle", story.Title),
+		zap.String("currentStatus", story.Status))
 
 	// 验证权限
 	if story.Author.ID != userID {
 		s.logger.Warn("unauthorized story update attempt",
 			zap.String("userID", userID),
-			zap.String("authorID", story.Author.ID),
-		)
+			zap.String("storyID", storyID),
+			zap.String("authorID", story.Author.ID))
 		return nil, errors.New("unauthorized")
 	}
 
+	s.logger.Debug("authorization verified for story update",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
+
 	// 更新字段
+	fieldsUpdated := []string{}
 	if req.Title != nil {
+		oldTitle := story.Title
 		story.Title = *req.Title
+		fieldsUpdated = append(fieldsUpdated, "title")
+		s.logger.Debug("title updated",
+			zap.String("storyID", storyID),
+			zap.String("oldTitle", oldTitle),
+			zap.String("newTitle", story.Title))
 	}
 	if req.Description != nil {
 		story.Description = *req.Description
+		fieldsUpdated = append(fieldsUpdated, "description")
+		s.logger.Debug("description updated",
+			zap.String("storyID", storyID),
+			zap.Int("newLength", len(story.Description)))
 	}
 	if req.CoverImage != nil {
 		story.CoverImage = *req.CoverImage
+		fieldsUpdated = append(fieldsUpdated, "coverImage")
+		s.logger.Debug("cover image updated",
+			zap.String("storyID", storyID),
+			zap.String("coverURL", story.CoverImage))
 	}
 	if req.Genre != nil {
+		oldGenre := story.Genre
 		story.Genre = *req.Genre
+		fieldsUpdated = append(fieldsUpdated, "genre")
+		s.logger.Debug("genre updated",
+			zap.String("storyID", storyID),
+			zap.String("oldGenre", oldGenre),
+			zap.String("newGenre", story.Genre))
 	}
 	if req.Status != nil {
+		oldStatus := story.Status
 		story.Status = *req.Status
+		fieldsUpdated = append(fieldsUpdated, "status")
+		s.logger.Debug("status updated",
+			zap.String("storyID", storyID),
+			zap.String("oldStatus", oldStatus),
+			zap.String("newStatus", story.Status))
+	}
+
+	if len(fieldsUpdated) == 0 {
+		s.logger.Debug("no fields to update",
+			zap.String("storyID", storyID))
+		return story, nil
 	}
 
 	story.UpdatedAt = time.Now().Unix()
 
+	s.logger.Debug("saving story updates to database",
+		zap.String("storyID", storyID),
+		zap.Strings("fieldsUpdated", fieldsUpdated))
 	if err := s.repo.UpdateStory(ctx, story); err != nil {
-		s.logger.Error("failed to update story", zap.Error(err))
+		s.logger.Error("failed to update story in database",
+			zap.String("storyID", storyID),
+			zap.Strings("fieldsUpdated", fieldsUpdated),
+			zap.Error(err))
 		return nil, errors.New("failed to update story")
 	}
 
-	s.logger.Info("story updated successfully", zap.String("storyID", storyID))
+	s.logger.Info("story updated successfully",
+		zap.String("storyID", storyID),
+		zap.Strings("fieldsUpdated", fieldsUpdated))
 	return story, nil
 }
 
@@ -346,33 +570,53 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error {
 	s.logger.Info("deleting story",
 		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-	)
+		zap.String("storyID", storyID))
 
 	// 获取故事
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for deletion",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return errors.New("story not found")
 		}
+		s.logger.Error("failed to get story for deletion",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to get story")
 	}
+
+	s.logger.Debug("story retrieved for deletion",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title),
+		zap.String("status", story.Status))
 
 	// 验证权限
 	if story.Author.ID != userID {
 		s.logger.Warn("unauthorized story delete attempt",
 			zap.String("userID", userID),
-			zap.String("authorID", story.Author.ID),
-		)
+			zap.String("storyID", storyID),
+			zap.String("authorID", story.Author.ID))
 		return errors.New("unauthorized")
 	}
 
+	s.logger.Debug("authorization verified for story deletion",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
+
+	s.logger.Debug("deleting story from database",
+		zap.String("storyID", storyID))
 	if err := s.repo.DeleteStory(ctx, storyID); err != nil {
-		s.logger.Error("failed to delete story", zap.Error(err))
+		s.logger.Error("failed to delete story from database",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to delete story")
 	}
 
-	s.logger.Info("story deleted successfully", zap.String("storyID", storyID))
+	s.logger.Info("story deleted successfully",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
 	return nil
 }
 
@@ -380,24 +624,41 @@ func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error
 func (s *Service) LikeStory(ctx context.Context, userID, storyID string) error {
 	s.logger.Info("liking story",
 		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-	)
+		zap.String("storyID", storyID))
 
 	// 验证故事存在
-	_, err := s.repo.StoryByID(ctx, storyID)
+	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for like",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return errors.New("story not found")
 		}
+		s.logger.Error("failed to get story for like",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to get story")
 	}
 
+	s.logger.Debug("story verified for like",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title))
+
+	s.logger.Debug("executing like operation",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	if err := s.repo.LikeStory(ctx, userID, storyID); err != nil {
-		s.logger.Error("failed to like story", zap.Error(err))
+		s.logger.Error("failed to like story",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to like story")
 	}
 
-	s.logger.Info("story liked successfully", zap.String("storyID", storyID))
+	s.logger.Info("story liked successfully",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	return nil
 }
 
@@ -405,15 +666,22 @@ func (s *Service) LikeStory(ctx context.Context, userID, storyID string) error {
 func (s *Service) UnlikeStory(ctx context.Context, userID, storyID string) error {
 	s.logger.Info("unliking story",
 		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-	)
+		zap.String("storyID", storyID))
 
+	s.logger.Debug("executing unlike operation",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	if err := s.repo.UnlikeStory(ctx, userID, storyID); err != nil {
-		s.logger.Error("failed to unlike story", zap.Error(err))
+		s.logger.Error("failed to unlike story",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to unlike story")
 	}
 
-	s.logger.Info("story unliked successfully", zap.String("storyID", storyID))
+	s.logger.Info("story unliked successfully",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	return nil
 }
 
@@ -421,24 +689,41 @@ func (s *Service) UnlikeStory(ctx context.Context, userID, storyID string) error
 func (s *Service) FollowStory(ctx context.Context, userID, storyID string) error {
 	s.logger.Info("following story",
 		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-	)
+		zap.String("storyID", storyID))
 
 	// 验证故事存在
-	_, err := s.repo.StoryByID(ctx, storyID)
+	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for follow",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return errors.New("story not found")
 		}
+		s.logger.Error("failed to get story for follow",
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to get story")
 	}
 
+	s.logger.Debug("story verified for follow",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title))
+
+	s.logger.Debug("executing follow operation",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	if err := s.repo.FollowStory(ctx, userID, storyID); err != nil {
-		s.logger.Error("failed to follow story", zap.Error(err))
+		s.logger.Error("failed to follow story",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to follow story")
 	}
 
-	s.logger.Info("story followed successfully", zap.String("storyID", storyID))
+	s.logger.Info("story followed successfully",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	return nil
 }
 
@@ -446,15 +731,22 @@ func (s *Service) FollowStory(ctx context.Context, userID, storyID string) error
 func (s *Service) UnfollowStory(ctx context.Context, userID, storyID string) error {
 	s.logger.Info("unfollowing story",
 		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-	)
+		zap.String("storyID", storyID))
 
+	s.logger.Debug("executing unfollow operation",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	if err := s.repo.UnfollowStory(ctx, userID, storyID); err != nil {
-		s.logger.Error("failed to unfollow story", zap.Error(err))
+		s.logger.Error("failed to unfollow story",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 		return errors.New("failed to unfollow story")
 	}
 
-	s.logger.Info("story unfollowed successfully", zap.String("storyID", storyID))
+	s.logger.Info("story unfollowed successfully",
+		zap.String("userID", userID),
+		zap.String("storyID", storyID))
 	return nil
 }
 
@@ -495,18 +787,42 @@ func (s *Service) RenderStory(ctx context.Context, userID, storyID string, req R
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for rendering",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return nil, errors.New("story not found")
 		}
-		s.logger.Error("failed to get story", zap.Error(err))
+		s.logger.Error("failed to get story for rendering",
+			zap.String("storyID", storyID),
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, errors.New("failed to get story")
 	}
 
+	s.logger.Debug("story retrieved for rendering",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title),
+		zap.String("status", story.Status))
+
 	if story.Author.ID != userID {
+		s.logger.Warn("unauthorized render attempt",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.String("authorID", story.Author.ID))
 		return nil, errors.New("unauthorized: not story owner")
 	}
 
+	s.logger.Debug("authorization verified for rendering",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
+
 	// 检查是否有需要处理的任务
 	if !req.EnrichDescription && !req.GenerateBackground && !req.GenerateCover {
+		s.logger.Warn("no render options selected",
+			zap.String("storyID", storyID),
+			zap.Bool("enrichDescription", req.EnrichDescription),
+			zap.Bool("generateBackground", req.GenerateBackground),
+			zap.Bool("generateCover", req.GenerateCover))
 		return nil, errors.New("no render options selected")
 	}
 
@@ -1001,26 +1317,6 @@ func (s *Service) markRenderTaskFailed(ctx context.Context, task *domain.RenderT
 	s.restoreStoryStatus(updateCtx, task)
 }
 
-// markRenderTaskCancelled 将渲染任务标记为取消（用于超时等情况）
-func (s *Service) markRenderTaskCancelled(ctx context.Context, task *domain.RenderTask, reason string) {
-	task.Status = domain.RenderTaskStatusCancelled
-	task.ErrorMessage = reason
-	task.UpdatedAt = time.Now().Unix()
-
-	// 使用新的 context 防止原 context 已取消
-	updateCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := s.repo.UpdateRenderTask(updateCtx, task); err != nil {
-		s.logger.Error("failed to mark render task as cancelled",
-			zap.String("taskID", task.ID),
-			zap.Error(err),
-		)
-	}
-
-	s.restoreStoryStatus(updateCtx, task)
-}
-
 // restoreStoryStatus 恢复故事状态（从 rendering 恢复为 draft）
 func (s *Service) restoreStoryStatus(ctx context.Context, task *domain.RenderTask) {
 	_, err := s.UpdateStory(ctx, task.UserID, task.StoryID, UpdateStoryRequest{
@@ -1113,60 +1409,6 @@ func (s *Service) GetLatestRenderTaskByStoryID(ctx context.Context, storyID stri
 		zap.Int("progress", task.Progress))
 
 	return task, nil
-}
-
-// CancelRenderTask 取消渲染任务
-func (s *Service) CancelRenderTask(ctx context.Context, userID, taskID string) error {
-	s.logger.Info("cancelling render task",
-		zap.String("userID", userID),
-		zap.String("taskID", taskID),
-	)
-
-	// 1. 获取任务
-	task, err := s.repo.GetRenderTask(ctx, taskID)
-	if err != nil {
-		s.logger.Error("failed to get render task", zap.Error(err))
-		return errors.New("failed to get render task")
-	}
-	if task == nil {
-		return errors.New("render task not found")
-	}
-
-	// 2. 验证任务属于用户
-	if task.UserID != userID {
-		return errors.New("unauthorized: task belongs to another user")
-	}
-
-	// 3. 检查任务状态是否可以取消
-	if task.Status != domain.RenderTaskStatusPending && task.Status != domain.RenderTaskStatusProcessing {
-		return fmt.Errorf("cannot cancel task with status: %s", task.Status)
-	}
-
-	// 4. 更新任务状态为 cancelled
-	task.Status = domain.RenderTaskStatusCancelled
-	task.UpdatedAt = time.Now().Unix()
-	completedTime := time.Now().Unix()
-	task.CompletedAt = &completedTime
-
-	if err := s.repo.UpdateRenderTask(ctx, task); err != nil {
-		s.logger.Error("failed to update render task status", zap.Error(err))
-		return errors.New("failed to cancel render task")
-	}
-
-	// 5. 恢复故事状态为 draft
-	_, err = s.UpdateStory(ctx, userID, task.StoryID, UpdateStoryRequest{
-		Status: stringPtr("draft"),
-	})
-	if err != nil {
-		s.logger.Error("failed to restore story status", zap.Error(err))
-	}
-
-	s.logger.Info("render task cancelled",
-		zap.String("taskID", taskID),
-		zap.String("userID", userID),
-	)
-
-	return nil
 }
 
 // ========== 故事发布功能 ==========
@@ -1435,7 +1677,9 @@ type GenerateStoryCoverRequest struct {
 	GenerateBackground bool   `json:"generateBackground"`
 }
 
-// GenerateStoryCover 使用AI生成故事封面/海报/背景图片
+// GenerateStoryCover 使用AI生成故事封面/海报/背景图片（两步AI工作流）
+// Step 1: 使用LLM生成封面概念JSON
+// Step 2: 组装最终提示词，使用图像生成AI创建图片
 func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string, req GenerateStoryCoverRequest) (*StoryAICoverResponse, error) {
 	s.logger.Info("generating story cover with AI",
 		zap.String("userID", userID),
@@ -1457,15 +1701,32 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		req.AspectRatio = "16:9"
 	}
 
-	// 构建图片生成提示词
-	imagePrompt := s.buildCoverImagePrompt(req.Title, req.Description, req.Genre, req.Style)
+	// Step 1: 生成封面概念（共享概念用于所有图片类型）
+	var coverConcept *CoverConcept
+	if req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
+		conceptResult, err := s.generateCoverConcept(ctx, userID, storyID, req.Title, req.Description, req.Genre, req.Style)
+		if err != nil {
+			s.logger.Warn("failed to generate cover concept, falling back to simple prompt",
+				zap.String("storyID", storyID),
+				zap.Error(err))
+			// 降级到简单提示词
+		} else {
+			coverConcept = conceptResult.Concept
+			totalTokens += conceptResult.TokensUsed
+			s.logger.Info("cover concept generated successfully",
+				zap.String("storyID", storyID),
+				zap.String("conceptRecordID", conceptResult.RecordID))
+		}
+	}
 
-	// 生成封面图
+	// Step 2: 生成封面图
 	if req.GenerateCover {
+		finalPrompt := s.assembleFinalCoverPrompt(coverConcept, req.Title, "cover")
+
 		coverResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
-			Prompt:            imagePrompt + " 作为书籍封面，突出标题文字空间，专业设计感",
-			Provider:          "gemini", // 使用默认provider
+			Prompt:            finalPrompt,
+			Provider:          "gemini",
 			Model:             "",
 			AspectRatio:       req.AspectRatio,
 			Quality:           "high",
@@ -1475,6 +1736,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 			Metadata: map[string]interface{}{
 				"operation": "generate_cover",
 				"storyId":   storyID,
+				"step":      2,
 			},
 		})
 		if err != nil {
@@ -1487,11 +1749,13 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		}
 	}
 
-	// 生成海报图
+	// Step 2: 生成海报图
 	if req.GeneratePoster {
+		finalPrompt := s.assembleFinalCoverPrompt(coverConcept, req.Title, "poster")
+
 		posterResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
-			Prompt:            imagePrompt + " 电影海报风格，戏剧性光影，史诗感构图",
+			Prompt:            finalPrompt,
 			Provider:          "gemini",
 			Model:             "",
 			AspectRatio:       "2:3", // 海报通常是竖版
@@ -1502,6 +1766,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 			Metadata: map[string]interface{}{
 				"operation": "generate_poster",
 				"storyId":   storyID,
+				"step":      2,
 			},
 		})
 		if err != nil {
@@ -1514,11 +1779,13 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		}
 	}
 
-	// 生成背景图
+	// Step 2: 生成背景图
 	if req.GenerateBackground {
+		finalPrompt := s.assembleFinalCoverPrompt(coverConcept, req.Title, "background")
+
 		bgResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
-			Prompt:            imagePrompt + " 宽幅背景图，适合作为页面背景，柔和色调，不抢眼",
+			Prompt:            finalPrompt,
 			Provider:          "gemini",
 			Model:             "",
 			AspectRatio:       "21:9", // 宽幅背景
@@ -1529,6 +1796,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 			Metadata: map[string]interface{}{
 				"operation": "generate_background",
 				"storyId":   storyID,
+				"step":      2,
 			},
 		})
 		if err != nil {
@@ -1553,7 +1821,250 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 	return response, nil
 }
 
-// buildCoverImagePrompt 构建封面图片生成提示词
+// CoverConcept LLM生成的封面概念结构
+type CoverConcept struct {
+	CoverConcept struct {
+		VisualSubject      string `json:"visual_subject"`      // 视觉主体（主要角色/场景/元素）
+		SceneEnvironment   string `json:"scene_environment"`   // 场景环境（背景、天气、道具）
+		CompositionCamera  string `json:"composition_camera"`  // 构图和镜头（角度、取景、景深）
+		LightingAtmosphere string `json:"lighting_atmosphere"` // 灯光和氛围（光照类型、色彩、情绪）
+		ArtStyle           string `json:"art_style"`           // 艺术风格（媒介、渲染引擎、风格关键词）
+	} `json:"cover_concept"`
+	TypographyInstruction struct {
+		TitleContent    string `json:"title_content"`    // 标题文本内容
+		TitleStyle      string `json:"title_style"`      // 标题样式（字体、材质、颜色）
+		TitlePosition   string `json:"title_position"`   // 标题位置
+		SubtitleContent string `json:"subtitle_content"` // 副标题内容（可选）
+		SubtitleStyle   string `json:"subtitle_style"`   // 副标题样式（可选）
+	} `json:"typography_instruction"`
+}
+
+// coverConceptGenerationResult Step 1 结果
+type coverConceptGenerationResult struct {
+	RecordID    string
+	ConceptJSON string
+	Concept     *CoverConcept
+	TokensUsed  int
+}
+
+// generateCoverConcept Step 1: 使用LLM生成封面概念
+func (s *Service) generateCoverConcept(ctx context.Context, userID, storyID string, title, description, genre, style string) (*coverConceptGenerationResult, error) {
+	// 构建System Prompt
+	systemPrompt := `# Role
+You are an expert AI Book Cover Designer. Your task is to generate a structured image generation prompt (JSON) based on Story Information.
+
+# Goal
+Create a professional book cover illustration where the AI generation model can render both the visual scene and typography perfectly in one shot.
+
+# Steps
+1. **Analyze Story**:
+   * Extract key visual elements from the story title and description.
+   * Identify the main subject (character, scene, or symbolic element).
+   * Determine the mood and atmosphere based on genre.
+2. **Design Composition**:
+   * Choose appropriate camera angle and framing for the cover.
+   * Define spatial relationships between elements.
+   * Consider how typography will integrate with the visual.
+3. **Design Typography**:
+   * Use the story title as the main text.
+   * Choose font style that matches the genre.
+   * Specify clear position where text won't interfere with key visual elements.
+
+# JSON Output Schema
+You must output ONLY valid JSON with no markdown code blocks:
+{
+  "cover_concept": {
+    "visual_subject": "string (Main character/scene/element with detailed description)",
+    "scene_environment": "string (Background setting + weather + props)",
+    "composition_camera": "string (Camera angle + framing + depth of field)",
+    "lighting_atmosphere": "string (Lighting type + color palette + mood)",
+    "art_style": "string (Art medium + render engine + style keywords)"
+  },
+  "typography_instruction": {
+    "title_content": "string (THE EXACT TITLE TEXT)",
+    "title_style": "string (Font type + material + color)",
+    "title_position": "string (Exact placement e.g., 'at the top center')",
+    "subtitle_content": "string (Short tagline or 'NONE')",
+    "subtitle_style": "string (Font style + placement or 'NONE')"
+  }
+}`
+
+	// 构建User Prompt
+	var userPrompt strings.Builder
+	userPrompt.WriteString("Please create a book cover concept based on the following story information:\n\n")
+
+	// 故事信息
+	userPrompt.WriteString("[Story Information]\n")
+	userPrompt.WriteString("Title: ")
+	userPrompt.WriteString(title)
+	userPrompt.WriteString("\n")
+	if description != "" {
+		userPrompt.WriteString("Description: ")
+		userPrompt.WriteString(description)
+		userPrompt.WriteString("\n")
+	}
+	if genre != "" {
+		userPrompt.WriteString("Genre: ")
+		userPrompt.WriteString(genre)
+		userPrompt.WriteString("\n")
+	}
+	if style != "" {
+		userPrompt.WriteString("Style Preference: ")
+		userPrompt.WriteString(style)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString("\n")
+
+	// 调用AI生成服务
+	genReq := &GenerateTextRequest{
+		UserID:            userID,
+		OriginalPrompt:    userPrompt.String(),
+		SystemPrompt:      systemPrompt,
+		Model:             "gemini-2.5-flash",
+		Temperature:       0.8,
+		MaxTokens:         2000,
+		RelatedEntityID:   storyID,
+		RelatedEntityType: "story_cover",
+		Metadata: map[string]interface{}{
+			"operation": "cover_concept_generation",
+			"storyId":   storyID,
+			"step":      1,
+		},
+	}
+
+	result, err := s.aiGenService.GenerateText(ctx, genReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析生成的JSON
+	concept, err := s.parseCoverConcept(result.Text)
+	if err != nil {
+		s.logger.Warn("failed to parse cover concept JSON, using raw text",
+			zap.Error(err),
+			zap.String("rawText", truncateForLog(result.Text, 500)))
+	}
+
+	return &coverConceptGenerationResult{
+		RecordID:    result.RecordID,
+		ConceptJSON: result.Text,
+		Concept:     concept,
+		TokensUsed:  result.TokensUsed,
+	}, nil
+}
+
+// parseCoverConcept 解析封面概念JSON
+func (s *Service) parseCoverConcept(text string) (*CoverConcept, error) {
+	// 清理JSON文本
+	cleanedText := strings.TrimSpace(text)
+
+	// 处理markdown代码块
+	if strings.HasPrefix(cleanedText, "```") {
+		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
+			cleanedText = cleanedText[idx+1:]
+		}
+		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
+			cleanedText = strings.TrimSpace(cleanedText[:idx])
+		}
+	}
+
+	// 提取JSON对象
+	cleanedText = extractJSONFromText(cleanedText)
+
+	var concept CoverConcept
+	if err := json.Unmarshal([]byte(cleanedText), &concept); err != nil {
+		return nil, err
+	}
+
+	return &concept, nil
+}
+
+// assembleFinalCoverPrompt 组装最终封面图像生成提示词
+func (s *Service) assembleFinalCoverPrompt(concept *CoverConcept, title, imageType string) string {
+	var prompt strings.Builder
+
+	if concept != nil && concept.CoverConcept.VisualSubject != "" {
+		// 使用结构化概念组装提示词
+		c := concept.CoverConcept
+		t := concept.TypographyInstruction
+
+		prompt.WriteString("A professional book cover illustration of ")
+		prompt.WriteString(c.VisualSubject)
+		prompt.WriteString(".\n")
+
+		if c.SceneEnvironment != "" {
+			prompt.WriteString("The scene is set in ")
+			prompt.WriteString(c.SceneEnvironment)
+			prompt.WriteString(".\n\n")
+		}
+
+		if c.CompositionCamera != "" {
+			prompt.WriteString("COMPOSITION & ANGLE:\n")
+			prompt.WriteString(c.CompositionCamera)
+			prompt.WriteString(".\n\n")
+		}
+
+		if c.LightingAtmosphere != "" {
+			prompt.WriteString("LIGHTING & MOOD:\n")
+			prompt.WriteString(c.LightingAtmosphere)
+			prompt.WriteString(".\n\n")
+		}
+
+		if c.ArtStyle != "" {
+			prompt.WriteString("ART STYLE:\n")
+			prompt.WriteString(c.ArtStyle)
+			prompt.WriteString(".\n\n")
+		}
+
+		// 排版指令
+		if t.TitleContent != "" && t.TitleContent != "NONE" {
+			prompt.WriteString("TYPOGRAPHY & TEXT GENERATION:\n")
+			prompt.WriteString("The image must feature the title text \"")
+			prompt.WriteString(t.TitleContent)
+			prompt.WriteString("\" written in ")
+			prompt.WriteString(t.TitleStyle)
+			prompt.WriteString(".\n")
+			prompt.WriteString("The title is placed ")
+			prompt.WriteString(t.TitlePosition)
+			prompt.WriteString(".\n")
+
+			if t.SubtitleContent != "" && t.SubtitleContent != "NONE" {
+				prompt.WriteString("Additionally, include the subtitle text \"")
+				prompt.WriteString(t.SubtitleContent)
+				prompt.WriteString("\" written in ")
+				prompt.WriteString(t.SubtitleStyle)
+				prompt.WriteString(".\n")
+			}
+		}
+
+		// 根据图片类型添加特定要求
+		switch imageType {
+		case "cover":
+			prompt.WriteString("\nRequirements: Professional book cover design, emphasize title text space, high-quality illustration.")
+		case "poster":
+			prompt.WriteString("\nRequirements: Movie poster style, dramatic lighting, epic composition.")
+		case "background":
+			prompt.WriteString("\nRequirements: Wide panoramic background image, suitable for page background, soft tones, unobtrusive.")
+		}
+	} else {
+		// 降级：使用基础提示词
+		prompt.WriteString("A professional book cover illustration for the story \"")
+		prompt.WriteString(title)
+		prompt.WriteString("\".")
+		switch imageType {
+		case "cover":
+			prompt.WriteString(" Professional book cover design, emphasize title text space.")
+		case "poster":
+			prompt.WriteString(" Movie poster style, dramatic lighting, epic composition.")
+		case "background":
+			prompt.WriteString(" Wide panoramic background, soft tones, unobtrusive.")
+		}
+	}
+
+	return prompt.String()
+}
+
+// buildCoverImagePrompt 构建封面图片生成提示词（保留作为降级方案）
 func (s *Service) buildCoverImagePrompt(title, description, genre, style string) string {
 	prompt := fmt.Sprintf(`为故事《%s》生成一张精美的插画。
 
@@ -1587,163 +2098,33 @@ func (s *Service) buildCoverImagePrompt(title, description, genre, style string)
 
 // updateUserTokenUsage 更新用户的token使用量
 func (s *Service) updateUserTokenUsage(ctx context.Context, userID string, tokensUsed int) error {
+	if tokensUsed <= 0 {
+		// 如果没有使用token，直接返回
+		return nil
+	}
+
 	s.logger.Info("updating user token usage",
 		zap.String("userID", userID),
 		zap.Int("tokensUsed", tokensUsed))
 
-	// 这里可以调用用户服务更新token使用记录
-	// 实际实现可能需要：
-	// 1. 检查用户的token余额
-	// 2. 扣除使用的token
-	// 3. 记录使用日志
-
-	// 简单实现：记录到AI生成记录表
-	// 实际项目中可能需要更复杂的计费逻辑
-	return nil
-}
-
-// RequestAIEnrichment 请求AI丰富故事（用户确认后调用）
-// 这个方法用于在故事创建后，用户单独选择是否使用AI丰富
-type RequestAIEnrichmentRequest struct {
-	EnrichDescription  bool   `json:"enrichDescription"`
-	GenerateCover      bool   `json:"generateCover"`
-	GeneratePoster     bool   `json:"generatePoster"`
-	GenerateBackground bool   `json:"generateBackground"`
-	Style              string `json:"style,omitempty"`
-	AspectRatio        string `json:"aspectRatio,omitempty"`
-}
-
-// RequestAIEnrichment 请求对已存在的故事进行AI丰富
-func (s *Service) RequestAIEnrichment(ctx context.Context, userID, storyID string, req RequestAIEnrichmentRequest) (*domain.Story, error) {
-	s.logger.Info("requesting AI enrichment for existing story",
-		zap.String("userID", userID),
-		zap.String("storyID", storyID),
-		zap.Bool("enrichDescription", req.EnrichDescription),
-		zap.Bool("generateCover", req.GenerateCover),
-	)
-
-	// 获取故事
-	story, err := s.repo.StoryByID(ctx, storyID)
+	// 调用 repository 更新 token 余额
+	// amount 为负数表示消费（扣除token）
+	// source 标识使用来源
+	// description 描述使用场景
+	_, err := s.repo.UpdateTokenBalance(ctx, userID, -tokensUsed, "story_ai_generation", fmt.Sprintf("Story AI generation consumed %d tokens", tokensUsed))
 	if err != nil {
-		if err == domain.ErrNotFound {
-			return nil, errors.New("story not found")
-		}
-		return nil, errors.New("failed to get story")
-	}
-
-	// 验证权限
-	if story.Author == nil || story.Author.ID != userID {
-		return nil, errors.New("unauthorized: not story owner")
-	}
-
-	totalTokens := 0
-	now := time.Now().Unix()
-
-	// 丰富描述
-	if req.EnrichDescription && story.Description != "" {
-		// 使用原始描述进行丰富（如果有的话）
-		descToEnrich := story.OriginalDescription
-		if descToEnrich == "" {
-			descToEnrich = story.Description
-		}
-
-		enrichResp, err := s.EnrichStoryDescription(ctx, userID, storyID, descToEnrich, story.Genre, req.Style)
-		if err != nil {
-			s.logger.Warn("failed to enrich story description",
-				zap.String("storyID", storyID),
-				zap.Error(err))
-		} else {
-			// 保留原始描述
-			if story.OriginalDescription == "" {
-				story.OriginalDescription = story.Description
-			}
-			story.EnrichedDescription = enrichResp.EnrichedDescription
-			story.Description = enrichResp.EnrichedDescription
-			story.IsAIEnriched = true
-			story.AIEnrichedAt = &now
-			story.TextTokensUsed += enrichResp.TokensUsed
-			totalTokens += enrichResp.TokensUsed
-		}
-	}
-
-	// 生成封面/海报/背景
-	if req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
-		coverResp, err := s.GenerateStoryCover(ctx, userID, storyID, GenerateStoryCoverRequest{
-			Title:              story.Title,
-			Description:        story.Description,
-			Genre:              story.Genre,
-			Style:              req.Style,
-			AspectRatio:        req.AspectRatio,
-			GenerateCover:      req.GenerateCover,
-			GeneratePoster:     req.GeneratePoster,
-			GenerateBackground: req.GenerateBackground,
-		})
-		if err != nil {
-			s.logger.Warn("failed to generate story cover",
-				zap.String("storyID", storyID),
-				zap.Error(err))
-		} else {
-			if coverResp.CoverURL != "" {
-				story.CoverImage = coverResp.CoverURL
-				story.CoverGeneratedByAI = true
-			}
-			if coverResp.PosterURL != "" {
-				story.PosterImage = coverResp.PosterURL
-			}
-			if coverResp.BackgroundURL != "" {
-				story.BackgroundImage = coverResp.BackgroundURL
-			}
-			story.ImageTokensUsed += coverResp.TokensUsed
-			totalTokens += coverResp.TokensUsed
-		}
-	}
-
-	// 更新token统计
-	story.TokensUsed += totalTokens
-	story.UpdatedAt = now
-
-	// 保存更新
-	if err := s.repo.UpdateStory(ctx, story); err != nil {
-		s.logger.Error("failed to update story with AI enrichment",
-			zap.String("storyID", storyID),
+		s.logger.Error("failed to update user token usage",
+			zap.String("userID", userID),
+			zap.Int("tokensUsed", tokensUsed),
 			zap.Error(err))
-		return nil, errors.New("failed to save AI enrichment")
+		return fmt.Errorf("failed to update token usage: %w", err)
 	}
 
-	// 更新用户token使用量
-	if totalTokens > 0 {
-		if err := s.updateUserTokenUsage(ctx, userID, totalTokens); err != nil {
-			s.logger.Warn("failed to update user token usage",
-				zap.String("userID", userID),
-				zap.Int("tokensUsed", totalTokens),
-				zap.Error(err))
-		}
-	}
+	s.logger.Info("user token usage updated successfully",
+		zap.String("userID", userID),
+		zap.Int("tokensUsed", tokensUsed))
 
-	s.logger.Info("AI enrichment completed",
-		zap.String("storyID", storyID),
-		zap.Int("totalTokensUsed", totalTokens))
-
-	return story, nil
-}
-
-// GetStoryAIUsage 获取故事的AI使用统计
-func (s *Service) GetStoryAIUsage(ctx context.Context, storyID string) (map[string]interface{}, error) {
-	story, err := s.repo.StoryByID(ctx, storyID)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]interface{}{
-		"storyId":            storyID,
-		"isAIEnriched":       story.IsAIEnriched,
-		"coverGeneratedByAI": story.CoverGeneratedByAI,
-		"tokensUsed":         story.TokensUsed,
-		"textTokensUsed":     story.TextTokensUsed,
-		"imageTokensUsed":    story.ImageTokensUsed,
-		"aiGenerationCost":   story.AIGenerationCost,
-		"aiEnrichedAt":       story.AIEnrichedAt,
-	}, nil
+	return nil
 }
 
 // ========== Story Contributor operations ==========

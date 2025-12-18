@@ -12,61 +12,116 @@ import (
 
 // CreateStoryboard 创建新的 storyboard
 func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
+	s.logger.Info("creating storyboard",
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("creatorId", storyboard.CreatorID),
+		zap.String("title", storyboard.Title),
+		zap.String("parentId", storyboard.ParentID),
+		zap.Bool("isStandalone", storyboard.IsStandalone),
+		zap.Int("sceneCount", storyboard.SceneCount))
+
 	// 验证故事存在
 	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
 	if err != nil {
+		s.logger.Error("story not found for storyboard creation",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
 		return fmt.Errorf("story not found: %w", err)
 	}
 
 	// 如果没有父节点或父节点为空，设置为 root marker
 	if storyboard.ParentID == "" {
 		storyboard.ParentID = domain.StoryboardRootMarker
+		s.logger.Debug("setting parentId to root marker",
+			zap.String("storyboardId", storyboard.ID))
 	}
 
 	// 如果有父节点（不是 root），验证父节点存在
 	if storyboard.ParentID != domain.StoryboardRootMarker {
 		parent, err := s.repo.StoryboardByID(ctx, storyboard.ParentID)
 		if err != nil {
+			s.logger.Error("parent storyboard not found",
+				zap.String("parentId", storyboard.ParentID),
+				zap.String("storyId", storyboard.StoryID),
+				zap.Error(err))
 			return fmt.Errorf("parent storyboard not found: %w", err)
 		}
 		// 确保父节点属于同一个故事
 		if parent.StoryID != storyboard.StoryID {
+			s.logger.Error("parent storyboard belongs to different story",
+				zap.String("parentId", storyboard.ParentID),
+				zap.String("parentStoryId", parent.StoryID),
+				zap.String("storyboardStoryId", storyboard.StoryID))
 			return fmt.Errorf("parent storyboard belongs to different story")
 		}
+		s.logger.Debug("parent storyboard validated",
+			zap.String("parentId", storyboard.ParentID),
+			zap.String("parentTitle", parent.Title))
 	}
 
 	// 使用 AI 生成内容（如果提供了 geminiClient）
 	if s.geminiClient != nil && storyboard.RawInput != "" {
+		s.logger.Info("starting AI generation for storyboard",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("rawInput", truncateForLog(storyboard.RawInput, 200)))
 		if err := s.GenerateStoryboardWithAI(ctx, storyboard); err != nil {
 			s.logger.Warn("AI generation failed, creating storyboard without AI content",
+				zap.String("storyboardId", storyboard.ID),
 				zap.Error(err))
 			// AI 生成失败不影响创建流程，继续使用原始输入
+		} else {
+			s.logger.Info("AI generation completed for storyboard",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("scenesGenerated", len(storyboard.StoryboardScenes)))
 		}
 	}
 
 	// Validate linked assets
+	s.logger.Debug("validating storyboard assets",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("characterRefs", len(storyboard.CharacterRefs)),
+		zap.Int("sceneRefs", len(storyboard.SceneRefs)))
 	if err := s.validateStoryboardAssets(ctx, storyboard); err != nil {
+		s.logger.Error("storyboard asset validation failed",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
 		return err
 	}
 
 	// 创建 storyboard
+	s.logger.Debug("saving storyboard to database",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyId", storyboard.StoryID))
 	if err := s.repo.CreateStoryboard(ctx, storyboard); err != nil {
+		s.logger.Error("failed to create storyboard in database",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
 		return fmt.Errorf("failed to create storyboard: %w", err)
 	}
 
 	// Persist AI-generated storyboard scenes (if any)
-	if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
-		s.logger.Warn("failed to persist storyboard scenes",
+	if len(storyboard.StoryboardScenes) > 0 {
+		s.logger.Debug("persisting AI-generated storyboard scenes",
 			zap.String("storyboardId", storyboard.ID),
-			zap.Error(err))
-		// Don't fail the entire creation for this
+			zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
+		if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
+			s.logger.Warn("failed to persist storyboard scenes",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
+			// Don't fail the entire creation for this
+		}
 	}
 
-	s.logger.Info("storyboard created",
+	s.logger.Info("storyboard created successfully",
 		zap.String("id", storyboard.ID),
 		zap.String("storyId", storyboard.StoryID),
 		zap.String("creatorId", storyboard.CreatorID),
-	)
+		zap.String("title", storyboard.Title),
+		zap.String("parentId", storyboard.ParentID),
+		zap.String("workflowStatus", storyboard.WorkflowStatus),
+		zap.Int("sceneCount", len(storyboard.StoryboardScenes)),
+		zap.Bool("isAIGenerated", storyboard.IsAIGenerated))
 
 	// 创建通知
 	// 通知故事作者（如果创建者不是故事作者本人）
@@ -121,10 +176,16 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 
 	// 如果故事属于群组，记录群组活动
 	if story.GroupID != "" {
+		s.logger.Debug("recording group activity for storyboard creation",
+			zap.String("groupId", story.GroupID),
+			zap.String("storyboardId", storyboard.ID))
 		go s.RecordGroupStoryboardCreated(context.Background(), story.GroupID, storyboard.CreatorID, story.ID, story.Title)
 	}
 
 	// 记录用户活动
+	s.logger.Debug("recording user activity for storyboard creation",
+		zap.String("userId", storyboard.CreatorID),
+		zap.String("storyboardId", storyboard.ID))
 	go s.RecordStoryboardCreated(context.Background(), storyboard.CreatorID, storyboard.ID, storyboard.Title)
 
 	// 更新故事的故事板数量
@@ -133,6 +194,9 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 			zap.String("storyId", storyboard.StoryID),
 			zap.Error(err))
 		// 不返回错误，因为故事板已经创建成功
+	} else {
+		s.logger.Debug("story storyboard count incremented",
+			zap.String("storyId", storyboard.StoryID))
 	}
 
 	return nil
@@ -305,31 +369,53 @@ func (s *Service) populateMissingSceneVideos(ctx context.Context, storyboard *do
 
 // UpdateStoryboard 更新 storyboard
 func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Storyboard, userID string) error {
+	s.logger.Info("updating storyboard",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("userId", userID),
+		zap.String("title", storyboard.Title))
+
 	// 验证权限
 	existing, err := s.repo.StoryboardByID(ctx, storyboard.ID)
 	if err != nil {
+		s.logger.Error("failed to get existing storyboard for update",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
 		return err
 	}
 
 	if existing.CreatorID != userID {
+		s.logger.Warn("permission denied: user is not the creator",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("userId", userID),
+			zap.String("creatorId", existing.CreatorID))
 		return fmt.Errorf("permission denied: not the creator")
 	}
 
 	// Validate linked assets (SceneRefs are references to StoryScenes, not StoryboardScenes)
 	if storyboard.CharacterRefs != nil || storyboard.SceneRefs != nil {
+		s.logger.Debug("validating storyboard assets for update",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("characterRefs", len(storyboard.CharacterRefs)),
+			zap.Int("sceneRefs", len(storyboard.SceneRefs)))
 		if err := s.validateStoryboardAssets(ctx, storyboard); err != nil {
+			s.logger.Error("storyboard asset validation failed during update",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
 			return err
 		}
 	}
 
 	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+		s.logger.Error("failed to update storyboard in database",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
 		return fmt.Errorf("failed to update storyboard: %w", err)
 	}
 
-	s.logger.Info("storyboard updated",
+	s.logger.Info("storyboard updated successfully",
 		zap.String("id", storyboard.ID),
 		zap.String("userId", userID),
-	)
+		zap.String("title", storyboard.Title))
 
 	return nil
 }
@@ -337,20 +423,35 @@ func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Story
 // persistStoryboardScenes saves AI-generated storyboard scenes to the database
 func (s *Service) persistStoryboardScenes(ctx context.Context, storyboard *domain.Storyboard) error {
 	if len(storyboard.StoryboardScenes) == 0 {
+		s.logger.Debug("no scenes to persist",
+			zap.String("storyboardId", storyboard.ID))
 		return nil
 	}
+
+	s.logger.Debug("persisting storyboard scenes",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 
 	// Convert to pointer slice for repository
 	scenes := make([]*domain.StoryboardScene, len(storyboard.StoryboardScenes))
 	for i := range storyboard.StoryboardScenes {
 		scenes[i] = &storyboard.StoryboardScenes[i]
+		s.logger.Debug("preparing scene for persistence",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneIndex", i),
+			zap.String("sceneTitle", scenes[i].Title),
+			zap.String("sceneId", scenes[i].ID))
 	}
 
 	if err := s.repo.CreateStoryboardScenes(ctx, storyboard.ID, scenes); err != nil {
+		s.logger.Error("failed to persist storyboard scenes to database",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(scenes)),
+			zap.Error(err))
 		return fmt.Errorf("failed to persist storyboard scenes: %w", err)
 	}
 
-	s.logger.Info("storyboard scenes persisted",
+	s.logger.Info("storyboard scenes persisted successfully",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("count", len(scenes)))
 
@@ -360,53 +461,109 @@ func (s *Service) persistStoryboardScenes(ctx context.Context, storyboard *domai
 func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *domain.Storyboard) error {
 	// Validate character refs
 	if storyboard.CharacterRefs != nil {
+		s.logger.Debug("validating character references",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("characterRefCount", len(storyboard.CharacterRefs)))
 		for i := range storyboard.CharacterRefs {
 			ref := &storyboard.CharacterRefs[i]
 			if ref.CharacterID == "" {
+				s.logger.Error("character reference missing characterId",
+					zap.String("storyboardId", storyboard.ID),
+					zap.Int("refIndex", i))
 				return fmt.Errorf("character reference requires characterId")
 			}
-			_, err := s.repo.CharacterByID(ctx, ref.CharacterID)
+			character, err := s.repo.CharacterByID(ctx, ref.CharacterID)
 			if err != nil {
+				s.logger.Error("character not found for reference",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("characterId", ref.CharacterID),
+					zap.Int("refIndex", i),
+					zap.Error(err))
 				return fmt.Errorf("character %s not found", ref.CharacterID)
 			}
 			if ref.Order == 0 {
 				ref.Order = i
 			}
+			s.logger.Debug("character reference validated",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("characterId", ref.CharacterID),
+				zap.String("characterName", character.Name),
+				zap.Int("order", ref.Order))
 		}
 	}
 
 	// Validate scene refs
 	if storyboard.SceneRefs != nil {
+		s.logger.Debug("validating scene references",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Int("sceneRefCount", len(storyboard.SceneRefs)))
 		for i := range storyboard.SceneRefs {
 			ref := &storyboard.SceneRefs[i]
 			if ref.StorySceneID == "" {
+				s.logger.Error("scene reference missing storySceneId",
+					zap.String("storyboardId", storyboard.ID),
+					zap.Int("refIndex", i))
 				return fmt.Errorf("scene reference requires storySceneId")
 			}
-			if _, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, ref.StorySceneID); err != nil {
+			scene, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, ref.StorySceneID)
+			if err != nil {
+				s.logger.Error("story scene not found for reference",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("storyId", storyboard.StoryID),
+					zap.String("storySceneId", ref.StorySceneID),
+					zap.Int("refIndex", i),
+					zap.Error(err))
 				return fmt.Errorf("story scene %s not found or not part of story", ref.StorySceneID)
 			}
 			if ref.Sequence == 0 {
 				ref.Sequence = i
 			}
+			s.logger.Debug("scene reference validated",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("storySceneId", ref.StorySceneID),
+				zap.String("sceneTitle", scene.Title),
+				zap.Int("sequence", ref.Sequence))
 		}
 	}
+	s.logger.Debug("storyboard assets validation completed",
+		zap.String("storyboardId", storyboard.ID))
 	return nil
 }
 
 // DeleteStoryboard 删除 storyboard
 func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error {
+	s.logger.Info("deleting storyboard",
+		zap.String("storyboardId", id),
+		zap.String("userId", userID))
+
 	// 验证权限
 	storyboard, err := s.repo.StoryboardByID(ctx, id)
 	if err != nil {
+		s.logger.Error("failed to get storyboard for deletion",
+			zap.String("storyboardId", id),
+			zap.Error(err))
 		return err
 	}
 
 	if storyboard.CreatorID != userID {
+		s.logger.Warn("permission denied: user is not the creator",
+			zap.String("storyboardId", id),
+			zap.String("userId", userID),
+			zap.String("creatorId", storyboard.CreatorID))
 		return fmt.Errorf("permission denied: not the creator")
 	}
 
+	s.logger.Debug("storyboard deletion authorized",
+		zap.String("storyboardId", id),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("title", storyboard.Title))
+
 	// 删除
 	if err := s.repo.DeleteStoryboard(ctx, id); err != nil {
+		s.logger.Error("failed to delete storyboard from database",
+			zap.String("storyboardId", id),
+			zap.Error(err))
 		return fmt.Errorf("failed to delete storyboard: %w", err)
 	}
 
@@ -416,18 +573,26 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 			zap.String("storyId", storyboard.StoryID),
 			zap.Error(err))
 		// 不返回错误，因为故事板已经删除成功
+	} else {
+		s.logger.Debug("story storyboard count decremented",
+			zap.String("storyId", storyboard.StoryID))
 	}
 
-	s.logger.Info("storyboard deleted",
+	s.logger.Info("storyboard deleted successfully",
 		zap.String("id", id),
 		zap.String("userId", userID),
-	)
+		zap.String("storyId", storyboard.StoryID))
 
 	return nil
 }
 
 // ListStoryboards 获取故事的 storyboards 列表
 func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Info("listing storyboards",
+		zap.String("storyId", storyID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
@@ -437,14 +602,30 @@ func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, of
 
 	storyboards, err := s.repo.StoryboardsByStory(ctx, storyID, limit, offset)
 	if err != nil {
+		s.logger.Error("failed to list storyboards",
+			zap.String("storyId", storyID),
+			zap.Int("limit", limit),
+			zap.Int("offset", offset),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to list storyboards: %w", err)
 	}
+
+	s.logger.Info("storyboards listed successfully",
+		zap.String("storyId", storyID),
+		zap.Int("count", len(storyboards)),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
 
 	return storyboards, nil
 }
 
 // ListRootStoryboards 获取故事的根 storyboards（ParentID 为空或 "__root__"）
 func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Info("listing root storyboards",
+		zap.String("storyId", storyID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
@@ -454,14 +635,31 @@ func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit
 
 	storyboards, err := s.repo.RootStoryboardsByStory(ctx, storyID, limit, offset)
 	if err != nil {
+		s.logger.Error("failed to list root storyboards",
+			zap.String("storyId", storyID),
+			zap.Int("limit", limit),
+			zap.Int("offset", offset),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to list root storyboards: %w", err)
 	}
+
+	s.logger.Info("root storyboards listed successfully",
+		zap.String("storyId", storyID),
+		zap.Int("count", len(storyboards)),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
 
 	return storyboards, nil
 }
 
 // ListStoryboardsByParent 获取指定父级的 storyboards
 func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Info("listing storyboards by parent",
+		zap.String("storyId", storyID),
+		zap.String("parentId", parentID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
@@ -471,28 +669,61 @@ func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID
 
 	storyboards, err := s.repo.StoryboardsByParent(ctx, storyID, parentID, limit, offset)
 	if err != nil {
+		s.logger.Error("failed to list storyboards by parent",
+			zap.String("storyId", storyID),
+			zap.String("parentId", parentID),
+			zap.Int("limit", limit),
+			zap.Int("offset", offset),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to list storyboards by parent: %w", err)
 	}
+
+	s.logger.Info("storyboards by parent listed successfully",
+		zap.String("storyId", storyID),
+		zap.String("parentId", parentID),
+		zap.Int("count", len(storyboards)),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
 
 	return storyboards, nil
 }
 
 // GetStoryboardChildren 获取子 storyboards (forks/continuations)
 func (s *Service) GetStoryboardChildren(ctx context.Context, parentID string) ([]*domain.Storyboard, error) {
+	s.logger.Info("getting storyboard children",
+		zap.String("parentId", parentID))
+
 	children, err := s.repo.StoryboardChildren(ctx, parentID)
 	if err != nil {
+		s.logger.Error("failed to get storyboard children",
+			zap.String("parentId", parentID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to get children: %w", err)
 	}
+
+	s.logger.Info("storyboard children retrieved successfully",
+		zap.String("parentId", parentID),
+		zap.Int("childCount", len(children)))
 
 	return children, nil
 }
 
 // GetStoryboardTree 获取完整的 storyboard 树
 func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*domain.Storyboard, error) {
+	s.logger.Info("getting storyboard tree",
+		zap.String("rootId", rootID))
+
 	tree, err := s.repo.StoryboardTree(ctx, rootID)
 	if err != nil {
+		s.logger.Error("failed to get storyboard tree",
+			zap.String("rootId", rootID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to get tree: %w", err)
 	}
+
+	s.logger.Info("storyboard tree retrieved successfully",
+		zap.String("rootId", rootID),
+		zap.Int("nodeCount", len(tree)))
 
 	return tree, nil
 }
@@ -522,11 +753,24 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, limit, offset int) ([]*
 
 // ForkStoryboard Fork 一个 storyboard
 func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, newStoryboard *domain.Storyboard) error {
+	s.logger.Info("forking storyboard",
+		zap.String("parentId", parentID),
+		zap.String("userId", userID),
+		zap.String("newTitle", newStoryboard.Title))
+
 	// 验证父节点存在
 	parent, err := s.repo.StoryboardByID(ctx, parentID)
 	if err != nil {
+		s.logger.Error("parent storyboard not found for fork",
+			zap.String("parentId", parentID),
+			zap.Error(err))
 		return fmt.Errorf("parent storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("parent storyboard found for fork",
+		zap.String("parentId", parentID),
+		zap.String("parentTitle", parent.Title),
+		zap.String("parentStoryId", parent.StoryID))
 
 	// 设置基本信息
 	newStoryboard.StoryID = parent.StoryID
@@ -535,16 +779,32 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 
 	// 如果用户提供了新的 rawInput，调用 AI 生成新内容
 	if s.geminiClient != nil && newStoryboard.RawInput != "" {
+		s.logger.Info("starting AI generation for forked storyboard",
+			zap.String("parentId", parentID),
+			zap.String("newStoryboardId", newStoryboard.ID),
+			zap.String("rawInput", truncateForLog(newStoryboard.RawInput, 200)))
 		if err := s.GenerateStoryboardWithAI(ctx, newStoryboard); err != nil {
 			s.logger.Warn("AI generation failed for fork",
+				zap.String("parentId", parentID),
+				zap.String("newStoryboardId", newStoryboard.ID),
 				zap.Error(err))
+		} else {
+			s.logger.Info("AI generation completed for forked storyboard",
+				zap.String("newStoryboardId", newStoryboard.ID),
+				zap.Int("scenesGenerated", len(newStoryboard.StoryboardScenes)))
 		}
 	} else {
 		// 否则，复制父节点的内容
+		s.logger.Debug("copying parent content for fork",
+			zap.String("parentId", parentID),
+			zap.String("newStoryboardId", newStoryboard.ID))
 		newStoryboard.Content = parent.Content
 	}
 
 	if len(newStoryboard.CharacterRefs) == 0 && len(parent.CharacterRefs) > 0 {
+		s.logger.Debug("copying character refs from parent",
+			zap.String("parentId", parentID),
+			zap.Int("characterRefCount", len(parent.CharacterRefs)))
 		newStoryboard.CharacterRefs = make([]domain.StoryboardCharacterRef, len(parent.CharacterRefs))
 		for i, ref := range parent.CharacterRefs {
 			newStoryboard.CharacterRefs[i] = domain.StoryboardCharacterRef{
@@ -557,6 +817,9 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 	}
 
 	if len(newStoryboard.SceneRefs) == 0 && len(parent.SceneRefs) > 0 {
+		s.logger.Debug("copying scene refs from parent",
+			zap.String("parentId", parentID),
+			zap.Int("sceneRefCount", len(parent.SceneRefs)))
 		newStoryboard.SceneRefs = make([]domain.StoryboardSceneRef, len(parent.SceneRefs))
 		for i, ref := range parent.SceneRefs {
 			newStoryboard.SceneRefs[i] = domain.StoryboardSceneRef{
@@ -568,15 +831,24 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 	}
 
 	// 创建 fork
+	s.logger.Debug("saving forked storyboard to database",
+		zap.String("parentId", parentID),
+		zap.String("newStoryboardId", newStoryboard.ID))
 	if err := s.repo.ForkStoryboard(ctx, parentID, userID, newStoryboard); err != nil {
+		s.logger.Error("failed to fork storyboard in database",
+			zap.String("parentId", parentID),
+			zap.String("newStoryboardId", newStoryboard.ID),
+			zap.Error(err))
 		return fmt.Errorf("failed to fork storyboard: %w", err)
 	}
 
-	s.logger.Info("storyboard forked",
+	s.logger.Info("storyboard forked successfully",
 		zap.String("parentId", parentID),
 		zap.String("newId", newStoryboard.ID),
 		zap.String("userId", userID),
-	)
+		zap.String("newTitle", newStoryboard.Title),
+		zap.String("storyId", newStoryboard.StoryID),
+		zap.Int("sceneCount", len(newStoryboard.StoryboardScenes)))
 
 	// 创建通知给父节点作者
 	if parent.CreatorID != userID {
@@ -673,14 +945,21 @@ func (s *Service) LikeStoryboard(ctx context.Context, userID, storyboardID strin
 
 // UnlikeStoryboard 取消点赞 storyboard
 func (s *Service) UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error {
+	s.logger.Info("unliking storyboard",
+		zap.String("userId", userID),
+		zap.String("storyboardId", storyboardID))
+
 	if err := s.repo.UnlikeStoryboard(ctx, userID, storyboardID); err != nil {
+		s.logger.Error("failed to unlike storyboard",
+			zap.String("userId", userID),
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return fmt.Errorf("failed to unlike storyboard: %w", err)
 	}
 
-	s.logger.Info("storyboard unliked",
+	s.logger.Info("storyboard unliked successfully",
 		zap.String("userId", userID),
-		zap.String("storyboardId", storyboardID),
-	)
+		zap.String("storyboardId", storyboardID))
 
 	return nil
 }
@@ -689,15 +968,40 @@ func (s *Service) UnlikeStoryboard(ctx context.Context, userID, storyboardID str
 // 业务数据：storyboard的内容和scenes
 // AI任务数据：通过AIGenerationService记录
 func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *domain.Storyboard) error {
+	s.logger.Info("starting AI storyboard generation",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("creatorId", storyboard.CreatorID),
+		zap.String("rawInput", truncateForLog(storyboard.RawInput, 200)),
+		zap.Int("sceneCount", storyboard.SceneCount),
+		zap.Bool("isStandalone", storyboard.IsStandalone))
+
 	// 1. 获取故事背景信息
 	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
 	if err != nil {
+		s.logger.Error("failed to get story for AI generation",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
 		return fmt.Errorf("failed to get story: %w", err)
 	}
 
+	s.logger.Debug("story retrieved for AI generation",
+		zap.String("storyId", story.ID),
+		zap.String("storyTitle", story.Title),
+		zap.String("storyGenre", story.Genre))
+
 	// 2. 构建上下文和提示词
+	s.logger.Debug("building storyboard context and prompt",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("characterRefs", len(storyboard.CharacterRefs)),
+		zap.Int("sceneRefs", len(storyboard.SceneRefs)))
 	contextInfo := s.buildStoryboardContext(ctx, storyboard, story)
 	prompt := s.buildStoryboardPrompt(storyboard, story, contextInfo)
+	s.logger.Debug("storyboard context and prompt built",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("contextLength", len(contextInfo)),
+		zap.Int("promptLength", len(prompt)))
 	systemPrompt := `你是专业的故事创作助手，擅长创建生动的故事分镜。
 重要要求：
 1. 直接返回纯JSON，不要使用markdown代码块（不要用` + "```json" + `或` + "```" + `包裹）
@@ -741,11 +1045,18 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 	}
 
 	// 4. 解析生成结果
+	s.logger.Debug("parsing AI generation result",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("responseLength", len(result.Text)))
 	storyboardResult := s.parseStoryboardResult(result.Text)
 
 	// 5. 更新业务数据：storyboard 内容
 	storyboard.Content = storyboardResult.Content
 	storyboard.IsAIGenerated = true
+	s.logger.Debug("storyboard content updated from AI generation",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("contentLength", len(storyboard.Content)),
+		zap.Int("scenesCount", len(storyboardResult.Scenes)))
 
 	// 将 map 转换为 StoryboardScene 对象 (AI-generated plot scenes)
 	storyboardScenes := make([]domain.StoryboardScene, 0, len(storyboardResult.Scenes))
@@ -790,9 +1101,18 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 
 	// 6. 可选：生成场景图片
 	if storyboardResult.GenerateImages && s.genAPI != nil {
+		s.logger.Info("starting scene image generation",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 		if err := s.generateSceneImages(ctx, storyboard); err != nil {
-			s.logger.Warn("failed to generate scene images", zap.Error(err))
+			s.logger.Warn("failed to generate scene images",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
 			// 图片生成失败不影响整体流程
+		} else {
+			s.logger.Info("scene images generation completed",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 		}
 	}
 
@@ -801,45 +1121,78 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 
 // getAncestorStoryboards fetches up to maxLevels ancestor storyboards in chronological order (oldest first)
 func (s *Service) getAncestorStoryboards(ctx context.Context, storyboard *domain.Storyboard, maxLevels int) []*domain.Storyboard {
+	s.logger.Debug("fetching ancestor storyboards",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("parentId", storyboard.ParentID),
+		zap.Int("maxLevels", maxLevels))
+
 	var ancestors []*domain.Storyboard
 	currentParentID := storyboard.ParentID
 
 	for i := 0; i < maxLevels; i++ {
 		if currentParentID == "" || currentParentID == domain.StoryboardRootMarker {
+			s.logger.Debug("reached root marker, stopping ancestor fetch",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("ancestorsFound", len(ancestors)))
 			break
 		}
 
 		parent, err := s.repo.StoryboardByID(ctx, currentParentID)
 		if err != nil {
 			s.logger.Warn("failed to fetch ancestor storyboard",
+				zap.String("storyboardId", storyboard.ID),
 				zap.String("parentId", currentParentID),
+				zap.Int("level", i+1),
 				zap.Error(err))
 			break
 		}
 
 		// Prepend to get chronological order (oldest first)
 		ancestors = append([]*domain.Storyboard{parent}, ancestors...)
+		s.logger.Debug("ancestor storyboard fetched",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("ancestorId", parent.ID),
+			zap.String("ancestorTitle", parent.Title),
+			zap.Int("level", i+1),
+			zap.Int("totalAncestors", len(ancestors)))
 		currentParentID = parent.ParentID
 	}
+
+	s.logger.Debug("ancestor storyboards fetch completed",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("ancestorsFound", len(ancestors)))
 
 	return ancestors
 }
 
 // buildStoryboardContext 构建 storyboard 生成上下文
 func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story) string {
+	s.logger.Debug("building storyboard context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyId", story.ID),
+		zap.Bool("isStandalone", storyboard.IsStandalone))
+
 	var context string
 
 	// 添加故事信息
 	context += fmt.Sprintf("故事标题: %s\n", story.Title)
 	context += fmt.Sprintf("故事简介: %s\n\n", story.Description)
+	s.logger.Debug("added story information to context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyTitle", story.Title))
 
 	// 如果是独立故事板，不添加父节点内容
 	if storyboard.IsStandalone {
 		context += "（独立故事线，不参考前情）\n\n"
+		s.logger.Debug("storyboard is standalone, skipping ancestor context",
+			zap.String("storyboardId", storyboard.ID))
 	} else if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
 		// 获取最多5级祖先故事板作为上下文
 		ancestors := s.getAncestorStoryboards(ctx, storyboard, 5)
 		if len(ancestors) > 0 {
+			s.logger.Debug("adding ancestor context",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("ancestorCount", len(ancestors)))
 			context += "前情提要（按时间顺序）：\n"
 			for i, ancestor := range ancestors {
 				// 限制每个祖先内容长度，避免上下文过长
@@ -847,11 +1200,17 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 				context += fmt.Sprintf("\n【第%d章 - %s】\n%s\n", i+1, ancestor.Title, ancestorContent)
 			}
 			context += "\n"
+		} else {
+			s.logger.Debug("no ancestors found for context",
+				zap.String("storyboardId", storyboard.ID))
 		}
 	}
 
 	// 添加选定的角色信息
 	if len(storyboard.CharacterRefs) > 0 {
+		s.logger.Debug("adding character references to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("characterCount", len(storyboard.CharacterRefs)))
 		context += "参与角色：\n"
 		for _, ref := range storyboard.CharacterRefs {
 			if ref.Character != nil {
@@ -867,6 +1226,9 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 
 	// 添加选定的故事场景（静态地点）作为可用场景
 	if len(storyboard.SceneRefs) > 0 {
+		s.logger.Debug("adding scene references to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(storyboard.SceneRefs)))
 		context += "可用场景地点（剧情应发生在这些场景中）：\n"
 		for _, ref := range storyboard.SceneRefs {
 			if ref.StoryScene != nil {
@@ -883,11 +1245,19 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 		context += "\n"
 	}
 
+	s.logger.Debug("storyboard context built",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("contextLength", len(context)))
+
 	return context
 }
 
 // buildStoryboardPrompt 构建 storyboard 生成提示词
 func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *domain.Story, contextInfo string) string {
+	s.logger.Debug("building storyboard prompt",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("requestedSceneCount", storyboard.SceneCount))
+
 	prompt := "作为专业的故事创作者，请根据以下信息生成精彩的故事分镜内容：\n\n"
 
 	if contextInfo != "" {
@@ -900,6 +1270,10 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	sceneCount := storyboard.SceneCount
 	if sceneCount < 2 || sceneCount > 5 {
 		sceneCount = 3
+		s.logger.Debug("scene count adjusted to default",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("requested", storyboard.SceneCount),
+			zap.Int("adjusted", sceneCount))
 	}
 
 	prompt += "请直接返回纯JSON（不要使用```包裹），格式如下：\n"
@@ -918,6 +1292,11 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "  \"generateImages\": false\n"
 	prompt += "}\n"
 	prompt += fmt.Sprintf("\n重要：请生成恰好 %d 个场景，确保JSON格式完整闭合。", sceneCount)
+
+	s.logger.Debug("storyboard prompt built",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("promptLength", len(prompt)),
+		zap.Int("sceneCount", sceneCount))
 
 	return prompt
 }
@@ -993,15 +1372,33 @@ func truncateForLog(s string, maxLen int) string {
 // generateSceneImages 为故事板场景生成图片（使用AI生成服务记录）
 func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.Storyboard) error {
 	if len(storyboard.StoryboardScenes) == 0 || s.aiGenService == nil {
+		s.logger.Debug("skipping scene image generation",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(storyboard.StoryboardScenes)),
+			zap.Bool("aiGenServiceAvailable", s.aiGenService != nil))
 		return nil
 	}
+
+	s.logger.Info("generating images for storyboard scenes",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("totalScenes", len(storyboard.StoryboardScenes)))
 
 	// 为每个故事板场景生成图片
 	for i := range storyboard.StoryboardScenes {
 		scene := &storyboard.StoryboardScenes[i]
 
+		s.logger.Debug("generating image for scene",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneIndex", i),
+			zap.String("sceneId", scene.ID),
+			zap.String("sceneTitle", scene.Title))
+
 		// 构建图片提示词
 		prompt := s.buildStoryboardSceneImagePrompt(scene)
+		s.logger.Debug("scene image prompt built",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneIndex", i),
+			zap.Int("promptLength", len(prompt)))
 
 		// 使用AI生成服务生成图片（自动记录AI使用数据）
 		imageReq := &GenerateImageRequest{
@@ -1024,26 +1421,48 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		result, err := s.aiGenService.GenerateImage(ctx, imageReq)
 		if err != nil {
 			s.logger.Warn("failed to generate scene image",
+				zap.String("storyboardId", storyboard.ID),
 				zap.Int("sceneIndex", i),
-				zap.String("aiRecordId", ""),
+				zap.String("sceneId", scene.ID),
+				zap.String("sceneTitle", scene.Title),
 				zap.Error(err))
 			continue
 		}
 
 		if len(result.ImageURLs) > 0 {
 			scene.Image = result.ImageURLs[0]
-			s.logger.Info("scene image generated",
+			s.logger.Info("scene image generated successfully",
+				zap.String("storyboardId", storyboard.ID),
 				zap.Int("sceneIndex", i),
+				zap.String("sceneId", scene.ID),
+				zap.String("sceneTitle", scene.Title),
 				zap.String("aiRecordId", result.RecordID),
-				zap.String("imageURL", scene.Image))
+				zap.String("imageURL", scene.Image),
+				zap.Int("tokensUsed", result.TokensUsed))
+		} else {
+			s.logger.Warn("scene image generation returned no URLs",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneIndex", i),
+				zap.String("sceneId", scene.ID))
 		}
 	}
+
+	s.logger.Info("scene images generation completed",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("totalScenes", len(storyboard.StoryboardScenes)))
 
 	return nil
 }
 
 // buildStoryboardSceneImagePrompt 构建故事板场景图片提示词
 func (s *Service) buildStoryboardSceneImagePrompt(scene *domain.StoryboardScene) string {
+	s.logger.Debug("building scene image prompt",
+		zap.String("sceneId", scene.ID),
+		zap.String("sceneTitle", scene.Title),
+		zap.String("location", scene.Location),
+		zap.String("timeOfDay", scene.TimeOfDay),
+		zap.String("mood", scene.Mood))
+
 	prompt := scene.Description
 
 	if scene.Location != "" {
@@ -1057,6 +1476,10 @@ func (s *Service) buildStoryboardSceneImagePrompt(scene *domain.StoryboardScene)
 	if scene.Mood != "" {
 		prompt += fmt.Sprintf(", 氛围: %s", scene.Mood)
 	}
+
+	s.logger.Debug("scene image prompt built",
+		zap.String("sceneId", scene.ID),
+		zap.Int("promptLength", len(prompt)))
 
 	return prompt
 }
