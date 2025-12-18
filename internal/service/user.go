@@ -398,11 +398,19 @@ func (s *Service) UserProfile(ctx context.Context, userID string) (*domain.User,
 		if err := c.Get(ctx, key, &cachedUser); err == nil {
 			s.logger.Debug("user profile cache hit",
 				zap.String("userID", userID))
+			// Record cache hit
+			if s.metrics != nil {
+				s.metrics.RecordCacheHit("user")
+			}
 			return &cachedUser, nil
 		} else {
 			s.logger.Debug("user profile cache miss",
 				zap.String("userID", userID),
 				zap.Error(err))
+			// Record cache miss
+			if s.metrics != nil {
+				s.metrics.RecordCacheMiss("user")
+			}
 		}
 	}
 

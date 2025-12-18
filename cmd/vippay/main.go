@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -12,12 +13,16 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/config"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	paypkg "github.com/grapestree/fgrapery/grapery/internal/service/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	pay "github.com/grapestree/fgrapery/grapery/internal/transport/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"github.com/grapestree/fgrapery/grapery/internal/version"
-	"github.com/sirupsen/logrus"
 )
 
 var printVersion = flag.Bool("version", false, "app build version")
@@ -30,17 +35,102 @@ func main() {
 		return
 	}
 
-	// 加载配置（简化版，不依赖GlobalConfig）
-	logrus.Info("Starting VIP payment service...")
+	// Get host information
+	hostname := utils.GetHostname()
+	hostIP := utils.GetHostIP()
+
+	// Load configuration
+	var cfg config.Config
+	var err error
+
+	if *configPath != "" {
+		cfg, err = config.LoadFromFile(*configPath, "vippay")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Println("loading config from environment variables")
+		cfg = config.Load("vippay")
+	}
+
+	// Initialize telemetry manager
+	telemetryConfig := telemetry.TelemetryManagerConfig{
+		LogLevel: cfg.LogLevel,
+	}
+
+	// Configure SLS if enabled
+	if cfg.Telemetry.SLS.Enabled {
+		telemetryConfig.SLS = &telemetry.SLSConfig{
+			Endpoint:        cfg.Telemetry.SLS.Endpoint,
+			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,
+			AccessKeySecret: cfg.Telemetry.SLS.AccessKeySecret,
+			Project:         cfg.Telemetry.SLS.Project,
+			Logstore:        cfg.Telemetry.SLS.Logstore,
+			Topic:           cfg.Telemetry.SLS.Topic,
+			Source:          cfg.Telemetry.SLS.Source,
+		}
+	}
+
+	// Configure Prometheus if enabled
+	if cfg.Telemetry.Prometheus.Enabled {
+		fmt.Println("telemetry Prometheus enable")
+		prometheusConfigData, _ := json.Marshal(cfg.Telemetry.Prometheus)
+		fmt.Println("prometheus config:", string(prometheusConfigData))
+		telemetryConfig.Prometheus = &telemetry.PrometheusConfig{
+			Enabled:      cfg.Telemetry.Prometheus.Enabled,
+			Path:         cfg.Telemetry.Prometheus.Path,
+			PushGateway:  cfg.Telemetry.Prometheus.PushGateway,
+			PushInterval: cfg.Telemetry.Prometheus.PushInterval,
+			JobName:      cfg.Telemetry.Prometheus.JobName,
+			AccessKey:    cfg.Telemetry.SLS.AccessKeyID,
+			SecretKey:    cfg.Telemetry.SLS.AccessKeySecret,
+			Grouping: map[string]string{
+				"appname": "vippay",
+				"host":    hostname,
+				"ip":      hostIP,
+			},
+		}
+	} else {
+		fmt.Println("telemetry Prometheus disable")
+	}
+
+	// Configure tracing if enabled
+	if cfg.Telemetry.Tracing.Enabled {
+		telemetryConfig.Tracing = &telemetry.TracingConfig{
+			Enabled:        cfg.Telemetry.Tracing.Enabled,
+			ServiceName:    cfg.Telemetry.Tracing.ServiceName,
+			ServiceVersion: cfg.Telemetry.Tracing.ServiceVersion,
+			Environment:    cfg.Telemetry.Tracing.Environment,
+			JaegerEndpoint: cfg.Telemetry.Tracing.JaegerEndpoint,
+			OTLPEndpoint:   cfg.Telemetry.Tracing.OTLPEndpoint,
+			SamplingRatio:  cfg.Telemetry.Tracing.SamplingRatio,
+		}
+	} else {
+		fmt.Println("telemetry tracing disable")
+	}
+
+	telemetryManager, err := telemetry.NewTelemetryManager(telemetryConfig)
+	if err != nil {
+		panic(err)
+	}
+	defer telemetryManager.Close()
+
+	logger := telemetryManager.Logger
+
+	logger.Info("starting grapery vip payment service",
+		zap.String("env", cfg.Env),
+		zap.String("addr", cfg.Addr()),
+	)
 
 	// 初始化数据库
-	err := initializeServices()
+	err = initializeServices(logger)
 	if err != nil {
-		logrus.Fatal("initialize services failed : ", err)
+		logger.Fatal("initialize services failed", zap.Error(err))
 	}
 
 	// 创建 Gin 引擎
-	router := createGinEngine()
+	router := createGinEngine(cfg, logger, telemetryManager)
 
 	// 注册路由
 	registerRoutes(router)
@@ -55,20 +145,39 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Setup graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Start metrics pusher if configured
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.PushGateway != "" {
+		go telemetryManager.Metrics.Start(context.Background())
+		logger.Info("Metrics pusher started",
+			zap.String("gateway", cfg.Telemetry.Prometheus.PushGateway),
+			zap.Int("interval", cfg.Telemetry.Prometheus.PushInterval),
+		)
+	}
+
 	// 启动服务器
 	go func() {
-		logrus.Infof("Starting VIP payment server on port %s", port)
+		logger.Info("VIP payment server listening",
+			zap.String("addr", ":"+port),
+		)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logrus.Fatalf("start server failed: %v", err)
+			logger.Fatal("start server failed", zap.Error(err))
 		}
 	}()
 
+	// Wait for interrupt signal
+	<-ctx.Done()
+	logger.Info("shutdown signal received")
+
 	// 优雅关闭
-	gracefulShutdown(server)
+	gracefulShutdown(ctx, server, logger)
 }
 
 // initializeServices 初始化服务
-func initializeServices() error {
+func initializeServices(logger *zap.Logger) error {
 	// 从环境变量获取数据库配置
 	dbUser := os.Getenv("DB_USERNAME")
 	if dbUser == "" {
@@ -90,19 +199,18 @@ func initializeServices() error {
 	// 初始化支付数据库
 	err := paymodels.Init(dbUser, dbPass, dbAddr, dbName)
 	if err != nil {
-		logrus.Fatal("init vippay database failed : ", err)
+		logger.Fatal("init vippay database failed", zap.Error(err))
 		return err
 	}
 
-	logrus.Info("init vippay database success")
+	logger.Info("init vippay database success")
 	return nil
 }
 
 // createGinEngine 创建 Gin 引擎
-func createGinEngine() *gin.Engine {
+func createGinEngine(cfg config.Config, logger *zap.Logger, telemetryManager *telemetry.TelemetryManager) *gin.Engine {
 	// 设置 Gin 模式
-	logLevel := getLogLevel()
-	if logLevel == "debug" {
+	if cfg.Env == "development" || cfg.LogLevel == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -115,28 +223,37 @@ func createGinEngine() *gin.Engine {
 	router.Use(
 		// 恢复中间件 - 处理 panic
 		gin.Recovery(),
-		// 日志中间件
-		gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-			return fmt.Sprintf("[VIP-PAY] %v | %3d | %13v | %15s | %-7s %s\n%s",
-				param.TimeStamp.Format("2006/01/02 - 15:04:05"),
-				param.StatusCode,
-				param.Latency,
-				param.ClientIP,
-				param.Method,
-				param.Path,
-				param.ErrorMessage,
-			)
-		}),
-		// CORS 中间件
-		cors.New(cors.Config{
-			AllowOrigins:     []string{"*"},
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
-			ExposeHeaders:    []string{"Content-Length"},
-			AllowCredentials: true,
-			MaxAge:           12 * time.Hour,
-		}),
 	)
+
+	// Configure CORS
+	allowOrigins := cfg.AllowOrigins
+	if len(allowOrigins) == 0 {
+		allowOrigins = []string{"*"}
+	}
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     allowOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", telemetry.CorrelationIDHeader},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// Add telemetry middleware
+	router.Use(telemetry.GinCorrelationMiddleware(logger))
+	router.Use(telemetry.GinRequestIDMiddleware(logger))
+	if telemetryManager.Tracer != nil {
+		router.Use(telemetryManager.Tracer.GinTraceMiddleware())
+	}
+	if telemetryManager.Metrics != nil {
+		router.Use(telemetry.GinHTTPMiddleware(logger, telemetryManager.Metrics))
+	}
+
+	// Add metrics endpoint if Prometheus is enabled
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.Enabled {
+		router.GET(cfg.Telemetry.Prometheus.Path, gin.WrapH(telemetryManager.Metrics.Handler()))
+		logger.Info("Metrics endpoint registered", zap.String("path", cfg.Telemetry.Prometheus.Path))
+	}
 
 	return router
 }
@@ -526,24 +643,19 @@ func createIAPConfig() *paypkg.IAPConfig {
 }
 
 // gracefulShutdown 优雅关闭
-func gracefulShutdown(server *http.Server) {
-	// 等待中断信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	<-quit
-
-	logrus.Info("Shutting down VIP payment server...")
+func gracefulShutdown(ctx context.Context, server *http.Server, logger *zap.Logger) {
+	logger.Info("Shutting down VIP payment server...")
 
 	// 设置关闭超时
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// 优雅关闭服务器
-	if err := server.Shutdown(ctx); err != nil {
-		logrus.Fatal("Server forced to shutdown:", err)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("graceful shutdown failed", zap.Error(err))
 	}
 
-	logrus.Info("VIP payment server exited")
+	logger.Info("VIP payment server exited")
 }
 
 // Helper functions for safe config access
@@ -563,11 +675,4 @@ func getVipPayDomain() string {
 		return domain
 	}
 	return "https://www.grapery.xyz"
-}
-
-func getLogLevel() string {
-	if level := os.Getenv("LOG_LEVEL"); level != "" {
-		return level
-	}
-	return "info"
 }

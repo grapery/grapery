@@ -153,6 +153,16 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"newPassword" binding:"required,min=6"`
 }
 
+// LoginInfo 登录时的客户端信息
+type LoginInfo struct {
+	IPAddress string // 客户端 IP 地址
+	Location  string // 地理位置（可选，可通过 IP 地址查询）
+	Device    string // 设备类型
+	OS        string // 操作系统
+	Browser   string // 浏览器
+	UserAgent string // 完整的 User-Agent 字符串
+}
+
 // Register 用户注册
 func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginResponse, error) {
 	s.logger.Info("user registration attempt", zap.String("email", req.Email))
@@ -286,6 +296,22 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	// 缓存用户信息
 	s.cacheUser(ctx, user)
 
+	// Record metrics
+	if s.metrics != nil {
+		source := "web"
+		if req.InvitationCode != "" {
+			source = "invitation"
+		}
+		s.metrics.RecordUserRegistration(source)
+		// 更新用户总数
+		s.metrics.UserCount.Inc()
+	}
+	
+	// 记录活跃用户（注册也算活跃）
+	if s.userStatsService != nil {
+		_ = s.userStatsService.RecordActiveUser(ctx, user.ID)
+	}
+
 	s.logger.Info("user registered successfully",
 		zap.String("userID", user.ID),
 		zap.String("username", user.Username))
@@ -299,7 +325,8 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 }
 
 // Login 用户登录
-func (s *Service) Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error) {
+// loginInfo 包含登录时的客户端信息（IP、User-Agent 等），可选
+func (s *Service) Login(ctx context.Context, req *LoginRequest, loginInfo *LoginInfo) (*LoginResponse, error) {
 	s.logger.Info("user login attempt", zap.String("email", req.Email))
 
 	// 查找用户
@@ -343,6 +370,16 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*LoginResponse,
 
 	// 缓存用户信息
 	s.cacheUser(ctx, user)
+
+	// Record metrics
+	if s.metrics != nil {
+		s.metrics.RecordUserLogin("password")
+	}
+	
+	// 记录活跃用户
+	if s.userStatsService != nil {
+		_ = s.userStatsService.RecordActiveUser(ctx, user.ID)
+	}
 
 	s.logger.Info("user logged in successfully",
 		zap.String("userID", user.ID),

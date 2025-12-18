@@ -129,6 +129,12 @@ func (r *Repository) migrate() error {
 		&ChatThreadStoryboardBranch{},
 		&ChatMessageReaction{},
 		&ChatMessageToken{},
+		
+		// User statistics
+		&UserStatistics{},
+		
+		// User login records
+		&UserLoginRecord{},
 	}
 
 	r.log.Info("migrating database tables", zap.Int("total_models", len(models)))

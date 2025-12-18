@@ -200,11 +200,11 @@ func Load(app string) Config {
 				Source:          app,
 			},
 			Prometheus: PrometheusConfig{
-				Enabled:      getEnv("TELEMETRY_PROMETHEUS_ENABLED", "false") == "true",
-				Path:         getEnv("TELEMETRY_PROMETHEUS_PATH", "/metrics"),
-				PushGateway:  getEnv("TELEMETRY_PROMETHEUS_PUSH_GATEWAY", ""),
-				PushInterval: getEnvInt("TELEMETRY_PROMETHEUS_PUSH_INTERVAL", 60),
-				JobName:      getEnv("TELEMETRY_PROMETHEUS_JOB_NAME", "grapery"),
+				Enabled:      true,
+				Path:         "/metrics",
+				PushGateway:  "https://workspace-default-cms-1866841989078847-cn-hangzhou.cn-hangzhou.log.aliyuncs.com/prometheus/workspace-default-cms-1866841989078847-cn-hangzhou/aliyun-prom-s8l4110ylj/api/v1/pushgateway",
+				PushInterval: 60,
+				JobName:      "grapery",
 			},
 			Tracing: TracingConfig{
 				Enabled:        getEnv("TELEMETRY_TRACING_ENABLED", "false") == "true",

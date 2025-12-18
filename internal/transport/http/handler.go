@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -323,7 +324,25 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.Login(c.Request.Context(), &req)
+	// 提取登录信息
+	userAgent := c.Request.UserAgent()
+	device, os, browser := utils.ParseUserAgent(userAgent)
+	ipAddress := utils.GetClientIP(
+		c.Request.RemoteAddr,
+		c.GetHeader("X-Forwarded-For"),
+		c.GetHeader("X-Real-IP"),
+	)
+
+	loginInfo := &service.LoginInfo{
+		IPAddress: ipAddress,
+		Location:  "", // 可以通过 IP 地址查询地理位置，这里先留空
+		Device:    device,
+		OS:        os,
+		Browser:   browser,
+		UserAgent: userAgent,
+	}
+
+	resp, err := h.svc.Login(c.Request.Context(), &req, loginInfo)
 	if err != nil {
 		Error(c, CodeError, err.Error())
 		return

@@ -1639,6 +1639,11 @@ func (s *Service) updateStoryboardTokens(ctx context.Context, storyboardID strin
 		s.logger.Debug("storyboard tokens updated successfully",
 			zap.String("storyboardId", storyboardID),
 			zap.Int("tokens", tokens))
+
+		// Record metrics
+		if s.metrics != nil && tokens > 0 {
+			s.metrics.RecordStoryboardTokenConsumed(storyboardID, float64(tokens))
+		}
 	}
 }
 

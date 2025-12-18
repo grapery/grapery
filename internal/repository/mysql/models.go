@@ -33,6 +33,22 @@ type User struct {
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
+// UserLoginRecord 用户登录记录表
+type UserLoginRecord struct {
+	ID        uint           `gorm:"primaryKey;autoIncrement"`
+	UserID    string         `gorm:"size:36;not null;index"`
+	User      User           `gorm:"foreignKey:UserID"`
+	IPAddress string         `gorm:"size:45;index"`        // IPv4 or IPv6 address
+	Location  string         `gorm:"size:200"`             // 地理位置（如：北京市、上海市）
+	Device    string         `gorm:"size:100"`             // 设备类型（如：iPhone, Android, Windows, Mac）
+	OS        string         `gorm:"size:50"`              // 操作系统（如：iOS 17.0, Android 13, Windows 11）
+	Browser   string         `gorm:"size:100"`             // 浏览器（如：Chrome, Safari, Firefox）
+	UserAgent string         `gorm:"type:text"`            // 完整的 User-Agent 字符串
+	LoginAt   time.Time      `gorm:"autoCreateTime;index"` // 登录时间
+	CreatedAt time.Time      `gorm:"autoCreateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
 // Story database model
 type Story struct {
 	ID                string         `gorm:"primaryKey;size:36"`
@@ -1211,5 +1227,8 @@ func migrate(db *gorm.DB) error {
 
 		// 邀请码系统
 		&InvitationCode{},
+
+		// 用户统计
+		&UserStatistics{},
 	)
 }

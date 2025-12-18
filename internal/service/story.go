@@ -157,6 +157,16 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		zap.String("status", story.Status),
 		zap.Int("defaultSceneCount", defaultSceneCount))
 
+	// Record metrics
+	if s.metrics != nil {
+		s.metrics.RecordStoryCreation(story.Genre)
+		// Record story participant count (will be updated when contributors are added)
+		s.metrics.RecordStoryParticipantCount(story.ID, 1.0) // At least the author
+
+		// Update story count metric (increment by 1 since we just created one)
+		s.metrics.StoryCount.Inc()
+	}
+
 	// 如果用户选择使用AI丰富描述
 	if req.UseAIEnrich && req.Description != "" {
 		s.logger.Debug("AI enrichment requested",
@@ -390,6 +400,11 @@ func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, 
 		s.logger.Debug("story contributors fetched",
 			zap.String("storyID", storyID),
 			zap.Int("contributorCount", len(contributors)))
+
+		// Record metrics - update participant count
+		if s.metrics != nil {
+			s.metrics.RecordStoryParticipantCount(storyID, float64(len(contributors)))
+		}
 	}
 
 	s.logger.Info("story retrieved successfully",
@@ -2320,6 +2335,11 @@ func (s *Service) updateUserTokenUsage(ctx context.Context, userID string, token
 		zap.String("userID", userID),
 		zap.Int("tokensUsed", tokensUsed))
 
+	// Record metrics
+	if s.metrics != nil {
+		s.metrics.RecordUserTokenConsumed(userID, float64(tokensUsed))
+	}
+
 	return nil
 }
 
@@ -2396,6 +2416,15 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 		zap.String("contributorID", contributor.ID),
 	)
 
+	// Record metrics - update participant count
+	if s.metrics != nil {
+		// Get updated contributor count
+		contributors, err := s.repo.GetStoryContributors(ctx, storyID, 1000, 0)
+		if err == nil {
+			s.metrics.RecordStoryParticipantCount(storyID, float64(len(contributors)))
+		}
+	}
+
 	return contributor, nil
 }
 
@@ -2434,6 +2463,15 @@ func (s *Service) RemoveStoryContributor(ctx context.Context, operatorID, storyI
 		zap.String("storyID", storyID),
 		zap.String("contributorID", contributorID),
 	)
+
+	// Record metrics - update participant count
+	if s.metrics != nil {
+		// Get updated contributor count
+		contributors, err := s.repo.GetStoryContributors(ctx, storyID, 1000, 0)
+		if err == nil {
+			s.metrics.RecordStoryParticipantCount(storyID, float64(len(contributors)))
+		}
+	}
 
 	return nil
 }

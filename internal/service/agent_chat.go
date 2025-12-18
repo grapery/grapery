@@ -244,6 +244,9 @@ func (s *AgentChatService) generateAgentReply(ctx context.Context, thread *domai
 	if err := s.repo.IncrementCharacterTokens(ctx, character.ID, int64(tokensUsed)); err != nil {
 		s.logger.Warn("failed to increment character tokens", zap.Error(err))
 	}
+	
+	// Note: Metrics recording for AgentChatService would need to be added via Service layer
+	// For now, metrics are recorded in the main Service's chat.go
 
 	s.logger.Info("agent reply generated",
 		zap.String("messageId", agentReply.ID),

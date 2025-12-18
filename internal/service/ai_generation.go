@@ -11,6 +11,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
 )
@@ -22,6 +23,7 @@ type AIGenerationService struct {
 	geminiClient *gemini.Client
 	genAPI       *genapi.GenAPI
 	logger       *zap.Logger
+	metrics      *telemetry.Metrics // Prometheus metrics (optional)
 }
 
 // NewAIGenerationService 创建AI生成服务
@@ -32,6 +34,11 @@ func NewAIGenerationService(repo domain.Repository, geminiClient *gemini.Client,
 		genAPI:       genAPI,
 		logger:       logger,
 	}
+}
+
+// SetMetrics 设置 Prometheus metrics
+func (s *AIGenerationService) SetMetrics(metrics *telemetry.Metrics) {
+	s.metrics = metrics
 }
 
 // GenerateTextRequest 文本生成请求
@@ -164,6 +171,11 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	// 更新记录
 	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
+	}
+
+	// Record metrics
+	if s.metrics != nil {
+		s.metrics.RecordAIGeneration("gemini", "text")
 	}
 
 	s.logger.Info("AI text generation completed",
@@ -299,6 +311,15 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	if resp.Usage != nil {
 		record.TotalTokens = resp.Usage.TotalTokens
 		record.ImageCount = resp.Usage.ImageCount
+	}
+
+	// Record metrics
+	if s.metrics != nil {
+		provider := req.Provider
+		if provider == "" {
+			provider = "unknown"
+		}
+		s.metrics.RecordAIGeneration(provider, "image")
 	}
 
 	// 上传图片到OSS并替换URL

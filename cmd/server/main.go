@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	transport "github.com/grapestree/fgrapery/grapery/internal/transport/http"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 )
 
 func main() {
@@ -36,13 +38,21 @@ func main() {
 		fmt.Println("Grapery Server v1.0.0")
 		os.Exit(0)
 	}
+	var appname = "api-server"
+	if os.Getenv("APP_NAME") != "" {
+		appname = os.Getenv("APP_NAME")
+	}
+
+	// Get host information
+	hostname := utils.GetHostname()
+	hostIP := utils.GetHostIP()
 
 	// Load configuration
 	var cfg config.Config
 	var err error
 
 	if *configPath != "" {
-		cfg, err = config.LoadFromFile(*configPath, "api-server")
+		cfg, err = config.LoadFromFile(*configPath, appname)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
 			os.Exit(1)
@@ -50,7 +60,7 @@ func main() {
 	} else {
 		fmt.Println("loading config from environment variables")
 		// Fallback to environment variables only
-		cfg = config.Load("api-server")
+		cfg = config.Load(appname)
 	}
 
 	// Initialize telemetry manager
@@ -60,8 +70,6 @@ func main() {
 
 	// Configure SLS if enabled
 	if cfg.Telemetry.SLS.Enabled {
-		fmt.Println("telemetry sls enable")
-
 		telemetryConfig.SLS = &telemetry.SLSConfig{
 			Endpoint:        cfg.Telemetry.SLS.Endpoint,
 			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,
@@ -71,10 +79,6 @@ func main() {
 			Topic:           cfg.Telemetry.SLS.Topic,
 			Source:          cfg.Telemetry.SLS.Source,
 		}
-		slsConfigData, _ := json.Marshal(telemetryConfig.SLS)
-		fmt.Println("telemetryConfig sls config:", string(slsConfigData))
-	} else {
-		fmt.Println("telemetry sls disable")
 	}
 
 	// Configure Prometheus if enabled
@@ -88,6 +92,13 @@ func main() {
 			PushGateway:  cfg.Telemetry.Prometheus.PushGateway,
 			PushInterval: cfg.Telemetry.Prometheus.PushInterval,
 			JobName:      cfg.Telemetry.Prometheus.JobName,
+			AccessKey:    cfg.Telemetry.SLS.AccessKeyID,
+			SecretKey:    cfg.Telemetry.SLS.AccessKeySecret,
+			Grouping: map[string]string{
+				"appname": appname,
+				"host":    hostname,
+				"ip":      hostIP,
+			},
 		}
 	} else {
 		fmt.Println("telemetry Prometheus disable")
@@ -95,9 +106,6 @@ func main() {
 
 	// Configure tracing if enabled
 	if cfg.Telemetry.Tracing.Enabled {
-		fmt.Println("telemetry tracing enable")
-		tracingConfigData, _ := json.Marshal(cfg.Telemetry.Tracing)
-		fmt.Println("tracing config:", string(tracingConfigData))
 		telemetryConfig.Tracing = &telemetry.TracingConfig{
 			Enabled:        cfg.Telemetry.Tracing.Enabled,
 			ServiceName:    cfg.Telemetry.Tracing.ServiceName,
@@ -154,6 +162,14 @@ func main() {
 	// Initialize service
 	svc := service.New(repo, logger)
 
+	// Set metrics if enabled
+	if telemetryManager.Metrics != nil {
+		svc.SetMetrics(telemetryManager.Metrics)
+		// Start metrics collection
+		ctx := context.Background()
+		telemetryManager.Metrics.Start(ctx)
+	}
+
 	// Initialize AI clients
 	initAIClients(cfg, svc, logger)
 
@@ -203,6 +219,12 @@ func main() {
 		)
 	}
 
+	// Start user statistics persistence task (runs daily at midnight)
+	if svc.UserStatsService() != nil {
+		go startUserStatisticsTask(ctx, svc.UserStatsService(), logger)
+		logger.Info("User statistics task started")
+	}
+
 	// Start server in goroutine
 	go func() {
 		logger.Info("server listening", zap.String("addr", cfg.Addr()))
@@ -221,6 +243,48 @@ func main() {
 	}
 
 	logger.Info("server stopped")
+}
+
+// startUserStatisticsTask 启动用户统计持久化任务（每天凌晨执行）
+func startUserStatisticsTask(ctx context.Context, statsService *service.UserStatisticsService, logger *zap.Logger) {
+	// 立即执行一次（用于初始化）
+	go func() {
+		statsCtx := context.Background()
+		if err := statsService.PersistStatistics(statsCtx, time.Now()); err != nil {
+			logger.Warn("failed to persist user statistics", zap.Error(err))
+		}
+	}()
+
+	// 计算到下一个凌晨的时间
+	now := time.Now()
+	nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	durationUntilMidnight := nextMidnight.Sub(now)
+
+	// 等待到凌晨
+	select {
+	case <-time.After(durationUntilMidnight):
+		// 到达凌晨，开始定时任务
+	case <-ctx.Done():
+		return
+	}
+
+	// 每天凌晨执行一次
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			statsCtx := context.Background()
+			if err := statsService.PersistStatistics(statsCtx, time.Now()); err != nil {
+				logger.Warn("failed to persist user statistics", zap.Error(err))
+			} else {
+				logger.Info("user statistics persisted successfully")
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // initAIClients initializes AI generation clients based on configuration

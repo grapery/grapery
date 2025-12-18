@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // StoryFilter holds story query filters
 type StoryFilter struct {
@@ -220,6 +223,17 @@ type Repository interface {
 	GetPendingInvitation(ctx context.Context, groupID, inviteeID string) (*GroupInvitation, error)
 	GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*GroupInvitation, error)
 	UpdateInvitationStatus(ctx context.Context, id, status string) error
+
+	// ========== User Statistics operations ==========
+	CountAllUsers(ctx context.Context) (int, error)
+	CountNewUsersByDate(ctx context.Context, date time.Time) (int, error)
+	GetUserStatisticsByDate(ctx context.Context, date time.Time) (*UserStatistics, error)
+	SaveUserStatistics(ctx context.Context, stats *UserStatistics) error
+
+	// ========== User Login Record operations ==========
+	CreateUserLoginRecord(ctx context.Context, record *UserLoginRecord) error
+	GetUserLoginRecords(ctx context.Context, userID string, limit, offset int) ([]*UserLoginRecord, error)
+	GetLatestUserLoginRecord(ctx context.Context, userID string) (*UserLoginRecord, error)
 
 	// ========== Storyboard operations ==========
 	StoryboardByID(ctx context.Context, id string) (*Storyboard, error)

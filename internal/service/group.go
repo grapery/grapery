@@ -421,6 +421,14 @@ func (s *Service) GetGroupMembers(ctx context.Context, groupID string, limit, of
 		return nil, errors.New("failed to get group members")
 	}
 
+	// Record metrics - get total member count from group
+	if s.metrics != nil {
+		group, err := s.repo.GroupByID(ctx, groupID)
+		if err == nil {
+			s.metrics.RecordGroupMemberCount(groupID, float64(group.Members))
+		}
+	}
+
 	// 写入缓存
 	if c != nil && len(members) > 0 {
 		cacheKey := cache.GroupMembersListKey(groupID, limit, offset)
