@@ -60,8 +60,17 @@ func GinHTTPMiddleware(logger *zap.Logger, metrics *Metrics) gin.HandlerFunc {
 			metrics.DecActiveRequests()
 		}
 
+		// Get logger from context (may include trace_id if tracing middleware ran first)
+		log := logger
+		if ctxLogger := GinLoggerFromContext(c); ctxLogger != nil {
+			log = ctxLogger
+		} else {
+			// If no logger in context, add trace_id from context if available
+			log = LoggerWithTraceID(log, c.Request.Context())
+		}
+
 		// Log request
-		logger.Info("HTTP request",
+		log.Info("HTTP request",
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.String("route", route),
@@ -129,6 +138,14 @@ func (tp *TracerProvider) GinTraceMiddleware() gin.HandlerFunc {
 		// Update request context
 		c.Request = c.Request.WithContext(ctx)
 
+		// Add trace_id and span_id to logger if logger exists in context
+		if logger, exists := c.Get("logger"); exists {
+			if l, ok := logger.(*zap.Logger); ok {
+				logWithTrace := LoggerWithTraceID(l, ctx)
+				c.Set("logger", logWithTrace)
+			}
+		}
+
 		// Process request
 		c.Next()
 
@@ -170,8 +187,15 @@ func GinCorrelationMiddleware(logger *zap.Logger) gin.HandlerFunc {
 		ctx := ContextWithCorrelationID(c.Request.Context(), correlationID)
 		c.Request = c.Request.WithContext(ctx)
 
-		// Add to logger
-		log := logger.With(zap.String("correlation_id", correlationID))
+		// Get existing logger from context or use default
+		log := logger
+		if ctxLogger := GinLoggerFromContext(c); ctxLogger != nil {
+			log = ctxLogger
+		}
+
+		// Add correlation ID and trace_id to logger
+		log = log.With(zap.String("correlation_id", correlationID))
+		log = LoggerWithTraceID(log, c.Request.Context())
 		c.Set("logger", log)
 
 		c.Next()

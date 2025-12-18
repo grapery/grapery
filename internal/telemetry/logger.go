@@ -2,7 +2,6 @@ package telemetry
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -28,8 +27,8 @@ func NewLogger(level string) (*zap.Logger, error) {
 			AccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 			Project:         "grapery-dev",
 			Logstore:        "apiservice",
-			Topic:           os.Getenv("ALIYUN_TOPIC"),
-			Source:          os.Getenv("ALIYUN_SOURCE"),
+			Topic:           "api-backend",
+			Source:          "backend",
 		},
 	})
 }
@@ -53,6 +52,7 @@ func NewLoggerWithConfig(config LoggerConfig) (*zap.Logger, error) {
 		EncodeDuration: zapcore.SecondsDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
+	fmt.Println("SLS encoderConfig: " + config.SLS.Endpoint)
 
 	// Create console core (always enabled)
 	consoleEncoder := zapcore.NewJSONEncoder(encoderConfig)
@@ -63,8 +63,6 @@ func NewLoggerWithConfig(config LoggerConfig) (*zap.Logger, error) {
 	)
 
 	cores := []zapcore.Core{consoleCore}
-	slsJson, _ := json.Marshal(config.SLS)
-	fmt.Println(string(slsJson))
 	// Add SLS core if configured
 	if config.SLS != nil && config.SLS.Endpoint != "" {
 		slsCore, err := NewSLSCore(*config.SLS, lvl)

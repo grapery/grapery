@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -119,4 +120,68 @@ func LoggerWithUserContext(logger *zap.Logger, ctx UserContext) *zap.Logger {
 	}
 
 	return logger.With(fields...)
+}
+
+// TraceIDFromContext extracts the trace ID from OpenTelemetry context
+func TraceIDFromContext(ctx context.Context) string {
+	span := trace.SpanFromContext(ctx)
+	if span != nil {
+		spanContext := span.SpanContext()
+		if spanContext.IsValid() {
+			return spanContext.TraceID().String()
+		}
+	}
+	return ""
+}
+
+// SpanIDFromContext extracts the span ID from OpenTelemetry context
+func SpanIDFromContext(ctx context.Context) string {
+	span := trace.SpanFromContext(ctx)
+	if span != nil {
+		spanContext := span.SpanContext()
+		if spanContext.IsValid() {
+			return spanContext.SpanID().String()
+		}
+	}
+	return ""
+}
+
+// LoggerWithTraceID adds trace ID and span ID to the logger from context
+func LoggerWithTraceID(logger *zap.Logger, ctx context.Context) *zap.Logger {
+	fields := []zap.Field{}
+
+	traceID := TraceIDFromContext(ctx)
+	if traceID != "" {
+		fields = append(fields, zap.String("trace_id", traceID))
+	}
+
+	spanID := SpanIDFromContext(ctx)
+	if spanID != "" {
+		fields = append(fields, zap.String("span_id", spanID))
+	}
+
+	if len(fields) > 0 {
+		return logger.With(fields...)
+	}
+	return logger
+}
+
+// LoggerFromContextWithTrace extracts the logger from context and adds trace ID and span ID
+func LoggerFromContextWithTrace(ctx context.Context, defaultLogger *zap.Logger) *zap.Logger {
+	logger := defaultLogger
+
+	// Try to get logger from context first
+	if ctxLogger := LoggerFromContext(ctx); ctxLogger != nil {
+		logger = ctxLogger
+	}
+
+	// Add trace ID and span ID if available
+	logger = LoggerWithTraceID(logger, ctx)
+
+	// Add correlation ID if available
+	if correlationID := CorrelationIDFromContext(ctx); correlationID != "" {
+		logger = logger.With(zap.String("correlation_id", correlationID))
+	}
+
+	return logger
 }

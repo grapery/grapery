@@ -41,7 +41,7 @@ func main() {
 	var err error
 
 	if *configPath != "" {
-		cfg, err = config.LoadFromFile(*configPath)
+		cfg, err = config.LoadFromFile(*configPath, "chatmcp")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
 			os.Exit(1)
@@ -49,13 +49,13 @@ func main() {
 	} else {
 		// Fallback to environment variables or default config.yaml
 		if _, err := os.Stat("config.yaml"); err == nil {
-			cfg, err = config.LoadFromFile("config.yaml")
+			cfg, err = config.LoadFromFile("config.yaml", "chatmcp")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to load config.yaml: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
-			cfg = config.Load()
+			cfg = config.Load("chatmcp")
 		}
 	}
 

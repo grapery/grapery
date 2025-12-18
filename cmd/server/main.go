@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
@@ -20,7 +23,6 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	transport "github.com/grapestree/fgrapery/grapery/internal/transport/http"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -40,14 +42,15 @@ func main() {
 	var err error
 
 	if *configPath != "" {
-		cfg, err = config.LoadFromFile(*configPath)
+		cfg, err = config.LoadFromFile(*configPath, "api-server")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
+		fmt.Println("loading config from environment variables")
 		// Fallback to environment variables only
-		cfg = config.Load()
+		cfg = config.Load("api-server")
 	}
 
 	// Initialize telemetry manager
@@ -57,6 +60,8 @@ func main() {
 
 	// Configure SLS if enabled
 	if cfg.Telemetry.SLS.Enabled {
+		fmt.Println("telemetry sls enable")
+
 		telemetryConfig.SLS = &telemetry.SLSConfig{
 			Endpoint:        cfg.Telemetry.SLS.Endpoint,
 			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,
@@ -66,10 +71,17 @@ func main() {
 			Topic:           cfg.Telemetry.SLS.Topic,
 			Source:          cfg.Telemetry.SLS.Source,
 		}
+		slsConfigData, _ := json.Marshal(telemetryConfig.SLS)
+		fmt.Println("telemetryConfig sls config:", string(slsConfigData))
+	} else {
+		fmt.Println("telemetry sls disable")
 	}
 
 	// Configure Prometheus if enabled
 	if cfg.Telemetry.Prometheus.Enabled {
+		fmt.Println("telemetry Prometheus enable")
+		prometheusConfigData, _ := json.Marshal(cfg.Telemetry.Prometheus)
+		fmt.Println("prometheus config:", string(prometheusConfigData))
 		telemetryConfig.Prometheus = &telemetry.PrometheusConfig{
 			Enabled:      cfg.Telemetry.Prometheus.Enabled,
 			Path:         cfg.Telemetry.Prometheus.Path,
@@ -77,10 +89,15 @@ func main() {
 			PushInterval: cfg.Telemetry.Prometheus.PushInterval,
 			JobName:      cfg.Telemetry.Prometheus.JobName,
 		}
+	} else {
+		fmt.Println("telemetry Prometheus disable")
 	}
 
 	// Configure tracing if enabled
 	if cfg.Telemetry.Tracing.Enabled {
+		fmt.Println("telemetry tracing enable")
+		tracingConfigData, _ := json.Marshal(cfg.Telemetry.Tracing)
+		fmt.Println("tracing config:", string(tracingConfigData))
 		telemetryConfig.Tracing = &telemetry.TracingConfig{
 			Enabled:        cfg.Telemetry.Tracing.Enabled,
 			ServiceName:    cfg.Telemetry.Tracing.ServiceName,
@@ -90,6 +107,8 @@ func main() {
 			OTLPEndpoint:   cfg.Telemetry.Tracing.OTLPEndpoint,
 			SamplingRatio:  cfg.Telemetry.Tracing.SamplingRatio,
 		}
+	} else {
+		fmt.Println("telemetry tracing disable")
 	}
 
 	telemetryManager, err := telemetry.NewTelemetryManager(telemetryConfig)

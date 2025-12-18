@@ -113,7 +113,8 @@ type TracingConfig struct {
 
 // LoadFromFile loads configuration from a YAML file
 // Environment variables will override file values
-func LoadFromFile(configPath string) (Config, error) {
+// app parameter identifies which backend service is running (e.g., "api-server", "chatmcp", "vippay")
+func LoadFromFile(configPath string, app string) (Config, error) {
 	// Start with default config
 	cfg := getDefaultConfig()
 
@@ -130,13 +131,14 @@ func LoadFromFile(configPath string) (Config, error) {
 	}
 
 	// Override with environment variables
-	cfg = overrideWithEnv(cfg)
+	cfg = overrideWithEnv(cfg, app)
 
 	return cfg, nil
 }
 
 // Load builds a Config from environment variables (backward compatible)
-func Load() Config {
+// app parameter identifies which backend service is running (e.g., "api-server", "chatmcp", "vippay")
+func Load(app string) Config {
 	redisDB, _ := strconv.Atoi(getEnv("REDIS_DATABASE", "0"))
 	pingInterval, _ := strconv.Atoi(getEnv("REDIS_PING_INTERVAL", "30"))
 	jwtExpiry, _ := strconv.Atoi(getEnv("JWT_EXPIRY_HOURS", "24"))
@@ -188,20 +190,20 @@ func Load() Config {
 		},
 		Telemetry: TelemetryConfig{
 			SLS: SLSConfig{
-				Enabled:         getEnv("TELEMETRY_SLS_ENABLED", "false") == "true",
-				Endpoint:        getEnv("TELEMETRY_SLS_ENDPOINT", ""),
-				AccessKeyID:     getEnv("TELEMETRY_SLS_ACCESS_KEY_ID", ""),
-				AccessKeySecret: getEnv("TELEMETRY_SLS_ACCESS_KEY_SECRET", ""),
-				Project:         getEnv("TELEMETRY_SLS_PROJECT", ""),
-				Logstore:        getEnv("TELEMETRY_SLS_LOGSTORE", ""),
-				Topic:           getEnv("TELEMETRY_SLS_TOPIC", "grapery"),
-				Source:          getEnv("TELEMETRY_SLS_SOURCE", ""),
+				Enabled:         true,
+				Endpoint:        "cn-hangzhou.log.aliyuncs.com",
+				AccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
+				AccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
+				Project:         "grapery-dev",
+				Logstore:        "apiservice",
+				Topic:           "api-backend",
+				Source:          app,
 			},
 			Prometheus: PrometheusConfig{
 				Enabled:      getEnv("TELEMETRY_PROMETHEUS_ENABLED", "false") == "true",
 				Path:         getEnv("TELEMETRY_PROMETHEUS_PATH", "/metrics"),
 				PushGateway:  getEnv("TELEMETRY_PROMETHEUS_PUSH_GATEWAY", ""),
-				PushInterval: getEnvInt("TELEMETRY_PROMETHEUS_PUSH_INTERVAL", 15),
+				PushInterval: getEnvInt("TELEMETRY_PROMETHEUS_PUSH_INTERVAL", 60),
 				JobName:      getEnv("TELEMETRY_PROMETHEUS_JOB_NAME", "grapery"),
 			},
 			Tracing: TracingConfig{
@@ -259,6 +261,31 @@ func getEnvFloat(key string, fallback float64) float64 {
 		}
 	}
 	return fallback
+}
+
+// getSLSSource returns the SLS source, using app parameter as default if not set via environment variable
+func getSLSSource(app string) string {
+	if source := getEnv("TELEMETRY_SLS_SOURCE", ""); source != "" {
+		return source
+	}
+	if app != "" {
+		return app
+	}
+	return "unknown"
+}
+
+// getSLSSourceWithDefault returns the SLS source, using provided default or app parameter
+func getSLSSourceWithDefault(defaultSource string, app string) string {
+	if source := getEnv("TELEMETRY_SLS_SOURCE", ""); source != "" {
+		return source
+	}
+	if defaultSource != "" {
+		return defaultSource
+	}
+	if app != "" {
+		return app
+	}
+	return "unknown"
 }
 
 // getDefaultConfig returns default configuration
@@ -336,7 +363,7 @@ func getDefaultConfig() Config {
 }
 
 // overrideWithEnv overrides config values with environment variables
-func overrideWithEnv(cfg Config) Config {
+func overrideWithEnv(cfg Config, app string) Config {
 	// Server config
 	cfg.Env = getEnv("GRAPERY_ENV", cfg.Env)
 	cfg.HTTPPort = getEnv("GRAPERY_HTTP_PORT", cfg.HTTPPort)
@@ -390,7 +417,7 @@ func overrideWithEnv(cfg Config) Config {
 	cfg.Telemetry.SLS.Project = getEnv("TELEMETRY_SLS_PROJECT", cfg.Telemetry.SLS.Project)
 	cfg.Telemetry.SLS.Logstore = getEnv("TELEMETRY_SLS_LOGSTORE", cfg.Telemetry.SLS.Logstore)
 	cfg.Telemetry.SLS.Topic = getEnv("TELEMETRY_SLS_TOPIC", cfg.Telemetry.SLS.Topic)
-	cfg.Telemetry.SLS.Source = getEnv("TELEMETRY_SLS_SOURCE", cfg.Telemetry.SLS.Source)
+	cfg.Telemetry.SLS.Source = getSLSSourceWithDefault(cfg.Telemetry.SLS.Source, app)
 
 	// Telemetry Prometheus config
 	cfg.Telemetry.Prometheus.Enabled = getEnvBool("TELEMETRY_PROMETHEUS_ENABLED", cfg.Telemetry.Prometheus.Enabled)

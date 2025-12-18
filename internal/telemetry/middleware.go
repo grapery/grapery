@@ -10,6 +10,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// loggerKey is the context key for logger
+type loggerKey struct{}
+
 // HTTPMiddleware returns an HTTP middleware that records metrics and logs requests
 func HTTPMiddleware(logger *zap.Logger, metrics *Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -56,8 +59,17 @@ func HTTPMiddleware(logger *zap.Logger, metrics *Metrics) func(http.Handler) htt
 				metrics.DecActiveRequests()
 			}
 
+			// Get logger from context (may include trace_id if tracing middleware ran first)
+			log := logger
+			if ctxLogger := LoggerFromContext(r.Context()); ctxLogger != nil {
+				log = ctxLogger
+			} else {
+				// If no logger in context, add trace_id from context if available
+				log = LoggerWithTraceID(log, r.Context())
+			}
+
 			// Log request
-			logger.Info("HTTP request",
+			log.Info("HTTP request",
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.String("route", route),
@@ -99,11 +111,18 @@ func RequestIDMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 				requestID = generateRequestID()
 			}
 
-			// Add request ID to logger
-			log := logger.With(zap.String("request_id", requestID))
+			// Get existing logger from context or use default
+			log := logger
+			if ctxLogger := LoggerFromContext(r.Context()); ctxLogger != nil {
+				log = ctxLogger
+			}
+
+			// Add request ID and trace_id to logger
+			log = log.With(zap.String("request_id", requestID))
+			log = LoggerWithTraceID(log, r.Context())
 
 			// Store logger in context
-			ctx := context.WithValue(r.Context(), "logger", log)
+			ctx := context.WithValue(r.Context(), loggerKey{}, log)
 
 			// Continue with new context
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -118,7 +137,7 @@ func generateRequestID() string {
 
 // LoggerFromContext returns the logger from the context
 func LoggerFromContext(ctx context.Context) *zap.Logger {
-	if logger, ok := ctx.Value("logger").(*zap.Logger); ok {
+	if logger, ok := ctx.Value(loggerKey{}).(*zap.Logger); ok {
 		return logger
 	}
 	return nil
