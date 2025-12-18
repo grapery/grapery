@@ -966,20 +966,46 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	)
 
 	// 验证故事存在且属于用户
+	s.logger.Debug("fetching story for media rendering",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("story not found for media rendering",
+				zap.String("storyID", storyID),
+				zap.String("userID", userID))
 			return nil, errors.New("story not found")
 		}
+		s.logger.Error("failed to get story for media rendering",
+			zap.String("storyID", storyID),
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, errors.New("failed to get story")
 	}
 
+	s.logger.Debug("story retrieved for media rendering",
+		zap.String("storyID", storyID),
+		zap.String("title", story.Title),
+		zap.Int("panels", story.Panels))
+
 	if story.Author.ID != userID {
+		s.logger.Warn("unauthorized media render attempt",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.String("authorID", story.Author.ID))
 		return nil, errors.New("unauthorized: not story owner")
 	}
 
+	s.logger.Debug("authorization verified for media rendering",
+		zap.String("storyID", storyID),
+		zap.String("userID", userID))
+
 	// 检查故事是否有内容可以渲染
 	if story.Panels == 0 {
+		s.logger.Warn("story has no panels to render",
+			zap.String("storyID", storyID),
+			zap.String("userID", userID))
 		return nil, errors.New("story has no panels to render")
 	}
 
@@ -1013,8 +1039,15 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	}
 
 	// 序列化配置
+	s.logger.Debug("serializing render config",
+		zap.String("storyID", storyID),
+		zap.String("type", string(config.Type)))
 	configJSON, err := jsonMarshal(config)
 	if err != nil {
+		s.logger.Error("failed to serialize render config",
+			zap.String("storyID", storyID),
+			zap.String("type", string(config.Type)),
+			zap.Error(err))
 		return nil, errors.New("failed to serialize config")
 	}
 
@@ -1032,26 +1065,52 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	}
 
 	// 保存渲染任务到数据库
+	s.logger.Debug("creating render task in database",
+		zap.String("storyID", storyID),
+		zap.String("taskID", task.ID),
+		zap.String("type", string(task.Type)))
 	if err := s.repo.CreateRenderTask(ctx, task); err != nil {
-		s.logger.Error("failed to create render task", zap.Error(err))
+		s.logger.Error("failed to create render task",
+			zap.String("storyID", storyID),
+			zap.String("taskID", task.ID),
+			zap.String("type", string(task.Type)),
+			zap.Error(err))
 		return nil, errors.New("failed to create render task")
 	}
 
+	s.logger.Debug("render task created successfully",
+		zap.String("taskID", task.ID),
+		zap.String("storyID", storyID))
+
 	// 更新故事状态为渲染中
+	s.logger.Debug("updating story status to rendering",
+		zap.String("storyID", storyID))
 	_, err = s.UpdateStory(ctx, userID, storyID, UpdateStoryRequest{
 		Status: stringPtr("rendering"),
 	})
 	if err != nil {
-		s.logger.Error("failed to update story status", zap.Error(err))
+		s.logger.Warn("failed to update story status to rendering",
+			zap.String("storyID", storyID),
+			zap.String("taskID", task.ID),
+			zap.Error(err))
+		// 不中断流程，任务已创建
+	} else {
+		s.logger.Debug("story status updated to rendering",
+			zap.String("storyID", storyID))
 	}
 
 	// 启动异步渲染
-	go s.processMediaRenderTask(context.Background(), task)
-
-	s.logger.Info("media render task created",
+	s.logger.Info("starting asynchronous media render task",
 		zap.String("taskID", task.ID),
 		zap.String("storyID", storyID),
-	)
+		zap.String("type", string(task.Type)))
+	go s.processMediaRenderTask(context.Background(), task)
+
+	s.logger.Info("media render task created and started",
+		zap.String("taskID", task.ID),
+		zap.String("storyID", storyID),
+		zap.String("type", string(task.Type)),
+		zap.String("status", string(task.Status)))
 
 	return task, nil
 }
@@ -1133,15 +1192,28 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 	}
 
 	// 根据任务类型执行不同的渲染流程
+	s.logger.Info("starting render process",
+		zap.String("taskID", task.ID),
+		zap.String("type", string(task.Type)),
+		zap.Int("storyboardCount", len(storyboards)))
 	var renderErr error
 	switch task.Type {
 	case domain.RenderTaskTypeVideo:
+		s.logger.Debug("rendering video content",
+			zap.String("taskID", task.ID))
 		renderErr = s.renderVideoContent(ctx, task, storyboards, &config)
 	case domain.RenderTaskTypeImageSet:
+		s.logger.Debug("rendering image set content",
+			zap.String("taskID", task.ID))
 		renderErr = s.renderImageSetContent(ctx, task, storyboards, &config)
 	case domain.RenderTaskTypeAnimation:
+		s.logger.Debug("rendering animation content",
+			zap.String("taskID", task.ID))
 		renderErr = s.renderAnimationContent(ctx, task, storyboards, &config)
 	default:
+		s.logger.Error("unknown render type",
+			zap.String("taskID", task.ID),
+			zap.String("type", string(task.Type)))
 		renderErr = fmt.Errorf("unknown render type: %s", task.Type)
 	}
 
@@ -1155,6 +1227,9 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 	}
 
 	// 生成输出URL
+	s.logger.Debug("generating output URLs",
+		zap.String("taskID", task.ID),
+		zap.String("type", string(task.Type)))
 	task.OutputURL = fmt.Sprintf("/uploads/renders/%s.%s", task.ID, getFileExtension(task.Type))
 	task.ThumbnailURL = fmt.Sprintf("/uploads/renders/%s_thumb.jpg", task.ID)
 	task.FileSize = 10485760 // 10MB（示例）
@@ -1162,25 +1237,47 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 	if task.Type == domain.RenderTaskTypeVideo {
 		task.Duration = 120 // 2分钟（示例）
 		task.Resolution = "1080p"
+		s.logger.Debug("video render metadata set",
+			zap.String("taskID", task.ID),
+			zap.Int("duration", task.Duration),
+			zap.String("resolution", task.Resolution))
 	}
 
 	// 完成
+	s.logger.Info("marking render task as completed",
+		zap.String("taskID", task.ID),
+		zap.String("outputURL", task.OutputURL))
 	task.Status = domain.RenderTaskStatusCompleted
 	task.Progress = 100
 	completedTime := time.Now().Unix()
 	task.CompletedAt = &completedTime
 	task.UpdatedAt = time.Now().Unix()
 	if err := s.repo.UpdateRenderTask(ctx, task); err != nil {
-		s.logger.Error("failed to update render task completion", zap.String("taskID", task.ID), zap.Error(err))
+		s.logger.Error("failed to update render task completion",
+			zap.String("taskID", task.ID),
+			zap.Error(err))
 		return
 	}
 
+	s.logger.Debug("render task status updated to completed",
+		zap.String("taskID", task.ID))
+
 	// 更新故事状态为 rendered（渲染完成，等待用户发布）
+	s.logger.Debug("updating story status to rendered",
+		zap.String("taskID", task.ID),
+		zap.String("storyID", task.StoryID))
 	_, err = s.UpdateStory(ctx, task.UserID, task.StoryID, UpdateStoryRequest{
 		Status: stringPtr("rendered"),
 	})
 	if err != nil {
-		s.logger.Error("failed to update story status after render", zap.Error(err))
+		s.logger.Warn("failed to update story status after render",
+			zap.String("taskID", task.ID),
+			zap.String("storyID", task.StoryID),
+			zap.Error(err))
+		// 不中断流程，任务已完成
+	} else {
+		s.logger.Debug("story status updated to rendered",
+			zap.String("storyID", task.StoryID))
 	}
 
 	s.logger.Info("media render task completed",
@@ -1191,6 +1288,11 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 
 // renderVideoContent 渲染视频内容
 func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+	s.logger.Info("rendering video content",
+		zap.String("taskID", task.ID),
+		zap.Int("storyboardCount", len(storyboards)),
+		zap.String("resolution", config.Resolution),
+		zap.String("quality", config.Quality))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1198,32 +1300,56 @@ func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTas
 		// 检查取消
 		select {
 		case <-ctx.Done():
+			s.logger.Warn("render context cancelled",
+				zap.String("taskID", task.ID),
+				zap.Error(ctx.Err()))
 			return ctx.Err()
 		default:
 		}
 
 		if cancelled := s.isRenderTaskCancelled(ctx, task.ID); cancelled {
+			s.logger.Info("render task cancelled by user",
+				zap.String("taskID", task.ID))
 			return errors.New("task cancelled by user")
 		}
 
 		progress := baseProgress + ((i + 1) * 60 / totalSteps)
 		if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, progress); err != nil {
-			s.logger.Warn("failed to update progress", zap.Error(err))
+			s.logger.Warn("failed to update render progress",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("render progress updated",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Int("currentStep", i+1),
+				zap.Int("totalSteps", totalSteps))
 		}
 
 		// TODO: 实际的视频生成逻辑
 		time.Sleep(500 * time.Millisecond)
 	}
 
+	s.logger.Debug("finalizing video render",
+		zap.String("taskID", task.ID))
 	if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, 90); err != nil {
-		s.logger.Warn("failed to update progress", zap.Error(err))
+		s.logger.Warn("failed to update final render progress",
+			zap.String("taskID", task.ID),
+			zap.Error(err))
 	}
 
+	s.logger.Info("video content rendered successfully",
+		zap.String("taskID", task.ID))
 	return nil
 }
 
 // renderImageSetContent 渲染图片集内容
 func (s *Service) renderImageSetContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+	s.logger.Info("rendering image set content",
+		zap.String("taskID", task.ID),
+		zap.Int("storyboardCount", len(storyboards)),
+		zap.String("quality", config.Quality))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1231,32 +1357,56 @@ func (s *Service) renderImageSetContent(ctx context.Context, task *domain.Render
 		// 检查取消
 		select {
 		case <-ctx.Done():
+			s.logger.Warn("render context cancelled",
+				zap.String("taskID", task.ID),
+				zap.Error(ctx.Err()))
 			return ctx.Err()
 		default:
 		}
 
 		if cancelled := s.isRenderTaskCancelled(ctx, task.ID); cancelled {
+			s.logger.Info("render task cancelled by user",
+				zap.String("taskID", task.ID))
 			return errors.New("task cancelled by user")
 		}
 
 		progress := baseProgress + ((i + 1) * 70 / totalSteps)
 		if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, progress); err != nil {
-			s.logger.Warn("failed to update progress", zap.Error(err))
+			s.logger.Warn("failed to update render progress",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("render progress updated",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Int("currentStep", i+1),
+				zap.Int("totalSteps", totalSteps))
 		}
 
 		// TODO: 实际的图片集生成逻辑
 		time.Sleep(300 * time.Millisecond)
 	}
 
+	s.logger.Debug("finalizing image set render",
+		zap.String("taskID", task.ID))
 	if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, 90); err != nil {
-		s.logger.Warn("failed to update progress", zap.Error(err))
+		s.logger.Warn("failed to update final render progress",
+			zap.String("taskID", task.ID),
+			zap.Error(err))
 	}
 
+	s.logger.Info("image set content rendered successfully",
+		zap.String("taskID", task.ID))
 	return nil
 }
 
 // renderAnimationContent 渲染动画内容
 func (s *Service) renderAnimationContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+	s.logger.Info("rendering animation content",
+		zap.String("taskID", task.ID),
+		zap.Int("storyboardCount", len(storyboards)),
+		zap.String("quality", config.Quality))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1264,27 +1414,47 @@ func (s *Service) renderAnimationContent(ctx context.Context, task *domain.Rende
 		// 检查取消
 		select {
 		case <-ctx.Done():
+			s.logger.Warn("render context cancelled",
+				zap.String("taskID", task.ID),
+				zap.Error(ctx.Err()))
 			return ctx.Err()
 		default:
 		}
 
 		if cancelled := s.isRenderTaskCancelled(ctx, task.ID); cancelled {
+			s.logger.Info("render task cancelled by user",
+				zap.String("taskID", task.ID))
 			return errors.New("task cancelled by user")
 		}
 
 		progress := baseProgress + ((i + 1) * 50 / totalSteps)
 		if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, progress); err != nil {
-			s.logger.Warn("failed to update progress", zap.Error(err))
+			s.logger.Warn("failed to update render progress",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("render progress updated",
+				zap.String("taskID", task.ID),
+				zap.Int("progress", progress),
+				zap.Int("currentStep", i+1),
+				zap.Int("totalSteps", totalSteps))
 		}
 
 		// TODO: 实际的动画生成逻辑
 		time.Sleep(400 * time.Millisecond)
 	}
 
+	s.logger.Debug("finalizing animation render",
+		zap.String("taskID", task.ID))
 	if err := s.repo.UpdateRenderTaskProgress(ctx, task.ID, 90); err != nil {
-		s.logger.Warn("failed to update progress", zap.Error(err))
+		s.logger.Warn("failed to update final render progress",
+			zap.String("taskID", task.ID),
+			zap.Error(err))
 	}
 
+	s.logger.Info("animation content rendered successfully",
+		zap.String("taskID", task.ID))
 	return nil
 }
 
@@ -1292,13 +1462,25 @@ func (s *Service) renderAnimationContent(ctx context.Context, task *domain.Rende
 func (s *Service) isRenderTaskCancelled(ctx context.Context, taskID string) bool {
 	currentTask, err := s.repo.GetRenderTask(ctx, taskID)
 	if err != nil {
+		s.logger.Debug("failed to check render task cancellation status",
+			zap.String("taskID", taskID),
+			zap.Error(err))
 		return false
 	}
-	return currentTask != nil && currentTask.Status == domain.RenderTaskStatusCancelled
+	isCancelled := currentTask != nil && currentTask.Status == domain.RenderTaskStatusCancelled
+	if isCancelled {
+		s.logger.Debug("render task is cancelled",
+			zap.String("taskID", taskID))
+	}
+	return isCancelled
 }
 
 // markRenderTaskFailed 将渲染任务标记为失败并恢复故事状态
 func (s *Service) markRenderTaskFailed(ctx context.Context, task *domain.RenderTask, errMsg string) {
+	s.logger.Info("marking render task as failed",
+		zap.String("taskID", task.ID),
+		zap.String("storyID", task.StoryID),
+		zap.String("error", errMsg))
 	task.Status = domain.RenderTaskStatusFailed
 	task.ErrorMessage = errMsg
 	task.UpdatedAt = time.Now().Unix()
@@ -1307,26 +1489,40 @@ func (s *Service) markRenderTaskFailed(ctx context.Context, task *domain.RenderT
 	updateCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	s.logger.Debug("updating render task status to failed",
+		zap.String("taskID", task.ID))
 	if err := s.repo.UpdateRenderTask(updateCtx, task); err != nil {
 		s.logger.Error("failed to mark render task as failed",
 			zap.String("taskID", task.ID),
-			zap.Error(err),
-		)
+			zap.String("storyID", task.StoryID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("render task marked as failed",
+			zap.String("taskID", task.ID))
 	}
 
+	s.logger.Debug("restoring story status after render failure",
+		zap.String("taskID", task.ID),
+		zap.String("storyID", task.StoryID))
 	s.restoreStoryStatus(updateCtx, task)
 }
 
 // restoreStoryStatus 恢复故事状态（从 rendering 恢复为 draft）
 func (s *Service) restoreStoryStatus(ctx context.Context, task *domain.RenderTask) {
+	s.logger.Debug("restoring story status to draft",
+		zap.String("storyID", task.StoryID),
+		zap.String("taskID", task.ID))
 	_, err := s.UpdateStory(ctx, task.UserID, task.StoryID, UpdateStoryRequest{
 		Status: stringPtr("draft"),
 	})
 	if err != nil {
 		s.logger.Error("failed to restore story status after render failure/cancellation",
 			zap.String("storyID", task.StoryID),
-			zap.Error(err),
-		)
+			zap.String("taskID", task.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("story status restored to draft",
+			zap.String("storyID", task.StoryID))
 	}
 }
 

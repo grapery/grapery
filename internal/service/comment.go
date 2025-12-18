@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -38,15 +39,33 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 
 	// 创建评论
 	if err := s.repo.CreateComment(ctx, comment); err != nil {
+		s.logger.Error("failed to create comment",
+			zap.String("commentId", comment.ID),
+			zap.Error(err))
 		return fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
+		// 清除目标对象的评论计数缓存（如果有）
+		_ = c.Delete(ctx, cache.StoryCommentsKey(comment.TargetID))
+		s.logger.Debug("comment cache invalidated",
+			zap.String("targetType", comment.TargetType),
+			zap.String("targetId", comment.TargetID))
 	}
 
 	s.logger.Info("comment created",
 		zap.String("id", comment.ID),
 		zap.String("authorId", comment.AuthorID),
 		zap.String("targetType", comment.TargetType),
-		zap.String("targetId", comment.TargetID),
-	)
+		zap.String("targetId", comment.TargetID))
 
 	// 异步发送通知（不阻塞主流程）
 	go s.sendCommentNotifications(context.Background(), comment, author, parentComment)
@@ -129,11 +148,47 @@ func (s *Service) getTargetTypeName(targetType string) string {
 	}
 }
 
-// GetComment 获取评论详情
+// GetComment 获取评论详情（带缓存）
 func (s *Service) GetComment(ctx context.Context, id string) (*domain.Comment, error) {
+	s.logger.Debug("getting comment",
+		zap.String("commentId", id))
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(id)
+		var cachedComment domain.Comment
+		if err := c.Get(ctx, key, &cachedComment); err == nil {
+			s.logger.Debug("comment cache hit",
+				zap.String("commentId", id))
+			return &cachedComment, nil
+		} else {
+			s.logger.Debug("comment cache miss",
+				zap.String("commentId", id),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
 	comment, err := s.repo.CommentByID(ctx, id)
 	if err != nil {
+		s.logger.Error("failed to get comment",
+			zap.String("commentId", id),
+			zap.Error(err))
 		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil {
+		key := cache.CommentKey(id)
+		if err := c.Set(ctx, key, comment, commentCacheTTL); err != nil {
+			s.logger.Warn("failed to cache comment",
+				zap.String("commentId", id),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("comment cached",
+				zap.String("commentId", id))
+		}
 	}
 
 	return comment, nil
@@ -153,13 +208,38 @@ func (s *Service) UpdateComment(ctx context.Context, comment *domain.Comment, us
 
 	// 更新
 	if err := s.repo.UpdateComment(ctx, comment); err != nil {
+		s.logger.Error("failed to update comment",
+			zap.String("commentId", comment.ID),
+			zap.Error(err))
 		return fmt.Errorf("failed to update comment: %w", err)
+	}
+
+	// 使缓存失效并重新缓存
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(comment.ID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache",
+				zap.String("commentId", comment.ID),
+				zap.Error(err))
+		}
+		// 重新缓存
+		if err := c.Set(ctx, key, comment, commentCacheTTL); err != nil {
+			s.logger.Warn("failed to cache updated comment",
+				zap.String("commentId", comment.ID),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
 	}
 
 	s.logger.Info("comment updated",
 		zap.String("id", comment.ID),
-		zap.String("userId", userID),
-	)
+		zap.String("userId", userID))
 
 	return nil
 }
@@ -178,19 +258,44 @@ func (s *Service) DeleteComment(ctx context.Context, id, userID string) error {
 
 	// 删除
 	if err := s.repo.DeleteComment(ctx, id); err != nil {
+		s.logger.Error("failed to delete comment",
+			zap.String("commentId", id),
+			zap.Error(err))
 		return fmt.Errorf("failed to delete comment: %w", err)
+	}
+
+	// 使缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(id)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache",
+				zap.String("commentId", id),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
 	}
 
 	s.logger.Info("comment deleted",
 		zap.String("id", id),
-		zap.String("userId", userID),
-	)
+		zap.String("userId", userID))
 
 	return nil
 }
 
-// ListComments 获取目标的评论列表
+// ListComments 获取目标的评论列表（带缓存）
 func (s *Service) ListComments(ctx context.Context, targetType, targetID string, limit, offset int, userID string) ([]*domain.Comment, int64, error) {
+	s.logger.Debug("listing comments",
+		zap.String("targetType", targetType),
+		zap.String("targetID", targetID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
@@ -198,8 +303,36 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 		limit = 100
 	}
 
+	// 尝试从缓存获取（注意：点赞状态是用户相关的，不缓存）
+	c := s.getCache()
+	if c != nil && userID == "" {
+		// 只有未登录用户才使用缓存（因为登录用户的点赞状态不同）
+		cacheKey := cache.CommentsListKey(targetType, targetID, limit, offset)
+		var cachedComments []*domain.Comment
+		var cachedTotal int64
+		if err := c.Get(ctx, cacheKey, &cachedComments); err == nil {
+			// 尝试获取总数缓存
+			totalKey := cacheKey + ":total"
+			_ = c.Get(ctx, totalKey, &cachedTotal)
+			s.logger.Debug("comments list cache hit",
+				zap.String("targetType", targetType),
+				zap.String("targetID", targetID),
+				zap.Int("count", len(cachedComments)))
+			return cachedComments, cachedTotal, nil
+		} else {
+			s.logger.Debug("comments list cache miss",
+				zap.String("targetType", targetType),
+				zap.String("targetID", targetID),
+				zap.Error(err))
+		}
+	}
+
 	comments, total, err := s.repo.CommentsByTarget(ctx, targetType, targetID, limit, offset)
 	if err != nil {
+		s.logger.Error("failed to list comments",
+			zap.String("targetType", targetType),
+			zap.String("targetID", targetID),
+			zap.Error(err))
 		return nil, 0, fmt.Errorf("failed to list comments: %w", err)
 	}
 
@@ -211,6 +344,25 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 				comment.IsLiked = isLike
 				comment.IsDisliked = !isLike
 			}
+		}
+	}
+
+	// 写入缓存（仅未登录用户）
+	if c != nil && userID == "" && len(comments) > 0 {
+		cacheKey := cache.CommentsListKey(targetType, targetID, limit, offset)
+		if err := c.Set(ctx, cacheKey, comments, commentCacheTTL); err != nil {
+			s.logger.Warn("failed to cache comments list",
+				zap.String("targetType", targetType),
+				zap.String("targetID", targetID),
+				zap.Error(err))
+		} else {
+			// 缓存总数
+			totalKey := cacheKey + ":total"
+			_ = c.Set(ctx, totalKey, total, commentCacheTTL)
+			s.logger.Debug("comments list cached",
+				zap.String("targetType", targetType),
+				zap.String("targetID", targetID),
+				zap.Int("count", len(comments)))
 		}
 	}
 
@@ -250,17 +402,28 @@ type ToggleLikeResult struct {
 	Likes   int  `json:"likes"`
 }
 
-// ToggleLikeComment 切换点赞状态
+// ToggleLikeComment 切换点赞状态（带缓存失效）
 func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID string) (*ToggleLikeResult, error) {
+	s.logger.Info("toggling comment like",
+		zap.String("userID", userID),
+		zap.String("commentID", commentID))
+
 	// 获取评论信息
 	comment, err := s.repo.CommentByID(ctx, commentID)
 	if err != nil {
+		s.logger.Error("failed to get comment for like toggle",
+			zap.String("commentID", commentID),
+			zap.Error(err))
 		return nil, fmt.Errorf("comment not found: %w", err)
 	}
 
 	// 检查当前是否已点赞
 	hasLiked, isLike, err := s.repo.IsCommentLiked(ctx, userID, commentID)
 	if err != nil {
+		s.logger.Error("failed to check like status",
+			zap.String("userID", userID),
+			zap.String("commentID", commentID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to check like status: %w", err)
 	}
 
@@ -270,6 +433,10 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 	if hasLiked && isLike {
 		// 已点赞，取消点赞
 		if err := s.repo.UnlikeComment(ctx, userID, commentID); err != nil {
+			s.logger.Error("failed to unlike comment",
+				zap.String("userID", userID),
+				zap.String("commentID", commentID),
+				zap.Error(err))
 			return nil, fmt.Errorf("failed to unlike comment: %w", err)
 		}
 		newIsLiked = false
@@ -279,19 +446,21 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 		}
 		s.logger.Info("comment unliked",
 			zap.String("userId", userID),
-			zap.String("commentId", commentID),
-		)
+			zap.String("commentId", commentID))
 	} else {
 		// 未点赞或是踩，执行点赞
 		if err := s.repo.LikeComment(ctx, userID, commentID, true); err != nil {
+			s.logger.Error("failed to like comment",
+				zap.String("userID", userID),
+				zap.String("commentID", commentID),
+				zap.Error(err))
 			return nil, fmt.Errorf("failed to like comment: %w", err)
 		}
 		newIsLiked = true
 		newLikes = comment.Likes + 1
 		s.logger.Info("comment liked",
 			zap.String("userId", userID),
-			zap.String("commentId", commentID),
-		)
+			zap.String("commentId", commentID))
 
 		// 异步发送通知（不通知自己点赞自己的评论）
 		if comment.AuthorID != userID {
@@ -306,10 +475,26 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 					s.logger.Error("failed to send comment like notification",
 						zap.Error(err),
 						zap.String("commentId", commentID),
-						zap.String("commentAuthor", comment.AuthorID),
-					)
+						zap.String("commentAuthor", comment.AuthorID))
 				}
 			}()
+		}
+	}
+
+	// 使评论缓存失效（因为点赞数变化）
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(commentID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache after like toggle",
+				zap.String("commentID", commentID),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
 		}
 	}
 
@@ -329,13 +514,33 @@ func (s *Service) LikeComment(ctx context.Context, userID, commentID string) err
 
 	// 执行点赞
 	if err := s.repo.LikeComment(ctx, userID, commentID, true); err != nil {
+		s.logger.Error("failed to like comment",
+			zap.String("userID", userID),
+			zap.String("commentID", commentID),
+			zap.Error(err))
 		return fmt.Errorf("failed to like comment: %w", err)
+	}
+
+	// 使评论缓存失效（因为点赞数变化）
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(commentID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache after like",
+				zap.String("commentID", commentID),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
 	}
 
 	s.logger.Info("comment liked",
 		zap.String("userId", userID),
-		zap.String("commentId", commentID),
-	)
+		zap.String("commentId", commentID))
 
 	// 异步发送通知（不通知自己点赞自己的评论）
 	if comment.AuthorID != userID {
@@ -360,30 +565,96 @@ func (s *Service) LikeComment(ctx context.Context, userID, commentID string) err
 	return nil
 }
 
-// DislikeComment 踩评论
+// DislikeComment 踩评论（带缓存失效）
 func (s *Service) DislikeComment(ctx context.Context, userID, commentID string) error {
+	s.logger.Info("disliking comment",
+		zap.String("userID", userID),
+		zap.String("commentID", commentID))
+
+	// 获取评论信息（用于缓存失效）
+	comment, err := s.repo.CommentByID(ctx, commentID)
+	if err != nil {
+		s.logger.Error("failed to get comment for dislike",
+			zap.String("commentID", commentID),
+			zap.Error(err))
+		return fmt.Errorf("comment not found: %w", err)
+	}
+
 	if err := s.repo.LikeComment(ctx, userID, commentID, false); err != nil {
+		s.logger.Error("failed to dislike comment",
+			zap.String("userID", userID),
+			zap.String("commentID", commentID),
+			zap.Error(err))
 		return fmt.Errorf("failed to dislike comment: %w", err)
+	}
+
+	// 使评论缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(commentID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache after dislike",
+				zap.String("commentID", commentID),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
 	}
 
 	s.logger.Info("comment disliked",
 		zap.String("userId", userID),
-		zap.String("commentId", commentID),
-	)
+		zap.String("commentId", commentID))
 
 	return nil
 }
 
-// UnlikeComment 取消点赞/踩
+// UnlikeComment 取消点赞/踩（带缓存失效）
 func (s *Service) UnlikeComment(ctx context.Context, userID, commentID string) error {
+	s.logger.Info("unliking comment",
+		zap.String("userID", userID),
+		zap.String("commentID", commentID))
+
+	// 获取评论信息（用于缓存失效）
+	comment, err := s.repo.CommentByID(ctx, commentID)
+	if err != nil {
+		s.logger.Error("failed to get comment for unlike",
+			zap.String("commentID", commentID),
+			zap.Error(err))
+		return fmt.Errorf("comment not found: %w", err)
+	}
+
 	if err := s.repo.UnlikeComment(ctx, userID, commentID); err != nil {
+		s.logger.Error("failed to unlike comment",
+			zap.String("userID", userID),
+			zap.String("commentID", commentID),
+			zap.Error(err))
 		return fmt.Errorf("failed to unlike comment: %w", err)
+	}
+
+	// 使评论缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.CommentKey(commentID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate comment cache after unlike",
+				zap.String("commentID", commentID),
+				zap.Error(err))
+		}
+		// 清除评论列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
+			}
+		}
 	}
 
 	s.logger.Info("comment unliked",
 		zap.String("userId", userID),
-		zap.String("commentId", commentID),
-	)
+		zap.String("commentId", commentID))
 
 	return nil
 }

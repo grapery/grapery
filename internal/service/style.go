@@ -5,30 +5,128 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"go.uber.org/zap"
 )
 
-// GetStyleConfigByID retrieves a style configuration by ID
+// GetStyleConfigByID retrieves a style configuration by ID（带缓存）
 func (s *Service) GetStyleConfigByID(ctx context.Context, id string) (*domain.StyleConfig, error) {
+	s.logger.Debug("getting style config by ID",
+		zap.String("id", id))
+
 	if id == "" {
+		s.logger.Warn("style config ID is empty")
 		return nil, fmt.Errorf("style config ID cannot be empty")
 	}
 
-	return s.repo.GetStyleConfigByID(ctx, id)
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.StyleConfigByIDKey(id)
+		var cachedConfig domain.StyleConfig
+		if err := c.Get(ctx, key, &cachedConfig); err == nil {
+			s.logger.Debug("style config cache hit",
+				zap.String("id", id))
+			return &cachedConfig, nil
+		} else {
+			s.logger.Debug("style config cache miss",
+				zap.String("id", id),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	config, err := s.repo.GetStyleConfigByID(ctx, id)
+	if err != nil {
+		s.logger.Error("failed to get style config",
+			zap.String("id", id),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil {
+		key := cache.StyleConfigByIDKey(id)
+		if err := c.Set(ctx, key, config, styleConfigCacheTTL); err != nil {
+			s.logger.Warn("failed to cache style config",
+				zap.String("id", id),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("style config cached",
+				zap.String("id", id))
+		}
+	}
+
+	return config, nil
 }
 
-// GetStyleConfigByStyle retrieves a style configuration by style name
+// GetStyleConfigByStyle retrieves a style configuration by style name（带缓存）
 func (s *Service) GetStyleConfigByStyle(ctx context.Context, styleName string) (*domain.StyleConfig, error) {
+	s.logger.Debug("getting style config by style name",
+		zap.String("styleName", styleName))
+
 	if styleName == "" {
+		s.logger.Warn("style name is empty")
 		return nil, fmt.Errorf("style name cannot be empty")
 	}
 
-	return s.repo.GetStyleConfigByStyle(ctx, styleName)
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.StyleConfigByStyleKey(styleName)
+		var cachedConfig domain.StyleConfig
+		if err := c.Get(ctx, key, &cachedConfig); err == nil {
+			s.logger.Debug("style config cache hit",
+				zap.String("styleName", styleName))
+			return &cachedConfig, nil
+		} else {
+			s.logger.Debug("style config cache miss",
+				zap.String("styleName", styleName),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	config, err := s.repo.GetStyleConfigByStyle(ctx, styleName)
+	if err != nil {
+		s.logger.Error("failed to get style config",
+			zap.String("styleName", styleName),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存（同时缓存 ID 和 style name）
+	if c != nil {
+		idKey := cache.StyleConfigByIDKey(config.ID)
+		styleKey := cache.StyleConfigByStyleKey(styleName)
+		if err := c.Set(ctx, idKey, config, styleConfigCacheTTL); err != nil {
+			s.logger.Warn("failed to cache style config by ID",
+				zap.String("id", config.ID),
+				zap.Error(err))
+		}
+		if err := c.Set(ctx, styleKey, config, styleConfigCacheTTL); err != nil {
+			s.logger.Warn("failed to cache style config by style name",
+				zap.String("styleName", styleName),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("style config cached",
+				zap.String("id", config.ID),
+				zap.String("styleName", styleName))
+		}
+	}
+
+	return config, nil
 }
 
-// ListStyleConfigs retrieves all style configurations with pagination
+// ListStyleConfigs retrieves all style configurations with pagination（带缓存）
 // If groupID is provided, group-specific styles are prioritized
 func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
+	s.logger.Debug("listing style configs",
+		zap.String("groupID", groupID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	// Set default limits
 	if limit <= 0 {
 		limit = 50
@@ -40,7 +138,54 @@ func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, o
 		offset = 0
 	}
 
-	return s.repo.ListStyleConfigs(ctx, groupID, limit, offset)
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StyleConfigsListKey(groupID, limit, offset)
+		var cachedConfigs []*domain.StyleConfig
+		var cachedTotal int64
+		if err := c.Get(ctx, cacheKey, &cachedConfigs); err == nil {
+			// 尝试获取总数缓存
+			totalKey := cacheKey + ":total"
+			_ = c.Get(ctx, totalKey, &cachedTotal)
+			s.logger.Debug("style configs list cache hit",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(cachedConfigs)))
+			return cachedConfigs, cachedTotal, nil
+		} else {
+			s.logger.Debug("style configs list cache miss",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	configs, total, err := s.repo.ListStyleConfigs(ctx, groupID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list style configs",
+			zap.String("groupID", groupID),
+			zap.Error(err))
+		return nil, 0, err
+	}
+
+	// 写入缓存
+	if c != nil && len(configs) > 0 {
+		cacheKey := cache.StyleConfigsListKey(groupID, limit, offset)
+		if err := c.Set(ctx, cacheKey, configs, styleConfigCacheTTL); err != nil {
+			s.logger.Warn("failed to cache style configs list",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		} else {
+			// 缓存总数
+			totalKey := cacheKey + ":total"
+			_ = c.Set(ctx, totalKey, total, styleConfigCacheTTL)
+			s.logger.Debug("style configs list cached",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(configs)))
+		}
+	}
+
+	return configs, total, nil
 }
 
 // SearchStyleConfigs searches style configurations by keyword with pagination
@@ -85,7 +230,25 @@ func (s *Service) CreateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 	styleConfig.CreatedAt = now
 	styleConfig.UpdatedAt = now
 
-	return s.repo.CreateStyleConfig(ctx, styleConfig)
+	if err := s.repo.CreateStyleConfig(ctx, styleConfig); err != nil {
+		return err
+	}
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除列表缓存
+		for limit := 50; limit <= 200; limit += 50 {
+			for offset := 0; offset < 500; offset += limit {
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(styleConfig.GroupID, limit, offset))
+				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset)) // 清除全局列表
+			}
+		}
+		s.logger.Debug("style config cache invalidated after create",
+			zap.String("styleConfigID", styleConfig.ID))
+	}
+
+	return nil
 }
 
 // UpdateStyleConfig updates an existing style configuration
@@ -119,7 +282,35 @@ func (s *Service) UpdateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 	// Set updated timestamp
 	styleConfig.UpdatedAt = time.Now().Unix()
 
-	return s.repo.UpdateStyleConfig(ctx, styleConfig)
+	if err := s.repo.UpdateStyleConfig(ctx, styleConfig); err != nil {
+		return err
+	}
+
+	// 使相关缓存失效并重新缓存
+	c := s.getCache()
+	if c != nil {
+		// 清除 ID 和 style name 缓存
+		_ = c.Delete(ctx, cache.StyleConfigByIDKey(styleConfig.ID))
+		_ = c.Delete(ctx, cache.StyleConfigByStyleKey(styleConfig.Style))
+		// 如果 style name 改变，清除旧的 style name 缓存
+		if existingStyle.Style != styleConfig.Style {
+			_ = c.Delete(ctx, cache.StyleConfigByStyleKey(existingStyle.Style))
+		}
+		// 重新缓存
+		_ = c.Set(ctx, cache.StyleConfigByIDKey(styleConfig.ID), styleConfig, styleConfigCacheTTL)
+		_ = c.Set(ctx, cache.StyleConfigByStyleKey(styleConfig.Style), styleConfig, styleConfigCacheTTL)
+		// 清除列表缓存
+		for limit := 50; limit <= 200; limit += 50 {
+			for offset := 0; offset < 500; offset += limit {
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(styleConfig.GroupID, limit, offset))
+				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset))
+			}
+		}
+		s.logger.Debug("style config cache invalidated after update",
+			zap.String("styleConfigID", styleConfig.ID))
+	}
+
+	return nil
 }
 
 // DeleteStyleConfig deletes a style configuration by ID
@@ -129,12 +320,35 @@ func (s *Service) DeleteStyleConfig(ctx context.Context, id string) error {
 	}
 
 	// Check if style config exists
-	_, err := s.repo.GetStyleConfigByID(ctx, id)
+	config, err := s.repo.GetStyleConfigByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("style config not found: %w", err)
 	}
 
-	return s.repo.DeleteStyleConfig(ctx, id)
+	if err := s.repo.DeleteStyleConfig(ctx, id); err != nil {
+		return err
+	}
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除 ID 和 style name 缓存
+		_ = c.Delete(ctx, cache.StyleConfigByIDKey(id))
+		if config != nil {
+			_ = c.Delete(ctx, cache.StyleConfigByStyleKey(config.Style))
+		}
+		// 清除列表缓存
+		for limit := 50; limit <= 200; limit += 50 {
+			for offset := 0; offset < 500; offset += limit {
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(config.GroupID, limit, offset))
+				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset))
+			}
+		}
+		s.logger.Debug("style config cache invalidated after delete",
+			zap.String("styleConfigID", id))
+	}
+
+	return nil
 }
 
 // BatchCreateStyleConfigs creates multiple style configurations in batch

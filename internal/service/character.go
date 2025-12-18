@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -147,11 +148,32 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
-		s.logger.Error("failed to create character", zap.Error(err))
+		s.logger.Error("failed to create character",
+			zap.String("characterID", character.ID),
+			zap.Error(err))
 		return nil, errors.New("failed to create character")
 	}
 
-	s.logger.Info("character created successfully", zap.String("characterID", character.ID))
+	// 缓存新创建的角色
+	c := s.getCache()
+	if c != nil {
+		key := cache.CharacterKey(character.ID)
+		character.IsFollowing = nil // 不缓存关注状态
+		if err := c.Set(ctx, key, character, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache new character",
+				zap.String("characterID", character.ID),
+				zap.Error(err))
+		}
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserCharactersListKey(userID, limit, offset))
+			}
+		}
+	}
+
+	s.logger.Info("character created successfully",
+		zap.String("characterID", character.ID))
 
 	// 记录用户活动
 	go s.RecordCharacterCreated(context.Background(), userID, character.ID, character.Name)
@@ -159,21 +181,56 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 	return character, nil
 }
 
-// GetCharacter 获取角色详情
+// GetCharacter 获取角色详情（带缓存）
 func (s *Service) GetCharacter(ctx context.Context, characterID string) (*domain.Character, error) {
 	return s.GetCharacterWithUserContext(ctx, characterID, "")
 }
 
-// GetCharacterWithUserContext 获取角色详情（带用户上下文，用于判断关注状态）
+// GetCharacterWithUserContext 获取角色详情（带用户上下文，用于判断关注状态，带缓存）
 func (s *Service) GetCharacterWithUserContext(ctx context.Context, characterID, userID string) (*domain.Character, error) {
-	s.logger.Info("getting character", zap.String("characterID", characterID), zap.String("userID", userID))
+	s.logger.Info("getting character",
+		zap.String("characterID", characterID),
+		zap.String("userID", userID))
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.CharacterKey(characterID)
+		var cachedCharacter domain.Character
+		if err := c.Get(ctx, key, &cachedCharacter); err == nil {
+			s.logger.Debug("character cache hit",
+				zap.String("characterID", characterID))
+			// 如果有用户ID，检查关注状态（关注状态不缓存，因为每个用户不同）
+			if userID != "" {
+				isFollowing, err := s.repo.IsCharacterFollowing(ctx, userID, characterID)
+				if err != nil {
+					s.logger.Warn("failed to check character following status",
+						zap.String("characterID", characterID),
+						zap.String("userID", userID),
+						zap.Error(err))
+				} else {
+					cachedCharacter.IsFollowing = &isFollowing
+				}
+			}
+			return &cachedCharacter, nil
+		} else {
+			s.logger.Debug("character cache miss",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
 	character, err := s.repo.CharacterByID(ctx, characterID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("character not found",
+				zap.String("characterID", characterID))
 			return nil, errors.New("character not found")
 		}
-		s.logger.Error("failed to get character", zap.Error(err))
+		s.logger.Error("failed to get character",
+			zap.String("characterID", characterID),
+			zap.Error(err))
 		return nil, errors.New("failed to get character")
 	}
 
@@ -181,10 +238,31 @@ func (s *Service) GetCharacterWithUserContext(ctx context.Context, characterID, 
 	if userID != "" {
 		isFollowing, err := s.repo.IsCharacterFollowing(ctx, userID, characterID)
 		if err != nil {
-			s.logger.Warn("failed to check character following status", zap.Error(err))
+			s.logger.Warn("failed to check character following status",
+				zap.String("characterID", characterID),
+				zap.String("userID", userID),
+				zap.Error(err))
 		} else {
 			character.IsFollowing = &isFollowing
 		}
+	}
+
+	// 写入缓存（不包含关注状态）
+	if c != nil {
+		key := cache.CharacterKey(characterID)
+		// 临时保存关注状态
+		isFollowing := character.IsFollowing
+		character.IsFollowing = nil
+		if err := c.Set(ctx, key, character, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache character",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("character cached",
+				zap.String("characterID", characterID))
+		}
+		// 恢复关注状态
+		character.IsFollowing = isFollowing
 	}
 
 	return character, nil
@@ -311,11 +389,38 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 	character.UpdatedAt = time.Now().Unix()
 
 	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
-		s.logger.Error("failed to update character", zap.Error(err))
+		s.logger.Error("failed to update character",
+			zap.String("characterID", characterID),
+			zap.Error(err))
 		return nil, errors.New("failed to update character")
 	}
 
-	s.logger.Info("character updated successfully", zap.String("characterID", characterID))
+	// 使缓存失效并重新缓存
+	c := s.getCache()
+	if c != nil {
+		key := cache.CharacterKey(characterID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate character cache",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+		}
+		// 重新缓存
+		character.IsFollowing = nil // 不缓存关注状态
+		if err := c.Set(ctx, key, character, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache updated character",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+		}
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserCharactersListKey(character.AuthorID, limit, offset))
+			}
+		}
+	}
+
+	s.logger.Info("character updated successfully",
+		zap.String("characterID", characterID))
 	return character, nil
 }
 
@@ -341,11 +446,31 @@ func (s *Service) DeleteCharacter(ctx context.Context, userID, characterID strin
 	}
 
 	if err := s.repo.DeleteCharacter(ctx, characterID); err != nil {
-		s.logger.Error("failed to delete character", zap.Error(err))
+		s.logger.Error("failed to delete character",
+			zap.String("characterID", characterID),
+			zap.Error(err))
 		return errors.New("failed to delete character")
 	}
 
-	s.logger.Info("character deleted successfully", zap.String("characterID", characterID))
+	// 使缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.CharacterKey(characterID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate character cache",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+		}
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserCharactersListKey(character.AuthorID, limit, offset))
+			}
+		}
+	}
+
+	s.logger.Info("character deleted successfully",
+		zap.String("characterID", characterID))
 	return nil
 }
 

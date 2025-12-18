@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -182,7 +183,7 @@ func (s *Service) fillMissingDates(data []*domain.ActivityHeatmapData, startTime
 	return result
 }
 
-// GetGroupActivities 获取群组活动流
+// GetGroupActivities 获取群组活动流（带缓存）
 func (s *Service) GetGroupActivities(ctx context.Context, groupID string, limit int) ([]*domain.GroupActivity, error) {
 	s.logger.Info("fetching group activities",
 		zap.String("groupID", groupID),
@@ -195,12 +196,43 @@ func (s *Service) GetGroupActivities(ctx context.Context, groupID string, limit 
 		limit = 100
 	}
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.GroupActivitiesKey(groupID, limit)
+		var cachedActivities []*domain.GroupActivity
+		if err := c.Get(ctx, cacheKey, &cachedActivities); err == nil {
+			s.logger.Debug("group activities cache hit",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(cachedActivities)))
+			return cachedActivities, nil
+		} else {
+			s.logger.Debug("group activities cache miss",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+	}
+
 	activities, err := s.repo.GroupActivities(ctx, groupID, limit)
 	if err != nil {
 		s.logger.Error("failed to fetch group activities",
 			zap.String("groupID", groupID),
 			zap.Error(err))
 		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(activities) > 0 {
+		cacheKey := cache.GroupActivitiesKey(groupID, limit)
+		if err := c.Set(ctx, cacheKey, activities, activityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache group activities",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("group activities cached",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(activities)))
+		}
 	}
 
 	s.logger.Info("successfully fetched group activities",
@@ -407,6 +439,16 @@ func (s *Service) RecordGroupStoryCreated(ctx context.Context, groupID, userID, 
 			zap.String("groupID", groupID),
 			zap.String("storyID", storyID),
 			zap.Error(err))
+	} else {
+		// 使活动流缓存失效
+		c := s.getCache()
+		if c != nil {
+			for limit := 20; limit <= 100; limit += 20 {
+				_ = c.Delete(ctx, cache.GroupActivitiesKey(groupID, limit))
+			}
+			s.logger.Debug("group activities cache invalidated",
+				zap.String("groupID", groupID))
+		}
 	}
 }
 
@@ -436,6 +478,16 @@ func (s *Service) RecordGroupStoryboardCreated(ctx context.Context, groupID, use
 			zap.String("groupID", groupID),
 			zap.String("storyID", storyID),
 			zap.Error(err))
+	} else {
+		// 使活动流缓存失效
+		c := s.getCache()
+		if c != nil {
+			for limit := 20; limit <= 100; limit += 20 {
+				_ = c.Delete(ctx, cache.GroupActivitiesKey(groupID, limit))
+			}
+			s.logger.Debug("group activities cache invalidated",
+				zap.String("groupID", groupID))
+		}
 	}
 }
 
@@ -468,5 +520,15 @@ func (s *Service) RecordGroupMemberJoined(ctx context.Context, groupID, userID s
 			zap.String("groupID", groupID),
 			zap.String("userID", userID),
 			zap.Error(err))
+	} else {
+		// 使活动流缓存失效
+		c := s.getCache()
+		if c != nil {
+			for limit := 20; limit <= 100; limit += 20 {
+				_ = c.Delete(ctx, cache.GroupActivitiesKey(groupID, limit))
+			}
+			s.logger.Debug("group activities cache invalidated",
+				zap.String("groupID", groupID))
+		}
 	}
 }

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -98,6 +100,27 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 			zap.String("storyId", storyboard.StoryID),
 			zap.Error(err))
 		return fmt.Errorf("failed to create storyboard: %w", err)
+	}
+
+	// 缓存新创建的 storyboard
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(storyboard.ID)
+		// 不缓存 scenes（动态数据）
+		scenes := storyboard.StoryboardScenes
+		storyboard.StoryboardScenes = nil
+		if err := c.Set(ctx, key, storyboard, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache new storyboard",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
+		}
+		storyboard.StoryboardScenes = scenes
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(storyboard.StoryID, limit, offset))
+			}
+		}
 	}
 
 	// Persist AI-generated storyboard scenes (if any)
@@ -202,13 +225,49 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	return nil
 }
 
-// GetStoryboard 获取 storyboard 详情
+// GetStoryboard 获取 storyboard 详情（带缓存）
 func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storyboard, error) {
-	s.logger.Info("GetStoryboard called", zap.String("storyboardId", id))
+	s.logger.Info("GetStoryboard called",
+		zap.String("storyboardId", id))
+
+	// 尝试从缓存获取（注意：storyboard 包含动态数据如 scenes，可能需要特殊处理）
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(id)
+		var cachedStoryboard domain.Storyboard
+		if err := c.Get(ctx, key, &cachedStoryboard); err == nil {
+			s.logger.Debug("storyboard cache hit",
+				zap.String("storyboardId", id))
+			// 从缓存获取后，仍需要加载 scenes（因为 scenes 可能更新）
+			storyboardScenes, err := s.repo.StoryboardScenes(ctx, id)
+			if err == nil && len(storyboardScenes) > 0 {
+				cachedStoryboard.StoryboardScenes = make([]domain.StoryboardScene, len(storyboardScenes))
+				for i, scene := range storyboardScenes {
+					cachedStoryboard.StoryboardScenes[i] = *scene
+				}
+			}
+			// Populate missing scene images/videos
+			s.populateMissingSceneImages(ctx, &cachedStoryboard)
+			s.populateMissingSceneVideos(ctx, &cachedStoryboard)
+			// 增加浏览量（异步）
+			go func() {
+				if err := s.repo.IncrementStoryboardViews(context.Background(), id); err != nil {
+					s.logger.Warn("failed to increment storyboard views", zap.Error(err))
+				}
+			}()
+			return &cachedStoryboard, nil
+		} else {
+			s.logger.Debug("storyboard cache miss",
+				zap.String("storyboardId", id),
+				zap.Error(err))
+		}
+	}
 
 	storyboard, err := s.repo.StoryboardByID(ctx, id)
 	if err != nil {
-		s.logger.Error("GetStoryboard: StoryboardByID failed", zap.String("storyboardId", id), zap.Error(err))
+		s.logger.Error("GetStoryboard: StoryboardByID failed",
+			zap.String("storyboardId", id),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -412,6 +471,32 @@ func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Story
 		return fmt.Errorf("failed to update storyboard: %w", err)
 	}
 
+	// 使缓存失效并重新缓存
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(storyboard.ID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate storyboard cache",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
+		}
+		// 重新缓存（不包含 scenes）
+		scenes := storyboard.StoryboardScenes
+		storyboard.StoryboardScenes = nil
+		if err := c.Set(ctx, key, storyboard, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache updated storyboard",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
+		}
+		storyboard.StoryboardScenes = scenes
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(storyboard.StoryID, limit, offset))
+			}
+		}
+	}
+
 	s.logger.Info("storyboard updated successfully",
 		zap.String("id", storyboard.ID),
 		zap.String("userId", userID),
@@ -586,7 +671,7 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 	return nil
 }
 
-// ListStoryboards 获取故事的 storyboards 列表
+// ListStoryboards 获取故事的 storyboards 列表（带缓存）
 func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, offset int) ([]*domain.Storyboard, error) {
 	s.logger.Info("listing storyboards",
 		zap.String("storyId", storyID),
@@ -600,6 +685,23 @@ func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, of
 		limit = 100
 	}
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StoryboardsListKey(storyID, limit, offset)
+		var cachedStoryboards []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedStoryboards); err == nil {
+			s.logger.Debug("storyboards list cache hit",
+				zap.String("storyId", storyID),
+				zap.Int("count", len(cachedStoryboards)))
+			return cachedStoryboards, nil
+		} else {
+			s.logger.Debug("storyboards list cache miss",
+				zap.String("storyId", storyID),
+				zap.Error(err))
+		}
+	}
+
 	storyboards, err := s.repo.StoryboardsByStory(ctx, storyID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list storyboards",
@@ -608,6 +710,20 @@ func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, of
 			zap.Int("offset", offset),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to list storyboards: %w", err)
+	}
+
+	// 写入缓存
+	if c != nil && len(storyboards) > 0 {
+		cacheKey := cache.StoryboardsListKey(storyID, limit, offset)
+		if err := c.Set(ctx, cacheKey, storyboards, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache storyboards list",
+				zap.String("storyId", storyID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboards list cached",
+				zap.String("storyId", storyID),
+				zap.Int("count", len(storyboards)))
+		}
 	}
 
 	s.logger.Info("storyboards listed successfully",
@@ -619,7 +735,7 @@ func (s *Service) ListStoryboards(ctx context.Context, storyID string, limit, of
 	return storyboards, nil
 }
 
-// ListRootStoryboards 获取故事的根 storyboards（ParentID 为空或 "__root__"）
+// ListRootStoryboards 获取故事的根 storyboards（ParentID 为空或 "__root__"，带缓存）
 func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit, offset int) ([]*domain.Storyboard, error) {
 	s.logger.Info("listing root storyboards",
 		zap.String("storyId", storyID),
@@ -633,6 +749,23 @@ func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit
 		limit = 100
 	}
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StoryboardsListKey(storyID+"_root", limit, offset)
+		var cachedStoryboards []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedStoryboards); err == nil {
+			s.logger.Debug("root storyboards cache hit",
+				zap.String("storyId", storyID),
+				zap.Int("count", len(cachedStoryboards)))
+			return cachedStoryboards, nil
+		} else {
+			s.logger.Debug("root storyboards cache miss",
+				zap.String("storyId", storyID),
+				zap.Error(err))
+		}
+	}
+
 	storyboards, err := s.repo.RootStoryboardsByStory(ctx, storyID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list root storyboards",
@@ -641,6 +774,20 @@ func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit
 			zap.Int("offset", offset),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to list root storyboards: %w", err)
+	}
+
+	// 写入缓存
+	if c != nil && len(storyboards) > 0 {
+		cacheKey := cache.StoryboardsListKey(storyID+"_root", limit, offset)
+		if err := c.Set(ctx, cacheKey, storyboards, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache root storyboards",
+				zap.String("storyId", storyID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("root storyboards cached",
+				zap.String("storyId", storyID),
+				zap.Int("count", len(storyboards)))
+		}
 	}
 
 	s.logger.Info("root storyboards listed successfully",
@@ -652,7 +799,7 @@ func (s *Service) ListRootStoryboards(ctx context.Context, storyID string, limit
 	return storyboards, nil
 }
 
-// ListStoryboardsByParent 获取指定父级的 storyboards
+// ListStoryboardsByParent 获取指定父级的 storyboards（带缓存）
 func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
 	s.logger.Info("listing storyboards by parent",
 		zap.String("storyId", storyID),
@@ -667,6 +814,25 @@ func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID
 		limit = 100
 	}
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StoryboardsListKey(storyID+"_parent_"+parentID, limit, offset)
+		var cachedStoryboards []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedStoryboards); err == nil {
+			s.logger.Debug("storyboards by parent cache hit",
+				zap.String("storyId", storyID),
+				zap.String("parentId", parentID),
+				zap.Int("count", len(cachedStoryboards)))
+			return cachedStoryboards, nil
+		} else {
+			s.logger.Debug("storyboards by parent cache miss",
+				zap.String("storyId", storyID),
+				zap.String("parentId", parentID),
+				zap.Error(err))
+		}
+	}
+
 	storyboards, err := s.repo.StoryboardsByParent(ctx, storyID, parentID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list storyboards by parent",
@@ -676,6 +842,22 @@ func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID
 			zap.Int("offset", offset),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to list storyboards by parent: %w", err)
+	}
+
+	// 写入缓存
+	if c != nil && len(storyboards) > 0 {
+		cacheKey := cache.StoryboardsListKey(storyID+"_parent_"+parentID, limit, offset)
+		if err := c.Set(ctx, cacheKey, storyboards, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache storyboards by parent",
+				zap.String("storyId", storyID),
+				zap.String("parentId", parentID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboards by parent cached",
+				zap.String("storyId", storyID),
+				zap.String("parentId", parentID),
+				zap.Int("count", len(storyboards)))
+		}
 	}
 
 	s.logger.Info("storyboards by parent listed successfully",
@@ -688,10 +870,27 @@ func (s *Service) ListStoryboardsByParent(ctx context.Context, storyID, parentID
 	return storyboards, nil
 }
 
-// GetStoryboardChildren 获取子 storyboards (forks/continuations)
+// GetStoryboardChildren 获取子 storyboards (forks/continuations，带缓存)
 func (s *Service) GetStoryboardChildren(ctx context.Context, parentID string) ([]*domain.Storyboard, error) {
 	s.logger.Info("getting storyboard children",
 		zap.String("parentId", parentID))
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StoryboardKey(parentID) + ":children"
+		var cachedChildren []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedChildren); err == nil {
+			s.logger.Debug("storyboard children cache hit",
+				zap.String("parentId", parentID),
+				zap.Int("count", len(cachedChildren)))
+			return cachedChildren, nil
+		} else {
+			s.logger.Debug("storyboard children cache miss",
+				zap.String("parentId", parentID),
+				zap.Error(err))
+		}
+	}
 
 	children, err := s.repo.StoryboardChildren(ctx, parentID)
 	if err != nil {
@@ -701,6 +900,20 @@ func (s *Service) GetStoryboardChildren(ctx context.Context, parentID string) ([
 		return nil, fmt.Errorf("failed to get children: %w", err)
 	}
 
+	// 写入缓存
+	if c != nil && len(children) > 0 {
+		cacheKey := cache.StoryboardKey(parentID) + ":children"
+		if err := c.Set(ctx, cacheKey, children, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache storyboard children",
+				zap.String("parentId", parentID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboard children cached",
+				zap.String("parentId", parentID),
+				zap.Int("count", len(children)))
+		}
+	}
+
 	s.logger.Info("storyboard children retrieved successfully",
 		zap.String("parentId", parentID),
 		zap.Int("childCount", len(children)))
@@ -708,10 +921,27 @@ func (s *Service) GetStoryboardChildren(ctx context.Context, parentID string) ([
 	return children, nil
 }
 
-// GetStoryboardTree 获取完整的 storyboard 树
+// GetStoryboardTree 获取完整的 storyboard 树（带缓存）
 func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*domain.Storyboard, error) {
 	s.logger.Info("getting storyboard tree",
 		zap.String("rootId", rootID))
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.StoryboardKey(rootID) + ":tree"
+		var cachedTree []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedTree); err == nil {
+			s.logger.Debug("storyboard tree cache hit",
+				zap.String("rootId", rootID),
+				zap.Int("nodeCount", len(cachedTree)))
+			return cachedTree, nil
+		} else {
+			s.logger.Debug("storyboard tree cache miss",
+				zap.String("rootId", rootID),
+				zap.Error(err))
+		}
+	}
 
 	tree, err := s.repo.StoryboardTree(ctx, rootID)
 	if err != nil {
@@ -721,6 +951,20 @@ func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*doma
 		return nil, fmt.Errorf("failed to get tree: %w", err)
 	}
 
+	// 写入缓存
+	if c != nil && len(tree) > 0 {
+		cacheKey := cache.StoryboardKey(rootID) + ":tree"
+		if err := c.Set(ctx, cacheKey, tree, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache storyboard tree",
+				zap.String("rootId", rootID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboard tree cached",
+				zap.String("rootId", rootID),
+				zap.Int("nodeCount", len(tree)))
+		}
+	}
+
 	s.logger.Info("storyboard tree retrieved successfully",
 		zap.String("rootId", rootID),
 		zap.Int("nodeCount", len(tree)))
@@ -728,8 +972,12 @@ func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*doma
 	return tree, nil
 }
 
-// GetStoryboardFeed 获取社区故事板 feed 流（按时间倒序）
+// GetStoryboardFeed 获取社区故事板 feed 流（按时间倒序，带缓存）
 func (s *Service) GetStoryboardFeed(ctx context.Context, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	s.logger.Debug("getting storyboard feed",
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
@@ -737,9 +985,43 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, limit, offset int) ([]*
 		limit = 100
 	}
 
+	// 尝试从缓存获取（feed 流缓存时间较短，因为内容变化频繁）
+	c := s.getCache()
+	if c != nil {
+		cacheKey := "storyboard_feed:" + fmt.Sprintf("%d:%d", limit, offset)
+		var cachedFeed []*domain.Storyboard
+		var cachedTotal int64
+		if err := c.Get(ctx, cacheKey, &cachedFeed); err == nil {
+			totalKey := cacheKey + ":total"
+			_ = c.Get(ctx, totalKey, &cachedTotal)
+			s.logger.Debug("storyboard feed cache hit",
+				zap.Int("count", len(cachedFeed)))
+			return cachedFeed, cachedTotal, nil
+		} else {
+			s.logger.Debug("storyboard feed cache miss",
+				zap.Error(err))
+		}
+	}
+
 	storyboards, total, err := s.repo.StoryboardFeed(ctx, limit, offset)
 	if err != nil {
+		s.logger.Error("failed to get storyboard feed",
+			zap.Error(err))
 		return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
+	}
+
+	// 写入缓存（较短的过期时间，因为 feed 流变化频繁）
+	if c != nil && len(storyboards) > 0 {
+		cacheKey := "storyboard_feed:" + fmt.Sprintf("%d:%d", limit, offset)
+		if err := c.Set(ctx, cacheKey, storyboards, 5*time.Minute); err != nil {
+			s.logger.Warn("failed to cache storyboard feed",
+				zap.Error(err))
+		} else {
+			totalKey := cacheKey + ":total"
+			_ = c.Set(ctx, totalKey, total, 5*time.Minute)
+			s.logger.Debug("storyboard feed cached",
+				zap.Int("count", len(storyboards)))
+		}
 	}
 
 	s.logger.Info("storyboard feed fetched",
@@ -842,6 +1124,26 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 		return fmt.Errorf("failed to fork storyboard: %w", err)
 	}
 
+	// 缓存新创建的 fork storyboard
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(newStoryboard.ID)
+		scenes := newStoryboard.StoryboardScenes
+		newStoryboard.StoryboardScenes = nil
+		if err := c.Set(ctx, key, newStoryboard, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache forked storyboard",
+				zap.String("storyboardId", newStoryboard.ID),
+				zap.Error(err))
+		}
+		newStoryboard.StoryboardScenes = scenes
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(newStoryboard.StoryID, limit, offset))
+			}
+		}
+	}
+
 	s.logger.Info("storyboard forked successfully",
 		zap.String("parentId", parentID),
 		zap.String("newId", newStoryboard.ID),
@@ -907,6 +1209,17 @@ func (s *Service) LikeStoryboard(ctx context.Context, userID, storyboardID strin
 		return fmt.Errorf("failed to like storyboard: %w", err)
 	}
 
+	// 使 storyboard 缓存失效（因为点赞数可能变化）
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(storyboardID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate storyboard cache after like",
+				zap.String("storyboardId", storyboardID),
+				zap.Error(err))
+		}
+	}
+
 	s.logger.Info("storyboard liked",
 		zap.String("userId", userID),
 		zap.String("storyboardId", storyboardID),
@@ -955,6 +1268,17 @@ func (s *Service) UnlikeStoryboard(ctx context.Context, userID, storyboardID str
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
 		return fmt.Errorf("failed to unlike storyboard: %w", err)
+	}
+
+	// 使 storyboard 缓存失效（因为点赞数可能变化）
+	c := s.getCache()
+	if c != nil {
+		key := cache.StoryboardKey(storyboardID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate storyboard cache after unlike",
+				zap.String("storyboardId", storyboardID),
+				zap.Error(err))
+		}
 	}
 
 	s.logger.Info("storyboard unliked successfully",

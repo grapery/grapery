@@ -18,6 +18,14 @@ const (
 	userCacheTTL          = 30 * time.Minute
 	passwordResetTokenTTL = 15 * time.Minute
 	emailVerifyTokenTTL   = 24 * time.Hour
+
+	// 通用实体缓存过期时间
+	entityCacheTTL        = 30 * time.Minute  // 单个实体缓存（用户、角色、群组、故事板等）
+	listCacheTTL          = 10 * time.Minute   // 列表缓存（较短，因为数据变化频繁）
+	styleConfigCacheTTL   = 1 * time.Hour     // 风格配置缓存（变化较少）
+	activityCacheTTL      = 5 * time.Minute   // 活动流缓存（变化频繁）
+	commentCacheTTL       = 15 * time.Minute  // 评论缓存
+	groupMemberCacheTTL   = 15 * time.Minute  // 群组成员缓存
 )
 
 // PasswordResetData 密码重置数据结构

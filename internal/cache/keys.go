@@ -36,6 +36,30 @@ const (
 	PrefixSession       = "session:"
 	PrefixPasswordReset = "pwd_reset:"
 	PrefixEmailVerify   = "email_verify:"
+
+	// 搜索缓存
+	PrefixSearchStories    = "search:stories:"
+	PrefixSearchCharacters = "search:characters:"
+	PrefixSearchUsers      = "search:users:"
+	PrefixSearchGroups     = "search:groups:"
+	PrefixSearchAll        = "search:all:"
+
+	// 搜索索引（用于模糊搜索）
+	PrefixSearchIndexStories    = "search_index:stories:"
+	PrefixSearchIndexCharacters = "search_index:characters:"
+	PrefixSearchIndexUsers      = "search_index:users:"
+	PrefixSearchIndexGroups     = "search_index:groups:"
+
+	// 列表缓存（带分页）
+	PrefixUserStoriesList    = "user_stories_list:"
+	PrefixUserCharactersList = "user_characters_list:"
+	PrefixUserGroupsList     = "user_groups_list:"
+	PrefixStoryboardsList    = "storyboards_list:"
+	PrefixCommentsList       = "comments_list:"
+	PrefixGroupMembersList   = "group_members_list:"
+	PrefixGroupActivities    = "group_activities:"
+	PrefixUserActivities     = "user_activities:"
+	PrefixStyleConfigs        = "style_configs:"
 )
 
 // 缓存键生成函数
@@ -118,4 +142,90 @@ func PasswordResetKey(token string) string {
 
 func EmailVerifyKey(token string) string {
 	return fmt.Sprintf("%s%s", PrefixEmailVerify, token)
+}
+
+// 搜索缓存键生成函数
+func SearchStoriesKey(query string, searchType string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchStories, query, searchType, limit, offset)
+}
+
+func SearchCharactersKey(query string, searchType string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchCharacters, query, searchType, limit, offset)
+}
+
+func SearchUsersKey(query string, searchType string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchUsers, query, searchType, limit, offset)
+}
+
+func SearchGroupsKey(query string, searchType string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchGroups, query, searchType, limit, offset)
+}
+
+func SearchAllKey(query string, limit int) string {
+	return fmt.Sprintf("%s%s:%d", PrefixSearchAll, query, limit)
+}
+
+// 搜索索引键（用于模糊搜索）
+func SearchIndexStoriesKey(keyword string) string {
+	return fmt.Sprintf("%s%s", PrefixSearchIndexStories, keyword)
+}
+
+func SearchIndexCharactersKey(keyword string) string {
+	return fmt.Sprintf("%s%s", PrefixSearchIndexCharacters, keyword)
+}
+
+func SearchIndexUsersKey(keyword string) string {
+	return fmt.Sprintf("%s%s", PrefixSearchIndexUsers, keyword)
+}
+
+func SearchIndexGroupsKey(keyword string) string {
+	return fmt.Sprintf("%s%s", PrefixSearchIndexGroups, keyword)
+}
+
+// 列表缓存键生成函数（带分页参数）
+func UserStoriesListKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixUserStoriesList, userID, limit, offset)
+}
+
+func UserCharactersListKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixUserCharactersList, userID, limit, offset)
+}
+
+func UserGroupsListKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixUserGroupsList, userID, limit, offset)
+}
+
+func StoryboardsListKey(storyID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixStoryboardsList, storyID, limit, offset)
+}
+
+func CommentsListKey(targetType, targetID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixCommentsList, targetType, targetID, limit, offset)
+}
+
+func GroupMembersListKey(groupID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixGroupMembersList, groupID, limit, offset)
+}
+
+func GroupActivitiesKey(groupID string, limit int) string {
+	return fmt.Sprintf("%s%s:%d", PrefixGroupActivities, groupID, limit)
+}
+
+func UserActivitiesKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", PrefixUserActivities, userID, limit, offset)
+}
+
+func StyleConfigsListKey(groupID string, limit, offset int) string {
+	if groupID == "" {
+		return fmt.Sprintf("%sall:%d:%d", PrefixStyleConfigs, limit, offset)
+	}
+	return fmt.Sprintf("%s%s:%d:%d", PrefixStyleConfigs, groupID, limit, offset)
+}
+
+func StyleConfigByIDKey(id string) string {
+	return fmt.Sprintf("%sid:%s", PrefixStyleConfigs, id)
+}
+
+func StyleConfigByStyleKey(styleName string) string {
+	return fmt.Sprintf("%sstyle:%s", PrefixStyleConfigs, styleName)
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -74,33 +75,85 @@ func (s *Service) CreateGroup(ctx context.Context, userID string, req CreateGrou
 	}
 
 	if err := s.repo.CreateGroup(ctx, group); err != nil {
-		s.logger.Error("failed to create group", zap.Error(err))
+		s.logger.Error("failed to create group",
+			zap.String("groupID", group.ID),
+			zap.Error(err))
 		return nil, errors.New("failed to create group")
 	}
 
 	// 将创建者添加为群主
 	if err := s.repo.AddGroupMember(ctx, group.ID, userID, domain.RoleOwner, ""); err != nil {
-		s.logger.Error("failed to add creator as owner", zap.Error(err))
+		s.logger.Error("failed to add creator as owner",
+			zap.String("groupID", group.ID),
+			zap.String("userID", userID),
+			zap.Error(err))
 		// 回滚群组创建
 		s.repo.DeleteGroup(ctx, group.ID)
 		return nil, errors.New("failed to initialize group")
 	}
 
-	s.logger.Info("group created successfully", zap.String("groupID", group.ID))
+	// 缓存新创建的群组
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(group.ID)
+		if err := c.Set(ctx, key, group, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache new group",
+				zap.String("groupID", group.ID),
+				zap.Error(err))
+		}
+	}
+
+	s.logger.Info("group created successfully",
+		zap.String("groupID", group.ID))
 	return group, nil
 }
 
-// GetGroup 获取群组详情
+// GetGroup 获取群组详情（带缓存）
 func (s *Service) GetGroup(ctx context.Context, groupID string) (*domain.Group, error) {
-	s.logger.Info("getting group", zap.String("groupID", groupID))
+	s.logger.Info("getting group",
+		zap.String("groupID", groupID))
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		var cachedGroup domain.Group
+		if err := c.Get(ctx, key, &cachedGroup); err == nil {
+			s.logger.Debug("group cache hit",
+				zap.String("groupID", groupID))
+			return &cachedGroup, nil
+		} else {
+			s.logger.Debug("group cache miss",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
 	group, err := s.repo.GroupByID(ctx, groupID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("group not found",
+				zap.String("groupID", groupID))
 			return nil, errors.New("group not found")
 		}
-		s.logger.Error("failed to get group", zap.Error(err))
+		s.logger.Error("failed to get group",
+			zap.String("groupID", groupID),
+			zap.Error(err))
 		return nil, errors.New("failed to get group")
+	}
+
+	// 写入缓存
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		if err := c.Set(ctx, key, group, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache group",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("group cached",
+				zap.String("groupID", groupID))
+		}
 	}
 
 	return group, nil
@@ -208,11 +261,31 @@ func (s *Service) UpdateGroup(ctx context.Context, userID, groupID string, req U
 	group.UpdatedAt = time.Now().Unix()
 
 	if err := s.repo.UpdateGroup(ctx, group); err != nil {
-		s.logger.Error("failed to update group", zap.Error(err))
+		s.logger.Error("failed to update group",
+			zap.String("groupID", groupID),
+			zap.Error(err))
 		return nil, errors.New("failed to update group")
 	}
 
-	s.logger.Info("group updated successfully", zap.String("groupID", groupID))
+	// 使缓存失效并重新缓存
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate group cache",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+		// 重新缓存
+		if err := c.Set(ctx, key, group, entityCacheTTL); err != nil {
+			s.logger.Warn("failed to cache updated group",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+	}
+
+	s.logger.Info("group updated successfully",
+		zap.String("groupID", groupID))
 	return group, nil
 }
 
@@ -272,31 +345,94 @@ func (s *Service) DeleteGroup(ctx context.Context, userID, groupID string) error
 	}
 
 	if err := s.repo.DeleteGroup(ctx, groupID); err != nil {
-		s.logger.Error("failed to delete group", zap.Error(err))
+		s.logger.Error("failed to delete group",
+			zap.String("groupID", groupID),
+			zap.Error(err))
 		return errors.New("failed to delete group")
 	}
 
-	s.logger.Info("group deleted successfully", zap.String("groupID", groupID))
+	// 使缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		if err := c.Delete(ctx, key); err != nil {
+			s.logger.Warn("failed to invalidate group cache",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+		// 清除相关列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.GroupMembersListKey(groupID, limit, offset))
+				_ = c.Delete(ctx, cache.GroupActivitiesKey(groupID, limit))
+			}
+		}
+	}
+
+	s.logger.Info("group deleted successfully",
+		zap.String("groupID", groupID))
 	return nil
 }
 
-// GetGroupMembers 获取群组成员列表
+// GetGroupMembers 获取群组成员列表（带缓存）
 func (s *Service) GetGroupMembers(ctx context.Context, groupID string, limit, offset int) ([]*domain.GroupMemberInfo, error) {
-	s.logger.Info("getting group members", zap.String("groupID", groupID))
+	s.logger.Info("getting group members",
+		zap.String("groupID", groupID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
 
 	// 验证群组存在
 	_, err := s.repo.GroupByID(ctx, groupID)
 	if err != nil {
 		if err == domain.ErrNotFound {
+			s.logger.Warn("group not found",
+				zap.String("groupID", groupID))
 			return nil, errors.New("group not found")
 		}
+		s.logger.Error("failed to get group",
+			zap.String("groupID", groupID),
+			zap.Error(err))
 		return nil, errors.New("failed to get group")
 	}
 
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.GroupMembersListKey(groupID, limit, offset)
+		var cachedMembers []*domain.GroupMemberInfo
+		if err := c.Get(ctx, cacheKey, &cachedMembers); err == nil {
+			s.logger.Debug("group members cache hit",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(cachedMembers)))
+			return cachedMembers, nil
+		} else {
+			s.logger.Debug("group members cache miss",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
 	members, err := s.repo.GetGroupMembers(ctx, groupID, limit, offset)
 	if err != nil {
-		s.logger.Error("failed to get group members", zap.Error(err))
+		s.logger.Error("failed to get group members",
+			zap.String("groupID", groupID),
+			zap.Error(err))
 		return nil, errors.New("failed to get group members")
+	}
+
+	// 写入缓存
+	if c != nil && len(members) > 0 {
+		cacheKey := cache.GroupMembersListKey(groupID, limit, offset)
+		if err := c.Set(ctx, cacheKey, members, groupMemberCacheTTL); err != nil {
+			s.logger.Warn("failed to cache group members",
+				zap.String("groupID", groupID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("group members cached",
+				zap.String("groupID", groupID),
+				zap.Int("count", len(members)))
+		}
 	}
 
 	return members, nil
@@ -375,19 +511,46 @@ func (s *Service) AcceptInvitation(ctx context.Context, userID, invitationID str
 
 	// 添加成员
 	if err := s.repo.AddGroupMember(ctx, invitation.GroupID, userID, domain.RoleMember, invitation.InviterID); err != nil {
-		s.logger.Error("failed to add member", zap.Error(err))
+		s.logger.Error("failed to add member",
+			zap.String("groupID", invitation.GroupID),
+			zap.String("userID", userID),
+			zap.Error(err))
 		return errors.New("failed to join group")
 	}
 
 	// 更新邀请状态
 	if err := s.repo.UpdateInvitationStatus(ctx, invitationID, "accepted"); err != nil {
-		s.logger.Error("failed to update invitation status", zap.Error(err))
+		s.logger.Error("failed to update invitation status",
+			zap.String("invitationID", invitationID),
+			zap.Error(err))
+	}
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除群组成员列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.GroupMembersListKey(invitation.GroupID, limit, offset))
+			}
+		}
+		// 清除用户群组列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserGroupsListKey(userID, limit, offset))
+			}
+		}
+		s.logger.Debug("group member cache invalidated",
+			zap.String("groupID", invitation.GroupID),
+			zap.String("userID", userID))
 	}
 
 	// 记录新成员加入的群组活动
 	go s.RecordGroupMemberJoined(context.Background(), invitation.GroupID, userID)
 
-	s.logger.Info("invitation accepted successfully", zap.String("groupID", invitation.GroupID))
+	s.logger.Info("invitation accepted successfully",
+		zap.String("groupID", invitation.GroupID),
+		zap.String("userID", userID))
 	return nil
 }
 
@@ -465,11 +628,36 @@ func (s *Service) RemoveMember(ctx context.Context, operatorID, groupID, memberI
 
 	// 移除成员
 	if err := s.repo.RemoveGroupMember(ctx, groupID, memberID); err != nil {
-		s.logger.Error("failed to remove member", zap.Error(err))
+		s.logger.Error("failed to remove member",
+			zap.String("groupID", groupID),
+			zap.String("memberID", memberID),
+			zap.Error(err))
 		return errors.New("failed to remove member")
 	}
 
-	s.logger.Info("member removed successfully")
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除群组成员列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.GroupMembersListKey(groupID, limit, offset))
+			}
+		}
+		// 清除用户群组列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserGroupsListKey(memberID, limit, offset))
+			}
+		}
+		s.logger.Debug("group member cache invalidated",
+			zap.String("groupID", groupID),
+			zap.String("memberID", memberID))
+	}
+
+	s.logger.Info("member removed successfully",
+		zap.String("groupID", groupID),
+		zap.String("memberID", memberID))
 	return nil
 }
 

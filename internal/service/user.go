@@ -5,15 +5,42 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
 
 func (s *Service) FollowUser(ctx context.Context, followerID, followeeID string) error {
+	s.logger.Info("following user",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
+
 	if err := s.repo.FollowUser(ctx, followerID, followeeID); err != nil {
+		s.logger.Error("failed to follow user",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID),
+			zap.Error(err))
 		return fmt.Errorf("failed to follow user: %w", err)
 	}
-	s.logger.Info("user followed", zap.String("follower", followerID), zap.String("followee", followeeID))
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除关注者和被关注者的关注列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserFollowingKey(followerID)+fmt.Sprintf(":%d:%d", limit, offset))
+				_ = c.Delete(ctx, cache.UserFollowersKey(followeeID)+fmt.Sprintf(":%d:%d", limit, offset))
+			}
+		}
+		s.logger.Debug("follow/unfollow cache invalidated",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID))
+	}
+
+	s.logger.Info("user followed successfully",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
 
 	// Create notification
 	followee, _ := s.repo.UserByID(ctx, followeeID)
@@ -26,10 +53,36 @@ func (s *Service) FollowUser(ctx context.Context, followerID, followeeID string)
 }
 
 func (s *Service) UnfollowUser(ctx context.Context, followerID, followeeID string) error {
+	s.logger.Info("unfollowing user",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
+
 	if err := s.repo.UnfollowUser(ctx, followerID, followeeID); err != nil {
+		s.logger.Error("failed to unfollow user",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID),
+			zap.Error(err))
 		return fmt.Errorf("failed to unfollow user: %w", err)
 	}
-	s.logger.Info("user unfollowed", zap.String("follower", followerID), zap.String("followee", followeeID))
+
+	// 使相关缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除关注者和被关注者的关注列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserFollowingKey(followerID)+fmt.Sprintf(":%d:%d", limit, offset))
+				_ = c.Delete(ctx, cache.UserFollowersKey(followeeID)+fmt.Sprintf(":%d:%d", limit, offset))
+			}
+		}
+		s.logger.Debug("follow/unfollow cache invalidated",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID))
+	}
+
+	s.logger.Info("user unfollowed successfully",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
 	return nil
 }
 
@@ -38,23 +91,115 @@ func (s *Service) IsFollowing(ctx context.Context, followerID, followeeID string
 }
 
 func (s *Service) GetFollowers(ctx context.Context, userID string, limit, offset int) ([]*domain.User, error) {
+	s.logger.Debug("getting followers",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.Followers(ctx, userID, limit, offset)
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserFollowersKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
+		var cachedFollowers []*domain.User
+		if err := c.Get(ctx, cacheKey, &cachedFollowers); err == nil {
+			s.logger.Debug("followers cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cachedFollowers)))
+			return cachedFollowers, nil
+		} else {
+			s.logger.Debug("followers cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	followers, err := s.repo.Followers(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get followers",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(followers) > 0 {
+		cacheKey := cache.UserFollowersKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
+		if err := c.Set(ctx, cacheKey, followers, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache followers",
+				zap.String("userID", userID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("followers cached",
+				zap.String("userID", userID),
+				zap.Int("count", len(followers)))
+		}
+	}
+
+	return followers, nil
 }
 
 func (s *Service) GetFollowing(ctx context.Context, userID string, limit, offset int) ([]*domain.User, error) {
+	s.logger.Debug("getting following",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.Following(ctx, userID, limit, offset)
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserFollowingKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
+		var cachedFollowing []*domain.User
+		if err := c.Get(ctx, cacheKey, &cachedFollowing); err == nil {
+			s.logger.Debug("following cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cachedFollowing)))
+			return cachedFollowing, nil
+		} else {
+			s.logger.Debug("following cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	following, err := s.repo.Following(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get following",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(following) > 0 {
+		cacheKey := cache.UserFollowingKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
+		if err := c.Set(ctx, cacheKey, following, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache following",
+				zap.String("userID", userID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("following cached",
+				zap.String("userID", userID),
+				zap.Int("count", len(following)))
+		}
+	}
+
+	return following, nil
 }
 
 // GetFollowersWithFollowStatus 获取粉丝列表，并包含当前用户的关注状态
@@ -111,10 +256,16 @@ func (s *Service) GetFollowingWithFollowStatus(ctx context.Context, userID, curr
 	return following, nil
 }
 
-// UpdateUserProfile 更新用户资料
+// UpdateUserProfile 更新用户资料（带缓存失效）
 func (s *Service) UpdateUserProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*domain.User, error) {
+	s.logger.Info("updating user profile",
+		zap.String("userID", userID))
+
 	user, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
+		s.logger.Error("failed to get user for update",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
@@ -142,82 +293,279 @@ func (s *Service) UpdateUserProfile(ctx context.Context, userID string, req *Upd
 	}
 
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
-		s.logger.Error("failed to update user profile", zap.Error(err), zap.String("userId", userID))
+		s.logger.Error("failed to update user profile",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to update user profile: %w", err)
 	}
 
-	s.logger.Info("user profile updated", zap.String("userId", userID))
+	// 使缓存失效并重新缓存
+	s.invalidateUserCache(ctx, userID)
+	s.cacheUser(ctx, user)
+
+	// 使相关列表缓存失效
+	c := s.getCache()
+	if c != nil {
+		// 清除用户故事列表缓存（简化实现，实际应该更精确）
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 100; offset += limit {
+				_ = c.Delete(ctx, cache.UserStoriesListKey(userID, limit, offset))
+			}
+		}
+		// 清除用户角色列表缓存
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 100; offset += limit {
+				_ = c.Delete(ctx, cache.UserCharactersListKey(userID, limit, offset))
+			}
+		}
+	}
+
+	s.logger.Info("user profile updated",
+		zap.String("userID", userID))
 	return user, nil
 }
 
-// UpdateUserAvatar 更新用户头像
+// UpdateUserAvatar 更新用户头像（带缓存失效）
 func (s *Service) UpdateUserAvatar(ctx context.Context, userID, avatarURL string) error {
+	s.logger.Info("updating user avatar",
+		zap.String("userID", userID))
+
 	user, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
+		s.logger.Error("failed to get user for avatar update",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return fmt.Errorf("user not found: %w", err)
 	}
 
 	user.Avatar = avatarURL
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
-		s.logger.Error("failed to update user avatar", zap.Error(err), zap.String("userId", userID))
+		s.logger.Error("failed to update user avatar",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return fmt.Errorf("failed to update user avatar: %w", err)
 	}
 
-	s.logger.Info("user avatar updated", zap.String("userId", userID))
+	// 使缓存失效并重新缓存
+	s.invalidateUserCache(ctx, userID)
+	s.cacheUser(ctx, user)
+
+	s.logger.Info("user avatar updated",
+		zap.String("userID", userID))
 	return nil
 }
 
-// UpdateUserBackground 更新用户背景图
+// UpdateUserBackground 更新用户背景图（带缓存失效）
 func (s *Service) UpdateUserBackground(ctx context.Context, userID, backgroundURL string) error {
+	s.logger.Info("updating user background",
+		zap.String("userID", userID))
+
 	user, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
+		s.logger.Error("failed to get user for background update",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return fmt.Errorf("user not found: %w", err)
 	}
 
 	user.Background = backgroundURL
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
-		s.logger.Error("failed to update user background", zap.Error(err), zap.String("userId", userID))
+		s.logger.Error("failed to update user background",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return fmt.Errorf("failed to update user background: %w", err)
 	}
 
-	s.logger.Info("user background updated", zap.String("userId", userID))
+	// 使缓存失效并重新缓存
+	s.invalidateUserCache(ctx, userID)
+	s.cacheUser(ctx, user)
+
+	s.logger.Info("user background updated",
+		zap.String("userID", userID))
 	return nil
 }
 
-// UserProfile 获取用户资料（对外API）
+// UserProfile 获取用户资料（对外API，带缓存）
 func (s *Service) UserProfile(ctx context.Context, userID string) (*domain.User, error) {
+	s.logger.Debug("getting user profile",
+		zap.String("userID", userID))
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.UserKey(userID)
+		var cachedUser domain.User
+		if err := c.Get(ctx, key, &cachedUser); err == nil {
+			s.logger.Debug("user profile cache hit",
+				zap.String("userID", userID))
+			return &cachedUser, nil
+		} else {
+			s.logger.Debug("user profile cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
 	user, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
+		s.logger.Error("failed to get user profile",
+			zap.String("userID", userID),
+			zap.Error(err))
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
+
+	// 写入缓存
+	s.cacheUser(ctx, user)
+
 	return user, nil
 }
 
-// GetUser 获取用户信息（内部使用）
+// GetUser 获取用户信息（内部使用，带缓存）
 func (s *Service) GetUser(ctx context.Context, userID string) (*domain.User, error) {
-	return s.repo.UserByID(ctx, userID)
+	s.logger.Debug("getting user",
+		zap.String("userID", userID))
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		key := cache.UserKey(userID)
+		var cachedUser domain.User
+		if err := c.Get(ctx, key, &cachedUser); err == nil {
+			s.logger.Debug("user cache hit",
+				zap.String("userID", userID))
+			return &cachedUser, nil
+		} else {
+			s.logger.Debug("user cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	user, err := s.repo.UserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 写入缓存
+	s.cacheUser(ctx, user)
+
+	return user, nil
 }
 
-// GetUserStories 获取用户的故事列表
+// GetUserStories 获取用户的故事列表（带缓存）
 func (s *Service) GetUserStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
+	s.logger.Debug("getting user stories",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.StoriesByAuthor(ctx, userID, limit, offset)
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserStoriesListKey(userID, limit, offset)
+		var cachedStories []*domain.Story
+		if err := c.Get(ctx, cacheKey, &cachedStories); err == nil {
+			s.logger.Debug("user stories cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cachedStories)))
+			return cachedStories, nil
+		} else {
+			s.logger.Debug("user stories cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	stories, err := s.repo.StoriesByAuthor(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get user stories",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(stories) > 0 {
+		cacheKey := cache.UserStoriesListKey(userID, limit, offset)
+		if err := c.Set(ctx, cacheKey, stories, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache user stories",
+				zap.String("userID", userID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("user stories cached",
+				zap.String("userID", userID),
+				zap.Int("count", len(stories)))
+		}
+	}
+
+	return stories, nil
 }
 
-// GetUserCharacters 获取用户的角色列表
+// GetUserCharacters 获取用户的角色列表（带缓存）
 func (s *Service) GetUserCharacters(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
+	s.logger.Debug("getting user characters",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.CharactersByAuthor(ctx, userID, limit, offset)
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserCharactersListKey(userID, limit, offset)
+		var cachedCharacters []*domain.Character
+		if err := c.Get(ctx, cacheKey, &cachedCharacters); err == nil {
+			s.logger.Debug("user characters cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cachedCharacters)))
+			return cachedCharacters, nil
+		} else {
+			s.logger.Debug("user characters cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	characters, err := s.repo.CharactersByAuthor(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get user characters",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(characters) > 0 {
+		cacheKey := cache.UserCharactersListKey(userID, limit, offset)
+		if err := c.Set(ctx, cacheKey, characters, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache user characters",
+				zap.String("userID", userID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("user characters cached",
+				zap.String("userID", userID),
+				zap.Int("count", len(characters)))
+		}
+	}
+
+	return characters, nil
 }
 
 // GetLikedStories 获取用户点赞的故事
@@ -286,12 +634,27 @@ func (s *Service) GetUserActivityList(ctx context.Context, userID string, limit,
 	return s.repo.UserActivitiesByUserID(ctx, userID, limit, offset)
 }
 
-// CreateUserActivity 创建用户活动记录
+// CreateUserActivity 创建用户活动记录（带缓存失效）
 func (s *Service) CreateUserActivity(ctx context.Context, activity *domain.UserActivity) error {
 	if err := s.repo.CreateUserActivity(ctx, activity); err != nil {
-		s.logger.Error("failed to create user activity", zap.Error(err))
+		s.logger.Error("failed to create user activity",
+			zap.String("userID", activity.UserID),
+			zap.Error(err))
 		return fmt.Errorf("failed to create user activity: %w", err)
 	}
+
+	// 使用户活动列表缓存失效
+	c := s.getCache()
+	if c != nil {
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.UserActivitiesKey(activity.UserID, limit, offset))
+			}
+		}
+		s.logger.Debug("user activities cache invalidated",
+			zap.String("userID", activity.UserID))
+	}
+
 	return nil
 }
 
