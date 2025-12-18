@@ -49,7 +49,7 @@ type Story struct {
 	StoryboardCount   int            `gorm:"default:0;index"` // Number of storyboards in this story
 	DefaultSceneCount int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
 	Genre             string         `gorm:"size:50;index"`
-	Style             string         `gorm:"size:50;index"`  // Story style (e.g., action, drama, comedy, mystery)
+	Style             string         `gorm:"size:50;index"`                 // Story style (e.g., action, drama, comedy, mystery)
 	Status            string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
 	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt         time.Time      `gorm:"autoUpdateTime;index"`
@@ -367,6 +367,11 @@ type ChatThread struct {
 	UnreadCount          int            `gorm:"default:0"`
 	MessageCount         int            `gorm:"default:0"`
 	InteractionFrequency float64        `gorm:"default:0"`
+	SelectedStoryboardID *string        `gorm:"size:36;index"`
+	ContextStoryboardIDs string         `gorm:"type:json"` // JSON array of storyboard IDs
+	TotalTokensUsed      int64          `gorm:"default:0"`
+	IsArchived           bool           `gorm:"default:false;index"`
+	Summary              string         `gorm:"type:text"`
 	CreatedAt            time.Time      `gorm:"autoCreateTime"`
 	UpdatedAt            time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt            gorm.DeletedAt `gorm:"index"`
@@ -374,17 +379,61 @@ type ChatThread struct {
 
 // ChatMessage database model
 type ChatMessage struct {
+	ID            string         `gorm:"primaryKey;size:36"`
+	ThreadID      string         `gorm:"size:36;not null;index"`
+	Thread        ChatThread     `gorm:"foreignKey:ThreadID"`
+	SenderID      string         `gorm:"size:36;not null"`
+	SenderName    string         `gorm:"size:100"`
+	SenderAvatar  string         `gorm:"size:500"`
+	Content       string         `gorm:"type:text;not null"`
+	Image         string         `gorm:"size:500"`
+	IsUser        bool           `gorm:"default:false"`
+	IsArchived    bool           `gorm:"default:false;index"`
+	ReactionCount int            `gorm:"default:0;index"`
+	CreatedAt     time.Time      `gorm:"autoCreateTime;index"`
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
+}
+
+// ChatThreadStoryboardBranch database model
+type ChatThreadStoryboardBranch struct {
 	ID           string         `gorm:"primaryKey;size:36"`
 	ThreadID     string         `gorm:"size:36;not null;index"`
 	Thread       ChatThread     `gorm:"foreignKey:ThreadID"`
-	SenderID     string         `gorm:"size:36;not null"`
-	SenderName   string         `gorm:"size:100"`
-	SenderAvatar string         `gorm:"size:500"`
-	Content      string         `gorm:"type:text;not null"`
-	Image        string         `gorm:"size:500"`
-	IsUser       bool           `gorm:"default:false"`
-	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
+	StoryboardID string         `gorm:"size:36;not null;index"`
+	Storyboard   Storyboard     `gorm:"foreignKey:StoryboardID"`
+	CharacterID  string         `gorm:"size:36;not null;index"`
+	Character    Character      `gorm:"foreignKey:CharacterID"`
+	SelectedAt   time.Time      `gorm:"index"`
+	CreatedAt    time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
+}
+
+// ChatMessageReaction database model
+type ChatMessageReaction struct {
+	ID           string         `gorm:"primaryKey;size:36"`
+	MessageID    string         `gorm:"size:36;not null;index"`
+	Message      ChatMessage    `gorm:"foreignKey:MessageID"`
+	UserID       string         `gorm:"size:36;not null;index"`
+	User         User           `gorm:"foreignKey:UserID"`
+	ReactionType string         `gorm:"size:20;not null;index"` // like, dislike, emoji
+	EmojiCode    string         `gorm:"size:10"`
+	CreatedAt    time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
+}
+
+// ChatMessageToken database model
+type ChatMessageToken struct {
+	ID           string      `gorm:"primaryKey;size:36"`
+	MessageID    string      `gorm:"size:36;not null;uniqueIndex"`
+	Message      ChatMessage `gorm:"foreignKey:MessageID"`
+	InputTokens  int         `gorm:"default:0"`
+	OutputTokens int         `gorm:"default:0"`
+	TotalTokens  int         `gorm:"default:0;index"`
+	Model        string      `gorm:"size:100"`
+	CreatedAt    time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt    time.Time   `gorm:"autoUpdateTime"`
 }
 
 // StoryComposition database model
@@ -481,7 +530,7 @@ type CharacterFollow struct {
 // GroupRole 群组角色定义表
 type GroupRole struct {
 	ID          string    `gorm:"primaryKey;size:36"`
-	Code        string    `gorm:"size:50;not null;uniqueIndex;index"` // creator, admin, member, outsider
+	RoleCode    string    `gorm:"size:50;not null;uniqueIndex;index"` // creator, admin, member, outsider
 	Name        string    `gorm:"size:100;not null"`                  // 小组创建者、小组管理员、小组成员、小组外部人员
 	Description string    `gorm:"type:text"`
 	IsSystem    bool      `gorm:"default:true;index"` // 是否为系统内置角色
@@ -497,7 +546,7 @@ type GroupMember struct {
 	UserID    string         `gorm:"size:36;not null;index:idx_group_user,unique;index"`
 	User      User           `gorm:"foreignKey:UserID"`
 	Role      string         `gorm:"size:20;not null"` // owner, admin, moderator, member (保留用于向后兼容)
-	RoleID    string         `gorm:"size:36;index"`   // 关联到GroupRole表
+	RoleID    string         `gorm:"size:36;index"`    // 关联到GroupRole表
 	RoleRef   GroupRole      `gorm:"foreignKey:RoleID"`
 	InvitedBy string         `gorm:"size:36"`
 	JoinedAt  time.Time      `gorm:"autoCreateTime"`
@@ -1079,7 +1128,7 @@ type InvitationCode struct {
 	IsActive    bool           `gorm:"default:true;index"` // 是否启用
 	MaxUses     int            `gorm:"default:1"`          // 最大使用次数（0表示无限制）
 	CurrentUses int            `gorm:"default:0"`          // 当前使用次数
-	ExpiresAt   time.Time      `gorm:"index"`             // 过期时间（零值表示永不过期）
+	ExpiresAt   time.Time      `gorm:"index"`              // 过期时间（零值表示永不过期）
 	Description string         `gorm:"type:text"`          // 描述信息
 	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime"`

@@ -213,12 +213,12 @@ func (r *Repository) IsGroupMember(ctx context.Context, groupID, userID string) 
 func (r *Repository) CreateGroupRole(ctx context.Context, role *domain.GroupRole) error {
 	model := &GroupRole{
 		ID:          role.ID,
-		Code:        role.Code,
+		RoleCode:    role.RoleCode,
 		Name:        role.Name,
 		Description: role.Description,
 		IsSystem:    role.IsSystem,
-		CreatedAt:    time.Unix(role.CreatedAt, 0),
-		UpdatedAt:    time.Unix(role.UpdatedAt, 0),
+		CreatedAt:   time.Unix(role.CreatedAt, 0),
+		UpdatedAt:   time.Unix(role.UpdatedAt, 0),
 	}
 	return r.db.WithContext(ctx).Create(model).Error
 }
@@ -265,7 +265,7 @@ func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
 	roles := []*domain.GroupRole{
 		{
 			ID:          uuid.New().String(),
-			Code:        domain.RoleCodeCreator,
+			RoleCode:    domain.RoleCodeCreator,
 			Name:        "小组创建者",
 			Description: "小组的创建者，拥有所有权限",
 			IsSystem:    true,
@@ -274,7 +274,7 @@ func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
 		},
 		{
 			ID:          uuid.New().String(),
-			Code:        domain.RoleCodeAdmin,
+			RoleCode:    domain.RoleCodeAdmin,
 			Name:        "小组管理员",
 			Description: "小组的管理员，可以管理成员和内容",
 			IsSystem:    true,
@@ -283,7 +283,7 @@ func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
 		},
 		{
 			ID:          uuid.New().String(),
-			Code:        domain.RoleCodeMember,
+			RoleCode:    domain.RoleCodeMember,
 			Name:        "小组成员",
 			Description: "小组的普通成员，可以创建和查看内容",
 			IsSystem:    true,
@@ -292,7 +292,7 @@ func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
 		},
 		{
 			ID:          uuid.New().String(),
-			Code:        domain.RoleCodeOutsider,
+			RoleCode:    domain.RoleCodeOutsider,
 			Name:        "小组外部人员",
 			Description: "小组外部人员，无权限访问小组内容",
 			IsSystem:    true,
@@ -303,7 +303,7 @@ func (r *Repository) InitializeGroupRoles(ctx context.Context) error {
 
 	for _, role := range roles {
 		// 检查角色是否已存在
-		existing, err := r.GetGroupRoleByCode(ctx, role.Code)
+		existing, err := r.GetGroupRoleByCode(ctx, role.RoleCode)
 		if err != nil && err != domain.ErrNotFound {
 			return err
 		}
@@ -353,7 +353,7 @@ func (r *Repository) GetMemberRoleID(ctx context.Context, groupID, userID string
 func (r *Repository) groupRoleToDomain(m *GroupRole) *domain.GroupRole {
 	return &domain.GroupRole{
 		ID:          m.ID,
-		Code:        m.Code,
+		RoleCode:    m.RoleCode,
 		Name:        m.Name,
 		Description: m.Description,
 		IsSystem:    m.IsSystem,

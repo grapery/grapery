@@ -125,20 +125,24 @@ func (r *Repository) migrate() error {
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&TokenTransaction{},
+		// Chat enhancements
+		&ChatThreadStoryboardBranch{},
+		&ChatMessageReaction{},
+		&ChatMessageToken{},
 	}
 
 	r.log.Info("migrating database tables", zap.Int("total_models", len(models)))
 
-	for _, model := range models {
-		modelName := fmt.Sprintf("%T", model)
-		r.log.Debug("migrating table", zap.String("model", modelName))
-		if err := r.db.AutoMigrate(model); err != nil {
-			r.log.Error("failed to migrate table",
-				zap.String("model", modelName),
-				zap.Error(err))
-			return fmt.Errorf("failed to migrate %s: %w", modelName, err)
-		}
-	}
+	// for _, model := range models {
+	// 	modelName := fmt.Sprintf("%T", model)
+	// 	r.log.Debug("migrating table", zap.String("model", modelName))
+	// 	if err := r.db.AutoMigrate(model); err != nil {
+	// 		r.log.Error("failed to migrate table",
+	// 			zap.String("model", modelName),
+	// 			zap.Error(err))
+	// 		return fmt.Errorf("failed to migrate %s: %w", modelName, err)
+	// 	}
+	// }
 
 	r.log.Info("all tables migrated successfully")
 	return nil

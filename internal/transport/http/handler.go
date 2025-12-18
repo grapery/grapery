@@ -277,7 +277,6 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/invitation-codes/:id", h.GetInvitationCode)
 			authenticated.PUT("/invitation-codes/:id", h.UpdateInvitationCode)
 			authenticated.DELETE("/invitation-codes/:id", h.DeleteInvitationCode)
-			authenticated.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 公开接口，验证邀请码
 		}
 
 		// 公开接口（无需认证）

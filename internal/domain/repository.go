@@ -129,6 +129,31 @@ type Repository interface {
 	CreateChatMessage(ctx context.Context, msg *ChatMessage) error
 	DeleteChatMessage(ctx context.Context, id string) error
 
+	// ========== Chat Storyboard Branch operations ==========
+	StoryboardLeafNodesByCharacter(ctx context.Context, characterID string) ([]*Storyboard, error)
+	TraceStoryboardAncestors(ctx context.Context, leafNodeID, characterID string, limit int) ([]*Storyboard, error)
+	CreateStoryboardBranch(ctx context.Context, branch *StoryboardBranch) error
+	GetStoryboardBranchByThread(ctx context.Context, threadID string) (*StoryboardBranch, error)
+
+	// ========== Chat Message Reaction operations ==========
+	CreateMessageReaction(ctx context.Context, reaction *MessageReaction) error
+	GetMessageReactions(ctx context.Context, messageID string) ([]*MessageReaction, error)
+	DeleteMessageReaction(ctx context.Context, messageID, userID, reactionType, emojiCode string) error
+	GetUserMessageReaction(ctx context.Context, messageID, userID string) (*MessageReaction, error)
+
+	// ========== Chat Message Token operations ==========
+	CreateMessageTokenUsage(ctx context.Context, tokenUsage *TokenUsage) error
+	GetMessageTokenUsage(ctx context.Context, messageID string) (*TokenUsage, error)
+	UpdateThreadTokenUsage(ctx context.Context, threadID string, tokens int64) error
+
+	// ========== Chat Message Archive operations ==========
+	ArchiveMessage(ctx context.Context, messageID, userID string) error
+	UnarchiveMessage(ctx context.Context, messageID, userID string) error
+	ArchiveThread(ctx context.Context, threadID, userID string) error
+	UnarchiveThread(ctx context.Context, threadID, userID string) error
+	ChatMessagesBefore(ctx context.Context, threadID, beforeMessageID string, limit int) ([]*ChatMessage, error)
+	ChatMessagesArchived(ctx context.Context, threadID string, limit, offset int) ([]*ChatMessage, error)
+
 	// ========== Storyboard operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
 

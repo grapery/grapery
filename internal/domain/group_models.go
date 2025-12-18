@@ -13,7 +13,7 @@ const (
 // GroupRole 群组角色定义表
 type GroupRole struct {
 	ID          string `json:"id"`
-	Code        string `json:"code"`        // 角色代码：creator, admin, member, outsider
+	RoleCode    string `json:"code"`        // 角色代码：creator, admin, member, outsider
 	Name        string `json:"name"`        // 角色名称：小组创建者、小组管理员、小组成员、小组外部人员
 	Description string `json:"description"` // 角色描述
 	IsSystem    bool   `json:"isSystem"`    // 是否为系统内置角色
@@ -23,12 +23,12 @@ type GroupRole struct {
 
 // GroupRolePermission 群组角色权限关联（权限固定，存储在代码中）
 type GroupRolePermission struct {
-	RoleCode           string `json:"roleCode"`
-	CanInviteMembers   bool   `json:"canInviteMembers"`
-	CanRemoveMembers   bool   `json:"canRemoveMembers"`
-	CanEditGroup       bool   `json:"canEditGroup"`
-	CanDeleteGroup     bool   `json:"canDeleteGroup"`
-	CanCreateStories   bool   `json:"canCreateStories"`
+	RoleCode            string `json:"roleCode"`
+	CanInviteMembers    bool   `json:"canInviteMembers"`
+	CanRemoveMembers    bool   `json:"canRemoveMembers"`
+	CanEditGroup        bool   `json:"canEditGroup"`
+	CanDeleteGroup      bool   `json:"canDeleteGroup"`
+	CanCreateStories    bool   `json:"canCreateStories"`
 	CanEditStories      bool   `json:"canEditStories"`
 	CanDeleteStories    bool   `json:"canDeleteStories"`
 	CanManageRoles      bool   `json:"canManageRoles"`
@@ -229,54 +229,54 @@ func GetRolePermissions(roleCode string) GroupRolePermission {
 	switch roleCode {
 	case RoleCodeCreator:
 		return GroupRolePermission{
-			RoleCode:           RoleCodeCreator,
-			CanInviteMembers:   true,
-			CanRemoveMembers:   true,
-			CanEditGroup:       true,
-			CanDeleteGroup:     true,
-			CanCreateStories:   true,
-			CanEditStories:     true,
-			CanDeleteStories:   true,
-			CanManageRoles:     true,
+			RoleCode:            RoleCodeCreator,
+			CanInviteMembers:    true,
+			CanRemoveMembers:    true,
+			CanEditGroup:        true,
+			CanDeleteGroup:      true,
+			CanCreateStories:    true,
+			CanEditStories:      true,
+			CanDeleteStories:    true,
+			CanManageRoles:      true,
 			CanViewGroupContent: true,
 		}
 	case RoleCodeAdmin:
 		return GroupRolePermission{
-			RoleCode:           RoleCodeAdmin,
-			CanInviteMembers:   true,
-			CanRemoveMembers:   true,
-			CanEditGroup:       true,
-			CanDeleteGroup:     false,
-			CanCreateStories:   true,
-			CanEditStories:     true,
-			CanDeleteStories:   true,
-			CanManageRoles:     true,
+			RoleCode:            RoleCodeAdmin,
+			CanInviteMembers:    true,
+			CanRemoveMembers:    true,
+			CanEditGroup:        true,
+			CanDeleteGroup:      false,
+			CanCreateStories:    true,
+			CanEditStories:      true,
+			CanDeleteStories:    true,
+			CanManageRoles:      true,
 			CanViewGroupContent: true,
 		}
 	case RoleCodeMember:
 		return GroupRolePermission{
-			RoleCode:           RoleCodeMember,
-			CanInviteMembers:   false,
-			CanRemoveMembers:   false,
-			CanEditGroup:       false,
-			CanDeleteGroup:     false,
-			CanCreateStories:   true,
-			CanEditStories:     false,
-			CanDeleteStories:   false,
-			CanManageRoles:     false,
+			RoleCode:            RoleCodeMember,
+			CanInviteMembers:    false,
+			CanRemoveMembers:    false,
+			CanEditGroup:        false,
+			CanDeleteGroup:      false,
+			CanCreateStories:    true,
+			CanEditStories:      false,
+			CanDeleteStories:    false,
+			CanManageRoles:      false,
 			CanViewGroupContent: true,
 		}
 	case RoleCodeOutsider:
 		return GroupRolePermission{
-			RoleCode:           RoleCodeOutsider,
-			CanInviteMembers:   false,
-			CanRemoveMembers:   false,
-			CanEditGroup:       false,
-			CanDeleteGroup:     false,
-			CanCreateStories:   false,
-			CanEditStories:     false,
-			CanDeleteStories:   false,
-			CanManageRoles:     false,
+			RoleCode:            RoleCodeOutsider,
+			CanInviteMembers:    false,
+			CanRemoveMembers:    false,
+			CanEditGroup:        false,
+			CanDeleteGroup:      false,
+			CanCreateStories:    false,
+			CanEditStories:      false,
+			CanDeleteStories:    false,
+			CanManageRoles:      false,
 			CanViewGroupContent: false,
 		}
 	default:

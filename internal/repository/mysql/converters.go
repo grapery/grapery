@@ -2108,6 +2108,11 @@ func AgentToModel(d *domain.Agent) *Agent {
 	if d == nil {
 		return nil
 	}
+	// Default to empty JSON object for MySQL JSON column
+	configJSON := d.ConfigJSON
+	if configJSON == "" {
+		configJSON = "{}"
+	}
 	return &Agent{
 		ID:               d.ID,
 		CharacterID:      d.CharacterID,
@@ -2121,7 +2126,7 @@ func AgentToModel(d *domain.Agent) *Agent {
 		MaxTokens:        d.MaxTokens,
 		InteractionCount: d.InteractionCount,
 		SkillCount:       d.SkillCount,
-		Config:           d.ConfigJSON,
+		Config:           configJSON,
 		CreatedAt:        unixToTime(d.CreatedAt),
 		UpdatedAt:        unixToTime(d.UpdatedAt),
 	}
