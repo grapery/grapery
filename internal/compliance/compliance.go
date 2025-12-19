@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	imageaudit20191230 "github.com/alibabacloud-go/imageaudit-20191230/v3/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	credential "github.com/aliyun/credentials-go/credentials"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 )
 
 var (
@@ -91,15 +93,22 @@ type TextComplianceResult struct {
 // 参数: content - 待检测的文本内容
 // 返回: isCompliant - true表示合规，false表示违规; error - 错误信息
 func TextCompliance(content string) (bool, error) {
+	startTime := time.Now()
 	log.Printf("[TextCompliance] 开始检测文本内容，长度: %d 字符", len(content))
+
 	if len(content) == 0 {
 		log.Printf("[TextCompliance] 文本内容为空，默认为合规")
+		duration := time.Since(startTime)
+		recordComplianceMetrics("compliant", duration, nil)
 		return true, nil
 	}
+
 	// 调用阿里云文本审核API
 	ret, err := DetectText(content)
 	if err != nil {
 		log.Printf("[TextCompliance] 调用DetectText失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return false, fmt.Errorf("文本合规检测失败: %w", err)
 	}
 
@@ -109,6 +118,8 @@ func TextCompliance(content string) (bool, error) {
 	jsonData, err := json.Marshal(ret)
 	if err != nil {
 		log.Printf("[TextCompliance] 序列化响应失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return false, fmt.Errorf("解析响应失败: %w", err)
 	}
 	log.Printf("[TextCompliance] 响应JSON数据: %s", string(jsonData))
@@ -117,6 +128,8 @@ func TextCompliance(content string) (bool, error) {
 	responseBody, err := parseAliCloudResponse(jsonData)
 	if err != nil {
 		log.Printf("[TextCompliance] 解析响应失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return false, fmt.Errorf("解析响应数据失败: %w", err)
 	}
 
@@ -127,8 +140,14 @@ func TextCompliance(content string) (bool, error) {
 	// 检查是否有检测结果
 	if len(responseBody.Data.Elements) == 0 {
 		log.Printf("[TextCompliance] 无检测结果，默认为合规")
+		duration := time.Since(startTime)
+		recordComplianceMetrics("compliant", duration, nil)
 		return true, nil
 	}
+
+	// 记录违规类型
+	var violationTypes []string
+	isCompliant := true
 
 	// 遍历所有检测结果
 	for i, element := range responseBody.Data.Elements {
@@ -147,6 +166,8 @@ func TextCompliance(content string) (bool, error) {
 			switch result.Suggestion {
 			case "block":
 				// 违规内容，记录详细信息
+				isCompliant = false
+				violationTypes = append(violationTypes, result.Label)
 				var violations []string
 				for _, detail := range result.Details {
 					for _, ctx := range detail.Contexts {
@@ -155,10 +176,14 @@ func TextCompliance(content string) (bool, error) {
 				}
 				log.Printf("[TextCompliance] 检测到违规内容 - 标签: %s, 置信度: %.2f, 违规详情: %v",
 					result.Label, result.Rate, violations)
+				duration := time.Since(startTime)
+				recordComplianceMetrics("non_compliant", duration, violationTypes)
 				return false, nil
 
 			case "review":
 				// 需要人工审核，按违规处理
+				isCompliant = false
+				violationTypes = append(violationTypes, "review")
 				log.Printf("[TextCompliance] 内容需要人工审核 - 标签: %s, 置信度: %.2f",
 					result.Label, result.Rate)
 				continue
@@ -171,6 +196,8 @@ func TextCompliance(content string) (bool, error) {
 
 			default:
 				// 未知建议，按违规处理
+				isCompliant = false
+				violationTypes = append(violationTypes, "unknown")
 				log.Printf("[TextCompliance] 未知的建议类型: %s，按违规处理", result.Suggestion)
 				continue
 			}
@@ -178,6 +205,12 @@ func TextCompliance(content string) (bool, error) {
 	}
 
 	log.Printf("[TextCompliance] 所有检测结果均显示内容合规")
+	duration := time.Since(startTime)
+	if isCompliant {
+		recordComplianceMetrics("compliant", duration, nil)
+	} else {
+		recordComplianceMetrics("non_compliant", duration, violationTypes)
+	}
 	return true, nil
 }
 
@@ -185,12 +218,15 @@ func TextCompliance(content string) (bool, error) {
 // 参数: content - 待检测的文本内容
 // 返回: TextComplianceResult - 详细的检测结果结构体; error - 错误信息
 func TextComplianceDetail(content string) (*TextComplianceResult, error) {
+	startTime := time.Now()
 	log.Printf("[TextComplianceDetail] 开始详细检测文本内容，长度: %d 字符", len(content))
 
 	// 调用阿里云文本审核API
 	ret, err := DetectText(content)
 	if err != nil {
 		log.Printf("[TextComplianceDetail] 调用DetectText失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return &TextComplianceResult{
 			IsCompliant:   false,
 			Suggestion:    "error",
@@ -207,6 +243,8 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 	jsonData, err := json.Marshal(ret)
 	if err != nil {
 		log.Printf("[TextComplianceDetail] 序列化响应失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return &TextComplianceResult{
 			IsCompliant:   false,
 			Suggestion:    "error",
@@ -221,6 +259,8 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 	responseBody, err := parseAliCloudResponse(jsonData)
 	if err != nil {
 		log.Printf("[TextComplianceDetail] 解析响应失败: %v", err)
+		duration := time.Since(startTime)
+		recordComplianceMetrics("error", duration, []string{"error"})
 		return &TextComplianceResult{
 			IsCompliant:   false,
 			Suggestion:    "error",
@@ -246,8 +286,13 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 	// 检查是否有检测结果
 	if len(responseBody.Data.Elements) == 0 {
 		log.Printf("[TextComplianceDetail] 无检测结果，默认为合规")
+		duration := time.Since(startTime)
+		recordComplianceMetrics("compliant", duration, nil)
 		return result, nil
 	}
+
+	// 记录违规类型
+	var violationTypes []string
 
 	// 遍历所有检测结果，找到最严重的违规
 	for i, element := range responseBody.Data.Elements {
@@ -274,7 +319,9 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 			case "block":
 				// 违规内容，记录详细信息
 				result.IsCompliant = false
+				violationTypes = append(violationTypes, complianceResult.Label)
 				for _, detail := range complianceResult.Details {
+					violationTypes = append(violationTypes, detail.Label)
 					for _, ctx := range detail.Contexts {
 						violationMsg := fmt.Sprintf("违规标签: %s, 内容: %s", detail.Label, ctx.Context)
 						result.ViolationInfo = append(result.ViolationInfo, violationMsg)
@@ -286,6 +333,7 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 			case "review":
 				// 需要人工审核，按违规处理
 				result.IsCompliant = false
+				violationTypes = append(violationTypes, "review")
 				result.ViolationInfo = append(result.ViolationInfo,
 					fmt.Sprintf("需要人工审核 - 标签: %s, 置信度: %.2f", complianceResult.Label, complianceResult.Rate))
 				log.Printf("[TextComplianceDetail] 内容需要人工审核 - 标签: %s, 置信度: %.2f",
@@ -299,11 +347,20 @@ func TextComplianceDetail(content string) (*TextComplianceResult, error) {
 			default:
 				// 未知建议，按违规处理
 				result.IsCompliant = false
+				violationTypes = append(violationTypes, "unknown")
 				result.ViolationInfo = append(result.ViolationInfo,
 					fmt.Sprintf("未知检测结果 - 建议: %s, 标签: %s", complianceResult.Suggestion, complianceResult.Label))
 				log.Printf("[TextComplianceDetail] 未知的建议类型: %s，按违规处理", complianceResult.Suggestion)
 			}
 		}
+	}
+
+	// 记录指标
+	duration := time.Since(startTime)
+	if result.IsCompliant {
+		recordComplianceMetrics("compliant", duration, nil)
+	} else {
+		recordComplianceMetrics("non_compliant", duration, violationTypes)
 	}
 
 	if result.IsCompliant {
@@ -395,4 +452,13 @@ func DetectText(content string) (interface{}, error) {
 		return nil, fmt.Errorf("检测失败: %v, 推荐: %v", tea.StringValue(sdkErr.Message), data)
 	}
 	return resp, nil
+}
+
+// recordComplianceMetrics 记录合规性检测指标
+func recordComplianceMetrics(status string, duration time.Duration, violationTypes []string) {
+	metrics := telemetry.GetDefaultMetrics()
+	if metrics == nil {
+		return
+	}
+	metrics.RecordComplianceCheck(status, duration, violationTypes)
 }

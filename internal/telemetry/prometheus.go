@@ -67,6 +67,12 @@ type Metrics struct {
 	MonthlyActiveUsers prometheus.Gauge
 	UserGrowthRate     *prometheus.GaugeVec // Year-over-year and month-over-month growth
 
+	// Compliance metrics
+	ComplianceChecksTotal      prometheus.Counter
+	ComplianceCheckResults     *prometheus.CounterVec // status: "compliant" | "non_compliant"
+	ComplianceViolationsByType *prometheus.CounterVec // violation_type: "porn" | "politics" | "abuse" | etc.
+	ComplianceCheckDuration    *prometheus.HistogramVec
+
 	config   PrometheusConfig
 	pusher   *push.Pusher
 	stopChan chan struct{}
@@ -289,6 +295,36 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 			},
 			[]string{"user_id"},
 		),
+
+		// Compliance metrics
+		ComplianceChecksTotal: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "compliance_checks_total",
+				Help: "Total number of compliance checks performed",
+			},
+		),
+		ComplianceCheckResults: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "compliance_check_results_total",
+				Help: "Total number of compliance check results by status",
+			},
+			[]string{"status"}, // "compliant" | "non_compliant"
+		),
+		ComplianceViolationsByType: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "compliance_violations_by_type_total",
+				Help: "Total number of compliance violations by violation type",
+			},
+			[]string{"violation_type"}, // "porn" | "politics" | "abuse" | "terrorism" | "spam" | "flood" | "contraband" | "ad" | "review" | "unknown"
+		),
+		ComplianceCheckDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "compliance_check_duration_seconds",
+				Help:    "Compliance check duration in seconds",
+				Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
+			},
+			[]string{"status"}, // "compliant" | "non_compliant" | "error"
+		),
 	}
 
 	// Register all metrics
@@ -321,6 +357,10 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.StoryboardChildCount,
 		m.StoryboardTokenConsumed,
 		m.UserTokenConsumed,
+		m.ComplianceChecksTotal,
+		m.ComplianceCheckResults,
+		m.ComplianceViolationsByType,
+		m.ComplianceCheckDuration,
 	)
 
 	// Note: Go collectors (NewGoCollector, NewProcessCollector) are not registered
@@ -610,6 +650,20 @@ func (m *Metrics) IncActiveRequests() {
 // DecActiveRequests decrements the active requests counter
 func (m *Metrics) DecActiveRequests() {
 	m.ActiveRequests.Dec()
+}
+
+// RecordComplianceCheck records a compliance check with duration and result
+func (m *Metrics) RecordComplianceCheck(status string, duration time.Duration, violationTypes []string) {
+	m.ComplianceChecksTotal.Inc()
+	m.ComplianceCheckResults.WithLabelValues(status).Inc()
+	m.ComplianceCheckDuration.WithLabelValues(status).Observe(duration.Seconds())
+	
+	// Record violations by type
+	for _, violationType := range violationTypes {
+		if violationType != "" {
+			m.ComplianceViolationsByType.WithLabelValues(violationType).Inc()
+		}
+	}
 }
 
 // DefaultMetrics is the global metrics instance
