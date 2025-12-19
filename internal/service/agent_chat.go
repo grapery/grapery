@@ -321,18 +321,31 @@ func (s *AgentChatService) SelectStoryboardBranch(ctx context.Context, threadID,
 	return nil
 }
 
-// ReactToMessage 消息互动
+// ReactToMessage 消息互动（支持toggle：如果已有相同类型的reaction则删除，否则添加）
 func (s *AgentChatService) ReactToMessage(ctx context.Context, messageID, userID, reactionType, emojiCode string) error {
-	// Check if user already reacted
+	// Check if user already has a reaction of the same type
 	existing, err := s.repo.GetUserMessageReaction(ctx, messageID, userID)
 	if err == nil && existing != nil {
-		// Remove existing reaction
+		// Check if it's the same reaction type and emoji code
+		if existing.ReactionType == reactionType {
+			// For emoji reactions, also check emojiCode
+			if reactionType == "emoji" {
+				if existing.EmojiCode == emojiCode {
+					// Same emoji reaction exists, toggle off (remove)
+					return s.repo.DeleteMessageReaction(ctx, messageID, userID, existing.ReactionType, existing.EmojiCode)
+				}
+			} else {
+				// Same reaction type (like/dislike), toggle off (remove)
+				return s.repo.DeleteMessageReaction(ctx, messageID, userID, existing.ReactionType, existing.EmojiCode)
+			}
+		}
+		// Different reaction type, remove old one first
 		if err := s.repo.DeleteMessageReaction(ctx, messageID, userID, existing.ReactionType, existing.EmojiCode); err != nil {
 			return fmt.Errorf("failed to remove existing reaction: %w", err)
 		}
 	}
 
-	// Create new reaction
+	// Create new reaction (toggle on)
 	reaction := &domain.MessageReaction{
 		MessageID:    messageID,
 		UserID:       userID,
