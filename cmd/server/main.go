@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
+	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
@@ -173,9 +174,19 @@ func main() {
 	// Initialize AI clients
 	initAIClients(cfg, svc, logger)
 
+	// Initialize Storyboard Chat Service
+	storyboardChatService := service.NewStoryboardChatService(repo, svc, logger)
+	logger.Info("storyboard chat service initialized")
+
 	// Initialize HTTP handler
 	handler := transport.NewHandler(svc, nil, logger)
 	router := transport.SetupRouter(handler, logger)
+
+	// Register Storyboard Chat routes
+	storyboardChatHandler := transport.NewStoryboardChatHandler(storyboardChatService, logger)
+	apiGroup := router.Group("/api")
+	storyboardChatHandler.RegisterRoutes(apiGroup.Group("/agent"), authPkg.AuthMiddleware())
+	logger.Info("storyboard chat routes registered")
 
 	// Configure CORS
 	router.Use(cors.New(cors.Config{

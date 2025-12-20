@@ -129,10 +129,14 @@ func (r *Repository) migrate() error {
 		&ChatThreadStoryboardBranch{},
 		&ChatMessageReaction{},
 		&ChatMessageToken{},
-		
+
+		// Storyboard Chat 会话
+		&StoryboardChatSession{},
+		&StoryboardChatMessage{},
+
 		// User statistics
 		&UserStatistics{},
-		
+
 		// User login records
 		&UserLoginRecord{},
 	}

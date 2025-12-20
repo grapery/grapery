@@ -476,4 +476,19 @@ type Repository interface {
 	DeleteInvitationCode(ctx context.Context, id string) error
 	UseInvitationCode(ctx context.Context, code string, userID string) error
 	ValidateInvitationCode(ctx context.Context, code string) error
+
+	// ========== Storyboard Chat Session operations ==========
+	CreateStoryboardChatSession(ctx context.Context, session *StoryboardChatSession) error
+	GetStoryboardChatSession(ctx context.Context, id string) (*StoryboardChatSession, error)
+	GetActiveStoryboardChatSession(ctx context.Context, userID, storyID string) (*StoryboardChatSession, error)
+	ListStoryboardChatSessions(ctx context.Context, userID string, limit, offset int) ([]*StoryboardChatSession, error)
+	UpdateStoryboardChatSession(ctx context.Context, session *StoryboardChatSession) error
+	DeleteStoryboardChatSession(ctx context.Context, id string) error
+
+	// ========== Storyboard Chat Message operations ==========
+	CreateStoryboardChatMessage(ctx context.Context, msg *StoryboardChatMessage) error
+	GetStoryboardChatMessage(ctx context.Context, id string) (*StoryboardChatMessage, error)
+	ListStoryboardChatMessages(ctx context.Context, sessionID string, limit, offset int) ([]*StoryboardChatMessage, error)
+	GetLastStoryboardChatMessage(ctx context.Context, sessionID string) (*StoryboardChatMessage, error)
+	DeleteStoryboardChatMessage(ctx context.Context, id string) error
 }

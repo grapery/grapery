@@ -182,6 +182,15 @@ func main() {
 	agentChatService := service.NewAgentChatService(repo, geminiClient, logger)
 	logger.Info("agent chat service initialized")
 
+	// Initialize Story Service (for storyboard chat)
+	storyService := service.New(repo, logger)
+	storyService.SetAIClients(nil, geminiClient)
+	logger.Info("story service initialized")
+
+	// Initialize Storyboard Chat Service
+	storyboardChatService := service.NewStoryboardChatService(repo, storyService, logger)
+	logger.Info("storyboard chat service initialized")
+
 	// Setup Gin router
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -234,6 +243,10 @@ func main() {
 		// Setup Agent Chat Handler and register routes
 		agentChatHandler := transport.NewAgentChatHandler(agentChatService, logger)
 		agentChatHandler.RegisterRoutes(api, authPkg.AuthMiddleware())
+
+		// Setup Storyboard Chat Handler and register routes
+		storyboardChatHandler := transport.NewStoryboardChatHandler(storyboardChatService, logger)
+		storyboardChatHandler.RegisterRoutes(api.Group("/agent"), authPkg.AuthMiddleware())
 	}
 
 	// Log all registered routes

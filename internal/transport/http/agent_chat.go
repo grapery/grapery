@@ -882,16 +882,20 @@ func (h *AgentChatHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin
 	agentGroup.POST("/chat/send-stream", h.SendMessageStream) // HTTP/2 streaming
 	agentGroup.GET("/chat/history/:threadId", h.GetChatHistory)
 	agentGroup.GET("/chat/threads", h.ListChatThreads)
-	agentGroup.POST("/chat/threads", h.CreateChatThread)                         // Create new thread
+	agentGroup.POST("/chat/threads", h.CreateChatThread) // Create new thread
 	agentGroup.GET("/chat/threads/:id/storyboard-branches", h.GetStoryboardBranches)
 	agentGroup.POST("/chat/threads/:id/select-branch", h.SelectStoryboardBranch)
 	agentGroup.GET("/chat/threads/:id/messages", h.LoadMoreMessages)
 	agentGroup.GET("/chat/threads/:id/stats", h.GetThreadStats)
-	agentGroup.POST("/chat/threads/:id/archive", h.ArchiveThread)                // Archive thread
+	agentGroup.POST("/chat/threads/:id/archive", h.ArchiveThread) // Archive thread
 	agentGroup.POST("/chat/messages/:id/react", h.ReactToMessage)
 	agentGroup.POST("/chat/messages/:id/archive", h.ArchiveMessage)
 
 	// Agent管理
 	agentGroup.GET("/character/:characterId", h.GetAgent)
 	agentGroup.PUT("/:agentId/config", h.UpdateAgentConfig) // 需要管理员权限
+
+	// agent—ui 相关的接口
+	agentGroup.GET("/agent-ui/chat/threads", h.ListChatThreads)
+
 }

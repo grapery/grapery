@@ -1230,5 +1230,9 @@ func migrate(db *gorm.DB) error {
 
 		// 用户统计
 		&UserStatistics{},
+
+		// Storyboard Chat 会话
+		&StoryboardChatSession{},
+		&StoryboardChatMessage{},
 	)
 }
