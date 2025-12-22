@@ -15,4 +15,3 @@ type UserLoginRecord struct {
 	LoginAt   time.Time `json:"loginAt"`   // 登录时间
 	CreatedAt time.Time `json:"createdAt"`
 }
-

@@ -59,7 +59,7 @@ const (
 	PrefixGroupMembersList   = "group_members_list:"
 	PrefixGroupActivities    = "group_activities:"
 	PrefixUserActivities     = "user_activities:"
-	PrefixStyleConfigs        = "style_configs:"
+	PrefixStyleConfigs       = "style_configs:"
 )
 
 // 缓存键生成函数

@@ -214,4 +214,3 @@ func (r *Repository) invitationCodeToDomain(m *InvitationCode) *domain.Invitatio
 
 	return code
 }
-

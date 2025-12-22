@@ -21,9 +21,9 @@ type CreateInvitationCodeRequest struct {
 
 // UpdateInvitationCodeRequest 更新邀请码请求
 type UpdateInvitationCodeRequest struct {
-	IsActive    *bool  `json:"isActive"`
-	MaxUses     *int   `json:"maxUses"`
-	ExpiresAt   *int64 `json:"expiresAt"`
+	IsActive    *bool   `json:"isActive"`
+	MaxUses     *int    `json:"maxUses"`
+	ExpiresAt   *int64  `json:"expiresAt"`
 	Description *string `json:"description"`
 }
 
@@ -187,4 +187,3 @@ func (s *Service) DeleteInvitationCode(ctx context.Context, userID, codeID strin
 func (s *Service) ValidateInvitationCode(ctx context.Context, code string) error {
 	return s.repo.ValidateInvitationCode(ctx, code)
 }
-

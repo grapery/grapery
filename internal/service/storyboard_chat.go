@@ -13,9 +13,9 @@ import (
 
 // StoryboardChatService handles storyboard creation chat workflow
 type StoryboardChatService struct {
-	repo           domain.Repository
-	storyService   *Service
-	logger         *zap.Logger
+	repo         domain.Repository
+	storyService *Service
+	logger       *zap.Logger
 }
 
 // NewStoryboardChatService creates a new storyboard chat service
@@ -1121,4 +1121,3 @@ func (s *StoryboardChatService) generateImagePrompt(scene *domain.StoryboardScen
 	}
 	return prompt
 }
-

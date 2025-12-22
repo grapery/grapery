@@ -394,4 +394,3 @@ func (r *OAuthRepository) thirdPartyLoginModelToDomain(model *OAuthThirdPartyLog
 		DeletedAt:        deletedAt,
 	}
 }
-

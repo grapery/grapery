@@ -255,10 +255,10 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			_ = h.repo.UpdateThirdPartyLogin(ctx, thirdPartyLogin)
 
 			logrus.WithFields(logrus.Fields{
-				"provider":        provider,
-				"providerUserID":  providerUserID,
-				"userID":          user.ID,
-				"email":           user.Email,
+				"provider":       provider,
+				"providerUserID": providerUserID,
+				"userID":         user.ID,
+				"email":          user.Email,
 			}).Info("Existing user logged in via third party")
 
 			return user, false, nil

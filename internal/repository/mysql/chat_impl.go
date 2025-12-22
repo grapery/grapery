@@ -157,15 +157,15 @@ func (r *Repository) ChatMessageByID(ctx context.Context, id string) (*domain.Ch
 		return nil, fmt.Errorf("failed to get chat message: %w", err)
 	}
 	dm := r.chatMessageToDomain(message)
-	
+
 	// Load reactions
 	reactions, _ := r.GetMessageReactions(ctx, id)
 	dm.Reactions = reactions
-	
+
 	// Load token usage
 	tokenUsage, _ := r.GetMessageTokenUsage(ctx, id)
 	dm.TokenUsage = tokenUsage
-	
+
 	return &dm, nil
 }
 
@@ -186,15 +186,15 @@ func (r *Repository) ChatMessages(ctx context.Context, threadID string, limit, o
 	result := make([]*domain.ChatMessage, len(messages))
 	for i, m := range messages {
 		dm := r.chatMessageToDomain(m)
-		
+
 		// Load reactions (optional, can be lazy loaded)
 		reactions, _ := r.GetMessageReactions(ctx, m.ID)
 		dm.Reactions = reactions
-		
+
 		// Load token usage (optional, can be lazy loaded)
 		tokenUsage, _ := r.GetMessageTokenUsage(ctx, m.ID)
 		dm.TokenUsage = tokenUsage
-		
+
 		result[i] = &dm
 	}
 	return result, nil
@@ -202,15 +202,15 @@ func (r *Repository) ChatMessages(ctx context.Context, threadID string, limit, o
 
 func (r *Repository) CreateChatMessage(ctx context.Context, msg *domain.ChatMessage) error {
 	dbMsg := ChatMessage{
-		ID:           uuid.New().String(),
-		ThreadID:     msg.ThreadID,
-		SenderID:     msg.SenderID,
-		SenderName:   msg.SenderName,
-		SenderAvatar: msg.SenderAvatar,
-		Content:      msg.Content,
-		Image:        msg.Image,
-		IsUser:       msg.IsUser,
-		IsArchived:   msg.IsArchived,
+		ID:            uuid.New().String(),
+		ThreadID:      msg.ThreadID,
+		SenderID:      msg.SenderID,
+		SenderName:    msg.SenderName,
+		SenderAvatar:  msg.SenderAvatar,
+		Content:       msg.Content,
+		Image:         msg.Image,
+		IsUser:        msg.IsUser,
+		IsArchived:    msg.IsArchived,
 		ReactionCount: 0,
 	}
 
@@ -535,12 +535,12 @@ func (r *Repository) GetUserMessageReaction(ctx context.Context, messageID, user
 
 func (r *Repository) CreateMessageTokenUsage(ctx context.Context, tokenUsage *domain.TokenUsage) error {
 	dbToken := ChatMessageToken{
-		ID:          uuid.New().String(),
-		MessageID:   tokenUsage.MessageID,
-		InputTokens: tokenUsage.InputTokens,
+		ID:           uuid.New().String(),
+		MessageID:    tokenUsage.MessageID,
+		InputTokens:  tokenUsage.InputTokens,
 		OutputTokens: tokenUsage.OutputTokens,
-		TotalTokens: tokenUsage.TotalTokens,
-		Model:       tokenUsage.Model,
+		TotalTokens:  tokenUsage.TotalTokens,
+		Model:        tokenUsage.Model,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbToken).Error; err != nil {
@@ -561,13 +561,13 @@ func (r *Repository) GetMessageTokenUsage(ctx context.Context, messageID string)
 	}
 
 	return &domain.TokenUsage{
-		ID:          token.ID,
-		MessageID:   token.MessageID,
-		InputTokens: token.InputTokens,
+		ID:           token.ID,
+		MessageID:    token.MessageID,
+		InputTokens:  token.InputTokens,
 		OutputTokens: token.OutputTokens,
-		TotalTokens: token.TotalTokens,
-		Model:       token.Model,
-		CreatedAt:   token.CreatedAt.Unix(),
+		TotalTokens:  token.TotalTokens,
+		Model:        token.Model,
+		CreatedAt:    token.CreatedAt.Unix(),
 	}, nil
 }
 

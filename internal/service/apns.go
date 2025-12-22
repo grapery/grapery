@@ -21,17 +21,17 @@ import (
 
 // APNsService Apple Push Notification Service
 type APNsService struct {
-	bundleID       string
-	teamID         string
-	keyID          string
-	privateKey     *ecdsa.PrivateKey
-	httpClient     *http.Client
-	authToken      string
-	tokenExpiry    time.Time
-	tokenMutex     sync.RWMutex
-	useSandbox     bool
-	enabled        bool
-	logger         *zap.Logger
+	bundleID    string
+	teamID      string
+	keyID       string
+	privateKey  *ecdsa.PrivateKey
+	httpClient  *http.Client
+	authToken   string
+	tokenExpiry time.Time
+	tokenMutex  sync.RWMutex
+	useSandbox  bool
+	enabled     bool
+	logger      *zap.Logger
 }
 
 // APNsConfig APNs 配置
@@ -618,7 +618,7 @@ func (s *Service) CreateNotificationWithPush(ctx context.Context, notification *
 	// 异步推送到所有设备
 	go func() {
 		bgCtx := context.Background()
-		
+
 		// 推送到 Apple 设备
 		if err := s.SendNotificationToAPNs(bgCtx, notification.UserID, notification); err != nil {
 			s.logger.Error("failed to send APNs notification",

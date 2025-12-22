@@ -35,18 +35,18 @@ func (StoryboardChatSession) TableName() string {
 
 // StoryboardChatMessage database model
 type StoryboardChatMessage struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	SessionID   string         `gorm:"size:36;not null;index"`
+	ID          string                `gorm:"primaryKey;size:36"`
+	SessionID   string                `gorm:"size:36;not null;index"`
 	Session     StoryboardChatSession `gorm:"foreignKey:SessionID"`
-	MessageType string         `gorm:"size:50;not null"`
-	Status      string         `gorm:"size:20;not null"`
-	Step        int            `gorm:"not null"`
-	Data        string         `gorm:"type:json"`
-	Actions     string         `gorm:"type:json"`
-	Content     string         `gorm:"type:text"`
-	IsUser      bool           `gorm:"default:false"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	MessageType string                `gorm:"size:50;not null"`
+	Status      string                `gorm:"size:20;not null"`
+	Step        int                   `gorm:"not null"`
+	Data        string                `gorm:"type:json"`
+	Actions     string                `gorm:"type:json"`
+	Content     string                `gorm:"type:text"`
+	IsUser      bool                  `gorm:"default:false"`
+	CreatedAt   time.Time             `gorm:"autoCreateTime;index"`
+	DeletedAt   gorm.DeletedAt        `gorm:"index"`
 }
 
 func (StoryboardChatMessage) TableName() string {
@@ -348,4 +348,3 @@ func (r *Repository) storyboardChatMessageToDomain(m StoryboardChatMessage) *dom
 
 	return msg
 }
-

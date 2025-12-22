@@ -193,4 +193,3 @@ func (r *Repository) GetUserByThirdPartyEmail(ctx context.Context, email string)
 	// 找到了第三方登录记录，获取关联的用户
 	return r.UserByID(ctx, thirdPartyLogin.UserID)
 }
-

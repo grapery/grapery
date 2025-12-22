@@ -20,12 +20,12 @@ const (
 	emailVerifyTokenTTL   = 24 * time.Hour
 
 	// 通用实体缓存过期时间
-	entityCacheTTL        = 30 * time.Minute  // 单个实体缓存（用户、角色、群组、故事板等）
-	listCacheTTL          = 10 * time.Minute   // 列表缓存（较短，因为数据变化频繁）
-	styleConfigCacheTTL   = 1 * time.Hour     // 风格配置缓存（变化较少）
-	activityCacheTTL      = 5 * time.Minute   // 活动流缓存（变化频繁）
-	commentCacheTTL       = 15 * time.Minute  // 评论缓存
-	groupMemberCacheTTL   = 15 * time.Minute  // 群组成员缓存
+	entityCacheTTL      = 30 * time.Minute // 单个实体缓存（用户、角色、群组、故事板等）
+	listCacheTTL        = 10 * time.Minute // 列表缓存（较短，因为数据变化频繁）
+	styleConfigCacheTTL = 1 * time.Hour    // 风格配置缓存（变化较少）
+	activityCacheTTL    = 5 * time.Minute  // 活动流缓存（变化频繁）
+	commentCacheTTL     = 15 * time.Minute // 评论缓存
+	groupMemberCacheTTL = 15 * time.Minute // 群组成员缓存
 )
 
 // PasswordResetData 密码重置数据结构
@@ -306,7 +306,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		// 更新用户总数
 		s.metrics.UserCount.Inc()
 	}
-	
+
 	// 记录活跃用户（注册也算活跃）
 	if s.userStatsService != nil {
 		_ = s.userStatsService.RecordActiveUser(ctx, user.ID)
@@ -375,7 +375,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, loginInfo *Login
 	if s.metrics != nil {
 		s.metrics.RecordUserLogin("password")
 	}
-	
+
 	// 记录活跃用户
 	if s.userStatsService != nil {
 		_ = s.userStatsService.RecordActiveUser(ctx, user.ID)

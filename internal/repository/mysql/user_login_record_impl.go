@@ -19,15 +19,15 @@ func (r *Repository) GetUserLoginRecords(ctx context.Context, userID string, lim
 	query := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("login_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&records).Error; err != nil {
 		return nil, err
 	}
-	
+
 	result := make([]*domain.UserLoginRecord, len(records))
 	for i, record := range records {
 		result[i] = r.userLoginRecordToDomain(&record)
@@ -42,14 +42,14 @@ func (r *Repository) GetLatestUserLoginRecord(ctx context.Context, userID string
 		Where("user_id = ?", userID).
 		Order("login_at DESC").
 		First(&record).Error
-	
+
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
-	
+
 	return r.userLoginRecordToDomain(&record), nil
 }
 
@@ -83,4 +83,3 @@ func (r *Repository) userLoginRecordFromDomain(d *domain.UserLoginRecord) *UserL
 		LoginAt:   d.LoginAt,
 	}
 }
-

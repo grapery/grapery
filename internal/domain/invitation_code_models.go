@@ -4,7 +4,7 @@ package domain
 type InvitationCode struct {
 	ID          string `json:"id"`
 	Code        string `json:"code"`        // 邀请码（唯一）
-	CreatedBy   string `json:"createdBy"`  // 创建者用户ID
+	CreatedBy   string `json:"createdBy"`   // 创建者用户ID
 	UsedBy      string `json:"usedBy"`      // 使用者用户ID（如果已使用）
 	UsedAt      int64  `json:"usedAt"`      // 使用时间
 	IsActive    bool   `json:"isActive"`    // 是否启用
@@ -19,4 +19,3 @@ type InvitationCode struct {
 	Creator *User `json:"creator,omitempty"`
 	User    *User `json:"user,omitempty"` // 使用者信息
 }
-

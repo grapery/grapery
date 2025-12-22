@@ -313,7 +313,7 @@ func (s *Service) generateCharacterReply(ctx context.Context, thread *domain.Cha
 		if err := s.repo.IncrementCharacterTokens(ctx, character.ID, int64(tokensUsed)); err != nil {
 			s.logger.Warn("failed to increment character tokens", zap.Error(err))
 		}
-		
+
 		// Record metrics
 		if s.metrics != nil {
 			s.metrics.RecordCharacterMessage(character.ID)

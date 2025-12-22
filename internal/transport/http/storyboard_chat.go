@@ -382,4 +382,3 @@ func storyboardChatJSONMarshal(v interface{}) ([]byte, error) {
 func storyboardChatJSONUnmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
-

@@ -231,14 +231,14 @@ func isInvalidTokenError(errMsg string) bool {
 // getCategoryForType 根据通知类型获取分类
 func getCategoryForType(notificationType string) string {
 	categories := map[string]string{
-		"like":          "LIKE",
-		"comment":       "COMMENT",
-		"follow":        "FOLLOW",
-		"mention":       "MENTION",
-		"message":       "MESSAGE",
-		"story_update":  "STORY_UPDATE",
-		"system":        "SYSTEM",
-		"subscription":  "SUBSCRIPTION",
+		"like":         "LIKE",
+		"comment":      "COMMENT",
+		"follow":       "FOLLOW",
+		"mention":      "MENTION",
+		"message":      "MESSAGE",
+		"story_update": "STORY_UPDATE",
+		"system":       "SYSTEM",
+		"subscription": "SUBSCRIPTION",
 	}
 
 	if cat, ok := categories[notificationType]; ok {
@@ -357,4 +357,3 @@ func (p *PushNotificationService) BroadcastToAllUsers(ctx context.Context, topic
 	// 通过 FCM Topic 广播
 	return p.SendToTopic(ctx, topic, payload)
 }
-

@@ -150,12 +150,12 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	if s.metrics != nil {
 		// Record storyboard scene count
 		s.metrics.RecordStoryboardSceneCount(storyboard.ID, float64(len(storyboard.StoryboardScenes)))
-		
+
 		// Record storyboard token consumption
 		if storyboard.TokenConsumption > 0 {
 			s.metrics.RecordStoryboardTokenConsumed(storyboard.ID, float64(storyboard.TokenConsumption))
 		}
-		
+
 		// Record child count if this is a child storyboard
 		if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
 			// Query actual child count for the parent
@@ -237,23 +237,23 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		zap.String("storyboardId", storyboard.ID))
 	go s.RecordStoryboardCreated(context.Background(), storyboard.CreatorID, storyboard.ID, storyboard.Title)
 
-		// 更新故事的故事板数量
-		if err := s.repo.IncrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
-			s.logger.Warn("failed to increment story storyboard count",
-				zap.String("storyId", storyboard.StoryID),
-				zap.Error(err))
-			// 不返回错误，因为故事板已经创建成功
-		} else {
-			s.logger.Debug("story storyboard count incremented",
-				zap.String("storyId", storyboard.StoryID))
-		}
+	// 更新故事的故事板数量
+	if err := s.repo.IncrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
+		s.logger.Warn("failed to increment story storyboard count",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+		// 不返回错误，因为故事板已经创建成功
+	} else {
+		s.logger.Debug("story storyboard count incremented",
+			zap.String("storyId", storyboard.StoryID))
+	}
 
-		// Update storyboard count metric (increment by 1)
-		if s.metrics != nil {
-			s.metrics.StoryboardCount.Inc()
-		}
+	// Update storyboard count metric (increment by 1)
+	if s.metrics != nil {
+		s.metrics.StoryboardCount.Inc()
+	}
 
-		return nil
+	return nil
 }
 
 // GetStoryboard 获取 storyboard 详情（带缓存）

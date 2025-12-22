@@ -196,12 +196,12 @@ func (s *AgentChatService) generateAgentReply(ctx context.Context, thread *domai
 	// 10. 保存token使用统计
 	if tokensUsed > 0 {
 		tokenUsage := &domain.TokenUsage{
-			MessageID:   agentReply.ID,
-			InputTokens: inputTokens,
+			MessageID:    agentReply.ID,
+			InputTokens:  inputTokens,
 			OutputTokens: outputTokens,
-			TotalTokens: tokensUsed,
-			Model:       model,
-			CreatedAt:   time.Now().Unix(),
+			TotalTokens:  tokensUsed,
+			Model:        model,
+			CreatedAt:    time.Now().Unix(),
 		}
 		if err := s.repo.CreateMessageTokenUsage(ctx, tokenUsage); err != nil {
 			s.logger.Warn("failed to save token usage", zap.Error(err))
@@ -244,7 +244,7 @@ func (s *AgentChatService) generateAgentReply(ctx context.Context, thread *domai
 	if err := s.repo.IncrementCharacterTokens(ctx, character.ID, int64(tokensUsed)); err != nil {
 		s.logger.Warn("failed to increment character tokens", zap.Error(err))
 	}
-	
+
 	// Note: Metrics recording for AgentChatService would need to be added via Service layer
 	// For now, metrics are recorded in the main Service's chat.go
 
@@ -598,12 +598,12 @@ func (s *AgentChatService) SendMessageWithStream(ctx context.Context, userID, ch
 		// 14. 保存token使用统计
 		if tokensUsed > 0 {
 			tokenUsage := &domain.TokenUsage{
-				MessageID:   agentReply.ID,
-				InputTokens: inputTokens,
+				MessageID:    agentReply.ID,
+				InputTokens:  inputTokens,
 				OutputTokens: outputTokens,
-				TotalTokens: tokensUsed,
-				Model:       model,
-				CreatedAt:   time.Now().Unix(),
+				TotalTokens:  tokensUsed,
+				Model:        model,
+				CreatedAt:    time.Now().Unix(),
 			}
 			s.repo.CreateMessageTokenUsage(ctx, tokenUsage)
 			s.repo.UpdateThreadTokenUsage(ctx, thread.ID, int64(tokensUsed))

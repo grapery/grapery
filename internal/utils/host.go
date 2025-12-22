@@ -64,4 +64,3 @@ func GetHostIP() string {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.String()
 }
-

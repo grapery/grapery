@@ -14,17 +14,17 @@ import (
 
 // Service exposes business logic
 type Service struct {
-	repo              domain.Repository
-	log               *zap.Logger
-	logger            *zap.Logger // 别名，用于新代码
-	cache             interface{} // Cache 接口
-	genAPI            *genapi.GenAPI
-	geminiClient      *gemini.Client
-	aiGenService      *AIGenerationService // AI生成服务（统一管理AI能力使用）
-	imageProvider     string               // Provider for image generation (gemini, huoshan)
-	videoProvider     string               // Provider for video generation (gemini, huoshan, hailuo)
-	metrics           *telemetry.Metrics   // Prometheus metrics (optional)
-	userStatsService  *UserStatisticsService // 用户统计服务
+	repo             domain.Repository
+	log              *zap.Logger
+	logger           *zap.Logger // 别名，用于新代码
+	cache            interface{} // Cache 接口
+	genAPI           *genapi.GenAPI
+	geminiClient     *gemini.Client
+	aiGenService     *AIGenerationService   // AI生成服务（统一管理AI能力使用）
+	imageProvider    string                 // Provider for image generation (gemini, huoshan)
+	videoProvider    string                 // Provider for video generation (gemini, huoshan, hailuo)
+	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
+	userStatsService *UserStatisticsService // 用户统计服务
 }
 
 // New creates a new service instance

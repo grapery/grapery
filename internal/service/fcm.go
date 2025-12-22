@@ -18,14 +18,14 @@ import (
 
 // FCMService Firebase Cloud Messaging Service
 type FCMService struct {
-	projectID      string
+	projectID       string
 	credentialsJSON []byte
-	httpClient     *http.Client
-	accessToken    string
-	tokenExpiry    time.Time
-	tokenMutex     sync.RWMutex
-	enabled        bool
-	logger         *zap.Logger
+	httpClient      *http.Client
+	accessToken     string
+	tokenExpiry     time.Time
+	tokenMutex      sync.RWMutex
+	enabled         bool
+	logger          *zap.Logger
 }
 
 // FCMConfig FCM 配置
@@ -85,23 +85,23 @@ type FCMNotification struct {
 
 // FCMAndroidConfig Android 特定配置
 type FCMAndroidConfig struct {
-	Priority     string                   `json:"priority,omitempty"` // normal, high
-	TTL          string                   `json:"ttl,omitempty"`      // e.g., "86400s"
-	CollapseKey  string                   `json:"collapse_key,omitempty"`
-	Notification *FCMAndroidNotification  `json:"notification,omitempty"`
+	Priority     string                  `json:"priority,omitempty"` // normal, high
+	TTL          string                  `json:"ttl,omitempty"`      // e.g., "86400s"
+	CollapseKey  string                  `json:"collapse_key,omitempty"`
+	Notification *FCMAndroidNotification `json:"notification,omitempty"`
 }
 
 // FCMAndroidNotification Android 通知配置
 type FCMAndroidNotification struct {
-	Title        string   `json:"title,omitempty"`
-	Body         string   `json:"body,omitempty"`
-	Icon         string   `json:"icon,omitempty"`
-	Color        string   `json:"color,omitempty"`
-	Sound        string   `json:"sound,omitempty"`
-	Tag          string   `json:"tag,omitempty"`
-	ClickAction  string   `json:"click_action,omitempty"`
-	ChannelID    string   `json:"channel_id,omitempty"`
-	DefaultSound bool     `json:"default_sound,omitempty"`
+	Title                string `json:"title,omitempty"`
+	Body                 string `json:"body,omitempty"`
+	Icon                 string `json:"icon,omitempty"`
+	Color                string `json:"color,omitempty"`
+	Sound                string `json:"sound,omitempty"`
+	Tag                  string `json:"tag,omitempty"`
+	ClickAction          string `json:"click_action,omitempty"`
+	ChannelID            string `json:"channel_id,omitempty"`
+	DefaultSound         bool   `json:"default_sound,omitempty"`
 	NotificationPriority string `json:"notification_priority,omitempty"` // PRIORITY_MIN, PRIORITY_LOW, PRIORITY_DEFAULT, PRIORITY_HIGH, PRIORITY_MAX
 }
 
@@ -317,7 +317,7 @@ func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.
 // SendBatch 批量发送通知
 func (f *FCMService) SendBatch(ctx context.Context, deviceTokens []string, payload *domain.PushNotificationPayload) []*domain.PushNotificationResult {
 	results := make([]*domain.PushNotificationResult, len(deviceTokens))
-	
+
 	// 并发发送，但限制并发数
 	sem := make(chan struct{}, 10) // 最多 10 个并发
 	var wg sync.WaitGroup
@@ -393,7 +393,7 @@ func (s *Service) SendNotificationToFCM(ctx context.Context, userID string, noti
 			s.logger.Warn("FCM notification failed",
 				zap.String("deviceId", device.ID),
 				zap.String("error", result.Error))
-			
+
 			// 如果是无效 token，标记设备为非活跃
 			if result.Error == "UNREGISTERED" || result.Error == "INVALID_ARGUMENT" {
 				_ = s.repo.DeactivateUserDevice(ctx, device.DeviceToken)
@@ -403,4 +403,3 @@ func (s *Service) SendNotificationToFCM(ctx context.Context, userID string, noti
 
 	return nil
 }
-

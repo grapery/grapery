@@ -179,4 +179,3 @@ func (h *Handler) ValidateInvitationCode(c *gin.Context) {
 
 	Success(c, gin.H{"valid": true, "message": "invitation code is valid"})
 }
-

@@ -80,11 +80,11 @@ type ChatAction struct {
 
 // CharacterSelectionData payload for character selection step
 type CharacterSelectionData struct {
-	Prompt       string                    `json:"prompt"`
-	Characters   []CharacterSelectionItem  `json:"characters"`
-	MinSelection int                       `json:"minSelection"`
-	MaxSelection int                       `json:"maxSelection"`
-	Styles       []StyleOption             `json:"styles,omitempty"`
+	Prompt       string                   `json:"prompt"`
+	Characters   []CharacterSelectionItem `json:"characters"`
+	MinSelection int                      `json:"minSelection"`
+	MaxSelection int                      `json:"maxSelection"`
+	Styles       []StyleOption            `json:"styles,omitempty"`
 }
 
 // CharacterSelectionItem represents a character in the selection list
@@ -106,10 +106,10 @@ type StyleOption struct {
 
 // StoryContentData payload for story content step
 type StoryContentData struct {
-	Title    string               `json:"title"`
-	Content  string               `json:"content"`
-	Scenes   []SceneContentItem   `json:"scenes"`
-	Editable bool                 `json:"editable"`
+	Title    string             `json:"title"`
+	Content  string             `json:"content"`
+	Scenes   []SceneContentItem `json:"scenes"`
+	Editable bool               `json:"editable"`
 }
 
 // SceneContentItem represents a scene in the story content
@@ -162,19 +162,19 @@ type SceneImageResultItem struct {
 
 // VideoPromptData payload for video generation choice
 type VideoPromptData struct {
-	Message     string                 `json:"message"`
-	Scenes      []SceneImageResultItem `json:"scenes"`
-	EstimatedTime string               `json:"estimatedTime,omitempty"`
+	Message       string                 `json:"message"`
+	Scenes        []SceneImageResultItem `json:"scenes"`
+	EstimatedTime string                 `json:"estimatedTime,omitempty"`
 }
 
 // VideoProcessingData payload for video processing status
 type VideoProcessingData struct {
-	Message        string             `json:"message"`
-	Progress       int                `json:"progress"` // 0-100
-	CurrentScene   int                `json:"currentScene,omitempty"`
-	TotalScenes    int                `json:"totalScenes,omitempty"`
-	EstimatedTime  string             `json:"estimatedTime,omitempty"`
-	SceneStatuses  []SceneVideoStatus `json:"sceneStatuses,omitempty"`
+	Message       string             `json:"message"`
+	Progress      int                `json:"progress"` // 0-100
+	CurrentScene  int                `json:"currentScene,omitempty"`
+	TotalScenes   int                `json:"totalScenes,omitempty"`
+	EstimatedTime string             `json:"estimatedTime,omitempty"`
+	SceneStatuses []SceneVideoStatus `json:"sceneStatuses,omitempty"`
 }
 
 // SceneVideoStatus represents video generation status for a scene
@@ -287,4 +287,3 @@ type PublishChoiceInput struct {
 	Publish bool   `json:"publish"`
 	Title   string `json:"title,omitempty"` // Optional title update
 }
-

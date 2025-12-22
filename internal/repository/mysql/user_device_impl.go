@@ -202,4 +202,3 @@ func (r *Repository) RegisterOrUpdateDevice(ctx context.Context, device *domain.
 	device.UpdatedAt = now
 	return r.CreateUserDevice(ctx, device)
 }
-
