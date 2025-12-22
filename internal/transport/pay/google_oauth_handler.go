@@ -174,26 +174,99 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	})
 }
 
-// findOrCreateUser 查找或创建 Google OAuth 用户
+// findOrCreateUser 查找或创建 Google OAuth 用户（支持跨设备、跨登录方式的账户关联）
+//
+// 账户关联策略：
+// 1. 首先通过 providerUserID 查找已绑定的第三方登录记录
+// 2. 如果未找到，通过 email 查找是否有其他登录方式已绑定的用户
+// 3. 如果找到用户，创建新的第三方登录绑定
+// 4. 如果未找到，创建新用户并绑定第三方登录
 func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID, email, displayName, avatar, provider string) (*domain.User, bool, error) {
 	now := time.Now().Unix()
+	providerType := domain.ThirdPartyProvider(provider)
 
-	// 如果有 repository，使用它查找/创建用户
-	if h.repo != nil && email != "" {
-		// 先通过 email 查找用户
-		existingUser, err := h.repo.UserByEmail(ctx, email)
-		if err == nil && existingUser != nil {
-			// 用户存在，更新最后登录时间和头像
+	// 如果有 repository，使用完整的账户关联逻辑
+	if h.repo != nil {
+		// Step 1: 通过 providerUserID 查找已绑定的第三方登录
+		thirdPartyLogin, err := h.repo.GetThirdPartyLoginByProviderUserID(ctx, providerType, providerUserID)
+		if err == nil && thirdPartyLogin != nil {
+			// 已有绑定，获取关联的用户
+			user, err := h.repo.UserByID(ctx, thirdPartyLogin.UserID)
+			if err != nil {
+				logrus.Errorf("Failed to get user by ID from third party login: %v", err)
+				return nil, false, err
+			}
+
+			// 更新登录时间和头像
+			user.LastLoginAt = &now
+			user.UpdatedAt = now
+			if avatar != "" && user.Avatar == "" {
+				user.Avatar = avatar
+			}
+			_ = h.repo.UpdateUser(ctx, user)
+
+			// 更新第三方登录记录
+			thirdPartyLogin.UpdatedAt = now
+			_ = h.repo.UpdateThirdPartyLogin(ctx, thirdPartyLogin)
+
+			logrus.WithFields(logrus.Fields{
+				"provider":       provider,
+				"providerUserID": providerUserID,
+				"userID":         user.ID,
+				"email":          user.Email,
+			}).Info("Existing user logged in via third party")
+
+			return user, false, nil
+		}
+
+		// Step 2: 通过 email 查找是否有已存在的用户
+		var existingUser *domain.User
+		if email != "" {
+			// 先查找是否有其他第三方登录使用相同 email
+			existingUser, _ = h.repo.GetUserByThirdPartyEmail(ctx, email)
+			if existingUser == nil {
+				// 再查找是否有直接注册的用户
+				existingUser, _ = h.repo.UserByEmail(ctx, email)
+			}
+		}
+
+		if existingUser != nil {
+			// Step 3: 用户存在，创建新的第三方登录绑定（账户关联）
+			newThirdPartyLogin := &domain.ThirdPartyLogin{
+				ID:               uuid.New().String(),
+				UserID:           existingUser.ID,
+				Provider:         providerType,
+				ProviderUserID:   providerUserID,
+				ProviderEmail:    email,
+				ProviderUserName: displayName,
+				Status:           domain.ThirdPartyLoginStatusNormal,
+				CreatedAt:        now,
+				UpdatedAt:        now,
+			}
+			if err := h.repo.CreateThirdPartyLogin(ctx, newThirdPartyLogin); err != nil {
+				logrus.Warnf("Failed to create third party login binding: %v", err)
+				// 不阻塞登录流程
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"provider":       provider,
+					"providerUserID": providerUserID,
+					"userID":         existingUser.ID,
+					"email":          email,
+				}).Info("New third party login linked to existing user")
+			}
+
+			// 更新登录时间和头像
 			existingUser.LastLoginAt = &now
 			existingUser.UpdatedAt = now
 			if avatar != "" && existingUser.Avatar == "" {
 				existingUser.Avatar = avatar
 			}
 			_ = h.repo.UpdateUser(ctx, existingUser)
+
 			return existingUser, false, nil
 		}
 
-		// 用户不存在，创建新用户
+		// Step 4: 用户不存在，创建新用户并绑定第三方登录
 		username := generateUsername(displayName, email, providerUserID, provider)
 		if displayName == "" {
 			displayName = username
@@ -214,6 +287,23 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
 			return nil, false, err
+		}
+
+		// 创建第三方登录绑定
+		newThirdPartyLogin := &domain.ThirdPartyLogin{
+			ID:               uuid.New().String(),
+			UserID:           newUser.ID,
+			Provider:         providerType,
+			ProviderUserID:   providerUserID,
+			ProviderEmail:    email,
+			ProviderUserName: displayName,
+			Status:           domain.ThirdPartyLoginStatusNormal,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		}
+		if err := h.repo.CreateThirdPartyLogin(ctx, newThirdPartyLogin); err != nil {
+			logrus.Warnf("Failed to create third party login for new user: %v", err)
+			// 不阻塞登录流程
 		}
 
 		// 创建默认用户设置
@@ -250,14 +340,23 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 		}
 		_ = h.repo.CreateMembership(ctx, membership)
 
+		logrus.WithFields(logrus.Fields{
+			"provider":       provider,
+			"providerUserID": providerUserID,
+			"userID":         newUser.ID,
+			"email":          email,
+		}).Info("New user created via third party login")
+
 		return newUser, true, nil
 	}
 
-	// 没有 repository，返回基于 OAuth 信息的临时用户
+	// 没有 repository，返回基于 OAuth 信息的临时用户（不持久化）
 	username := generateUsername(displayName, email, providerUserID, provider)
 	if displayName == "" {
 		displayName = username
 	}
+
+	logrus.Warn("OAuth handler has no repository, user data will not be persisted")
 
 	return &domain.User{
 		ID:            providerUserID,

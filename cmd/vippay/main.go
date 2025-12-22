@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	paypkg "github.com/grapestree/fgrapery/grapery/internal/service/pay"
@@ -121,6 +122,20 @@ func main() {
 	logger.Info("starting grapery vip payment service",
 		zap.String("env", cfg.Env),
 		zap.String("addr", cfg.Addr()),
+	)
+
+	// 配置 JWT Secret
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = cfg.JWT.Secret
+		if jwtSecret == "" {
+			jwtSecret = "grapery-secret-key-change-in-production" // 默认值，仅用于开发
+			logger.Warn("JWT_SECRET not set, using default (NOT FOR PRODUCTION)")
+		}
+	}
+	auth.SetJWTSecret(jwtSecret)
+	logger.Info("JWT secret configured",
+		zap.Bool("from_env", os.Getenv("JWT_SECRET") != ""),
 	)
 
 	// 初始化数据库
@@ -281,11 +296,24 @@ func registerRoutes(router *gin.Engine) {
 	// 创建 IAP 处理器，传入产品服务
 	iapHandler := pay.NewIAPHandler(iapService, productService)
 
-	// 创建 Apple OAuth2 处理器
-	appleOAuthHandler := pay.NewAppleOAuthHandler()
+	// 创建 OAuth Repository（用于持久化用户数据和第三方登录绑定）
+	oauthRepo := paymodels.NewOAuthRepository()
 
-	// 创建 Google OAuth2 处理器
-	googleOAuthHandler := pay.NewGoogleOAuthHandler()
+	// 创建 Apple OAuth2 处理器（带 Repository 支持跨设备登录和账户关联）
+	var appleOAuthHandler *pay.AppleOAuthHandler
+	if oauthRepo != nil {
+		appleOAuthHandler = pay.NewAppleOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		appleOAuthHandler = pay.NewAppleOAuthHandler()
+	}
+
+	// 创建 Google OAuth2 处理器（带 Repository 支持跨设备登录和账户关联）
+	var googleOAuthHandler *pay.GoogleOAuthHandler
+	if oauthRepo != nil {
+		googleOAuthHandler = pay.NewGoogleOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		googleOAuthHandler = pay.NewGoogleOAuthHandler()
+	}
 
 	// API 路由组
 	api := router.Group("/api/vippay")

@@ -1234,5 +1234,30 @@ func migrate(db *gorm.DB) error {
 		// Storyboard Chat 会话
 		&StoryboardChatSession{},
 		&StoryboardChatMessage{},
+
+		// 用户登录记录
+		&UserLoginRecord{},
+
+		// 第三方登录
+		&ThirdPartyLogin{},
 	)
+}
+
+// ThirdPartyLogin 第三方登录表（支持 Google/Apple 跨设备登录）
+type ThirdPartyLogin struct {
+	ID               string         `gorm:"primaryKey;size:36"`
+	UserID           string         `gorm:"size:36;not null;index"`
+	User             User           `gorm:"foreignKey:UserID"`
+	Provider         string         `gorm:"size:32;not null;index:idx_provider_user_id,unique"` // google, apple, facebook, wechat
+	ProviderUserID   string         `gorm:"size:255;not null;index:idx_provider_user_id,unique"`
+	ProviderEmail    string         `gorm:"size:255;index"`
+	ProviderUserName string         `gorm:"size:255"`
+	ProviderUserInfo string         `gorm:"type:text"` // JSON 格式的完整用户信息
+	AccessToken      string         `gorm:"type:text"`
+	RefreshToken     string         `gorm:"type:text"`
+	TokenExpireTime  *int64         `gorm:"type:bigint"`
+	Status           int            `gorm:"default:1;index"` // 1: 正常, 2: 禁用
+	CreatedAt        int64          `gorm:"type:bigint;autoCreateTime;index"`
+	UpdatedAt        int64          `gorm:"type:bigint;autoUpdateTime"`
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
 }

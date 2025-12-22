@@ -491,4 +491,16 @@ type Repository interface {
 	ListStoryboardChatMessages(ctx context.Context, sessionID string, limit, offset int) ([]*StoryboardChatMessage, error)
 	GetLastStoryboardChatMessage(ctx context.Context, sessionID string) (*StoryboardChatMessage, error)
 	DeleteStoryboardChatMessage(ctx context.Context, id string) error
+
+	// ========== Third Party Login operations ==========
+	// 第三方登录账户关联（支持 Google/Apple 跨设备登录）
+	CreateThirdPartyLogin(ctx context.Context, login *ThirdPartyLogin) error
+	GetThirdPartyLogin(ctx context.Context, id string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginByProviderUserID(ctx context.Context, provider ThirdPartyProvider, providerUserID string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginByEmail(ctx context.Context, provider ThirdPartyProvider, email string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginsByUserID(ctx context.Context, userID string) ([]*ThirdPartyLogin, error)
+	UpdateThirdPartyLogin(ctx context.Context, login *ThirdPartyLogin) error
+	DeleteThirdPartyLogin(ctx context.Context, id string) error
+	// 通过任意第三方登录（Google 或 Apple）的 email 查找关联的用户
+	GetUserByThirdPartyEmail(ctx context.Context, email string) (*User, error)
 }
