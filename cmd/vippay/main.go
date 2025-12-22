@@ -629,45 +629,68 @@ func registerRoutes(router *gin.Engine) {
 	}
 }
 
-// createIAPConfig 创建IAP配置
+// createIAPConfig 创建IAP配置（从环境变量加载）
 func createIAPConfig() *paypkg.IAPConfig {
-	// 默认配置
+	// Apple 配置
+	appleBundleID := getEnvWithDefault("APPLE_BUNDLE_ID", "com.grapery.app")
+	appleIssuerID := os.Getenv("APPLE_ISSUER_ID")
+	appleKeyID := os.Getenv("APPLE_KEY_ID")
+	applePrivateKey := os.Getenv("APPLE_PRIVATE_KEY")
+
+	// Apple Sandbox 配置（如不设置，使用生产配置）
+	appleSandboxBundleID := getEnvWithDefault("APPLE_SANDBOX_BUNDLE_ID", appleBundleID)
+	appleSandboxIssuerID := getEnvWithDefault("APPLE_SANDBOX_ISSUER_ID", appleIssuerID)
+	appleSandboxKeyID := getEnvWithDefault("APPLE_SANDBOX_KEY_ID", appleKeyID)
+	appleSandboxPrivateKey := getEnvWithDefault("APPLE_SANDBOX_PRIVATE_KEY", applePrivateKey)
+
+	// Google 配置
+	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.grapery.app")
+	googleServiceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+
+	// Google Sandbox 配置（如不设置，使用生产配置）
+	googleSandboxPackageName := getEnvWithDefault("GOOGLE_SANDBOX_PACKAGE_NAME", googlePackageName)
+	googleSandboxServiceAccountKey := getEnvWithDefault("GOOGLE_SANDBOX_SERVICE_ACCOUNT_KEY", googleServiceAccountKey)
+
 	config := &paypkg.IAPConfig{
 		Apple: paypkg.AppleConfig{
-			BundleID:       "com.yourapp.bundleid", // 需要配置实际的Bundle ID
+			BundleID:       appleBundleID,
 			SandboxURL:     "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/verifyReceipt",
 			ProductionURL:  "https://api.storekit.itunes.apple.com/inApps/v1/verifyReceipt",
-			IssuerID:       "YOUR_APPLE_ISSUER_ID",   // 需要配置实际的Issuer ID
-			KeyID:          "YOUR_APPLE_KEY_ID",      // 需要配置实际的Key ID
-			PrivateKey:     "YOUR_APPLE_PRIVATE_KEY", // 需要配置实际的Private Key
+			IssuerID:       appleIssuerID,
+			KeyID:          appleKeyID,
+			PrivateKey:     applePrivateKey,
 			APIBaseURL:     "https://api.appstoreconnect.apple.com",
 			TimeoutSeconds: 30,
 			MaxRetries:     3,
 			RetryDelayMs:   1000,
-			// Sandbox特定配置
-			SandboxBundleID:   "com.yourapp.sandbox",      // 如果需要不同的Sandbox Bundle ID
-			SandboxIssuerID:   "YOUR_SANDBOX_ISSUER_ID",   // 如果需要不同的Sandbox Issuer ID
-			SandboxKeyID:      "YOUR_SANDBOX_KEY_ID",      // 如果需要不同的Sandbox Key ID
-			SandboxPrivateKey: "YOUR_SANDBOX_PRIVATE_KEY", // 如果需要不同的Sandbox Private Key
+			// Sandbox 特定配置
+			SandboxBundleID:   appleSandboxBundleID,
+			SandboxIssuerID:   appleSandboxIssuerID,
+			SandboxKeyID:      appleSandboxKeyID,
+			SandboxPrivateKey: appleSandboxPrivateKey,
 		},
 		Google: paypkg.GoogleConfig{
-			PackageName:       "com.yourapp.packagename",         // 需要配置实际的Package Name
-			ServiceAccountKey: "YOUR_GOOGLE_SERVICE_ACCOUNT_KEY", // 需要配置实际的Service Account Key
+			PackageName:       googlePackageName,
+			ServiceAccountKey: googleServiceAccountKey,
 			APIBaseURL:        "https://androidpublisher.googleapis.com",
 			TimeoutSeconds:    30,
 			MaxRetries:        3,
 			RetryDelayMs:      1000,
-			// Sandbox特定配置
-			SandboxPackageName:       "com.yourapp.sandbox",              // 如果需要不同的Sandbox Package Name
-			SandboxServiceAccountKey: "YOUR_SANDBOX_SERVICE_ACCOUNT_KEY", // 如果需要不同的Sandbox Service Account Key
+			// Sandbox 特定配置
+			SandboxPackageName:       googleSandboxPackageName,
+			SandboxServiceAccountKey: googleSandboxServiceAccountKey,
 		},
 	}
 
-	// TODO: 从配置文件或环境变量加载实际的配置
-	// 这里可以从 config.GlobalConfig 中读取IAP相关配置
-	// 或者从环境变量中读取敏感信息如私钥等
-
 	return config
+}
+
+// getEnvWithDefault 获取环境变量，如果不存在则返回默认值
+func getEnvWithDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 // gracefulShutdown 优雅关闭

@@ -52,10 +52,28 @@ ENV APPLE_BUNDLE_ID=
 ENV APPLE_ISSUER_ID=
 ENV APPLE_KEY_ID=
 ENV APPLE_PRIVATE_KEY=
+# Apple Sandbox Configuration (optional, falls back to production values)
+ENV APPLE_SANDBOX_BUNDLE_ID=
+ENV APPLE_SANDBOX_ISSUER_ID=
+ENV APPLE_SANDBOX_KEY_ID=
+ENV APPLE_SANDBOX_PRIVATE_KEY=
 
 # ========== Google IAP Configuration ==========
 ENV GOOGLE_PACKAGE_NAME=
 ENV GOOGLE_SERVICE_ACCOUNT_KEY=
+# Google Sandbox Configuration (optional, falls back to production values)
+ENV GOOGLE_SANDBOX_PACKAGE_NAME=
+ENV GOOGLE_SANDBOX_SERVICE_ACCOUNT_KEY=
+
+# ========== Apple OAuth Configuration ==========
+ENV APPLE_OAUTH_CLIENT_ID=
+ENV APPLE_OAUTH_TEAM_ID=
+ENV APPLE_OAUTH_KEY_ID=
+ENV APPLE_OAUTH_PRIVATE_KEY=
+
+# ========== Google OAuth Configuration ==========
+ENV GOOGLE_OAUTH_CLIENT_ID=
+ENV GOOGLE_OAUTH_CLIENT_SECRET=
 
 EXPOSE 8081
 
