@@ -75,6 +75,17 @@ ENV APPLE_OAUTH_PRIVATE_KEY=
 ENV GOOGLE_OAUTH_CLIENT_ID=
 ENV GOOGLE_OAUTH_CLIENT_SECRET=
 
+# ========== APNs Push Notification Configuration ==========
+ENV APNS_BUNDLE_ID=
+ENV APNS_TEAM_ID=
+ENV APNS_KEY_ID=
+ENV APNS_PRIVATE_KEY=
+ENV APNS_USE_SANDBOX=false
+
+# ========== FCM Push Notification Configuration ==========
+ENV FCM_PROJECT_ID=
+ENV FCM_CREDENTIALS_JSON=
+
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

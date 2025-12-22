@@ -503,4 +503,18 @@ type Repository interface {
 	DeleteThirdPartyLogin(ctx context.Context, id string) error
 	// 通过任意第三方登录（Google 或 Apple）的 email 查找关联的用户
 	GetUserByThirdPartyEmail(ctx context.Context, email string) (*User, error)
+
+	// ========== User Device operations ==========
+	// 用户设备管理（APNs/FCM 推送通知）
+	CreateUserDevice(ctx context.Context, device *UserDevice) error
+	GetUserDevice(ctx context.Context, id string) (*UserDevice, error)
+	GetUserDeviceByToken(ctx context.Context, deviceToken string) (*UserDevice, error)
+	GetUserDevicesByUserID(ctx context.Context, userID string) ([]*UserDevice, error)
+	GetActiveUserDevicesByUserID(ctx context.Context, userID string) ([]*UserDevice, error)
+	GetUserDevicesByPlatform(ctx context.Context, userID string, platform DevicePlatform) ([]*UserDevice, error)
+	UpdateUserDevice(ctx context.Context, device *UserDevice) error
+	DeleteUserDevice(ctx context.Context, id string) error
+	DeleteUserDeviceByToken(ctx context.Context, deviceToken string) error
+	DeactivateUserDevice(ctx context.Context, deviceToken string) error
+	UpdateUserDeviceLastActive(ctx context.Context, deviceToken string, lastActiveAt int64) error
 }

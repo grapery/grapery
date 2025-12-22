@@ -1240,6 +1240,9 @@ func migrate(db *gorm.DB) error {
 
 		// 第三方登录
 		&ThirdPartyLogin{},
+
+		// 用户设备（推送通知）
+		&UserDevice{},
 	)
 }
 

@@ -72,3 +72,58 @@ type UserActivity struct {
 	// Relations
 	User *User `json:"user,omitempty"`
 }
+
+// DevicePlatform 设备平台类型
+type DevicePlatform string
+
+const (
+	PlatformIOS     DevicePlatform = "ios"
+	PlatformAndroid DevicePlatform = "android"
+	PlatformMacOS   DevicePlatform = "macos"
+	PlatformIPadOS  DevicePlatform = "ipados"
+	PlatformWatchOS DevicePlatform = "watchos"
+	PlatformTVOS    DevicePlatform = "tvos"
+	PlatformWeb     DevicePlatform = "web"
+)
+
+// UserDevice 用户设备信息（用于推送通知）
+type UserDevice struct {
+	ID           string         `json:"id"`
+	UserID       string         `json:"userId"`
+	DeviceToken  string         `json:"deviceToken"`           // APNs token 或 FCM token
+	Platform     DevicePlatform `json:"platform"`              // ios, android, macos, etc.
+	PushProvider string         `json:"pushProvider"`          // apns, fcm
+	DeviceModel  string         `json:"deviceModel,omitempty"` // iPhone 14 Pro, Pixel 7, etc.
+	OSVersion    string         `json:"osVersion,omitempty"`   // iOS 17.0, Android 14, etc.
+	AppVersion   string         `json:"appVersion,omitempty"`  // 1.0.0
+	AppBuild     string         `json:"appBuild,omitempty"`    // 100
+	Locale       string         `json:"locale,omitempty"`      // en-US, zh-CN
+	Timezone     string         `json:"timezone,omitempty"`    // Asia/Shanghai
+	IsActive     bool           `json:"isActive"`              // 设备是否活跃
+	LastActiveAt int64          `json:"lastActiveAt"`          // 最后活跃时间
+	CreatedAt    int64          `json:"createdAt"`
+	UpdatedAt    int64          `json:"updatedAt"`
+
+	// Relations
+	User *User `json:"user,omitempty"`
+}
+
+// PushNotificationPayload 推送通知载荷
+type PushNotificationPayload struct {
+	Title    string            `json:"title"`
+	Body     string            `json:"body"`
+	Sound    string            `json:"sound,omitempty"`
+	Badge    int               `json:"badge,omitempty"`
+	Category string            `json:"category,omitempty"`
+	ThreadID string            `json:"threadId,omitempty"`
+	Data     map[string]string `json:"data,omitempty"` // 自定义数据
+}
+
+// PushNotificationResult 推送结果
+type PushNotificationResult struct {
+	DeviceID    string `json:"deviceId"`
+	DeviceToken string `json:"deviceToken"`
+	Success     bool   `json:"success"`
+	Error       string `json:"error,omitempty"`
+	MessageID   string `json:"messageId,omitempty"`
+}
