@@ -610,33 +610,6 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 func (m *Metrics) Start(ctx context.Context) {
 	// Start test data updater (for testing push gateway)
 	// This simulates some metrics updates to verify push functionality
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-
-		ticker := time.NewTicker(10 * time.Second) // Update test data every 10 seconds
-		defer ticker.Stop()
-
-		// Initial update
-		m.updateTestMetrics()
-
-		for {
-			select {
-			case <-ticker.C:
-				// Update test metrics to verify push gateway is working
-				m.updateTestMetrics()
-			case <-ctx.Done():
-				// Final update before shutdown
-				m.updateTestMetrics()
-				return
-			case <-m.stopChan:
-				// Final update before shutdown
-				m.updateTestMetrics()
-				return
-			}
-		}
-	}()
-
 	if m.pusher == nil || m.config.PushInterval <= 0 {
 		return
 	}
@@ -686,28 +659,6 @@ func (m *Metrics) Start(ctx context.Context) {
 			}
 		}
 	}()
-}
-
-// updateTestMetrics updates test metrics to verify push gateway functionality
-func (m *Metrics) updateTestMetrics() {
-	// Simulate some test data updates
-	// These metrics will change over time, making it easy to verify push gateway is working
-
-	// Update active requests (simulate some activity)
-	m.ActiveRequests.Set(float64(time.Now().Unix() % 100))
-
-	// Increment some test counters periodically
-	m.UserRegistrations.WithLabelValues("test").Inc()
-	m.UserLogins.WithLabelValues("test").Inc()
-	m.StoryCreations.WithLabelValues("test").Inc()
-	m.AIGenerations.WithLabelValues("test", "text").Inc()
-
-	// Simulate cache activity
-	m.CacheHits.WithLabelValues("test").Inc()
-	m.CacheMisses.WithLabelValues("test").Add(0.5) // Can use Add for fractional increments
-
-	// Simulate database query
-	m.DatabaseQueryTime.WithLabelValues("select", "test_table").Observe(0.01)
 }
 
 // Stop stops the metrics push goroutine
