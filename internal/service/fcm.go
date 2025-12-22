@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/google"
 )
@@ -210,9 +211,15 @@ func (f *FCMService) SendToTopic(ctx context.Context, topic string, payload *dom
 
 // sendMessage 发送 FCM 消息
 func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.PushNotificationResult, error) {
+	startTime := time.Now()
+
 	accessToken, err := f.getAccessToken(ctx)
 	if err != nil {
 		f.logger.Error("failed to get FCM access token", zap.Error(err))
+		// 记录通知发送错误
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationError("push", "fcm", "network")
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: msg.Message.Token,
 			Success:     false,
@@ -224,6 +231,9 @@ func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.
 	url := fmt.Sprintf("https://fcm.googleapis.com/v1/projects/%s/messages:send", f.projectID)
 	body, err := json.Marshal(msg)
 	if err != nil {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationError("push", "fcm", "payload_too_large")
+		}
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 
@@ -238,6 +248,11 @@ func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		f.logger.Error("failed to send FCM request", zap.Error(err))
+		// 记录通知发送失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationSent("push", "fcm", "failed", time.Since(startTime))
+			metrics.RecordNotificationError("push", "fcm", "network")
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: msg.Message.Token,
 			Success:     false,
@@ -261,6 +276,21 @@ func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.
 		f.logger.Error("FCM request failed",
 			zap.Int("status", resp.StatusCode),
 			zap.String("error", errMsg))
+		// 记录通知发送失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationSent("push", "fcm", "failed", time.Since(startTime))
+			// 根据错误类型分类记录
+			errorType := "unknown"
+			if fcmResp.Error != nil {
+				switch fcmResp.Error.Status {
+				case "UNREGISTERED", "INVALID_ARGUMENT":
+					errorType = "invalid_token"
+				case "QUOTA_EXCEEDED":
+					errorType = "rate_limit"
+				}
+			}
+			metrics.RecordNotificationError("push", "fcm", errorType)
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: msg.Message.Token,
 			Success:     false,
@@ -271,6 +301,11 @@ func (f *FCMService) sendMessage(ctx context.Context, msg *FCMMessage) (*domain.
 	f.logger.Debug("FCM message sent",
 		zap.String("messageId", fcmResp.Name),
 		zap.String("token", msg.Message.Token))
+
+	// 记录通知发送成功
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordNotificationSent("push", "fcm", "success", time.Since(startTime))
+	}
 
 	return &domain.PushNotificationResult{
 		DeviceToken: msg.Message.Token,

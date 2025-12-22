@@ -17,6 +17,7 @@ import (
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,6 +65,7 @@ func (s *AppleIAPService) GetPlatform() IAPPlatform {
 
 // VerifyReceipt 验证收据
 func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, sandbox bool) (*IAPReceipt, error) {
+	startTime := time.Now()
 	s.logger.WithFields(logrus.Fields{
 		"sandbox":          sandbox,
 		"receipt_length":   len(receipt),
@@ -85,12 +87,20 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 	resp, err := appleClient.VerifyReceipt(ctx, receipt, sandbox)
 	if err != nil {
 		s.logger.WithError(err).Error("Apple收据验证失败")
+		// 记录验证失败的指标
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("收据验证失败: %w", err)
 	}
 
 	// 3. 检查验证状态
 	if resp.Status != 0 {
 		s.logger.WithField("status", resp.Status).Error("Apple收据验证失败")
+		// 记录验证失败的指标
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("收据验证失败，状态码: %d", resp.Status)
 	}
 
@@ -127,6 +137,11 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 		"status":      iapReceipt.Status,
 		"environment": iapReceipt.Environment,
 	}).Info("Apple收据验证成功")
+
+	// 记录验证成功的指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
+	}
 
 	return iapReceipt, nil
 }
@@ -644,6 +659,12 @@ func (s *AppleIAPService) handleInitialPurchase(ctx context.Context, notificatio
 		"purchase_date":           transactionInfo.PurchaseDate,
 	}).Info("处理Apple初始购买通知")
 
+	// 记录支付成功指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentSimple("apple", "subscription", "success")
+		metrics.IncPaymentSubscription("apple", transactionInfo.ProductID)
+	}
+
 	// 1. 保存通知记录
 	if err := s.saveAppleNotification(ctx, notification, "Success"); err != nil {
 		s.logger.WithError(err).Error("保存Apple通知记录失败")
@@ -701,6 +722,11 @@ func (s *AppleIAPService) handleSubscriptionRenewal(ctx context.Context, notific
 		"product_id":              transactionInfo.ProductID,
 		"expires_date":            transactionInfo.ExpiresDate,
 	}).Info("处理Apple订阅续费通知")
+
+	// 记录续费成功指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentSimple("apple", "subscription", "success")
+	}
 
 	// 1. 保存通知记录
 	if err := s.saveAppleNotification(ctx, notification, "Success"); err != nil {
@@ -771,6 +797,11 @@ func (s *AppleIAPService) handleSubscriptionExpiration(ctx context.Context, noti
 		"product_id":              transactionInfo.ProductID,
 		"expires_date":            transactionInfo.ExpiresDate,
 	}).Info("处理Apple订阅过期通知")
+
+	// 记录订阅过期指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.DecPaymentSubscription("apple", transactionInfo.ProductID)
+	}
 
 	// 1. 保存通知记录
 	if err := s.saveAppleNotification(ctx, notification, "Success"); err != nil {
@@ -868,6 +899,12 @@ func (s *AppleIAPService) handleRefund(ctx context.Context, notification *IAPNot
 		"transaction_id":          transactionInfo.TransactionID,
 		"product_id":              transactionInfo.ProductID,
 	}).Info("处理Apple退款通知")
+
+	// 记录退款指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.PaymentRefundsTotal.WithLabelValues("apple", "user_request").Inc()
+		metrics.DecPaymentSubscription("apple", transactionInfo.ProductID)
+	}
 
 	// 1. 保存通知记录
 	if err := s.saveAppleNotification(ctx, notification, "Success"); err != nil {

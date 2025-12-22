@@ -7,6 +7,7 @@ import (
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,6 +34,7 @@ func (s *GoogleIAPServiceRefactored) GetPlatform() IAPPlatform {
 
 // VerifyReceipt 验证收据
 func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt string, sandbox bool) (*IAPReceipt, error) {
+	startTime := time.Now()
 	s.logger.WithFields(logrus.Fields{
 		"receipt_length": len(receipt),
 		"sandbox":        sandbox,
@@ -45,17 +47,27 @@ func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt 
 	var receiptData map[string]interface{}
 	if err := json.Unmarshal([]byte(receipt), &receiptData); err != nil {
 		s.logger.WithError(err).Error("解析Google收据数据失败")
+		// 记录验证失败的指标
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("解析收据数据失败: %w", err)
 	}
 
 	// 提取必要信息
 	purchaseToken, ok := receiptData["purchaseToken"].(string)
 	if !ok {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("收据中缺少purchaseToken")
 	}
 
 	productID, ok := receiptData["productId"].(string)
 	if !ok {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("收据中缺少productId")
 	}
 
@@ -63,6 +75,10 @@ func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt 
 	purchaseInfo, err := googleClient.GetPurchaseInfo(ctx, purchaseToken, productID)
 	if err != nil {
 		s.logger.WithError(err).Error("验证Google购买失败")
+		// 记录验证失败的指标
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+		}
 		return nil, fmt.Errorf("验证购买失败: %w", err)
 	}
 
@@ -86,6 +102,11 @@ func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt 
 		"purchase_state": purchaseInfo.PurchaseState,
 		"environment":    iapReceipt.Environment,
 	}).Info("Google收据验证成功")
+
+	// 记录验证成功的指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentVerify("google", "success", time.Since(startTime))
+	}
 
 	return iapReceipt, nil
 }
@@ -446,6 +467,11 @@ func (s *GoogleIAPServiceRefactored) handleSubscriptionRenewed(ctx context.Conte
 		"event_time":      time.Unix(data.EventTimeMillis/1000, 0),
 	}).Info("处理Google订阅续费通知")
 
+	// 记录续费成功指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentSimple("google", "subscription", "success")
+	}
+
 	// 1. 保存通知记录
 	if err := s.saveGoogleNotification(ctx, notification, data, "Success"); err != nil {
 		s.logger.WithError(err).Error("保存Google通知记录失败")
@@ -514,6 +540,12 @@ func (s *GoogleIAPServiceRefactored) handleSubscriptionPurchased(ctx context.Con
 		"subscription_id": data.SubscriptionNotification.SubscriptionID,
 		"event_time":      time.Unix(data.EventTimeMillis/1000, 0),
 	}).Info("处理Google订阅购买通知")
+
+	// 记录订阅购买成功指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentSimple("google", "subscription", "success")
+		metrics.IncPaymentSubscription("google", data.SubscriptionNotification.SubscriptionID)
+	}
 
 	// 1. 保存通知记录
 	if err := s.saveGoogleNotification(ctx, notification, data, "Success"); err != nil {
@@ -869,6 +901,11 @@ func (s *GoogleIAPServiceRefactored) handleSubscriptionExpired(ctx context.Conte
 		"subscription_id": data.SubscriptionNotification.SubscriptionID,
 		"event_time":      time.Unix(data.EventTimeMillis/1000, 0),
 	}).Info("处理Google订阅过期通知")
+
+	// 记录订阅过期指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.DecPaymentSubscription("google", data.SubscriptionNotification.SubscriptionID)
+	}
 
 	// 1. 保存通知记录
 	if err := s.saveGoogleNotification(ctx, notification, data, "Success"); err != nil {

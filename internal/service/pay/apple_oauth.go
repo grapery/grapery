@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
@@ -68,10 +69,16 @@ func NewAppleSignInVerifier(config *AppleOAuthConfig) *AppleSignInVerifier {
 
 // VerifyToken 验证 Apple Identity Token
 func (v *AppleSignInVerifier) VerifyToken(tokenString string) (*AppleIdentityTokenClaims, error) {
+	startTime := time.Now()
+
 	// 1. 获取 Apple 的公钥集（带缓存）
 	fmt.Printf("开始获取 Apple 公钥集，Bundle ID: %s\n", v.config.BundleID)
 	keySet, err := v.getApplePublicKeys()
 	if err != nil {
+		// 记录 OAuth 登录错误
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLoginError("apple", "network")
+		}
 		return nil, fmt.Errorf("failed to get Apple public keys: %w", err)
 	}
 	fmt.Printf("成功获取 Apple 公钥集，包含 %d 个密钥\n", keySet.Len())
@@ -84,6 +91,11 @@ func (v *AppleSignInVerifier) VerifyToken(tokenString string) (*AppleIdentityTok
 		jwt.WithAudience(v.config.BundleID),
 	)
 	if err != nil {
+		// 记录 OAuth 登录失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("apple", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("apple", "invalid_token")
+		}
 		return nil, fmt.Errorf("failed to parse/validate token: %w", err)
 	}
 
@@ -126,6 +138,11 @@ func (v *AppleSignInVerifier) VerifyToken(tokenString string) (*AppleIdentityTok
 	}
 	if fullName, ok := rawClaims["full_name"].(string); ok {
 		claims.FullName = fullName
+	}
+
+	// 记录 OAuth 登录成功
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordOAuthLogin("apple", "success", time.Since(startTime))
 	}
 
 	return claims, nil

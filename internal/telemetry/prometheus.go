@@ -73,6 +73,33 @@ type Metrics struct {
 	ComplianceViolationsByType *prometheus.CounterVec // violation_type: "porn" | "politics" | "abuse" | etc.
 	ComplianceCheckDuration    *prometheus.HistogramVec
 
+	// Payment metrics
+	PaymentTotal          *prometheus.CounterVec   // provider: "apple" | "google" | "stripe", type: "subscription" | "one_time", status: "success" | "failed" | "pending"
+	PaymentAmount         *prometheus.HistogramVec // provider, currency
+	PaymentDuration       *prometheus.HistogramVec // provider, status
+	PaymentRefundsTotal   *prometheus.CounterVec   // provider, reason
+	PaymentRefundAmount   *prometheus.HistogramVec // provider, currency
+	PaymentSubscriptions  *prometheus.GaugeVec     // provider, plan: active subscription count by plan
+	PaymentVerifyTotal    *prometheus.CounterVec   // provider, status: receipt/purchase verification count
+	PaymentVerifyDuration *prometheus.HistogramVec // provider: verification duration
+
+	// OAuth/Third-party login metrics
+	OAuthLoginTotal        *prometheus.CounterVec   // provider: "apple" | "google" | "facebook" | "twitter", status: "success" | "failed"
+	OAuthLoginDuration     *prometheus.HistogramVec // provider
+	OAuthLoginErrors       *prometheus.CounterVec   // provider, error_type: "invalid_token" | "expired" | "network" | "unknown"
+	OAuthTokenRefreshTotal *prometheus.CounterVec   // provider, status
+	OAuthLinkTotal         *prometheus.CounterVec   // provider, action: "link" | "unlink", status
+	OAuthActiveProviders   *prometheus.GaugeVec     // provider: count of users using each provider
+
+	// Notification metrics
+	NotificationsSentTotal       *prometheus.CounterVec   // type: "push" | "email" | "sms" | "in_app", channel: "apns" | "fcm" | "smtp" | etc., status
+	NotificationDeliveryDuration *prometheus.HistogramVec // type, channel
+	NotificationErrors           *prometheus.CounterVec   // type, channel, error_type
+	NotificationsQueued          prometheus.Gauge         // current queue size
+	NotificationDeliveryRate     *prometheus.GaugeVec     // type, channel: success rate
+	NotificationByCategory       *prometheus.CounterVec   // category: "marketing" | "transactional" | "system" | "social"
+	NotificationRetries          *prometheus.CounterVec   // type, channel: retry attempts
+
 	config   PrometheusConfig
 	pusher   *push.Pusher
 	stopChan chan struct{}
@@ -325,6 +352,164 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 			},
 			[]string{"status"}, // "compliant" | "non_compliant" | "error"
 		),
+
+		// Payment metrics
+		PaymentTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "payment_total",
+				Help: "Total number of payment transactions",
+			},
+			[]string{"provider", "type", "status"}, // provider: "apple" | "google" | "stripe", type: "subscription" | "one_time", status: "success" | "failed" | "pending"
+		),
+		PaymentAmount: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "payment_amount",
+				Help:    "Payment amount distribution",
+				Buckets: []float64{0.99, 2.99, 4.99, 9.99, 19.99, 49.99, 99.99, 199.99, 499.99},
+			},
+			[]string{"provider", "currency"},
+		),
+		PaymentDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "payment_duration_seconds",
+				Help:    "Payment processing duration in seconds",
+				Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
+			},
+			[]string{"provider", "status"},
+		),
+		PaymentRefundsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "payment_refunds_total",
+				Help: "Total number of refund transactions",
+			},
+			[]string{"provider", "reason"},
+		),
+		PaymentRefundAmount: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "payment_refund_amount",
+				Help:    "Refund amount distribution",
+				Buckets: []float64{0.99, 2.99, 4.99, 9.99, 19.99, 49.99, 99.99, 199.99, 499.99},
+			},
+			[]string{"provider", "currency"},
+		),
+		PaymentSubscriptions: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "payment_subscriptions_active",
+				Help: "Number of active subscriptions by provider and plan",
+			},
+			[]string{"provider", "plan"},
+		),
+		PaymentVerifyTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "payment_verify_total",
+				Help: "Total number of payment verification requests",
+			},
+			[]string{"provider", "status"},
+		),
+		PaymentVerifyDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "payment_verify_duration_seconds",
+				Help:    "Payment verification duration in seconds",
+				Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10},
+			},
+			[]string{"provider"},
+		),
+
+		// OAuth/Third-party login metrics
+		OAuthLoginTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "oauth_login_total",
+				Help: "Total number of OAuth login attempts",
+			},
+			[]string{"provider", "status"}, // provider: "apple" | "google" | "facebook" | "twitter", status: "success" | "failed"
+		),
+		OAuthLoginDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "oauth_login_duration_seconds",
+				Help:    "OAuth login processing duration in seconds",
+				Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10},
+			},
+			[]string{"provider"},
+		),
+		OAuthLoginErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "oauth_login_errors_total",
+				Help: "Total number of OAuth login errors by type",
+			},
+			[]string{"provider", "error_type"}, // error_type: "invalid_token" | "expired" | "network" | "unknown"
+		),
+		OAuthTokenRefreshTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "oauth_token_refresh_total",
+				Help: "Total number of OAuth token refresh attempts",
+			},
+			[]string{"provider", "status"},
+		),
+		OAuthLinkTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "oauth_link_total",
+				Help: "Total number of OAuth account link/unlink operations",
+			},
+			[]string{"provider", "action", "status"}, // action: "link" | "unlink"
+		),
+		OAuthActiveProviders: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "oauth_active_providers",
+				Help: "Number of users using each OAuth provider",
+			},
+			[]string{"provider"},
+		),
+
+		// Notification metrics
+		NotificationsSentTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "notifications_sent_total",
+				Help: "Total number of notifications sent",
+			},
+			[]string{"type", "channel", "status"}, // type: "push" | "email" | "sms" | "in_app", channel: "apns" | "fcm" | "smtp", status: "success" | "failed"
+		),
+		NotificationDeliveryDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "notification_delivery_duration_seconds",
+				Help:    "Notification delivery duration in seconds",
+				Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+			},
+			[]string{"type", "channel"},
+		),
+		NotificationErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "notification_errors_total",
+				Help: "Total number of notification errors",
+			},
+			[]string{"type", "channel", "error_type"}, // error_type: "invalid_token" | "rate_limit" | "network" | "unknown"
+		),
+		NotificationsQueued: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "notifications_queued",
+				Help: "Current number of notifications in queue",
+			},
+		),
+		NotificationDeliveryRate: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "notification_delivery_rate",
+				Help: "Notification delivery success rate (0-1)",
+			},
+			[]string{"type", "channel"},
+		),
+		NotificationByCategory: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "notifications_by_category_total",
+				Help: "Total number of notifications by category",
+			},
+			[]string{"category"}, // "marketing" | "transactional" | "system" | "social"
+		),
+		NotificationRetries: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "notification_retries_total",
+				Help: "Total number of notification retry attempts",
+			},
+			[]string{"type", "channel"},
+		),
 	}
 
 	// Register all metrics
@@ -361,6 +546,30 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.ComplianceCheckResults,
 		m.ComplianceViolationsByType,
 		m.ComplianceCheckDuration,
+		// Payment metrics
+		m.PaymentTotal,
+		m.PaymentAmount,
+		m.PaymentDuration,
+		m.PaymentRefundsTotal,
+		m.PaymentRefundAmount,
+		m.PaymentSubscriptions,
+		m.PaymentVerifyTotal,
+		m.PaymentVerifyDuration,
+		// OAuth metrics
+		m.OAuthLoginTotal,
+		m.OAuthLoginDuration,
+		m.OAuthLoginErrors,
+		m.OAuthTokenRefreshTotal,
+		m.OAuthLinkTotal,
+		m.OAuthActiveProviders,
+		// Notification metrics
+		m.NotificationsSentTotal,
+		m.NotificationDeliveryDuration,
+		m.NotificationErrors,
+		m.NotificationsQueued,
+		m.NotificationDeliveryRate,
+		m.NotificationByCategory,
+		m.NotificationRetries,
 	)
 
 	// Note: Go collectors (NewGoCollector, NewProcessCollector) are not registered
@@ -657,13 +866,159 @@ func (m *Metrics) RecordComplianceCheck(status string, duration time.Duration, v
 	m.ComplianceChecksTotal.Inc()
 	m.ComplianceCheckResults.WithLabelValues(status).Inc()
 	m.ComplianceCheckDuration.WithLabelValues(status).Observe(duration.Seconds())
-	
+
 	// Record violations by type
 	for _, violationType := range violationTypes {
 		if violationType != "" {
 			m.ComplianceViolationsByType.WithLabelValues(violationType).Inc()
 		}
 	}
+}
+
+// ============================================
+// Payment Metrics Recording Methods
+// ============================================
+
+// RecordPayment records a payment transaction
+// provider: "apple" | "google" | "stripe"
+// paymentType: "subscription" | "one_time"
+// status: "success" | "failed" | "pending"
+func (m *Metrics) RecordPayment(provider, paymentType, status string, amount float64, currency string, duration time.Duration) {
+	m.PaymentTotal.WithLabelValues(provider, paymentType, status).Inc()
+	m.PaymentAmount.WithLabelValues(provider, currency).Observe(amount)
+	m.PaymentDuration.WithLabelValues(provider, status).Observe(duration.Seconds())
+}
+
+// RecordPaymentSimple records a simple payment transaction without duration
+func (m *Metrics) RecordPaymentSimple(provider, paymentType, status string) {
+	m.PaymentTotal.WithLabelValues(provider, paymentType, status).Inc()
+}
+
+// RecordPaymentAmount records payment amount
+func (m *Metrics) RecordPaymentAmount(provider, currency string, amount float64) {
+	m.PaymentAmount.WithLabelValues(provider, currency).Observe(amount)
+}
+
+// RecordPaymentRefund records a refund transaction
+func (m *Metrics) RecordPaymentRefund(provider, reason, currency string, amount float64) {
+	m.PaymentRefundsTotal.WithLabelValues(provider, reason).Inc()
+	m.PaymentRefundAmount.WithLabelValues(provider, currency).Observe(amount)
+}
+
+// RecordPaymentSubscription updates active subscription count
+func (m *Metrics) RecordPaymentSubscription(provider, plan string, count float64) {
+	m.PaymentSubscriptions.WithLabelValues(provider, plan).Set(count)
+}
+
+// IncPaymentSubscription increments subscription count
+func (m *Metrics) IncPaymentSubscription(provider, plan string) {
+	m.PaymentSubscriptions.WithLabelValues(provider, plan).Inc()
+}
+
+// DecPaymentSubscription decrements subscription count
+func (m *Metrics) DecPaymentSubscription(provider, plan string) {
+	m.PaymentSubscriptions.WithLabelValues(provider, plan).Dec()
+}
+
+// RecordPaymentVerify records a payment verification request
+func (m *Metrics) RecordPaymentVerify(provider, status string, duration time.Duration) {
+	m.PaymentVerifyTotal.WithLabelValues(provider, status).Inc()
+	m.PaymentVerifyDuration.WithLabelValues(provider).Observe(duration.Seconds())
+}
+
+// ============================================
+// OAuth/Third-party Login Metrics Recording Methods
+// ============================================
+
+// RecordOAuthLogin records an OAuth login attempt
+// provider: "apple" | "google" | "facebook" | "twitter" | "wechat"
+// status: "success" | "failed"
+func (m *Metrics) RecordOAuthLogin(provider, status string, duration time.Duration) {
+	m.OAuthLoginTotal.WithLabelValues(provider, status).Inc()
+	m.OAuthLoginDuration.WithLabelValues(provider).Observe(duration.Seconds())
+}
+
+// RecordOAuthLoginSimple records a simple OAuth login attempt without duration
+func (m *Metrics) RecordOAuthLoginSimple(provider, status string) {
+	m.OAuthLoginTotal.WithLabelValues(provider, status).Inc()
+}
+
+// RecordOAuthLoginError records an OAuth login error
+// errorType: "invalid_token" | "expired" | "network" | "user_cancelled" | "unknown"
+func (m *Metrics) RecordOAuthLoginError(provider, errorType string) {
+	m.OAuthLoginErrors.WithLabelValues(provider, errorType).Inc()
+}
+
+// RecordOAuthTokenRefresh records an OAuth token refresh attempt
+func (m *Metrics) RecordOAuthTokenRefresh(provider, status string) {
+	m.OAuthTokenRefreshTotal.WithLabelValues(provider, status).Inc()
+}
+
+// RecordOAuthLink records an OAuth account link/unlink operation
+// action: "link" | "unlink"
+// status: "success" | "failed"
+func (m *Metrics) RecordOAuthLink(provider, action, status string) {
+	m.OAuthLinkTotal.WithLabelValues(provider, action, status).Inc()
+}
+
+// RecordOAuthActiveProviders updates the count of users using a specific OAuth provider
+func (m *Metrics) RecordOAuthActiveProviders(provider string, count float64) {
+	m.OAuthActiveProviders.WithLabelValues(provider).Set(count)
+}
+
+// ============================================
+// Notification Metrics Recording Methods
+// ============================================
+
+// RecordNotificationSent records a notification sent
+// notificationType: "push" | "email" | "sms" | "in_app"
+// channel: "apns" | "fcm" | "smtp" | "sms_provider"
+// status: "success" | "failed"
+func (m *Metrics) RecordNotificationSent(notificationType, channel, status string, duration time.Duration) {
+	m.NotificationsSentTotal.WithLabelValues(notificationType, channel, status).Inc()
+	m.NotificationDeliveryDuration.WithLabelValues(notificationType, channel).Observe(duration.Seconds())
+}
+
+// RecordNotificationSentSimple records a simple notification sent without duration
+func (m *Metrics) RecordNotificationSentSimple(notificationType, channel, status string) {
+	m.NotificationsSentTotal.WithLabelValues(notificationType, channel, status).Inc()
+}
+
+// RecordNotificationError records a notification error
+// errorType: "invalid_token" | "rate_limit" | "network" | "payload_too_large" | "unknown"
+func (m *Metrics) RecordNotificationError(notificationType, channel, errorType string) {
+	m.NotificationErrors.WithLabelValues(notificationType, channel, errorType).Inc()
+}
+
+// SetNotificationsQueued updates the current queue size
+func (m *Metrics) SetNotificationsQueued(count float64) {
+	m.NotificationsQueued.Set(count)
+}
+
+// IncNotificationsQueued increments the queue size
+func (m *Metrics) IncNotificationsQueued() {
+	m.NotificationsQueued.Inc()
+}
+
+// DecNotificationsQueued decrements the queue size
+func (m *Metrics) DecNotificationsQueued() {
+	m.NotificationsQueued.Dec()
+}
+
+// RecordNotificationDeliveryRate updates the delivery success rate
+func (m *Metrics) RecordNotificationDeliveryRate(notificationType, channel string, rate float64) {
+	m.NotificationDeliveryRate.WithLabelValues(notificationType, channel).Set(rate)
+}
+
+// RecordNotificationByCategory records a notification by category
+// category: "marketing" | "transactional" | "system" | "social"
+func (m *Metrics) RecordNotificationByCategory(category string) {
+	m.NotificationByCategory.WithLabelValues(category).Inc()
+}
+
+// RecordNotificationRetry records a notification retry attempt
+func (m *Metrics) RecordNotificationRetry(notificationType, channel string) {
+	m.NotificationRetries.WithLabelValues(notificationType, channel).Inc()
 }
 
 // DefaultMetrics is the global metrics instance

@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -230,9 +231,15 @@ func (a *APNsService) SendToDevice(ctx context.Context, deviceToken string, payl
 
 // sendNotification 发送 APNs 通知
 func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, payload *APNsPayload) (*domain.PushNotificationResult, error) {
+	startTime := time.Now()
+
 	authToken, err := a.getAuthToken()
 	if err != nil {
 		a.logger.Error("failed to get APNs auth token", zap.Error(err))
+		// 记录通知发送错误
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationError("push", "apns", "network")
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: deviceToken,
 			Success:     false,
@@ -243,6 +250,9 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 	// 序列化载荷
 	body, err := json.Marshal(payload)
 	if err != nil {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationError("push", "apns", "payload_too_large")
+		}
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
@@ -264,6 +274,11 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		a.logger.Error("failed to send APNs request", zap.Error(err))
+		// 记录通知发送失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationSent("push", "apns", "failed", time.Since(startTime))
+			metrics.RecordNotificationError("push", "apns", "network")
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: deviceToken,
 			Success:     false,
@@ -279,6 +294,10 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 		a.logger.Debug("APNs notification sent",
 			zap.String("apnsId", apnsID),
 			zap.String("token", deviceToken[:min(16, len(deviceToken))]+"..."))
+		// 记录通知发送成功
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordNotificationSent("push", "apns", "success", time.Since(startTime))
+		}
 		return &domain.PushNotificationResult{
 			DeviceToken: deviceToken,
 			Success:     true,
@@ -297,6 +316,20 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 	a.logger.Error("APNs request failed",
 		zap.Int("status", resp.StatusCode),
 		zap.String("reason", errorResp.Reason))
+
+	// 记录通知发送失败
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordNotificationSent("push", "apns", "failed", time.Since(startTime))
+		// 根据错误原因分类记录
+		errorType := "unknown"
+		switch errorResp.Reason {
+		case "BadDeviceToken", "Unregistered":
+			errorType = "invalid_token"
+		case "TooManyRequests":
+			errorType = "rate_limit"
+		}
+		metrics.RecordNotificationError("push", "apns", errorType)
+	}
 
 	return &domain.PushNotificationResult{
 		DeviceToken: deviceToken,

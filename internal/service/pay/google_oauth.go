@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
@@ -70,10 +71,16 @@ func NewGoogleSignInVerifier(config *GoogleOAuthConfig) *GoogleSignInVerifier {
 
 // VerifyToken 验证 Google Identity Token
 func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityTokenClaims, error) {
+	startTime := time.Now()
+
 	// 1. 获取 Google 的公钥集（带缓存）
 	fmt.Printf("开始获取 Google 公钥集，Client ID: %s\n", v.config.ClientID)
 	keySet, err := v.getGooglePublicKeys()
 	if err != nil {
+		// 记录 OAuth 登录错误
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLoginError("google", "network")
+		}
 		return nil, fmt.Errorf("failed to get Google public keys: %w", err)
 	}
 	fmt.Printf("成功获取 Google 公钥集，包含 %d 个密钥\n", keySet.Len())
@@ -86,12 +93,22 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 		jwt.WithAudience(v.config.ClientID),
 	)
 	if err != nil {
+		// 记录 OAuth 登录失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
 		return nil, fmt.Errorf("failed to parse/validate token: %w", err)
 	}
 
 	// 验证 issuer（手动验证，因为 Google 有两种格式）
 	issuer := token.Issuer()
 	if issuer != "https://accounts.google.com" && issuer != "accounts.google.com" {
+		// 记录 OAuth 登录失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
 		return nil, fmt.Errorf("invalid issuer: %s", issuer)
 	}
 
@@ -140,6 +157,11 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 	}
 	if hd, ok := rawClaims["hd"].(string); ok {
 		claims.HostedDomain = hd
+	}
+
+	// 记录 OAuth 登录成功
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordOAuthLogin("google", "success", time.Since(startTime))
 	}
 
 	return claims, nil

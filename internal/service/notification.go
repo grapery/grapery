@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -40,6 +41,21 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 		return fmt.Errorf("failed to create notification: %w", err)
 	}
 	s.logger.Info("notification created", zap.String("userId", notification.UserID), zap.String("type", notification.Type))
+
+	// 记录通知创建指标
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordNotificationSentSimple("in_app", "database", "success")
+		// 根据通知类型分类
+		category := "system"
+		switch notification.Type {
+		case "comment", "like", "follow", "reply", "mention":
+			category = "social"
+		case "storyboard", "fork":
+			category = "transactional"
+		}
+		metrics.RecordNotificationByCategory(category)
+	}
+
 	return nil
 }
 
