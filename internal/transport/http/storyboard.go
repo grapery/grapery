@@ -49,8 +49,8 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 
 	// Default scene count to 3 if not specified or out of range
 	sceneCount := req.SceneCount
-	if sceneCount < 2 || sceneCount > 5 {
-		sceneCount = 3
+	if sceneCount < 2 || sceneCount > 16 {
+		sceneCount = 6
 	}
 
 	storyboard := &domain.Storyboard{

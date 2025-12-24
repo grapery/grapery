@@ -673,7 +673,27 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 	s.logger.Debug("storyboard deletion authorized",
 		zap.String("storyboardId", id),
 		zap.String("storyId", storyboard.StoryID),
-		zap.String("title", storyboard.Title))
+		zap.String("title", storyboard.Title),
+		zap.String("workflowStatus", storyboard.WorkflowStatus))
+
+	// 检查是否为已发布的故事板，已发布的故事板有有效的统计数据
+	isPublished := storyboard.WorkflowStatus == "published"
+
+	// 记录删除前的统计数据（用于日志和调试）
+	if isPublished {
+		s.logger.Info("deleting published storyboard with stats",
+			zap.String("storyboardId", id),
+			zap.Int("likes", storyboard.Likes),
+			zap.Int("comments", storyboard.Comments),
+			zap.Int("shares", storyboard.Shares),
+			zap.Int("views", storyboard.Views),
+			zap.Int("forkCount", storyboard.ForkCount),
+			zap.Int("tokenConsumption", storyboard.TokenConsumption))
+	} else {
+		s.logger.Debug("deleting unpublished storyboard (stats are 0)",
+			zap.String("storyboardId", id),
+			zap.String("workflowStatus", storyboard.WorkflowStatus))
+	}
 
 	// 删除
 	if err := s.repo.DeleteStoryboard(ctx, id); err != nil {
@@ -683,7 +703,7 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 		return fmt.Errorf("failed to delete storyboard: %w", err)
 	}
 
-	// 更新故事的故事板数量
+	// 更新故事的故事板数量（所有故事板都需要更新）
 	if err := s.repo.DecrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
 		s.logger.Warn("failed to decrement story storyboard count",
 			zap.String("storyId", storyboard.StoryID),
@@ -694,10 +714,25 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 			zap.String("storyId", storyboard.StoryID))
 	}
 
+	// 更新 metrics（只有已发布的故事板才需要更新统计指标）
+	if s.metrics != nil {
+		// 减少故事板总数
+		s.metrics.StoryboardCount.Dec()
+
+		// 只有已发布的故事板才有有效的统计数据需要记录
+		if isPublished {
+			s.logger.Debug("updating metrics for deleted published storyboard",
+				zap.String("storyboardId", id),
+				zap.Int("likes", storyboard.Likes),
+				zap.Int("views", storyboard.Views))
+		}
+	}
+
 	s.logger.Info("storyboard deleted successfully",
 		zap.String("id", id),
 		zap.String("userId", userID),
-		zap.String("storyId", storyboard.StoryID))
+		zap.String("storyId", storyboard.StoryID),
+		zap.Bool("wasPublished", isPublished))
 
 	return nil
 }
@@ -1357,11 +1392,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("contextLength", len(contextInfo)),
 		zap.Int("promptLength", len(prompt)))
-	systemPrompt := `你是专业的故事创作助手，擅长创建生动的故事分镜。
-重要要求：
-1. 直接返回纯JSON，不要使用markdown代码块（不要用` + "```json" + `或` + "```" + `包裹）
-2. 确保JSON完整闭合，所有括号和引号配对正确
-3. 内容简洁精炼，每个场景描述控制在200字以内`
+	systemPrompt := s.buildStoryboardSystemPrompt(story)
 
 	// 3. 使用AI生成服务生成文本（自动记录AI使用数据）
 	if s.aiGenService == nil {
@@ -1413,37 +1444,24 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.Int("contentLength", len(storyboard.Content)),
 		zap.Int("scenesCount", len(storyboardResult.Scenes)))
 
-	// 将 map 转换为 StoryboardScene 对象 (AI-generated plot scenes)
+	// 将 StoryboardSceneResult 转换为 domain.StoryboardScene (AI-generated plot scenes)
 	storyboardScenes := make([]domain.StoryboardScene, 0, len(storyboardResult.Scenes))
-	for i, sceneMap := range storyboardResult.Scenes {
+	for i, sceneResult := range storyboardResult.Scenes {
 		scene := domain.StoryboardScene{
 			Sequence:      i,
+			Title:         sceneResult.Title,
+			Description:   sceneResult.Description,
+			Location:      sceneResult.Location,
+			TimeOfDay:     sceneResult.TimeOfDay,
+			Mood:          sceneResult.Mood,
+			Characters:    sceneResult.Characters,
+			Image:         "", // 图片将在后续生成
 			IsAIGenerated: true,
 		}
-		if title, ok := sceneMap["title"].(string); ok {
-			scene.Title = title
+		// 确保 Characters 不为 nil
+		if scene.Characters == nil {
+			scene.Characters = []string{}
 		}
-		if desc, ok := sceneMap["description"].(string); ok {
-			scene.Description = desc
-		}
-		if location, ok := sceneMap["location"].(string); ok {
-			scene.Location = location
-		}
-		if timeOfDay, ok := sceneMap["timeOfDay"].(string); ok {
-			scene.TimeOfDay = timeOfDay
-		}
-		if mood, ok := sceneMap["mood"].(string); ok {
-			scene.Mood = mood
-		}
-		if chars, ok := sceneMap["characters"].([]interface{}); ok {
-			for _, c := range chars {
-				if charName, ok := c.(string); ok {
-					scene.Characters = append(scene.Characters, charName)
-				}
-			}
-		}
-		// Image 将在后续生成
-		scene.Image = ""
 		storyboardScenes = append(storyboardScenes, scene)
 	}
 	storyboard.StoryboardScenes = storyboardScenes
@@ -1656,11 +1674,108 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	return prompt
 }
 
+// buildStoryboardSystemPrompt 构建 storyboard 生成的系统提示词
+func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
+	// 根据故事类型获取风格指导
+	genreGuidance := s.getGenreStyleGuidance(story.Genre)
+
+	systemPrompt := `# 角色定义
+你是一位专业的故事分镜编剧，擅长将用户的创意构思转化为生动、有画面感的故事分镜脚本。你具备以下专业能力：
+- 故事结构设计：精通三幕结构、起承转合等叙事技巧
+- 场景视觉化：能够将抽象概念转化为具体的视觉场景描述
+- 角色刻画：善于通过场景互动展现角色性格和关系
+- 氛围营造：精准把握不同场景的情感基调和环境氛围
+
+# 创作原则
+1. **连贯性**：确保场景之间有自然的过渡和逻辑联系
+2. **画面感**：每个场景描述应具有强烈的视觉冲击力，便于后续图像/视频生成
+3. **角色一致性**：严格遵循提供的角色设定，保持人物行为和性格的连贯
+4. **场景利用**：优先使用用户提供的场景地点，确保故事发生在合理的空间内
+5. **情感递进**：场景间应有情感的起伏变化，避免单调
+
+` + genreGuidance + `
+
+# 输出格式要求
+**重要**：直接返回纯JSON，不要使用markdown代码块包裹（不要用` + "`" + "`" + "`" + `json或` + "`" + "`" + "`" + `）
+
+确保输出的JSON满足以下要求：
+- 所有括号、引号正确配对和闭合
+- 字符串内的特殊字符正确转义
+- 不包含注释或多余的逗号
+
+# 内容质量标准
+- content字段：润色后的完整故事概述，300-500字，语言流畅优美
+- 场景标题：简洁有力，10字以内，体现场景核心
+- 场景描述：100-200字，包含环境、动作、情感三个维度
+- 地点和时间：具体明确，与场景内容呼应
+- 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）`
+
+	return systemPrompt
+}
+
+// getGenreStyleGuidance 根据故事类型返回创作风格指导
+func (s *Service) getGenreStyleGuidance(genre string) string {
+	genreGuides := map[string]string{
+		"fantasy": `# 奇幻类型创作指南
+- 注重魔法元素和奇幻世界观的展现
+- 场景描述应突出神秘感和想象力
+- 可适当加入奇幻生物、魔法特效等元素`,
+		"romance": `# 浪漫类型创作指南
+- 注重人物情感互动和内心描写
+- 场景应营造浪漫、温馨的氛围
+- 关注眼神交流、肢体语言等细节`,
+		"thriller": `# 悬疑/惊悚类型创作指南
+- 注重悬念铺设和紧张氛围的营造
+- 场景描述应突出阴影、光影对比
+- 节奏把控：张弛有度，层层递进`,
+		"scifi": `# 科幻类型创作指南
+- 注重未来科技感和视觉震撼
+- 场景应体现科技元素与人文关怀的平衡
+- 关注高科技设备、太空场景等元素的描述`,
+		"adventure": `# 冒险类型创作指南
+- 注重动作场面和探险元素
+- 场景应体现挑战性和刺激感
+- 展现角色的勇气和成长`,
+		"comedy": `# 喜剧类型创作指南
+- 注重幽默元素和轻松氛围
+- 场景可适当夸张，突出喜剧效果
+- 关注人物表情和滑稽动作的描写`,
+		"horror": `# 恐怖类型创作指南
+- 注重恐怖氛围的层层铺垫
+- 场景描述应突出阴暗、压抑的环境
+- 善用心理恐惧，而非单纯的视觉冲击`,
+		"drama": `# 剧情类型创作指南
+- 注重人物内心冲突和人际关系
+- 场景应服务于情感表达
+- 关注细腻的情感变化和对话张力`,
+	}
+
+	if guidance, ok := genreGuides[genre]; ok {
+		return guidance
+	}
+
+	// 默认通用指导
+	return `# 创作风格指南
+- 根据故事内容自然选择合适的叙事风格
+- 保持场景描述的生动性和画面感
+- 注重情节发展的逻辑性和趣味性`
+}
+
+// StoryboardSceneResult AI 生成的场景结果（强类型解析）
+type StoryboardSceneResult struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Location    string   `json:"location"`
+	TimeOfDay   string   `json:"timeOfDay"`
+	Characters  []string `json:"characters"`
+	Mood        string   `json:"mood"`
+}
+
 // StoryboardResult AI 生成的 storyboard 结果
 type StoryboardResult struct {
-	Content        string                   `json:"content"`
-	Scenes         []map[string]interface{} `json:"scenes"`
-	GenerateImages bool                     `json:"generateImages"`
+	Content        string                  `json:"content"`
+	Scenes         []StoryboardSceneResult `json:"scenes"`
+	GenerateImages bool                    `json:"generateImages"`
 }
 
 // parseStoryboardResult 解析 AI 生成的结果
@@ -1673,47 +1788,147 @@ func (s *Service) parseStoryboardResult(text string) *StoryboardResult {
 		zap.String("rawText", truncateForLog(text, 2000)),
 	)
 
-	// Strip markdown code blocks if present (```json ... ```)
-	cleanedText := strings.TrimSpace(text)
-	hadMarkdown := false
-	if strings.HasPrefix(cleanedText, "```") {
-		hadMarkdown = true
-		// Find the end of the first line (after ```json or ```)
-		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
-			cleanedText = cleanedText[idx+1:]
-		}
-		// Remove trailing ```
-		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
-			cleanedText = strings.TrimSpace(cleanedText[:idx])
-		}
-	}
+	// 清理文本
+	cleanedText := s.cleanAIResponseText(text)
 
 	s.logger.Debug("AI response after cleaning",
-		zap.Bool("hadMarkdownBlock", hadMarkdown),
 		zap.Int("cleanedLength", len(cleanedText)),
 		zap.String("cleanedText", truncateForLog(cleanedText, 2000)),
 	)
 
 	// 尝试解析 JSON
 	if err := json.Unmarshal([]byte(cleanedText), &result); err != nil {
-		// 如果不是 JSON，使用原始文本
-		s.logger.Warn("failed to parse JSON, using raw text",
+		s.logger.Warn("initial JSON parse failed, attempting recovery",
+			zap.Error(err))
+
+		// 尝试修复常见的 JSON 问题后重新解析
+		fixedText := s.fixCommonJSONIssues(cleanedText)
+		if fixedText != cleanedText {
+			if err2 := json.Unmarshal([]byte(fixedText), &result); err2 == nil {
+				s.logger.Info("JSON parsed successfully after fixing",
+					zap.Int("contentLength", len(result.Content)),
+					zap.Int("scenesCount", len(result.Scenes)))
+				s.validateStoryboardResult(&result)
+				return &result
+			}
+		}
+
+		// 如果仍然失败，使用原始文本
+		s.logger.Warn("failed to parse JSON, using raw text as content",
 			zap.Error(err),
 			zap.Int("rawLength", len(text)),
 			zap.Int("cleanedLength", len(cleanedText)),
 			zap.String("rawTextPreview", truncateForLog(text, 500)),
-			zap.String("cleanedTextPreview", truncateForLog(cleanedText, 500)),
 		)
 		result.Content = text
-		result.Scenes = []map[string]interface{}{}
+		result.Scenes = []StoryboardSceneResult{}
 	} else {
 		s.logger.Info("AI response JSON parsed successfully",
 			zap.Int("contentLength", len(result.Content)),
 			zap.Int("scenesCount", len(result.Scenes)),
 		)
+		s.validateStoryboardResult(&result)
 	}
 
 	return &result
+}
+
+// cleanAIResponseText 清理 AI 响应文本
+func (s *Service) cleanAIResponseText(text string) string {
+	cleanedText := strings.TrimSpace(text)
+
+	// 移除 markdown 代码块 (```json ... ``` 或 ``` ... ```)
+	if strings.HasPrefix(cleanedText, "```") {
+		// 找到第一行的结束位置（跳过 ```json 或 ```）
+		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
+			cleanedText = cleanedText[idx+1:]
+		}
+		// 移除尾部的 ```
+		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
+			cleanedText = strings.TrimSpace(cleanedText[:idx])
+		}
+	}
+
+	// 移除可能的 BOM 标记
+	cleanedText = strings.TrimPrefix(cleanedText, "\ufeff")
+
+	// 移除开头可能的非 JSON 文本（找到第一个 { 的位置）
+	if idx := strings.Index(cleanedText, "{"); idx > 0 {
+		// 检查前面是否只有空白字符
+		prefix := strings.TrimSpace(cleanedText[:idx])
+		if prefix != "" {
+			s.logger.Debug("removing non-JSON prefix",
+				zap.String("prefix", truncateForLog(prefix, 100)))
+		}
+		cleanedText = cleanedText[idx:]
+	}
+
+	// 确保以 } 结尾，移除尾部可能的非 JSON 文本
+	if idx := strings.LastIndex(cleanedText, "}"); idx >= 0 && idx < len(cleanedText)-1 {
+		suffix := strings.TrimSpace(cleanedText[idx+1:])
+		if suffix != "" {
+			s.logger.Debug("removing non-JSON suffix",
+				zap.String("suffix", truncateForLog(suffix, 100)))
+		}
+		cleanedText = cleanedText[:idx+1]
+	}
+
+	return cleanedText
+}
+
+// fixCommonJSONIssues 修复常见的 JSON 格式问题
+func (s *Service) fixCommonJSONIssues(text string) string {
+	fixed := text
+
+	// 移除尾部多余的逗号（如 ",}" 或 ",]"）
+	// 使用简单的字符串替换处理常见情况
+	fixed = strings.ReplaceAll(fixed, ",\n}", "\n}")
+	fixed = strings.ReplaceAll(fixed, ",\n]", "\n]")
+	fixed = strings.ReplaceAll(fixed, ", }", " }")
+	fixed = strings.ReplaceAll(fixed, ", ]", " ]")
+	fixed = strings.ReplaceAll(fixed, ",}", "}")
+	fixed = strings.ReplaceAll(fixed, ",]", "]")
+
+	// 修复可能的中文标点问题
+	fixed = strings.ReplaceAll(fixed, "，", ",")
+	fixed = strings.ReplaceAll(fixed, "：", ":")
+	fixed = strings.ReplaceAll(fixed, "\u201c", `"`) // 中文左双引号
+	fixed = strings.ReplaceAll(fixed, "\u201d", `"`) // 中文右双引号
+	fixed = strings.ReplaceAll(fixed, "【", "[")
+	fixed = strings.ReplaceAll(fixed, "】", "]")
+
+	return fixed
+}
+
+// validateStoryboardResult 验证并修正解析结果
+func (s *Service) validateStoryboardResult(result *StoryboardResult) {
+	// 验证 content
+	if result.Content == "" {
+		s.logger.Warn("storyboard result has empty content")
+	} else if len(result.Content) > 2000 {
+		s.logger.Debug("storyboard content exceeds recommended length",
+			zap.Int("contentLength", len(result.Content)))
+	}
+
+	// 验证 scenes
+	if len(result.Scenes) == 0 {
+		s.logger.Warn("storyboard result has no scenes")
+	} else {
+		for i, scene := range result.Scenes {
+			if scene.Title == "" {
+				s.logger.Debug("scene missing title",
+					zap.Int("sceneIndex", i))
+			}
+			if scene.Description == "" {
+				s.logger.Debug("scene missing description",
+					zap.Int("sceneIndex", i))
+			}
+			// 确保 Characters 不为 nil
+			if scene.Characters == nil {
+				result.Scenes[i].Characters = []string{}
+			}
+		}
+	}
 }
 
 // truncateForLog truncates a string for logging purposes
