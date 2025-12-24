@@ -738,7 +738,7 @@ func (r *Repository) storyToDomain(s Story) domain.Story {
 		Followers:   s.Followers,
 		Panels:      s.Panels,
 		Genre:       s.Genre,
-		Style:       s.Style,
+		Style:       jsonToStyleConfig(s.Style),
 		Status:      s.Status,
 		CreatedAt:   s.CreatedAt.Unix(),
 		UpdatedAt:   s.UpdatedAt.Unix(),

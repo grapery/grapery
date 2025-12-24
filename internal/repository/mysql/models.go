@@ -65,7 +65,7 @@ type Story struct {
 	StoryboardCount   int            `gorm:"default:0;index"` // Number of storyboards in this story
 	DefaultSceneCount int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
 	Genre             string         `gorm:"size:50;index"`
-	Style             string         `gorm:"size:50;index"`                 // Story style (e.g., action, drama, comedy, mystery)
+	Style             string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
 	Status            string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
 	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt         time.Time      `gorm:"autoUpdateTime;index"`

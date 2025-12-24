@@ -15,7 +15,7 @@ type Story struct {
 	CharacterCount    int    `json:"characterCount"`    // Number of characters in the story
 	DefaultSceneCount int    `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
 	Genre             string `json:"genre"`
-	Style             string `json:"style,omitempty"` // Story style (e.g., action, drama, comedy, mystery)
+	Style             *StyleConfig `json:"style,omitempty"` // AI生成风格配置（完整信息，可为空）
 	Status            string `json:"status"`          // draft, published, rendering
 	CreatedAt         int64  `json:"createdAt"`
 	UpdatedAt         int64  `json:"updatedAt"`

@@ -74,6 +74,32 @@ func stringPtrToString(ptr *string) string {
 	return *ptr
 }
 
+// ========== StyleConfig JSON 转换 ==========
+
+// styleConfigToJSON 将 *domain.StyleConfig 序列化为 JSON 字符串
+func styleConfigToJSON(style *domain.StyleConfig) string {
+	if style == nil {
+		return ""
+	}
+	data, err := json.Marshal(style)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToStyleConfig 将 JSON 字符串反序列化为 *domain.StyleConfig
+func jsonToStyleConfig(jsonStr string) *domain.StyleConfig {
+	if jsonStr == "" {
+		return nil
+	}
+	var style domain.StyleConfig
+	if err := json.Unmarshal([]byte(jsonStr), &style); err != nil {
+		return nil
+	}
+	return &style
+}
+
 // ========== User 转换 ==========
 
 // UserToModel 将 domain.User 转换为 MySQL User 模型
@@ -154,7 +180,7 @@ func StoryToModel(d *domain.Story) *Story {
 		StoryboardCount:   d.StoryboardCount,
 		DefaultSceneCount: d.DefaultSceneCount,
 		Genre:             d.Genre,
-		Style:             d.Style,
+		Style:             styleConfigToJSON(d.Style),
 		Status:            d.Status,
 		CreatedAt:         unixToTime(d.CreatedAt),
 		UpdatedAt:         unixToTime(d.UpdatedAt),
@@ -179,7 +205,7 @@ func ModelToStory(m *Story) *domain.Story {
 		StoryboardCount:   m.StoryboardCount,
 		DefaultSceneCount: m.DefaultSceneCount,
 		Genre:             m.Genre,
-		Style:             m.Style,
+		Style:             jsonToStyleConfig(m.Style),
 		Status:            m.Status,
 		CreatedAt:         timeToUnix(m.CreatedAt),
 		UpdatedAt:         timeToUnix(m.UpdatedAt),

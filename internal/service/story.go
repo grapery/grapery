@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -25,12 +27,12 @@ type CreateStoryRequest struct {
 	DefaultSceneCount int    `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
 
 	// AI 丰富选项（可选）
-	UseAIEnrich        bool   `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
-	GenerateCover      bool   `json:"generateCover"`              // 是否使用AI生成封面/海报
-	GeneratePoster     bool   `json:"generatePoster"`             // 是否生成故事海报
-	GenerateBackground bool   `json:"generateBackground"`         // 是否生成背景图片
-	AIStyle            string `json:"aiStyle,omitempty"`          // AI 生成风格：realistic, anime, fantasy, etc.
-	CoverAspectRatio   string `json:"coverAspectRatio,omitempty"` // 封面图比例：1:1, 16:9, 9:16, etc.
+	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
+	GenerateCover      bool                `json:"generateCover"`              // 是否使用AI生成封面/海报
+	GeneratePoster     bool                `json:"generatePoster"`             // 是否生成故事海报
+	GenerateBackground bool                `json:"generateBackground"`         // 是否生成背景图片
+	AIStyle            *domain.StyleConfig `json:"aiStyle,omitempty"`          // AI 生成风格配置（完整信息，可为空）
+	CoverAspectRatio   string              `json:"coverAspectRatio,omitempty"` // 封面图比例：1:1, 16:9, 9:16, etc.
 }
 
 // StoryAIEnrichResponse AI丰富故事的响应
@@ -38,6 +40,8 @@ type StoryAIEnrichResponse struct {
 	EnrichedDescription string   `json:"enrichedDescription"`     // 丰富后的描述
 	SuggestedTags       []string `json:"suggestedTags,omitempty"` // 建议的标签
 	TokensUsed          int      `json:"tokensUsed"`              // 消耗的token数
+	RecordID            string   `json:"recordId,omitempty"`      // AI生成记录ID（用于追踪/计费）
+	DurationMs          int64    `json:"durationMs,omitempty"`    // 生成耗时（毫秒）
 }
 
 // StoryAICoverResponse AI生成封面的响应
@@ -108,8 +112,8 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 
 	// Set default scene count (2-8, default 3)
 	defaultSceneCount := req.DefaultSceneCount
-	if defaultSceneCount < 2 || defaultSceneCount > 8 {
-		defaultSceneCount = 3
+	if defaultSceneCount < 2 || defaultSceneCount > 16 {
+		defaultSceneCount = 6
 		s.logger.Debug("using default scene count",
 			zap.Int("requested", req.DefaultSceneCount),
 			zap.Int("adjusted", defaultSceneCount))
@@ -134,6 +138,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Panels:              0,
 		CreatedAt:           now,
 		UpdatedAt:           now,
+		Style:               req.AIStyle,
 	}
 
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
@@ -205,7 +210,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.Bool("generateCover", req.GenerateCover),
 			zap.Bool("generatePoster", req.GeneratePoster),
 			zap.Bool("generateBackground", req.GenerateBackground),
-			zap.String("style", req.AIStyle),
+			zap.Any("style", req.AIStyle),
 			zap.String("aspectRatio", req.CoverAspectRatio))
 		coverResp, err := s.GenerateStoryCover(ctx, userID, story.ID, GenerateStoryCoverRequest{
 			Title:              req.Title,
@@ -771,11 +776,11 @@ func (s *Service) UnfollowStory(ctx context.Context, userID, storyID string) err
 // 用于丰富故事描述和生成背景图片
 type RenderStoryRequest struct {
 	// AI 丰富选项
-	EnrichDescription  bool   `json:"enrichDescription"`     // 是否丰富故事描述
-	GenerateBackground bool   `json:"generateBackground"`    // 是否生成背景图片
-	GenerateCover      bool   `json:"generateCover"`         // 是否生成封面图片
-	Style              string `json:"style,omitempty"`       // AI 生成风格：realistic, anime, fantasy, etc.
-	AspectRatio        string `json:"aspectRatio,omitempty"` // 图片比例：1:1, 16:9, 9:16, etc.
+	EnrichDescription  bool                `json:"enrichDescription"`     // 是否丰富故事描述
+	GenerateBackground bool                `json:"generateBackground"`    // 是否生成背景图片
+	GenerateCover      bool                `json:"generateCover"`         // 是否生成封面图片
+	Style              *domain.StyleConfig `json:"style,omitempty"`       // AI 生成风格配置（完整信息，可为空）
+	AspectRatio        string              `json:"aspectRatio,omitempty"` // 图片比例：1:1, 16:9, 9:16, etc.
 }
 
 // RenderStoryResponse AI渲染故事响应
@@ -1057,7 +1062,7 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	s.logger.Debug("serializing render config",
 		zap.String("storyID", storyID),
 		zap.String("type", string(config.Type)))
-	configJSON, err := jsonMarshal(config)
+	configJSON, err := utils.JSONMarshal(config)
 	if err != nil {
 		s.logger.Error("failed to serialize render config",
 			zap.String("storyID", storyID),
@@ -1068,7 +1073,7 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 
 	// 创建渲染任务
 	task := &domain.RenderTask{
-		ID:        generateID(),
+		ID:        utils.GenerateID(),
 		UserID:    userID,
 		StoryID:   storyID,
 		Type:      req.Type,
@@ -1101,7 +1106,7 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	s.logger.Debug("updating story status to rendering",
 		zap.String("storyID", storyID))
 	_, err = s.UpdateStory(ctx, userID, storyID, UpdateStoryRequest{
-		Status: stringPtr("rendering"),
+		Status: utils.StringPtr("rendering"),
 	})
 	if err != nil {
 		s.logger.Warn("failed to update story status to rendering",
@@ -1245,7 +1250,7 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 	s.logger.Debug("generating output URLs",
 		zap.String("taskID", task.ID),
 		zap.String("type", string(task.Type)))
-	task.OutputURL = fmt.Sprintf("/uploads/renders/%s.%s", task.ID, getFileExtension(task.Type))
+	task.OutputURL = fmt.Sprintf("/uploads/renders/%s.%s", task.ID, utils.FileExtensionForRenderType(task.Type))
 	task.ThumbnailURL = fmt.Sprintf("/uploads/renders/%s_thumb.jpg", task.ID)
 	task.FileSize = 10485760 // 10MB（示例）
 
@@ -1282,7 +1287,7 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 		zap.String("taskID", task.ID),
 		zap.String("storyID", task.StoryID))
 	_, err = s.UpdateStory(ctx, task.UserID, task.StoryID, UpdateStoryRequest{
-		Status: stringPtr("rendered"),
+		Status: utils.StringPtr("rendered"),
 	})
 	if err != nil {
 		s.logger.Warn("failed to update story status after render",
@@ -1528,7 +1533,7 @@ func (s *Service) restoreStoryStatus(ctx context.Context, task *domain.RenderTas
 		zap.String("storyID", task.StoryID),
 		zap.String("taskID", task.ID))
 	_, err := s.UpdateStory(ctx, task.UserID, task.StoryID, UpdateStoryRequest{
-		Status: stringPtr("draft"),
+		Status: utils.StringPtr("draft"),
 	})
 	if err != nil {
 		s.logger.Error("failed to restore story status after render failure/cancellation",
@@ -1666,7 +1671,7 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 	// 创建发布记录
 	now := time.Now().Unix()
 	publication := &domain.StoryPublication{
-		ID:          generateID(),
+		ID:          utils.GenerateID(),
 		StoryID:     storyID,
 		Version:     nextVersion,
 		Status:      "published",
@@ -1682,11 +1687,22 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 
 	// 更新故事状态为已发布
 	_, err = s.UpdateStory(ctx, userID, storyID, UpdateStoryRequest{
-		Status: stringPtr("published"),
+		Status: utils.StringPtr("published"),
 	})
 	if err != nil {
 		s.logger.Error("failed to update story status", zap.Error(err))
 		return nil, errors.New("failed to update story status")
+	}
+
+	// 发布成功后刷新统计：
+	// 1) 用户创建的故事板计数（User.StoryboardCount）
+	// 2) 故事的故事板计数（Story.StoryboardCount）
+	// 3) 参与故事板的角色统计（Character.Stories）
+	if err := s.refreshPublishStoryStats(ctx, userID, storyID); err != nil {
+		s.logger.Warn("failed to refresh publish story stats (non-fatal)",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 	}
 
 	s.logger.Info("story published successfully",
@@ -1696,6 +1712,76 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 	)
 
 	return publication, nil
+}
+
+func (s *Service) refreshPublishStoryStats(ctx context.Context, userID, storyID string) error {
+	// 1) Update user's storyboard count
+	userStoryboardCount, err := s.repo.CountStoryboardsByCreator(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("count storyboards by creator: %w", err)
+	}
+	if u, err := s.repo.UserByID(ctx, userID); err != nil {
+		return fmt.Errorf("get user: %w", err)
+	} else if u != nil {
+		u.StoryboardCount = int(userStoryboardCount)
+		if err := s.repo.UpdateUser(ctx, u); err != nil {
+			return fmt.Errorf("update user storyboard count: %w", err)
+		}
+	}
+
+	// 2) Update story's storyboard count
+	storyboardCount, err := s.repo.CountStoryboardsByStory(ctx, storyID)
+	if err != nil {
+		return fmt.Errorf("count storyboards by story: %w", err)
+	}
+	story, err := s.repo.StoryByID(ctx, storyID)
+	if err != nil {
+		return fmt.Errorf("get story: %w", err)
+	}
+	if story != nil {
+		story.StoryboardCount = int(storyboardCount)
+		if err := s.repo.UpdateStory(ctx, story); err != nil {
+			return fmt.Errorf("update story storyboard count: %w", err)
+		}
+	}
+
+	// 3) Update character participation counts (Character.Stories)
+	charCounts, err := s.repo.CharacterStoryboardCountsByStory(ctx, storyID)
+	if err != nil {
+		return fmt.Errorf("count character storyboard participation: %w", err)
+	}
+	chars, err := s.repo.CharactersByStory(ctx, storyID)
+	if err != nil {
+		return fmt.Errorf("list characters by story: %w", err)
+	}
+	for _, ch := range chars {
+		if ch == nil {
+			continue
+		}
+		target := int(charCounts[ch.ID]) // missing -> 0
+		if ch.Stories == target {
+			continue
+		}
+		ch.Stories = target
+		if err := s.repo.UpdateCharacter(ctx, ch); err != nil {
+			return fmt.Errorf("update character(%s) participation count: %w", ch.ID, err)
+		}
+	}
+
+	// Cache invalidation (best-effort)
+	c := s.getCache()
+	if c != nil {
+		_ = c.Delete(ctx, cache.UserKey(userID))
+		_ = c.Delete(ctx, cache.StoryKey(storyID))
+		for _, ch := range chars {
+			if ch == nil {
+				continue
+			}
+			_ = c.Delete(ctx, cache.CharacterKey(ch.ID))
+		}
+	}
+
+	return nil
 }
 
 // UnpublishStory 取消发布故事
@@ -1752,11 +1838,19 @@ func (s *Service) UnpublishStory(ctx context.Context, userID, storyID string) er
 
 	// 更新故事状态为草稿
 	_, err = s.UpdateStory(ctx, userID, storyID, UpdateStoryRequest{
-		Status: stringPtr("draft"),
+		Status: utils.StringPtr("draft"),
 	})
 	if err != nil {
 		s.logger.Error("failed to update story status", zap.Error(err))
 		return errors.New("failed to update story status")
+	}
+
+	// 取消发布成功后刷新统计（幂等重算，非致命）
+	if err := s.refreshPublishStoryStats(ctx, userID, storyID); err != nil {
+		s.logger.Warn("failed to refresh unpublish story stats (non-fatal)",
+			zap.String("userID", userID),
+			zap.String("storyID", storyID),
+			zap.Error(err))
 	}
 
 	s.logger.Info("story unpublished successfully", zap.String("storyID", storyID))
@@ -1765,40 +1859,13 @@ func (s *Service) UnpublishStory(ctx context.Context, userID, storyID string) er
 
 // ========== 辅助函数 ==========
 
-// getFileExtension 根据渲染类型获取文件扩展名
-func getFileExtension(renderType domain.RenderTaskType) string {
-	switch renderType {
-	case domain.RenderTaskTypeVideo:
-		return "mp4"
-	case domain.RenderTaskTypeImageSet:
-		return "zip"
-	case domain.RenderTaskTypeAnimation:
-		return "gif"
-	default:
-		return "mp4"
-	}
-}
-
-// stringPtr 字符串指针辅助函数
-func stringPtr(s string) *string {
-	return &s
-}
-
-// jsonMarshal JSON序列化辅助函数
-func jsonMarshal(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-// generateID 生成ID辅助函数
-func generateID() string {
-	return fmt.Sprintf("id_%d", time.Now().UnixNano())
-}
+// moved to internal/utils
 
 // ========== AI 故事丰富功能 ==========
 
 // EnrichStoryDescription 使用AI丰富故事描述
 // 根据用户输入的原始描述，生成更加丰富、生动的故事背景描述
-func (s *Service) EnrichStoryDescription(ctx context.Context, userID, storyID, originalDesc, genre, style string) (*StoryAIEnrichResponse, error) {
+func (s *Service) EnrichStoryDescription(ctx context.Context, userID, storyID, originalDesc, genre string, style *domain.StyleConfig) (*StoryAIEnrichResponse, error) {
 	s.logger.Info("enriching story description with AI",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID),
@@ -1814,9 +1881,24 @@ func (s *Service) EnrichStoryDescription(ctx context.Context, userID, storyID, o
 	}
 
 	result, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
-		UserID:            userID,
-		OriginalPrompt:    prompt,
-		SystemPrompt:      "你是一位专业的故事创作顾问，擅长将简单的故事概念扩展成引人入胜的故事背景描述。请保持原意的同时，添加更多细节、氛围描写和世界观设定。",
+		UserID:         userID,
+		OriginalPrompt: prompt,
+		SystemPrompt: `你是一位资深故事创作作家兼编辑。
+你的任务：根据用户提供的故事概念与约束，生成「可直接用于故事详情页展示」的背景描述，并给出标签建议。
+
+输出格式要求（必须严格遵守）：
+1. 只输出 **纯 JSON**，不要使用 markdown 代码块，不要输出解释或多余文本
+2. JSON 必须包含以下字段：
+   - "enrichedDescription": string  // 300-500字左右，中文为主，可少量专有名词
+   - "suggestedTags": string[]      // 5-10个标签，简短、可检索、去重
+
+写作要求：
+- 保持原始描述的核心概念与主题，不要改写成另一个故事
+- 强化环境描写、氛围、世界观设定与潜在冲突/悬念
+- 与用户提供的 genre / style 保持一致（若未提供则保持中性、通用）
+- 不要出现“作为AI/模型/我认为”等自我指代
+- 避免敏感或违规内容；不要使用表情符号
+`,
 		Model:             "", // 使用默认模型
 		Temperature:       0.7,
 		MaxTokens:         1000,
@@ -1839,53 +1921,102 @@ func (s *Service) EnrichStoryDescription(ctx context.Context, userID, storyID, o
 		zap.String("storyID", storyID),
 		zap.Int("tokensUsed", result.TokensUsed))
 
+	// 解析 JSON 输出（若解析失败则降级为纯文本）
+	type enrichOut struct {
+		EnrichedDescription string   `json:"enrichedDescription"`
+		SuggestedTags       []string `json:"suggestedTags"`
+	}
+
+	text := strings.TrimSpace(result.Text)
+	out := enrichOut{}
+	if err := json.Unmarshal([]byte(text), &out); err != nil || strings.TrimSpace(out.EnrichedDescription) == "" {
+		// fallback: treat as plain enriched description
+		out.EnrichedDescription = text
+		out.SuggestedTags = nil
+	}
+
+	// Normalize tags (best-effort)
+	if len(out.SuggestedTags) > 0 {
+		seen := make(map[string]struct{}, len(out.SuggestedTags))
+		tags := make([]string, 0, len(out.SuggestedTags))
+		for _, t := range out.SuggestedTags {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			tags = append(tags, t)
+			if len(tags) >= 10 {
+				break
+			}
+		}
+		out.SuggestedTags = tags
+	}
+
 	return &StoryAIEnrichResponse{
-		EnrichedDescription: result.Text,
+		EnrichedDescription: strings.TrimSpace(out.EnrichedDescription),
+		SuggestedTags:       out.SuggestedTags,
 		TokensUsed:          result.TokensUsed,
+		RecordID:            result.RecordID,
+		DurationMs:          result.DurationMs,
 	}, nil
 }
 
 // buildEnrichDescriptionPrompt 构建丰富描述的提示词
-func (s *Service) buildEnrichDescriptionPrompt(originalDesc, genre, style string) string {
-	prompt := fmt.Sprintf(`请根据以下故事概念，创作一段更加丰富、生动的故事背景描述（300-500字）：
+func (s *Service) buildEnrichDescriptionPrompt(originalDesc, genre string, style *domain.StyleConfig) string {
+	prompt := fmt.Sprintf(`你将收到一个「故事概念/背景」的原始描述。请在不改变核心设定的前提下，将其扩写为适合展示在故事详情页的「故事背景描述」。
 
-原始描述：
+【原始描述】
 %s
 
-`, originalDesc)
+【上下文约束】
+`, strings.TrimSpace(originalDesc))
 
 	if genre != "" {
-		prompt += fmt.Sprintf("故事类型：%s\n", genre)
+		prompt += fmt.Sprintf("- 故事类型(genre)：%s\n", strings.TrimSpace(genre))
 	}
 
-	if style != "" {
-		prompt += fmt.Sprintf("风格偏好：%s\n", style)
+	if style != nil && style.Style != "" {
+		prompt += fmt.Sprintf("- 风格偏好(style)：%s\n", strings.TrimSpace(style.Style))
+		if style.Description != "" {
+			prompt += fmt.Sprintf("- 风格说明：%s\n", strings.TrimSpace(style.Description))
+		}
 	}
 
 	prompt += `
-要求：
-1. 保持原有故事的核心概念和主题
-2. 添加更多环境描写和氛围营造
-3. 可以适当扩展世界观设定
-4. 暗示可能的冲突或悬念
-5. 语言生动，具有画面感
-6. 直接输出丰富后的描述，不要包含任何解释或前缀
+【写作目标】
+- 输出一段 300-500 字左右的中文背景描述（自然段即可）
+- 强化环境描写、氛围、世界观细节，让读者“能看到画面”
+- 暗示潜在冲突/悬念，但不要剧透完整情节
 
-请直接输出丰富后的故事描述：`
+【硬性规则】
+- 保留原始描述的核心概念/人物关系/世界设定，不要改写成另一个故事
+- 不要出现“作为AI/模型/我认为”等自我指代
+- 不要输出 markdown、标题编号、解释说明
+
+【标签建议（用于检索）】
+- 给出 5-10 个简短标签
+- 尽量覆盖：题材/时代或世界观/氛围基调/关键主题/主要冲突方向/重要元素（如学校、海盗、机甲、魔法、都市、末日等）
+- 标签去重，避免过长句子
+
+请按 SystemPrompt 要求输出对应 JSON。`
 
 	return prompt
 }
 
 // GenerateStoryCoverRequest 生成故事封面请求
 type GenerateStoryCoverRequest struct {
-	Title              string `json:"title"`
-	Description        string `json:"description"`
-	Genre              string `json:"genre"`
-	Style              string `json:"style,omitempty"`
-	AspectRatio        string `json:"aspectRatio,omitempty"`
-	GenerateCover      bool   `json:"generateCover"`
-	GeneratePoster     bool   `json:"generatePoster"`
-	GenerateBackground bool   `json:"generateBackground"`
+	Title              string              `json:"title"`
+	Description        string              `json:"description"`
+	Genre              string              `json:"genre"`
+	Style              *domain.StyleConfig `json:"style,omitempty"` // AI 生成风格配置（完整信息，可为空）
+	AspectRatio        string              `json:"aspectRatio,omitempty"`
+	GenerateCover      bool                `json:"generateCover"`
+	GeneratePoster     bool                `json:"generatePoster"`
+	GenerateBackground bool                `json:"generateBackground"`
 }
 
 // GenerateStoryCover 使用AI生成故事封面/海报/背景图片（两步AI工作流）
@@ -2059,50 +2190,55 @@ type coverConceptGenerationResult struct {
 }
 
 // generateCoverConcept Step 1: 使用LLM生成封面概念
-func (s *Service) generateCoverConcept(ctx context.Context, userID, storyID string, title, description, genre, style string) (*coverConceptGenerationResult, error) {
+func (s *Service) generateCoverConcept(ctx context.Context, userID, storyID string, title, description, genre string, style *domain.StyleConfig) (*coverConceptGenerationResult, error) {
 	// 构建System Prompt
 	systemPrompt := `# Role
-You are an expert AI Book Cover Designer. Your task is to generate a structured image generation prompt (JSON) based on Story Information.
+You are an expert Key Art / Book Cover Designer.
+Your task is to generate a structured concept (JSON) for an image-generation model based on Story Information.
+
+# Important Product Constraint (TEXT HANDLING)
+- The final image will have typography overlaid later by the app.
+- Do NOT require the image model to generate readable text.
+- In your plan, reserve a clean typography SAFE AREA (negative space) where text can be placed later.
 
 # Goal
-Create a professional book cover illustration where the AI generation model can render both the visual scene and typography perfectly in one shot.
+Create a professional, cinematic key art concept that is:
+- visually clear (strong focal point, readable silhouette)
+- compositionally clean (no clutter where typography should go)
+- consistent with genre and style preference
 
 # Steps
-1. **Analyze Story**:
-   * Extract key visual elements from the story title and description.
-   * Identify the main subject (character, scene, or symbolic element).
-   * Determine the mood and atmosphere based on genre.
-2. **Design Composition**:
-   * Choose appropriate camera angle and framing for the cover.
-   * Define spatial relationships between elements.
-   * Consider how typography will integrate with the visual.
-3. **Design Typography**:
-   * Use the story title as the main text.
-   * Choose font style that matches the genre.
-   * Specify clear position where text won't interfere with key visual elements.
+1) Analyze Story: extract key visuals, symbols, setting, mood.
+2) Design Composition: camera, framing, depth, spatial hierarchy.
+3) Plan Typography Safe Area (no text rendering): choose placement and style references only.
+
+# Output Rules
+- Output ONLY valid JSON (no markdown, no explanations).
+- Use concise but vivid English phrases suitable for image generation.
+- Avoid sensitive/illegal content.
 
 # JSON Output Schema
-You must output ONLY valid JSON with no markdown code blocks:
 {
   "cover_concept": {
-    "visual_subject": "string (Main character/scene/element with detailed description)",
-    "scene_environment": "string (Background setting + weather + props)",
-    "composition_camera": "string (Camera angle + framing + depth of field)",
-    "lighting_atmosphere": "string (Lighting type + color palette + mood)",
-    "art_style": "string (Art medium + render engine + style keywords)"
+    "visual_subject": "string (main subject with concrete visual details)",
+    "scene_environment": "string (setting + weather + props, if any)",
+    "composition_camera": "string (camera angle + framing + depth of field + negative space guidance)",
+    "lighting_atmosphere": "string (lighting + color palette + mood)",
+    "art_style": "string (medium + rendering style keywords)"
   },
   "typography_instruction": {
-    "title_content": "string (THE EXACT TITLE TEXT)",
-    "title_style": "string (Font type + material + color)",
-    "title_position": "string (Exact placement e.g., 'at the top center')",
-    "subtitle_content": "string (Short tagline or 'NONE')",
-    "subtitle_style": "string (Font style + placement or 'NONE')"
+    "title_content": "string (MUST be 'NONE' — do not generate text in image)",
+    "title_style": "string (style reference for later overlay, e.g. 'minimal sans-serif, gold foil feel')",
+    "title_position": "string (safe-area placement, e.g. 'top center with 20% margin')",
+    "subtitle_content": "string ('NONE')",
+    "subtitle_style": "string ('NONE' or optional style reference)"
   }
 }`
 
 	// 构建User Prompt
 	var userPrompt strings.Builder
-	userPrompt.WriteString("Please create a book cover concept based on the following story information:\n\n")
+	userPrompt.WriteString("Please create a key art / book cover concept based on the following story information.\n")
+	userPrompt.WriteString("Typography will be added later by the app, so reserve a clean safe area and DO NOT generate readable text.\n\n")
 
 	// 故事信息
 	userPrompt.WriteString("[Story Information]\n")
@@ -2119,10 +2255,15 @@ You must output ONLY valid JSON with no markdown code blocks:
 		userPrompt.WriteString(genre)
 		userPrompt.WriteString("\n")
 	}
-	if style != "" {
+	if style != nil && style.Style != "" {
 		userPrompt.WriteString("Style Preference: ")
-		userPrompt.WriteString(style)
+		userPrompt.WriteString(style.Style)
 		userPrompt.WriteString("\n")
+		if style.Description != "" {
+			userPrompt.WriteString("Style Description: ")
+			userPrompt.WriteString(style.Description)
+			userPrompt.WriteString("\n")
+		}
 	}
 	userPrompt.WriteString("\n")
 
@@ -2199,76 +2340,107 @@ func (s *Service) assembleFinalCoverPrompt(concept *CoverConcept, title, imageTy
 		c := concept.CoverConcept
 		t := concept.TypographyInstruction
 
-		prompt.WriteString("A professional book cover illustration of ")
+		prompt.WriteString("TASK:\n")
+		prompt.WriteString("Create a high-quality, cinematic illustration for a story.\n")
+		prompt.WriteString("This image will be used as ")
+		prompt.WriteString(imageType)
+		prompt.WriteString(" key art.\n\n")
+
+		prompt.WriteString("STORY TITLE (for context only, do NOT render as text):\n")
+		prompt.WriteString(title)
+		prompt.WriteString("\n\n")
+
+		prompt.WriteString("PRIMARY SUBJECT:\n")
 		prompt.WriteString(c.VisualSubject)
-		prompt.WriteString(".\n")
+		prompt.WriteString("\n\n")
 
 		if c.SceneEnvironment != "" {
-			prompt.WriteString("The scene is set in ")
+			prompt.WriteString("SCENE / ENVIRONMENT:\n")
 			prompt.WriteString(c.SceneEnvironment)
-			prompt.WriteString(".\n\n")
+			prompt.WriteString("\n\n")
 		}
 
 		if c.CompositionCamera != "" {
-			prompt.WriteString("COMPOSITION & ANGLE:\n")
+			prompt.WriteString("COMPOSITION & CAMERA:\n")
 			prompt.WriteString(c.CompositionCamera)
-			prompt.WriteString(".\n\n")
+			prompt.WriteString("\n\n")
 		}
 
 		if c.LightingAtmosphere != "" {
 			prompt.WriteString("LIGHTING & MOOD:\n")
 			prompt.WriteString(c.LightingAtmosphere)
-			prompt.WriteString(".\n\n")
+			prompt.WriteString("\n\n")
 		}
 
 		if c.ArtStyle != "" {
-			prompt.WriteString("ART STYLE:\n")
+			prompt.WriteString("ART STYLE / RENDERING:\n")
 			prompt.WriteString(c.ArtStyle)
-			prompt.WriteString(".\n\n")
+			prompt.WriteString("\n\n")
 		}
 
 		// 排版指令
 		if t.TitleContent != "" && t.TitleContent != "NONE" {
-			prompt.WriteString("TYPOGRAPHY & TEXT GENERATION:\n")
-			prompt.WriteString("The image must feature the title text \"")
-			prompt.WriteString(t.TitleContent)
-			prompt.WriteString("\" written in ")
-			prompt.WriteString(t.TitleStyle)
-			prompt.WriteString(".\n")
-			prompt.WriteString("The title is placed ")
-			prompt.WriteString(t.TitlePosition)
-			prompt.WriteString(".\n")
-
-			if t.SubtitleContent != "" && t.SubtitleContent != "NONE" {
-				prompt.WriteString("Additionally, include the subtitle text \"")
-				prompt.WriteString(t.SubtitleContent)
-				prompt.WriteString("\" written in ")
-				prompt.WriteString(t.SubtitleStyle)
-				prompt.WriteString(".\n")
+			prompt.WriteString("TYPOGRAPHY SAFE AREA (IMPORTANT):\n")
+			prompt.WriteString("- Do NOT render any readable text, letters, words, logos, or watermarks.\n")
+			prompt.WriteString("- Reserve a clean, uncluttered area for later title overlay.\n")
+			if t.TitlePosition != "" {
+				prompt.WriteString("- Safe area position: ")
+				prompt.WriteString(t.TitlePosition)
+				prompt.WriteString("\n")
 			}
+			if t.TitleStyle != "" && t.TitleStyle != "NONE" {
+				prompt.WriteString("- Title style reference (for layout mood only): ")
+				prompt.WriteString(t.TitleStyle)
+				prompt.WriteString("\n")
+			}
+			if t.SubtitleStyle != "" && t.SubtitleStyle != "NONE" {
+				prompt.WriteString("- Subtitle style reference (optional): ")
+				prompt.WriteString(t.SubtitleStyle)
+				prompt.WriteString("\n")
+			}
+			prompt.WriteString("\n")
 		}
 
 		// 根据图片类型添加特定要求
 		switch imageType {
 		case "cover":
-			prompt.WriteString("\nRequirements: Professional book cover design, emphasize title text space, high-quality illustration.")
+			prompt.WriteString("OUTPUT REQUIREMENTS (COVER):\n")
+			prompt.WriteString("- Professional book cover key art\n")
+			prompt.WriteString("- Strong focal point, readable silhouette, clean composition\n")
+			prompt.WriteString("- Leave clear space for typography overlay\n")
 		case "poster":
-			prompt.WriteString("\nRequirements: Movie poster style, dramatic lighting, epic composition.")
+			prompt.WriteString("OUTPUT REQUIREMENTS (POSTER):\n")
+			prompt.WriteString("- Movie poster style, dramatic lighting, epic composition\n")
+			prompt.WriteString("- High contrast, punchy color grading, dynamic staging\n")
+			prompt.WriteString("- Leave a small clean area for optional overlay text\n")
 		case "background":
-			prompt.WriteString("\nRequirements: Wide panoramic background image, suitable for page background, soft tones, unobtrusive.")
+			prompt.WriteString("OUTPUT REQUIREMENTS (BACKGROUND):\n")
+			prompt.WriteString("- Wide panoramic background suitable for UI background\n")
+			prompt.WriteString("- Softer tones, unobtrusive details, avoid clutter in the center\n")
+			prompt.WriteString("- No readable text or logos\n")
 		}
+
+		prompt.WriteString("\n\nNEGATIVE CONSTRAINTS:\n")
+		prompt.WriteString("- No readable text, no logos, no watermarks, no signatures\n")
+		prompt.WriteString("- No frames, no borders, no UI mockups\n")
+		prompt.WriteString("- No low-res, blur, noise, compression artifacts\n")
 	} else {
 		// 降级：使用基础提示词
-		prompt.WriteString("A professional book cover illustration for the story \"")
+		prompt.WriteString("TASK:\n")
+		prompt.WriteString("Create a high-quality cinematic illustration for a story.\n\n")
+		prompt.WriteString("STORY TITLE (for context only, do NOT render as text):\n")
 		prompt.WriteString(title)
-		prompt.WriteString("\".")
+		prompt.WriteString("\n\n")
+		prompt.WriteString("KEY REQUIREMENTS:\n")
+		prompt.WriteString("- Do NOT render any readable text, no logos, no watermarks\n")
+		prompt.WriteString("- Leave a clean area for later title overlay\n")
 		switch imageType {
 		case "cover":
-			prompt.WriteString(" Professional book cover design, emphasize title text space.")
+			prompt.WriteString("- Professional book cover key art, clean composition\n")
 		case "poster":
-			prompt.WriteString(" Movie poster style, dramatic lighting, epic composition.")
+			prompt.WriteString("- Movie poster style, dramatic lighting, epic composition\n")
 		case "background":
-			prompt.WriteString(" Wide panoramic background, soft tones, unobtrusive.")
+			prompt.WriteString("- Wide panoramic background, soft tones, unobtrusive\n")
 		}
 	}
 
@@ -2277,34 +2449,64 @@ func (s *Service) assembleFinalCoverPrompt(concept *CoverConcept, title, imageTy
 
 // buildCoverImagePrompt 构建封面图片生成提示词（保留作为降级方案）
 func (s *Service) buildCoverImagePrompt(title, description, genre, style string) string {
-	prompt := fmt.Sprintf(`为故事《%s》生成一张精美的插画。
+	// NOTE: This prompt is a fallback (used when structured concept generation fails).
+	// Keep it robust, structured, and avoid text generation artifacts.
+	var b strings.Builder
 
-故事描述：%s
-`, title, description)
+	b.WriteString("TASK:\n")
+	b.WriteString("Create a high-quality cinematic illustration for a STORY COVER.\n\n")
 
-	// 根据类型添加风格指导
+	b.WriteString("STORY TITLE (for context only, do NOT render as text):\n")
+	b.WriteString(strings.TrimSpace(title))
+	b.WriteString("\n\n")
+
+	if strings.TrimSpace(description) != "" {
+		b.WriteString("STORY DESCRIPTION (context):\n")
+		b.WriteString(strings.TrimSpace(description))
+		b.WriteString("\n\n")
+	}
+
+	// Genre/style hints
+	genreKey := strings.ToLower(strings.TrimSpace(genre))
+	if genreKey != "" {
+		b.WriteString("GENRE:\n")
+		b.WriteString(genreKey)
+		b.WriteString("\n\n")
+	}
+
 	genreStyles := map[string]string{
-		"fantasy":   "奇幻风格，魔法元素，神秘氛围",
-		"scifi":     "科幻风格，未来科技，太空元素",
-		"romance":   "浪漫唯美，柔和光线，温馨氛围",
-		"horror":    "黑暗神秘，紧张氛围，阴影对比",
-		"adventure": "冒险风格，宏大场景，动感构图",
-		"mystery":   "悬疑风格，神秘元素，暗色调",
-		"comedy":    "轻松明快，鲜艳色彩，有趣构图",
-		"drama":     "戏剧性，情感张力，人物特写",
+		"fantasy":   "fantasy mood, magical elements, mysterious atmosphere, rich textures",
+		"scifi":     "sci-fi mood, futuristic technology, subtle space/industrial elements, clean shapes",
+		"romance":   "romantic mood, soft lighting, warm tones, gentle composition",
+		"horror":    "horror mood, high contrast shadows, unsettling atmosphere, restrained color palette",
+		"adventure": "adventure mood, grand scenery, dynamic composition, sense of journey",
+		"mystery":   "mystery mood, enigmatic symbols, noir lighting, suspenseful atmosphere",
+		"comedy":    "lighthearted mood, bright colors, playful composition, whimsical details",
+		"drama":     "dramatic mood, emotional tension, cinematic lighting, character-focused framing",
+	}
+	if hint, ok := genreStyles[genreKey]; ok {
+		b.WriteString("STYLE HINTS (from genre):\n")
+		b.WriteString(hint)
+		b.WriteString("\n\n")
 	}
 
-	if genreStyle, ok := genreStyles[genre]; ok {
-		prompt += fmt.Sprintf("\n风格要求：%s", genreStyle)
+	if strings.TrimSpace(style) != "" {
+		b.WriteString("STYLE PREFERENCE (additional):\n")
+		b.WriteString(strings.TrimSpace(style))
+		b.WriteString("\n\n")
 	}
 
-	if style != "" {
-		prompt += fmt.Sprintf("\n艺术风格：%s", style)
-	}
+	b.WriteString("COMPOSITION REQUIREMENTS:\n")
+	b.WriteString("- Professional book cover key art\n")
+	b.WriteString("- Strong focal point, clean silhouette, balanced composition\n")
+	b.WriteString("- Reserve a clean uncluttered area for later typography overlay (safe area near top or bottom)\n\n")
 
-	prompt += "\n\n要求：高质量，专业插画，适合作为故事封面"
+	b.WriteString("NEGATIVE CONSTRAINTS:\n")
+	b.WriteString("- Do NOT render any readable text, letters, words, logos, watermarks, or signatures\n")
+	b.WriteString("- No frames, no borders, no UI mockups\n")
+	b.WriteString("- No low-res, blur, noise, compression artifacts\n")
 
-	return prompt
+	return b.String()
 }
 
 // updateUserTokenUsage 更新用户的token使用量
@@ -2397,7 +2599,7 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 
 	// 创建贡献者
 	contributor := &domain.StoryContributor{
-		ID:        generateID(),
+		ID:        utils.GenerateID(),
 		StoryID:   storyID,
 		UserID:    req.UserID,
 		Role:      domain.StoryContributorRole(req.Role),
@@ -2430,6 +2632,11 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 
 // RemoveStoryContributor 移除故事贡献者
 func (s *Service) RemoveStoryContributor(ctx context.Context, operatorID, storyID, contributorID string) error {
+	// 参数验证
+	if operatorID == "" || storyID == "" || contributorID == "" {
+		return errors.New("invalid parameters: operatorID, storyID and contributorID are required")
+	}
+
 	s.logger.Info("removing story contributor",
 		zap.String("operatorID", operatorID),
 		zap.String("storyID", storyID),
@@ -2442,12 +2649,15 @@ func (s *Service) RemoveStoryContributor(ctx context.Context, operatorID, storyI
 		if err == domain.ErrNotFound {
 			return errors.New("story not found")
 		}
-		return errors.New("failed to get story")
+		return fmt.Errorf("failed to get story: %w", err)
 	}
 
-	// 验证操作者权限（必须是作者）
-	if story.Author == nil || story.Author.ID != operatorID {
-		return errors.New("permission denied: only author can remove contributors")
+	// 验证操作者权限（作者可以移除任何人，贡献者可以移除自己）
+	isAuthor := story.Author != nil && story.Author.ID == operatorID
+	isSelfRemoval := operatorID == contributorID
+
+	if !isAuthor && !isSelfRemoval {
+		return errors.New("permission denied: only author can remove other contributors")
 	}
 
 	// 移除贡献者
@@ -2466,9 +2676,10 @@ func (s *Service) RemoveStoryContributor(ctx context.Context, operatorID, storyI
 
 	// Record metrics - update participant count
 	if s.metrics != nil {
-		// Get updated contributor count
 		contributors, err := s.repo.GetStoryContributors(ctx, storyID, 1000, 0)
-		if err == nil {
+		if err != nil {
+			s.logger.Warn("failed to get contributors for metrics", zap.Error(err))
+		} else {
 			s.metrics.RecordStoryParticipantCount(storyID, float64(len(contributors)))
 		}
 	}

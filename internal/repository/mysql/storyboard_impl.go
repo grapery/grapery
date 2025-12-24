@@ -294,6 +294,48 @@ func (r *Repository) CountStoryboardsByCreator(ctx context.Context, creatorID st
 	return count, nil
 }
 
+// CountStoryboardsByStory counts storyboards that belong to a given story.
+func (r *Repository) CountStoryboardsByStory(ctx context.Context, storyID string) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("story_id = ?", storyID).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count storyboards by story: %w", err)
+	}
+	return count, nil
+}
+
+// CharacterStoryboardCountsByStory returns participation counts keyed by characterID,
+// counting distinct storyboard IDs within the given story.
+func (r *Repository) CharacterStoryboardCountsByStory(ctx context.Context, storyID string) (map[string]int64, error) {
+	type row struct {
+		CharacterID string `gorm:"column:character_id"`
+		Cnt         int64  `gorm:"column:cnt"`
+	}
+
+	var rows []row
+	if err := r.db.WithContext(ctx).
+		Table("storyboard_character_links").
+		Select("storyboard_character_links.character_id as character_id, COUNT(DISTINCT storyboard_character_links.storyboard_id) as cnt").
+		Joins("JOIN storyboards ON storyboards.id = storyboard_character_links.storyboard_id AND storyboards.deleted_at IS NULL").
+		Where("storyboards.story_id = ?", storyID).
+		Where("storyboard_character_links.character_id IS NOT NULL").
+		Group("storyboard_character_links.character_id").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to count character storyboard participation by story: %w", err)
+	}
+
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		if r.CharacterID == "" {
+			continue
+		}
+		out[r.CharacterID] = r.Cnt
+	}
+	return out, nil
+}
+
 // StoryboardChildren retrieves child storyboards (forks/continuations)
 func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard

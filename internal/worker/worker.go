@@ -14,6 +14,7 @@ import (
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
 	"github.com/grapestree/fgrapery/grapery/internal/queue"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"google.golang.org/genai"
 )
 
@@ -810,7 +811,7 @@ func (w *Worker) processRenderTask(ctx context.Context, message *queue.TaskMessa
 	}
 
 	// 生成输出
-	task.OutputURL = fmt.Sprintf("/uploads/renders/%s.%s", task.ID, getFileExtension(task.Type))
+	task.OutputURL = fmt.Sprintf("/uploads/renders/%s.%s", task.ID, utils.FileExtensionForRenderType(task.Type))
 	task.ThumbnailURL = fmt.Sprintf("/uploads/renders/%s_thumb.jpg", task.ID)
 	task.FileSize = 10485760 // 10MB
 
@@ -1298,18 +1299,7 @@ func extractImprovements(text string) string {
 	return ""
 }
 
-func getFileExtension(renderType domain.RenderTaskType) string {
-	switch renderType {
-	case domain.RenderTaskTypeVideo:
-		return "mp4"
-	case domain.RenderTaskTypeImageSet:
-		return "zip"
-	case domain.RenderTaskTypeAnimation:
-		return "gif"
-	default:
-		return "mp4"
-	}
-}
+// moved to internal/utils
 
 func min(a, b int) int {
 	if a < b {

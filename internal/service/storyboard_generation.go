@@ -166,8 +166,8 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 				s.logger.Debug("using story genre as style",
 					zap.String("generationId", gen.ID),
 					zap.String("style", style))
-			} else if story.Style != "" {
-				style = story.Style
+			} else if story.Style != nil && story.Style.Style != "" {
+				style = story.Style.Style
 				s.logger.Debug("using story style as style",
 					zap.String("generationId", gen.ID),
 					zap.String("style", style))

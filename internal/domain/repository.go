@@ -246,6 +246,9 @@ type Repository interface {
 	StoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	DraftStoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	CountStoryboardsByCreator(ctx context.Context, creatorID string) (int64, error)
+	CountStoryboardsByStory(ctx context.Context, storyID string) (int64, error)
+	// CharacterStoryboardCountsByStory returns participation counts keyed by characterID, counting distinct storyboard IDs within the given story.
+	CharacterStoryboardCountsByStory(ctx context.Context, storyID string) (map[string]int64, error)
 	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
 	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
