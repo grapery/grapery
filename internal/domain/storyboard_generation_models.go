@@ -109,6 +109,13 @@ type StoryboardVideoGeneration struct {
 	CreatedAt         int64  `json:"createdAt"`
 	CompletedAt       *int64 `json:"completedAt,omitempty"`
 
+	// Keyframe Subdivision fields
+	IsSubdivided        bool               `json:"isSubdivided"`              // Whether keyframe subdivision was applied
+	VideoSegmentsJSON   string             `json:"-"`                         // JSON storage for video segments
+	MiddleFrameURLsJSON string             `json:"-"`                         // JSON storage for middle frame URLs
+	VideoSegments       []VideoSegmentInfo `json:"videoSegments,omitempty"`   // Parsed video segments
+	MiddleFrameURLs     []string           `json:"middleFrameUrls,omitempty"` // Parsed middle frame URLs
+
 	// Relations
 	Storyboard *Storyboard `json:"storyboard,omitempty"`
 }

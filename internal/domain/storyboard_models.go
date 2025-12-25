@@ -23,8 +23,23 @@ type StoryboardScene struct {
 	CreatedAt     int64    `json:"createdAt"`
 	UpdatedAt     int64    `json:"updatedAt"`
 
+	// Keyframe Subdivision fields
+	VideoSegments    []VideoSegmentInfo `json:"videoSegments,omitempty"`   // Video segments when subdivision is applied
+	MiddleFrameURLs  []string           `json:"middleFrameUrls,omitempty"` // Generated middle frame URLs
+	IsSubdivided     bool               `json:"isSubdivided"`              // Whether keyframe subdivision was applied
+	VideoSegmentsJSON string            `json:"-"`                         // JSON storage for database
+
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`
+}
+
+// VideoSegmentInfo represents a video segment in the storyboard scene.
+type VideoSegmentInfo struct {
+	Index        int    `json:"index"`        // Segment sequence number (0-based)
+	VideoURL     string `json:"videoUrl"`     // Video URL
+	StartFrame   string `json:"startFrame"`   // Start keyframe URL
+	EndFrame     string `json:"endFrame"`     // End keyframe URL
+	DurationSecs int    `json:"durationSecs"` // Duration in seconds
 }
 
 // StoryboardCharacter represents a character reference in a storyboard

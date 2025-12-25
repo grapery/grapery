@@ -618,16 +618,33 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 		}
 	}
 
+	videoSegmentsJSON := ""
+	if len(scene.VideoSegments) > 0 {
+		if jsonBytes, err := json.Marshal(scene.VideoSegments); err == nil {
+			videoSegmentsJSON = string(jsonBytes)
+		}
+	}
+
+	middleFrameURLsJSON := ""
+	if len(scene.MiddleFrameURLs) > 0 {
+		if jsonBytes, err := json.Marshal(scene.MiddleFrameURLs); err == nil {
+			middleFrameURLsJSON = string(jsonBytes)
+		}
+	}
+
 	updates := map[string]interface{}{
-		"story_scene_id": storySceneID,
-		"sequence":       scene.Sequence,
-		"title":          scene.Title,
-		"description":    scene.Description,
-		"image":          scene.Image,
-		"location":       scene.Location,
-		"time_of_day":    scene.TimeOfDay,
-		"characters":     charactersJSON,
-		"mood":           scene.Mood,
+		"story_scene_id":      storySceneID,
+		"sequence":            scene.Sequence,
+		"title":               scene.Title,
+		"description":         scene.Description,
+		"image":               scene.Image,
+		"location":            scene.Location,
+		"time_of_day":         scene.TimeOfDay,
+		"characters":          charactersJSON,
+		"mood":                scene.Mood,
+		"is_subdivided":       scene.IsSubdivided,
+		"video_segments_json": videoSegmentsJSON,
+		"middle_frame_urls":   middleFrameURLsJSON,
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -684,6 +701,7 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		TimeOfDay:     dbScene.TimeOfDay,
 		Mood:          dbScene.Mood,
 		IsAIGenerated: dbScene.IsAIGenerated,
+		IsSubdivided:  dbScene.IsSubdivided,
 		CreatedAt:     dbScene.CreatedAt.Unix(),
 		UpdatedAt:     dbScene.UpdatedAt.Unix(),
 	}
@@ -697,6 +715,22 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		var characters []string
 		if err := json.Unmarshal([]byte(dbScene.Characters), &characters); err == nil {
 			scene.Characters = characters
+		}
+	}
+
+	// Parse video segments JSON
+	if dbScene.VideoSegmentsJSON != "" && dbScene.VideoSegmentsJSON != "[]" {
+		var segments []domain.VideoSegmentInfo
+		if err := json.Unmarshal([]byte(dbScene.VideoSegmentsJSON), &segments); err == nil {
+			scene.VideoSegments = segments
+		}
+	}
+
+	// Parse middle frame URLs JSON
+	if dbScene.MiddleFrameURLs != "" && dbScene.MiddleFrameURLs != "[]" {
+		var urls []string
+		if err := json.Unmarshal([]byte(dbScene.MiddleFrameURLs), &urls); err == nil {
+			scene.MiddleFrameURLs = urls
 		}
 	}
 

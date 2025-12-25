@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -1001,16 +1002,69 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			AspectRatio:     "16:9",
 		}
 
+		// Use configured video provider (default: hailuo)
+		videoProvider := s.videoProvider
+		if videoProvider == "" {
+			videoProvider = "hailuo"
+			s.logger.Debug("using default video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
+		} else {
+			s.logger.Debug("using configured video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
+		}
+
 		// Choose operation type based on whether reference images are provided
 		if gen.ReferenceImageURL != "" && gen.EndFrameURL != "" {
-			// Keyframe mode: need both FirstFrameURL and LastFrameURL
-			genReq.Operation = genapi.OperationKeyframeToVideo
-			genReq.FirstFrameURL = gen.ReferenceImageURL // Map ReferenceImageURL to FirstFrameURL
-			genReq.LastFrameURL = gen.EndFrameURL
-			s.logger.Info("using keyframe-to-video mode",
+			// Keyframe mode: use subdivision strategy for smooth transitions
+			s.logger.Info("using keyframe-to-video mode with subdivision strategy",
 				zap.String("sceneId", gen.SceneID),
-				zap.String("firstFrameURL", genReq.FirstFrameURL),
-				zap.String("lastFrameURL", genReq.LastFrameURL))
+				zap.String("firstFrameURL", gen.ReferenceImageURL),
+				zap.String("lastFrameURL", gen.EndFrameURL))
+
+			// Use AIGenerationService for subdivision if available
+			if s.aiGenService != nil {
+				subdivResult, err := s.aiGenService.GenerateVideoWithSubdivision(ctx, &genapi.SubdivisionVideoRequest{
+					FirstFrameURL:   gen.ReferenceImageURL,
+					LastFrameURL:    gen.EndFrameURL,
+					Prompt:          gen.GeneratedPrompt,
+					DurationSeconds: 5,
+					MaxDepth:        3,
+					Provider:        videoProvider,
+					AspectRatio:     "16:9",
+				})
+				if err != nil {
+					s.logger.Warn("subdivision video generation failed, falling back to direct generation",
+						zap.String("sceneId", gen.SceneID),
+						zap.Error(err))
+					// Fall back to direct keyframe-to-video
+				} else if subdivResult != nil && len(subdivResult.Segments) > 0 {
+					// Successfully generated with subdivision
+					s.logger.Info("subdivision video generation succeeded",
+						zap.String("sceneId", gen.SceneID),
+						zap.Int("segmentCount", len(subdivResult.Segments)),
+						zap.Bool("isSubdivided", subdivResult.IsSubdivided))
+
+					// Use the first segment's video URL as the main video
+					gen.GeneratedVideoURL = subdivResult.Segments[0].VideoURL
+
+					// Store subdivision info in generation record
+					if subdivResult.IsSubdivided {
+						gen.VideoSegmentsJSON = s.serializeVideoSegments(subdivResult.Segments)
+						gen.MiddleFrameURLsJSON = s.serializeMiddleFrames(subdivResult.MiddleFrames)
+						gen.IsSubdivided = true
+					}
+
+					// Skip the normal generation flow
+					goto updateGeneration
+				}
+			}
+
+			// Direct keyframe-to-video generation (fallback or no aiGenService)
+			genReq.Operation = genapi.OperationKeyframeToVideo
+			genReq.FirstFrameURL = gen.ReferenceImageURL
+			genReq.LastFrameURL = gen.EndFrameURL
 		} else if gen.ReferenceImageURL != "" {
 			// Image to video mode: only need ReferenceImageURL
 			genReq.Operation = genapi.OperationImageToVideo
@@ -1023,19 +1077,6 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			genReq.Operation = genapi.OperationTextToVideo
 			s.logger.Info("using text-to-video mode",
 				zap.String("sceneId", gen.SceneID))
-		}
-
-		// Use configured video provider (default: hailuo)
-		videoProvider := s.videoProvider
-		if videoProvider == "" {
-			videoProvider = "hailuo"
-			s.logger.Debug("using default video provider",
-				zap.String("generationId", gen.ID),
-				zap.String("provider", videoProvider))
-		} else {
-			s.logger.Debug("using configured video provider",
-				zap.String("generationId", gen.ID),
-				zap.String("provider", videoProvider))
 		}
 
 		// Log final request details
@@ -1167,6 +1208,7 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 		}
 	}
 
+updateGeneration:
 	// Only mark as completed if we have a video URL (synchronous case)
 	// For async tasks, polling will handle completion
 	if gen.GeneratedVideoURL != "" {
@@ -1990,4 +2032,73 @@ func (s *Service) RecoverPendingVideoGenerations(ctx context.Context) {
 
 	s.logger.Info("video generation recovery completed",
 		zap.Int("recoveredTasks", len(pendingTasks)))
+}
+
+// ============== Keyframe Subdivision Helper Functions ==============
+
+// serializeVideoSegments converts video segments to JSON string for storage.
+func (s *Service) serializeVideoSegments(segments []genapi.VideoSegment) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	// Convert genapi.VideoSegment to domain.VideoSegmentInfo
+	domainSegments := make([]domain.VideoSegmentInfo, len(segments))
+	for i, seg := range segments {
+		domainSegments[i] = domain.VideoSegmentInfo{
+			Index:        seg.Index,
+			VideoURL:     seg.VideoURL,
+			StartFrame:   seg.StartFrame,
+			EndFrame:     seg.EndFrame,
+			DurationSecs: seg.DurationSecs,
+		}
+	}
+	data, err := json.Marshal(domainSegments)
+	if err != nil {
+		s.logger.Warn("failed to serialize video segments",
+			zap.Error(err))
+		return ""
+	}
+	return string(data)
+}
+
+// serializeMiddleFrames converts middle frame URLs to JSON string for storage.
+func (s *Service) serializeMiddleFrames(urls []string) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(urls)
+	if err != nil {
+		s.logger.Warn("failed to serialize middle frames",
+			zap.Error(err))
+		return ""
+	}
+	return string(data)
+}
+
+// deserializeVideoSegments parses JSON string back to video segments.
+func (s *Service) deserializeVideoSegments(jsonStr string) []domain.VideoSegmentInfo {
+	if jsonStr == "" {
+		return nil
+	}
+	var segments []domain.VideoSegmentInfo
+	if err := json.Unmarshal([]byte(jsonStr), &segments); err != nil {
+		s.logger.Warn("failed to deserialize video segments",
+			zap.Error(err))
+		return nil
+	}
+	return segments
+}
+
+// deserializeMiddleFrames parses JSON string back to middle frame URLs.
+func (s *Service) deserializeMiddleFrames(jsonStr string) []string {
+	if jsonStr == "" {
+		return nil
+	}
+	var urls []string
+	if err := json.Unmarshal([]byte(jsonStr), &urls); err != nil {
+		s.logger.Warn("failed to deserialize middle frames",
+			zap.Error(err))
+		return nil
+	}
+	return urls
 }

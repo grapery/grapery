@@ -197,28 +197,31 @@ type StoryboardImageGeneration struct {
 
 // StoryboardVideoGeneration - Step 4: Scene → video
 type StoryboardVideoGeneration struct {
-	ID                string         `gorm:"primaryKey;size:36"`
-	StoryboardID      string         `gorm:"size:36;not null;index"`
-	Storyboard        Storyboard     `gorm:"foreignKey:StoryboardID"`
-	SceneID           string         `gorm:"size:36;not null;index"` // Reference to StoryScene
-	SceneTitle        string         `gorm:"size:200"`               // Snapshot of scene title
-	InputDescription  string         `gorm:"type:text"`              // Scene description for video
-	ReferenceImageURL string         `gorm:"size:2048"`              // Start keyframe image for video generation
-	EndFrameURL       string         `gorm:"size:2048"`              // End keyframe image for video transitions
-	GeneratedPrompt   string         `gorm:"type:text"`              // AI-generated video prompt
-	GeneratedVideoURL string         `gorm:"size:2048"`              // Final generated video URL (needs to be long for signed URLs)
-	ProviderTaskID    string         `gorm:"size:128;index"`         // Provider's task ID for async video generation (for recovery)
-	ProviderName      string         `gorm:"size:50"`                // Provider name (huoshan, hailuo, etc.) for recovery
-	Duration          int            `gorm:"default:0"`              // Video duration in seconds
-	Status            string         `gorm:"size:20;not null;default:'pending';index"`
-	InputTokens       int            `gorm:"default:0"`
-	OutputTokens      int            `gorm:"default:0"`
-	TotalTokens       int            `gorm:"default:0;index"`
-	ErrorMessage      string         `gorm:"type:text"`
-	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
-	CompletedAt       *time.Time     `gorm:"index"`
-	UpdatedAt         time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
+	ID                  string         `gorm:"primaryKey;size:36"`
+	StoryboardID        string         `gorm:"size:36;not null;index"`
+	Storyboard          Storyboard     `gorm:"foreignKey:StoryboardID"`
+	SceneID             string         `gorm:"size:36;not null;index"` // Reference to StoryScene
+	SceneTitle          string         `gorm:"size:200"`               // Snapshot of scene title
+	InputDescription    string         `gorm:"type:text"`              // Scene description for video
+	ReferenceImageURL   string         `gorm:"size:2048"`              // Start keyframe image for video generation
+	EndFrameURL         string         `gorm:"size:2048"`              // End keyframe image for video transitions
+	GeneratedPrompt     string         `gorm:"type:text"`              // AI-generated video prompt
+	GeneratedVideoURL   string         `gorm:"size:2048"`              // Final generated video URL (needs to be long for signed URLs)
+	ProviderTaskID      string         `gorm:"size:128;index"`         // Provider's task ID for async video generation (for recovery)
+	ProviderName        string         `gorm:"size:50"`                // Provider name (huoshan, hailuo, etc.) for recovery
+	Duration            int            `gorm:"default:0"`              // Video duration in seconds
+	Status              string         `gorm:"size:20;not null;default:'pending';index"`
+	InputTokens         int            `gorm:"default:0"`
+	OutputTokens        int            `gorm:"default:0"`
+	TotalTokens         int            `gorm:"default:0;index"`
+	ErrorMessage        string         `gorm:"type:text"`
+	IsSubdivided        bool           `gorm:"default:false"`    // Whether keyframe subdivision was applied
+	VideoSegmentsJSON   string         `gorm:"type:text"`        // JSON storage for video segments
+	MiddleFrameURLsJSON string         `gorm:"type:text"`        // JSON storage for middle frame URLs
+	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
+	CompletedAt         *time.Time     `gorm:"index"`
+	UpdatedAt           time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
 // Character database model
@@ -285,24 +288,27 @@ type StoryScene struct {
 // These are dynamic scenes generated based on user input, characters, and selected StoryScenes.
 // Different from StoryScene which is a static location.
 type StoryboardScene struct {
-	ID            string         `gorm:"primaryKey;size:36"`
-	StoryboardID  string         `gorm:"size:36;not null;index"`
-	Storyboard    Storyboard     `gorm:"foreignKey:StoryboardID"`
-	StorySceneID  *string        `gorm:"size:36;index"` // Optional FK to story_scenes (location where plot happens)
-	StoryScene    *StoryScene    `gorm:"foreignKey:StorySceneID"`
-	Sequence      int            `gorm:"default:0;index"`
-	Title         string         `gorm:"size:200;not null"`
-	Description   string         `gorm:"type:text"`
-	Image         string         `gorm:"size:500"`
-	VideoUrl      string         `gorm:"size:2048"` // Generated video URL (populated from StoryboardVideoGeneration)
-	Location      string         `gorm:"size:100"`  // AI-generated or from StoryScene
-	TimeOfDay     string         `gorm:"size:50"`
-	Characters    string         `gorm:"type:json"` // JSON array of character names
-	Mood          string         `gorm:"size:100"`
-	IsAIGenerated bool           `gorm:"default:true"`
-	CreatedAt     time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt     gorm.DeletedAt `gorm:"index"`
+	ID                string         `gorm:"primaryKey;size:36"`
+	StoryboardID      string         `gorm:"size:36;not null;index"`
+	Storyboard        Storyboard     `gorm:"foreignKey:StoryboardID"`
+	StorySceneID      *string        `gorm:"size:36;index"` // Optional FK to story_scenes (location where plot happens)
+	StoryScene        *StoryScene    `gorm:"foreignKey:StorySceneID"`
+	Sequence          int            `gorm:"default:0;index"`
+	Title             string         `gorm:"size:200;not null"`
+	Description       string         `gorm:"type:text"`
+	Image             string         `gorm:"size:500"`
+	VideoUrl          string         `gorm:"size:2048"` // Generated video URL (populated from StoryboardVideoGeneration)
+	Location          string         `gorm:"size:100"`  // AI-generated or from StoryScene
+	TimeOfDay         string         `gorm:"size:50"`
+	Characters        string         `gorm:"type:json"` // JSON array of character names
+	Mood              string         `gorm:"size:100"`
+	IsAIGenerated     bool           `gorm:"default:true"`
+	IsSubdivided      bool           `gorm:"default:false"`  // Whether keyframe subdivision was applied
+	VideoSegmentsJSON string         `gorm:"type:text"`      // JSON storage for video segments
+	MiddleFrameURLs   string         `gorm:"type:text"`      // JSON storage for middle frame URLs
+	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt         time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
 // StoryboardCharacterLink links storyboards to characters.

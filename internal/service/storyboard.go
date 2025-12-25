@@ -580,6 +580,9 @@ func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *doma
 		s.logger.Debug("validating character references",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("characterRefCount", len(storyboard.CharacterRefs)))
+
+		var charactersWithoutAvatar []string
+
 		for i := range storyboard.CharacterRefs {
 			ref := &storyboard.CharacterRefs[i]
 			if ref.CharacterID == "" {
@@ -588,23 +591,58 @@ func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *doma
 					zap.Int("refIndex", i))
 				return fmt.Errorf("character reference requires characterId")
 			}
+
+			// 查询角色（GORM 会自动过滤软删除的记录）
 			character, err := s.repo.CharacterByID(ctx, ref.CharacterID)
 			if err != nil {
-				s.logger.Error("character not found for reference",
+				s.logger.Error("character not found or deleted",
 					zap.String("storyboardId", storyboard.ID),
 					zap.String("characterId", ref.CharacterID),
 					zap.Int("refIndex", i),
 					zap.Error(err))
-				return fmt.Errorf("character %s not found", ref.CharacterID)
+				return fmt.Errorf("character %s not found or has been deleted", ref.CharacterID)
 			}
+
+			// 验证角色是否属于该故事
+			if character.StoryID != storyboard.StoryID {
+				s.logger.Error("character does not belong to this story",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("characterId", ref.CharacterID),
+					zap.String("characterStoryId", character.StoryID),
+					zap.String("storyboardStoryId", storyboard.StoryID))
+				return fmt.Errorf("character %s does not belong to story %s", ref.CharacterID, storyboard.StoryID)
+			}
+
+			// 检查角色是否有 avatar（渲染故事板图片需要）
+			if character.Avatar == "" {
+				charactersWithoutAvatar = append(charactersWithoutAvatar, character.Name)
+				s.logger.Warn("character missing avatar, image generation may be affected",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("characterId", ref.CharacterID),
+					zap.String("characterName", character.Name))
+			}
+
+			// 填充角色信息到引用中，供后续 AI 生成使用
+			ref.Character = character
+
 			if ref.Order == 0 {
 				ref.Order = i
 			}
+
 			s.logger.Debug("character reference validated",
 				zap.String("storyboardId", storyboard.ID),
 				zap.String("characterId", ref.CharacterID),
 				zap.String("characterName", character.Name),
+				zap.Bool("hasAvatar", character.Avatar != ""),
 				zap.Int("order", ref.Order))
+		}
+
+		// 如果有角色缺少 avatar，记录汇总日志
+		if len(charactersWithoutAvatar) > 0 {
+			s.logger.Warn("some characters are missing avatars",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Strings("charactersWithoutAvatar", charactersWithoutAvatar),
+				zap.Int("count", len(charactersWithoutAvatar)))
 		}
 	}
 
@@ -614,6 +652,9 @@ func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *doma
 			zap.String("storyboardId", storyboard.ID),
 			zap.String("storyId", storyboard.StoryID),
 			zap.Int("sceneRefCount", len(storyboard.SceneRefs)))
+
+		var scenesWithoutImage []string
+
 		for i := range storyboard.SceneRefs {
 			ref := &storyboard.SceneRefs[i]
 			if ref.StorySceneID == "" {
@@ -622,28 +663,56 @@ func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *doma
 					zap.Int("refIndex", i))
 				return fmt.Errorf("scene reference requires storySceneId")
 			}
+
 			scene, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, ref.StorySceneID)
 			if err != nil {
-				s.logger.Error("story scene not found for reference",
+				s.logger.Error("story scene not found or deleted",
 					zap.String("storyboardId", storyboard.ID),
 					zap.String("storyId", storyboard.StoryID),
 					zap.String("storySceneId", ref.StorySceneID),
 					zap.Int("refIndex", i),
 					zap.Error(err))
-				return fmt.Errorf("story scene %s not found or not part of story", ref.StorySceneID)
+				return fmt.Errorf("story scene %s not found or has been deleted", ref.StorySceneID)
 			}
+
+			// 检查场景是否有图片（可选警告）
+			if scene.Image == "" {
+				scenesWithoutImage = append(scenesWithoutImage, scene.Title)
+				s.logger.Debug("scene missing image",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("storySceneId", ref.StorySceneID),
+					zap.String("sceneTitle", scene.Title))
+			}
+
+			// 填充场景信息到引用中，供后续 AI 生成使用
+			ref.StoryScene = scene
+
 			if ref.Sequence == 0 {
 				ref.Sequence = i
 			}
+
 			s.logger.Debug("scene reference validated",
 				zap.String("storyboardId", storyboard.ID),
 				zap.String("storySceneId", ref.StorySceneID),
 				zap.String("sceneTitle", scene.Title),
+				zap.Bool("hasImage", scene.Image != ""),
 				zap.Int("sequence", ref.Sequence))
 		}
+
+		// 如果有场景缺少图片，记录汇总日志
+		if len(scenesWithoutImage) > 0 {
+			s.logger.Debug("some scenes are missing images",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Strings("scenesWithoutImage", scenesWithoutImage),
+				zap.Int("count", len(scenesWithoutImage)))
+		}
 	}
+
 	s.logger.Debug("storyboard assets validation completed",
-		zap.String("storyboardId", storyboard.ID))
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("characterRefs", len(storyboard.CharacterRefs)),
+		zap.Int("sceneRefs", len(storyboard.SceneRefs)))
+
 	return nil
 }
 
@@ -1461,7 +1530,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		// 确保 Characters 不为 nil
 		if scene.Characters == nil {
 			scene.Characters = []string{}
-		}
+			}
 		storyboardScenes = append(storyboardScenes, scene)
 	}
 	storyboard.StoryboardScenes = storyboardScenes

@@ -1078,25 +1078,28 @@ func StoryboardVideoGenerationToModel(d *domain.StoryboardVideoGeneration) *Stor
 	}
 
 	return &StoryboardVideoGeneration{
-		ID:                d.ID,
-		StoryboardID:      d.StoryboardID,
-		SceneID:           d.SceneID,
-		SceneTitle:        d.SceneTitle,
-		InputDescription:  d.InputDescription,
-		ReferenceImageURL: d.ReferenceImageURL,
-		EndFrameURL:       d.EndFrameURL,
-		GeneratedPrompt:   d.GeneratedPrompt,
-		GeneratedVideoURL: d.GeneratedVideoURL,
-		ProviderTaskID:    d.ProviderTaskID,
-		ProviderName:      d.ProviderName,
-		Duration:          d.Duration,
-		Status:            d.Status,
-		InputTokens:       d.InputTokens,
-		OutputTokens:      d.OutputTokens,
-		TotalTokens:       d.TotalTokens,
-		ErrorMessage:      d.ErrorMessage,
-		CreatedAt:         unixToTime(d.CreatedAt),
-		CompletedAt:       completedAt,
+		ID:                  d.ID,
+		StoryboardID:        d.StoryboardID,
+		SceneID:             d.SceneID,
+		SceneTitle:          d.SceneTitle,
+		InputDescription:    d.InputDescription,
+		ReferenceImageURL:   d.ReferenceImageURL,
+		EndFrameURL:         d.EndFrameURL,
+		GeneratedPrompt:     d.GeneratedPrompt,
+		GeneratedVideoURL:   d.GeneratedVideoURL,
+		ProviderTaskID:      d.ProviderTaskID,
+		ProviderName:        d.ProviderName,
+		Duration:            d.Duration,
+		Status:              d.Status,
+		InputTokens:         d.InputTokens,
+		OutputTokens:        d.OutputTokens,
+		TotalTokens:         d.TotalTokens,
+		ErrorMessage:        d.ErrorMessage,
+		IsSubdivided:        d.IsSubdivided,
+		VideoSegmentsJSON:   d.VideoSegmentsJSON,
+		MiddleFrameURLsJSON: d.MiddleFrameURLsJSON,
+		CreatedAt:           unixToTime(d.CreatedAt),
+		CompletedAt:         completedAt,
 	}
 }
 
@@ -1111,27 +1114,48 @@ func ModelToStoryboardVideoGeneration(m *StoryboardVideoGeneration) *domain.Stor
 		completedAt = &unix
 	}
 
-	return &domain.StoryboardVideoGeneration{
-		ID:                m.ID,
-		StoryboardID:      m.StoryboardID,
-		SceneID:           m.SceneID,
-		SceneTitle:        m.SceneTitle,
-		InputDescription:  m.InputDescription,
-		ReferenceImageURL: m.ReferenceImageURL,
-		EndFrameURL:       m.EndFrameURL,
-		GeneratedPrompt:   m.GeneratedPrompt,
-		GeneratedVideoURL: m.GeneratedVideoURL,
-		ProviderTaskID:    m.ProviderTaskID,
-		ProviderName:      m.ProviderName,
-		Duration:          m.Duration,
-		Status:            m.Status,
-		InputTokens:       m.InputTokens,
-		OutputTokens:      m.OutputTokens,
-		TotalTokens:       m.TotalTokens,
-		ErrorMessage:      m.ErrorMessage,
-		CreatedAt:         timeToUnix(m.CreatedAt),
-		CompletedAt:       completedAt,
+	result := &domain.StoryboardVideoGeneration{
+		ID:                  m.ID,
+		StoryboardID:        m.StoryboardID,
+		SceneID:             m.SceneID,
+		SceneTitle:          m.SceneTitle,
+		InputDescription:    m.InputDescription,
+		ReferenceImageURL:   m.ReferenceImageURL,
+		EndFrameURL:         m.EndFrameURL,
+		GeneratedPrompt:     m.GeneratedPrompt,
+		GeneratedVideoURL:   m.GeneratedVideoURL,
+		ProviderTaskID:      m.ProviderTaskID,
+		ProviderName:        m.ProviderName,
+		Duration:            m.Duration,
+		Status:              m.Status,
+		InputTokens:         m.InputTokens,
+		OutputTokens:        m.OutputTokens,
+		TotalTokens:         m.TotalTokens,
+		ErrorMessage:        m.ErrorMessage,
+		IsSubdivided:        m.IsSubdivided,
+		VideoSegmentsJSON:   m.VideoSegmentsJSON,
+		MiddleFrameURLsJSON: m.MiddleFrameURLsJSON,
+		CreatedAt:           timeToUnix(m.CreatedAt),
+		CompletedAt:         completedAt,
 	}
+
+	// Parse video segments from JSON
+	if m.VideoSegmentsJSON != "" {
+		var segments []domain.VideoSegmentInfo
+		if err := json.Unmarshal([]byte(m.VideoSegmentsJSON), &segments); err == nil {
+			result.VideoSegments = segments
+		}
+	}
+
+	// Parse middle frame URLs from JSON
+	if m.MiddleFrameURLsJSON != "" {
+		var urls []string
+		if err := json.Unmarshal([]byte(m.MiddleFrameURLsJSON), &urls); err == nil {
+			result.MiddleFrameURLs = urls
+		}
+	}
+
+	return result
 }
 
 // ========== Asset 转换 ==========

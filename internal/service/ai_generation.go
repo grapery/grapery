@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -636,4 +638,507 @@ func (s *AIGenerationService) GetUserTokenUsage(ctx context.Context, userID stri
 	stats["byType"] = byType
 
 	return stats, nil
+}
+
+// ============== Keyframe Subdivision Functions ==============
+
+// EvaluateFrameGap uses VLM to assess whether two frames can transition smoothly in a short video clip.
+// Returns: gapTooLarge (bool), evaluation details, error
+func (s *AIGenerationService) EvaluateFrameGap(ctx context.Context, frameA, frameB string) (*genapi.FrameGapEvaluation, error) {
+	if s.geminiClient == nil {
+		return nil, fmt.Errorf("Gemini client not configured for VLM evaluation")
+	}
+
+	s.logger.Info("evaluating frame gap with VLM",
+		zap.String("frameA", truncateURL(frameA)),
+		zap.String("frameB", truncateURL(frameB)))
+
+	// Download both images
+	imageAData, mimeTypeA, err := downloadImageFromURL(ctx, frameA)
+	if err != nil {
+		s.logger.Error("failed to download frame A",
+			zap.String("url", frameA),
+			zap.Error(err))
+		return nil, fmt.Errorf("download frame A: %w", err)
+	}
+
+	imageBData, mimeTypeB, err := downloadImageFromURL(ctx, frameB)
+	if err != nil {
+		s.logger.Error("failed to download frame B",
+			zap.String("url", frameB),
+			zap.Error(err))
+		return nil, fmt.Errorf("download frame B: %w", err)
+	}
+
+	// Build VLM prompt for gap evaluation
+	evaluationPrompt := `Analyze the visual difference between Image A and Image B to determine if a smooth video transition is possible.
+
+Evaluation criteria:
+1. Character pose change magnitude (standing/sitting/lying down - major posture changes)
+2. Character position movement distance (whether crossing the scene)
+3. Viewpoint/angle change (front to side, etc.)
+4. Scene change (whether the location changed)
+
+Question: Can the action between these two images be naturally completed in a single 5-second continuous shot?
+
+IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no explanation):
+{"feasible": true, "reason": "brief reason", "middleAction": "description of needed middle state if not feasible, empty string if feasible"}`
+
+	// Build multimodal content with both images
+	partA, err := encodeImagePart(imageAData, mimeTypeA)
+	if err != nil {
+		return nil, fmt.Errorf("encode frame A: %w", err)
+	}
+	partB, err := encodeImagePart(imageBData, mimeTypeB)
+	if err != nil {
+		return nil, fmt.Errorf("encode frame B: %w", err)
+	}
+
+	contents := []*genai.Content{{
+		Role: genai.RoleUser,
+		Parts: []*genai.Part{
+			genai.NewPartFromText("Image A (Start Frame):"),
+			partA,
+			genai.NewPartFromText("Image B (End Frame):"),
+			partB,
+			genai.NewPartFromText(evaluationPrompt),
+		},
+	}}
+
+	// Call Gemini with multimodal content
+	config := &genai.GenerateContentConfig{
+		Temperature:      floatPtr(0.3), // Low temperature for consistent evaluation
+		ResponseMIMEType: "application/json",
+	}
+
+	resp, err := s.geminiClient.SDK().Models.GenerateContent(ctx, "gemini-2.5-flash", contents, config)
+	if err != nil {
+		s.logger.Error("VLM evaluation failed",
+			zap.Error(err))
+		return nil, fmt.Errorf("VLM evaluation failed: %w", err)
+	}
+
+	// Extract text response
+	responseText := strings.TrimSpace(resp.Text())
+	s.logger.Debug("VLM evaluation raw response",
+		zap.String("response", responseText))
+
+	// Parse JSON response
+	var evaluation genapi.FrameGapEvaluation
+	if err := json.Unmarshal([]byte(responseText), &evaluation); err != nil {
+		// Try to extract JSON from response
+		cleanedResponse := extractJSON(responseText)
+		if err2 := json.Unmarshal([]byte(cleanedResponse), &evaluation); err2 != nil {
+			s.logger.Warn("failed to parse VLM evaluation response, defaulting to feasible",
+				zap.String("response", responseText),
+				zap.Error(err2))
+			// Default to feasible to avoid unnecessary subdivision
+			return &genapi.FrameGapEvaluation{
+				Feasible:     true,
+				Reason:       "Unable to parse VLM response, defaulting to feasible",
+				MiddleAction: "",
+			}, nil
+		}
+	}
+
+	s.logger.Info("frame gap evaluation completed",
+		zap.Bool("feasible", evaluation.Feasible),
+		zap.String("reason", evaluation.Reason),
+		zap.String("middleAction", evaluation.MiddleAction))
+
+	return &evaluation, nil
+}
+
+// GenerateMiddleFrame generates an intermediate frame image based on start frame and action description.
+func (s *AIGenerationService) GenerateMiddleFrame(ctx context.Context, req *genapi.MiddleFrameRequest) (string, error) {
+	if s.genAPI == nil {
+		return "", fmt.Errorf("GenAPI not configured for middle frame generation")
+	}
+
+	s.logger.Info("generating middle frame",
+		zap.String("startFrame", truncateURL(req.StartFrameURL)),
+		zap.String("middleAction", req.MiddleAction))
+
+	// Build image generation prompt
+	prompt := fmt.Sprintf(`Generate an intermediate state image based on the reference image.
+
+Middle action to depict: %s
+
+Requirements:
+1. Maintain exact same character appearance, clothing, and features
+2. Keep the scene environment consistent
+3. Only change the pose/position to the described middle state
+4. Preserve lighting and color palette`, req.MiddleAction)
+
+	// Determine provider
+	provider := req.Provider
+	if provider == "" {
+		provider = "gemini" // Default to gemini for image generation
+	}
+
+	// Build image-to-image request
+	genReq := &genapi.GenerateRequest{
+		Operation:         genapi.OperationImageToImage,
+		Prompt:            prompt,
+		ReferenceImageURL: req.StartFrameURL,
+		AspectRatio:       req.AspectRatio,
+		OutputCount:       1,
+	}
+
+	resp, err := s.genAPI.GenerateImage(ctx, provider, genReq)
+	if err != nil {
+		s.logger.Error("middle frame generation failed",
+			zap.Error(err))
+		return "", fmt.Errorf("middle frame generation failed: %w", err)
+	}
+
+	if len(resp.ImageURLs) == 0 {
+		return "", fmt.Errorf("no image generated for middle frame")
+	}
+
+	imageURL := resp.ImageURLs[0]
+
+	// Upload to OSS for persistence
+	ossClient := aliyun.GetGlobalClient()
+	if ossClient != nil {
+		objectKey := fmt.Sprintf("keyframe-subdivision/middle-frames/%d.png", time.Now().UnixNano())
+		ossURL, err := ossClient.UploadFileFromURL(objectKey, imageURL)
+		if err != nil {
+			s.logger.Warn("failed to upload middle frame to OSS, using original URL",
+				zap.Error(err))
+		} else {
+			imageURL = ossURL
+		}
+	}
+
+	s.logger.Info("middle frame generated successfully",
+		zap.String("imageURL", truncateURL(imageURL)))
+
+	return imageURL, nil
+}
+
+// helper functions
+
+func truncateURL(url string) string {
+	if len(url) > 80 {
+		return url[:80] + "..."
+	}
+	return url
+}
+
+func floatPtr(f float32) *float32 {
+	return &f
+}
+
+func encodeImagePart(data []byte, mimeType string) (*genai.Part, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("image data is empty")
+	}
+	return &genai.Part{
+		InlineData: &genai.Blob{
+			MIMEType: mimeType,
+			Data:     data,
+		},
+	}, nil
+}
+
+func extractJSON(text string) string {
+	// Try to find JSON object in text
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start >= 0 && end > start {
+		return text[start : end+1]
+	}
+	return text
+}
+
+func downloadImageFromURL(ctx context.Context, url string) ([]byte, string, error) {
+	if url == "" {
+		return nil, "", fmt.Errorf("empty URL")
+	}
+
+	// Use http.Get with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch image: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("read image data: %w", err)
+	}
+
+	// Determine MIME type
+	mimeType := resp.Header.Get("Content-Type")
+	if mimeType == "" {
+		// Try to detect from content
+		mimeType = http.DetectContentType(data)
+	}
+
+	return data, mimeType, nil
+}
+
+// ============== Keyframe Subdivision Core Logic ==============
+
+const (
+	defaultMaxSubdivisionDepth = 3 // Maximum recursion depth (up to 8 segments)
+	defaultSegmentDuration     = 5 // Default duration per segment in seconds
+)
+
+// GenerateVideoWithSubdivision generates video with automatic keyframe subdivision.
+// When the gap between start and end frames is too large, it recursively generates
+// middle frames and produces multiple video segments for smooth transitions.
+func (s *AIGenerationService) GenerateVideoWithSubdivision(ctx context.Context, req *genapi.SubdivisionVideoRequest) (*genapi.KeyframeSubdivisionResult, error) {
+	if s.genAPI == nil {
+		return nil, fmt.Errorf("GenAPI not configured")
+	}
+
+	// Set defaults
+	maxDepth := req.MaxDepth
+	if maxDepth <= 0 {
+		maxDepth = defaultMaxSubdivisionDepth
+	}
+	durationSecs := req.DurationSeconds
+	if durationSecs <= 0 {
+		durationSecs = defaultSegmentDuration
+	}
+
+	s.logger.Info("starting video generation with subdivision",
+		zap.String("firstFrame", truncateURL(req.FirstFrameURL)),
+		zap.String("lastFrame", truncateURL(req.LastFrameURL)),
+		zap.String("prompt", req.Prompt),
+		zap.Int("maxDepth", maxDepth))
+
+	// Initialize result
+	result := &genapi.KeyframeSubdivisionResult{
+		Segments:      []genapi.VideoSegment{},
+		MiddleFrames:  []string{},
+		TotalDuration: 0,
+		IsSubdivided:  false,
+	}
+
+	// Start recursive subdivision
+	segments, middleFrames, err := s.subdivideAndGenerate(ctx, subdivisionParams{
+		startFrame:   req.FirstFrameURL,
+		endFrame:     req.LastFrameURL,
+		prompt:       req.Prompt,
+		durationSecs: durationSecs,
+		provider:     req.Provider,
+		aspectRatio:  req.AspectRatio,
+		currentDepth: 0,
+		maxDepth:     maxDepth,
+		segmentIndex: 0,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	result.Segments = segments
+	result.MiddleFrames = middleFrames
+	result.IsSubdivided = len(middleFrames) > 0
+	for _, seg := range segments {
+		result.TotalDuration += seg.DurationSecs
+	}
+
+	s.logger.Info("video generation with subdivision completed",
+		zap.Int("segmentCount", len(result.Segments)),
+		zap.Int("middleFrameCount", len(result.MiddleFrames)),
+		zap.Int("totalDuration", result.TotalDuration),
+		zap.Bool("isSubdivided", result.IsSubdivided))
+
+	return result, nil
+}
+
+type subdivisionParams struct {
+	startFrame   string
+	endFrame     string
+	prompt       string
+	durationSecs int
+	provider     string
+	aspectRatio  string
+	currentDepth int
+	maxDepth     int
+	segmentIndex int
+}
+
+// subdivideAndGenerate recursively evaluates frame gaps and generates video segments.
+// Returns: video segments, middle frame URLs, error
+func (s *AIGenerationService) subdivideAndGenerate(ctx context.Context, params subdivisionParams) ([]genapi.VideoSegment, []string, error) {
+	s.logger.Debug("subdivision step",
+		zap.Int("depth", params.currentDepth),
+		zap.Int("maxDepth", params.maxDepth),
+		zap.String("startFrame", truncateURL(params.startFrame)),
+		zap.String("endFrame", truncateURL(params.endFrame)))
+
+	// Check recursion limit
+	if params.currentDepth >= params.maxDepth {
+		s.logger.Debug("max depth reached, generating video directly",
+			zap.Int("depth", params.currentDepth))
+		segment, err := s.generateSingleVideoSegment(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []genapi.VideoSegment{segment}, nil, nil
+	}
+
+	// Evaluate frame gap using VLM
+	evaluation, err := s.EvaluateFrameGap(ctx, params.startFrame, params.endFrame)
+	if err != nil {
+		s.logger.Warn("frame gap evaluation failed, generating video directly",
+			zap.Error(err))
+		// Fall back to direct generation
+		segment, err := s.generateSingleVideoSegment(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []genapi.VideoSegment{segment}, nil, nil
+	}
+
+	// If gap is feasible, generate video directly
+	if evaluation.Feasible {
+		s.logger.Debug("frame gap is feasible, generating video directly")
+		segment, err := s.generateSingleVideoSegment(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []genapi.VideoSegment{segment}, nil, nil
+	}
+
+	// Gap is too large, need to subdivide
+	s.logger.Info("frame gap too large, generating middle frame",
+		zap.String("reason", evaluation.Reason),
+		zap.String("middleAction", evaluation.MiddleAction))
+
+	// Generate middle frame
+	middleFrameURL, err := s.GenerateMiddleFrame(ctx, &genapi.MiddleFrameRequest{
+		StartFrameURL: params.startFrame,
+		EndFrameURL:   params.endFrame,
+		MiddleAction:  evaluation.MiddleAction,
+		Provider:      params.provider,
+		AspectRatio:   params.aspectRatio,
+	})
+	if err != nil {
+		s.logger.Warn("middle frame generation failed, generating video directly",
+			zap.Error(err))
+		// Fall back to direct generation
+		segment, err := s.generateSingleVideoSegment(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []genapi.VideoSegment{segment}, nil, nil
+	}
+
+	// Recursively process first half: startFrame -> middleFrame
+	firstHalfParams := subdivisionParams{
+		startFrame:   params.startFrame,
+		endFrame:     middleFrameURL,
+		prompt:       params.prompt,
+		durationSecs: params.durationSecs,
+		provider:     params.provider,
+		aspectRatio:  params.aspectRatio,
+		currentDepth: params.currentDepth + 1,
+		maxDepth:     params.maxDepth,
+		segmentIndex: params.segmentIndex,
+	}
+	firstSegments, firstMiddleFrames, err := s.subdivideAndGenerate(ctx, firstHalfParams)
+	if err != nil {
+		return nil, nil, fmt.Errorf("first half subdivision failed: %w", err)
+	}
+
+	// Recursively process second half: middleFrame -> endFrame
+	secondHalfParams := subdivisionParams{
+		startFrame:   middleFrameURL,
+		endFrame:     params.endFrame,
+		prompt:       params.prompt,
+		durationSecs: params.durationSecs,
+		provider:     params.provider,
+		aspectRatio:  params.aspectRatio,
+		currentDepth: params.currentDepth + 1,
+		maxDepth:     params.maxDepth,
+		segmentIndex: params.segmentIndex + len(firstSegments),
+	}
+	secondSegments, secondMiddleFrames, err := s.subdivideAndGenerate(ctx, secondHalfParams)
+	if err != nil {
+		return nil, nil, fmt.Errorf("second half subdivision failed: %w", err)
+	}
+
+	// Combine results
+	allSegments := append(firstSegments, secondSegments...)
+	allMiddleFrames := append([]string{middleFrameURL}, firstMiddleFrames...)
+	allMiddleFrames = append(allMiddleFrames, secondMiddleFrames...)
+
+	// Re-index segments
+	for i := range allSegments {
+		allSegments[i].Index = i
+	}
+
+	return allSegments, allMiddleFrames, nil
+}
+
+// generateSingleVideoSegment generates a single video segment using keyframe-to-video.
+func (s *AIGenerationService) generateSingleVideoSegment(ctx context.Context, params subdivisionParams) (genapi.VideoSegment, error) {
+	s.logger.Debug("generating single video segment",
+		zap.String("startFrame", truncateURL(params.startFrame)),
+		zap.String("endFrame", truncateURL(params.endFrame)),
+		zap.Int("duration", params.durationSecs))
+
+	provider := params.provider
+	if provider == "" {
+		provider = "hailuo" // Default video provider
+	}
+
+	genReq := &genapi.GenerateRequest{
+		Operation:       genapi.OperationKeyframeToVideo,
+		FirstFrameURL:   params.startFrame,
+		LastFrameURL:    params.endFrame,
+		Prompt:          params.prompt,
+		DurationSeconds: params.durationSecs,
+		AspectRatio:     params.aspectRatio,
+	}
+
+	resp, err := s.genAPI.GenerateVideo(ctx, provider, genReq)
+	if err != nil {
+		return genapi.VideoSegment{}, fmt.Errorf("video generation failed: %w", err)
+	}
+
+	videoURL := resp.VideoURL
+
+	// Upload to OSS for persistence
+	ossClient := aliyun.GetGlobalClient()
+	if ossClient != nil && videoURL != "" {
+		objectKey := fmt.Sprintf("keyframe-subdivision/videos/%d.mp4", time.Now().UnixNano())
+		ossURL, err := ossClient.UploadFileFromURL(objectKey, videoURL)
+		if err != nil {
+			s.logger.Warn("failed to upload video segment to OSS, using original URL",
+				zap.Error(err))
+		} else {
+			videoURL = ossURL
+		}
+	}
+
+	segment := genapi.VideoSegment{
+		Index:        params.segmentIndex,
+		VideoURL:     videoURL,
+		StartFrame:   params.startFrame,
+		EndFrame:     params.endFrame,
+		DurationSecs: params.durationSecs,
+	}
+
+	s.logger.Debug("video segment generated",
+		zap.Int("index", segment.Index),
+		zap.String("videoURL", truncateURL(videoURL)))
+
+	return segment, nil
 }
