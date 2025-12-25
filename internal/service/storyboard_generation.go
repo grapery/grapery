@@ -51,6 +51,24 @@ type VideoGenerationRequest struct {
 	EndFrameURL       string `json:"endFrameUrl"`       // End keyframe image for video transitions
 }
 
+// VideoSegmentInfo represents a video segment for HLS playlist generation
+type VideoSegmentInfo struct {
+	Index        int    `json:"index"`
+	VideoURL     string `json:"videoUrl"`
+	StartFrame   string `json:"startFrame"`
+	EndFrame     string `json:"endFrame"`
+	DurationSecs int    `json:"durationSecs"`
+}
+
+// VideoGenerationInfo represents video generation data for HLS playlist
+type VideoGenerationInfo struct {
+	SceneID           string             `json:"sceneId"`
+	GeneratedVideoURL string             `json:"generatedVideoUrl"`
+	Duration          int                `json:"duration"`
+	IsSubdivided      bool               `json:"isSubdivided"`
+	VideoSegments     []VideoSegmentInfo `json:"videoSegments,omitempty"`
+}
+
 // StartContentGeneration starts the AI content generation process (Step 1)
 func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenerationRequest) (*domain.StoryboardContentGeneration, error) {
 	s.logger.Info("starting content generation",
@@ -2101,4 +2119,79 @@ func (s *Service) deserializeMiddleFrames(jsonStr string) []string {
 		return nil
 	}
 	return urls
+}
+
+// ============== HLS Playlist Support ==============
+
+// GetVideoGenerationBySceneID retrieves video generation info for a specific scene
+func (s *Service) GetVideoGenerationBySceneID(ctx context.Context, storyboardID, sceneID string) (*VideoGenerationInfo, error) {
+	// Get video generation record for this scene
+	videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, gen := range videoGens {
+		if gen.SceneID == sceneID && gen.Status == domain.GenerationStatusCompleted {
+			return s.convertToVideoGenerationInfo(gen), nil
+		}
+	}
+
+	return nil, domain.ErrNotFound
+}
+
+// GetVideoGenerationsByStoryboardID retrieves all video generations for a storyboard
+func (s *Service) GetVideoGenerationsByStoryboardID(ctx context.Context, storyboardID string) ([]*VideoGenerationInfo, error) {
+	videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*VideoGenerationInfo, 0)
+	for _, gen := range videoGens {
+		if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL != "" {
+			result = append(result, s.convertToVideoGenerationInfo(gen))
+		}
+	}
+
+	return result, nil
+}
+
+// convertToVideoGenerationInfo converts domain model to service info type
+func (s *Service) convertToVideoGenerationInfo(gen *domain.StoryboardVideoGeneration) *VideoGenerationInfo {
+	info := &VideoGenerationInfo{
+		SceneID:           gen.SceneID,
+		GeneratedVideoURL: gen.GeneratedVideoURL,
+		Duration:          gen.Duration,
+		IsSubdivided:      gen.IsSubdivided,
+	}
+
+	// Convert video segments if available
+	if len(gen.VideoSegments) > 0 {
+		info.VideoSegments = make([]VideoSegmentInfo, len(gen.VideoSegments))
+		for i, seg := range gen.VideoSegments {
+			info.VideoSegments[i] = VideoSegmentInfo{
+				Index:        seg.Index,
+				VideoURL:     seg.VideoURL,
+				StartFrame:   seg.StartFrame,
+				EndFrame:     seg.EndFrame,
+				DurationSecs: seg.DurationSecs,
+			}
+		}
+	} else if gen.VideoSegmentsJSON != "" {
+		// Parse from JSON if not already parsed
+		segments := s.deserializeVideoSegments(gen.VideoSegmentsJSON)
+		info.VideoSegments = make([]VideoSegmentInfo, len(segments))
+		for i, seg := range segments {
+			info.VideoSegments[i] = VideoSegmentInfo{
+				Index:        seg.Index,
+				VideoURL:     seg.VideoURL,
+				StartFrame:   seg.StartFrame,
+				EndFrame:     seg.EndFrame,
+				DurationSecs: seg.DurationSecs,
+			}
+		}
+	}
+
+	return info
 }

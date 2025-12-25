@@ -141,6 +141,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
 			authenticated.GET("/storyboards/:id/generation-progress", h.GetGenerationProgress)
 			authenticated.POST("/storyboards/:id/publish", h.PublishStoryboard)
+			authenticated.GET("/storyboards/:id/playlist.m3u8", h.GetStoryboardVideoPlaylist)
+			authenticated.GET("/storyboards/:id/scenes/:sceneId/playlist.m3u8", h.GetSceneVideoPlaylist)
 
 			// 评论相关
 			authenticated.POST("/comments", h.CreateComment)
