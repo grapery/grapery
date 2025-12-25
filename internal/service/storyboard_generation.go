@@ -1978,17 +1978,41 @@ processResult:
 		return
 	}
 
-	// Sync video URL to storyboard scene for easy access
+	// Sync video URL and subdivision info to storyboard scene for easy access
 	if gen.GeneratedVideoURL != "" && gen.SceneID != "" {
-		if err := s.repo.UpdateStoryboardSceneVideo(ctx, gen.SceneID, gen.GeneratedVideoURL); err != nil {
-			s.logger.Warn("failed to sync video URL to storyboard scene",
-				zap.String("sceneId", gen.SceneID),
-				zap.String("videoURL", gen.GeneratedVideoURL),
-				zap.Error(err))
+		if gen.IsSubdivided {
+			// Sync with subdivision info for seamless HLS playback
+			if err := s.repo.UpdateStoryboardSceneVideoWithSubdivision(
+				ctx,
+				gen.SceneID,
+				gen.GeneratedVideoURL,
+				gen.IsSubdivided,
+				gen.VideoSegmentsJSON,
+				gen.MiddleFrameURLsJSON,
+			); err != nil {
+				s.logger.Warn("failed to sync video with subdivision to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Bool("isSubdivided", gen.IsSubdivided),
+					zap.Error(err))
+			} else {
+				s.logger.Info("video with subdivision synced to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Bool("isSubdivided", gen.IsSubdivided))
+			}
 		} else {
-			s.logger.Info("video URL synced to storyboard scene",
-				zap.String("sceneId", gen.SceneID),
-				zap.String("videoURL", gen.GeneratedVideoURL))
+			// Simple video URL update
+			if err := s.repo.UpdateStoryboardSceneVideo(ctx, gen.SceneID, gen.GeneratedVideoURL); err != nil {
+				s.logger.Warn("failed to sync video URL to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Error(err))
+			} else {
+				s.logger.Info("video URL synced to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL))
+			}
 		}
 	}
 

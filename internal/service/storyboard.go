@@ -427,15 +427,31 @@ func (s *Service) populateMissingSceneVideos(ctx context.Context, storyboard *do
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("videoGenCount", len(videoGens)))
 
-	// Build a map of sceneID -> generated video URL
-	sceneVideoMap := make(map[string]string)
+	// Build maps for sceneID -> video info including subdivision data
+	type sceneVideoInfo struct {
+		VideoURL            string
+		IsSubdivided        bool
+		VideoSegments       []domain.VideoSegmentInfo
+		MiddleFrameURLs     []string
+		VideoSegmentsJSON   string
+		MiddleFrameURLsJSON string
+	}
+	sceneVideoMap := make(map[string]sceneVideoInfo)
 	for _, gen := range videoGens {
 		s.logger.Debug("populateMissingSceneVideos: checking video generation",
 			zap.String("sceneId", gen.SceneID),
 			zap.String("status", string(gen.Status)),
-			zap.String("videoURL", gen.GeneratedVideoURL))
+			zap.String("videoURL", gen.GeneratedVideoURL),
+			zap.Bool("isSubdivided", gen.IsSubdivided))
 		if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL != "" {
-			sceneVideoMap[gen.SceneID] = gen.GeneratedVideoURL
+			sceneVideoMap[gen.SceneID] = sceneVideoInfo{
+				VideoURL:            gen.GeneratedVideoURL,
+				IsSubdivided:        gen.IsSubdivided,
+				VideoSegments:       gen.VideoSegments,
+				MiddleFrameURLs:     gen.MiddleFrameURLs,
+				VideoSegmentsJSON:   gen.VideoSegmentsJSON,
+				MiddleFrameURLsJSON: gen.MiddleFrameURLsJSON,
+			}
 		}
 	}
 
@@ -443,15 +459,20 @@ func (s *Service) populateMissingSceneVideos(ctx context.Context, storyboard *do
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("scenesWithVideo", len(sceneVideoMap)))
 
-	// Fill in missing scene videos
+	// Fill in missing scene videos with subdivision info
 	for i := range storyboard.StoryboardScenes {
 		scene := &storyboard.StoryboardScenes[i]
 		if scene.VideoUrl == "" {
-			if videoURL, ok := sceneVideoMap[scene.ID]; ok {
-				scene.VideoUrl = videoURL
+			if info, ok := sceneVideoMap[scene.ID]; ok {
+				scene.VideoUrl = info.VideoURL
+				scene.IsSubdivided = info.IsSubdivided
+				scene.VideoSegments = info.VideoSegments
+				scene.MiddleFrameURLs = info.MiddleFrameURLs
+				scene.VideoSegmentsJSON = info.VideoSegmentsJSON
 				s.logger.Info("populated missing scene video from generation record",
 					zap.String("sceneId", scene.ID),
-					zap.String("videoURL", videoURL))
+					zap.String("videoURL", info.VideoURL),
+					zap.Bool("isSubdivided", info.IsSubdivided))
 			}
 		}
 	}

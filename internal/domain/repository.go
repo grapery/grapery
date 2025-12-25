@@ -266,6 +266,7 @@ type Repository interface {
 	UpdateStoryboardScene(ctx context.Context, scene *StoryboardScene) error
 	UpdateStoryboardSceneImage(ctx context.Context, sceneID, imageURL string) error
 	UpdateStoryboardSceneVideo(ctx context.Context, sceneID, videoURL string) error
+	UpdateStoryboardSceneVideoWithSubdivision(ctx context.Context, sceneID, videoURL string, isSubdivided bool, videoSegmentsJSON, middleFrameURLsJSON string) error
 
 	// ========== Storyboard Generation operations ==========
 	// Content generation (Step 1)

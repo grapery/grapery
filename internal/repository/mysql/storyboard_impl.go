@@ -687,6 +687,29 @@ func (r *Repository) UpdateStoryboardSceneVideo(ctx context.Context, sceneID, vi
 	return nil
 }
 
+// UpdateStoryboardSceneVideoWithSubdivision updates video URL and subdivision info for a scene
+func (r *Repository) UpdateStoryboardSceneVideoWithSubdivision(ctx context.Context, sceneID, videoURL string, isSubdivided bool, videoSegmentsJSON, middleFrameURLsJSON string) error {
+	updates := map[string]interface{}{
+		"video_url":           videoURL,
+		"is_subdivided":       isSubdivided,
+		"video_segments_json": videoSegmentsJSON,
+		"middle_frame_urls":   middleFrameURLsJSON,
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&StoryboardScene{}).
+		Where("id = ?", sceneID).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update storyboard scene video with subdivision: %w", err)
+	}
+
+	r.log.Info("storyboard scene video with subdivision updated",
+		zap.String("sceneId", sceneID),
+		zap.String("videoUrl", videoURL),
+		zap.Bool("isSubdivided", isSubdivided))
+	return nil
+}
+
 // storyboardSceneToDomain converts database StoryboardScene to domain StoryboardScene
 func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.StoryboardScene {
 	scene := &domain.StoryboardScene{
