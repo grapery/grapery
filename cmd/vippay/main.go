@@ -315,6 +315,13 @@ func registerRoutes(router *gin.Engine) {
 		googleOAuthHandler = pay.NewGoogleOAuthHandler()
 	}
 
+	// 创建徽章 Repository 和处理器
+	badgeRepo := paymodels.NewBadgeRepository()
+	var badgeHandler *pay.BadgeHandler
+	if badgeRepo != nil {
+		badgeHandler = pay.NewBadgeHandler(badgeRepo)
+	}
+
 	// API 路由组
 	api := router.Group("/api/vippay")
 	{
@@ -625,6 +632,32 @@ func registerRoutes(router *gin.Engine) {
 					},
 				})
 			})
+		}
+
+		// 徽章相关路由
+		if badgeHandler != nil {
+			badges := api.Group("/badges")
+			{
+				// 公开接口 - 无需鉴权
+				badges.GET("", badgeHandler.GetAllBadges)                           // 获取所有徽章定义
+				badges.GET("/category/:category", badgeHandler.GetBadgesByCategory) // 根据类别获取徽章
+				badges.GET("/user", badgeHandler.GetUserBadges)                     // 获取用户已获得的徽章（支持user_id参数）
+				badges.GET("/pinned", badgeHandler.GetUserPinnedBadges)             // 获取用户置顶的徽章
+
+				// 需要鉴权的接口
+				authBadges := badges.Group("")
+				authBadges.Use(paymiddleware.AuthMiddleware())
+				{
+					authBadges.GET("/profile", badgeHandler.GetUserBadgeProfile)   // 获取用户徽章档案
+					authBadges.GET("/stats", badgeHandler.GetUserStats)            // 获取用户统计
+					authBadges.GET("/progress", badgeHandler.GetBadgeProgress)     // 获取徽章进度
+					authBadges.POST("/pin", badgeHandler.PinBadge)                 // 置顶徽章
+					authBadges.POST("/unpin/:badge_id", badgeHandler.UnpinBadge)   // 取消置顶
+					authBadges.POST("/mark-viewed", badgeHandler.MarkBadgesViewed) // 标记徽章已查看
+					authBadges.POST("/check", badgeHandler.CheckAndAwardBadges)    // 检查并授予徽章
+					authBadges.POST("/sync-stats", badgeHandler.SyncUserStats)     // 同步用户统计
+				}
+			}
 		}
 	}
 }

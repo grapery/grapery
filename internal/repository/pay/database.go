@@ -77,6 +77,11 @@ func Init(uname, pwd, address, dbname string) error {
 	database.AutoMigrate(&IAPReceiptValidation{})
 	database.AutoMigrate(&IAPSubscriptionSync{})
 
+	// 徽章系统相关表
+	database.AutoMigrate(&Badge{})
+	database.AutoMigrate(&UserBadge{})
+	database.AutoMigrate(&UserBadgeStats{})
+
 	return nil
 }
 
