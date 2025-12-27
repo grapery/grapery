@@ -824,6 +824,7 @@ func (s *Service) DeleteCharacterPoster(ctx context.Context, userID, posterID st
 // GeneratePosterRequest 生成海报请求
 type GeneratePosterRequest struct {
 	AspectRatio string `json:"aspectRatio"` // 16:9, 9:16, 1:1
+	Provider    string `json:"provider"`    // huoshan (default), nana, banana
 }
 
 // GeneratePosterResult 生成海报结果
@@ -922,7 +923,7 @@ func (s *Service) GenerateCharacterPoster(ctx context.Context, userID, posterID 
 	poster.PosterConceptJSON = conceptResult.ConceptJSON
 
 	// 10. Step 2: 组装最终提示词并生成图像
-	imageResult, err := s.generatePosterImage(ctx, userID, poster, conceptResult.Concept, req.AspectRatio)
+	imageResult, err := s.generatePosterImage(ctx, userID, poster, conceptResult.Concept, req.AspectRatio, req.Provider)
 	if err != nil {
 		s.logger.Error("failed to generate poster image", zap.Error(err))
 		poster.Status = domain.PosterStatusFailed
@@ -1111,7 +1112,7 @@ You must output ONLY valid JSON with no markdown code blocks:
 		SystemPrompt:      systemPrompt,
 		Model:             "gemini-2.5-flash",
 		Temperature:       0.8,
-		MaxTokens:         2000,
+		MaxTokens:         4000, // 增加 token 限制以确保完整的 JSON 响应
 		RelatedEntityID:   poster.ID,
 		RelatedEntityType: "character_poster",
 		Metadata: map[string]interface{}{
@@ -1169,7 +1170,7 @@ func (s *Service) parsePosterConcept(text string) (*PosterConcept, error) {
 }
 
 // generatePosterImage Step 2: 组装最终提示词并生成图像
-func (s *Service) generatePosterImage(ctx context.Context, userID string, poster *domain.CharacterPoster, concept *PosterConcept, aspectRatio string) (*imageGenerationResult, error) {
+func (s *Service) generatePosterImage(ctx context.Context, userID string, poster *domain.CharacterPoster, concept *PosterConcept, aspectRatio string, provider string) (*imageGenerationResult, error) {
 	// 组装最终图像提示词
 	finalPrompt := s.assembleFinalImagePrompt(concept, poster)
 
@@ -1178,13 +1179,16 @@ func (s *Service) generatePosterImage(ctx context.Context, userID string, poster
 		aspectRatio = "16:9"
 	}
 
-	// 调用AI图像生成服务
+	// 设置默认 provider 为 huoshan，支持 nana、banana 等特殊指定
+	if provider == "" {
+		provider = "huoshan"
+	}
+
+	// 根据 provider 构建不同的请求参数
 	imageReq := &GenerateImageRequest{
 		UserID:            userID,
 		Prompt:            finalPrompt,
-		Provider:          "gemini",
-		Model:             "imagen-3.0-generate-001",
-		AspectRatio:       aspectRatio,
+		Provider:          provider,
 		Quality:           "high",
 		OutputCount:       1,
 		RelatedEntityID:   poster.ID,
@@ -1194,6 +1198,23 @@ func (s *Service) generatePosterImage(ctx context.Context, userID string, poster
 			"characterId": poster.CharacterID,
 			"step":        2,
 		},
+	}
+
+	// 根据不同的 provider 设置相应的参数
+	switch provider {
+	case "huoshan":
+		// huoshan 使用 Size 而不是 AspectRatio
+		imageReq.Size = aspectRatioToSize(aspectRatio)
+		// Model 留空，使用 huoshan provider 的默认模型 (doubao-seedream)
+	case "gemini":
+		imageReq.Model = "imagen-3.0-generate-001"
+		imageReq.AspectRatio = aspectRatio
+	case "nana", "banana":
+		// nana/banana 使用 AspectRatio
+		imageReq.AspectRatio = aspectRatio
+	default:
+		// 其他 provider 使用 AspectRatio
+		imageReq.AspectRatio = aspectRatio
 	}
 
 	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
@@ -1210,6 +1231,25 @@ func (s *Service) generatePosterImage(ctx context.Context, userID string, poster
 		FinalPrompt: finalPrompt,
 		ImageURL:    result.ImageURLs[0],
 	}, nil
+}
+
+// aspectRatioToSize 将宽高比转换为具体尺寸（用于 huoshan provider）
+// huoshan 要求图片至少 3686400 像素 (约 1920x1920)
+func aspectRatioToSize(aspectRatio string) string {
+	switch aspectRatio {
+	case "16:9":
+		return "2560x1440" // 3686400 pixels
+	case "9:16":
+		return "1440x2560" // 3686400 pixels
+	case "1:1":
+		return "1920x1920" // 3686400 pixels
+	case "4:3":
+		return "2220x1665" // ~3696300 pixels
+	case "3:4":
+		return "1665x2220" // ~3696300 pixels
+	default:
+		return "2560x1440" // 默认 16:9
+	}
 }
 
 // assembleFinalImagePrompt 组装最终图像生成提示词

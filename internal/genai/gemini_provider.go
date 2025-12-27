@@ -167,16 +167,32 @@ func (p *geminiProvider) textToImage(ctx context.Context, req *GenerateRequest) 
 	}
 
 	model := strings.TrimSpace(req.Model)
-	opts := p.buildConversationalImageOptions(req)
 
-	// Use conversational image generation API (gemini-2.0-flash-exp) instead of Imagen API
-	// This is more reliable and supports the same features
+	// Check if the model is an Imagen model (uses different API)
+	if isImagenModel(model) {
+		// Use Imagen API with GenerateImagesConfig
+		config := p.buildImageConfig(req)
+		resp, err := p.client.GenerateImages(ctx, model, prompt, config)
+		if err != nil {
+			return nil, fmt.Errorf("AI image generation failed: %w", err)
+		}
+		return buildGeminiImageResponse(p.name, req, resp), nil
+	}
+
+	// Use conversational image generation API for Gemini models
+	opts := p.buildConversationalImageOptions(req)
 	images, resp, err := p.client.GenerateConversationalImageFromText(ctx, model, prompt, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	return buildGeminiConversationalImageResponse(p.name, req, images, resp), nil
+}
+
+// isImagenModel checks if the model name indicates an Imagen model
+func isImagenModel(model string) bool {
+	model = strings.ToLower(model)
+	return strings.HasPrefix(model, "imagen") || strings.Contains(model, "imagen")
 }
 
 func (p *geminiProvider) imageToImage(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {

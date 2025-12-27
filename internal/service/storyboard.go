@@ -438,11 +438,15 @@ func (s *Service) populateMissingSceneVideos(ctx context.Context, storyboard *do
 	}
 	sceneVideoMap := make(map[string]sceneVideoInfo)
 	for _, gen := range videoGens {
-		s.logger.Debug("populateMissingSceneVideos: checking video generation",
+		// Log each video generation record for debugging
+		s.logger.Info("populateMissingSceneVideos: checking video generation",
 			zap.String("sceneId", gen.SceneID),
 			zap.String("status", string(gen.Status)),
 			zap.String("videoURL", gen.GeneratedVideoURL),
-			zap.Bool("isSubdivided", gen.IsSubdivided))
+			zap.String("errorMessage", gen.ErrorMessage),
+			zap.Bool("isSubdivided", gen.IsSubdivided),
+			zap.String("providerTaskID", gen.ProviderTaskID))
+
 		if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL != "" {
 			sceneVideoMap[gen.SceneID] = sceneVideoInfo{
 				VideoURL:            gen.GeneratedVideoURL,
@@ -452,6 +456,11 @@ func (s *Service) populateMissingSceneVideos(ctx context.Context, storyboard *do
 				VideoSegmentsJSON:   gen.VideoSegmentsJSON,
 				MiddleFrameURLsJSON: gen.MiddleFrameURLsJSON,
 			}
+		} else {
+			// Log why this generation was skipped
+			s.logger.Warn("populateMissingSceneVideos: skipping video generation",
+				zap.String("sceneId", gen.SceneID),
+				zap.String("reason", fmt.Sprintf("status=%s, hasVideoURL=%v", gen.Status, gen.GeneratedVideoURL != "")))
 		}
 	}
 

@@ -200,6 +200,7 @@ type GenerateImageRequest struct {
 	Provider          string // gemini, hailuo, huoshan
 	Model             string
 	AspectRatio       string
+	Size              string // Image dimensions (e.g., "1024x1024", "1280x720") - used by huoshan
 	Quality           string
 	OutputCount       int
 	ReferenceImages   []string // Character or scene reference images for image-to-image generation
@@ -246,6 +247,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		"provider":        req.Provider,
 		"model":           req.Model,
 		"aspectRatio":     req.AspectRatio,
+		"size":            req.Size,
 		"quality":         req.Quality,
 		"outputCount":     req.OutputCount,
 		"referenceImages": req.ReferenceImages,
@@ -269,6 +271,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	genReq := &genapi.GenerateRequest{
 		Prompt:          req.Prompt,
 		AspectRatio:     req.AspectRatio,
+		Size:            req.Size,
 		Quality:         req.Quality,
 		OutputCount:     req.OutputCount,
 		Model:           req.Model,
@@ -892,8 +895,9 @@ func downloadImageFromURL(ctx context.Context, url string) ([]byte, string, erro
 // ============== Keyframe Subdivision Core Logic ==============
 
 const (
-	defaultMaxSubdivisionDepth = 3 // Maximum recursion depth (up to 8 segments)
+	defaultMaxSubdivisionDepth = 1 // Maximum recursion depth (1 = up to 2 segments, 2 = up to 4)
 	defaultSegmentDuration     = 5 // Default duration per segment in seconds
+	maxAllowedSegments         = 3 // Hard limit on segments to control cost
 )
 
 // GenerateVideoWithSubdivision generates video with automatic keyframe subdivision.
@@ -918,7 +922,8 @@ func (s *AIGenerationService) GenerateVideoWithSubdivision(ctx context.Context, 
 		zap.String("firstFrame", truncateURL(req.FirstFrameURL)),
 		zap.String("lastFrame", truncateURL(req.LastFrameURL)),
 		zap.String("prompt", req.Prompt),
-		zap.Int("maxDepth", maxDepth))
+		zap.Int("maxDepth", maxDepth),
+		zap.Int("maxSegments", maxAllowedSegments))
 
 	// Initialize result
 	result := &genapi.KeyframeSubdivisionResult{
@@ -928,17 +933,19 @@ func (s *AIGenerationService) GenerateVideoWithSubdivision(ctx context.Context, 
 		IsSubdivided:  false,
 	}
 
-	// Start recursive subdivision
+	// Start recursive subdivision with segment limit
 	segments, middleFrames, err := s.subdivideAndGenerate(ctx, subdivisionParams{
-		startFrame:   req.FirstFrameURL,
-		endFrame:     req.LastFrameURL,
-		prompt:       req.Prompt,
-		durationSecs: durationSecs,
-		provider:     req.Provider,
-		aspectRatio:  req.AspectRatio,
-		currentDepth: 0,
-		maxDepth:     maxDepth,
-		segmentIndex: 0,
+		startFrame:      req.FirstFrameURL,
+		endFrame:        req.LastFrameURL,
+		prompt:          req.Prompt,
+		durationSecs:    durationSecs,
+		provider:        req.Provider,
+		aspectRatio:     req.AspectRatio,
+		currentDepth:    0,
+		maxDepth:        maxDepth,
+		segmentIndex:    0,
+		currentSegments: 0,
+		maxSegments:     maxAllowedSegments, // Limit to 3 segments max
 	})
 
 	if err != nil {
@@ -962,15 +969,17 @@ func (s *AIGenerationService) GenerateVideoWithSubdivision(ctx context.Context, 
 }
 
 type subdivisionParams struct {
-	startFrame   string
-	endFrame     string
-	prompt       string
-	durationSecs int
-	provider     string
-	aspectRatio  string
-	currentDepth int
-	maxDepth     int
-	segmentIndex int
+	startFrame        string
+	endFrame          string
+	prompt            string
+	durationSecs      int
+	provider          string
+	aspectRatio       string
+	currentDepth      int
+	maxDepth          int
+	segmentIndex      int
+	currentSegments   int // Track current segment count to enforce limit
+	maxSegments       int // Maximum allowed segments
 }
 
 // subdivideAndGenerate recursively evaluates frame gaps and generates video segments.
@@ -979,8 +988,24 @@ func (s *AIGenerationService) subdivideAndGenerate(ctx context.Context, params s
 	s.logger.Debug("subdivision step",
 		zap.Int("depth", params.currentDepth),
 		zap.Int("maxDepth", params.maxDepth),
+		zap.Int("currentSegments", params.currentSegments),
+		zap.Int("maxSegments", params.maxSegments),
 		zap.String("startFrame", truncateURL(params.startFrame)),
 		zap.String("endFrame", truncateURL(params.endFrame)))
+
+	// Check segment limit - if we would exceed max segments, generate directly
+	// With subdivision, we'd create at least 2 segments, so check if we have room
+	remainingSlots := params.maxSegments - params.currentSegments
+	if remainingSlots <= 1 {
+		s.logger.Debug("segment limit reached, generating video directly",
+			zap.Int("currentSegments", params.currentSegments),
+			zap.Int("maxSegments", params.maxSegments))
+		segment, err := s.generateSingleVideoSegment(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []genapi.VideoSegment{segment}, nil, nil
+	}
 
 	// Check recursion limit
 	if params.currentDepth >= params.maxDepth {
@@ -1042,15 +1067,17 @@ func (s *AIGenerationService) subdivideAndGenerate(ctx context.Context, params s
 
 	// Recursively process first half: startFrame -> middleFrame
 	firstHalfParams := subdivisionParams{
-		startFrame:   params.startFrame,
-		endFrame:     middleFrameURL,
-		prompt:       params.prompt,
-		durationSecs: params.durationSecs,
-		provider:     params.provider,
-		aspectRatio:  params.aspectRatio,
-		currentDepth: params.currentDepth + 1,
-		maxDepth:     params.maxDepth,
-		segmentIndex: params.segmentIndex,
+		startFrame:      params.startFrame,
+		endFrame:        middleFrameURL,
+		prompt:          params.prompt,
+		durationSecs:    params.durationSecs,
+		provider:        params.provider,
+		aspectRatio:     params.aspectRatio,
+		currentDepth:    params.currentDepth + 1,
+		maxDepth:        params.maxDepth,
+		segmentIndex:    params.segmentIndex,
+		currentSegments: params.currentSegments,
+		maxSegments:     params.maxSegments,
 	}
 	firstSegments, firstMiddleFrames, err := s.subdivideAndGenerate(ctx, firstHalfParams)
 	if err != nil {
@@ -1058,16 +1085,19 @@ func (s *AIGenerationService) subdivideAndGenerate(ctx context.Context, params s
 	}
 
 	// Recursively process second half: middleFrame -> endFrame
+	// Update currentSegments to include segments from first half
 	secondHalfParams := subdivisionParams{
-		startFrame:   middleFrameURL,
-		endFrame:     params.endFrame,
-		prompt:       params.prompt,
-		durationSecs: params.durationSecs,
-		provider:     params.provider,
-		aspectRatio:  params.aspectRatio,
-		currentDepth: params.currentDepth + 1,
-		maxDepth:     params.maxDepth,
-		segmentIndex: params.segmentIndex + len(firstSegments),
+		startFrame:      middleFrameURL,
+		endFrame:        params.endFrame,
+		prompt:          params.prompt,
+		durationSecs:    params.durationSecs,
+		provider:        params.provider,
+		aspectRatio:     params.aspectRatio,
+		currentDepth:    params.currentDepth + 1,
+		maxDepth:        params.maxDepth,
+		segmentIndex:    params.segmentIndex + len(firstSegments),
+		currentSegments: params.currentSegments + len(firstSegments), // Track segments generated so far
+		maxSegments:     params.maxSegments,
 	}
 	secondSegments, secondMiddleFrames, err := s.subdivideAndGenerate(ctx, secondHalfParams)
 	if err != nil {
@@ -1088,6 +1118,7 @@ func (s *AIGenerationService) subdivideAndGenerate(ctx context.Context, params s
 }
 
 // generateSingleVideoSegment generates a single video segment using keyframe-to-video.
+// For async providers (like hailuo), it polls until video generation completes.
 func (s *AIGenerationService) generateSingleVideoSegment(ctx context.Context, params subdivisionParams) (genapi.VideoSegment, error) {
 	s.logger.Debug("generating single video segment",
 		zap.String("startFrame", truncateURL(params.startFrame)),
@@ -1115,6 +1146,23 @@ func (s *AIGenerationService) generateSingleVideoSegment(ctx context.Context, pa
 
 	videoURL := resp.VideoURL
 
+	// Handle async video generation (TaskID returned instead of VideoURL)
+	if videoURL == "" && resp.TaskID != "" {
+		s.logger.Info("video generation is async, polling for completion",
+			zap.String("taskId", resp.TaskID),
+			zap.String("provider", provider))
+
+		videoURL, err = s.pollForVideoCompletion(ctx, provider, resp.TaskID)
+		if err != nil {
+			return genapi.VideoSegment{}, fmt.Errorf("async video generation polling failed: %w", err)
+		}
+	}
+
+	// Check if we got a video URL
+	if videoURL == "" {
+		return genapi.VideoSegment{}, fmt.Errorf("video generation did not return a video URL")
+	}
+
 	// Upload to OSS for persistence
 	ossClient := aliyun.GetGlobalClient()
 	if ossClient != nil && videoURL != "" {
@@ -1141,4 +1189,58 @@ func (s *AIGenerationService) generateSingleVideoSegment(ctx context.Context, pa
 		zap.String("videoURL", truncateURL(videoURL)))
 
 	return segment, nil
+}
+
+// pollForVideoCompletion polls the video generation task until it completes.
+// This is used for async video providers like hailuo.
+func (s *AIGenerationService) pollForVideoCompletion(ctx context.Context, provider, taskID string) (string, error) {
+	const (
+		maxPollAttempts = 120             // Max poll attempts (10 minutes at 5s interval)
+		pollInterval    = 5 * time.Second // Polling interval
+	)
+
+	for attempt := 1; attempt <= maxPollAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("polling video generation status",
+			zap.String("taskId", taskID),
+			zap.String("provider", provider),
+			zap.Int("attempt", attempt))
+
+		resp, err := s.genAPI.GetVideoStatus(ctx, provider, taskID)
+		if err != nil {
+			s.logger.Warn("poll request failed, will retry",
+				zap.String("taskId", taskID),
+				zap.Int("attempt", attempt),
+				zap.Error(err))
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Check if completed
+		if resp.VideoURL != "" {
+			s.logger.Info("video generation completed",
+				zap.String("taskId", taskID),
+				zap.String("videoURL", truncateURL(resp.VideoURL)))
+			return resp.VideoURL, nil
+		}
+
+		// Check if failed
+		if resp.Status == "failed" || resp.Status == "error" {
+			errMsg := resp.Error
+			if errMsg == "" {
+				errMsg = resp.Message
+			}
+			return "", fmt.Errorf("video generation failed: %s", errMsg)
+		}
+
+		// Still processing, wait and retry
+		time.Sleep(pollInterval)
+	}
+
+	return "", fmt.Errorf("video generation timed out after %d attempts", maxPollAttempts)
 }

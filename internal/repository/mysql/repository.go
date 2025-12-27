@@ -60,101 +60,171 @@ func NewRepository(dsn string, log *zap.Logger) (*Repository, error) {
 
 // migrate runs database migrations
 func (r *Repository) migrate() error {
-	models := []interface{}{
-		// 核心实体
-		&User{},
-		&Story{},
-		&Panel{},
-		&StoryScene{},
-		&StoryboardCharacterLink{},
-		&StoryboardSceneLink{},
-		&Character{},
-		&Group{},
-		&Comment{},
-		&ChatThread{},
-		&ChatMessage{},
-		&StoryComposition{},
-		&StoryParticipant{},
-		&Storyboard{},
-		&StoryboardScene{}, // AI-generated plot scenes within storyboards
-		&GroupActivity{},
-		&UserActivity{},
-		&CharacterPoster{},
-		&CharacterAnalytics{},
-		// Storyboard AI 生成记录
-		&StoryboardContentGeneration{},
-		&StoryboardSceneGeneration{},
-		&StoryboardImageGeneration{},
-		&StoryboardVideoGeneration{},
-		// 关系表
-		&UserFollow{},
-		&StoryLike{},
-		&StoryFollow{},
-		&StoryContributor{},
-		&CharacterFollow{},
-		&GroupMember{},
-		&GroupRole{},
-		&GroupInvitation{},
-		&CommentLike{},
-		&StoryboardLike{},
-		// 系统表
-		&Asset{},
-		&Notification{},
-		&UserSettings{},
-		&Membership{},
-		&AIGenerationRecord{},
-		&Tag{},
-		&StoryTag{},
-		&CharacterTag{},
-		&StyleConfig{},
-		&InvitationCode{},
-		&SearchHistory{},
-		&ViewHistory{},
-		&Report{},
-		// 任务表
-		&AITask{},
-		&RenderTask{},
-		&StoryPublication{},
-		// Agent 系统表
-		&Agent{},
-		&AgentSkill{},
-		&AgentSkillUsage{},
-		&AgentInteraction{},
-		&AgentMemory{},
-		// 支付订阅系统表
-		&SubscriptionPlan{},
-		&SubscriptionOrder{},
-		&TokenTransaction{},
-		// Chat enhancements
-		&ChatThreadStoryboardBranch{},
-		&ChatMessageReaction{},
-		&ChatMessageToken{},
+	// NOTE:
+	// We intentionally avoid running global GORM AutoMigrate here.
+	// Reason: if an existing schema has incompatible indexes (e.g. an index on
+	// `stories.style`), AutoMigrate may try to change the column type to TEXT and
+	// fail with: "BLOB/TEXT column 'style' used in key specification..."
+	//
+	// Instead, we run a small set of targeted, backwards-compatible schema patches
+	// needed by the current code.
 
-		// Storyboard Chat 会话
-		&StoryboardChatSession{},
-		&StoryboardChatMessage{},
+	r.log.Info("running targeted schema migrations")
 
-		// User statistics
-		&UserStatistics{},
-
-		// User login records
-		&UserLoginRecord{},
+	// 1) Ensure storyboard_video_generations has the new subdivision fields.
+	if err := r.ensureStoryboardVideoGenerationSchema(); err != nil {
+		return err
 	}
 
-	r.log.Info("migrating database tables", zap.Int("total_models", len(models)))
+	// 2) Ensure stories.style can store JSON (TEXT) and is not indexed.
+	// If an index exists on stories.style from older schemas, we drop it before
+	// converting the column to TEXT.
+	if err := r.ensureStoriesStyleSchema(); err != nil {
+		return err
+	}
 
-	// for _, model := range models {
-	// 	modelName := fmt.Sprintf("%T", model)
-	// 	r.log.Debug("migrating table", zap.String("model", modelName))
-	// 	if err := r.db.AutoMigrate(model); err != nil {
-	// 		r.log.Error("failed to migrate table",
-	// 			zap.String("model", modelName),
-	// 			zap.Error(err))
-	// 		return fmt.Errorf("failed to migrate %s: %w", modelName, err)
-	// 	}
-	// }
+	r.log.Info("targeted schema migrations completed successfully")
+	return nil
+}
 
-	r.log.Info("all tables migrated successfully")
+type columnInfo struct {
+	DataType   string `gorm:"column:data_type"`
+	ColumnType string `gorm:"column:column_type"`
+}
+
+func (r *Repository) columnExists(table, column string) (bool, error) {
+	var count int64
+	err := r.db.Raw(
+		`SELECT COUNT(*) FROM information_schema.columns
+		 WHERE table_schema = DATABASE()
+		   AND table_name = ?
+		   AND column_name = ?`,
+		table, column,
+	).Scan(&count).Error
+	return count > 0, err
+}
+
+func (r *Repository) getColumnInfo(table, column string) (*columnInfo, error) {
+	var info columnInfo
+	err := r.db.Raw(
+		`SELECT data_type, column_type FROM information_schema.columns
+		 WHERE table_schema = DATABASE()
+		   AND table_name = ?
+		   AND column_name = ?
+		 LIMIT 1`,
+		table, column,
+	).Scan(&info).Error
+	if err != nil {
+		return nil, err
+	}
+	if info.DataType == "" && info.ColumnType == "" {
+		return nil, nil
+	}
+	return &info, nil
+}
+
+func (r *Repository) ensureColumn(table, column, definition string) error {
+	exists, err := r.columnExists(table, column)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	sql := fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s", table, column, definition)
+	return r.db.Exec(sql).Error
+}
+
+type indexRow struct {
+	IndexName string `gorm:"column:index_name"`
+}
+
+func (r *Repository) listIndexesOnColumn(table, column string) ([]string, error) {
+	rows, err := r.db.Raw(
+		`SELECT DISTINCT index_name FROM information_schema.statistics
+		 WHERE table_schema = DATABASE()
+		   AND table_name = ?
+		   AND column_name = ?
+		   AND index_name <> 'PRIMARY'`,
+		table, column,
+	).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var idx string
+		// MySQL driver may return []uint8 for text columns; scanning into string is safe.
+		if err := rows.Scan(&idx); err != nil {
+			return nil, err
+		}
+		if idx != "" {
+			out = append(out, idx)
+		}
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) ensureStoryboardVideoGenerationSchema() error {
+	// These columns are referenced by inserts in storyboard_generation_impl.go
+	// and by converters for keyframe subdivision playback support.
+	if err := r.ensureColumn("storyboard_video_generations", "is_subdivided", "TINYINT(1) NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("ensure storyboard_video_generations.is_subdivided: %w", err)
+	}
+	if err := r.ensureColumn("storyboard_video_generations", "video_segments_json", "TEXT NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_video_generations.video_segments_json: %w", err)
+	}
+	if err := r.ensureColumn("storyboard_video_generations", "middle_frame_urls_json", "TEXT NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_video_generations.middle_frame_urls_json: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ensureStoriesStyleSchema() error {
+	// If stories.style doesn't exist, do nothing here (older schemas may not have it).
+	exists, err := r.columnExists("stories", "style")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	info, err := r.getColumnInfo("stories", "style")
+	if err != nil {
+		return err
+	}
+
+	// If it's already TEXT-like, we only need to ensure no indexes remain.
+	isTextLike := false
+	if info != nil {
+		switch info.DataType {
+		case "text", "mediumtext", "longtext":
+			isTextLike = true
+		}
+	}
+
+	// Drop any indexes involving stories.style; MySQL disallows TEXT in indexes
+	// unless a prefix length is specified.
+	indexes, err := r.listIndexesOnColumn("stories", "style")
+	if err != nil {
+		return err
+	}
+	for _, idx := range indexes {
+		r.log.Warn("dropping incompatible index on stories.style", zap.String("index", idx))
+		if err := r.db.Exec(fmt.Sprintf("DROP INDEX `%s` ON `stories`", idx)).Error; err != nil {
+			return fmt.Errorf("drop index %s on stories: %w", idx, err)
+		}
+	}
+
+	// Convert to TEXT if needed.
+	if !isTextLike {
+		if err := r.db.Exec("ALTER TABLE `stories` MODIFY COLUMN `style` TEXT").Error; err != nil {
+			return fmt.Errorf("alter stories.style to TEXT: %w", err)
+		}
+	}
 	return nil
 }
 

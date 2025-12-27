@@ -146,9 +146,9 @@ func Load(app string) Config {
 	cfg := Config{
 		Env:          getEnv("GRAPERY_ENV", "development"),
 		HTTPPort:     getEnv("GRAPERY_HTTP_PORT", "8080"),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second, // 增加超时以支持 AI 生成等长时间操作
+		IdleTimeout:  120 * time.Second,
 		LogLevel:     getEnv("GRAPERY_LOG_LEVEL", "info"),
 		AllowOrigins: []string{
 			getEnv("GRAPERY_ALLOW_ORIGIN", "http://localhost:5173"),
@@ -293,9 +293,9 @@ func getDefaultConfig() Config {
 	return Config{
 		Env:          "development",
 		HTTPPort:     "8080",
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 120 * time.Second, // 增加超时以支持 AI 生成等长时间操作
+		IdleTimeout:  120 * time.Second,
 		LogLevel:     "info",
 		AllowOrigins: []string{"http://localhost:8080"},
 		Database: DatabaseConfig{
