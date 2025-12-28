@@ -136,11 +136,14 @@ func main() {
 	// Initialize Aliyun OSS client (optional, graceful degradation to local storage)
 	if cfg.Aliyun.APIKey != "" && cfg.Aliyun.SecretKey != "" {
 		aliyunCfg := &aliyun.Config{
-			APIKey:    cfg.Aliyun.APIKey,
-			SecretKey: cfg.Aliyun.SecretKey,
-			Endpoint:  cfg.Aliyun.Endpoint,
-			Bucket:    cfg.Aliyun.Bucket,
-			RoleARN:   cfg.Aliyun.RoleARN,
+			APIKey:             cfg.Aliyun.APIKey,
+			SecretKey:          cfg.Aliyun.SecretKey,
+			Endpoint:           cfg.Aliyun.Endpoint,
+			Bucket:             cfg.Aliyun.Bucket,
+			RoleARN:            cfg.Aliyun.RoleARN,
+			OSSAccessKeyID:     cfg.Aliyun.OSSAccessKeyID,
+			OSSAccessKeySecret: cfg.Aliyun.OSSAccessKeySecret,
+			OSSRoleARN:         cfg.Aliyun.OSSRoleARN,
 		}
 		if err := aliyun.InitGlobalClient(aliyunCfg, logger); err != nil {
 			logger.Warn("failed to initialize Aliyun OSS client, falling back to local storage", zap.Error(err))

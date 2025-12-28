@@ -197,6 +197,11 @@ jobs:
           ALIYUN_ENDPOINT=${{ vars.ALIYUN_ENDPOINT || 'oss-cn-shanghai.aliyuncs.com' }}
           ALIYUN_BUCKET=${{ vars.ALIYUN_BUCKET || 'grapery-dev' }}
           ALIYUN_ROLE_ARN=${{ vars.ALIYUN_ROLE_ARN }}
+          
+          # ========== Aliyun OSS STS Configuration ==========
+          ALIYUN_OSS_ACCESS_KEY_ID=${{ vars.ALIYUN_OSS_ACCESS_KEY_ID }}
+          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+          ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
           echo "✅ Development .env file generated"
           cat .env
@@ -349,6 +354,11 @@ jobs:
           ALIYUN_ENDPOINT=${{ vars.ALIYUN_ENDPOINT || 'oss-cn-shanghai.aliyuncs.com' }}
           ALIYUN_BUCKET=${{ vars.ALIYUN_BUCKET || 'grapery-prod' }}
           ALIYUN_ROLE_ARN=${{ vars.ALIYUN_ROLE_ARN }}
+          
+          # ========== Aliyun OSS STS Configuration ==========
+          ALIYUN_OSS_ACCESS_KEY_ID=${{ vars.ALIYUN_OSS_ACCESS_KEY_ID }}
+          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+          ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
           echo "✅ Production .env file generated"
           cat .env

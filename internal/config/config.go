@@ -69,6 +69,10 @@ type AliyunConfig struct {
 	Endpoint  string `yaml:"endpoint"`
 	Bucket    string `yaml:"bucket"`
 	RoleARN   string `yaml:"role_arn"` // for STS token
+	// OSS STS credentials (RAM user for AssumeRole)
+	OSSAccessKeyID     string `yaml:"oss_access_key_id"`
+	OSSAccessKeySecret string `yaml:"oss_access_key_secret"`
+	OSSRoleARN         string `yaml:"oss_role_arn"`
 }
 
 // TelemetryConfig holds telemetry configuration
@@ -187,6 +191,10 @@ func Load(app string) Config {
 			Endpoint:  getEnv("ALIYUN_ENDPOINT", "oss-cn-shanghai.aliyuncs.com"),
 			Bucket:    getEnv("ALIYUN_BUCKET", "grapery-dev"),
 			RoleARN:   getEnv("ALIYUN_ROLE_ARN", ""),
+			// OSS STS credentials (RAM user for AssumeRole)
+			OSSAccessKeyID:     getEnv("ALIYUN_OSS_ACCESS_KEY_ID", ""),
+			OSSAccessKeySecret: getEnv("ALIYUN_OSS_ACCESS_KEY_SECRET", ""),
+			OSSRoleARN:         getEnv("ALIYUN_OSS_ROLE_ARN", ""),
 		},
 		Telemetry: TelemetryConfig{
 			SLS: SLSConfig{
@@ -408,6 +416,10 @@ func overrideWithEnv(cfg Config, app string) Config {
 	cfg.Aliyun.Endpoint = getEnv("ALIYUN_ENDPOINT", cfg.Aliyun.Endpoint)
 	cfg.Aliyun.Bucket = getEnv("ALIYUN_BUCKET", cfg.Aliyun.Bucket)
 	cfg.Aliyun.RoleARN = getEnv("ALIYUN_ROLE_ARN", cfg.Aliyun.RoleARN)
+	// OSS STS credentials (RAM user for AssumeRole)
+	cfg.Aliyun.OSSAccessKeyID = getEnv("ALIYUN_OSS_ACCESS_KEY_ID", cfg.Aliyun.OSSAccessKeyID)
+	cfg.Aliyun.OSSAccessKeySecret = getEnv("ALIYUN_OSS_ACCESS_KEY_SECRET", cfg.Aliyun.OSSAccessKeySecret)
+	cfg.Aliyun.OSSRoleARN = getEnv("ALIYUN_OSS_ROLE_ARN", cfg.Aliyun.OSSRoleARN)
 
 	// Telemetry SLS config
 	cfg.Telemetry.SLS.Enabled = getEnvBool("TELEMETRY_SLS_ENABLED", cfg.Telemetry.SLS.Enabled)

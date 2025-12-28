@@ -29,7 +29,11 @@ type Config struct {
 	SecretKey string
 	Endpoint  string
 	Bucket    string
-	RoleARN   string // for STS token
+	RoleARN   string // for STS token (legacy)
+	// OSS STS credentials (RAM user for AssumeRole)
+	OSSAccessKeyID     string
+	OSSAccessKeySecret string
+	OSSRoleARN         string
 }
 
 // Client wraps Aliyun OSS client
@@ -353,16 +357,32 @@ type STSCredentials struct {
 	AccessKeySecret string `json:"accessKeySecret"`
 	SecurityToken   string `json:"securityToken"`
 	Expiration      string `json:"expiration"`
+	Region          string `json:"region"`
+	Bucket          string `json:"bucket"`
+	Endpoint        string `json:"endpoint"`
 }
 
 // GetSTSToken returns Aliyun STS temporary credentials
 func (c *Client) GetSTSToken() (*STSCredentials, error) {
-	if c.config.RoleARN == "" {
-		return nil, errors.New("ALIYUN_ROLE_ARN is not set")
+	// RAM Role ARN format: acs:ram::<account-id>:role/<role-name>
+	// Read from config: ALIYUN_OSS_ROLE_ARN
+	roleARN := c.config.OSSRoleARN
+	if roleARN == "" {
+		return nil, errors.New("ALIYUN_OSS_ROLE_ARN is not set")
 	}
 
-	// Create STS client
-	client, err := stssdk.NewClientWithAccessKey("cn-shanghai", c.config.APIKey, c.config.SecretKey)
+	// Use RAM user credentials from config (not root account)
+	// Read from config: ALIYUN_OSS_ACCESS_KEY_ID, ALIYUN_OSS_ACCESS_KEY_SECRET
+	if c.config.OSSAccessKeyID == "" || c.config.OSSAccessKeySecret == "" {
+		return nil, errors.New("ALIYUN_OSS_ACCESS_KEY_ID and ALIYUN_OSS_ACCESS_KEY_SECRET are required for STS")
+	}
+
+	// Create STS client with RAM user credentials
+	client, err := stssdk.NewClientWithAccessKey(
+		"cn-shanghai",
+		c.config.OSSAccessKeyID,
+		c.config.OSSAccessKeySecret,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create STS client: %w", err)
 	}
@@ -370,7 +390,7 @@ func (c *Client) GetSTSToken() (*STSCredentials, error) {
 	// Build AssumeRole request
 	req := stssdk.CreateAssumeRoleRequest()
 	req.Scheme = "https"
-	req.RoleArn = c.config.RoleARN
+	req.RoleArn = roleARN
 	req.RoleSessionName = "grapery-session"
 	req.DurationSeconds = "1200" // 20 minutes
 
@@ -381,10 +401,24 @@ func (c *Client) GetSTSToken() (*STSCredentials, error) {
 	}
 
 	cred := resp.Credentials
+
+	// Extract region from endpoint (e.g., "oss-cn-shanghai.aliyuncs.com" -> "cn-shanghai")
+	region := "cn-shanghai"
+	if c.config.Endpoint != "" {
+		// Parse endpoint like "oss-cn-shanghai.aliyuncs.com"
+		parts := strings.Split(c.config.Endpoint, ".")
+		if len(parts) > 0 && strings.HasPrefix(parts[0], "oss-") {
+			region = strings.TrimPrefix(parts[0], "oss-")
+		}
+	}
+
 	return &STSCredentials{
 		AccessKeyId:     cred.AccessKeyId,
 		AccessKeySecret: cred.AccessKeySecret,
 		SecurityToken:   cred.SecurityToken,
 		Expiration:      cred.Expiration,
+		Region:          region,
+		Bucket:          c.config.Bucket,
+		Endpoint:        c.config.Endpoint,
 	}, nil
 }

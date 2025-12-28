@@ -711,6 +711,9 @@ func (h *Handler) GetSTSToken(c *gin.Context) {
 		"accessKeySecret": credentials.AccessKeySecret,
 		"securityToken":   credentials.SecurityToken,
 		"expiration":      credentials.Expiration,
+		"region":          credentials.Region,
+		"bucket":          credentials.Bucket,
+		"endpoint":        credentials.Endpoint,
 	})
 }
 
