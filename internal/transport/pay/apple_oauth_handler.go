@@ -2,6 +2,8 @@ package pay
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"os"
 	"time"
@@ -19,6 +21,7 @@ type AppleSignInRequest struct {
 	IdentityToken     string `json:"identityToken" binding:"required"` // Apple Identity Token
 	AuthorizationCode string `json:"authorizationCode,omitempty"`      // Authorization Code
 	User              string `json:"user,omitempty"`                   // Apple User ID
+	Nonce             string `json:"nonce,omitempty"`                  // raw nonce (optional; if present it will be verified)
 }
 
 // OAuthUserResponse 用户信息响应 (匹配前端 User model)
@@ -146,6 +149,24 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 		return
 	}
 
+	// Optional nonce verification (prevents replay). If client sends nonce, verify it matches token claim.
+	// Apple returns the SHA256(nonce) value in the identity token's "nonce" claim when request.nonce is set.
+	if req.Nonce != "" {
+		expected := sha256Hex(req.Nonce)
+		if claims.Nonce == "" || claims.Nonce != expected {
+			logrus.WithFields(logrus.Fields{
+				"expected": expected,
+				"actual":   claims.Nonce,
+			}).Warn("Apple Sign-In nonce mismatch")
+			c.JSON(http.StatusUnauthorized, OAuthErrorResponse{
+				Code:    401,
+				Message: "Invalid Apple nonce",
+				Success: false,
+			})
+			return
+		}
+	}
+
 	// Apple 用户ID（sub claim）
 	appleUserID := claims.Subject
 	if appleUserID == "" {
@@ -220,6 +241,11 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 		ExpiresIn: expiresIn,
 		IsNewUser: isNewUser,
 	})
+}
+
+func sha256Hex(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 // findOrCreateUser 查找或创建 OAuth 用户（支持跨设备、跨登录方式的账户关联）
@@ -428,26 +454,50 @@ func generateUsername(displayName, email, providerUserID, provider string) strin
 
 // HandleAppleSignInStatus 处理 Apple Sign-In 状态查询
 func (h *AppleOAuthHandler) HandleAppleSignInStatus(c *gin.Context) {
+	enabled := h.verifier.IsValid()
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"msg":     "success",
+		"msg":     "success", // legacy field (Android)
+		"message": "success", // new field (iOS)
 		"success": true,
 		"data": gin.H{
-			"enabled": h.verifier.IsValid(),
-			"message": "Apple Sign-In is available",
+			// Keep both names for compatibility across clients.
+			"enabled":     enabled,
+			"isAvailable": enabled,
+			"provider":    "apple",
+			"message":     "Apple Sign-In is available",
 		},
 	})
 }
 
 // GetAppleOAuthConfig 获取 Apple OAuth 配置（前端需要的公开信息）
 func (h *AppleOAuthHandler) GetAppleOAuthConfig(c *gin.Context) {
+	bundleID := h.verifier.GetBundleID()
+	enabled := h.verifier.IsValid()
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"msg":     "success",
+		"msg":     "success", // legacy field (Android)
+		"message": "success", // new field (iOS)
 		"success": true,
 		"data": gin.H{
-			"bundle_id": h.verifier.GetBundleID(),
-			"enabled":   h.verifier.IsValid(),
+			// Canonical OAuth-style fields (iOS expects these)
+			"clientId":     bundleID,
+			"redirectUri":  "",
+			"scope":        "name email",
+			"responseType": "id_token",
+			"state":        nil,
+
+			// Legacy/alternate keys (Android / older clients)
+			"client_id":      bundleID,
+			"redirect_uri":   "",
+			"response_type":  "id_token",
+			"bundleId":       bundleID,
+			"bundle_id":      bundleID,
+			"enabled":        enabled,
+			"isAvailable":    enabled,
+			"provider":       "apple",
+			"scopes":         []string{"name", "email"},
+			"message":        "Apple OAuth config",
 		},
 	})
 }

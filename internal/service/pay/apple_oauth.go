@@ -37,6 +37,7 @@ type AppleIdentityTokenClaims struct {
 	IsPrivateEmail bool   `json:"is_private_email,omitempty"` // 是否为私有邮箱（Apple 中转邮箱）
 	AuthTime       int64  `json:"auth_time,omitempty"`        // 认证时间
 	FullName       string `json:"full_name,omitempty"`        // 用户全名（仅在首次登录时提供）
+	Nonce          string `json:"nonce,omitempty"`            // request.nonce echo (SHA256 of raw nonce)
 }
 
 // AppleSignInVerifier Apple Sign-In 验证器
@@ -138,6 +139,9 @@ func (v *AppleSignInVerifier) VerifyToken(tokenString string) (*AppleIdentityTok
 	}
 	if fullName, ok := rawClaims["full_name"].(string); ok {
 		claims.FullName = fullName
+	}
+	if nonce, ok := rawClaims["nonce"].(string); ok {
+		claims.Nonce = nonce
 	}
 
 	// 记录 OAuth 登录成功

@@ -374,26 +374,47 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 
 // HandleGoogleSignInStatus 处理 Google Sign-In 状态查询
 func (h *GoogleOAuthHandler) HandleGoogleSignInStatus(c *gin.Context) {
+	enabled := h.verifier.IsValid()
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"msg":     "success",
+		"msg":     "success", // legacy field (Android)
+		"message": "success", // new field (iOS)
 		"success": true,
 		"data": gin.H{
-			"enabled": h.verifier.IsValid(),
-			"message": "Google Sign-In is available",
+			"enabled":     enabled,
+			"isAvailable": enabled,
+			"provider":    "google",
+			"message":     "Google Sign-In is available",
 		},
 	})
 }
 
 // GetGoogleOAuthConfig 获取 Google OAuth 配置（前端需要的公开信息）
 func (h *GoogleOAuthHandler) GetGoogleOAuthConfig(c *gin.Context) {
+	clientID := h.verifier.GetClientID()
+	enabled := h.verifier.IsValid()
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"msg":     "success",
+		"msg":     "success", // legacy field (Android)
+		"message": "success", // new field (iOS)
 		"success": true,
 		"data": gin.H{
-			"client_id": h.verifier.GetClientID(),
-			"enabled":   h.verifier.IsValid(),
+			// Canonical OAuth-style fields (iOS expects these)
+			"clientId":     clientID,
+			"redirectUri":  "",
+			"scope":        "openid email profile",
+			"responseType": "id_token",
+			"state":        nil,
+
+			// Legacy/alternate keys (Android / older clients)
+			"client_id":      clientID,
+			"redirect_uri":   "",
+			"response_type":  "id_token",
+			"enabled":        enabled,
+			"isAvailable":    enabled,
+			"provider":       "google",
+			"scopes":         []string{"openid", "email", "profile"},
+			"message":        "Google OAuth config",
 		},
 	})
 }
