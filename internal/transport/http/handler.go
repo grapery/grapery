@@ -45,6 +45,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			auth.POST("/login", h.Login)
 			auth.POST("/password/request-reset", h.RequestPasswordReset)
 			auth.POST("/password/reset", h.ResetPassword)
+			auth.POST("/email/send-verification-code", h.SendEmailVerificationCode)
+			auth.POST("/email/verify", h.VerifyEmail)
 			auth.POST("/refresh", h.RefreshToken)
 		}
 
@@ -361,13 +363,34 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	var req service.ChangePasswordRequest
+	// Backward/forward compatible payload:
+	// - iOS currently sends old_password/new_password
+	// - backend service expects oldPassword/newPassword
+	var req struct {
+		OldPasswordCamel string `json:"oldPassword"`
+		NewPasswordCamel string `json:"newPassword"`
+		OldPasswordSnake string `json:"old_password"`
+		NewPasswordSnake string `json:"new_password"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
 
-	if err := h.svc.ChangePassword(c.Request.Context(), userID, &req); err != nil {
+	oldPassword := req.OldPasswordCamel
+	if oldPassword == "" {
+		oldPassword = req.OldPasswordSnake
+	}
+	newPassword := req.NewPasswordCamel
+	if newPassword == "" {
+		newPassword = req.NewPasswordSnake
+	}
+	svcReq := &service.ChangePasswordRequest{
+		OldPassword: oldPassword,
+		NewPassword: newPassword,
+	}
+
+	if err := h.svc.ChangePassword(c.Request.Context(), userID, svcReq); err != nil {
 		Error(c, CodeError, err.Error())
 		return
 	}
@@ -393,18 +416,80 @@ func (h *Handler) RequestPasswordReset(c *gin.Context) {
 
 // ResetPassword 重置密码
 func (h *Handler) ResetPassword(c *gin.Context) {
-	var req service.PasswordResetConfirm
+	// Backward/forward compatible payload:
+	// - backend service expects: { token, newPassword }
+	// - Android currently sends: { resetToken, password }
+	// - iOS currently sends: { token, password }
+	var req struct {
+		Token       string `json:"token"`
+		ResetToken  string `json:"resetToken"`
+		NewPassword string `json:"newPassword"`
+		Password    string `json:"password"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
 
-	if err := h.svc.ResetPassword(c.Request.Context(), &req); err != nil {
+	token := req.Token
+	if token == "" {
+		token = req.ResetToken
+	}
+	newPassword := req.NewPassword
+	if newPassword == "" {
+		newPassword = req.Password
+	}
+	svcReq := &service.PasswordResetConfirm{
+		Token:       token,
+		NewPassword: newPassword,
+	}
+
+	if err := h.svc.ResetPassword(c.Request.Context(), svcReq); err != nil {
 		Error(c, CodeError, err.Error())
 		return
 	}
 
 	Success(c, gin.H{"message": "password reset successfully"})
+}
+
+// SendEmailVerificationCode sends a 6-digit email verification code.
+// POST /api/auth/email/send-verification-code
+func (h *Handler) SendEmailVerificationCode(c *gin.Context) {
+	var req service.EmailVerificationSendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	ipAddress := utils.GetClientIP(
+		c.Request.RemoteAddr,
+		c.GetHeader("X-Forwarded-For"),
+		c.GetHeader("X-Real-IP"),
+	)
+
+	if err := h.svc.SendEmailVerificationCode(c.Request.Context(), &req, ipAddress); err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "verification code sent"})
+}
+
+// VerifyEmail verifies email via 6-digit code.
+// POST /api/auth/email/verify
+func (h *Handler) VerifyEmail(c *gin.Context) {
+	var req service.EmailVerificationConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	if err := h.svc.VerifyEmailByCode(c.Request.Context(), &req); err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "email verified"})
 }
 
 // RefreshToken 刷新访问令牌

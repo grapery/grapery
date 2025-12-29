@@ -36,6 +36,9 @@ const (
 	PrefixSession       = "session:"
 	PrefixPasswordReset = "pwd_reset:"
 	PrefixEmailVerify   = "email_verify:"
+	PrefixEmailVerifyCode      = "email_verify_code:"
+	PrefixEmailVerifySendLimit = "email_verify_send_limit:"
+	PrefixEmailVerifyIPLimit   = "email_verify_ip_limit:"
 
 	// 搜索缓存
 	PrefixSearchStories    = "search:stories:"
@@ -142,6 +145,20 @@ func PasswordResetKey(token string) string {
 
 func EmailVerifyKey(token string) string {
 	return fmt.Sprintf("%s%s", PrefixEmailVerify, token)
+}
+
+// Email verification code key (per email)
+func EmailVerifyCodeKey(email string) string {
+	return fmt.Sprintf("%s%s", PrefixEmailVerifyCode, email)
+}
+
+// Rate limit keys
+func EmailVerifySendLimitKey(email string) string {
+	return fmt.Sprintf("%s%s", PrefixEmailVerifySendLimit, email)
+}
+
+func EmailVerifyIPLimitKey(ip string) string {
+	return fmt.Sprintf("%s%s", PrefixEmailVerifyIPLimit, ip)
 }
 
 // 搜索缓存键生成函数

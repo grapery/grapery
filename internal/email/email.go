@@ -1,8 +1,12 @@
 package email
 
 import (
+	"crypto/tls"
 	"fmt"
 	"html"
+	"os"
+	"strconv"
+	"strings"
 
 	"gopkg.in/gomail.v2"
 )
@@ -10,7 +14,36 @@ import (
 var (
 	SMTPServer = ""
 	SMTPPort   = 0
+	SMTPUsername = ""
+	SMTPPassword = ""
+	SMTPFrom     = "support@grapery.xyz"
+	// SMTPInsecureSkipVerify is useful for some self-hosted SMTP servers; keep false in production.
+	SMTPInsecureSkipVerify = false
 )
+
+func init() {
+	// Load from env at startup (works for all binaries using this package).
+	if v := strings.TrimSpace(os.Getenv("SMTP_SERVER")); v != "" {
+		SMTPServer = v
+	}
+	if v := strings.TrimSpace(os.Getenv("SMTP_PORT")); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			SMTPPort = p
+		}
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		SMTPUsername = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		SMTPPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("SMTP_FROM")); v != "" {
+		SMTPFrom = v
+	}
+	if v := strings.TrimSpace(os.Getenv("SMTP_INSECURE_SKIP_VERIFY")); v != "" {
+		SMTPInsecureSkipVerify = v == "1" || strings.EqualFold(v, "true")
+	}
+}
 
 // EmailType 邮件业务类型
 type EmailType string
@@ -89,10 +122,17 @@ func baseEmailTemplate(title, content, footer string) string {
 
 // SendSystemEmails 发送系统邮件
 func SendSystemEmails(sendTo []string, subject, body string) error {
-	dialer := gomail.NewDialer(SMTPServer, SMTPPort, "", "")
+	dialer := gomail.NewDialer(SMTPServer, SMTPPort, SMTPUsername, SMTPPassword)
+	// Common defaults: port 465 is implicit TLS.
+	if SMTPPort == 465 {
+		dialer.SSL = true
+	}
+	dialer.TLSConfig = &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: SMTPInsecureSkipVerify,
+	}
 	m := gomail.NewMessage()
-	var from = "support@grapery.xyz"
-	m.SetHeader("From", from)
+	m.SetHeader("From", SMTPFrom)
 	m.SetHeader("To", sendTo...)
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
@@ -112,7 +152,7 @@ func PasswordResetEmail(to []string, username, resetLink string) error {
             <a href="%s" class="button">重置密码</a>
         </p>
         <div class="warning">
-            <p>⚠️ 此链接将在 24 小时后失效。如果不是您本人操作，请忽略此邮件并确保您的账户安全。</p>
+            <p>⚠️ 此链接将在 15 分钟后失效。如果不是您本人操作，请忽略此邮件并确保您的账户安全。</p>
         </div>
         <p>如果按钮无法点击，请复制以下链接到浏览器：</p>
         <p style="word-break: break-all; color: #6366f1;">%s</p>

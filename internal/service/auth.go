@@ -2,14 +2,21 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/email"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +25,13 @@ const (
 	userCacheTTL          = 30 * time.Minute
 	passwordResetTokenTTL = 15 * time.Minute
 	emailVerifyTokenTTL   = 24 * time.Hour
+	emailVerifyCodeTTL    = 10 * time.Minute
+
+	emailVerifyMaxAttempts     = 5
+	emailVerifySendLimitTTL    = 1 * time.Minute
+	emailVerifySendLimitMax    = 1 // per email per minute
+	emailVerifyIPLimitTTL      = 1 * time.Minute
+	emailVerifyIPLimitMax      = 5 // per IP per minute
 
 	// 通用实体缓存过期时间
 	entityCacheTTL      = 30 * time.Minute // 单个实体缓存（用户、角色、群组、故事板等）
@@ -27,6 +41,177 @@ const (
 	commentCacheTTL     = 15 * time.Minute // 评论缓存
 	groupMemberCacheTTL = 15 * time.Minute // 群组成员缓存
 )
+
+// EmailVerificationSendRequest send verification code request
+type EmailVerificationSendRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// EmailVerificationConfirmRequest verify email with code
+type EmailVerificationConfirmRequest struct {
+	Email string `json:"email" binding:"required,email"`
+	Code  string `json:"code" binding:"required,len=6"`
+}
+
+type emailVerifyCodeData struct {
+	Email     string `json:"email"`
+	CodeHash  string `json:"codeHash"`
+	CreatedAt int64  `json:"createdAt"`
+	Attempts  int    `json:"attempts"`
+}
+
+func (s *Service) emailVerifySecret() string {
+	if v := os.Getenv("EMAIL_VERIFICATION_SECRET"); v != "" {
+		return v
+	}
+	// Fallback: JWT secret if present.
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		return v
+	}
+	// Last resort (dev): constant, but should not be used in production.
+	return "email-verify-dev-secret"
+}
+
+func (s *Service) hashEmailVerificationCode(emailAddr, code string) string {
+	secret := s.emailVerifySecret()
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(strings.ToLower(emailAddr)))
+	_, _ = mac.Write([]byte(":"))
+	_, _ = mac.Write([]byte(code))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func generate6DigitCode() (string, error) {
+	// crypto/rand to avoid predictable codes
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	// 0..999999
+	n := (uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])) % 1000000
+	return fmt.Sprintf("%06d", n), nil
+}
+
+func (s *Service) emailVerifyRateLimit(ctx context.Context, emailAddr, ip string) error {
+	c := s.getCache()
+	if c == nil {
+		return nil // allow if no cache (degraded)
+	}
+
+	if emailAddr != "" {
+		emailKey := cache.EmailVerifySendLimitKey(strings.ToLower(emailAddr))
+		n, err := c.Incr(ctx, emailKey)
+		if err == nil && n == 1 {
+			_ = c.Expire(ctx, emailKey, emailVerifySendLimitTTL)
+		}
+		if err == nil && n > emailVerifySendLimitMax {
+			return errors.New("too many requests, please try again later")
+		}
+	}
+
+	if ip != "" {
+		ipKey := cache.EmailVerifyIPLimitKey(ip)
+		n, err := c.Incr(ctx, ipKey)
+		if err == nil && n == 1 {
+			_ = c.Expire(ctx, ipKey, emailVerifyIPLimitTTL)
+		}
+		if err == nil && n > emailVerifyIPLimitMax {
+			return errors.New("too many requests, please try again later")
+		}
+	}
+
+	return nil
+}
+
+// SendEmailVerificationCode sends a 6-digit verification code to the email if user exists and not verified.
+// Always returns nil for non-existent emails (anti-enumeration).
+func (s *Service) SendEmailVerificationCode(ctx context.Context, req *EmailVerificationSendRequest, ip string) error {
+	// Rate limit (best-effort)
+	if err := s.emailVerifyRateLimit(ctx, req.Email, ip); err != nil {
+		return err
+	}
+
+	user, err := s.repo.UserByEmail(ctx, req.Email)
+	if err != nil || user == nil {
+		// Silent success to prevent enumeration
+		return nil
+	}
+	if user.EmailVerified {
+		return nil
+	}
+
+	code, err := generate6DigitCode()
+	if err != nil {
+		s.logger.Error("failed to generate verification code", zap.Error(err))
+		return errors.New("failed to generate verification code")
+	}
+
+	data := &emailVerifyCodeData{
+		Email:     strings.ToLower(req.Email),
+		CodeHash:  s.hashEmailVerificationCode(req.Email, code),
+		CreatedAt: time.Now().Unix(),
+		Attempts:  0,
+	}
+
+	c := s.getCache()
+	if c != nil {
+		_ = c.Set(ctx, cache.EmailVerifyCodeKey(strings.ToLower(req.Email)), data, emailVerifyCodeTTL)
+	}
+
+	username := user.DisplayName
+	if username == "" {
+		username = user.Username
+	}
+	if err := email.VerificationCodeEmail([]string{user.Email}, username, code, int(emailVerifyCodeTTL.Minutes())); err != nil {
+		s.logger.Error("failed to send verification code email", zap.Error(err))
+		// Keep behavior: do not leak, but user won't receive email.
+		return errors.New("failed to send verification code email")
+	}
+	return nil
+}
+
+// VerifyEmailByCode verifies the email using the stored code, and flips user.EmailVerified to true.
+func (s *Service) VerifyEmailByCode(ctx context.Context, req *EmailVerificationConfirmRequest) error {
+	c := s.getCache()
+	if c == nil {
+		return errors.New("cache not available")
+	}
+
+	key := cache.EmailVerifyCodeKey(strings.ToLower(req.Email))
+	var data emailVerifyCodeData
+	if err := c.Get(ctx, key, &data); err != nil {
+		return errors.New("invalid or expired code")
+	}
+
+	if data.Attempts >= emailVerifyMaxAttempts {
+		_ = c.Delete(ctx, key)
+		return errors.New("too many attempts")
+	}
+
+	expected := s.hashEmailVerificationCode(req.Email, req.Code)
+	if !hmac.Equal([]byte(expected), []byte(data.CodeHash)) {
+		data.Attempts++
+		_ = c.Set(ctx, key, &data, emailVerifyCodeTTL)
+		return errors.New("invalid or expired code")
+	}
+
+	user, err := s.repo.UserByEmail(ctx, req.Email)
+	if err != nil || user == nil {
+		return errors.New("invalid code")
+	}
+
+	if !user.EmailVerified {
+		user.EmailVerified = true
+		user.UpdatedAt = time.Now().Unix()
+		if err := s.repo.UpdateUser(ctx, user); err != nil {
+			return errors.New("failed to verify email")
+		}
+		s.invalidateUserCache(ctx, user.ID)
+	}
+
+	_ = c.Delete(ctx, key)
+	return nil
+}
 
 // PasswordResetData 密码重置数据结构
 type PasswordResetData struct {
@@ -421,22 +606,22 @@ func (s *Service) RequestPasswordReset(ctx context.Context, req *PasswordResetRe
 		// 在生产环境中，可能需要考虑其他存储方式
 	}
 
-	s.logger.Info("password reset token generated",
-		zap.String("userID", user.ID),
-		zap.String("token", resetToken))
+	s.logger.Info("password reset token generated", zap.String("userID", user.ID))
 
-	// 发送重置邮件
-	// TODO: 集成邮件服务后取消注释
-	// resetURL := fmt.Sprintf("https://your-app.com/reset-password?token=%s", resetToken)
-	// if err := s.emailService.SendPasswordResetEmail(user.Email, user.DisplayName, resetURL); err != nil {
-	//     s.logger.Error("failed to send password reset email", zap.Error(err))
-	//     return errors.New("failed to send password reset email")
-	// }
-
-	// 开发环境日志输出 token（生产环境应删除）
-	s.logger.Debug("password reset token (DEV ONLY - remove in production)",
-		zap.String("token", resetToken),
-		zap.String("email", user.Email))
+	// Send reset email (do not leak whether email exists; failures are logged but response remains success).
+	resetBaseURL := os.Getenv("PASSWORD_RESET_BASE_URL")
+	if resetBaseURL == "" {
+		resetBaseURL = "https://rankquantity.xyz/reset-password"
+	}
+	resetURL := fmt.Sprintf("%s?token=%s", resetBaseURL, resetToken)
+	username := user.DisplayName
+	if username == "" {
+		username = user.Username
+	}
+	if err := email.PasswordResetEmail([]string{user.Email}, username, resetURL); err != nil {
+		s.logger.Error("failed to send password reset email", zap.Error(err))
+		// Keep silent to client to prevent email enumeration; user can retry.
+	}
 
 	return nil
 }
