@@ -33,6 +33,7 @@ type GoogleIdentityTokenClaims struct {
 	// Google 特定声明
 	Email         string `json:"email,omitempty"`          // 用户邮箱
 	EmailVerified bool   `json:"email_verified,omitempty"` // 邮箱是否已验证
+	AuthorizedParty string `json:"azp,omitempty"`          // authorized party (when multiple audiences)
 	Name          string `json:"name,omitempty"`           // 用户全名
 	GivenName     string `json:"given_name,omitempty"`     // 名
 	FamilyName    string `json:"family_name,omitempty"`    // 姓
@@ -112,6 +113,27 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 		return nil, fmt.Errorf("invalid issuer: %s", issuer)
 	}
 
+	// Basic strictness: ensure token has exp/iat populated (jwx validates exp, but we want to fail fast if missing)
+	if token.Expiration().IsZero() || token.IssuedAt().IsZero() {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
+		return nil, fmt.Errorf("invalid token: missing exp/iat")
+	}
+
+	// If token has multiple audiences, Google requires "azp" to be present (authorized party).
+	audiences := token.Audience()
+	if len(audiences) > 1 {
+		if azp, ok := token.Get("azp"); !ok || azp == nil || azp == "" {
+			if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+				metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+				metrics.RecordOAuthLoginError("google", "invalid_token")
+			}
+			return nil, fmt.Errorf("invalid token: missing azp for multiple audiences")
+		}
+	}
+
 	// 3. 提取声明
 	claims := &GoogleIdentityTokenClaims{}
 
@@ -137,8 +159,15 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 	if email, ok := rawClaims["email"].(string); ok {
 		claims.Email = email
 	}
-	if emailVerified, ok := rawClaims["email_verified"].(bool); ok {
-		claims.EmailVerified = emailVerified
+	// email_verified may be bool or string ("true"/"false") depending on issuer/version
+	switch v := rawClaims["email_verified"].(type) {
+	case bool:
+		claims.EmailVerified = v
+	case string:
+		claims.EmailVerified = v == "true" || v == "1"
+	}
+	if azp, ok := rawClaims["azp"].(string); ok {
+		claims.AuthorizedParty = azp
 	}
 	if name, ok := rawClaims["name"].(string); ok {
 		claims.Name = name

@@ -122,7 +122,7 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 
 	// 查找或创建用户
 	ctx := c.Request.Context()
-	user, isNewUser, err := h.findOrCreateUser(ctx, googleUserID, email, name, avatar, "google")
+	user, isNewUser, err := h.findOrCreateUser(ctx, googleUserID, email, claims.EmailVerified, name, avatar, "google")
 	if err != nil {
 		logrus.Errorf("Failed to find or create user: %v", err)
 		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
@@ -181,7 +181,7 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 // 2. 如果未找到，通过 email 查找是否有其他登录方式已绑定的用户
 // 3. 如果找到用户，创建新的第三方登录绑定
 // 4. 如果未找到，创建新用户并绑定第三方登录
-func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID, email, displayName, avatar, provider string) (*domain.User, bool, error) {
+func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID, email string, emailVerified bool, displayName, avatar, provider string) (*domain.User, bool, error) {
 	now := time.Now().Unix()
 	providerType := domain.ThirdPartyProvider(provider)
 
@@ -197,11 +197,14 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 				return nil, false, err
 			}
 
-			// 更新登录时间和头像
+			// 更新登录时间、头像、邮箱验证状态（只提升，不降低）
 			user.LastLoginAt = &now
 			user.UpdatedAt = now
 			if avatar != "" && user.Avatar == "" {
 				user.Avatar = avatar
+			}
+			if email != "" && emailVerified && !user.EmailVerified {
+				user.EmailVerified = true
 			}
 			_ = h.repo.UpdateUser(ctx, user)
 
@@ -221,7 +224,8 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 
 		// Step 2: 通过 email 查找是否有已存在的用户
 		var existingUser *domain.User
-		if email != "" {
+		// Only allow email-based linking if Google explicitly says the email is verified.
+		if email != "" && emailVerified {
 			// 先查找是否有其他第三方登录使用相同 email
 			existingUser, _ = h.repo.GetUserByThirdPartyEmail(ctx, email)
 			if existingUser == nil {
@@ -261,6 +265,9 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			if avatar != "" && existingUser.Avatar == "" {
 				existingUser.Avatar = avatar
 			}
+			if email != "" && emailVerified && !existingUser.EmailVerified {
+				existingUser.EmailVerified = true
+			}
 			_ = h.repo.UpdateUser(ctx, existingUser)
 
 			return existingUser, false, nil
@@ -279,7 +286,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			DisplayName:   displayName,
 			Avatar:        avatar,
 			Status:        "active",
-			EmailVerified: true, // OAuth 登录邮箱已验证
+			EmailVerified: email != "" && emailVerified,
 			LastLoginAt:   &now,
 			CreatedAt:     now,
 			UpdatedAt:     now,
@@ -365,7 +372,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 		DisplayName:   displayName,
 		Avatar:        avatar,
 		Status:        "active",
-		EmailVerified: true,
+		EmailVerified: email != "" && emailVerified,
 		LastLoginAt:   &now,
 		CreatedAt:     now,
 		UpdatedAt:     now,
