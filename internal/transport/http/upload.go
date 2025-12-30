@@ -733,6 +733,49 @@ func (h *Handler) GetImageLevels(c *gin.Context) {
 	})
 }
 
+// PersistImageLevels persists multi-level variants for an OSS image object key,
+// and returns stable (no-query) URLs for each level.
+//
+// POST /api/upload/persist-image-levels
+// JSON: { "objectKey": "images/xxx.jpg" }
+func (h *Handler) PersistImageLevels(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	var req struct {
+		ObjectKey string `json:"objectKey"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, "invalid json body")
+		return
+	}
+	req.ObjectKey = strings.TrimSpace(req.ObjectKey)
+	if req.ObjectKey == "" {
+		InvalidParams(c, "objectKey is required")
+		return
+	}
+
+	ossClient := aliyun.GetGlobalClient()
+	if ossClient == nil {
+		InternalError(c, "OSS client not configured")
+		return
+	}
+
+	levels, err := ossClient.PersistMultiLevelImages(req.ObjectKey)
+	if err != nil {
+		InternalError(c, "failed to persist image levels: "+err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"objectKey": req.ObjectKey,
+		"levels":    levels,
+	})
+}
+
 func isVideoType(contentType string) bool {
 	allowedTypes := []string{
 		"video/mp4",

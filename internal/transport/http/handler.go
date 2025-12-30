@@ -225,6 +225,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/upload/video", h.UploadVideo)
 			authenticated.POST("/upload/from-url", h.UploadImageFromURL)
 			authenticated.POST("/upload/multiple", h.UploadMultiple)
+			authenticated.POST("/upload/persist-image-levels", h.PersistImageLevels)
 			authenticated.DELETE("/upload", h.DeleteUpload)
 			authenticated.GET("/upload/sts-token", h.GetSTSToken)
 			authenticated.GET("/upload/image-levels", h.GetImageLevels)
