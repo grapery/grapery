@@ -15,7 +15,8 @@ type CreateGroupRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
 	Description string `json:"description" binding:"max=2000"`
 	Avatar      string `json:"avatar" binding:"omitempty,url"`
-	IsPublic    bool   `json:"isPublic"`
+	// Keep consistent with API responses and mobile clients (snake_case).
+	IsPublic    bool   `json:"is_public"`
 }
 
 // UpdateGroupRequest 更新群组请求
@@ -23,7 +24,8 @@ type UpdateGroupRequest struct {
 	Name        *string `json:"name" binding:"omitempty,min=1,max=100"`
 	Description *string `json:"description" binding:"omitempty,max=2000"`
 	Avatar      *string `json:"avatar" binding:"omitempty,url"`
-	IsPublic    *bool   `json:"isPublic"`
+	// Keep consistent with API responses and mobile clients (snake_case).
+	IsPublic    *bool   `json:"is_public"`
 }
 
 // GroupListRequest 群组列表请求
