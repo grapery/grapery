@@ -83,6 +83,11 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
+	// 3) Ensure ai_generation_records prompt fields can store Unicode (utf8mb4).
+	if err := r.ensureAIGenerationRecordsSchema(); err != nil {
+		return err
+	}
+
 	r.log.Info("targeted schema migrations completed successfully")
 	return nil
 }
@@ -90,6 +95,12 @@ func (r *Repository) migrate() error {
 type columnInfo struct {
 	DataType   string `gorm:"column:data_type"`
 	ColumnType string `gorm:"column:column_type"`
+}
+
+type columnCharsetInfo struct {
+	CharacterSetName string `gorm:"column:character_set_name"`
+	CollationName    string `gorm:"column:collation_name"`
+	DataType         string `gorm:"column:data_type"`
 }
 
 func (r *Repository) columnExists(table, column string) (bool, error) {
@@ -118,6 +129,25 @@ func (r *Repository) getColumnInfo(table, column string) (*columnInfo, error) {
 		return nil, err
 	}
 	if info.DataType == "" && info.ColumnType == "" {
+		return nil, nil
+	}
+	return &info, nil
+}
+
+func (r *Repository) getColumnCharsetInfo(table, column string) (*columnCharsetInfo, error) {
+	var info columnCharsetInfo
+	err := r.db.Raw(
+		`SELECT character_set_name, collation_name, data_type FROM information_schema.columns
+		 WHERE table_schema = DATABASE()
+		   AND table_name = ?
+		   AND column_name = ?
+		 LIMIT 1`,
+		table, column,
+	).Scan(&info).Error
+	if err != nil {
+		return nil, err
+	}
+	if info.DataType == "" {
 		return nil, nil
 	}
 	return &info, nil
@@ -224,6 +254,81 @@ func (r *Repository) ensureStoriesStyleSchema() error {
 		if err := r.db.Exec("ALTER TABLE `stories` MODIFY COLUMN `style` TEXT").Error; err != nil {
 			return fmt.Errorf("alter stories.style to TEXT: %w", err)
 		}
+	}
+	return nil
+}
+
+func (r *Repository) ensureAIGenerationRecordsSchema() error {
+	// If the table doesn't exist (fresh DB), nothing to do.
+	exists, err := r.columnExists("ai_generation_records", "original_prompt")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		r.log.Info("ai_generation_records.original_prompt not found; skipping ai_generation_records charset migration")
+		return nil
+	}
+
+	// These columns store user/system prompts and can include Chinese/emoji etc.
+	cols := []string{"original_prompt", "enhanced_prompt", "system_prompt", "error_message"}
+	needAlter := false
+
+	for _, c := range cols {
+		info, err := r.getColumnCharsetInfo("ai_generation_records", c)
+		if err != nil {
+			return err
+		}
+		// Some columns may not exist in older schemas; skip them.
+		if info == nil {
+			r.log.Info("ai_generation_records column not found; skipping", zap.String("column", c))
+			continue
+		}
+		r.log.Info("ai_generation_records column charset",
+			zap.String("column", c),
+			zap.String("charset", info.CharacterSetName),
+			zap.String("collation", info.CollationName),
+			zap.String("dataType", info.DataType),
+		)
+		// Only applies to character types; JSON columns report nil charset.
+		if info.CharacterSetName != "utf8mb4" {
+			needAlter = true
+			r.log.Warn("ai_generation_records column not utf8mb4; will convert",
+				zap.String("column", c),
+				zap.String("charset", info.CharacterSetName),
+				zap.String("collation", info.CollationName),
+				zap.String("dataType", info.DataType),
+			)
+		}
+	}
+
+	if !needAlter {
+		r.log.Info("ai_generation_records prompt columns already utf8mb4; no charset migration needed")
+		return nil
+	}
+
+	// Convert only the prompt-related TEXT columns to utf8mb4; keep types as TEXT/LONGTEXT.
+	// This avoids a full table CONVERT (which can be heavier on large tables).
+	for _, c := range cols {
+		info, err := r.getColumnInfo("ai_generation_records", c)
+		if err != nil {
+			return err
+		}
+		if info == nil {
+			continue
+		}
+		// Preserve existing column_type (e.g. text/mediumtext/longtext) while changing charset/collation.
+		sql := fmt.Sprintf(
+			"ALTER TABLE `ai_generation_records` MODIFY COLUMN `%s` %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+			c,
+			info.ColumnType,
+		)
+		if err := r.db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("alter ai_generation_records.%s to utf8mb4: %w", c, err)
+		}
+		r.log.Info("ai_generation_records column converted to utf8mb4",
+			zap.String("column", c),
+			zap.String("columnType", info.ColumnType),
+		)
 	}
 	return nil
 }
