@@ -76,6 +76,10 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/stories/:id/stats", h.GetStoryStats)
 			authenticated.GET("/storyboards", h.ListStoryboards)
 			authenticated.GET("/storyboards/feed", h.GetStoryboardFeed) // Community storyboard feed
+			// Dashboard storyboard feeds (authenticated)
+			authenticated.GET("/dashboard/storyboards", h.GetDashboardStoryboards)
+			authenticated.GET("/dashboard/groups/storyboards", h.GetDashboardGroupStoryboards)
+			authenticated.GET("/dashboard/characters/storyboards", h.GetDashboardCharacterStoryboards)
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
@@ -289,6 +293,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 		public := api.Group("")
 		{
 			public.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 验证邀请码（注册前验证）
+			// Dashboard Trending (guest-accessible)
+			public.GET("/public/stories/trending", h.GetTrendingStoriesPublic)
 		}
 
 	}

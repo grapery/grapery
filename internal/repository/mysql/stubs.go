@@ -68,11 +68,24 @@ func (r *Repository) StoriesByAuthor(ctx context.Context, authorID string, limit
 
 func (r *Repository) TrendingStories(ctx context.Context, limit int) ([]*domain.Story, error) {
 	var stories []Story
-	// 根据点赞数、关注数和创建时间计算趋势分数
+
+	// Default/cap: trending is non-paginated and should not exceed 20.
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	// Only include stories created in the last 24 hours.
+	since := time.Now().Add(-24 * time.Hour)
+
+	// Simple hotness ordering: followers > likes > updated recency.
 	err := r.db.WithContext(ctx).
 		Preload("Author").
 		Where("status = ?", "published").
-		Order("likes DESC, followers DESC, created_at DESC").
+		Where("created_at >= ?", since).
+		Order("followers DESC, likes DESC, updated_at DESC").
 		Limit(limit).
 		Find(&stories).Error
 	if err != nil {

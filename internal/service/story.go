@@ -16,6 +16,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// GetTrendingStories24h returns up to `limit` published stories created in the last 24 hours.
+// Intended for the guest-accessible dashboard trending endpoint (backend caps limit to 20).
+func (s *Service) GetTrendingStories24h(ctx context.Context, limit int) ([]*domain.Story, error) {
+	return s.repo.TrendingStories(ctx, limit)
+}
+
 // CreateStoryRequest 创建故事请求
 type CreateStoryRequest struct {
 	Title             string `json:"title" binding:"required,min=1,max=200"`

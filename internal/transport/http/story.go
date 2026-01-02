@@ -1,11 +1,32 @@
 package http
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
+
+// GetTrendingStoriesPublic returns top trending stories in the last 24 hours (guest accessible).
+// GET /api/public/stories/trending?limit=20
+func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	stories, err := h.svc.GetTrendingStories24h(c.Request.Context(), limit)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"stories": stories,
+		"total":  len(stories),
+		"limit":  limit,
+		"offset": 0,
+	})
+}
 
 // CreateStory 创建故事
 func (h *Handler) CreateStory(c *gin.Context) {

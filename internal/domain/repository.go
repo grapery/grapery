@@ -54,6 +54,14 @@ type Repository interface {
 	StoriesByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*Story, error)
 	TrendingStories(ctx context.Context, limit int) ([]*Story, error)
 
+	// ========== Dashboard feeds ==========
+	// DashboardStoryboards returns storyboards from stories the user created OR follows.
+	DashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// DashboardGroupStoryboards returns storyboards from stories that belong to groups the user joined.
+	DashboardGroupStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// DashboardCharacterStoryboards returns storyboards that followed characters participate in.
+	DashboardCharacterStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+
 	// ========== Story Contributor operations ==========
 	AddStoryContributor(ctx context.Context, contributor *StoryContributor) error
 	RemoveStoryContributor(ctx context.Context, storyID, userID string) error

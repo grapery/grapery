@@ -76,6 +76,11 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
+	// 1b) Ensure storyboard_scenes has the new subdivision fields.
+	if err := r.ensureStoryboardScenesSchema(); err != nil {
+		return err
+	}
+
 	// 2) Ensure stories.style can store JSON (TEXT) and is not indexed.
 	// If an index exists on stories.style from older schemas, we drop it before
 	// converting the column to TEXT.
@@ -85,6 +90,11 @@ func (r *Repository) migrate() error {
 
 	// 3) Ensure ai_generation_records prompt fields can store Unicode (utf8mb4).
 	if err := r.ensureAIGenerationRecordsSchema(); err != nil {
+		return err
+	}
+
+	// 4) Ensure group_members has the role_id column for new role system.
+	if err := r.ensureGroupMembersSchema(); err != nil {
 		return err
 	}
 
@@ -212,6 +222,20 @@ func (r *Repository) ensureStoryboardVideoGenerationSchema() error {
 	return nil
 }
 
+func (r *Repository) ensureStoryboardScenesSchema() error {
+	// These columns are referenced by StoryboardScene model for keyframe subdivision support.
+	if err := r.ensureColumn("storyboard_scenes", "is_subdivided", "TINYINT(1) NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("ensure storyboard_scenes.is_subdivided: %w", err)
+	}
+	if err := r.ensureColumn("storyboard_scenes", "video_segments_json", "TEXT NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_scenes.video_segments_json: %w", err)
+	}
+	if err := r.ensureColumn("storyboard_scenes", "middle_frame_urls", "TEXT NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_scenes.middle_frame_urls: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) ensureStoriesStyleSchema() error {
 	// If stories.style doesn't exist, do nothing here (older schemas may not have it).
 	exists, err := r.columnExists("stories", "style")
@@ -329,6 +353,15 @@ func (r *Repository) ensureAIGenerationRecordsSchema() error {
 			zap.String("column", c),
 			zap.String("columnType", info.ColumnType),
 		)
+	}
+	return nil
+}
+
+func (r *Repository) ensureGroupMembersSchema() error {
+	// Add role_id column for the new role system.
+	// This column references the group_roles table for flexible permission management.
+	if err := r.ensureColumn("group_members", "role_id", "VARCHAR(36) NULL"); err != nil {
+		return fmt.Errorf("ensure group_members.role_id: %w", err)
 	}
 	return nil
 }
