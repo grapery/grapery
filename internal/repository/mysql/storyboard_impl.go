@@ -469,7 +469,7 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		return domain.Storyboard{}, fmt.Errorf("load storyboard scenes: %w", err)
 	}
 
-	r.log.Info("storyboardToDomain: loaded storyboard scenes",
+	r.log.Debug("storyboardToDomain: loaded storyboard scenes",
 		zap.String("storyboardId", sb.ID),
 		zap.Int("sceneCount", len(storyboardScenes)))
 
@@ -478,7 +478,7 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 	for i, scene := range storyboardScenes {
 		if scene != nil {
 			scenes[i] = *scene
-			r.log.Info("storyboardToDomain: scene detail",
+			r.log.Debug("storyboardToDomain: scene detail",
 				zap.String("sceneId", scene.ID),
 				zap.String("image", scene.Image),
 				zap.String("title", scene.Title))

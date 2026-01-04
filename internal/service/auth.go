@@ -126,6 +126,12 @@ func (s *Service) emailVerifyRateLimit(ctx context.Context, emailAddr, ip string
 // SendEmailVerificationCode sends a 6-digit verification code to the email if user exists and not verified.
 // Always returns nil for non-existent emails (anti-enumeration).
 func (s *Service) SendEmailVerificationCode(ctx context.Context, req *EmailVerificationSendRequest, ip string) error {
+	// Temporary override: allow disabling email sending (e.g., during SMTP instability).
+	// This keeps the API responsive and avoids request timeouts.
+	if v := strings.TrimSpace(os.Getenv("DISABLE_EMAIL_VERIFICATION_SEND")); v == "1" || strings.EqualFold(v, "true") {
+		s.logger.Warn("email verification send disabled by env", zap.String("email", req.Email))
+		return nil
+	}
 	// Rate limit (best-effort)
 	if err := s.emailVerifyRateLimit(ctx, req.Email, ip); err != nil {
 		return err
@@ -164,8 +170,9 @@ func (s *Service) SendEmailVerificationCode(ctx context.Context, req *EmailVerif
 	}
 	if err := email.VerificationCodeEmail([]string{user.Email}, username, code, int(emailVerifyCodeTTL.Minutes())); err != nil {
 		s.logger.Error("failed to send verification code email", zap.Error(err))
-		// Keep behavior: do not leak, but user won't receive email.
-		return errors.New("failed to send verification code email")
+		// Relaxed behavior: do not fail the request if email sending is unavailable.
+		// Caller can retry later; verification code remains in cache if available.
+		return nil
 	}
 	return nil
 }
@@ -620,7 +627,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, req *PasswordResetRe
 	}
 	if err := email.PasswordResetEmail([]string{user.Email}, username, resetURL); err != nil {
 		s.logger.Error("failed to send password reset email", zap.Error(err))
-		// Keep silent to client to prevent email enumeration; user can retry.
+		// Keep silent to client; also avoid failing the request on SMTP issues.
 	}
 
 	return nil

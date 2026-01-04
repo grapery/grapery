@@ -122,6 +122,9 @@ func baseEmailTemplate(title, content, footer string) string {
 
 // SendSystemEmails 发送系统邮件
 func SendSystemEmails(sendTo []string, subject, body string) error {
+	if strings.TrimSpace(SMTPServer) == "" || SMTPPort == 0 {
+		return fmt.Errorf("smtp not configured")
+	}
 	dialer := gomail.NewDialer(SMTPServer, SMTPPort, SMTPUsername, SMTPPassword)
 	// Common defaults: port 465 is implicit TLS.
 	if SMTPPort == 465 {

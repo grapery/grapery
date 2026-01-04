@@ -258,7 +258,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 
 // GetStoryboard 获取 storyboard 详情（带缓存）
 func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storyboard, error) {
-	s.logger.Info("GetStoryboard called",
+	s.logger.Debug("GetStoryboard called",
 		zap.String("storyboardId", id))
 
 	// 尝试从缓存获取（注意：storyboard 包含动态数据如 scenes，可能需要特殊处理）
@@ -316,7 +316,7 @@ func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storybo
 				zap.String("image", scene.Image),
 				zap.String("videoUrl", scene.VideoUrl))
 		}
-		s.logger.Info("GetStoryboard: loaded scenes from DB",
+		s.logger.Debug("GetStoryboard: loaded scenes from DB",
 			zap.String("storyboardId", id),
 			zap.Int("sceneCount", len(storyboardScenes)))
 	}
@@ -329,7 +329,7 @@ func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storybo
 
 	// Log final scene state
 	for i, scene := range storyboard.StoryboardScenes {
-		s.logger.Info("GetStoryboard: final scene state",
+		s.logger.Debug("GetStoryboard: final scene state",
 			zap.Int("index", i),
 			zap.String("sceneId", scene.ID),
 			zap.String("title", scene.Title),

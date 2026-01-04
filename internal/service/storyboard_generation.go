@@ -1428,12 +1428,17 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.GenerationMessage = "所有生成任务已完成"
 	}
 
-	s.logger.Info("generation progress retrieved",
-		zap.String("storyboardId", storyboardID),
-		zap.Bool("isGenerating", progress.IsGenerating),
-		zap.Bool("hasPendingTasks", progress.HasPendingTasks),
-		zap.String("generationMessage", progress.GenerationMessage),
-		zap.Int("totalTokens", progress.TotalTokens))
+	// Only log progress retrieval while there is ongoing work.
+	// Once all tasks are completed, this endpoint can be polled frequently by clients;
+	// suppressing the completed-state log reduces noise.
+	if progress.IsGenerating || progress.HasPendingTasks {
+		s.logger.Info("generation progress retrieved",
+			zap.String("storyboardId", storyboardID),
+			zap.Bool("isGenerating", progress.IsGenerating),
+			zap.Bool("hasPendingTasks", progress.HasPendingTasks),
+			zap.String("generationMessage", progress.GenerationMessage),
+			zap.Int("totalTokens", progress.TotalTokens))
+	}
 
 	return progress, nil
 }

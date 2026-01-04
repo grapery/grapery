@@ -505,6 +505,10 @@ func registerRoutes(router *gin.Engine) {
 			c.String(http.StatusOK, privacyHTML)
 		})
 
+		// Legal docs (JSON + markdown, localized)
+		api.GET("/legal/terms-of-service", pay.GetTermsOfService)
+		api.GET("/legal/privacy-policy", pay.GetPrivacyPolicy)
+
 		// IAP 相关路由
 		iap := api.Group("/iap")
 		{
