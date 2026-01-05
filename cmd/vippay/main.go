@@ -556,6 +556,14 @@ func registerRoutes(router *gin.Engine) {
 			appleOAuth.POST("/signin", appleOAuthHandler.HandleAppleSignIn)
 			appleOAuth.GET("/status", appleOAuthHandler.HandleAppleSignInStatus)
 			appleOAuth.GET("/config", appleOAuthHandler.GetAppleOAuthConfig)
+
+			// 需要鉴权的接口
+			appleOAuthAuth := appleOAuth.Group("")
+			appleOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				appleOAuthAuth.POST("/link", appleOAuthHandler.HandleAppleLink)
+				appleOAuthAuth.POST("/unlink", appleOAuthHandler.HandleAppleUnlink)
+			}
 		}
 
 		// Google OAuth2 相关路由
@@ -565,6 +573,14 @@ func registerRoutes(router *gin.Engine) {
 			googleOAuth.POST("/signin", googleOAuthHandler.HandleGoogleSignIn)
 			googleOAuth.GET("/status", googleOAuthHandler.HandleGoogleSignInStatus)
 			googleOAuth.GET("/config", googleOAuthHandler.GetGoogleOAuthConfig)
+
+			// 需要鉴权的接口
+			googleOAuthAuth := googleOAuth.Group("")
+			googleOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				googleOAuthAuth.POST("/link", googleOAuthHandler.HandleGoogleLink)
+				googleOAuthAuth.POST("/unlink", googleOAuthHandler.HandleGoogleUnlink)
+			}
 		}
 
 		// VIP 会员相关路由 - 需要鉴权

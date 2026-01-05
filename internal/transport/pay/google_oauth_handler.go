@@ -11,6 +11,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
+	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
 )
 
@@ -444,6 +445,245 @@ func (h *GoogleOAuthHandler) GetGoogleOAuthConfig(c *gin.Context) {
 			"scopes":         []string{"openid", "email", "profile"},
 			"message":        "Google OAuth config",
 		},
+	})
+}
+
+// HandleGoogleLink 处理 Google 账号绑定请求（需要鉴权）
+func (h *GoogleOAuthHandler) HandleGoogleLink(c *gin.Context) {
+	// 获取当前登录用户ID
+	currentUserID := paymiddleware.GetUserIDFromContext(c)
+	if currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Unauthorized",
+			Message: "Unauthorized",
+			Success: false,
+		})
+		return
+	}
+
+	var req GoogleSignInRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logrus.Errorf("Invalid request body: %v", err)
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Invalid request body",
+			Message: "Invalid request body",
+			Success: false,
+		})
+		return
+	}
+
+	if req.IDToken == "" {
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "ID token is required",
+			Message: "ID token is required",
+			Success: false,
+		})
+		return
+	}
+
+	// 检查验证器是否有效
+	if !h.verifier.IsValid() {
+		logrus.Error("Google OAuth2 verifier is not properly configured")
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Google OAuth2 service is not available",
+			Message: "Google OAuth2 service is not available",
+			Success: false,
+		})
+		return
+	}
+
+	// 验证 Google ID Token
+	claims, err := h.verifier.VerifyToken(req.IDToken)
+	if err != nil {
+		logrus.Errorf("Failed to verify Google ID token: %v", err)
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Invalid Google ID token",
+			Message: "Invalid Google ID token",
+			Success: false,
+		})
+		return
+	}
+
+	googleUserID := claims.Subject
+	if googleUserID == "" {
+		logrus.Error("Google user ID (sub) not found in token claims")
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Invalid token: user ID not found",
+			Message: "Invalid token: user ID not found",
+			Success: false,
+		})
+		return
+	}
+
+	email := claims.Email
+	name := claims.Name
+	avatar := claims.Picture
+
+	ctx := c.Request.Context()
+
+	// 检查该 Google 账号是否已被其他用户绑定
+	if h.repo != nil {
+		existingLogin, err := h.repo.GetThirdPartyLoginByProviderUserID(ctx, domain.ProviderGoogle, googleUserID)
+		if err == nil && existingLogin != nil {
+			// 已存在绑定
+			if existingLogin.UserID != currentUserID {
+				// 绑定到其他用户，返回错误
+				c.JSON(http.StatusConflict, VipPayAPIResponse{
+					Code:    409,
+					Msg:     "This Google account is already linked to another user",
+					Message: "This Google account is already linked to another user",
+					Success: false,
+				})
+				return
+			}
+			// 已绑定到当前用户，更新绑定信息（幂等）
+			existingLogin.ProviderEmail = email
+			existingLogin.ProviderUserName = name
+			existingLogin.UpdatedAt = time.Now().Unix()
+			if err := h.repo.UpdateThirdPartyLogin(ctx, existingLogin); err != nil {
+				logrus.Errorf("Failed to update Google login binding: %v", err)
+			}
+		} else {
+			// 未绑定，创建新绑定
+			now := time.Now().Unix()
+			newThirdPartyLogin := &domain.ThirdPartyLogin{
+				ID:               uuid.New().String(),
+				UserID:           currentUserID,
+				Provider:         domain.ProviderGoogle,
+				ProviderUserID:   googleUserID,
+				ProviderEmail:    email,
+				ProviderUserName: name,
+				Status:           domain.ThirdPartyLoginStatusNormal,
+				CreatedAt:        now,
+				UpdatedAt:        now,
+			}
+			if err := h.repo.CreateThirdPartyLogin(ctx, newThirdPartyLogin); err != nil {
+				logrus.Errorf("Failed to create Google login binding: %v", err)
+				c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+					Code:    500,
+					Msg:     "Failed to link Google account",
+					Message: "Failed to link Google account",
+					Success: false,
+				})
+				return
+			}
+		}
+
+		// 获取当前用户信息
+		user, err := h.repo.UserByID(ctx, currentUserID)
+		if err != nil {
+			logrus.Errorf("Failed to get user: %v", err)
+			c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+				Code:    500,
+				Msg:     "Failed to get user information",
+				Message: "Failed to get user information",
+				Success: false,
+			})
+			return
+		}
+
+		// 更新用户头像（如果Google提供了且用户还没有头像）
+		if avatar != "" && user.Avatar == "" {
+			user.Avatar = avatar
+			user.UpdatedAt = time.Now().Unix()
+			_ = h.repo.UpdateUser(ctx, user)
+		}
+
+		// 返回用户信息（类似 signin 响应）
+		userResp := &OAuthUserResponse{
+			ID:          user.ID,
+			Username:    user.Username,
+			Email:       user.Email,
+			DisplayName: user.DisplayName,
+			Avatar:      user.Avatar,
+			Bio:         user.Bio,
+			Status:      user.Status,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		}
+
+		data := OAuthSignInData{
+			Token:        "", // Link 操作不需要返回新 token
+			RefreshToken: "",
+			User:         userResp,
+			ExpiresIn:    0,
+			IsNewUser:    false,
+
+			UserID:        user.ID,
+			AccessToken:   "",
+			RefreshToken2: "",
+			ExpiresIn2:    0,
+			IsNewUser2:    false,
+		}
+
+		c.JSON(http.StatusOK, VipPayAPIResponse{
+			Code:    0,
+			Msg:     "success",
+			Message: "success",
+			Success: true,
+			Data:    data,
+		})
+		return
+	}
+
+	c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+		Code:    500,
+		Msg:     "Repository not available",
+		Message: "Repository not available",
+		Success: false,
+	})
+}
+
+// HandleGoogleUnlink 处理 Google 账号解绑请求（需要鉴权）
+func (h *GoogleOAuthHandler) HandleGoogleUnlink(c *gin.Context) {
+	// 获取当前登录用户ID
+	currentUserID := paymiddleware.GetUserIDFromContext(c)
+	if currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Unauthorized",
+			Message: "Unauthorized",
+			Success: false,
+		})
+		return
+	}
+
+	if h.repo == nil {
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Repository not available",
+			Message: "Repository not available",
+			Success: false,
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 删除 Google 绑定
+	if err := h.repo.DeleteThirdPartyLogin(ctx, currentUserID, domain.ProviderGoogle); err != nil {
+		logrus.Errorf("Failed to unlink Google account: %v", err)
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Failed to unlink Google account",
+			Message: "Failed to unlink Google account",
+			Success: false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, VipPayAPIResponse{
+		Code:    0,
+		Msg:     "success",
+		Message: "success",
+		Success: true,
+		Data:    gin.H{"message": "Google account unlinked successfully"},
 	})
 }
 

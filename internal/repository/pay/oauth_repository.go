@@ -321,6 +321,13 @@ func (r *OAuthRepository) GetUserByThirdPartyEmail(ctx context.Context, email st
 	return r.UserByID(ctx, thirdPartyLogin.UserID)
 }
 
+// DeleteThirdPartyLogin 删除用户的第三方登录绑定
+func (r *OAuthRepository) DeleteThirdPartyLogin(ctx context.Context, userID string, provider domain.ThirdPartyProvider) error {
+	return r.db.WithContext(ctx).
+		Where("user_id = ? AND provider = ?", userID, string(provider)).
+		Delete(&OAuthThirdPartyLogin{}).Error
+}
+
 // Helper functions
 
 func (r *OAuthRepository) userModelToDomain(model *OAuthUser) *domain.User {

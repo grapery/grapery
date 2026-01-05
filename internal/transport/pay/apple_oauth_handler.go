@@ -13,6 +13,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
+	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
 )
 
@@ -91,6 +92,7 @@ type OAuthRepository interface {
 	GetThirdPartyLoginByEmail(ctx context.Context, provider domain.ThirdPartyProvider, email string) (*domain.ThirdPartyLogin, error)
 	GetThirdPartyLoginsByUserID(ctx context.Context, userID string) ([]*domain.ThirdPartyLogin, error)
 	UpdateThirdPartyLogin(ctx context.Context, login *domain.ThirdPartyLogin) error
+	DeleteThirdPartyLogin(ctx context.Context, userID string, provider domain.ThirdPartyProvider) error
 	// 通过任意第三方登录的 email 查找关联的用户
 	GetUserByThirdPartyEmail(ctx context.Context, email string) (*domain.User, error)
 }
@@ -543,6 +545,255 @@ func (h *AppleOAuthHandler) GetAppleOAuthConfig(c *gin.Context) {
 			"scopes":         []string{"name", "email"},
 			"message":        "Apple OAuth config",
 		},
+	})
+}
+
+// HandleAppleLink 处理 Apple 账号绑定请求（需要鉴权）
+func (h *AppleOAuthHandler) HandleAppleLink(c *gin.Context) {
+	// 获取当前登录用户ID
+	currentUserID := paymiddleware.GetUserIDFromContext(c)
+	if currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Unauthorized",
+			Message: "Unauthorized",
+			Success: false,
+		})
+		return
+	}
+
+	var req AppleSignInRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logrus.Errorf("Invalid request body: %v", err)
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Invalid request body",
+			Message: "Invalid request body",
+			Success: false,
+		})
+		return
+	}
+
+	if req.IdentityToken == "" {
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Identity token is required",
+			Message: "Identity token is required",
+			Success: false,
+		})
+		return
+	}
+
+	// 检查验证器是否有效
+	if !h.verifier.IsValid() {
+		logrus.Error("Apple OAuth2 verifier is not properly configured")
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Apple OAuth2 service is not available",
+			Message: "Apple OAuth2 service is not available",
+			Success: false,
+		})
+		return
+	}
+
+	// 验证 Apple Identity Token
+	claims, err := h.verifier.VerifyToken(req.IdentityToken)
+	if err != nil {
+		logrus.Errorf("Failed to verify Apple identity token: %v", err)
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Invalid Apple identity token",
+			Message: "Invalid Apple identity token",
+			Success: false,
+		})
+		return
+	}
+
+	// Optional nonce verification
+	if req.Nonce != "" {
+		expected := sha256Hex(req.Nonce)
+		if claims.Nonce == "" || claims.Nonce != expected {
+			logrus.WithFields(logrus.Fields{
+				"expected": expected,
+				"actual":   claims.Nonce,
+			}).Warn("Apple Sign-In nonce mismatch")
+			c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+				Code:    401,
+				Msg:     "Invalid Apple nonce",
+				Message: "Invalid Apple nonce",
+				Success: false,
+			})
+			return
+		}
+	}
+
+	appleUserID := claims.Subject
+	if appleUserID == "" {
+		logrus.Error("Apple user ID (sub) not found in token claims")
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Invalid token: user ID not found",
+			Message: "Invalid token: user ID not found",
+			Success: false,
+		})
+		return
+	}
+
+	email := claims.Email
+	fullName := claims.FullName
+
+	ctx := c.Request.Context()
+
+	// 检查该 Apple 账号是否已被其他用户绑定
+	if h.repo != nil {
+		existingLogin, err := h.repo.GetThirdPartyLoginByProviderUserID(ctx, domain.ProviderApple, appleUserID)
+		if err == nil && existingLogin != nil {
+			// 已存在绑定
+			if existingLogin.UserID != currentUserID {
+				// 绑定到其他用户，返回错误
+				c.JSON(http.StatusConflict, VipPayAPIResponse{
+					Code:    409,
+					Msg:     "This Apple account is already linked to another user",
+					Message: "This Apple account is already linked to another user",
+					Success: false,
+				})
+				return
+			}
+			// 已绑定到当前用户，更新绑定信息（幂等）
+			existingLogin.ProviderEmail = email
+			existingLogin.ProviderUserName = fullName
+			existingLogin.UpdatedAt = time.Now().Unix()
+			if err := h.repo.UpdateThirdPartyLogin(ctx, existingLogin); err != nil {
+				logrus.Errorf("Failed to update Apple login binding: %v", err)
+			}
+		} else {
+			// 未绑定，创建新绑定
+			now := time.Now().Unix()
+			newThirdPartyLogin := &domain.ThirdPartyLogin{
+				ID:               uuid.New().String(),
+				UserID:           currentUserID,
+				Provider:         domain.ProviderApple,
+				ProviderUserID:   appleUserID,
+				ProviderEmail:    email,
+				ProviderUserName: fullName,
+				Status:           domain.ThirdPartyLoginStatusNormal,
+				CreatedAt:        now,
+				UpdatedAt:        now,
+			}
+			if err := h.repo.CreateThirdPartyLogin(ctx, newThirdPartyLogin); err != nil {
+				logrus.Errorf("Failed to create Apple login binding: %v", err)
+				c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+					Code:    500,
+					Msg:     "Failed to link Apple account",
+					Message: "Failed to link Apple account",
+					Success: false,
+				})
+				return
+			}
+		}
+
+		// 获取当前用户信息
+		user, err := h.repo.UserByID(ctx, currentUserID)
+		if err != nil {
+			logrus.Errorf("Failed to get user: %v", err)
+			c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+				Code:    500,
+				Msg:     "Failed to get user information",
+				Message: "Failed to get user information",
+				Success: false,
+			})
+			return
+		}
+
+		// 返回用户信息（类似 signin 响应）
+		userResp := &OAuthUserResponse{
+			ID:          user.ID,
+			Username:    user.Username,
+			Email:       user.Email,
+			DisplayName: user.DisplayName,
+			Avatar:      user.Avatar,
+			Bio:         user.Bio,
+			Status:      user.Status,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+		}
+
+		data := OAuthSignInData{
+			Token:        "", // Link 操作不需要返回新 token
+			RefreshToken: "",
+			User:         userResp,
+			ExpiresIn:    0,
+			IsNewUser:    false,
+
+			UserID:        user.ID,
+			AccessToken:   "",
+			RefreshToken2: "",
+			ExpiresIn2:    0,
+			IsNewUser2:    false,
+		}
+
+		c.JSON(http.StatusOK, VipPayAPIResponse{
+			Code:    0,
+			Msg:     "success",
+			Message: "success",
+			Success: true,
+			Data:    data,
+		})
+		return
+	}
+
+	c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+		Code:    500,
+		Msg:     "Repository not available",
+		Message: "Repository not available",
+		Success: false,
+	})
+}
+
+// HandleAppleUnlink 处理 Apple 账号解绑请求（需要鉴权）
+func (h *AppleOAuthHandler) HandleAppleUnlink(c *gin.Context) {
+	// 获取当前登录用户ID
+	currentUserID := paymiddleware.GetUserIDFromContext(c)
+	if currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Unauthorized",
+			Message: "Unauthorized",
+			Success: false,
+		})
+		return
+	}
+
+	if h.repo == nil {
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Repository not available",
+			Message: "Repository not available",
+			Success: false,
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 删除 Apple 绑定
+	if err := h.repo.DeleteThirdPartyLogin(ctx, currentUserID, domain.ProviderApple); err != nil {
+		logrus.Errorf("Failed to unlink Apple account: %v", err)
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
+			Code:    500,
+			Msg:     "Failed to unlink Apple account",
+			Message: "Failed to unlink Apple account",
+			Success: false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, VipPayAPIResponse{
+		Code:    0,
+		Msg:     "success",
+		Message: "success",
+		Success: true,
+		Data:    gin.H{"message": "Apple account unlinked successfully"},
 	})
 }
 
