@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"os"
 	"os/signal"
@@ -588,67 +589,148 @@ func registerRoutes(router *gin.Engine) {
 		vip.Use(paymiddleware.AuthMiddleware())
 		{
 			vip.GET("/info", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
-				// 简单的VIP信息响应
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+				
+				// 查询用户活跃订阅
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				if err != nil {
+					// 没有活跃订阅，返回默认值
+					c.JSON(http.StatusOK, gin.H{
+						"code": 0,
+						"msg":  "success",
+						"data": gin.H{
+							"user_id":      userID,
+							"is_vip":       false,
+							"level":        0,
+							"status":       0,
+							"auto_renew":   false,
+							"quota_used":   0,
+							"quota_limit":  0,
+							"max_roles":    2,  // 免费用户默认值
+							"max_contexts": 5,  // 免费用户默认值
+							"expires_at":   nil,
+						},
+					})
+					return
+				}
+				
+				// 计算VIP等级（根据订阅套餐）
+				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
+				
+				// 格式化过期时间
+				var expiresAt *string
+				if !subscription.EndTime.IsZero() {
+					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
+					expiresAt = &expiresAtStr
+				}
+				
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"is_vip":       false,
-						"level":        0,
-						"status":       0,
-						"auto_renew":   false,
-						"quota_used":   0,
-						"quota_limit":  0,
-						"max_roles":    2,
-						"max_contexts": 5,
+						"is_vip":       subscription.IsActive(),
+						"level":        vipLevel,
+						"status":       int(subscription.Status),
+						"auto_renew":   subscription.AutoRenew,
+						"quota_used":   subscription.QuotaUsed,
+						"quota_limit":  subscription.QuotaLimit,
+						"max_roles":    subscription.MaxRoles,
+						"max_contexts": subscription.MaxContexts,
+						"expires_at":   expiresAt,
 					},
 				})
 			})
 			vip.GET("/check", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+				
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				isVip := err == nil && subscription != nil && subscription.IsActive()
+				
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id": userID,
-						"is_vip":  false,
+						"is_vip":  isVip,
 					},
 				})
 			})
 			vip.GET("/quota", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+				
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				if err != nil {
+					// 没有活跃订阅
+					c.JSON(http.StatusOK, gin.H{
+						"code": 0,
+						"msg":  "success",
+						"data": gin.H{
+							"user_id":     userID,
+							"quota_used":  0,
+							"quota_limit": 0,
+							"remaining":   0,
+						},
+					})
+					return
+				}
+				
+				remaining := subscription.GetRemainingQuota()
+				
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":     userID,
-						"quota_used":  0,
-						"quota_limit": 0,
-						"remaining":   0,
+						"quota_used":  subscription.QuotaUsed,
+						"quota_limit": subscription.QuotaLimit,
+						"remaining":   remaining,
 					},
 				})
 			})
 			vip.GET("/max-roles", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+				
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				maxRoles := 2 // 默认值
+				if err == nil && subscription != nil {
+					maxRoles = subscription.MaxRoles
+				}
+				
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":   userID,
-						"max_roles": 2,
+						"max_roles": maxRoles,
 					},
 				})
 			})
 			vip.GET("/max-contexts", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+				
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				maxContexts := 5 // 默认值
+				if err == nil && subscription != nil {
+					maxContexts = subscription.MaxContexts
+				}
+				
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"max_contexts": 5,
+						"max_contexts": maxContexts,
 					},
 				})
 			})
@@ -763,6 +845,30 @@ func gracefulShutdown(ctx context.Context, server *http.Server, logger *zap.Logg
 }
 
 // Helper functions for safe config access
+
+// stringToInt64 将字符串用户ID转换为int64
+// 使用 FNV-1a 哈希将字符串UUID转换为稳定的数值ID
+func stringToInt64(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return int64(h.Sum64())
+}
+
+// calculateVIPLevel 根据套餐计划ID计算VIP等级
+// 这里可以根据实际的套餐计划配置来映射等级
+func calculateVIPLevel(packagePlanID uint) int {
+	// 简单的映射逻辑，实际应该从数据库查询套餐计划配置
+	// 这里可以根据 packagePlanID 映射到不同的VIP等级
+	// 例如：1=免费, 2=基础, 3=高级, 4=专业
+	if packagePlanID == 0 {
+		return 0 // 免费用户
+	}
+	// 可以根据实际业务逻辑调整
+	return int(packagePlanID)
+}
 
 func getVipPayPort() string {
 	// 尝试从环境变量获取
