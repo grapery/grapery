@@ -57,8 +57,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	var req GoogleSignInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logrus.Errorf("Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
 			Code:    400,
+			Msg:     "Invalid request body",
 			Message: "Invalid request body",
 			Success: false,
 		})
@@ -66,8 +67,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	}
 
 	if req.IDToken == "" {
-		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
 			Code:    400,
+			Msg:     "ID token is required",
 			Message: "ID token is required",
 			Success: false,
 		})
@@ -77,8 +79,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	// 检查验证器是否有效
 	if !h.verifier.IsValid() {
 		logrus.Error("Google OAuth2 verifier is not properly configured")
-		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
 			Code:    500,
+			Msg:     "Google OAuth2 service is not available",
 			Message: "Google OAuth2 service is not available",
 			Success: false,
 		})
@@ -89,8 +92,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	claims, err := h.verifier.VerifyToken(req.IDToken)
 	if err != nil {
 		logrus.Errorf("Failed to verify Google ID token: %v", err)
-		c.JSON(http.StatusUnauthorized, OAuthErrorResponse{
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
 			Code:    401,
+			Msg:     "Invalid Google ID token",
 			Message: "Invalid Google ID token",
 			Success: false,
 		})
@@ -101,8 +105,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	googleUserID := claims.Subject
 	if googleUserID == "" {
 		logrus.Error("Google user ID (sub) not found in token claims")
-		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
 			Code:    400,
+			Msg:     "Invalid token: user ID not found",
 			Message: "Invalid token: user ID not found",
 			Success: false,
 		})
@@ -125,8 +130,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	user, isNewUser, err := h.findOrCreateUser(ctx, googleUserID, email, claims.EmailVerified, name, avatar, "google")
 	if err != nil {
 		logrus.Errorf("Failed to find or create user: %v", err)
-		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
 			Code:    500,
+			Msg:     "Failed to process user account",
 			Message: "Failed to process user account",
 			Success: false,
 		})
@@ -137,8 +143,9 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	jwtToken, err := auth.GenerateToken(user.ID, user.Username, user.Email)
 	if err != nil {
 		logrus.Errorf("Failed to generate JWT token: %v", err)
-		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
 			Code:    500,
+			Msg:     "Failed to generate access token",
 			Message: "Failed to generate access token",
 			Success: false,
 		})
@@ -154,23 +161,37 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 
 	expiresIn := int64(24 * 3600) // 24小时
 
-	// 返回前端期望的格式
-	c.JSON(http.StatusOK, OAuthResponse{
+	userResp := &OAuthUserResponse{
+		ID:          user.ID,
+		Username:    user.Username,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Avatar:      user.Avatar,
+		Bio:         user.Bio,
+		Status:      user.Status,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+	}
+	data := OAuthSignInData{
 		Token:        jwtToken,
 		RefreshToken: refreshToken,
-		User: &OAuthUserResponse{
-			ID:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Avatar:      user.Avatar,
-			Bio:         user.Bio,
-			Status:      user.Status,
-			CreatedAt:   user.CreatedAt,
-			UpdatedAt:   user.UpdatedAt,
-		},
-		ExpiresIn: expiresIn,
-		IsNewUser: isNewUser,
+		User:         userResp,
+		ExpiresIn:    expiresIn,
+		IsNewUser:    isNewUser,
+
+		UserID:        user.ID,
+		AccessToken:   jwtToken,
+		RefreshToken2: refreshToken,
+		ExpiresIn2:    expiresIn,
+		IsNewUser2:    isNewUser,
+	}
+
+	c.JSON(http.StatusOK, VipPayAPIResponse{
+		Code:    0,
+		Msg:     "success",
+		Message: "success",
+		Success: true,
+		Data:    data,
 	})
 }
 

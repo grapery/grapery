@@ -117,11 +117,27 @@ ENV DB_DATABASE=grapery
 
 1. 创建或选择项目
 2. 启用 "Google Sign-In API"
-3. 创建 OAuth 2.0 客户端 ID（iOS 类型）
-4. 配置 Bundle ID（与 iOS 应用一致）
-5. 复制 Client ID
+3. 创建 OAuth 2.0 客户端 ID
+   - iOS：创建 iOS 客户端，配置 Bundle ID（与 iOS 应用一致）
+   - Android：创建 Android 客户端，配置 packageName + SHA-1（用于 GoogleSignIn 在设备上正常工作）
+   - Web：创建 Web application 客户端（**Server Client ID**，用于后端校验 ID Token 的 audience）
+4. 复制 **Web application Client ID**（Server Client ID）
 
 **配置位置：** https://console.cloud.google.com/
+
+#### 重要：GOOGLE_CLIENT_ID 该填哪个？
+
+- 后端环境变量 `GOOGLE_CLIENT_ID` 必须设置为 **Web application Client ID（Server Client ID）**
+  - 原因：后端在 `internal/service/pay/google_oauth.go` 用 `audience = GOOGLE_CLIENT_ID` 校验 Google ID Token
+  - Android 端使用 `requestIdToken(serverClientId)`，会让返回的 ID Token 的 `aud` 等于这个 Web Client ID
+- 如果误填 Android Client ID / iOS Client ID，后端会报 `invalid_token`（audience 不匹配）
+
+#### Android 客户端说明（pioneer）
+
+- Android 登录页不会硬编码 clientId，而是从后端获取：`GET /api/vippay/google-oauth/config`（字段 `clientId`）
+- 你仍然需要在 Google Cloud Console 为 Android 客户端配置：
+  - package name（`applicationId`）
+  - SHA-1 指纹（debug/release）
 
 ## 📝 配置检查清单
 
