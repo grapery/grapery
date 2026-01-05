@@ -31,6 +31,8 @@ FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
 COPY --from=builder /bin/grapery-vippay /app/grapery-vippay
+# Copy config file (optional, service will fall back to env vars if file is missing)
+COPY --from=builder /src/cmd/vippay/vippay.json /app/vippay.json
 
 # ========== Server Configuration ==========
 ENV VIPPAY_PORT=8081

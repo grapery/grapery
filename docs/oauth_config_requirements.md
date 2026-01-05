@@ -76,7 +76,7 @@ CREATE TABLE third_party_logins (
 
 ```bash
 # Apple OAuth
-APPLE_BUNDLE_ID=com.grapery.app
+APPLE_BUNDLE_ID=com.rankquantity.voyager
 
 # Google OAuth
 GOOGLE_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
@@ -94,7 +94,7 @@ DB_DATABASE=grapery
 ### Dockerfile 配置示例
 
 ```dockerfile
-ENV APPLE_BUNDLE_ID=com.grapery.app
+ENV APPLE_BUNDLE_ID=com.rankquantity.voyager
 ENV GOOGLE_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
 ENV JWT_SECRET=your-super-secret-jwt-key
 ENV DB_USERNAME=root
@@ -200,7 +200,7 @@ ENV DB_DATABASE=grapery
 
 ```bash
 # 设置环境变量
-export APPLE_BUNDLE_ID=com.grapery.app
+export APPLE_BUNDLE_ID=com.rankquantity.voyager
 export GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 export JWT_SECRET=your-super-secret-key-at-least-32-chars
 export DB_USERNAME=root
@@ -217,7 +217,7 @@ go run cmd/vippay/main.go
 ```bash
 docker build -t vippay -f cmd/vippay/Dockerfile .
 docker run -d \
-  -e APPLE_BUNDLE_ID=com.grapery.app \
+  -e APPLE_BUNDLE_ID=com.rankquantity.voyager \
   -e GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com \
   -e JWT_SECRET=your-super-secret-key \
   -e DB_USERNAME=root \

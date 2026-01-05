@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/fnv"
@@ -48,8 +49,15 @@ func main() {
 	if *configPath != "" {
 		cfg, err = config.LoadFromFile(*configPath, "vippay")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
-			os.Exit(1)
+			// If config file doesn't exist, fall back to environment variables
+			if errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "Config file %s not found, falling back to environment variables\n", *configPath)
+				cfg = config.Load("vippay")
+			} else {
+				// For other errors (e.g., invalid YAML), exit
+				fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	} else {
 		fmt.Println("loading config from environment variables")
@@ -592,7 +600,7 @@ func registerRoutes(router *gin.Engine) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
 				ctx := c.Request.Context()
-				
+
 				// 查询用户活跃订阅
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
 				if err != nil {
@@ -608,24 +616,24 @@ func registerRoutes(router *gin.Engine) {
 							"auto_renew":   false,
 							"quota_used":   0,
 							"quota_limit":  0,
-							"max_roles":    2,  // 免费用户默认值
-							"max_contexts": 5,  // 免费用户默认值
+							"max_roles":    2, // 免费用户默认值
+							"max_contexts": 5, // 免费用户默认值
 							"expires_at":   nil,
 						},
 					})
 					return
 				}
-				
+
 				// 计算VIP等级（根据订阅套餐）
 				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
-				
+
 				// 格式化过期时间
 				var expiresAt *string
 				if !subscription.EndTime.IsZero() {
 					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
 					expiresAt = &expiresAtStr
 				}
-				
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -647,10 +655,10 @@ func registerRoutes(router *gin.Engine) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
 				ctx := c.Request.Context()
-				
+
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
 				isVip := err == nil && subscription != nil && subscription.IsActive()
-				
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -664,7 +672,7 @@ func registerRoutes(router *gin.Engine) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
 				ctx := c.Request.Context()
-				
+
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
 				if err != nil {
 					// 没有活跃订阅
@@ -680,9 +688,9 @@ func registerRoutes(router *gin.Engine) {
 					})
 					return
 				}
-				
+
 				remaining := subscription.GetRemainingQuota()
-				
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -698,13 +706,13 @@ func registerRoutes(router *gin.Engine) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
 				ctx := c.Request.Context()
-				
+
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
 				maxRoles := 2 // 默认值
 				if err == nil && subscription != nil {
 					maxRoles = subscription.MaxRoles
 				}
-				
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -718,13 +726,13 @@ func registerRoutes(router *gin.Engine) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
 				ctx := c.Request.Context()
-				
+
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
 				maxContexts := 5 // 默认值
 				if err == nil && subscription != nil {
 					maxContexts = subscription.MaxContexts
 				}
-				
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -767,7 +775,7 @@ func registerRoutes(router *gin.Engine) {
 // createIAPConfig 创建IAP配置（从环境变量加载）
 func createIAPConfig() *paypkg.IAPConfig {
 	// Apple 配置
-	appleBundleID := getEnvWithDefault("APPLE_BUNDLE_ID", "com.grapery.app")
+	appleBundleID := getEnvWithDefault("APPLE_BUNDLE_ID", "com.rankquantity.voyager")
 	appleIssuerID := os.Getenv("APPLE_ISSUER_ID")
 	appleKeyID := os.Getenv("APPLE_KEY_ID")
 	applePrivateKey := os.Getenv("APPLE_PRIVATE_KEY")
@@ -779,7 +787,7 @@ func createIAPConfig() *paypkg.IAPConfig {
 	appleSandboxPrivateKey := getEnvWithDefault("APPLE_SANDBOX_PRIVATE_KEY", applePrivateKey)
 
 	// Google 配置
-	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.grapery.app")
+	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.rankquantity.voyager")
 	googleServiceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
 
 	// Google Sandbox 配置（如不设置，使用生产配置）

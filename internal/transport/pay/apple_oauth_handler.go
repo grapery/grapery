@@ -534,16 +534,16 @@ func (h *AppleOAuthHandler) GetAppleOAuthConfig(c *gin.Context) {
 			"state":        nil,
 
 			// Legacy/alternate keys (Android / older clients)
-			"client_id":      bundleID,
-			"redirect_uri":   "",
-			"response_type":  "id_token",
-			"bundleId":       bundleID,
-			"bundle_id":      bundleID,
-			"enabled":        enabled,
-			"isAvailable":    enabled,
-			"provider":       "apple",
-			"scopes":         []string{"name", "email"},
-			"message":        "Apple OAuth config",
+			"client_id":     bundleID,
+			"redirect_uri":  "",
+			"response_type": "id_token",
+			"bundleId":      bundleID,
+			"bundle_id":     bundleID,
+			"enabled":       enabled,
+			"isAvailable":   enabled,
+			"provider":      "apple",
+			"scopes":        []string{"name", "email"},
+			"message":       "Apple OAuth config",
 		},
 	})
 }
@@ -802,7 +802,7 @@ func createAppleOAuthConfig() *payservice.AppleOAuthConfig {
 	// 从环境变量读取配置
 	bundleID := os.Getenv("APPLE_BUNDLE_ID")
 	if bundleID == "" {
-		bundleID = "com.grapery.app" // 默认 Bundle ID
+		bundleID = "com.rankquantity.voyager" // 默认 Bundle ID
 	}
 
 	return &payservice.AppleOAuthConfig{

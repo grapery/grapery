@@ -1,0 +1,76 @@
+{
+  "env": "development",
+  "http_port": "8081",
+  "read_timeout": "120s",
+  "write_timeout": "120s",
+  "idle_timeout": "120s",
+  "log_level": "info",
+  "allow_origins": ["*"],
+  "database": {
+    "database": "grapery",
+    "username": "root",
+    "password": "",
+    "address": "localhost",
+    "max_idle": 10,
+    "max_open": 100
+  },
+  "redis": {
+    "address": "localhost:6379",
+    "password": "",
+    "database": 0,
+    "ping_interval": "30s"
+  },
+  "jwt": {
+    "secret": "",
+    "expiry": "24h"
+  },
+  "aliyun": {
+    "api_key": "",
+    "secret_key": "",
+    "endpoint": "oss-cn-shanghai.aliyuncs.com",
+    "bucket": "grapery-dev",
+    "role_arn": "",
+    "oss_access_key_id": "",
+    "oss_access_key_secret": "",
+    "oss_role_arn": ""
+  },
+  "ai": {
+    "huoshan_api_key": "",
+    "huoshan_base_url": "",
+    "huoshan_image_model": "",
+    "gemini_api_key": "",
+    "gemini_base_url": "",
+    "default_provider": "huoshan",
+    "image_provider": "huoshan",
+    "video_provider": "huoshan"
+  },
+  "telemetry": {
+    "sls": {
+      "enabled": false,
+      "endpoint": "",
+      "access_key_id": "",
+      "access_key_secret": "",
+      "project": "",
+      "logstore": "",
+      "topic": "grapery",
+      "source": ""
+    },
+    "prometheus": {
+      "enabled": false,
+      "path": "/metrics",
+      "push_gateway": "",
+      "push_interval": 15,
+      "job_name": "grapery-vippay"
+    },
+    "tracing": {
+      "enabled": false,
+      "service_name": "grapery-vippay",
+      "service_version": "1.0.0",
+      "environment": "development",
+      "sampling_ratio": 1.0,
+      "headers": {},
+      "jaeger_endpoint": "",
+      "otlp_endpoint": ""
+    }
+  }
+}
