@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// Configure SLS if enabled
-	if cfg.Telemetry.SLS.Enabled {
+	if cfg.Telemetry.SLS.Enabled && cfg.Telemetry.SLS.Endpoint != "" {
 		telemetryConfig.SLS = &telemetry.SLSConfig{
 			Endpoint:        cfg.Telemetry.SLS.Endpoint,
 			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,

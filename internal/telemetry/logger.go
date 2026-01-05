@@ -52,7 +52,6 @@ func NewLoggerWithConfig(config LoggerConfig) (*zap.Logger, error) {
 		EncodeDuration: zapcore.SecondsDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
-	fmt.Println("SLS encoderConfig: " + config.SLS.Endpoint)
 
 	// Create console core (always enabled)
 	consoleEncoder := zapcore.NewJSONEncoder(encoderConfig)
