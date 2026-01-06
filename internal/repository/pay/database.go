@@ -61,8 +61,9 @@ func Init(uname, pwd, address, dbname string) error {
 		return err
 	}
 	database.Callback().Update().Before("gorm:update").Register("update_update_at", callbacks.BeforeCreate)
-	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
-	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
+	// Note: GORM automatically handles soft delete with DeletedAt field, no need for manual deleteFilter
+	// database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
+	// database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
 	database.AutoMigrate(&PaymentRecord{})
 	database.AutoMigrate(&Subscription{})

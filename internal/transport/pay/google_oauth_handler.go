@@ -2,6 +2,7 @@ package pay
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"time"
@@ -689,8 +690,33 @@ func (h *GoogleOAuthHandler) HandleGoogleUnlink(c *gin.Context) {
 
 // createGoogleOAuthConfig 创建 Google OAuth2 配置
 func createGoogleOAuthConfig() *payservice.GoogleOAuthConfig {
-	// 从环境变量读取配置
+	// 优先级：环境变量 > 配置文件 > 默认值
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	
+	// 如果环境变量未设置，尝试从配置文件读取
+	if clientID == "" {
+		// 尝试读取 vippay.json 配置文件
+		configPath := os.Getenv("VIPPAY_CONFIG_PATH")
+		if configPath == "" {
+			configPath = "vippay.json"
+		}
+		
+		if data, err := os.ReadFile(configPath); err == nil {
+			// 解析 JSON 配置文件
+			var config struct {
+				OAuth struct {
+					Google struct {
+						ClientID string `json:"client_id"`
+					} `json:"google"`
+				} `json:"oauth"`
+			}
+			if err := json.Unmarshal(data, &config); err == nil && config.OAuth.Google.ClientID != "" {
+				clientID = config.OAuth.Google.ClientID
+			}
+		}
+	}
+	
+	// 如果仍未设置，使用默认值
 	if clientID == "" {
 		clientID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com" // 默认 Client ID
 	}

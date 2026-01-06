@@ -74,7 +74,9 @@ ENV APPLE_OAUTH_KEY_ID=
 ENV APPLE_OAUTH_PRIVATE_KEY=
 
 # ========== Google OAuth Configuration ==========
-ENV GOOGLE_OAUTH_CLIENT_ID=
+# Note: Code uses GOOGLE_CLIENT_ID (not GOOGLE_OAUTH_CLIENT_ID)
+# Set GOOGLE_CLIENT_ID to Web application Client ID (Server Client ID)
+ENV GOOGLE_CLIENT_ID=
 ENV GOOGLE_OAUTH_CLIENT_SECRET=
 
 # ========== APNs Push Notification Configuration ==========

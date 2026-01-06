@@ -787,7 +787,7 @@ func createIAPConfig() *paypkg.IAPConfig {
 	appleSandboxPrivateKey := getEnvWithDefault("APPLE_SANDBOX_PRIVATE_KEY", applePrivateKey)
 
 	// Google 配置
-	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.rankquantity.voyager")
+	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.rankquantity.pioneer")
 	googleServiceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
 
 	// Google Sandbox 配置（如不设置，使用生产配置）
