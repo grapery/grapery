@@ -205,7 +205,7 @@ jobs:
           
           # ========== Aliyun SLS Telemetry Configuration ==========
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           EOF
           echo "✅ Development .env file generated"
           cat .env

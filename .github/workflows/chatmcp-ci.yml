@@ -197,12 +197,12 @@ jobs:
           
           # ========== Aliyun OSS STS Configuration ==========
           ALIYUN_OSS_ACCESS_KEY_ID=${{ vars.ALIYUN_OSS_ACCESS_KEY_ID }}
-          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_OSS_ACCESS_KEY_SECRET }}
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           
           # ========== Aliyun SLS Telemetry Configuration ==========
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           EOF
           echo "✅ Development .env file generated"
           cat .env
@@ -366,7 +366,7 @@ jobs:
           
           # ========== Aliyun OSS STS Configuration ==========
           ALIYUN_OSS_ACCESS_KEY_ID=${{ vars.ALIYUN_OSS_ACCESS_KEY_ID }}
-          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+          ALIYUN_OSS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_OSS_ACCESS_KEY_SECRET }}
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
           echo "✅ Production .env file generated"
@@ -384,7 +384,7 @@ jobs:
           echo "| Environment | production |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Secrets Status" >> $GITHUB_STEP_SUMMARY
+          echo "### vars Status" >> $GITHUB_STEP_SUMMARY
           echo "- DB_PASSWORD: ${{ vars.DB_PASSWORD && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- JWT_SECRET: ${{ vars.JWT_SECRET && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
