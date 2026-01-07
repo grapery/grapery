@@ -98,6 +98,21 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
+	// 5) Ensure user_devices table exists for push notifications.
+	if err := r.ensureUserDevicesSchema(); err != nil {
+		return err
+	}
+
+	// 6) Ensure storyboard_image_generations has prompt_details_json column.
+	if err := r.ensureStoryboardImageGenerationSchema(); err != nil {
+		return err
+	}
+
+	// 7) Ensure storyboard_video_generations has prompt_details_json column.
+	if err := r.ensureStoryboardVideoGenerationPromptDetailsSchema(); err != nil {
+		return err
+	}
+
 	r.log.Info("targeted schema migrations completed successfully")
 	return nil
 }
@@ -362,6 +377,40 @@ func (r *Repository) ensureGroupMembersSchema() error {
 	// This column references the group_roles table for flexible permission management.
 	if err := r.ensureColumn("group_members", "role_id", "VARCHAR(36) NULL"); err != nil {
 		return fmt.Errorf("ensure group_members.role_id: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ensureUserDevicesSchema() error {
+	// Check if user_devices table exists
+	hasTable := r.db.Migrator().HasTable(&UserDevice{})
+	if !hasTable {
+		r.log.Info("user_devices table not found, creating it...")
+		// Use AutoMigrate to create the table with all its columns and indexes
+		if err := r.db.AutoMigrate(&UserDevice{}); err != nil {
+			return fmt.Errorf("failed to create user_devices table: %w", err)
+		}
+		r.log.Info("user_devices table created successfully")
+	} else {
+		r.log.Info("user_devices table already exists")
+	}
+	return nil
+}
+
+func (r *Repository) ensureStoryboardImageGenerationSchema() error {
+	// Add prompt_details_json column if it doesn't exist
+	// This column stores structured prompt details for client editing
+	if err := r.ensureColumn("storyboard_image_generations", "prompt_details_json", "JSON NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_image_generations.prompt_details_json: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ensureStoryboardVideoGenerationPromptDetailsSchema() error {
+	// Add prompt_details_json column if it doesn't exist
+	// This column stores structured prompt details for client editing
+	if err := r.ensureColumn("storyboard_video_generations", "prompt_details_json", "JSON NULL"); err != nil {
+		return fmt.Errorf("ensure storyboard_video_generations.prompt_details_json: %w", err)
 	}
 	return nil
 }

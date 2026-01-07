@@ -2843,20 +2843,21 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 }
 
 // promptDetailsToJSON 将 ImagePromptDetails 转换为 JSON 字符串
+// 返回 "null" 而不是空字符串，因为 MySQL JSON 列不接受空字符串
 func promptDetailsToJSON(details *domain.ImagePromptDetails) string {
 	if details == nil {
-		return ""
+		return "null"
 	}
 	data, err := json.Marshal(details)
 	if err != nil {
-		return ""
+		return "null"
 	}
 	return string(data)
 }
 
 // jsonToPromptDetails 将 JSON 字符串转换为 ImagePromptDetails
 func jsonToPromptDetails(jsonStr string) *domain.ImagePromptDetails {
-	if jsonStr == "" {
+	if jsonStr == "" || jsonStr == "null" {
 		return nil
 	}
 	var details domain.ImagePromptDetails
@@ -2867,20 +2868,21 @@ func jsonToPromptDetails(jsonStr string) *domain.ImagePromptDetails {
 }
 
 // videoPromptDetailsToJSON 将 VideoPromptDetails 转换为 JSON 字符串
+// 返回 "null" 而不是空字符串，因为 MySQL JSON 列不接受空字符串
 func videoPromptDetailsToJSON(details *domain.VideoPromptDetails) string {
 	if details == nil {
-		return ""
+		return "null"
 	}
 	data, err := json.Marshal(details)
 	if err != nil {
-		return ""
+		return "null"
 	}
 	return string(data)
 }
 
 // jsonToVideoPromptDetails 将 JSON 字符串转换为 VideoPromptDetails
 func jsonToVideoPromptDetails(jsonStr string) *domain.VideoPromptDetails {
-	if jsonStr == "" {
+	if jsonStr == "" || jsonStr == "null" {
 		return nil
 	}
 	var details domain.VideoPromptDetails

@@ -26,10 +26,10 @@
   },
   "oauth": {
     "google": {
-      "client_id": ""
+      "client_id": "345805164843-pbd5oc8emnu03l1i0sdn7r19pmk10ajf.apps.googleusercontent.com"
     },
     "apple": {
-      "bundle_id": ""
+      "bundle_id": "com.rankquantity.voyager"
     }
   },
   "aliyun": {
