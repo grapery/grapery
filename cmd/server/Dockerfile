@@ -67,6 +67,10 @@ ENV ALIYUN_ENDPOINT=oss-cn-shanghai.aliyuncs.com
 ENV ALIYUN_BUCKET=grapery-dev
 ENV ALIYUN_ROLE_ARN=
 
+# ========== Aliyun SLS Telemetry Configuration ==========
+ENV ALIYUN_ACCESS_KEY_ID=
+ENV ALIYUN_ACCESS_KEY_SECRET=
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

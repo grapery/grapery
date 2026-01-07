@@ -57,6 +57,10 @@ ENV GEMINI_BASE_URL=
 ENV JWT_SECRET=
 ENV JWT_EXPIRY_HOURS=24
 
+# ========== Aliyun SLS Telemetry Configuration ==========
+ENV ALIYUN_ACCESS_KEY_ID=
+ENV ALIYUN_ACCESS_KEY_SECRET=
+
 EXPOSE 8082
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

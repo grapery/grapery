@@ -90,6 +90,10 @@ ENV APNS_USE_SANDBOX=false
 ENV FCM_PROJECT_ID=
 ENV FCM_CREDENTIALS_JSON=
 
+# ========== Aliyun SLS Telemetry Configuration ==========
+ENV ALIYUN_ACCESS_KEY_ID=
+ENV ALIYUN_ACCESS_KEY_SECRET=
+
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
