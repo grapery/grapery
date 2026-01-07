@@ -78,7 +78,7 @@ func (r *Repository) TrendingStories(ctx context.Context, limit int) ([]*domain.
 	}
 
 	// Only include stories created in the last 24 hours.
-	since := time.Now().Add(-24 * time.Hour)
+	since := time.Now().Add(-30 * 24 * time.Hour)
 
 	// Simple hotness ordering: followers > likes > updated recency.
 	err := r.db.WithContext(ctx).

@@ -94,6 +94,11 @@ func (s *Service) CreateGroup(ctx context.Context, userID string, req CreateGrou
 		return nil, errors.New("failed to initialize group")
 	}
 
+	// Record metrics: group member count (creator is first member)
+	if s.metrics != nil {
+		s.metrics.RecordGroupMemberCount(group.ID, 1.0)
+	}
+
 	// 缓存新创建的群组
 	c := s.getCache()
 	if c != nil {
@@ -528,6 +533,14 @@ func (s *Service) AcceptInvitation(ctx context.Context, userID, invitationID str
 		return errors.New("failed to join group")
 	}
 
+	// Record metrics: update group member count
+	if s.metrics != nil {
+		members, err := s.repo.GetGroupMembers(ctx, invitation.GroupID, 1000, 0)
+		if err == nil {
+			s.metrics.RecordGroupMemberCount(invitation.GroupID, float64(len(members)))
+		}
+	}
+
 	// 更新邀请状态
 	if err := s.repo.UpdateInvitationStatus(ctx, invitationID, "accepted"); err != nil {
 		s.logger.Error("failed to update invitation status",
@@ -645,6 +658,14 @@ func (s *Service) RemoveMember(ctx context.Context, operatorID, groupID, memberI
 		return errors.New("failed to remove member")
 	}
 
+	// Record metrics: update group member count
+	if s.metrics != nil {
+		members, err := s.repo.GetGroupMembers(ctx, groupID, 1000, 0)
+		if err == nil {
+			s.metrics.RecordGroupMemberCount(groupID, float64(len(members)))
+		}
+	}
+
 	// 使相关缓存失效
 	c := s.getCache()
 	if c != nil {
@@ -726,6 +747,14 @@ func (s *Service) LeaveGroup(ctx context.Context, userID, groupID string) error 
 	if err := s.repo.RemoveGroupMember(ctx, groupID, userID); err != nil {
 		s.logger.Error("failed to leave group", zap.Error(err))
 		return errors.New("failed to leave group")
+	}
+
+	// Record metrics: update group member count
+	if s.metrics != nil {
+		members, err := s.repo.GetGroupMembers(ctx, groupID, 1000, 0)
+		if err == nil {
+			s.metrics.RecordGroupMemberCount(groupID, float64(len(members)))
+		}
 	}
 
 	s.logger.Info("left group successfully")

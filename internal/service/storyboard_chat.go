@@ -1047,6 +1047,25 @@ func (s *StoryboardChatService) generateSceneImages(ctx context.Context, session
 		zap.String("sessionID", session.ID),
 		zap.String("storyboardID", session.StoryboardID))
 
+	// Get storyboard to access story style
+	storyboard, err := s.repo.StoryboardByID(ctx, session.StoryboardID)
+	if err != nil {
+		s.logger.Error("failed to get storyboard", zap.Error(err))
+		return
+	}
+
+	// Get story style configuration
+	var storyStyle *domain.StyleConfig
+	if storyboard.StoryID != "" {
+		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+		if err == nil && story.Style != nil {
+			storyStyle = story.Style
+			s.logger.Debug("fetched story style for image generation",
+				zap.String("storyId", storyboard.StoryID),
+				zap.String("style", storyStyle.Style))
+		}
+	}
+
 	// Get scenes
 	scenes, err := s.repo.StoryboardScenes(ctx, session.StoryboardID)
 	if err != nil {
@@ -1061,6 +1080,8 @@ func (s *StoryboardChatService) generateSceneImages(ctx context.Context, session
 			SceneID:          scene.ID,
 			SceneTitle:       scene.Title,
 			SceneDescription: scene.Description,
+			SceneCharacters:  scene.Characters, // 传递场景中的角色名称
+			StoryStyle:       storyStyle,       // 传递故事风格配置
 		}
 
 		if _, err := s.storyService.GenerateSceneImage(ctx, req); err != nil {

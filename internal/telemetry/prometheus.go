@@ -100,6 +100,54 @@ type Metrics struct {
 	NotificationByCategory       *prometheus.CounterVec   // category: "marketing" | "transactional" | "system" | "social"
 	NotificationRetries          *prometheus.CounterVec   // type, channel: retry attempts
 
+	// Storyboard Generation Workflow metrics
+	StoryboardContentGenerations    *prometheus.CounterVec   // step: "content", status: "pending" | "processing" | "completed" | "failed"
+	StoryboardContentGenerationTime *prometheus.HistogramVec // step: "content"
+	StoryboardSceneGenerations      *prometheus.CounterVec   // step: "scene_details", status
+	StoryboardSceneGenerationTime   *prometheus.HistogramVec // step: "scene_details"
+	StoryboardImageGenerations      *prometheus.CounterVec   // step: "image", status, scene_type: "transition" | "with_characters"
+	StoryboardImageGenerationTime   *prometheus.HistogramVec // step: "image", scene_type
+	StoryboardVideoGenerations      *prometheus.CounterVec   // step: "video", status, is_subdivided: "true" | "false"
+	StoryboardVideoGenerationTime   *prometheus.HistogramVec // step: "video", is_subdivided
+
+	// Image Generation Detailed metrics
+	ImageGenerationWithCharacters    *prometheus.CounterVec   // status: "completed" | "failed", character_count: "0" | "1" | "2+"
+	ImageGenerationWithStyle         *prometheus.CounterVec   // status, has_style: "true" | "false"
+	ImageGenerationPromptDetailsUsed *prometheus.CounterVec   // has_prompt_details: "true" | "false"
+	ImageGenerationCharacterRefs     *prometheus.HistogramVec // character_count: number of character references used
+	ImageGenerationTokenConsumed     *prometheus.HistogramVec // step: "prompt" | "image", scene_type
+	ImageGenerationErrors            *prometheus.CounterVec   // error_type: "ai_error" | "image_api_error" | "parsing_error" | "timeout" | "unknown"
+
+	// Video Generation Detailed metrics
+	VideoGenerationSubdivided    *prometheus.CounterVec   // is_subdivided: "true" | "false", status
+	VideoGenerationSegmentCount  *prometheus.HistogramVec // segment_count: number of video segments
+	VideoGenerationTokenConsumed *prometheus.HistogramVec // step: "prompt" | "video"
+	VideoGenerationErrors        *prometheus.CounterVec   // error_type: "ai_error" | "video_api_error" | "timeout" | "unknown"
+
+	// Character Poster Generation metrics
+	CharacterPosterGenerations    *prometheus.CounterVec   // status, has_story_reference: "true" | "false"
+	CharacterPosterGenerationTime *prometheus.HistogramVec // step: "concept" | "image"
+	CharacterPosterConceptTime    *prometheus.HistogramVec // concept generation duration
+	CharacterPosterImageTime      *prometheus.HistogramVec // image generation duration
+	CharacterPosterTokenConsumed  *prometheus.HistogramVec // step: "concept" | "image"
+	CharacterPosterErrors         *prometheus.CounterVec   // error_type: "concept_error" | "image_error" | "parsing_error" | "unknown"
+
+	// Story Style Configuration metrics
+	StoryStyleConfigUsage   *prometheus.CounterVec // style_id, usage_type: "image_generation" | "video_generation" | "poster_generation"
+	StoryStyleConfigCount   prometheus.Gauge       // total number of style configurations
+	StoryStyleConfigByStyle *prometheus.GaugeVec   // style: style name, count
+
+	// AI Generation Quality metrics
+	AIGenerationSuccessRate     *prometheus.GaugeVec   // type: "image" | "video" | "poster" | "content" | "scene", provider
+	AIGenerationAverageTokens   *prometheus.GaugeVec   // type, provider
+	AIGenerationAverageDuration *prometheus.GaugeVec   // type, provider
+	AIGenerationRetries         *prometheus.CounterVec // type, provider, retry_count
+
+	// Storyboard Workflow Completion metrics
+	StoryboardWorkflowCompleted *prometheus.CounterVec   // workflow_status: "content_ready" | "images_ready" | "video_ready" | "published"
+	StoryboardWorkflowDuration  *prometheus.HistogramVec // total workflow duration from start to completion
+	StoryboardWorkflowAbandoned *prometheus.CounterVec   // abandoned_at_step: "content" | "images" | "video"
+
 	config   PrometheusConfig
 	pusher   *push.Pusher
 	stopChan chan struct{}
@@ -510,6 +558,270 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 			},
 			[]string{"type", "channel"},
 		),
+
+		// Storyboard Generation Workflow metrics
+		StoryboardContentGenerations: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_content_generations_total",
+				Help: "Total number of storyboard content generations",
+			},
+			[]string{"status"}, // "pending" | "processing" | "completed" | "failed"
+		),
+		StoryboardContentGenerationTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "storyboard_content_generation_duration_seconds",
+				Help:    "Storyboard content generation duration in seconds",
+				Buckets: []float64{1, 2, 5, 10, 20, 30, 60, 120, 300},
+			},
+			[]string{"status"},
+		),
+		StoryboardSceneGenerations: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_scene_generations_total",
+				Help: "Total number of storyboard scene detail generations",
+			},
+			[]string{"status"},
+		),
+		StoryboardSceneGenerationTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "storyboard_scene_generation_duration_seconds",
+				Help:    "Storyboard scene detail generation duration in seconds",
+				Buckets: []float64{0.5, 1, 2, 5, 10, 20, 30, 60},
+			},
+			[]string{"status"},
+		),
+		StoryboardImageGenerations: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_image_generations_total",
+				Help: "Total number of storyboard image generations",
+			},
+			[]string{"status", "scene_type"}, // scene_type: "transition" | "with_characters"
+		),
+		StoryboardImageGenerationTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "storyboard_image_generation_duration_seconds",
+				Help:    "Storyboard image generation duration in seconds",
+				Buckets: []float64{5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300},
+			},
+			[]string{"scene_type"},
+		),
+		StoryboardVideoGenerations: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_video_generations_total",
+				Help: "Total number of storyboard video generations",
+			},
+			[]string{"status", "is_subdivided"}, // is_subdivided: "true" | "false"
+		),
+		StoryboardVideoGenerationTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "storyboard_video_generation_duration_seconds",
+				Help:    "Storyboard video generation duration in seconds",
+				Buckets: []float64{10, 30, 60, 120, 300, 600, 900, 1800, 3600},
+			},
+			[]string{"is_subdivided"},
+		),
+
+		// Image Generation Detailed metrics
+		ImageGenerationWithCharacters: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "image_generation_with_characters_total",
+				Help: "Total number of image generations with character references",
+			},
+			[]string{"status", "character_count"}, // character_count: "0" | "1" | "2+"
+		),
+		ImageGenerationWithStyle: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "image_generation_with_style_total",
+				Help: "Total number of image generations with story style configuration",
+			},
+			[]string{"status", "has_style"}, // has_style: "true" | "false"
+		),
+		ImageGenerationPromptDetailsUsed: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "image_generation_prompt_details_used_total",
+				Help: "Total number of image generations using structured prompt details",
+			},
+			[]string{"has_prompt_details"}, // has_prompt_details: "true" | "false"
+		),
+		ImageGenerationCharacterRefs: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "image_generation_character_refs_count",
+				Help:    "Number of character references used in image generation",
+				Buckets: []float64{0, 1, 2, 3, 4, 5, 10},
+			},
+			[]string{"scene_type"},
+		),
+		ImageGenerationTokenConsumed: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "image_generation_token_consumed",
+				Help:    "Token consumption for image generation by step",
+				Buckets: []float64{50, 100, 200, 500, 1000, 2000, 5000, 10000},
+			},
+			[]string{"step", "scene_type"}, // step: "prompt" | "image"
+		),
+		ImageGenerationErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "image_generation_errors_total",
+				Help: "Total number of image generation errors by type",
+			},
+			[]string{"error_type"}, // "ai_error" | "image_api_error" | "parsing_error" | "timeout" | "unknown"
+		),
+
+		// Video Generation Detailed metrics
+		VideoGenerationSubdivided: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "video_generation_subdivided_total",
+				Help: "Total number of video generations with subdivision",
+			},
+			[]string{"is_subdivided", "status"},
+		),
+		VideoGenerationSegmentCount: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "video_generation_segment_count",
+				Help:    "Number of video segments when subdivision is applied",
+				Buckets: []float64{1, 2, 3, 4, 5, 6, 8, 10, 15, 20},
+			},
+			[]string{"is_subdivided"},
+		),
+		VideoGenerationTokenConsumed: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "video_generation_token_consumed",
+				Help:    "Token consumption for video generation by step",
+				Buckets: []float64{100, 200, 500, 1000, 2000, 5000, 10000, 20000},
+			},
+			[]string{"step"}, // step: "prompt" | "video"
+		),
+		VideoGenerationErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "video_generation_errors_total",
+				Help: "Total number of video generation errors by type",
+			},
+			[]string{"error_type"}, // "ai_error" | "video_api_error" | "timeout" | "unknown"
+		),
+
+		// Character Poster Generation metrics
+		CharacterPosterGenerations: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "character_poster_generations_total",
+				Help: "Total number of character poster generations",
+			},
+			[]string{"status", "has_story_reference"}, // has_story_reference: "true" | "false"
+		),
+		CharacterPosterGenerationTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "character_poster_generation_duration_seconds",
+				Help:    "Character poster generation duration in seconds",
+				Buckets: []float64{5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300},
+			},
+			[]string{"step"}, // step: "concept" | "image"
+		),
+		CharacterPosterConceptTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "character_poster_concept_duration_seconds",
+				Help:    "Character poster concept generation duration in seconds",
+				Buckets: []float64{1, 2, 5, 10, 20, 30, 60},
+			},
+			[]string{"status"},
+		),
+		CharacterPosterImageTime: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "character_poster_image_duration_seconds",
+				Help:    "Character poster image generation duration in seconds",
+				Buckets: []float64{5, 10, 15, 20, 30, 45, 60, 90, 120},
+			},
+			[]string{"status"},
+		),
+		CharacterPosterTokenConsumed: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "character_poster_token_consumed",
+				Help:    "Token consumption for character poster generation by step",
+				Buckets: []float64{50, 100, 200, 500, 1000, 2000, 5000},
+			},
+			[]string{"step"}, // step: "concept" | "image"
+		),
+		CharacterPosterErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "character_poster_errors_total",
+				Help: "Total number of character poster generation errors by type",
+			},
+			[]string{"error_type"}, // "concept_error" | "image_error" | "parsing_error" | "unknown"
+		),
+
+		// Story Style Configuration metrics
+		StoryStyleConfigUsage: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "story_style_config_usage_total",
+				Help: "Total number of story style configuration usages",
+			},
+			[]string{"style_id", "usage_type"}, // usage_type: "image_generation" | "video_generation" | "poster_generation"
+		),
+		StoryStyleConfigCount: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "story_style_config_count",
+				Help: "Total number of story style configurations",
+			},
+		),
+		StoryStyleConfigByStyle: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "story_style_config_by_style",
+				Help: "Number of style configurations by style name",
+			},
+			[]string{"style"},
+		),
+
+		// AI Generation Quality metrics
+		AIGenerationSuccessRate: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "ai_generation_success_rate",
+				Help: "AI generation success rate (0-1)",
+			},
+			[]string{"type", "provider"}, // type: "image" | "video" | "poster" | "content" | "scene"
+		),
+		AIGenerationAverageTokens: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "ai_generation_average_tokens",
+				Help: "Average token consumption for AI generation",
+			},
+			[]string{"type", "provider"},
+		),
+		AIGenerationAverageDuration: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "ai_generation_average_duration_seconds",
+				Help: "Average duration for AI generation in seconds",
+			},
+			[]string{"type", "provider"},
+		),
+		AIGenerationRetries: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "ai_generation_retries_total",
+				Help: "Total number of AI generation retries",
+			},
+			[]string{"type", "provider", "retry_count"}, // retry_count: "1" | "2" | "3+"
+		),
+
+		// Storyboard Workflow Completion metrics
+		StoryboardWorkflowCompleted: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_workflow_completed_total",
+				Help: "Total number of completed storyboard workflows",
+			},
+			[]string{"workflow_status"}, // "content_ready" | "images_ready" | "video_ready" | "published"
+		),
+		StoryboardWorkflowDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "storyboard_workflow_duration_seconds",
+				Help:    "Total workflow duration from start to completion",
+				Buckets: []float64{60, 300, 600, 1800, 3600, 7200, 14400, 28800, 86400},
+			},
+			[]string{"workflow_status"},
+		),
+		StoryboardWorkflowAbandoned: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "storyboard_workflow_abandoned_total",
+				Help: "Total number of abandoned storyboard workflows",
+			},
+			[]string{"abandoned_at_step"}, // "content" | "images" | "video"
+		),
 	}
 
 	// Register all metrics
@@ -570,6 +882,47 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.NotificationDeliveryRate,
 		m.NotificationByCategory,
 		m.NotificationRetries,
+		// Storyboard Generation Workflow metrics
+		m.StoryboardContentGenerations,
+		m.StoryboardContentGenerationTime,
+		m.StoryboardSceneGenerations,
+		m.StoryboardSceneGenerationTime,
+		m.StoryboardImageGenerations,
+		m.StoryboardImageGenerationTime,
+		m.StoryboardVideoGenerations,
+		m.StoryboardVideoGenerationTime,
+		// Image Generation Detailed metrics
+		m.ImageGenerationWithCharacters,
+		m.ImageGenerationWithStyle,
+		m.ImageGenerationPromptDetailsUsed,
+		m.ImageGenerationCharacterRefs,
+		m.ImageGenerationTokenConsumed,
+		m.ImageGenerationErrors,
+		// Video Generation Detailed metrics
+		m.VideoGenerationSubdivided,
+		m.VideoGenerationSegmentCount,
+		m.VideoGenerationTokenConsumed,
+		m.VideoGenerationErrors,
+		// Character Poster Generation metrics
+		m.CharacterPosterGenerations,
+		m.CharacterPosterGenerationTime,
+		m.CharacterPosterConceptTime,
+		m.CharacterPosterImageTime,
+		m.CharacterPosterTokenConsumed,
+		m.CharacterPosterErrors,
+		// Story Style Configuration metrics
+		m.StoryStyleConfigUsage,
+		m.StoryStyleConfigCount,
+		m.StoryStyleConfigByStyle,
+		// AI Generation Quality metrics
+		m.AIGenerationSuccessRate,
+		m.AIGenerationAverageTokens,
+		m.AIGenerationAverageDuration,
+		m.AIGenerationRetries,
+		// Storyboard Workflow Completion metrics
+		m.StoryboardWorkflowCompleted,
+		m.StoryboardWorkflowDuration,
+		m.StoryboardWorkflowAbandoned,
 	)
 
 	// Note: Go collectors (NewGoCollector, NewProcessCollector) are not registered
@@ -970,6 +1323,234 @@ func (m *Metrics) RecordNotificationByCategory(category string) {
 // RecordNotificationRetry records a notification retry attempt
 func (m *Metrics) RecordNotificationRetry(notificationType, channel string) {
 	m.NotificationRetries.WithLabelValues(notificationType, channel).Inc()
+}
+
+// ============================================
+// Storyboard Generation Workflow Metrics Recording Methods
+// ============================================
+
+// RecordStoryboardContentGeneration records a storyboard content generation
+func (m *Metrics) RecordStoryboardContentGeneration(status string, duration time.Duration) {
+	m.StoryboardContentGenerations.WithLabelValues(status).Inc()
+	m.StoryboardContentGenerationTime.WithLabelValues(status).Observe(duration.Seconds())
+}
+
+// RecordStoryboardSceneGeneration records a storyboard scene detail generation
+func (m *Metrics) RecordStoryboardSceneGeneration(status string, duration time.Duration) {
+	m.StoryboardSceneGenerations.WithLabelValues(status).Inc()
+	m.StoryboardSceneGenerationTime.WithLabelValues(status).Observe(duration.Seconds())
+}
+
+// RecordStoryboardImageGeneration records a storyboard image generation
+// sceneType: "transition" | "with_characters"
+func (m *Metrics) RecordStoryboardImageGeneration(status, sceneType string, duration time.Duration) {
+	m.StoryboardImageGenerations.WithLabelValues(status, sceneType).Inc()
+	m.StoryboardImageGenerationTime.WithLabelValues(sceneType).Observe(duration.Seconds())
+}
+
+// RecordStoryboardVideoGeneration records a storyboard video generation
+func (m *Metrics) RecordStoryboardVideoGeneration(status string, isSubdivided bool, duration time.Duration) {
+	isSubdividedStr := "false"
+	if isSubdivided {
+		isSubdividedStr = "true"
+	}
+	m.StoryboardVideoGenerations.WithLabelValues(status, isSubdividedStr).Inc()
+	m.StoryboardVideoGenerationTime.WithLabelValues(isSubdividedStr).Observe(duration.Seconds())
+}
+
+// ============================================
+// Image Generation Detailed Metrics Recording Methods
+// ============================================
+
+// RecordImageGenerationWithCharacters records image generation with character references
+// characterCount: number of characters (0, 1, 2+)
+func (m *Metrics) RecordImageGenerationWithCharacters(status string, characterCount int) {
+	charCountLabel := "0"
+	if characterCount == 1 {
+		charCountLabel = "1"
+	} else if characterCount >= 2 {
+		charCountLabel = "2+"
+	}
+	m.ImageGenerationWithCharacters.WithLabelValues(status, charCountLabel).Inc()
+}
+
+// RecordImageGenerationWithStyle records image generation with story style configuration
+func (m *Metrics) RecordImageGenerationWithStyle(status string, hasStyle bool) {
+	hasStyleStr := "false"
+	if hasStyle {
+		hasStyleStr = "true"
+	}
+	m.ImageGenerationWithStyle.WithLabelValues(status, hasStyleStr).Inc()
+}
+
+// RecordImageGenerationPromptDetails records usage of structured prompt details
+func (m *Metrics) RecordImageGenerationPromptDetails(hasPromptDetails bool) {
+	hasPromptDetailsStr := "false"
+	if hasPromptDetails {
+		hasPromptDetailsStr = "true"
+	}
+	m.ImageGenerationPromptDetailsUsed.WithLabelValues(hasPromptDetailsStr).Inc()
+}
+
+// RecordImageGenerationCharacterRefs records number of character references used
+func (m *Metrics) RecordImageGenerationCharacterRefs(sceneType string, characterCount float64) {
+	m.ImageGenerationCharacterRefs.WithLabelValues(sceneType).Observe(characterCount)
+}
+
+// RecordImageGenerationTokenConsumed records token consumption for image generation
+// step: "prompt" | "image"
+func (m *Metrics) RecordImageGenerationTokenConsumed(step, sceneType string, tokens float64) {
+	m.ImageGenerationTokenConsumed.WithLabelValues(step, sceneType).Observe(tokens)
+}
+
+// RecordImageGenerationError records an image generation error
+// errorType: "ai_error" | "image_api_error" | "parsing_error" | "timeout" | "unknown"
+func (m *Metrics) RecordImageGenerationError(errorType string) {
+	m.ImageGenerationErrors.WithLabelValues(errorType).Inc()
+}
+
+// ============================================
+// Video Generation Detailed Metrics Recording Methods
+// ============================================
+
+// RecordVideoGenerationSubdivided records video generation with subdivision
+func (m *Metrics) RecordVideoGenerationSubdivided(isSubdivided bool, status string) {
+	isSubdividedStr := "false"
+	if isSubdivided {
+		isSubdividedStr = "true"
+	}
+	m.VideoGenerationSubdivided.WithLabelValues(isSubdividedStr, status).Inc()
+}
+
+// RecordVideoGenerationSegmentCount records number of video segments
+func (m *Metrics) RecordVideoGenerationSegmentCount(isSubdivided bool, segmentCount float64) {
+	isSubdividedStr := "false"
+	if isSubdivided {
+		isSubdividedStr = "true"
+	}
+	m.VideoGenerationSegmentCount.WithLabelValues(isSubdividedStr).Observe(segmentCount)
+}
+
+// RecordVideoGenerationTokenConsumed records token consumption for video generation
+// step: "prompt" | "video"
+func (m *Metrics) RecordVideoGenerationTokenConsumed(step string, tokens float64) {
+	m.VideoGenerationTokenConsumed.WithLabelValues(step).Observe(tokens)
+}
+
+// RecordVideoGenerationError records a video generation error
+// errorType: "ai_error" | "video_api_error" | "timeout" | "unknown"
+func (m *Metrics) RecordVideoGenerationError(errorType string) {
+	m.VideoGenerationErrors.WithLabelValues(errorType).Inc()
+}
+
+// ============================================
+// Character Poster Generation Metrics Recording Methods
+// ============================================
+
+// RecordCharacterPosterGeneration records a character poster generation
+func (m *Metrics) RecordCharacterPosterGeneration(status string, hasStoryReference bool) {
+	hasStoryRefStr := "false"
+	if hasStoryReference {
+		hasStoryRefStr = "true"
+	}
+	m.CharacterPosterGenerations.WithLabelValues(status, hasStoryRefStr).Inc()
+}
+
+// RecordCharacterPosterGenerationTime records character poster generation duration
+// step: "concept" | "image"
+func (m *Metrics) RecordCharacterPosterGenerationTime(step string, duration time.Duration) {
+	m.CharacterPosterGenerationTime.WithLabelValues(step).Observe(duration.Seconds())
+}
+
+// RecordCharacterPosterConceptTime records character poster concept generation duration
+func (m *Metrics) RecordCharacterPosterConceptTime(status string, duration time.Duration) {
+	m.CharacterPosterConceptTime.WithLabelValues(status).Observe(duration.Seconds())
+}
+
+// RecordCharacterPosterImageTime records character poster image generation duration
+func (m *Metrics) RecordCharacterPosterImageTime(status string, duration time.Duration) {
+	m.CharacterPosterImageTime.WithLabelValues(status).Observe(duration.Seconds())
+}
+
+// RecordCharacterPosterTokenConsumed records token consumption for character poster generation
+// step: "concept" | "image"
+func (m *Metrics) RecordCharacterPosterTokenConsumed(step string, tokens float64) {
+	m.CharacterPosterTokenConsumed.WithLabelValues(step).Observe(tokens)
+}
+
+// RecordCharacterPosterError records a character poster generation error
+// errorType: "concept_error" | "image_error" | "parsing_error" | "unknown"
+func (m *Metrics) RecordCharacterPosterError(errorType string) {
+	m.CharacterPosterErrors.WithLabelValues(errorType).Inc()
+}
+
+// ============================================
+// Story Style Configuration Metrics Recording Methods
+// ============================================
+
+// RecordStoryStyleConfigUsage records usage of a story style configuration
+// usageType: "image_generation" | "video_generation" | "poster_generation"
+func (m *Metrics) RecordStoryStyleConfigUsage(styleID, usageType string) {
+	m.StoryStyleConfigUsage.WithLabelValues(styleID, usageType).Inc()
+}
+
+// RecordStoryStyleConfigCount records the total number of style configurations
+func (m *Metrics) RecordStoryStyleConfigCount(count float64) {
+	m.StoryStyleConfigCount.Set(count)
+}
+
+// RecordStoryStyleConfigByStyle records style configuration count by style name
+func (m *Metrics) RecordStoryStyleConfigByStyle(style string, count float64) {
+	m.StoryStyleConfigByStyle.WithLabelValues(style).Set(count)
+}
+
+// ============================================
+// AI Generation Quality Metrics Recording Methods
+// ============================================
+
+// RecordAIGenerationSuccessRate records AI generation success rate
+// generationType: "image" | "video" | "poster" | "content" | "scene"
+func (m *Metrics) RecordAIGenerationSuccessRate(generationType, provider string, rate float64) {
+	m.AIGenerationSuccessRate.WithLabelValues(generationType, provider).Set(rate)
+}
+
+// RecordAIGenerationAverageTokens records average token consumption
+func (m *Metrics) RecordAIGenerationAverageTokens(generationType, provider string, avgTokens float64) {
+	m.AIGenerationAverageTokens.WithLabelValues(generationType, provider).Set(avgTokens)
+}
+
+// RecordAIGenerationAverageDuration records average generation duration
+func (m *Metrics) RecordAIGenerationAverageDuration(generationType, provider string, avgDuration float64) {
+	m.AIGenerationAverageDuration.WithLabelValues(generationType, provider).Set(avgDuration)
+}
+
+// RecordAIGenerationRetry records an AI generation retry
+// retryCount: number of retries (1, 2, 3+)
+func (m *Metrics) RecordAIGenerationRetry(generationType, provider string, retryCount int) {
+	retryCountLabel := "1"
+	if retryCount == 2 {
+		retryCountLabel = "2"
+	} else if retryCount >= 3 {
+		retryCountLabel = "3+"
+	}
+	m.AIGenerationRetries.WithLabelValues(generationType, provider, retryCountLabel).Inc()
+}
+
+// ============================================
+// Storyboard Workflow Completion Metrics Recording Methods
+// ============================================
+
+// RecordStoryboardWorkflowCompleted records a completed storyboard workflow
+// workflowStatus: "content_ready" | "images_ready" | "video_ready" | "published"
+func (m *Metrics) RecordStoryboardWorkflowCompleted(workflowStatus string, duration time.Duration) {
+	m.StoryboardWorkflowCompleted.WithLabelValues(workflowStatus).Inc()
+	m.StoryboardWorkflowDuration.WithLabelValues(workflowStatus).Observe(duration.Seconds())
+}
+
+// RecordStoryboardWorkflowAbandoned records an abandoned storyboard workflow
+// abandonedAtStep: "content" | "images" | "video"
+func (m *Metrics) RecordStoryboardWorkflowAbandoned(abandonedAtStep string) {
+	m.StoryboardWorkflowAbandoned.WithLabelValues(abandonedAtStep).Inc()
 }
 
 // DefaultMetrics is the global metrics instance

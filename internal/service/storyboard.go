@@ -1546,6 +1546,18 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 	// 将 StoryboardSceneResult 转换为 domain.StoryboardScene (AI-generated plot scenes)
 	storyboardScenes := make([]domain.StoryboardScene, 0, len(storyboardResult.Scenes))
 	for i, sceneResult := range storyboardResult.Scenes {
+		// 从角色对象数组中提取角色名称
+		characterNames := make([]string, 0, len(sceneResult.Characters))
+		characterIDs := make([]string, 0, len(sceneResult.Characters))
+		for _, charRef := range sceneResult.Characters {
+			if charRef.Name != "" {
+				characterNames = append(characterNames, charRef.Name)
+			}
+			if charRef.ID != "" {
+				characterIDs = append(characterIDs, charRef.ID)
+			}
+		}
+
 		scene := domain.StoryboardScene{
 			Sequence:      i,
 			Title:         sceneResult.Title,
@@ -1553,14 +1565,30 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 			Location:      sceneResult.Location,
 			TimeOfDay:     sceneResult.TimeOfDay,
 			Mood:          sceneResult.Mood,
-			Characters:    sceneResult.Characters,
-			Image:         "", // 图片将在后续生成
+			Characters:    characterNames,           // 角色名称数组
+			StorySceneID:  sceneResult.StorySceneID, // 保存关联的场景ID
+			Image:         "",                       // 图片将在后续生成
 			IsAIGenerated: true,
 		}
 		// 确保 Characters 不为 nil
 		if scene.Characters == nil {
 			scene.Characters = []string{}
-			}
+		}
+		// 记录角色ID信息（用于日志和后续关联）
+		if len(characterIDs) > 0 {
+			s.logger.Debug("scene has character IDs from AI",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneIndex", i),
+				zap.Strings("characterIds", characterIDs),
+				zap.Strings("characterNames", characterNames))
+		}
+		// 记录场景ID信息
+		if sceneResult.StorySceneID != "" {
+			s.logger.Debug("scene has story scene ID from AI",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneIndex", i),
+				zap.String("storySceneId", sceneResult.StorySceneID))
+		}
 		storyboardScenes = append(storyboardScenes, scene)
 	}
 	storyboard.StoryboardScenes = storyboardScenes
@@ -1686,7 +1714,7 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 		context += "参与角色：\n"
 		for _, ref := range storyboard.CharacterRefs {
 			if ref.Character != nil {
-				context += fmt.Sprintf("- %s", ref.Character.Name)
+				context += fmt.Sprintf("- %s [角色ID: %s]", ref.Character.Name, ref.Character.ID)
 				if ref.Character.Description != "" {
 					context += fmt.Sprintf(": %s", truncateForLog(ref.Character.Description, 100))
 				}
@@ -1694,6 +1722,7 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 			}
 		}
 		context += "\n"
+		context += "重要提示：在生成场景时，如果使用上述角色，必须在characters数组中为每个角色提供对象，包含name（角色完整名称）和id（对应的角色ID）字段。\n\n"
 	}
 
 	// 添加选定的故事场景（静态地点）作为可用场景
@@ -1704,7 +1733,7 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 		context += "可用场景地点（剧情应发生在这些场景中）：\n"
 		for _, ref := range storyboard.SceneRefs {
 			if ref.StoryScene != nil {
-				context += fmt.Sprintf("- %s", ref.StoryScene.Title)
+				context += fmt.Sprintf("- %s [场景ID: %s]", ref.StoryScene.Title, ref.StoryScene.ID)
 				if ref.StoryScene.Description != "" {
 					context += fmt.Sprintf(": %s", truncateForLog(ref.StoryScene.Description, 100))
 				}
@@ -1715,6 +1744,7 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 			}
 		}
 		context += "\n"
+		context += "重要提示：在生成场景时，如果使用上述场景地点，应在storySceneId字段中提供对应的场景ID，以便精确关联。\n\n"
 	}
 
 	s.logger.Debug("storyboard context built",
@@ -1757,13 +1787,20 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "      \"description\": \"场景描述（100-200字）\",\n"
 	prompt += "      \"location\": \"地点\",\n"
 	prompt += "      \"timeOfDay\": \"时间\",\n"
-	prompt += "      \"characters\": [\"角色名\"],\n"
+	prompt += "      \"storySceneId\": \"场景ID（如果使用了提供的场景地点，必须填写对应的场景ID）\",\n"
+	prompt += "      \"characters\": [\n"
+	prompt += "        {\n"
+	prompt += "          \"name\": \"角色名\",\n"
+	prompt += "          \"id\": \"角色ID\"\n"
+	prompt += "        }\n"
+	prompt += "      ],\n"
 	prompt += "      \"mood\": \"氛围\"\n"
 	prompt += "    }\n"
 	prompt += "  ],\n"
 	prompt += "  \"generateImages\": false\n"
 	prompt += "}\n"
 	prompt += fmt.Sprintf("\n重要：请生成恰好 %d 个场景，确保JSON格式完整闭合。", sceneCount)
+	prompt += "\n重要：如果场景中使用了提供的角色，characters数组中的每个角色对象必须包含对应的角色ID。如果场景使用了提供的场景地点，storySceneId字段必须填写对应的场景ID。"
 
 	s.logger.Debug("storyboard prompt built",
 		zap.String("storyboardId", storyboard.ID),
@@ -1860,14 +1897,21 @@ func (s *Service) getGenreStyleGuidance(genre string) string {
 - 注重情节发展的逻辑性和趣味性`
 }
 
+// CharacterRef AI生成的角色引用
+type CharacterRef struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
 // StoryboardSceneResult AI 生成的场景结果（强类型解析）
 type StoryboardSceneResult struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Location    string   `json:"location"`
-	TimeOfDay   string   `json:"timeOfDay"`
-	Characters  []string `json:"characters"`
-	Mood        string   `json:"mood"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description"`
+	Location     string         `json:"location"`
+	TimeOfDay    string         `json:"timeOfDay"`
+	Characters   []CharacterRef `json:"characters"`             // 角色对象数组，包含name和id
+	StorySceneID string         `json:"storySceneId,omitempty"` // 关联的场景ID
+	Mood         string         `json:"mood"`
 }
 
 // StoryboardResult AI 生成的 storyboard 结果
@@ -2024,7 +2068,7 @@ func (s *Service) validateStoryboardResult(result *StoryboardResult) {
 			}
 			// 确保 Characters 不为 nil
 			if scene.Characters == nil {
-				result.Scenes[i].Characters = []string{}
+				result.Scenes[i].Characters = []CharacterRef{}
 			}
 		}
 	}
@@ -2048,22 +2092,73 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		return nil
 	}
 
+	// 获取故事的风格配置
+	var storyStyle *domain.StyleConfig
+	if storyboard.StoryID != "" {
+		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+		if err == nil && story.Style != nil {
+			storyStyle = story.Style
+			s.logger.Debug("fetched story style for scene image generation",
+				zap.String("storyId", storyboard.StoryID),
+				zap.String("style", storyStyle.Style))
+		}
+	}
+
+	// 获取故事的所有角色（用于根据场景角色名获取角色图片）
+	var storyCharacters []*domain.Character
+	if storyboard.StoryID != "" {
+		chars, err := s.repo.CharactersByStory(ctx, storyboard.StoryID)
+		if err == nil {
+			storyCharacters = chars
+			s.logger.Debug("fetched story characters for reference images",
+				zap.String("storyId", storyboard.StoryID),
+				zap.Int("characterCount", len(chars)))
+		}
+	}
+
+	// 创建角色名称到角色的映射
+	charMap := make(map[string]*domain.Character)
+	for _, char := range storyCharacters {
+		charMap[char.Name] = char
+	}
+
 	s.logger.Info("generating images for storyboard scenes",
 		zap.String("storyboardId", storyboard.ID),
-		zap.Int("totalScenes", len(storyboard.StoryboardScenes)))
+		zap.Int("totalScenes", len(storyboard.StoryboardScenes)),
+		zap.Bool("hasStoryStyle", storyStyle != nil))
 
 	// 为每个故事板场景生成图片
 	for i := range storyboard.StoryboardScenes {
 		scene := &storyboard.StoryboardScenes[i]
 
+		// 判断是否为过渡场景（没有角色出现）
+		isTransitionScene := len(scene.Characters) == 0
+
+		// 收集场景关联角色的图片
+		var referenceImages []string
+		if !isTransitionScene {
+			for _, charName := range scene.Characters {
+				if char, ok := charMap[charName]; ok {
+					// 优先使用海报图片，其次使用头像
+					if char.Poster != "" {
+						referenceImages = append(referenceImages, char.Poster)
+					} else if char.Avatar != "" {
+						referenceImages = append(referenceImages, char.Avatar)
+					}
+				}
+			}
+		}
+
 		s.logger.Debug("generating image for scene",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("sceneIndex", i),
 			zap.String("sceneId", scene.ID),
-			zap.String("sceneTitle", scene.Title))
+			zap.String("sceneTitle", scene.Title),
+			zap.Bool("isTransitionScene", isTransitionScene),
+			zap.Int("characterReferenceCount", len(referenceImages)))
 
-		// 构建图片提示词
-		prompt := s.buildStoryboardSceneImagePrompt(scene)
+		// 构建图片提示词（包含故事风格配置）
+		prompt := s.buildStoryboardSceneImagePromptWithStyle(scene, storyStyle, isTransitionScene)
 		s.logger.Debug("scene image prompt built",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("sceneIndex", i),
@@ -2078,12 +2173,15 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 			AspectRatio:       "16:9",
 			Quality:           "high",
 			OutputCount:       1,
+			ReferenceImages:   referenceImages, // 使用角色参考图片
 			RelatedEntityID:   storyboard.ID,
 			RelatedEntityType: "storyboard_scene",
 			Metadata: map[string]interface{}{
-				"storyId":    storyboard.StoryID,
-				"sceneIndex": i,
-				"sceneTitle": scene.Title,
+				"storyId":           storyboard.StoryID,
+				"sceneIndex":        i,
+				"sceneTitle":        scene.Title,
+				"isTransitionScene": isTransitionScene,
+				"sceneCharacters":   scene.Characters,
 			},
 		}
 
@@ -2147,6 +2245,54 @@ func (s *Service) buildStoryboardSceneImagePrompt(scene *domain.StoryboardScene)
 	}
 
 	s.logger.Debug("scene image prompt built",
+		zap.String("sceneId", scene.ID),
+		zap.Int("promptLength", len(prompt)))
+
+	return prompt
+}
+
+// buildStoryboardSceneImagePromptWithStyle 构建故事板场景图片提示词（包含故事风格配置）
+func (s *Service) buildStoryboardSceneImagePromptWithStyle(scene *domain.StoryboardScene, storyStyle *domain.StyleConfig, isTransitionScene bool) string {
+	s.logger.Debug("building scene image prompt with style",
+		zap.String("sceneId", scene.ID),
+		zap.String("sceneTitle", scene.Title),
+		zap.Bool("hasStoryStyle", storyStyle != nil),
+		zap.Bool("isTransitionScene", isTransitionScene))
+
+	var promptBuilder strings.Builder
+
+	// 添加故事风格配置
+	if storyStyle != nil {
+		promptBuilder.WriteString(fmt.Sprintf("[Art Style: %s] ", storyStyle.Style))
+		if storyStyle.Description != "" {
+			promptBuilder.WriteString(fmt.Sprintf("[Style Guide: %s] ", storyStyle.Description))
+		}
+	}
+
+	// 添加场景类型信息
+	if isTransitionScene {
+		promptBuilder.WriteString("[Scene Type: Transition/Environment Scene - No characters] ")
+	} else if len(scene.Characters) > 0 {
+		promptBuilder.WriteString(fmt.Sprintf("[Characters: %s] ", strings.Join(scene.Characters, ", ")))
+	}
+
+	// 添加场景描述
+	promptBuilder.WriteString(scene.Description)
+
+	if scene.Location != "" {
+		promptBuilder.WriteString(fmt.Sprintf(", 地点: %s", scene.Location))
+	}
+
+	if scene.TimeOfDay != "" {
+		promptBuilder.WriteString(fmt.Sprintf(", 时间: %s", scene.TimeOfDay))
+	}
+
+	if scene.Mood != "" {
+		promptBuilder.WriteString(fmt.Sprintf(", 氛围: %s", scene.Mood))
+	}
+
+	prompt := promptBuilder.String()
+	s.logger.Debug("scene image prompt with style built",
 		zap.String("sceneId", scene.ID),
 		zap.Int("promptLength", len(prompt)))
 

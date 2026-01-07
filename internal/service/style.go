@@ -234,6 +234,13 @@ func (s *Service) CreateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 		return err
 	}
 
+	// Record metrics
+	if s.metrics != nil {
+		s.metrics.StoryStyleConfigCount.Inc()
+		// Increment count for this style
+		s.metrics.StoryStyleConfigByStyle.WithLabelValues(styleConfig.Style).Add(1)
+	}
+
 	// 使相关缓存失效
 	c := s.getCache()
 	if c != nil {
@@ -284,6 +291,16 @@ func (s *Service) UpdateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 
 	if err := s.repo.UpdateStyleConfig(ctx, styleConfig); err != nil {
 		return err
+	}
+
+	// Record metrics - update style count if style name changed
+	if s.metrics != nil {
+		if existingStyle.Style != styleConfig.Style {
+			// Style name changed, decrement old style count and increment new style count
+			// Note: GaugeVec.Add() with negative value decreases the gauge
+			s.metrics.StoryStyleConfigByStyle.WithLabelValues(existingStyle.Style).Add(-1)
+			s.metrics.StoryStyleConfigByStyle.WithLabelValues(styleConfig.Style).Add(1)
+		}
 	}
 
 	// 使相关缓存失效并重新缓存

@@ -92,6 +92,20 @@ func (h *Handler) GenerateSceneDetails(c *gin.Context) {
 
 // GenerateStoryboardImage generates an image for a scene (Step 3)
 // POST /api/storyboards/:id/generate/image
+//
+// Request body:
+//   - sceneId (required): 场景ID
+//   - sceneTitle: 场景标题
+//   - sceneDescription (required): 场景描述
+//   - referenceImages: 额外的参考图片URL列表（可选）
+//   - sceneCharacters: 场景中出现的角色名称列表（可选，用于自动获取角色参考图片）
+//   - characterReferenceImages: 角色参考图片URL列表（可选，如果不提供则自动从故事中获取）
+//   - storyStyleId: 故事风格配置ID（可选，如果不提供则自动从故事中获取）
+//
+// 注意：
+//   - 如果场景有角色出现，系统会自动使用角色的海报/头像作为参考图片
+//   - 如果场景是过渡场景（无角色），则只使用故事风格配置
+//   - 故事风格配置会自动从故事中获取，除非明确指定 storyStyleId
 func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
@@ -100,10 +114,13 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 	}
 
 	var req struct {
-		SceneID          string   `json:"sceneId" binding:"required"`
-		SceneTitle       string   `json:"sceneTitle"`
-		SceneDescription string   `json:"sceneDescription" binding:"required"`
-		ReferenceImages  []string `json:"referenceImages"`
+		SceneID                  string   `json:"sceneId" binding:"required"`
+		SceneTitle               string   `json:"sceneTitle"`
+		SceneDescription         string   `json:"sceneDescription" binding:"required"`
+		ReferenceImages          []string `json:"referenceImages"`
+		SceneCharacters          []string `json:"sceneCharacters"`          // 场景中的角色名称列表
+		CharacterReferenceImages []string `json:"characterReferenceImages"` // 角色参考图片（可选）
+		StoryStyleID             string   `json:"storyStyleId"`             // 故事风格配置ID（可选）
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -111,12 +128,19 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 		return
 	}
 
+	// 如果提供了 storyStyleId，获取风格配置
+	// 暂时不实现，因为系统会自动从故事中获取风格配置
+	// 客户端可以通过 storyStyleId 来指定特定的风格，但目前系统会优先使用故事默认风格
+
 	genReq := &service.ImageGenerationRequest{
-		StoryboardID:     storyboardID,
-		SceneID:          req.SceneID,
-		SceneTitle:       req.SceneTitle,
-		SceneDescription: req.SceneDescription,
-		ReferenceImages:  req.ReferenceImages,
+		StoryboardID:             storyboardID,
+		SceneID:                  req.SceneID,
+		SceneTitle:               req.SceneTitle,
+		SceneDescription:         req.SceneDescription,
+		ReferenceImages:          req.ReferenceImages,
+		SceneCharacters:          req.SceneCharacters,
+		CharacterReferenceImages: req.CharacterReferenceImages,
+		// StoryStyle 会在 service 层自动从故事中获取
 	}
 
 	gen, err := h.svc.GenerateSceneImage(c.Request.Context(), genReq)

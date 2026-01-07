@@ -2453,68 +2453,6 @@ func (s *Service) assembleFinalCoverPrompt(concept *CoverConcept, title, imageTy
 	return prompt.String()
 }
 
-// buildCoverImagePrompt 构建封面图片生成提示词（保留作为降级方案）
-func (s *Service) buildCoverImagePrompt(title, description, genre, style string) string {
-	// NOTE: This prompt is a fallback (used when structured concept generation fails).
-	// Keep it robust, structured, and avoid text generation artifacts.
-	var b strings.Builder
-
-	b.WriteString("TASK:\n")
-	b.WriteString("Create a high-quality cinematic illustration for a STORY COVER.\n\n")
-
-	b.WriteString("STORY TITLE (for context only, do NOT render as text):\n")
-	b.WriteString(strings.TrimSpace(title))
-	b.WriteString("\n\n")
-
-	if strings.TrimSpace(description) != "" {
-		b.WriteString("STORY DESCRIPTION (context):\n")
-		b.WriteString(strings.TrimSpace(description))
-		b.WriteString("\n\n")
-	}
-
-	// Genre/style hints
-	genreKey := strings.ToLower(strings.TrimSpace(genre))
-	if genreKey != "" {
-		b.WriteString("GENRE:\n")
-		b.WriteString(genreKey)
-		b.WriteString("\n\n")
-	}
-
-	genreStyles := map[string]string{
-		"fantasy":   "fantasy mood, magical elements, mysterious atmosphere, rich textures",
-		"scifi":     "sci-fi mood, futuristic technology, subtle space/industrial elements, clean shapes",
-		"romance":   "romantic mood, soft lighting, warm tones, gentle composition",
-		"horror":    "horror mood, high contrast shadows, unsettling atmosphere, restrained color palette",
-		"adventure": "adventure mood, grand scenery, dynamic composition, sense of journey",
-		"mystery":   "mystery mood, enigmatic symbols, noir lighting, suspenseful atmosphere",
-		"comedy":    "lighthearted mood, bright colors, playful composition, whimsical details",
-		"drama":     "dramatic mood, emotional tension, cinematic lighting, character-focused framing",
-	}
-	if hint, ok := genreStyles[genreKey]; ok {
-		b.WriteString("STYLE HINTS (from genre):\n")
-		b.WriteString(hint)
-		b.WriteString("\n\n")
-	}
-
-	if strings.TrimSpace(style) != "" {
-		b.WriteString("STYLE PREFERENCE (additional):\n")
-		b.WriteString(strings.TrimSpace(style))
-		b.WriteString("\n\n")
-	}
-
-	b.WriteString("COMPOSITION REQUIREMENTS:\n")
-	b.WriteString("- Professional book cover key art\n")
-	b.WriteString("- Strong focal point, clean silhouette, balanced composition\n")
-	b.WriteString("- Reserve a clean uncluttered area for later typography overlay (safe area near top or bottom)\n\n")
-
-	b.WriteString("NEGATIVE CONSTRAINTS:\n")
-	b.WriteString("- Do NOT render any readable text, letters, words, logos, watermarks, or signatures\n")
-	b.WriteString("- No frames, no borders, no UI mockups\n")
-	b.WriteString("- No low-res, blur, noise, compression artifacts\n")
-
-	return b.String()
-}
-
 // updateUserTokenUsage 更新用户的token使用量
 func (s *Service) updateUserTokenUsage(ctx context.Context, userID string, tokensUsed int) error {
 	if tokensUsed <= 0 {

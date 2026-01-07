@@ -1018,6 +1018,7 @@ func StoryboardImageGenerationToModel(d *domain.StoryboardImageGeneration) *Stor
 		SceneDescription:    d.SceneDescription,
 		ReferenceImagesJSON: string(referenceImagesJSON),
 		GeneratedPrompt:     d.GeneratedPrompt,
+		PromptDetailsJSON:   promptDetailsToJSON(d.PromptDetails),
 		GeneratedImageURL:   d.GeneratedImageURL,
 		ImageWidth:          d.ImageWidth,
 		ImageHeight:         d.ImageHeight,
@@ -1045,6 +1046,11 @@ func ModelToStoryboardImageGeneration(m *StoryboardImageGeneration) *domain.Stor
 		completedAt = &unix
 	}
 
+	var promptDetails *domain.ImagePromptDetails
+	if m.PromptDetailsJSON != "" {
+		promptDetails = jsonToPromptDetails(m.PromptDetailsJSON)
+	}
+
 	return &domain.StoryboardImageGeneration{
 		ID:                m.ID,
 		StoryboardID:      m.StoryboardID,
@@ -1053,6 +1059,7 @@ func ModelToStoryboardImageGeneration(m *StoryboardImageGeneration) *domain.Stor
 		SceneDescription:  m.SceneDescription,
 		ReferenceImages:   referenceImages,
 		GeneratedPrompt:   m.GeneratedPrompt,
+		PromptDetails:     promptDetails,
 		GeneratedImageURL: m.GeneratedImageURL,
 		ImageWidth:        m.ImageWidth,
 		ImageHeight:       m.ImageHeight,
@@ -1086,6 +1093,7 @@ func StoryboardVideoGenerationToModel(d *domain.StoryboardVideoGeneration) *Stor
 		ReferenceImageURL:   d.ReferenceImageURL,
 		EndFrameURL:         d.EndFrameURL,
 		GeneratedPrompt:     d.GeneratedPrompt,
+		PromptDetailsJSON:   videoPromptDetailsToJSON(d.PromptDetails),
 		GeneratedVideoURL:   d.GeneratedVideoURL,
 		ProviderTaskID:      d.ProviderTaskID,
 		ProviderName:        d.ProviderName,
@@ -1114,6 +1122,11 @@ func ModelToStoryboardVideoGeneration(m *StoryboardVideoGeneration) *domain.Stor
 		completedAt = &unix
 	}
 
+	var videoPromptDetails *domain.VideoPromptDetails
+	if m.PromptDetailsJSON != "" {
+		videoPromptDetails = jsonToVideoPromptDetails(m.PromptDetailsJSON)
+	}
+
 	result := &domain.StoryboardVideoGeneration{
 		ID:                  m.ID,
 		StoryboardID:        m.StoryboardID,
@@ -1123,6 +1136,7 @@ func ModelToStoryboardVideoGeneration(m *StoryboardVideoGeneration) *domain.Stor
 		ReferenceImageURL:   m.ReferenceImageURL,
 		EndFrameURL:         m.EndFrameURL,
 		GeneratedPrompt:     m.GeneratedPrompt,
+		PromptDetails:       videoPromptDetails,
 		GeneratedVideoURL:   m.GeneratedVideoURL,
 		ProviderTaskID:      m.ProviderTaskID,
 		ProviderName:        m.ProviderName,
@@ -1916,20 +1930,33 @@ func CharacterPosterToModel(d *domain.CharacterPoster) *CharacterPoster {
 	if d == nil {
 		return nil
 	}
+	// Serialize PosterConcept to JSON if present
+	posterConceptJSON := d.PosterConceptJSON
+	if posterConceptJSON == "" && d.PosterConcept != nil {
+		posterConceptJSON = posterConceptDetailsToJSON(d.PosterConcept)
+	}
+
 	return &CharacterPoster{
-		ID:          d.ID,
-		CharacterID: d.CharacterID,
-		AuthorID:    d.AuthorID,
-		Type:        d.Type,
-		Title:       d.Title,
-		Image:       d.Image,
-		Video:       d.Video,
-		Thumbnail:   d.Thumbnail,
-		Duration:    d.Duration,
-		Prompt:      d.Prompt,
-		Likes:       d.Likes,
-		Shares:      d.Shares,
-		CreatedAt:   unixToTime(d.CreatedAt),
+		ID:                    d.ID,
+		CharacterID:           d.CharacterID,
+		AuthorID:              d.AuthorID,
+		Type:                  d.Type,
+		Title:                 d.Title,
+		Image:                 d.Image,
+		Video:                 d.Video,
+		Thumbnail:             d.Thumbnail,
+		Duration:              d.Duration,
+		Prompt:                d.Prompt,
+		Status:                string(d.Status),
+		ReferenceStoryEnabled: d.ReferenceStoryEnabled,
+		PosterConceptJSON:     posterConceptJSON,
+		FinalImagePrompt:      d.FinalImagePrompt,
+		ErrorMessage:          d.ErrorMessage,
+		ConceptGenerationID:   d.ConceptGenerationID,
+		ImageGenerationID:     d.ImageGenerationID,
+		Likes:                 d.Likes,
+		Shares:                d.Shares,
+		CreatedAt:             unixToTime(d.CreatedAt),
 	}
 }
 
@@ -1938,20 +1965,34 @@ func ModelToCharacterPoster(m *CharacterPoster) *domain.CharacterPoster {
 	if m == nil {
 		return nil
 	}
+	// Parse PosterConcept from JSON if present
+	var posterConcept *domain.PosterConceptDetails
+	if m.PosterConceptJSON != "" {
+		posterConcept = jsonToPosterConceptDetails(m.PosterConceptJSON)
+	}
+
 	return &domain.CharacterPoster{
-		ID:          m.ID,
-		CharacterID: m.CharacterID,
-		AuthorID:    m.AuthorID,
-		Type:        m.Type,
-		Title:       m.Title,
-		Image:       m.Image,
-		Video:       m.Video,
-		Thumbnail:   m.Thumbnail,
-		Duration:    m.Duration,
-		Prompt:      m.Prompt,
-		Likes:       m.Likes,
-		Shares:      m.Shares,
-		CreatedAt:   timeToUnix(m.CreatedAt),
+		ID:                    m.ID,
+		CharacterID:           m.CharacterID,
+		AuthorID:              m.AuthorID,
+		Type:                  m.Type,
+		Title:                 m.Title,
+		Image:                 m.Image,
+		Video:                 m.Video,
+		Thumbnail:             m.Thumbnail,
+		Duration:              m.Duration,
+		Prompt:                m.Prompt,
+		Status:                domain.PosterStatus(m.Status),
+		ReferenceStoryEnabled: m.ReferenceStoryEnabled,
+		PosterConceptJSON:     m.PosterConceptJSON,
+		PosterConcept:         posterConcept,
+		FinalImagePrompt:      m.FinalImagePrompt,
+		ErrorMessage:          m.ErrorMessage,
+		ConceptGenerationID:   m.ConceptGenerationID,
+		ImageGenerationID:     m.ImageGenerationID,
+		Likes:                 m.Likes,
+		Shares:                m.Shares,
+		CreatedAt:             timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -2799,4 +2840,76 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 		CreatedAt:             timeToUnix(m.CreatedAt),
 		UpdatedAt:             timeToUnix(m.UpdatedAt),
 	}
+}
+
+// promptDetailsToJSON 将 ImagePromptDetails 转换为 JSON 字符串
+func promptDetailsToJSON(details *domain.ImagePromptDetails) string {
+	if details == nil {
+		return ""
+	}
+	data, err := json.Marshal(details)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToPromptDetails 将 JSON 字符串转换为 ImagePromptDetails
+func jsonToPromptDetails(jsonStr string) *domain.ImagePromptDetails {
+	if jsonStr == "" {
+		return nil
+	}
+	var details domain.ImagePromptDetails
+	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
+		return nil
+	}
+	return &details
+}
+
+// videoPromptDetailsToJSON 将 VideoPromptDetails 转换为 JSON 字符串
+func videoPromptDetailsToJSON(details *domain.VideoPromptDetails) string {
+	if details == nil {
+		return ""
+	}
+	data, err := json.Marshal(details)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToVideoPromptDetails 将 JSON 字符串转换为 VideoPromptDetails
+func jsonToVideoPromptDetails(jsonStr string) *domain.VideoPromptDetails {
+	if jsonStr == "" {
+		return nil
+	}
+	var details domain.VideoPromptDetails
+	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
+		return nil
+	}
+	return &details
+}
+
+// posterConceptDetailsToJSON 将 PosterConceptDetails 转换为 JSON 字符串
+func posterConceptDetailsToJSON(details *domain.PosterConceptDetails) string {
+	if details == nil {
+		return ""
+	}
+	data, err := json.Marshal(details)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToPosterConceptDetails 将 JSON 字符串转换为 PosterConceptDetails
+func jsonToPosterConceptDetails(jsonStr string) *domain.PosterConceptDetails {
+	if jsonStr == "" {
+		return nil
+	}
+	var details domain.PosterConceptDetails
+	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
+		return nil
+	}
+	return &details
 }

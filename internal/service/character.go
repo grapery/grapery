@@ -835,6 +835,7 @@ type GeneratePosterResult struct {
 }
 
 // PosterConcept LLM生成的海报概念结构
+// PosterConcept AI返回的海报概念JSON结构（snake_case匹配AI输出）
 type PosterConcept struct {
 	PosterConcept struct {
 		VisualSubject      string `json:"visual_subject"`
@@ -850,6 +851,29 @@ type PosterConcept struct {
 		SubtitleContent string `json:"subtitle_content"`
 		SubtitleStyle   string `json:"subtitle_style"`
 	} `json:"typography_instruction"`
+}
+
+// convertToPosterConceptDetails 将AI返回的PosterConcept转换为domain.PosterConceptDetails
+func (s *Service) convertToPosterConceptDetails(concept *PosterConcept) *domain.PosterConceptDetails {
+	if concept == nil {
+		return nil
+	}
+	return &domain.PosterConceptDetails{
+		VisualConcept: &domain.PosterVisualConcept{
+			VisualSubject:      concept.PosterConcept.VisualSubject,
+			SceneEnvironment:   concept.PosterConcept.SceneEnvironment,
+			CompositionCamera:  concept.PosterConcept.CompositionCamera,
+			LightingAtmosphere: concept.PosterConcept.LightingAtmosphere,
+			ArtStyle:           concept.PosterConcept.ArtStyle,
+		},
+		Typography: &domain.PosterTypography{
+			TitleContent:    concept.TypographyInstruction.TitleContent,
+			TitleStyle:      concept.TypographyInstruction.TitleStyle,
+			TitlePosition:   concept.TypographyInstruction.TitlePosition,
+			SubtitleContent: concept.TypographyInstruction.SubtitleContent,
+			SubtitleStyle:   concept.TypographyInstruction.SubtitleStyle,
+		},
+	}
 }
 
 // GenerateCharacterPoster 生成角色海报（两步AI工作流）
@@ -910,26 +934,55 @@ func (s *Service) GenerateCharacterPoster(ctx context.Context, userID, posterID 
 	}
 
 	// 9. Step 1: 使用LLM生成海报概念
+	conceptStartTime := time.Now()
 	conceptResult, err := s.generatePosterConcept(ctx, userID, poster, character, plotContext)
+	conceptDuration := time.Since(conceptStartTime)
 	if err != nil {
 		s.logger.Error("failed to generate poster concept", zap.Error(err))
 		poster.Status = domain.PosterStatusFailed
 		poster.ErrorMessage = "Failed to generate poster concept: " + err.Error()
 		_ = s.repo.UpdateCharacterPoster(ctx, poster)
+		// Record metrics: concept generation failed
+		if s.metrics != nil {
+			s.metrics.RecordCharacterPosterConceptTime("failed", conceptDuration)
+			s.metrics.RecordCharacterPosterGeneration("failed", plotContext != "")
+			s.metrics.RecordCharacterPosterError("concept_error")
+		}
 		return nil, errors.New("failed to generate poster concept: " + err.Error())
+	}
+	// Record metrics: concept generation completed
+	if s.metrics != nil {
+		s.metrics.RecordCharacterPosterConceptTime("completed", conceptDuration)
+		if conceptResult.TokensUsed > 0 {
+			s.metrics.RecordCharacterPosterTokenConsumed("concept", float64(conceptResult.TokensUsed))
+		}
 	}
 
 	poster.ConceptGenerationID = conceptResult.RecordID
 	poster.PosterConceptJSON = conceptResult.ConceptJSON
+	poster.PosterConcept = s.convertToPosterConceptDetails(conceptResult.Concept)
 
 	// 10. Step 2: 组装最终提示词并生成图像
+	imageStartTime := time.Now()
 	imageResult, err := s.generatePosterImage(ctx, userID, poster, conceptResult.Concept, req.AspectRatio, req.Provider)
+	imageDuration := time.Since(imageStartTime)
 	if err != nil {
 		s.logger.Error("failed to generate poster image", zap.Error(err))
 		poster.Status = domain.PosterStatusFailed
 		poster.ErrorMessage = "Failed to generate poster image: " + err.Error()
 		_ = s.repo.UpdateCharacterPoster(ctx, poster)
+		// Record metrics: image generation failed
+		if s.metrics != nil {
+			s.metrics.RecordCharacterPosterImageTime("failed", imageDuration)
+			s.metrics.RecordCharacterPosterGeneration("failed", plotContext != "")
+			s.metrics.RecordCharacterPosterError("image_error")
+		}
 		return nil, errors.New("failed to generate poster image: " + err.Error())
+	}
+	// Record metrics: image generation completed
+	if s.metrics != nil {
+		s.metrics.RecordCharacterPosterImageTime("completed", imageDuration)
+		// Note: Token consumption for image generation is tracked in aiGenService
 	}
 
 	// 11. 更新海报信息
@@ -942,6 +995,15 @@ func (s *Service) GenerateCharacterPoster(ctx context.Context, userID, posterID 
 	if err := s.repo.UpdateCharacterPoster(ctx, poster); err != nil {
 		s.logger.Error("failed to update poster with generated image", zap.Error(err))
 		return nil, errors.New("failed to save generated poster")
+	}
+
+	// Record metrics: poster generation completed
+	if s.metrics != nil {
+		s.metrics.RecordCharacterPosterGenerationTime("concept", conceptDuration)
+		s.metrics.RecordCharacterPosterGenerationTime("image", imageDuration)
+		s.metrics.RecordCharacterPosterGeneration("completed", plotContext != "")
+		// Record AI generation
+		s.metrics.RecordAIGeneration("gemini", "poster")
 	}
 
 	s.logger.Info("character poster generated successfully",

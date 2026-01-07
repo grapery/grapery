@@ -65,6 +65,30 @@ const (
 	PosterStatusFailed     PosterStatus = "failed"     // 生成失败
 )
 
+// PosterVisualConcept 海报视觉概念
+type PosterVisualConcept struct {
+	VisualSubject      string `json:"visualSubject"`      // 视觉主体描述（角色+动作）
+	SceneEnvironment   string `json:"sceneEnvironment"`   // 场景环境（背景+天气+道具）
+	CompositionCamera  string `json:"compositionCamera"`  // 构图与摄像角度
+	LightingAtmosphere string `json:"lightingAtmosphere"` // 光照与氛围
+	ArtStyle           string `json:"artStyle"`           // 艺术风格
+}
+
+// PosterTypography 海报排版指令
+type PosterTypography struct {
+	TitleContent    string `json:"titleContent"`    // 标题文字内容（大写）
+	TitleStyle      string `json:"titleStyle"`      // 标题样式（字体+材质+颜色）
+	TitlePosition   string `json:"titlePosition"`   // 标题位置
+	SubtitleContent string `json:"subtitleContent"` // 副标题内容
+	SubtitleStyle   string `json:"subtitleStyle"`   // 副标题样式
+}
+
+// PosterConceptDetails 结构化的海报概念详情
+type PosterConceptDetails struct {
+	VisualConcept *PosterVisualConcept `json:"posterConcept"`         // 视觉概念
+	Typography    *PosterTypography    `json:"typographyInstruction"` // 排版指令
+}
+
 // CharacterPoster 角色海报
 type CharacterPoster struct {
 	ID          string       `json:"id"`
@@ -80,10 +104,11 @@ type CharacterPoster struct {
 	Status      PosterStatus `json:"status"`              // draft, generating, generated, published, failed
 
 	// AI Generation fields
-	ReferenceStoryEnabled bool   `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
-	PosterConceptJSON     string `json:"posterConceptJson,omitempty"`     // LLM generated poster concept JSON
-	FinalImagePrompt      string `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
-	ErrorMessage          string `json:"errorMessage,omitempty"`          // Error message if generation failed
+	ReferenceStoryEnabled bool                       `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
+	PosterConceptJSON     string                     `json:"-"`                               // LLM generated poster concept JSON (internal storage)
+	PosterConcept         *PosterConceptDetails      `json:"posterConcept,omitempty"`         // Structured poster concept for client editing
+	FinalImagePrompt      string                     `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
+	ErrorMessage          string                     `json:"errorMessage,omitempty"`          // Error message if generation failed
 
 	// AI Generation Record IDs (for tracking both AI steps)
 	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)

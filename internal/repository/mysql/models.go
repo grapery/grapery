@@ -180,7 +180,8 @@ type StoryboardImageGeneration struct {
 	SceneTitle          string         `gorm:"size:200"`               // Snapshot of scene title
 	SceneDescription    string         `gorm:"type:text"`              // Snapshot of scene description
 	ReferenceImagesJSON string         `gorm:"type:json"`              // JSON array of reference image URLs
-	GeneratedPrompt     string         `gorm:"type:text"`              // AI-generated image prompt
+	GeneratedPrompt     string         `gorm:"type:text"`              // AI-generated image prompt (final combined text)
+	PromptDetailsJSON   string         `gorm:"type:json"`              // JSON of structured prompt details for client editing
 	GeneratedImageURL   string         `gorm:"size:2048"`              // Final generated image URL (needs to be long for signed URLs)
 	ImageWidth          int            `gorm:"default:0"`
 	ImageHeight         int            `gorm:"default:0"`
@@ -205,7 +206,8 @@ type StoryboardVideoGeneration struct {
 	InputDescription    string         `gorm:"type:text"`              // Scene description for video
 	ReferenceImageURL   string         `gorm:"size:2048"`              // Start keyframe image for video generation
 	EndFrameURL         string         `gorm:"size:2048"`              // End keyframe image for video transitions
-	GeneratedPrompt     string         `gorm:"type:text"`              // AI-generated video prompt
+	GeneratedPrompt     string         `gorm:"type:text"`              // AI-generated video prompt (final combined text)
+	PromptDetailsJSON   string         `gorm:"type:json"`              // JSON of structured prompt details for client editing
 	GeneratedVideoURL   string         `gorm:"size:2048"`              // Final generated video URL (needs to be long for signed URLs)
 	ProviderTaskID      string         `gorm:"size:128;index"`         // Provider's task ID for async video generation (for recovery)
 	ProviderName        string         `gorm:"size:50"`                // Provider name (huoshan, hailuo, etc.) for recovery
