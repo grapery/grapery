@@ -24,19 +24,21 @@ func (s *Service) GetTrendingStories24h(ctx context.Context, limit int) ([]*doma
 
 // CreateStoryRequest 创建故事请求
 type CreateStoryRequest struct {
-	Title             string `json:"title" binding:"required,min=1,max=200"`
-	Description       string `json:"description" binding:"max=2000"`
-	CoverImage        string `json:"coverImage" binding:"omitempty,url"`
-	Genre             string `json:"genre" binding:"required"`
-	Status            string `json:"status" binding:"omitempty,oneof=draft published"`
-	GroupID           string `json:"groupId" binding:"omitempty"`
-	DefaultSceneCount int    `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
+	Title             string   `json:"title" binding:"required,min=1,max=200"`
+	Description       string   `json:"description" binding:"max=2000"`
+	CoverImage        string   `json:"coverImage" binding:"omitempty,url"`
+	Genre             string   `json:"genre" binding:"required"`
+	Status            string   `json:"status" binding:"omitempty,oneof=draft published"`
+	GroupID           string   `json:"groupId" binding:"omitempty"`
+	DefaultSceneCount int      `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
+	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
 	// AI 丰富选项（可选）
 	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
 	GenerateCover      bool                `json:"generateCover"`              // 是否使用AI生成封面/海报
 	GeneratePoster     bool                `json:"generatePoster"`             // 是否生成故事海报
 	GenerateBackground bool                `json:"generateBackground"`         // 是否生成背景图片
+	Style              string              `json:"style,omitempty"`            // AI 生成风格名称（字符串，用于AI辅助创建）
 	AIStyle            *domain.StyleConfig `json:"aiStyle,omitempty"`          // AI 生成风格配置（完整信息，可为空）
 	CoverAspectRatio   string              `json:"coverAspectRatio,omitempty"` // 封面图比例：1:1, 16:9, 9:16, etc.
 }
@@ -178,6 +180,26 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		s.metrics.StoryCount.Inc()
 	}
 
+	// 如果提供了 Style 字符串但没有 AIStyle，尝试获取 StyleConfig
+	if req.Style != "" && req.AIStyle == nil {
+		s.logger.Debug("style string provided, attempting to load StyleConfig",
+			zap.String("storyID", story.ID),
+			zap.String("style", req.Style))
+		// 尝试通过风格名称获取 StyleConfig
+		styleConfig, err := s.GetStyleConfigByStyle(ctx, req.Style)
+		if err == nil && styleConfig != nil {
+			req.AIStyle = styleConfig
+			s.logger.Debug("StyleConfig loaded from style name",
+				zap.String("storyID", story.ID),
+				zap.String("style", req.Style))
+		} else {
+			s.logger.Debug("could not load StyleConfig from style name, will use style string",
+				zap.String("storyID", story.ID),
+				zap.String("style", req.Style),
+				zap.Error(err))
+		}
+	}
+
 	// 如果用户选择使用AI丰富描述
 	if req.UseAIEnrich && req.Description != "" {
 		s.logger.Debug("AI enrichment requested",
@@ -218,11 +240,19 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.Bool("generateBackground", req.GenerateBackground),
 			zap.Any("style", req.AIStyle),
 			zap.String("aspectRatio", req.CoverAspectRatio))
+		// 如果 Style 字符串有值但 AIStyle 为空，创建一个简单的 StyleConfig
+		styleToUse := req.AIStyle
+		if styleToUse == nil && req.Style != "" {
+			styleToUse = &domain.StyleConfig{
+				Style: req.Style,
+			}
+		}
+		
 		coverResp, err := s.GenerateStoryCover(ctx, userID, story.ID, GenerateStoryCoverRequest{
 			Title:              req.Title,
 			Description:        story.Description,
 			Genre:              req.Genre,
-			Style:              req.AIStyle,
+			Style:              styleToUse,
 			AspectRatio:        req.CoverAspectRatio,
 			GenerateCover:      req.GenerateCover,
 			GeneratePoster:     req.GeneratePoster,
@@ -321,6 +351,36 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	} else {
 		s.logger.Debug("story not in group, skipping group activity",
 			zap.String("storyID", story.ID))
+	}
+
+	// 添加标签（如果有）
+	if len(req.Tags) > 0 {
+		s.logger.Debug("adding tags to story",
+			zap.String("storyID", story.ID),
+			zap.Strings("tags", req.Tags))
+		// 去重并规范化标签（转小写，去除前后空格）
+		uniqueTags := make(map[string]bool)
+		normalizedTags := make([]string, 0, len(req.Tags))
+		for _, tag := range req.Tags {
+			normalized := strings.TrimSpace(strings.ToLower(tag))
+			if normalized != "" && !uniqueTags[normalized] {
+				uniqueTags[normalized] = true
+				normalizedTags = append(normalizedTags, normalized)
+			}
+		}
+		if len(normalizedTags) > 0 {
+			if err := s.AddStoryTags(ctx, story.ID, normalizedTags); err != nil {
+				s.logger.Warn("failed to add tags to story",
+					zap.String("storyID", story.ID),
+					zap.Strings("tags", normalizedTags),
+					zap.Error(err))
+				// 不返回错误，标签添加失败不影响故事创建
+			} else {
+				s.logger.Info("tags added to story successfully",
+					zap.String("storyID", story.ID),
+					zap.Strings("tags", normalizedTags))
+			}
+		}
 	}
 
 	// 记录用户活动

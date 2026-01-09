@@ -14,23 +14,24 @@ import (
 
 // CreateCharacterRequest 创建角色请求
 type CreateCharacterRequest struct {
-	Name            string `json:"name" binding:"required,min=1,max=100"`
-	Description     string `json:"description" binding:"max=2000"`
-	Avatar          string `json:"avatar" binding:"omitempty,url"`
-	Personality     string `json:"personality" binding:"max=1000"`
-	Background      string `json:"background" binding:"max=2000"`
-	ShortTermGoal   string `json:"shortTermGoal" binding:"max=1000"`
-	LongTermGoal    string `json:"longTermGoal" binding:"max=1000"`
-	HandlingStyle   string `json:"handlingStyle" binding:"max=1000"`
-	CognitionRange  string `json:"cognitionRange" binding:"max=1000"`
-	AbilityFeatures string `json:"abilityFeatures" binding:"max=1000"`
-	Appearance      string `json:"appearance" binding:"max=1000"`
-	DressPreference string `json:"dressPreference" binding:"max=1000"`
-	StoryID         string `json:"storyId" binding:"required"`
-	IsPublic        bool   `json:"isPublic"`
-	SourceType      string `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
-	SourcePrompt    string `json:"sourcePrompt"`
-	SourceImage     string `json:"sourceImage" binding:"omitempty,url"`
+	Name            string   `json:"name" binding:"required,min=1,max=100"`
+	Description     string   `json:"description" binding:"max=2000"`
+	Avatar          string   `json:"avatar" binding:"omitempty,url"`
+	Personality     string   `json:"personality" binding:"max=1000"`
+	Background      string   `json:"background" binding:"max=2000"`
+	ShortTermGoal   string   `json:"shortTermGoal" binding:"max=1000"`
+	LongTermGoal    string   `json:"longTermGoal" binding:"max=1000"`
+	HandlingStyle   string   `json:"handlingStyle" binding:"max=1000"`
+	CognitionRange  string   `json:"cognitionRange" binding:"max=1000"`
+	AbilityFeatures string   `json:"abilityFeatures" binding:"max=1000"`
+	Appearance      string   `json:"appearance" binding:"max=1000"`
+	DressPreference string   `json:"dressPreference" binding:"max=1000"`
+	StoryID         string   `json:"storyId" binding:"required"`
+	IsPublic        bool     `json:"isPublic"`
+	SourceType      string   `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
+	SourcePrompt    string   `json:"sourcePrompt"`
+	SourceImage     string   `json:"sourceImage" binding:"omitempty,url"`
+	Tags            []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 }
 
 // UpdateCharacterRequest 更新角色请求
@@ -174,6 +175,36 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 
 	s.logger.Info("character created successfully",
 		zap.String("characterID", character.ID))
+
+	// 添加标签（如果有）
+	if len(req.Tags) > 0 {
+		s.logger.Debug("adding tags to character",
+			zap.String("characterID", character.ID),
+			zap.Strings("tags", req.Tags))
+		// 去重并规范化标签（转小写，去除前后空格）
+		uniqueTags := make(map[string]bool)
+		normalizedTags := make([]string, 0, len(req.Tags))
+		for _, tag := range req.Tags {
+			normalized := strings.TrimSpace(strings.ToLower(tag))
+			if normalized != "" && !uniqueTags[normalized] {
+				uniqueTags[normalized] = true
+				normalizedTags = append(normalizedTags, normalized)
+			}
+		}
+		if len(normalizedTags) > 0 {
+			if err := s.AddCharacterTags(ctx, character.ID, normalizedTags); err != nil {
+				s.logger.Warn("failed to add tags to character",
+					zap.String("characterID", character.ID),
+					zap.Strings("tags", normalizedTags),
+					zap.Error(err))
+				// 不返回错误，标签添加失败不影响角色创建
+			} else {
+				s.logger.Info("tags added to character successfully",
+					zap.String("characterID", character.ID),
+					zap.Strings("tags", normalizedTags))
+			}
+		}
+	}
 
 	// 记录用户活动
 	go s.RecordCharacterCreated(context.Background(), userID, character.ID, character.Name)

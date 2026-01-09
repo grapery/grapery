@@ -46,3 +46,20 @@ func (s *Service) GetPopularTags(ctx context.Context, limit int) ([]*domain.Tag,
 	}
 	return s.repo.PopularTags(ctx, limit)
 }
+
+func (s *Service) AddCharacterTags(ctx context.Context, characterID string, tagNames []string) error {
+	for _, name := range tagNames {
+		tag, err := s.repo.GetOrCreateTag(ctx, name)
+		if err != nil {
+			return err
+		}
+		if err := s.repo.AddCharacterTag(ctx, characterID, tag.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) GetCharacterTags(ctx context.Context, characterID string) ([]*domain.Tag, error) {
+	return s.repo.CharacterTags(ctx, characterID)
+}
