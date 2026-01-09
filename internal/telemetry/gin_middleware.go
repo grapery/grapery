@@ -18,6 +18,9 @@ func GinHTTPMiddleware(logger *zap.Logger, metrics *Metrics) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
+		// Store start time in context for error metrics
+		c.Set("request_start_time", start)
+
 		// Increment active requests counter
 		if metrics != nil {
 			metrics.IncActiveRequests()

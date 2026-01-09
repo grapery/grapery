@@ -16,7 +16,7 @@ func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
 
 	stories, err := h.svc.GetTrendingStories24h(c.Request.Context(), limit)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -30,21 +30,19 @@ func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
 
 // CreateStory 创建故事
 func (h *Handler) CreateStory(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
 	var req service.CreateStoryRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	story, err := h.svc.CreateStory(c.Request.Context(), userID, req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -53,19 +51,14 @@ func (h *Handler) CreateStory(c *gin.Context) {
 
 // GetStory 获取故事详情
 func (h *Handler) GetStory(c *gin.Context) {
-	storyID := c.Param("id")
-	if storyID == "" {
-		InvalidParams(c, "story id is required")
+	storyID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	story, err := h.svc.GetStory(c.Request.Context(), storyID)
 	if err != nil {
-		if err.Error() == "story not found" {
-			NotFound(c, "story not found")
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -75,14 +68,13 @@ func (h *Handler) GetStory(c *gin.Context) {
 // ListStories 获取故事列表
 func (h *Handler) ListStories(c *gin.Context) {
 	var req service.StoryListRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindQuery(c, &req) {
 		return
 	}
 
 	stories, total, err := h.svc.ListStories(c.Request.Context(), req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -96,35 +88,24 @@ func (h *Handler) ListStories(c *gin.Context) {
 
 // UpdateStory 更新故事
 func (h *Handler) UpdateStory(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	storyID := c.Param("id")
-	if storyID == "" {
-		InvalidParams(c, "story id is required")
+	storyID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	var req service.UpdateStoryRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	story, err := h.svc.UpdateStory(c.Request.Context(), userID, storyID, req)
 	if err != nil {
-		if err.Error() == "unauthorized" {
-			Forbidden(c, "you can only update your own stories")
-			return
-		}
-		if err.Error() == "story not found" {
-			NotFound(c, "story not found")
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 

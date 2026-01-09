@@ -313,14 +313,13 @@ func (h *Handler) Health(c *gin.Context) {
 // Register 用户注册
 func (h *Handler) Register(c *gin.Context) {
 	var req service.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	resp, err := h.svc.Register(c.Request.Context(), &req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -330,8 +329,7 @@ func (h *Handler) Register(c *gin.Context) {
 // Login 用户登录
 func (h *Handler) Login(c *gin.Context) {
 	var req service.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
@@ -355,7 +353,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	resp, err := h.svc.Login(c.Request.Context(), &req, loginInfo)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -364,9 +362,8 @@ func (h *Handler) Login(c *gin.Context) {
 
 // ChangePassword 修改密码
 func (h *Handler) ChangePassword(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -379,8 +376,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		OldPasswordSnake string `json:"old_password"`
 		NewPasswordSnake string `json:"new_password"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
@@ -398,7 +394,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := h.svc.ChangePassword(c.Request.Context(), userID, svcReq); err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -408,13 +404,12 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 // RequestPasswordReset 请求密码重置
 func (h *Handler) RequestPasswordReset(c *gin.Context) {
 	var req service.PasswordResetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	if err := h.svc.RequestPasswordReset(c.Request.Context(), &req); err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -433,8 +428,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		NewPassword string `json:"newPassword"`
 		Password    string `json:"password"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
@@ -452,7 +446,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	}
 
 	if err := h.svc.ResetPassword(c.Request.Context(), svcReq); err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -463,8 +457,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 // POST /api/auth/email/send-verification-code
 func (h *Handler) SendEmailVerificationCode(c *gin.Context) {
 	var req service.EmailVerificationSendRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
@@ -475,7 +468,7 @@ func (h *Handler) SendEmailVerificationCode(c *gin.Context) {
 	)
 
 	if err := h.svc.SendEmailVerificationCode(c.Request.Context(), &req, ipAddress); err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -486,13 +479,12 @@ func (h *Handler) SendEmailVerificationCode(c *gin.Context) {
 // POST /api/auth/email/verify
 func (h *Handler) VerifyEmail(c *gin.Context) {
 	var req service.EmailVerificationConfirmRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	if err := h.svc.VerifyEmailByCode(c.Request.Context(), &req); err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -505,14 +497,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		RefreshToken string `json:"refreshToken" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	resp, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -521,15 +512,14 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 // CurrentUser 获取当前用户信息
 func (h *Handler) CurrentUser(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
 	user, err := h.svc.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 

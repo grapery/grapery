@@ -4,28 +4,25 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 // CreateInvitationCode 创建邀请码
 // POST /api/invitation-codes
 func (h *Handler) CreateInvitationCode(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
 	var req service.CreateInvitationCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	code, err := h.svc.CreateInvitationCode(c.Request.Context(), userID, req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -35,9 +32,8 @@ func (h *Handler) CreateInvitationCode(c *gin.Context) {
 // ListInvitationCodes 列出邀请码
 // GET /api/invitation-codes
 func (h *Handler) ListInvitationCodes(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -46,7 +42,7 @@ func (h *Handler) ListInvitationCodes(c *gin.Context) {
 
 	codes, err := h.svc.ListInvitationCodes(c.Request.Context(), userID, limit, offset)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -59,25 +55,19 @@ func (h *Handler) ListInvitationCodes(c *gin.Context) {
 // GetInvitationCode 获取邀请码信息
 // GET /api/invitation-codes/:id
 func (h *Handler) GetInvitationCode(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	codeID := c.Param("id")
-	if codeID == "" {
-		InvalidParams(c, "invitation code id is required")
+	codeID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	code, err := h.svc.GetInvitationCode(c.Request.Context(), codeID)
 	if err != nil {
-		if err.Error() == "invitation code not found" {
-			NotFound(c, "invitation code not found")
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -93,35 +83,24 @@ func (h *Handler) GetInvitationCode(c *gin.Context) {
 // UpdateInvitationCode 更新邀请码
 // PUT /api/invitation-codes/:id
 func (h *Handler) UpdateInvitationCode(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	codeID := c.Param("id")
-	if codeID == "" {
-		InvalidParams(c, "invitation code id is required")
+	codeID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	var req service.UpdateInvitationCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	code, err := h.svc.UpdateInvitationCode(c.Request.Context(), userID, codeID, req)
 	if err != nil {
-		if err.Error() == "invitation code not found" {
-			NotFound(c, "invitation code not found")
-			return
-		}
-		if err.Error() == "unauthorized: you can only update your own invitation codes" {
-			Forbidden(c, err.Error())
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -131,29 +110,19 @@ func (h *Handler) UpdateInvitationCode(c *gin.Context) {
 // DeleteInvitationCode 删除邀请码
 // DELETE /api/invitation-codes/:id
 func (h *Handler) DeleteInvitationCode(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	codeID := c.Param("id")
-	if codeID == "" {
-		InvalidParams(c, "invitation code id is required")
+	codeID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	err := h.svc.DeleteInvitationCode(c.Request.Context(), userID, codeID)
 	if err != nil {
-		if err.Error() == "invitation code not found" {
-			NotFound(c, "invitation code not found")
-			return
-		}
-		if err.Error() == "unauthorized: you can only delete your own invitation codes" {
-			Forbidden(c, err.Error())
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -166,14 +135,13 @@ func (h *Handler) ValidateInvitationCode(c *gin.Context) {
 	var req struct {
 		Code string `json:"code" binding:"required"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	err := h.svc.ValidateInvitationCode(c.Request.Context(), req.Code)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
