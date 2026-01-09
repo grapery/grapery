@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
@@ -14,35 +15,50 @@ import (
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
 	"github.com/grapestree/fgrapery/grapery/internal/queue"
+	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	pay "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"google.golang.org/genai"
 )
 
 // Worker 任务处理器
 type Worker struct {
-	queue        *queue.TaskQueue
-	repo         domain.Repository
-	genAPI       *genapi.GenAPI
-	geminiClient *gemini.Client
-	logger       *zap.Logger
-	stopChan     chan struct{}
+	queue                *queue.TaskQueue
+	repo                 domain.Repository
+	genAPI               *genapi.GenAPI
+	geminiClient         *gemini.Client
+	tokenUsageService    pay.TokenUsageService
+	tokenUsageLogService pay.TokenUsageLogService
+	logger               *zap.Logger
+	stopChan             chan struct{}
 }
 
 // NewWorker 创建Worker
+// tokenUsageService 可以为 nil，如果为 nil 则不会记录 token 使用量统计
+// tokenUsageLogService 可以为 nil，如果为 nil 则不会记录详细日志
+// 创建 TokenUsageService 示例：
+//
+//	logrusLogger := logrus.New()
+//	tokenUsageService := pay.NewTokenUsageService(logrusLogger)
+//	tokenUsageLogService := pay.NewTokenUsageLogService(logrusLogger)
 func NewWorker(
 	queue *queue.TaskQueue,
 	repo domain.Repository,
 	genAPI *genapi.GenAPI,
 	geminiClient *gemini.Client,
+	tokenUsageService pay.TokenUsageService,
+	tokenUsageLogService pay.TokenUsageLogService,
 	logger *zap.Logger,
 ) *Worker {
 	return &Worker{
-		queue:        queue,
-		repo:         repo,
-		genAPI:       genAPI,
-		geminiClient: geminiClient,
-		logger:       logger,
-		stopChan:     make(chan struct{}),
+		queue:                queue,
+		repo:                 repo,
+		genAPI:               genAPI,
+		geminiClient:         geminiClient,
+		tokenUsageService:    tokenUsageService,
+		tokenUsageLogService: tokenUsageLogService,
+		logger:               logger,
+		stopChan:             make(chan struct{}),
 	}
 }
 
@@ -258,13 +274,19 @@ func (w *Worker) processStoryGeneration(ctx context.Context, task *domain.AITask
 
 	// 计算 token 使用量
 	tokensUsed := 0
+	inputTokens := 0
+	outputTokens := 0
 	if geminiResp != nil && geminiResp.UsageMetadata != nil {
 		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
+		inputTokens = int(geminiResp.UsageMetadata.PromptTokenCount)
+		outputTokens = int(geminiResp.UsageMetadata.CandidatesTokenCount)
 	}
 
 	w.logger.Info("story generation completed",
 		zap.String("taskId", task.ID),
 		zap.Int("tokensUsed", tokensUsed),
+		zap.Int("inputTokens", inputTokens),
+		zap.Int("outputTokens", outputTokens),
 		zap.Int("textLength", len(text)))
 
 	// 解析结果
@@ -279,6 +301,9 @@ func (w *Worker) processStoryGeneration(ctx context.Context, task *domain.AITask
 	task.Progress = 100
 	completedTime := time.Now().Unix()
 	task.CompletedAt = &completedTime
+
+	// 记录 token 使用量到统计系统
+	w.recordTokenUsage(ctx, task, inputTokens, outputTokens, task.Model)
 
 	return w.repo.UpdateAITask(ctx, task)
 }
@@ -327,13 +352,19 @@ func (w *Worker) processPromptEnhancement(ctx context.Context, task *domain.AITa
 
 	// 计算 token 使用量
 	tokensUsed := 0
+	inputTokens := 0
+	outputTokens := 0
 	if geminiResp != nil && geminiResp.UsageMetadata != nil {
 		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
+		inputTokens = int(geminiResp.UsageMetadata.PromptTokenCount)
+		outputTokens = int(geminiResp.UsageMetadata.CandidatesTokenCount)
 	}
 
 	w.logger.Info("prompt enhancement completed",
 		zap.String("taskId", task.ID),
-		zap.Int("tokensUsed", tokensUsed))
+		zap.Int("tokensUsed", tokensUsed),
+		zap.Int("inputTokens", inputTokens),
+		zap.Int("outputTokens", outputTokens))
 
 	result := &domain.AIPromptEnhanceResult{
 		EnhancedPrompt: extractEnhancedPrompt(text),
@@ -348,6 +379,9 @@ func (w *Worker) processPromptEnhancement(ctx context.Context, task *domain.AITa
 	task.Progress = 100
 	completedTime := time.Now().Unix()
 	task.CompletedAt = &completedTime
+
+	// 记录 token 使用量到统计系统
+	w.recordTokenUsage(ctx, task, inputTokens, outputTokens, task.Model)
 
 	return w.repo.UpdateAITask(ctx, task)
 }
@@ -434,8 +468,12 @@ func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask
 
 	// 计算 token 使用量
 	tokensUsed := 0
+	inputTokens := 0
+	outputTokens := 0
 	if resp.Usage != nil {
 		tokensUsed = resp.Usage.TotalTokens
+		inputTokens = resp.Usage.InputTokens
+		outputTokens = resp.Usage.OutputTokens
 	}
 
 	w.logger.Info("image generation completed",
@@ -443,6 +481,8 @@ func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask
 		zap.String("provider", resp.Provider),
 		zap.Int("imageCount", len(resp.ImageURLs)),
 		zap.Int("tokensUsed", tokensUsed),
+		zap.Int("inputTokens", inputTokens),
+		zap.Int("outputTokens", outputTokens),
 		zap.Duration("duration", resp.Duration()))
 
 	// 上传图片到OSS并替换URL
@@ -495,6 +535,9 @@ func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask
 	task.Progress = 100
 	completedTime := time.Now().Unix()
 	task.CompletedAt = &completedTime
+
+	// 记录 token 使用量到统计系统
+	w.recordTokenUsage(ctx, task, inputTokens, outputTokens, task.Model)
 
 	return w.repo.UpdateAITask(ctx, task)
 }
@@ -625,8 +668,12 @@ func (w *Worker) processVideoGeneration(ctx context.Context, task *domain.AITask
 
 	// 计算 token 使用量
 	tokensUsed := 0
+	inputTokens := 0
+	outputTokens := 0
 	if resp.Usage != nil {
 		tokensUsed = resp.Usage.TotalTokens
+		inputTokens = resp.Usage.InputTokens
+		outputTokens = resp.Usage.OutputTokens
 		if resp.Usage.DurationSeconds > 0 {
 			tokensUsed += resp.Usage.DurationSeconds // 视频时长也可能算入用量
 		}
@@ -688,6 +735,8 @@ func (w *Worker) processVideoGeneration(ctx context.Context, task *domain.AITask
 		zap.String("provider", resp.Provider),
 		zap.String("videoURL", ossVideoURL),
 		zap.Int("tokensUsed", tokensUsed),
+		zap.Int("inputTokens", inputTokens),
+		zap.Int("outputTokens", outputTokens),
 		zap.Duration("duration", resp.Duration()))
 
 	// 构建生成结果（使用OSS URL）
@@ -705,6 +754,9 @@ func (w *Worker) processVideoGeneration(ctx context.Context, task *domain.AITask
 	task.Progress = 100
 	completedTime := time.Now().Unix()
 	task.CompletedAt = &completedTime
+
+	// 记录 token 使用量到统计系统
+	w.recordTokenUsage(ctx, task, inputTokens, outputTokens, task.Model)
 
 	return w.repo.UpdateAITask(ctx, task)
 }
@@ -1319,4 +1371,236 @@ func getStoryboardImageURL(sb *domain.Storyboard) string {
 		return sb.SceneRefs[0].StoryScene.Image
 	}
 	return ""
+}
+
+// ========== Token 使用量统计辅助函数 ==========
+
+// convertUserIDToInt64 将字符串 UserID 转换为 int64
+// 使用 FNV-1a 64位哈希算法，确保相同字符串总是映射到相同的 int64 值
+func convertUserIDToInt64(userID string) int64 {
+	if userID == "" {
+		return 0
+	}
+	h := fnv.New64a()
+	h.Write([]byte(userID))
+	return int64(h.Sum64())
+}
+
+// mapAITaskTypeToTokenUsageType 将 AITaskType 映射到 TokenUsageType
+func mapAITaskTypeToTokenUsageType(taskType domain.AITaskType) paymodels.TokenUsageType {
+	switch taskType {
+	case domain.AITaskGenerateStory:
+		return paymodels.TokenUsageTypeStoryGen
+	case domain.AITaskEnhancePrompt:
+		return paymodels.TokenUsageTypeOther
+	case domain.AITaskGenerateImage:
+		return paymodels.TokenUsageTypeImageGen
+	case domain.AITaskGenerateVideo:
+		return paymodels.TokenUsageTypeVideoGen
+	default:
+		return paymodels.TokenUsageTypeOther
+	}
+}
+
+// getFeatureName 根据任务类型获取功能名称
+func getFeatureName(taskType domain.AITaskType) string {
+	switch taskType {
+	case domain.AITaskGenerateStory:
+		return "story_generation"
+	case domain.AITaskEnhancePrompt:
+		return "prompt_enhancement"
+	case domain.AITaskGenerateImage:
+		return "image_generation"
+	case domain.AITaskGenerateVideo:
+		return "video_generation"
+	default:
+		return "unknown"
+	}
+}
+
+// recordTokenUsage 记录 token 使用量到统计系统
+// 错误不会影响任务完成状态，只记录日志
+func (w *Worker) recordTokenUsage(ctx context.Context, task *domain.AITask, inputTokens, outputTokens int, modelName string) {
+	// 转换 UserID
+	userIDInt64 := convertUserIDToInt64(task.UserID)
+	if userIDInt64 == 0 {
+		w.logger.Warn("invalid userID, skipping token usage recording",
+			zap.String("taskId", task.ID),
+			zap.String("userID", task.UserID))
+		return
+	}
+
+	// 映射任务类型
+	usageType := mapAITaskTypeToTokenUsageType(task.Type)
+	featureName := getFeatureName(task.Type)
+
+	// 如果 modelName 为空，使用 task.Model
+	if modelName == "" {
+		modelName = task.Model
+	}
+	if modelName == "" {
+		modelName = task.Provider
+	}
+	if modelName == "" {
+		modelName = "unknown"
+	}
+
+	// 提取业务实体信息
+	entityInfo := w.extractEntityInfo(task)
+
+	// 记录 token 使用量（异步，不阻塞）
+	go func() {
+		// 1. 记录到 TokenUsage 表（周期汇总）
+		if w.tokenUsageService != nil {
+			err := w.tokenUsageService.RecordTokenUsage(
+				ctx,
+				userIDInt64,
+				usageType,
+				int64(inputTokens),
+				int64(outputTokens),
+				modelName,
+				featureName,
+			)
+			if err != nil {
+				w.logger.Error("failed to record token usage",
+					zap.String("taskId", task.ID),
+					zap.String("userID", task.UserID),
+					zap.Int("inputTokens", inputTokens),
+					zap.Int("outputTokens", outputTokens),
+					zap.Error(err))
+			}
+		}
+
+		// 2. 记录到 TokenUsageLog 表（详细日志）
+		if w.tokenUsageLogService != nil {
+			usageLog := &paymodels.TokenUsageLog{
+				UserID:        userIDInt64,
+				EntityType:    entityInfo.EntityType,
+				EntityID:      entityInfo.EntityID,
+				OperationType: entityInfo.OperationType,
+				UsageType:     usageType,
+				InputTokens:   inputTokens,
+				OutputTokens:  outputTokens,
+				TotalTokens:   inputTokens + outputTokens,
+				ModelName:     modelName,
+				Provider:      task.Provider,
+				FeatureName:   featureName,
+				TaskID:        task.ID,
+				StoryID:       entityInfo.StoryID,
+				CostAmount:    0, // 成本计算可以在后续添加
+				Currency:      "USD",
+				IsBilled:      false,
+			}
+
+			// 设置元数据
+			metadata := map[string]interface{}{
+				"task_type":         string(task.Type),
+				"task_status":       string(task.Status),
+				"related_entity_id": task.RelatedEntityID,
+			}
+			if err := usageLog.SetMetadata(metadata); err != nil {
+				w.logger.Warn("failed to set metadata for usage log",
+					zap.String("taskId", task.ID),
+					zap.Error(err))
+			}
+
+			err := w.tokenUsageLogService.RecordUsageLog(ctx, usageLog)
+			if err != nil {
+				w.logger.Error("failed to record token usage log",
+					zap.String("taskId", task.ID),
+					zap.String("userID", task.UserID),
+					zap.Error(err))
+			} else {
+				w.logger.Debug("token usage log recorded successfully",
+					zap.String("taskId", task.ID),
+					zap.String("entityType", string(entityInfo.EntityType)),
+					zap.String("entityID", entityInfo.EntityID))
+			}
+		}
+	}()
+}
+
+// EntityInfo 业务实体信息
+type EntityInfo struct {
+	EntityType    paymodels.EntityType
+	EntityID      string
+	OperationType paymodels.OperationType
+	StoryID       string
+}
+
+// extractEntityInfo 从 AITask 提取业务实体信息
+func (w *Worker) extractEntityInfo(task *domain.AITask) EntityInfo {
+	info := EntityInfo{
+		EntityID:      task.ID, // 默认使用 task ID
+		EntityType:    paymodels.EntityTypeAITask,
+		OperationType: paymodels.OperationTypeCreate,
+	}
+
+	// 根据任务类型确定操作类型
+	switch task.Type {
+	case domain.AITaskGenerateStory:
+		info.OperationType = paymodels.OperationTypeGenerateText
+	case domain.AITaskEnhancePrompt:
+		info.OperationType = paymodels.OperationTypeEnhancePrompt
+	case domain.AITaskGenerateImage:
+		info.OperationType = paymodels.OperationTypeGenerateImage
+	case domain.AITaskGenerateVideo:
+		info.OperationType = paymodels.OperationTypeGenerateVideo
+	}
+
+	// 从 RelatedEntityType 和 RelatedEntityID 提取业务实体信息
+	if task.RelatedEntityID != "" {
+		info.EntityID = task.RelatedEntityID
+
+		// 映射 RelatedEntityType 到 EntityType
+		switch task.RelatedEntityType {
+		case "story":
+			info.EntityType = paymodels.EntityTypeStory
+		case "storyboard":
+			info.EntityType = paymodels.EntityTypeStoryboard
+		case "character":
+			info.EntityType = paymodels.EntityTypeCharacter
+		case "poster":
+			info.EntityType = paymodels.EntityTypePoster
+		case "story_scene":
+			info.EntityType = paymodels.EntityTypeStoryScene
+		default:
+			info.EntityType = paymodels.EntityTypeAITask
+		}
+	}
+
+	// 从 task.Input 解析 JSON，尝试提取 story_id
+	if task.Input != "" {
+		var inputMap map[string]interface{}
+		if err := json.Unmarshal([]byte(task.Input), &inputMap); err == nil {
+			if storyID, ok := inputMap["storyId"].(string); ok && storyID != "" {
+				info.StoryID = storyID
+			}
+			// 如果 entity_id 在输入中，优先使用
+			if entityID, ok := inputMap["entityId"].(string); ok && entityID != "" {
+				info.EntityID = entityID
+			}
+			if entityType, ok := inputMap["entityType"].(string); ok && entityType != "" {
+				switch entityType {
+				case "story":
+					info.EntityType = paymodels.EntityTypeStory
+				case "storyboard":
+					info.EntityType = paymodels.EntityTypeStoryboard
+				case "character":
+					info.EntityType = paymodels.EntityTypeCharacter
+				case "poster":
+					info.EntityType = paymodels.EntityTypePoster
+				}
+			}
+		}
+	}
+
+	// 如果 RelatedEntityType 是 storyboard，尝试从输入中提取 story_id
+	if task.RelatedEntityType == "storyboard" && info.StoryID == "" {
+		// 尝试从数据库查询 storyboard 获取 story_id
+		// 这里暂时跳过，避免同步数据库查询影响性能
+		// 可以在后续异步补充
+	}
+
+	return info
 }

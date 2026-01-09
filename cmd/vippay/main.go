@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
@@ -767,6 +768,97 @@ func registerRoutes(router *gin.Engine) {
 					authBadges.POST("/check", badgeHandler.CheckAndAwardBadges)    // 检查并授予徽章
 					authBadges.POST("/sync-stats", badgeHandler.SyncUserStats)     // 同步用户统计
 				}
+			}
+		}
+
+		// Token 用量统计相关路由 - 需要鉴权
+		usage := api.Group("/usage")
+		usage.Use(paymiddleware.AuthMiddleware())
+		{
+			// 创建 TokenUsageService 和 TokenUsageLogService
+			logrusLogger := &logrus.Logger{
+				Out:       os.Stderr,
+				Formatter: new(logrus.TextFormatter),
+				Hooks:     make(logrus.LevelHooks),
+				Level:     logrus.InfoLevel,
+			}
+			tokenUsageService := paypkg.NewTokenUsageService(logrusLogger)
+			tokenUsageLogService := paypkg.NewTokenUsageLogService(logrusLogger)
+			usageHandler := paypkg.NewUsageLimitHandler(tokenUsageService, logrusLogger)
+			usageLogHandler := pay.NewTokenUsageLogHandler(tokenUsageLogService, logrusLogger)
+
+			// 获取用户总用量统计（支持 daily/weekly/monthly/yearly 周期）
+			usage.GET("/stats", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.GetUsageStats(c)
+			})
+
+			// 获取用户各类型用量统计
+			usage.GET("/by-type", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.GetUsageByType(c)
+			})
+
+			// 检查特定类型的用量限制
+			usage.GET("/limit/:type", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.CheckUsageLimit(c)
+			})
+
+			// Token 用量日志相关路由
+			logs := usage.Group("/logs")
+			{
+				// 查询日志列表
+				logs.GET("", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetLogs(c)
+				})
+
+				// 获取汇总统计
+				logs.GET("/summary", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetSummary(c)
+				})
+
+				// 按实体类型汇总
+				logs.GET("/summary/by-type", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetSummaryByEntityType(c)
+				})
+
+				// 导出日志（CSV/JSON）
+				logs.GET("/export", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.ExportLogs(c)
+				})
+
+				// 按业务实体查询日志
+				logs.GET("/by-entity/:entity_type/:entity_id", usageLogHandler.GetLogsByEntity)
+
+				// 获取计费汇总
+				logs.GET("/billing", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetBilling(c)
+				})
+
+				// 标记为已计费
+				logs.POST("/mark-billed", usageLogHandler.MarkAsBilled)
 			}
 		}
 	}
