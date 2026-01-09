@@ -680,3 +680,97 @@ func (h *Handler) UpdateCharacterAvatar(c *gin.Context) {
 
 	Success(c, character)
 }
+
+// GetPortraitPrompt 获取角色形象生成推荐提示词
+// GET /api/characters/:id/portrait-prompt
+func (h *Handler) GetPortraitPrompt(c *gin.Context) {
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	prompt, err := h.svc.GeneratePortraitPrompt(c.Request.Context(), characterID)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"prompt": prompt})
+}
+
+// GenerateCharacterPortrait 生成角色形象图
+// POST /api/characters/:id/generate-portrait
+func (h *Handler) GenerateCharacterPortrait(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req service.GenerateCharacterPortraitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 允许空请求体，使用默认参数
+		req = service.GenerateCharacterPortraitRequest{
+			AspectRatio: "2:3",
+		}
+	}
+
+	result, err := h.svc.GenerateCharacterPortrait(c.Request.Context(), userID, characterID, req)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized: only character creator can generate portrait" {
+			Forbidden(c, "you can only generate portraits for your own characters")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, result)
+}
+
+// CropAvatarFromPortrait 从形象图裁剪生成头像
+// POST /api/characters/:id/crop-avatar
+func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	avatarURL, err := h.svc.CropAvatarFromPortrait(c.Request.Context(), characterID)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "character has no portrait to crop from" {
+			InvalidParams(c, "character has no portrait image")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"avatarUrl": avatarURL})
+}

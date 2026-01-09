@@ -14,23 +14,26 @@ import (
 
 // CreateCharacterRequest 创建角色请求
 type CreateCharacterRequest struct {
-	Name            string `json:"name" binding:"required,min=1,max=100"`
-	Description     string `json:"description" binding:"max=2000"`
-	Avatar          string `json:"avatar" binding:"omitempty,url"`
-	Personality     string `json:"personality" binding:"max=1000"`
-	Background      string `json:"background" binding:"max=2000"`
-	ShortTermGoal   string `json:"shortTermGoal" binding:"max=1000"`
-	LongTermGoal    string `json:"longTermGoal" binding:"max=1000"`
-	HandlingStyle   string `json:"handlingStyle" binding:"max=1000"`
-	CognitionRange  string `json:"cognitionRange" binding:"max=1000"`
-	AbilityFeatures string `json:"abilityFeatures" binding:"max=1000"`
-	Appearance      string `json:"appearance" binding:"max=1000"`
-	DressPreference string `json:"dressPreference" binding:"max=1000"`
-	StoryID         string `json:"storyId" binding:"required"`
-	IsPublic        bool   `json:"isPublic"`
-	SourceType      string `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
-	SourcePrompt    string `json:"sourcePrompt"`
-	SourceImage     string `json:"sourceImage" binding:"omitempty,url"`
+	Name            string   `json:"name" binding:"required,min=1,max=100"`
+	Description     string   `json:"description" binding:"max=2000"`
+	Avatar          string   `json:"avatar" binding:"omitempty,url"`
+	Personality     string   `json:"personality" binding:"max=1000"`
+	Background      string   `json:"background" binding:"max=2000"`
+	ShortTermGoal   string   `json:"shortTermGoal" binding:"max=1000"`
+	LongTermGoal    string   `json:"longTermGoal" binding:"max=1000"`
+	HandlingStyle   string   `json:"handlingStyle" binding:"max=1000"`
+	CognitionRange  string   `json:"cognitionRange" binding:"max=1000"`
+	AbilityFeatures string   `json:"abilityFeatures" binding:"max=1000"`
+	Appearance      string   `json:"appearance" binding:"max=1000"`
+	DressPreference string   `json:"dressPreference" binding:"max=1000"`
+	StoryID         string   `json:"storyId" binding:"required"`
+	IsPublic        bool     `json:"isPublic"`
+	SourceType      string   `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
+	SourcePrompt    string   `json:"sourcePrompt"`
+	SourceImage     string   `json:"sourceImage" binding:"omitempty,url"`
+	Tags            []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
+	NeedsPortrait   bool     `json:"needsPortrait"`                                    // 是否需要生成形象
+	ReferenceImage  string   `json:"referenceImage" binding:"omitempty,url"`           // 参考图URL
 }
 
 // UpdateCharacterRequest 更新角色请求
@@ -68,6 +71,19 @@ type GenerateCharacterAvatarRequest struct {
 type GenerateCharacterAvatarResult struct {
 	AvatarURL string `json:"avatarUrl"`
 	RecordID  string `json:"recordId"`
+}
+
+// GenerateCharacterPortraitRequest AI生成角色形象请求（完整形象图）
+type GenerateCharacterPortraitRequest struct {
+	CustomPrompt   string `json:"customPrompt"`   // 用户自定义提示词（可选）
+	ReferenceImage string `json:"referenceImage"` // 参考图URL（可选）
+	AspectRatio    string `json:"aspectRatio"`    // 建议 2:3 或 3:4（竖版人像）
+}
+
+// GenerateCharacterPortraitResult 生成角色形象结果
+type GenerateCharacterPortraitResult struct {
+	PortraitURL string `json:"portraitUrl"`
+	RecordID    string `json:"recordId"`
 }
 
 // GeneratedCharacterAttributes AI生成的角色属性
@@ -117,34 +133,44 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		sourceType = AssetSourceManual
 	}
 	s.logger.Info("source type", zap.String("sourceType", sourceType))
+	// 设置形象生成状态
+	portraitStatus := "none"
+	if req.NeedsPortrait {
+		portraitStatus = "pending"
+	}
+
 	// 创建角色
 	character := &domain.Character{
-		StoryID:         req.StoryID,
-		AuthorID:        author.ID,
-		Name:            req.Name,
-		Description:     req.Description,
-		Avatar:          req.Avatar,
-		Poster:          "",
-		Author:          author,
-		Personality:     req.Personality,
-		Background:      req.Background,
-		ShortTermGoal:   req.ShortTermGoal,
-		LongTermGoal:    req.LongTermGoal,
-		HandlingStyle:   req.HandlingStyle,
-		CognitionRange:  req.CognitionRange,
-		AbilityFeatures: req.AbilityFeatures,
-		Appearance:      req.Appearance,
-		DressPreference: req.DressPreference,
-		IsPublic:        req.IsPublic,
-		SourceType:      sourceType,
-		SourcePrompt:    req.SourcePrompt,
-		SourceImage:     req.SourceImage,
-		CreatedBy:       userID,
-		LastEditedBy:    userID,
-		Followers:       0,
-		Stories:         0,
-		CreatedAt:       time.Now().Unix(),
-		UpdatedAt:       time.Now().Unix(),
+		StoryID:                  req.StoryID,
+		AuthorID:                 author.ID,
+		Name:                     req.Name,
+		Description:              req.Description,
+		Avatar:                   req.Avatar,
+		Poster:                   "",
+		Portrait:                 "",
+		NeedsPortrait:            req.NeedsPortrait,
+		ReferenceImage:           req.ReferenceImage,
+		PortraitGenerationStatus: portraitStatus,
+		Author:                   author,
+		Personality:              req.Personality,
+		Background:               req.Background,
+		ShortTermGoal:            req.ShortTermGoal,
+		LongTermGoal:             req.LongTermGoal,
+		HandlingStyle:            req.HandlingStyle,
+		CognitionRange:           req.CognitionRange,
+		AbilityFeatures:          req.AbilityFeatures,
+		Appearance:               req.Appearance,
+		DressPreference:          req.DressPreference,
+		IsPublic:                 req.IsPublic,
+		SourceType:               sourceType,
+		SourcePrompt:             req.SourcePrompt,
+		SourceImage:              req.SourceImage,
+		CreatedBy:                userID,
+		LastEditedBy:             userID,
+		Followers:                0,
+		Stories:                  0,
+		CreatedAt:                time.Now().Unix(),
+		UpdatedAt:                time.Now().Unix(),
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
@@ -174,6 +200,36 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 
 	s.logger.Info("character created successfully",
 		zap.String("characterID", character.ID))
+
+	// 添加标签（如果有）
+	if len(req.Tags) > 0 {
+		s.logger.Debug("adding tags to character",
+			zap.String("characterID", character.ID),
+			zap.Strings("tags", req.Tags))
+		// 去重并规范化标签（转小写，去除前后空格）
+		uniqueTags := make(map[string]bool)
+		normalizedTags := make([]string, 0, len(req.Tags))
+		for _, tag := range req.Tags {
+			normalized := strings.TrimSpace(strings.ToLower(tag))
+			if normalized != "" && !uniqueTags[normalized] {
+				uniqueTags[normalized] = true
+				normalizedTags = append(normalizedTags, normalized)
+			}
+		}
+		if len(normalizedTags) > 0 {
+			if err := s.AddCharacterTags(ctx, character.ID, normalizedTags); err != nil {
+				s.logger.Warn("failed to add tags to character",
+					zap.String("characterID", character.ID),
+					zap.Strings("tags", normalizedTags),
+					zap.Error(err))
+				// 不返回错误，标签添加失败不影响角色创建
+			} else {
+				s.logger.Info("tags added to character successfully",
+					zap.String("characterID", character.ID),
+					zap.Strings("tags", normalizedTags))
+			}
+		}
+	}
 
 	// 记录用户活动
 	go s.RecordCharacterCreated(context.Background(), userID, character.ID, character.Name)
@@ -1811,4 +1867,247 @@ func (s *Service) UpdateCharacterAvatar(ctx context.Context, userID, characterID
 
 	s.logger.Info("character avatar updated successfully", zap.String("characterID", characterID))
 	return character, nil
+}
+
+// GeneratePortraitPrompt 为角色生成推荐的形象提示词
+func (s *Service) GeneratePortraitPrompt(ctx context.Context, characterID string) (string, error) {
+	s.logger.Info("generating portrait prompt for character", zap.String("characterID", characterID))
+
+	// 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return "", errors.New("character not found")
+		}
+		return "", errors.New("failed to get character")
+	}
+
+	// 构建形象生成提示词
+	prompt := s.buildPortraitPrompt(character)
+
+	s.logger.Info("portrait prompt generated successfully", zap.String("characterID", characterID))
+	return prompt, nil
+}
+
+// buildPortraitPrompt 构建角色完整形象生成提示词
+func (s *Service) buildPortraitPrompt(character *domain.Character) string {
+	var prompt strings.Builder
+
+	prompt.WriteString("A full-body character portrait of ")
+	prompt.WriteString(character.Name)
+	prompt.WriteString(".\n\n")
+
+	// 外观描述
+	if character.Appearance != "" {
+		prompt.WriteString("Physical Appearance: ")
+		prompt.WriteString(character.Appearance)
+		prompt.WriteString(".\n\n")
+	}
+
+	// 服装风格
+	if character.DressPreference != "" {
+		prompt.WriteString("Clothing and Dress Style: ")
+		prompt.WriteString(character.DressPreference)
+		prompt.WriteString(".\n\n")
+	}
+
+	// 性格特征（影响姿势和表情）
+	if character.Personality != "" {
+		prompt.WriteString("Personality (to inform pose and expression): ")
+		prompt.WriteString(character.Personality)
+		prompt.WriteString(".\n\n")
+	}
+
+	// 背景信息（可能影响服装或氛围）
+	if character.Background != "" {
+		prompt.WriteString("Background: ")
+		prompt.WriteString(character.Background)
+		prompt.WriteString(".\n\n")
+	}
+
+	// 能力特征（可能影响外观细节）
+	if character.AbilityFeatures != "" {
+		prompt.WriteString("Special Abilities/Features: ")
+		prompt.WriteString(character.AbilityFeatures)
+		prompt.WriteString(".\n\n")
+	}
+
+	// 艺术风格指导
+	prompt.WriteString("Style: High-quality character design illustration, ")
+	prompt.WriteString("full body portrait in a standing or dynamic pose, ")
+	prompt.WriteString("detailed clothing and accessories, ")
+	prompt.WriteString("professional character art, ")
+	prompt.WriteString("clear and expressive features, ")
+	prompt.WriteString("suitable background or environment that complements the character, ")
+	prompt.WriteString("2:3 or 3:4 vertical aspect ratio.")
+
+	return prompt.String()
+}
+
+// GenerateCharacterPortrait 使用AI生成角色形象（完整形象图）
+func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, characterID string, req GenerateCharacterPortraitRequest) (*GenerateCharacterPortraitResult, error) {
+	s.logger.Info("generating character portrait",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+	)
+
+	// 1. 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+
+	// 2. 验证权限
+	if character.Author == nil || character.Author.ID != userID {
+		return nil, errors.New("unauthorized: only character creator can generate portrait")
+	}
+
+	// 3. 检查AI服务是否可用
+	if s.aiGenService == nil {
+		return nil, errors.New("AI generation service not configured")
+	}
+
+	// 4. 构建形象生成提示词
+	var prompt string
+	if req.CustomPrompt != "" {
+		// 用户提供了自定义提示词
+		prompt = req.CustomPrompt
+	} else {
+		// 使用自动生成的提示词
+		prompt = s.buildPortraitPrompt(character)
+	}
+
+	// 5. 设置宽高比（竖版人像）
+	aspectRatio := req.AspectRatio
+	if aspectRatio == "" {
+		aspectRatio = "2:3" // 默认2:3竖版人像
+	}
+
+	// 6. 更新角色状态为"生成中"
+	character.PortraitGenerationStatus = "generating"
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Warn("failed to update portrait generation status", zap.Error(err))
+	}
+
+	// 7. 调用AI图像生成服务
+	var referenceImages []string
+	if req.ReferenceImage != "" {
+		referenceImages = []string{req.ReferenceImage}
+	}
+
+	imageReq := &GenerateImageRequest{
+		UserID:            userID,
+		Prompt:            prompt,
+		ReferenceImages:   referenceImages, // 传递参考图
+		Provider:          "gemini",
+		Model:             "imagen-3.0-generate-001",
+		AspectRatio:       aspectRatio,
+		Quality:           "high",
+		OutputCount:       1,
+		RelatedEntityID:   characterID,
+		RelatedEntityType: "character",
+		Metadata: map[string]interface{}{
+			"operation":         "character_portrait_generation",
+			"characterId":       characterID,
+			"hasCustomPrompt":   req.CustomPrompt != "",
+			"hasReferenceImage": req.ReferenceImage != "",
+		},
+	}
+
+	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
+	if err != nil {
+		s.logger.Error("failed to generate character portrait", zap.Error(err))
+
+		// 更新状态为失败
+		character.PortraitGenerationStatus = "failed"
+		_ = s.repo.UpdateCharacter(ctx, character)
+
+		return nil, errors.New("failed to generate portrait: " + err.Error())
+	}
+
+	if len(result.ImageURLs) == 0 {
+		// 更新状态为失败
+		character.PortraitGenerationStatus = "failed"
+		_ = s.repo.UpdateCharacter(ctx, character)
+
+		return nil, errors.New("no image generated")
+	}
+
+	// 8. 更新角色的Portrait字段和状态
+	character.Portrait = result.ImageURLs[0]
+	character.PortraitGenerationStatus = "generated"
+	character.LastEditedBy = userID
+	character.UpdatedAt = time.Now().Unix()
+
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Error("failed to update character portrait", zap.Error(err))
+		return nil, errors.New("failed to update character portrait")
+	}
+
+	// 清除缓存
+	c := s.getCache()
+	if c != nil {
+		_ = c.Delete(ctx, cache.CharacterKey(characterID))
+	}
+
+	s.logger.Info("character portrait generated successfully",
+		zap.String("characterID", characterID),
+		zap.String("recordID", result.RecordID),
+	)
+
+	return &GenerateCharacterPortraitResult{
+		PortraitURL: result.ImageURLs[0],
+		RecordID:    result.RecordID,
+	}, nil
+}
+
+// CropAvatarFromPortrait 从Portrait裁剪生成Avatar（可选功能）
+func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string) (string, error) {
+	s.logger.Info("cropping avatar from portrait", zap.String("characterID", characterID))
+
+	// 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return "", errors.New("character not found")
+		}
+		return "", errors.New("failed to get character")
+	}
+
+	// 检查是否有Portrait
+	if character.Portrait == "" {
+		return "", errors.New("character has no portrait to crop from")
+	}
+
+	// TODO: 实现图片裁剪逻辑
+	// 这里需要调用图片处理服务（如阿里云OSS的图片处理功能或其他图片处理服务）
+	// 从Portrait裁剪出头像区域（通常是人脸为中心的正方形区域）
+	// 生成小尺寸的Avatar图片
+
+	// 暂时返回Portrait作为Avatar（实际应用中应该实现裁剪逻辑）
+	s.logger.Warn("CropAvatarFromPortrait not fully implemented, using portrait as avatar",
+		zap.String("characterID", characterID))
+
+	avatarURL := character.Portrait // 临时方案
+
+	// 更新角色的Avatar字段
+	character.Avatar = avatarURL
+	character.UpdatedAt = time.Now().Unix()
+
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Error("failed to update character avatar", zap.Error(err))
+		return "", errors.New("failed to update character avatar")
+	}
+
+	// 清除缓存
+	c := s.getCache()
+	if c != nil {
+		_ = c.Delete(ctx, cache.CharacterKey(characterID))
+	}
+
+	s.logger.Info("avatar cropped from portrait successfully", zap.String("characterID", characterID))
+	return avatarURL, nil
 }

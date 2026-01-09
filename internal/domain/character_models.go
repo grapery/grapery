@@ -7,9 +7,13 @@ type Character struct {
 	AuthorID        string  `json:"-"`
 	Name            string  `json:"name"`
 	Description     string  `json:"description"`
-	Avatar          string  `json:"avatar,omitempty"`
-	Poster          string  `json:"poster,omitempty"`
-	Personality     string  `json:"personality,omitempty"`
+	Avatar                   string  `json:"avatar,omitempty"`
+	Poster                   string  `json:"poster,omitempty"`
+	Portrait                 string  `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
+	NeedsPortrait            bool    `json:"needsPortrait"`                      // 是否需要生成形象
+	ReferenceImage           string  `json:"referenceImage,omitempty"`           // 参考图URL
+	PortraitGenerationStatus string  `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
+	Personality              string  `json:"personality,omitempty"`
 	Background      string  `json:"background,omitempty"`
 	ShortTermGoal   string  `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
 	LongTermGoal    string  `json:"longTermGoal,omitempty"`    // Overarching ambitions

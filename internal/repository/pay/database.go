@@ -83,6 +83,9 @@ func Init(uname, pwd, address, dbname string) error {
 	database.AutoMigrate(&UserBadge{})
 	database.AutoMigrate(&UserBadgeStats{})
 
+	// Token用量日志表
+	database.AutoMigrate(&TokenUsageLog{})
+
 	return nil
 }
 

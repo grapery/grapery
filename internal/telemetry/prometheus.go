@@ -35,6 +35,13 @@ type Metrics struct {
 	HTTPRequestSize     *prometheus.SummaryVec
 	HTTPResponseSize    *prometheus.SummaryVec
 
+	// HTTP Error metrics
+	HTTPErrorTotal        *prometheus.CounterVec   // error_code, method, path: total count of errors by type
+	HTTPErrorDuration     *prometheus.HistogramVec // error_code, method, path: error occurrence time distribution
+	HTTPErrorDistribution *prometheus.SummaryVec   // error_code, method, path: error distribution with percentiles
+	HTTPErrorRate         *prometheus.GaugeVec     // error_code, method, path: error rate percentage (0-100)
+	HTTPErrorPercentiles  *prometheus.SummaryVec   // error_code: error percentiles (p50, p90, p95, p99)
+
 	// Application metrics
 	ActiveRequests    prometheus.Gauge
 	ErrorsTotal       *prometheus.CounterVec
@@ -194,6 +201,46 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 			},
 			[]string{"method", "path"},
+		),
+
+		// HTTP Error metrics
+		HTTPErrorTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "http_error_total",
+				Help: "Total number of HTTP errors by error code, method, and path",
+			},
+			[]string{"error_code", "method", "path"}, // error_code: "-1" (InvalidParams), "-2" (Unauthorized), "-3" (Forbidden), "-4" (NotFound), "-5" (InternalError), "-6" (DuplicateEntry), "-7" (RateLimitExceed), "-8" (TokenExpired), "-9" (InvalidToken), "0" (GenericError)
+		),
+		HTTPErrorDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "http_error_duration_seconds",
+				Help:    "HTTP error occurrence time distribution in seconds",
+				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+			},
+			[]string{"error_code", "method", "path"},
+		),
+		HTTPErrorDistribution: prometheus.NewSummaryVec(
+			prometheus.SummaryOpts{
+				Name:       "http_error_distribution_seconds",
+				Help:       "HTTP error distribution with percentiles (p50, p90, p95, p99)",
+				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			},
+			[]string{"error_code", "method", "path"},
+		),
+		HTTPErrorRate: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "http_error_rate_percent",
+				Help: "HTTP error rate percentage (0-100) by error code, method, and path",
+			},
+			[]string{"error_code", "method", "path"},
+		),
+		HTTPErrorPercentiles: prometheus.NewSummaryVec(
+			prometheus.SummaryOpts{
+				Name:       "http_error_percentiles_seconds",
+				Help:       "HTTP error percentiles (p50, p90, p95, p99) aggregated by error code",
+				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			},
+			[]string{"error_code"},
 		),
 
 		// Application metrics
@@ -830,6 +877,11 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.HTTPRequestDuration,
 		m.HTTPRequestSize,
 		m.HTTPResponseSize,
+		m.HTTPErrorTotal,
+		m.HTTPErrorDuration,
+		m.HTTPErrorDistribution,
+		m.HTTPErrorRate,
+		m.HTTPErrorPercentiles,
 		m.ActiveRequests,
 		m.ErrorsTotal,
 		m.DatabaseQueryTime,
@@ -1038,6 +1090,32 @@ func (m *Metrics) RecordHTTPRequest(method, path, status string, duration time.D
 	m.HTTPRequestDuration.WithLabelValues(method, path, status).Observe(duration.Seconds())
 	m.HTTPRequestSize.WithLabelValues(method, path).Observe(requestSize)
 	m.HTTPResponseSize.WithLabelValues(method, path).Observe(responseSize)
+}
+
+// RecordHTTPError records an HTTP error
+// errorCode: error code as string ("-1", "-2", "-3", "-4", "-5", "-6", "-7", "-8", "-9", "0")
+// method: HTTP method ("GET", "POST", "PUT", "DELETE", etc.)
+// path: HTTP request path
+// duration: time when error occurred (can be request duration or error occurrence time)
+func (m *Metrics) RecordHTTPError(errorCode, method, path string, duration time.Duration) {
+	m.HTTPErrorTotal.WithLabelValues(errorCode, method, path).Inc()
+	m.HTTPErrorDuration.WithLabelValues(errorCode, method, path).Observe(duration.Seconds())
+	m.HTTPErrorDistribution.WithLabelValues(errorCode, method, path).Observe(duration.Seconds())
+	m.HTTPErrorPercentiles.WithLabelValues(errorCode).Observe(duration.Seconds())
+}
+
+// RecordHTTPErrorRate records HTTP error rate percentage
+// errorCode: error code as string
+// method: HTTP method
+// path: HTTP request path
+// rate: error rate percentage (0-100)
+func (m *Metrics) RecordHTTPErrorRate(errorCode, method, path string, rate float64) {
+	m.HTTPErrorRate.WithLabelValues(errorCode, method, path).Set(rate)
+}
+
+// RecordHTTPErrorSimple records a simple HTTP error without duration (for counting only)
+func (m *Metrics) RecordHTTPErrorSimple(errorCode, method, path string) {
+	m.HTTPErrorTotal.WithLabelValues(errorCode, method, path).Inc()
 }
 
 // RecordError records an error

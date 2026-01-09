@@ -2,6 +2,7 @@ package http
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -35,6 +36,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-5, default 3)
 		SceneRefs     []sceneRefPayload     `json:"sceneRefs"`    // References to story-level scenes (static locations)
 		CharacterRefs []characterRefPayload `json:"characterRefs"`
+		Tags          []string              `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -106,6 +108,30 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 			zap.Error(err))
 		InternalError(c, err.Error())
 		return
+	}
+
+	// 添加标签（如果有）- 故事板标签添加到对应的故事上
+	if len(req.Tags) > 0 {
+		// 去重并规范化标签
+		uniqueTags := make(map[string]bool)
+		normalizedTags := make([]string, 0, len(req.Tags))
+		for _, tag := range req.Tags {
+			normalized := strings.TrimSpace(strings.ToLower(tag))
+			if normalized != "" && !uniqueTags[normalized] {
+				uniqueTags[normalized] = true
+				normalizedTags = append(normalizedTags, normalized)
+			}
+		}
+		if len(normalizedTags) > 0 {
+			if err := h.svc.AddStoryTags(c.Request.Context(), storyboard.StoryID, normalizedTags); err != nil {
+				h.logger.Warn("failed to add tags to story for storyboard",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("storyId", storyboard.StoryID),
+					zap.Strings("tags", normalizedTags),
+					zap.Error(err))
+				// 不返回错误，标签添加失败不影响故事板创建
+			}
+		}
 	}
 
 	h.logger.Info("CreateStoryboard success",

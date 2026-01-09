@@ -57,24 +57,12 @@ func NewGoogleOAuthHandlerWithRepo(repo OAuthRepository) *GoogleOAuthHandler {
 // HandleGoogleSignIn 处理 Google Sign-In 请求
 func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 	var req GoogleSignInRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logrus.Errorf("Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
-			Code:    400,
-			Msg:     "Invalid request body",
-			Message: "Invalid request body",
-			Success: false,
-		})
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	if req.IDToken == "" {
-		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
-			Code:    400,
-			Msg:     "ID token is required",
-			Message: "ID token is required",
-			Success: false,
-		})
+		InvalidParams(c, "ID token is required")
 		return
 	}
 
