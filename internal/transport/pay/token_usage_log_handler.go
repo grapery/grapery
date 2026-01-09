@@ -28,21 +28,8 @@ func NewTokenUsageLogHandler(logService paypkg.TokenUsageLogService, logger *log
 // GetLogs 查询日志列表
 // GET /api/vippay/usage/logs?entity_type=storyboard&entity_id=xxx&start_time=xxx&end_time=xxx&page=1&limit=20
 func (h *TokenUsageLogHandler) GetLogs(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "User not authenticated",
-		})
-		return
-	}
-
-	userID, ok := userIDInterface.(int64)
+	userID, ok := RequireUserIDInt64(c)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Invalid user ID",
-		})
 		return
 	}
 
@@ -79,43 +66,23 @@ func (h *TokenUsageLogHandler) GetLogs(c *gin.Context) {
 	logs, total, err := h.logService.QueryLogs(c.Request.Context(), userID, entityType, entityID, startTime, endTime, page, limit)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to query token usage logs")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to query logs",
-		})
+		HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": gin.H{
-			"logs":  logs,
-			"total": total,
-			"page":  page,
-			"limit": limit,
-		},
+	SuccessLegacy(c, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
 // GetSummary 获取汇总统计
 // GET /api/vippay/usage/logs/summary?entity_type=storyboard&entity_id=xxx&start_time=xxx&end_time=xxx
 func (h *TokenUsageLogHandler) GetSummary(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "User not authenticated",
-		})
-		return
-	}
-
-	userID, ok := userIDInterface.(int64)
+	userID, ok := RequireUserIDInt64(c)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Invalid user ID",
-		})
 		return
 	}
 
@@ -149,38 +116,18 @@ func (h *TokenUsageLogHandler) GetSummary(c *gin.Context) {
 	summary, err := h.logService.GetSummary(c.Request.Context(), userID, entityType, entityID, startTime, endTime)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get token usage summary")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to get summary",
-		})
+		HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": summary,
-	})
+	SuccessLegacy(c, summary)
 }
 
 // GetSummaryByEntityType 按实体类型汇总
 // GET /api/vippay/usage/logs/summary/by-type?start_time=xxx&end_time=xxx
 func (h *TokenUsageLogHandler) GetSummaryByEntityType(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "User not authenticated",
-		})
-		return
-	}
-
-	userID, ok := userIDInterface.(int64)
+	userID, ok := RequireUserIDInt64(c)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Invalid user ID",
-		})
 		return
 	}
 
@@ -202,10 +149,7 @@ func (h *TokenUsageLogHandler) GetSummaryByEntityType(c *gin.Context) {
 	summary, err := h.logService.GetSummaryByEntityType(c.Request.Context(), userID, startTime, endTime)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get token usage summary by entity type")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to get summary",
-		})
+		HandleError(c, err)
 		return
 	}
 
@@ -215,31 +159,14 @@ func (h *TokenUsageLogHandler) GetSummaryByEntityType(c *gin.Context) {
 		result[string(et)] = stats
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": result,
-	})
+	SuccessLegacy(c, result)
 }
 
 // ExportLogs 导出日志
 // GET /api/vippay/usage/logs/export?format=csv&entity_type=storyboard&entity_id=xxx&start_time=xxx&end_time=xxx
 func (h *TokenUsageLogHandler) ExportLogs(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "User not authenticated",
-		})
-		return
-	}
-
-	userID, ok := userIDInterface.(int64)
+	userID, ok := RequireUserIDInt64(c)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Invalid user ID",
-		})
 		return
 	}
 
@@ -275,10 +202,7 @@ func (h *TokenUsageLogHandler) ExportLogs(c *gin.Context) {
 	data, contentType, err := h.logService.ExportLogs(c.Request.Context(), userID, entityType, entityID, startTime, endTime, format)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to export token usage logs")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to export logs",
-		})
+		HandleError(c, err)
 		return
 	}
 
@@ -298,16 +222,16 @@ func (h *TokenUsageLogHandler) ExportLogs(c *gin.Context) {
 // GetLogsByEntity 按业务实体查询日志
 // GET /api/vippay/usage/logs/by-entity/:entity_type/:entity_id?limit=20&offset=0
 func (h *TokenUsageLogHandler) GetLogsByEntity(c *gin.Context) {
-	entityType := paymodels.EntityType(c.Param("entity_type"))
-	entityID := c.Param("entity_id")
-
-	if entityType == "" || entityID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  "entity_type and entity_id are required",
-		})
+	entityTypeStr, ok := RequireParam(c, "entity_type")
+	if !ok {
 		return
 	}
+	entityID, ok := RequireParam(c, "entity_id")
+	if !ok {
+		return
+	}
+
+	entityType := paymodels.EntityType(entityTypeStr)
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -316,38 +240,18 @@ func (h *TokenUsageLogHandler) GetLogsByEntity(c *gin.Context) {
 	logs, err := h.logService.GetLogsByEntity(c.Request.Context(), entityType, entityID, limit, offset)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get token usage logs by entity")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to get logs",
-		})
+		HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": logs,
-	})
+	SuccessLegacy(c, logs)
 }
 
 // GetBilling 获取计费汇总
 // GET /api/vippay/usage/logs/billing?start_time=xxx&end_time=xxx
 func (h *TokenUsageLogHandler) GetBilling(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "User not authenticated",
-		})
-		return
-	}
-
-	userID, ok := userIDInterface.(int64)
+	userID, ok := RequireUserIDInt64(c)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Invalid user ID",
-		})
 		return
 	}
 
@@ -369,10 +273,7 @@ func (h *TokenUsageLogHandler) GetBilling(c *gin.Context) {
 	unbilledLogs, err := h.logService.GetUnbilledLogs(c.Request.Context(), userID, startTime, endTime)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get unbilled logs")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to get unbilled logs",
-		})
+		HandleError(c, err)
 		return
 	}
 
@@ -380,21 +281,14 @@ func (h *TokenUsageLogHandler) GetBilling(c *gin.Context) {
 	unbilledAmount, err := h.logService.CalculateBilling(c.Request.Context(), userID, startTime, endTime)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to calculate billing amount")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to calculate billing",
-		})
+		HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": gin.H{
-			"unbilled_logs":  unbilledLogs,
-			"unbilled_amount": unbilledAmount,
-			"log_count":      len(unbilledLogs),
-		},
+	SuccessLegacy(c, gin.H{
+		"unbilled_logs":   unbilledLogs,
+		"unbilled_amount": unbilledAmount,
+		"log_count":       len(unbilledLogs),
 	})
 }
 
@@ -406,27 +300,16 @@ func (h *TokenUsageLogHandler) MarkAsBilled(c *gin.Context) {
 		BillingID string `json:"billing_id" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  "Invalid request",
-			"error": err.Error(),
-		})
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	err := h.logService.MarkAsBilled(c.Request.Context(), req.LogIDs, req.BillingID)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to mark logs as billed")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "Failed to mark as billed",
-		})
+		HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-	})
+	SuccessLegacy(c, nil)
 }
