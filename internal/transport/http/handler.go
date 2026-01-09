@@ -184,6 +184,9 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.DELETE("/characters/:id/skills/:skill", h.RemoveCharacterSkill)
 			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar) // AI生成角色头像
 			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)             // 更新角色头像
+			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)        // 获取形象生成推荐提示词
+			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait) // AI生成角色完整形象
+			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)      // 从形象图裁剪头像
 			authenticated.POST("/characters/:id/posters", h.CreateCharacterPoster)
 			authenticated.POST("/posters/:id/generate", h.GenerateCharacterPoster) // AI两步生成海报
 			authenticated.POST("/posters/:id/publish", h.PublishCharacterPoster)   // 发布海报

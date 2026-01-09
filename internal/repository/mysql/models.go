@@ -233,9 +233,13 @@ type Character struct {
 	Story           Story          `gorm:"foreignKey:StoryID"`
 	Name            string         `gorm:"size:100;not null;index"`
 	Description     string         `gorm:"type:text"`
-	Avatar          string         `gorm:"size:500"`
-	Poster          string         `gorm:"size:500"`
-	AuthorID        string         `gorm:"size:36;not null;index"`
+	Avatar                   string         `gorm:"size:500"`
+	Poster                   string         `gorm:"size:500"`
+	Portrait                 string         `gorm:"size:500"`                              // 完整角色形象图URL（AI生成）
+	NeedsPortrait            bool           `gorm:"default:false"`                         // 是否需要生成形象
+	ReferenceImage           string         `gorm:"size:500"`                              // 参考图URL
+	PortraitGenerationStatus string         `gorm:"size:20;default:'none';index"`          // none/pending/generating/generated/failed
+	AuthorID                 string         `gorm:"size:36;not null;index"`
 	Author          User           `gorm:"foreignKey:AuthorID"`
 	Personality     string         `gorm:"type:text"`
 	Background      string         `gorm:"type:text"`

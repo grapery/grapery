@@ -36,15 +36,30 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 	}
 
 	now := time.Now()
+	
+	// 设置默认的形象生成状态
+	portraitStatus := character.PortraitGenerationStatus
+	if portraitStatus == "" {
+		if character.NeedsPortrait {
+			portraitStatus = "pending"
+		} else {
+			portraitStatus = "none"
+		}
+	}
+	
 	dbCharacter := Character{
-		ID:              uuid.New().String(),
-		StoryID:         character.StoryID,
-		Name:            character.Name,
-		Description:     character.Description,
-		Avatar:          character.Avatar,
-		Poster:          character.Poster,
-		AuthorID:        authorID,
-		Personality:     character.Personality,
+		ID:                       uuid.New().String(),
+		StoryID:                  character.StoryID,
+		Name:                     character.Name,
+		Description:              character.Description,
+		Avatar:                   character.Avatar,
+		Poster:                   character.Poster,
+		Portrait:                 character.Portrait,
+		NeedsPortrait:            character.NeedsPortrait,
+		ReferenceImage:           character.ReferenceImage,
+		PortraitGenerationStatus: portraitStatus,
+		AuthorID:                 authorID,
+		Personality:              character.Personality,
 		Background:      character.Background,
 		ShortTermGoal:   character.ShortTermGoal,
 		LongTermGoal:    character.LongTermGoal,
@@ -85,13 +100,17 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		authorID = character.Author.ID
 	}
 	updates := map[string]interface{}{
-		"story_id":         character.StoryID,
-		"name":             character.Name,
-		"description":      character.Description,
-		"avatar":           character.Avatar,
-		"poster":           character.Poster,
-		"author_id":        authorID,
-		"personality":      character.Personality,
+		"story_id":                   character.StoryID,
+		"name":                       character.Name,
+		"description":                character.Description,
+		"avatar":                     character.Avatar,
+		"poster":                     character.Poster,
+		"portrait":                   character.Portrait,
+		"needs_portrait":             character.NeedsPortrait,
+		"reference_image":            character.ReferenceImage,
+		"portrait_generation_status": character.PortraitGenerationStatus,
+		"author_id":                  authorID,
+		"personality":                character.Personality,
 		"background":       character.Background,
 		"short_term_goal":  character.ShortTermGoal,
 		"long_term_goal":   character.LongTermGoal,
