@@ -670,9 +670,21 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 }
 
 // getCharacterImagesForScene 根据场景中的角色名称获取角色图片
+// 限制最多5个主要角色，超过的角色将被忽略
 func (s *Service) getCharacterImagesForScene(ctx context.Context, storyID string, characterNames []string) []string {
 	if len(characterNames) == 0 {
 		return nil
+	}
+
+	// 限制主要角色数量最多5个
+	maxMainCharacters := 5
+	mainCharacterNames := characterNames
+	if len(mainCharacterNames) > maxMainCharacters {
+		mainCharacterNames = mainCharacterNames[:maxMainCharacters]
+		s.logger.Debug("limiting main characters to 5",
+			zap.String("storyId", storyID),
+			zap.Int("originalCount", len(characterNames)),
+			zap.Int("limitedCount", len(mainCharacterNames)))
 	}
 
 	// 获取故事的所有角色
@@ -690,15 +702,19 @@ func (s *Service) getCharacterImagesForScene(ctx context.Context, storyID string
 		charMap[char.Name] = char
 	}
 
-	// 收集匹配角色的图片
+	// 收集匹配角色的图片（仅主要角色，最多5个）
+	// 只使用Portrait，如果没有Portrait则跳过该角色（该角色只会在文本中描述，不参与图片生成）
 	var images []string
-	for _, name := range characterNames {
+	for _, name := range mainCharacterNames {
 		if char, ok := charMap[name]; ok {
-			// 优先使用海报图片，其次使用头像
-			if char.Poster != "" {
-				images = append(images, char.Poster)
-			} else if char.Avatar != "" {
-				images = append(images, char.Avatar)
+			// 只使用Portrait（完整角色形象图），如果没有Portrait则跳过该角色
+			if char.Portrait != "" {
+				images = append(images, char.Portrait)
+			} else {
+				s.logger.Debug("character has no portrait, skipping from image generation",
+					zap.String("storyId", storyID),
+					zap.String("characterName", name),
+					zap.String("characterId", char.ID))
 			}
 		}
 	}
@@ -2565,14 +2581,35 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		prompt.WriteString("Focus on environment, atmosphere, and mood. ")
 		prompt.WriteString("Do NOT include any human figures or characters in the image.\n")
 	} else if len(gen.SceneCharacters) > 0 {
-		prompt.WriteString("\n## Scene Characters:\n")
-		for _, charName := range gen.SceneCharacters {
-			prompt.WriteString(fmt.Sprintf("- %s\n", charName))
+		// 限制主要角色数量最多5个
+		maxMainCharacters := 5
+		mainCharacters := gen.SceneCharacters
+		if len(mainCharacters) > maxMainCharacters {
+			mainCharacters = mainCharacters[:maxMainCharacters]
 		}
+		
+		prompt.WriteString("\n## Scene Characters:\n")
+		prompt.WriteString("MAIN CHARACTERS (limit to maximum 5, must be accurately depicted):\n")
+		for i, charName := range mainCharacters {
+			prompt.WriteString(fmt.Sprintf("- %s\n", charName))
+			if i >= maxMainCharacters-1 {
+				break
+			}
+		}
+		
+		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
+		if len(gen.SceneCharacters) > maxMainCharacters {
+			prompt.WriteString(fmt.Sprintf("\nNOTE: There are %d total characters mentioned in the scene. ", len(gen.SceneCharacters)))
+			prompt.WriteString("The above are the MAIN CHARACTERS (maximum 5). ")
+			prompt.WriteString("You may include additional background characters, crowds, bystanders, or passersby as needed for the scene composition. ")
+			prompt.WriteString("These additional characters do not need to match specific reference images.\n")
+		}
+		
 		if len(gen.CharacterReferenceImages) > 0 {
-			prompt.WriteString("\nCharacter reference images are provided. ")
-			prompt.WriteString("The generated image should depict the characters consistent with the reference images. ")
-			prompt.WriteString("Maintain character appearance, clothing style, and overall visual identity.\n")
+			prompt.WriteString("\nCharacter reference images are provided for the MAIN CHARACTERS listed above. ")
+			prompt.WriteString("The generated image MUST accurately depict these main characters consistent with the reference images. ")
+			prompt.WriteString("Maintain character appearance, clothing style, and overall visual identity for the main characters. ")
+			prompt.WriteString("Background characters, crowds, and other non-main characters can be freely designed.\n")
 		}
 	}
 

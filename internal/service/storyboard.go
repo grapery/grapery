@@ -2134,16 +2134,31 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		// 判断是否为过渡场景（没有角色出现）
 		isTransitionScene := len(scene.Characters) == 0
 
-		// 收集场景关联角色的图片
+		// 收集场景关联角色的图片（限制最多5个主要角色）
 		var referenceImages []string
 		if !isTransitionScene {
-			for _, charName := range scene.Characters {
+			maxMainCharacters := 5
+			mainCharacterNames := scene.Characters
+			if len(mainCharacterNames) > maxMainCharacters {
+				mainCharacterNames = mainCharacterNames[:maxMainCharacters]
+				s.logger.Debug("limiting main characters to 5 for scene image generation",
+					zap.String("storyboardId", storyboard.ID),
+					zap.Int("sceneIndex", i),
+					zap.Int("originalCount", len(scene.Characters)),
+					zap.Int("limitedCount", len(mainCharacterNames)))
+			}
+			
+			for _, charName := range mainCharacterNames {
 				if char, ok := charMap[charName]; ok {
-					// 优先使用海报图片，其次使用头像
-					if char.Poster != "" {
-						referenceImages = append(referenceImages, char.Poster)
-					} else if char.Avatar != "" {
-						referenceImages = append(referenceImages, char.Avatar)
+					// 只使用Portrait（完整角色形象图），如果没有Portrait则跳过该角色（该角色只会在文本中描述，不参与图片生成）
+					if char.Portrait != "" {
+						referenceImages = append(referenceImages, char.Portrait)
+					} else {
+						s.logger.Debug("character has no portrait, skipping from scene image generation",
+							zap.String("storyboardId", storyboard.ID),
+							zap.Int("sceneIndex", i),
+							zap.String("characterName", charName),
+							zap.String("characterId", char.ID))
 					}
 				}
 			}
@@ -2273,7 +2288,18 @@ func (s *Service) buildStoryboardSceneImagePromptWithStyle(scene *domain.Storybo
 	if isTransitionScene {
 		promptBuilder.WriteString("[Scene Type: Transition/Environment Scene - No characters] ")
 	} else if len(scene.Characters) > 0 {
-		promptBuilder.WriteString(fmt.Sprintf("[Characters: %s] ", strings.Join(scene.Characters, ", ")))
+		maxMainCharacters := 5
+		mainCharacters := scene.Characters
+		if len(mainCharacters) > maxMainCharacters {
+			mainCharacters = mainCharacters[:maxMainCharacters]
+		}
+		
+		promptBuilder.WriteString(fmt.Sprintf("[Main Characters (limit to maximum 5, must be accurately depicted): %s] ", strings.Join(mainCharacters, ", ")))
+		
+		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
+		if len(scene.Characters) > maxMainCharacters {
+			promptBuilder.WriteString(fmt.Sprintf("[Note: There are %d total characters mentioned. The above are the MAIN CHARACTERS (maximum 5). You may include additional background characters, crowds, bystanders, or passersby as needed. These additional characters do not need to match specific reference images.] ", len(scene.Characters)))
+		}
 	}
 
 	// 添加场景描述
