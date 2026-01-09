@@ -16,8 +16,13 @@
 - **SHA-1 指纹**:
   - Debug: `01:C4:61:0E:33:E1:8A:5D:93:0E:E5:19:D8:A7:D5:77:60:EC:3C:74`
   - Release: （待配置）
-- **用途**: 在 Google Cloud Console 中配置 Android OAuth 客户端
-- **注意**: Android 应用实际登录时应使用 Server Client ID（从后端 API 获取）
+- **用途**: 
+  - **仅在 Google Cloud Console 中配置 Android OAuth 客户端时使用**
+  - 用于标识和授权 Android 应用（Package name + SHA-1）
+  - **不需要在代码或配置文件中硬编码**
+- **注意**: 
+  - Android 应用实际登录时应使用 **Server Client ID**（从后端 API `/api/vippay/google-oauth/config` 获取）
+  - Android Client ID 只在 Google Cloud Console 的配置界面中使用
 
 ### Web/Server 客户端（后端）
 - **Client ID**: `345805164843-pbd5oc8emnu03l1i0sdn7r19pmk10ajf.apps.googleusercontent.com` ✅
