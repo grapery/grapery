@@ -31,11 +31,26 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		return fmt.Errorf("story not found: %w", err)
 	}
 
+	// Validate parent ID and isStandalone consistency
+	if !storyboard.IsStandalone && storyboard.ParentID == "" {
+		s.logger.Error("isStandalone is false but parentId is empty",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Bool("isStandalone", storyboard.IsStandalone))
+		return fmt.Errorf("parent storyboard ID is required when isStandalone is false")
+	}
+
 	// 如果没有父节点或父节点为空，设置为 root marker
 	if storyboard.ParentID == "" {
 		storyboard.ParentID = domain.StoryboardRootMarker
-		s.logger.Debug("setting parentId to root marker",
-			zap.String("storyboardId", storyboard.ID))
+		s.logger.Info("creating root storyboard (no parent)",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID))
+	} else {
+		s.logger.Info("creating child storyboard with parent",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.String("parentId", storyboard.ParentID))
 	}
 
 	// 如果有父节点（不是 root），验证父节点存在
@@ -1535,7 +1550,20 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.Int("responseLength", len(result.Text)))
 	storyboardResult := s.parseStoryboardResult(result.Text)
 
-	// 5. 更新业务数据：storyboard 内容
+	// 5. 截断保护：确保content字段不超过1024字符
+	const maxContentLength = 1024
+	if len(storyboardResult.Content) > maxContentLength {
+		originalLength := len(storyboardResult.Content)
+		// 截断到1024字符，尽量在完整的句子处截断
+		storyboardResult.Content = truncateAtSentence(storyboardResult.Content, maxContentLength)
+		s.logger.Warn("storyboard content truncated due to length limit",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("originalLength", originalLength),
+			zap.Int("truncatedLength", len(storyboardResult.Content)),
+			zap.Int("maxLength", maxContentLength))
+	}
+
+	// 6. 更新业务数据：storyboard 内容
 	storyboard.Content = storyboardResult.Content
 	storyboard.IsAIGenerated = true
 	s.logger.Debug("storyboard content updated from AI generation",
@@ -1780,7 +1808,7 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 
 	prompt += "请直接返回纯JSON（不要使用```包裹），格式如下：\n"
 	prompt += "{\n"
-	prompt += "  \"content\": \"润色后的故事内容（控制在500字以内）\",\n"
+	prompt += "  \"content\": \"润色后的故事内容（必须控制在420字以内，建议300-400字）\",\n"
 	prompt += "  \"scenes\": [\n"
 	prompt += "    {\n"
 	prompt += "      \"title\": \"场景标题（10字以内）\",\n"
@@ -1800,7 +1828,7 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "  \"generateImages\": false\n"
 	prompt += "}\n"
 	prompt += fmt.Sprintf("\n重要：请生成恰好 %d 个场景，确保JSON格式完整闭合。", sceneCount)
-	prompt += "\n重要：如果场景中使用了提供的角色，characters数组中的每个角色对象必须包含对应的角色ID。如果场景使用了提供的场景地点，storySceneId字段必须填写对应的场景ID。"
+	prompt += "\n重要：content字段必须严格控制在420字以内，超出部分将被截断。如果场景中使用了提供的角色，characters数组中的每个角色对象必须包含对应的角色ID。如果场景使用了提供的场景地点，storySceneId字段必须填写对应的场景ID。"
 
 	s.logger.Debug("storyboard prompt built",
 		zap.String("storyboardId", storyboard.ID),
@@ -1840,11 +1868,14 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 - 不包含注释或多余的逗号
 
 # 内容质量标准
-- content字段：润色后的完整故事概述，300-500字，语言流畅优美
+- content字段：润色后的完整故事概述，**必须严格控制在420字以内**（建议300-400字），语言流畅优美，避免冗长
 - 场景标题：简洁有力，10字以内，体现场景核心
 - 场景描述：100-200字，包含环境、动作、情感三个维度
 - 地点和时间：具体明确，与场景内容呼应
-- 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）`
+- 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）
+
+# 长度限制说明
+**极其重要**：content字段长度限制为420字是硬性要求，这是为了避免后续处理时的内容截断问题。系统内部最多可处理1024字符，但为确保质量和完整性，生成内容应控制在420字以内。`
 
 	return systemPrompt
 }
@@ -2074,6 +2105,51 @@ func (s *Service) validateStoryboardResult(result *StoryboardResult) {
 	}
 }
 
+// truncateAtSentence 在指定长度处截断文本，尽量在句子边界处截断
+func truncateAtSentence(text string, maxLength int) string {
+	if len(text) <= maxLength {
+		return text
+	}
+
+	// 截取到最大长度
+	truncated := text[:maxLength]
+
+	// 尝试在句子结束符处截断（。！？）
+	sentenceEnds := []string{"。", "！", "？", ".", "!", "?"}
+	lastSentencePos := -1
+	for _, end := range sentenceEnds {
+		if pos := strings.LastIndex(truncated, end); pos > lastSentencePos && pos > maxLength/2 {
+			lastSentencePos = pos
+		}
+	}
+
+	// 如果找到了句子结束符，在那里截断
+	if lastSentencePos > 0 {
+		return truncated[:lastSentencePos+len("。")]
+	}
+
+	// 否则尝试在标点符号处截断
+	punctuations := []string{"，", "、", ",", ";", "；"}
+	lastPuncPos := -1
+	for _, punct := range punctuations {
+		if pos := strings.LastIndex(truncated, punct); pos > lastPuncPos && pos > maxLength/2 {
+			lastPuncPos = pos
+		}
+	}
+
+	if lastPuncPos > 0 {
+		return truncated[:lastPuncPos+len("，")]
+	}
+
+	// 最后在空格处截断
+	if pos := strings.LastIndex(truncated, " "); pos > maxLength/2 {
+		return truncated[:pos]
+	}
+
+	// 如果都找不到，直接截断并添加省略号
+	return truncated + "..."
+}
+
 // truncateForLog truncates a string for logging purposes
 func truncateForLog(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -2147,7 +2223,7 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 					zap.Int("originalCount", len(scene.Characters)),
 					zap.Int("limitedCount", len(mainCharacterNames)))
 			}
-			
+
 			for _, charName := range mainCharacterNames {
 				if char, ok := charMap[charName]; ok {
 					// 只使用Portrait（完整角色形象图），如果没有Portrait则跳过该角色（该角色只会在文本中描述，不参与图片生成）
@@ -2293,9 +2369,9 @@ func (s *Service) buildStoryboardSceneImagePromptWithStyle(scene *domain.Storybo
 		if len(mainCharacters) > maxMainCharacters {
 			mainCharacters = mainCharacters[:maxMainCharacters]
 		}
-		
+
 		promptBuilder.WriteString(fmt.Sprintf("[Main Characters (limit to maximum 5, must be accurately depicted): %s] ", strings.Join(mainCharacters, ", ")))
-		
+
 		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
 		if len(scene.Characters) > maxMainCharacters {
 			promptBuilder.WriteString(fmt.Sprintf("[Note: There are %d total characters mentioned. The above are the MAIN CHARACTERS (maximum 5). You may include additional background characters, crowds, bystanders, or passersby as needed. These additional characters do not need to match specific reference images.] ", len(scene.Characters)))

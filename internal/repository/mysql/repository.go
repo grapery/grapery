@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -110,6 +111,11 @@ func (r *Repository) migrate() error {
 
 	// 7) Ensure storyboard_video_generations has prompt_details_json column.
 	if err := r.ensureStoryboardVideoGenerationPromptDetailsSchema(); err != nil {
+		return err
+	}
+
+	// 8) Ensure characters table has portrait-related columns.
+	if err := r.ensureCharacterPortraitSchema(); err != nil {
 		return err
 	}
 
@@ -413,6 +419,61 @@ func (r *Repository) ensureStoryboardVideoGenerationPromptDetailsSchema() error 
 		return fmt.Errorf("ensure storyboard_video_generations.prompt_details_json: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) ensureCharacterPortraitSchema() error {
+	// Add portrait column if it doesn't exist
+	// This column stores the full character portrait image URL (AI-generated)
+	if err := r.ensureColumn("characters", "portrait", "VARCHAR(500) DEFAULT NULL COMMENT '完整角色形象图URL（AI生成）'"); err != nil {
+		return fmt.Errorf("ensure characters.portrait: %w", err)
+	}
+
+	// Add needs_portrait column if it doesn't exist
+	// This column indicates whether portrait generation is needed
+	if err := r.ensureColumn("characters", "needs_portrait", "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否需要生成形象'"); err != nil {
+		return fmt.Errorf("ensure characters.needs_portrait: %w", err)
+	}
+
+	// Add reference_image column if it doesn't exist
+	// This column stores reference image URL for portrait generation
+	if err := r.ensureColumn("characters", "reference_image", "VARCHAR(500) DEFAULT NULL COMMENT '参考图URL'"); err != nil {
+		return fmt.Errorf("ensure characters.reference_image: %w", err)
+	}
+
+	// Add portrait_generation_status column if it doesn't exist
+	// This column tracks the status of portrait generation: none/pending/generating/generated/failed
+	if err := r.ensureColumn("characters", "portrait_generation_status", "VARCHAR(20) DEFAULT 'none' COMMENT '形象生成状态: none/pending/generating/generated/failed'"); err != nil {
+		return fmt.Errorf("ensure characters.portrait_generation_status: %w", err)
+	}
+
+	// Ensure index exists on portrait_generation_status
+	indexExists, err := r.indexExists("characters", "idx_characters_portrait_status")
+	if err != nil {
+		return fmt.Errorf("check index idx_characters_portrait_status: %w", err)
+	}
+	if !indexExists {
+		if err := r.db.Exec("CREATE INDEX idx_characters_portrait_status ON characters(portrait_generation_status)").Error; err != nil {
+			// Index might already exist, ignore error if it's a duplicate key error
+			if !strings.Contains(err.Error(), "Duplicate key name") {
+				return fmt.Errorf("create index idx_characters_portrait_status: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// indexExists checks if an index exists on a table
+func (r *Repository) indexExists(table, indexName string) (bool, error) {
+	var count int64
+	err := r.db.Raw(
+		`SELECT COUNT(*) FROM information_schema.statistics
+		 WHERE table_schema = DATABASE()
+		   AND table_name = ?
+		   AND index_name = ?`,
+		table, indexName,
+	).Scan(&count).Error
+	return count > 0, err
 }
 
 // CurrentUser returns the current authenticated user (mock for now)

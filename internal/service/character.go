@@ -128,6 +128,26 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		return nil, err
 	}
 	s.logger.Info("story ownership checked", zap.String("storyID", req.StoryID), zap.String("userID", userID))
+
+	// 检查同一故事中是否存在同名角色
+	existingCharacters, err := s.repo.CharactersByStory(ctx, req.StoryID)
+	if err != nil {
+		s.logger.Warn("failed to check existing characters", zap.Error(err))
+		// 如果查询失败，继续创建（不阻塞）
+	} else {
+		// 检查是否存在同名角色（大小写不敏感）
+		for _, existingChar := range existingCharacters {
+			if strings.EqualFold(existingChar.Name, req.Name) {
+				s.logger.Info("duplicate character name found",
+					zap.String("storyID", req.StoryID),
+					zap.String("name", req.Name),
+					zap.String("existingCharacterID", existingChar.ID),
+				)
+				return nil, errors.New("character with same name already exists in this story")
+			}
+		}
+	}
+
 	sourceType := strings.ToLower(req.SourceType)
 	if sourceType == "" {
 		sourceType = AssetSourceManual
@@ -1365,8 +1385,12 @@ func aspectRatioToSize(aspectRatio string) string {
 		return "2220x1665" // ~3696300 pixels
 	case "3:4":
 		return "1665x2220" // ~3696300 pixels
+	case "2:3":
+		return "1600x2400" // 3840000 pixels (portrait format, meets huoshan minimum)
+	case "3:2":
+		return "2400x1600" // 3840000 pixels (landscape format, meets huoshan minimum)
 	default:
-		return "2560x1440" // 默认 16:9
+		return "1600x2400" // 默认 2:3 竖版人像
 	}
 }
 
@@ -1535,13 +1559,14 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 
 要求：
 1. 直接返回纯JSON，不要使用markdown代码块
-2. 每个属性都应该是简洁有力的描述，100-200字左右
-3. 角色属性应该相互协调，形成一个完整的角色形象
-4. 确保JSON格式完整闭合
+2. 角色描述(description)字段总长度不超过420字，确保输出完整的JSON数据结构
+3. 每个属性都应该是简洁有力的描述，100-200字左右
+4. 角色属性应该相互协调，形成一个完整的角色形象
+5. 确保JSON格式完整闭合
 
 返回格式：
 {
-  "description": "角色整体描述和基本特征",
+  "description": "角色整体描述和基本特征（不超过420字）",
   "personality": "性格特点、气质和行为模式",
   "background": "角色的历史、起源故事和成长经历",
   "shortTermGoal": "当前故事中的即时目标",
@@ -1869,6 +1894,54 @@ func (s *Service) UpdateCharacterAvatar(ctx context.Context, userID, characterID
 	return character, nil
 }
 
+// UsePortraitAsAvatar 使用portrait作为头像（仅在头像为空时）
+func (s *Service) UsePortraitAsAvatar(ctx context.Context, userID, characterID, portraitURL string) (*domain.Character, error) {
+	s.logger.Info("using portrait as avatar",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+	)
+
+	// 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+
+	// 验证权限（只有角色创建者可以操作）
+	if character.Author == nil || character.Author.ID != userID {
+		return nil, errors.New("unauthorized")
+	}
+
+	// 检查头像是否为空，只有在为空时才设置
+	if character.Avatar != "" {
+		s.logger.Info("character already has avatar, skipping",
+			zap.String("characterID", characterID),
+			zap.String("existingAvatar", character.Avatar),
+		)
+		return character, nil
+	}
+
+	// 设置portrait为头像
+	character.Avatar = portraitURL
+	character.LastEditedBy = userID
+	character.UpdatedAt = time.Now().Unix()
+
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Error("failed to update character avatar", zap.Error(err))
+		return nil, errors.New("failed to update character avatar")
+	}
+
+	s.logger.Info("portrait set as avatar successfully",
+		zap.String("characterID", characterID),
+		zap.String("portraitURL", portraitURL),
+	)
+
+	return character, nil
+}
+
 // GeneratePortraitPrompt 为角色生成推荐的形象提示词
 func (s *Service) GeneratePortraitPrompt(ctx context.Context, characterID string) (string, error) {
 	s.logger.Info("generating portrait prompt for character", zap.String("characterID", characterID))
@@ -1998,13 +2071,17 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		referenceImages = []string{req.ReferenceImage}
 	}
 
+	// 设置默认 provider 为 huoshan（火山引擎）
+	provider := "huoshan"
+	if s.imageProvider != "" {
+		provider = s.imageProvider
+	}
+
 	imageReq := &GenerateImageRequest{
 		UserID:            userID,
 		Prompt:            prompt,
 		ReferenceImages:   referenceImages, // 传递参考图
-		Provider:          "gemini",
-		Model:             "imagen-3.0-generate-001",
-		AspectRatio:       aspectRatio,
+		Provider:          provider,
 		Quality:           "high",
 		OutputCount:       1,
 		RelatedEntityID:   characterID,
@@ -2015,6 +2092,23 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 			"hasCustomPrompt":   req.CustomPrompt != "",
 			"hasReferenceImage": req.ReferenceImage != "",
 		},
+	}
+
+	// 根据不同的 provider 设置相应的参数
+	switch provider {
+	case "huoshan":
+		// huoshan 使用 Size 而不是 AspectRatio
+		imageReq.Size = aspectRatioToSize(aspectRatio)
+		// Model 留空，使用 huoshan provider 的默认模型 (doubao-seedream)
+	case "gemini":
+		imageReq.Model = "imagen-3.0-generate-001"
+		imageReq.AspectRatio = aspectRatio
+	case "nana", "banana":
+		// nana/banana 使用 AspectRatio
+		imageReq.AspectRatio = aspectRatio
+	default:
+		// 其他 provider 使用 AspectRatio
+		imageReq.AspectRatio = aspectRatio
 	}
 
 	result, err := s.aiGenService.GenerateImage(ctx, imageReq)

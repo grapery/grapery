@@ -32,6 +32,10 @@ func (h *Handler) CreateCharacter(c *gin.Context) {
 			Forbidden(c, err.Error())
 			return
 		}
+		if err.Error() == "character with same name already exists in this story" {
+			Error(c, CodeError, err.Error())
+			return
+		}
 		Error(c, CodeError, err.Error())
 		return
 	}
@@ -597,6 +601,61 @@ func (h *Handler) GenerateCharacterAttributes(c *gin.Context) {
 	Success(c, attributes)
 }
 
+// GenerateCharacter 使用AI生成角色内容（iOS兼容端点）
+// POST /api/ai/generate-character
+func (h *Handler) GenerateCharacter(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	// iOS app sends: { name: String, baseDescription: String? }
+	var req struct {
+		Name            string `json:"name"`
+		BaseDescription string `json:"baseDescription"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	// Map iOS request to service request
+	// Use baseDescription as prompt, or empty string if not provided
+	prompt := req.BaseDescription
+	if prompt == "" {
+		prompt = "创建一个角色"
+		if req.Name != "" {
+			prompt = "创建一个名为" + req.Name + "的角色"
+		}
+	}
+
+	serviceReq := service.GenerateCharacterRequest{
+		Name:   req.Name,
+		Prompt: prompt,
+	}
+
+	attributes, err := h.svc.GenerateCharacterWithAI(c.Request.Context(), userID, serviceReq)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	// Return all fields from GeneratedCharacterAttributes
+	Success(c, gin.H{
+		"description":     attributes.Description,
+		"personality":     attributes.Personality,
+		"background":      attributes.Background,
+		"shortTermGoal":   attributes.ShortTermGoal,
+		"longTermGoal":    attributes.LongTermGoal,
+		"handlingStyle":   attributes.HandlingStyle,
+		"cognitionRange":  attributes.CognitionRange,
+		"abilityFeatures": attributes.AbilityFeatures,
+		"appearance":      attributes.Appearance,
+		"dressPreference": attributes.DressPreference,
+	})
+}
+
 // GenerateCharacterAvatar 使用AI生成角色头像
 // POST /api/characters/:id/generate-avatar
 func (h *Handler) GenerateCharacterAvatar(c *gin.Context) {
@@ -665,6 +724,46 @@ func (h *Handler) UpdateCharacterAvatar(c *gin.Context) {
 	}
 
 	character, err := h.svc.UpdateCharacterAvatar(c.Request.Context(), userID, characterID, req.AvatarURL)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized" {
+			Forbidden(c, "you can only update your own characters")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, character)
+}
+
+// UsePortraitAsAvatar 使用portrait作为头像（仅在头像为空时）
+// PUT /api/characters/:id/use-portrait-as-avatar
+func (h *Handler) UsePortraitAsAvatar(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req struct {
+		PortraitURL string `json:"portraitUrl" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	character, err := h.svc.UsePortraitAsAvatar(c.Request.Context(), userID, characterID, req.PortraitURL)
 	if err != nil {
 		if err.Error() == "character not found" {
 			NotFound(c, "character not found")

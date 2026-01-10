@@ -151,14 +151,16 @@ func (c *Client) UploadFileFromURL(objectKey string, url string) (string, error)
 		return "", err
 	}
 
-	// Persist multi-level images
-	imageLevels, err := c.PersistMultiLevelImages(objectKey)
-	if err != nil {
-		c.logger.Warn("failed to persist multi-level images", zap.Error(err), zap.String("objectKey", objectKey))
-		// Continue even if multi-level persistence fails
-	} else {
-		levelData, _ := json.Marshal(imageLevels)
-		c.logger.Debug("multi-level images persisted", zap.String("levels", string(levelData)))
+	// Persist multi-level images only for image files
+	if c.isImageFile(objectKey) {
+		imageLevels, err := c.PersistMultiLevelImages(objectKey)
+		if err != nil {
+			c.logger.Warn("failed to persist multi-level images", zap.Error(err), zap.String("objectKey", objectKey))
+			// Continue even if multi-level persistence fails
+		} else {
+			levelData, _ := json.Marshal(imageLevels)
+			c.logger.Debug("multi-level images persisted", zap.String("levels", string(levelData)))
+		}
 	}
 
 	// Clean URL: remove query params and ensure HTTPS
@@ -321,6 +323,22 @@ func (c *Client) PersistMultiLevelImages(objectKey string) (ImageLevels, error) 
 	}
 
 	return result, nil
+}
+
+// isImageFile checks if the object key represents an image file
+func (c *Client) isImageFile(objectKey string) bool {
+	lastDot := strings.LastIndex(objectKey, ".")
+	if lastDot == -1 || lastDot == len(objectKey)-1 {
+		return false
+	}
+	ext := strings.ToLower(objectKey[lastDot:])
+	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	for _, imgExt := range imageExts {
+		if ext == imgExt {
+			return true
+		}
+	}
+	return false
 }
 
 // ListAllObjects lists all objects in the bucket with the given prefix

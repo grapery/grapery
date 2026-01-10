@@ -184,6 +184,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.DELETE("/characters/:id/skills/:skill", h.RemoveCharacterSkill)
 			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar) // AI生成角色头像
 			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)             // 更新角色头像
+			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar) // 使用portrait作为头像
 			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)        // 获取形象生成推荐提示词
 			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait) // AI生成角色完整形象
 			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)      // 从形象图裁剪头像
@@ -269,6 +270,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/ai/enhance-prompt", h.EnhancePrompt)
 			authenticated.POST("/ai/generate-image", h.GenerateImage)
 			authenticated.POST("/ai/generate-video", h.GenerateVideo)
+			authenticated.POST("/ai/generate-character", h.GenerateCharacter) // iOS兼容端点
 			authenticated.GET("/ai/tasks/:id", h.GetTaskStatus)
 			authenticated.GET("/ai/tasks/:id/result", h.GetTaskResult)
 			authenticated.DELETE("/ai/tasks/:id", h.CancelTask)
