@@ -7,9 +7,8 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
-// DashboardStoryboards returns storyboards from stories the user created OR follows.
-// - For user's own stories: include all storyboard workflow statuses.
-// - For followed stories: include only published storyboards.
+// DashboardStoryboards returns published storyboards from stories the user created OR follows.
+// Only published storyboards are returned regardless of story ownership.
 func (r *Repository) DashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	if limit <= 0 {
 		limit = 20
@@ -26,7 +25,7 @@ func (r *Repository) DashboardStoryboards(ctx context.Context, userID string, li
 		Joins("JOIN stories ON stories.id = storyboards.story_id").
 		Joins("LEFT JOIN story_follows ON story_follows.story_id = stories.id AND story_follows.user_id = ?", userID).
 		Where("(stories.author_id = ? OR story_follows.user_id IS NOT NULL)", userID).
-		Where("(stories.author_id = ? OR storyboards.workflow_status = ?)", userID, domain.WorkflowStatusPublished)
+		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished)
 
 	// total (distinct storyboard ids)
 	var total int64
