@@ -21,4 +21,9 @@ func (s *Service) DashboardCharacterStoryboards(ctx context.Context, userID stri
 	return s.repo.DashboardCharacterStoryboards(ctx, userID, limit, offset)
 }
 
+// TrendingStoryboards returns published storyboards from trending stories.
+func (s *Service) TrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	return s.repo.TrendingStoryboards(ctx, userID, limit, offset)
+}
+
 

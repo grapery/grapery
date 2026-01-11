@@ -85,4 +85,30 @@ func (h *Handler) GetDashboardCharacterStoryboards(c *gin.Context) {
 	})
 }
 
+// GetTrendingStoryboards returns storyboards from trending stories.
+// GET /api/dashboard/trending/storyboards?limit=20&offset=0
+func (h *Handler) GetTrendingStoryboards(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	items, total, err := h.svc.TrendingStoryboards(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		InternalError(c, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"storyboards": items,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
+}
+
 

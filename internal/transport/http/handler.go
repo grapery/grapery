@@ -80,6 +80,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/dashboard/storyboards", h.GetDashboardStoryboards)
 			authenticated.GET("/dashboard/groups/storyboards", h.GetDashboardGroupStoryboards)
 			authenticated.GET("/dashboard/characters/storyboards", h.GetDashboardCharacterStoryboards)
+			authenticated.GET("/dashboard/trending/storyboards", h.GetTrendingStoryboards)
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
