@@ -27,7 +27,7 @@ func (r *Repository) NotificationsByUser(ctx context.Context, userID string, lim
 
 func (r *Repository) UnreadNotificationCount(ctx context.Context, userID string) (int, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ? AND read = ?", userID, false).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ? AND `read` = ?", userID, false).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count unread notifications: %w", err)
 	}
 	return int(count), nil
@@ -55,14 +55,14 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 }
 
 func (r *Repository) MarkNotificationRead(ctx context.Context, id string) error {
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("id = ?", id).Update("read", true).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("id = ?", id).Update("`read`", true).Error; err != nil {
 		return fmt.Errorf("failed to mark notification as read: %w", err)
 	}
 	return nil
 }
 
 func (r *Repository) MarkAllNotificationsRead(ctx context.Context, userID string) error {
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ?", userID).Update("read", true).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ?", userID).Update("`read`", true).Error; err != nil {
 		return fmt.Errorf("failed to mark all notifications as read: %w", err)
 	}
 	return nil
