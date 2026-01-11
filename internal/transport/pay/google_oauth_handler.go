@@ -425,14 +425,14 @@ func (h *GoogleOAuthHandler) GetGoogleOAuthConfig(c *gin.Context) {
 			"state":        nil,
 
 			// Legacy/alternate keys (Android / older clients)
-			"client_id":      clientID,
-			"redirect_uri":   "",
-			"response_type":  "id_token",
-			"enabled":        enabled,
-			"isAvailable":    enabled,
-			"provider":       "google",
-			"scopes":         []string{"openid", "email", "profile"},
-			"message":        "Google OAuth config",
+			"client_id":     clientID,
+			"redirect_uri":  "",
+			"response_type": "id_token",
+			"enabled":       enabled,
+			"isAvailable":   enabled,
+			"provider":      "google",
+			"scopes":        []string{"openid", "email", "profile"},
+			"message":       "Google OAuth config",
 		},
 	})
 }
@@ -680,7 +680,7 @@ func (h *GoogleOAuthHandler) HandleGoogleUnlink(c *gin.Context) {
 func createGoogleOAuthConfig() *payservice.GoogleOAuthConfig {
 	// 优先级：环境变量 > 配置文件 > 默认值
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
-	
+
 	// 如果环境变量未设置，尝试从配置文件读取
 	if clientID == "" {
 		// 尝试读取 vippay.json 配置文件
@@ -688,7 +688,7 @@ func createGoogleOAuthConfig() *payservice.GoogleOAuthConfig {
 		if configPath == "" {
 			configPath = "vippay.json"
 		}
-		
+
 		if data, err := os.ReadFile(configPath); err == nil {
 			// 解析 JSON 配置文件
 			var config struct {
@@ -703,10 +703,10 @@ func createGoogleOAuthConfig() *payservice.GoogleOAuthConfig {
 			}
 		}
 	}
-	
+
 	// 如果仍未设置，使用默认值
 	if clientID == "" {
-		clientID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com" // 默认 Client ID
+		clientID = "345805164843-pbd5oc8emnu03l1i0sdn7r19pmk10ajf.apps.googleusercontent.com" // 默认 Client ID
 	}
 
 	return &payservice.GoogleOAuthConfig{
