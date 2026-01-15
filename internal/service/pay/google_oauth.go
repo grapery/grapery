@@ -31,15 +31,15 @@ type GoogleIdentityTokenClaims struct {
 	IssuedAt  int64  `json:"iat,omitempty"` // 签发时间
 
 	// Google 特定声明
-	Email         string `json:"email,omitempty"`          // 用户邮箱
-	EmailVerified bool   `json:"email_verified,omitempty"` // 邮箱是否已验证
-	AuthorizedParty string `json:"azp,omitempty"`          // authorized party (when multiple audiences)
-	Name          string `json:"name,omitempty"`           // 用户全名
-	GivenName     string `json:"given_name,omitempty"`     // 名
-	FamilyName    string `json:"family_name,omitempty"`    // 姓
-	Picture       string `json:"picture,omitempty"`        // 用户头像 URL
-	Locale        string `json:"locale,omitempty"`         // 用户语言环境
-	HostedDomain  string `json:"hd,omitempty"`             // G Suite 域（如果是企业账号）
+	Email           string `json:"email,omitempty"`          // 用户邮箱
+	EmailVerified   bool   `json:"email_verified,omitempty"` // 邮箱是否已验证
+	AuthorizedParty string `json:"azp,omitempty"`            // authorized party (when multiple audiences)
+	Name            string `json:"name,omitempty"`           // 用户全名
+	GivenName       string `json:"given_name,omitempty"`     // 名
+	FamilyName      string `json:"family_name,omitempty"`    // 姓
+	Picture         string `json:"picture,omitempty"`        // 用户头像 URL
+	Locale          string `json:"locale,omitempty"`         // 用户语言环境
+	HostedDomain    string `json:"hd,omitempty"`             // G Suite 域（如果是企业账号）
 }
 
 // GoogleSignInVerifier Google Sign-In 验证器

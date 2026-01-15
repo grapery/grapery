@@ -309,11 +309,11 @@ func (h *BadgeHandler) GetUserBadgeProfile(c *gin.Context) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"endpoint":      "GetUserBadgeProfile",
-		"user_id":       userID,
-		"earned_count":  len(earnedBadges),
-		"new_count":     len(newBadges),
-		"total_points":  profile.TotalPoints,
+		"endpoint":     "GetUserBadgeProfile",
+		"user_id":      userID,
+		"earned_count": len(earnedBadges),
+		"new_count":    len(newBadges),
+		"total_points": profile.TotalPoints,
 	}).Info("Successfully retrieved user badge profile")
 
 	c.JSON(http.StatusOK, gin.H{
@@ -344,13 +344,13 @@ func (h *BadgeHandler) GetUserBadgeProfile(c *gin.Context) {
 // @Router /api/vippay/badges/user [get]
 func (h *BadgeHandler) GetUserBadges(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	// 支持查询指定用户或当前用户
 	userID := c.Query("user_id")
 	if userID == "" {
 		userID = middleware.GetUserIDFromContext(c)
 	}
-	
+
 	if userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
@@ -421,12 +421,12 @@ func (h *BadgeHandler) GetUserBadges(c *gin.Context) {
 // @Router /api/vippay/badges/pinned [get]
 func (h *BadgeHandler) GetUserPinnedBadges(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	userID := c.Query("user_id")
 	if userID == "" {
 		userID = middleware.GetUserIDFromContext(c)
 	}
-	
+
 	if userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
@@ -934,17 +934,17 @@ func (h *BadgeHandler) GetBadgeProgress(c *gin.Context) {
 		}
 		if bp.Badge != nil {
 			progressData["badge"] = gin.H{
-				"id":          bp.Badge.ID,
-				"code":        bp.Badge.Code,
-				"name":        bp.Badge.Name,
-				"name_zh":     bp.Badge.NameZh,
-				"category":    bp.Badge.Category,
-				"tier":        bp.Badge.Tier,
-				"icon_url":    bp.Badge.IconURL,
-				"icon_emoji":  bp.Badge.IconEmoji,
-				"color_hex":   bp.Badge.ColorHex,
-				"threshold":   bp.Badge.Threshold,
-				"points":      bp.Badge.Points,
+				"id":         bp.Badge.ID,
+				"code":       bp.Badge.Code,
+				"name":       bp.Badge.Name,
+				"name_zh":    bp.Badge.NameZh,
+				"category":   bp.Badge.Category,
+				"tier":       bp.Badge.Tier,
+				"icon_url":   bp.Badge.IconURL,
+				"icon_emoji": bp.Badge.IconEmoji,
+				"color_hex":  bp.Badge.ColorHex,
+				"threshold":  bp.Badge.Threshold,
+				"points":     bp.Badge.Points,
 			}
 		}
 		progressList = append(progressList, progressData)
@@ -959,4 +959,3 @@ func (h *BadgeHandler) GetBadgeProgress(c *gin.Context) {
 		},
 	})
 }
-

@@ -36,7 +36,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 	}
 
 	now := time.Now()
-	
+
 	// 设置默认的形象生成状态
 	portraitStatus := character.PortraitGenerationStatus
 	if portraitStatus == "" {
@@ -46,7 +46,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 			portraitStatus = "none"
 		}
 	}
-	
+
 	dbCharacter := Character{
 		ID:                       uuid.New().String(),
 		StoryID:                  character.StoryID,
@@ -60,26 +60,26 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		PortraitGenerationStatus: portraitStatus,
 		AuthorID:                 authorID,
 		Personality:              character.Personality,
-		Background:      character.Background,
-		ShortTermGoal:   character.ShortTermGoal,
-		LongTermGoal:    character.LongTermGoal,
-		HandlingStyle:   character.HandlingStyle,
-		CognitionRange:  character.CognitionRange,
-		AbilityFeatures: character.AbilityFeatures,
-		Appearance:      character.Appearance,
-		DressPreference: character.DressPreference,
-		SourceType:      sourceType,
-		SourcePrompt:    character.SourcePrompt,
-		SourceImage:     character.SourceImage,
-		CreatedBy:       character.CreatedBy,
-		LastEditedBy:    character.LastEditedBy,
-		IsPublic:        character.IsPublic,
-		Traits:          character.TraitsJSON,
-		Skills:          character.SkillsJSON,
-		Followers:       character.Followers,
-		Stories:         character.Stories,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Background:               character.Background,
+		ShortTermGoal:            character.ShortTermGoal,
+		LongTermGoal:             character.LongTermGoal,
+		HandlingStyle:            character.HandlingStyle,
+		CognitionRange:           character.CognitionRange,
+		AbilityFeatures:          character.AbilityFeatures,
+		Appearance:               character.Appearance,
+		DressPreference:          character.DressPreference,
+		SourceType:               sourceType,
+		SourcePrompt:             character.SourcePrompt,
+		SourceImage:              character.SourceImage,
+		CreatedBy:                character.CreatedBy,
+		LastEditedBy:             character.LastEditedBy,
+		IsPublic:                 character.IsPublic,
+		Traits:                   character.TraitsJSON,
+		Skills:                   character.SkillsJSON,
+		Followers:                character.Followers,
+		Stories:                  character.Stories,
+		CreatedAt:                now,
+		UpdatedAt:                now,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbCharacter).Error; err != nil {
@@ -111,24 +111,24 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"portrait_generation_status": character.PortraitGenerationStatus,
 		"author_id":                  authorID,
 		"personality":                character.Personality,
-		"background":       character.Background,
-		"short_term_goal":  character.ShortTermGoal,
-		"long_term_goal":   character.LongTermGoal,
-		"handling_style":   character.HandlingStyle,
-		"cognition_range":  character.CognitionRange,
-		"ability_features": character.AbilityFeatures,
-		"appearance":       character.Appearance,
-		"dress_preference": character.DressPreference,
-		"source_type":      character.SourceType,
-		"source_prompt":    character.SourcePrompt,
-		"source_image":     character.SourceImage,
-		"last_edited_by":   character.LastEditedBy,
-		"is_public":        character.IsPublic,
-		"traits":           character.TraitsJSON,
-		"skills":           character.SkillsJSON,
-		"followers":        character.Followers,
-		"stories":          character.Stories,
-		"updated_at":       time.Now(),
+		"background":                 character.Background,
+		"short_term_goal":            character.ShortTermGoal,
+		"long_term_goal":             character.LongTermGoal,
+		"handling_style":             character.HandlingStyle,
+		"cognition_range":            character.CognitionRange,
+		"ability_features":           character.AbilityFeatures,
+		"appearance":                 character.Appearance,
+		"dress_preference":           character.DressPreference,
+		"source_type":                character.SourceType,
+		"source_prompt":              character.SourcePrompt,
+		"source_image":               character.SourceImage,
+		"last_edited_by":             character.LastEditedBy,
+		"is_public":                  character.IsPublic,
+		"traits":                     character.TraitsJSON,
+		"skills":                     character.SkillsJSON,
+		"followers":                  character.Followers,
+		"stories":                    character.Stories,
+		"updated_at":                 time.Now(),
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Character{}).

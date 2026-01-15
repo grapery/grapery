@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -85,6 +86,7 @@ func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) erro
 
 	// 创建点赞记录
 	like := StoryLike{
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		StoryID:   storyID,
 		CreatedAt: time.Now(),
@@ -145,6 +147,7 @@ func (r *Repository) FollowStory(ctx context.Context, userID, storyID string) er
 
 	// 创建关注记录
 	follow := StoryFollow{
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		StoryID:   storyID,
 		CreatedAt: time.Now(),

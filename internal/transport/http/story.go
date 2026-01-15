@@ -22,9 +22,9 @@ func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
 
 	Success(c, gin.H{
 		"stories": stories,
-		"total":  len(stories),
-		"limit":  limit,
-		"offset": 0,
+		"total":   len(stories),
+		"limit":   limit,
+		"offset":  0,
 	})
 }
 

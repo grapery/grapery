@@ -27,11 +27,11 @@ const (
 	emailVerifyTokenTTL   = 24 * time.Hour
 	emailVerifyCodeTTL    = 10 * time.Minute
 
-	emailVerifyMaxAttempts     = 5
-	emailVerifySendLimitTTL    = 1 * time.Minute
-	emailVerifySendLimitMax    = 1 // per email per minute
-	emailVerifyIPLimitTTL      = 1 * time.Minute
-	emailVerifyIPLimitMax      = 5 // per IP per minute
+	emailVerifyMaxAttempts  = 5
+	emailVerifySendLimitTTL = 1 * time.Minute
+	emailVerifySendLimitMax = 1 // per email per minute
+	emailVerifyIPLimitTTL   = 1 * time.Minute
+	emailVerifyIPLimitMax   = 5 // per IP per minute
 
 	// 通用实体缓存过期时间
 	entityCacheTTL      = 30 * time.Minute // 单个实体缓存（用户、角色、群组、故事板等）

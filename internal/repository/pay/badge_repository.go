@@ -476,4 +476,3 @@ func (r *BadgeRepository) SyncUserStats(ctx context.Context, userID string, stor
 
 	return r.UpdateUserBadgeStats(ctx, stats)
 }
-

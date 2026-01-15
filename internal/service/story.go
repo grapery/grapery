@@ -30,7 +30,7 @@ type CreateStoryRequest struct {
 	Genre             string   `json:"genre" binding:"required"`
 	Status            string   `json:"status" binding:"omitempty,oneof=draft published"`
 	GroupID           string   `json:"groupId" binding:"omitempty"`
-	DefaultSceneCount int      `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
+	DefaultSceneCount int      `json:"defaultSceneCount"`                                // Default number of scenes for storyboards (2-8, default 3)
 	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
 	// AI 丰富选项（可选）
@@ -247,7 +247,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 				Style: req.Style,
 			}
 		}
-		
+
 		coverResp, err := s.GenerateStoryCover(ctx, userID, story.ID, GenerateStoryCoverRequest{
 			Title:              req.Title,
 			Description:        story.Description,
@@ -735,6 +735,13 @@ func (s *Service) LikeStory(ctx context.Context, userID, storyID string) error {
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
 	if err := s.repo.LikeStory(ctx, userID, storyID); err != nil {
+		// Treat "already liked" as success (idempotent operation)
+		if err.Error() == "already liked" {
+			s.logger.Info("story already liked",
+				zap.String("userID", userID),
+				zap.String("storyID", storyID))
+			return nil
+		}
 		s.logger.Error("failed to like story",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID),
@@ -800,6 +807,13 @@ func (s *Service) FollowStory(ctx context.Context, userID, storyID string) error
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
 	if err := s.repo.FollowStory(ctx, userID, storyID); err != nil {
+		// Treat "already following" as success (idempotent operation)
+		if err.Error() == "already following" {
+			s.logger.Info("story already followed",
+				zap.String("userID", userID),
+				zap.String("storyID", storyID))
+			return nil
+		}
 		s.logger.Error("failed to follow story",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID),

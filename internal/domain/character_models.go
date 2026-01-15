@@ -2,11 +2,11 @@ package domain
 
 // Character represents a story character
 type Character struct {
-	ID              string  `json:"id"`
-	StoryID         string  `json:"storyId"`
-	AuthorID        string  `json:"-"`
-	Name            string  `json:"name"`
-	Description     string  `json:"description"`
+	ID                       string  `json:"id"`
+	StoryID                  string  `json:"storyId"`
+	AuthorID                 string  `json:"-"`
+	Name                     string  `json:"name"`
+	Description              string  `json:"description"`
 	Avatar                   string  `json:"avatar,omitempty"`
 	Poster                   string  `json:"poster,omitempty"`
 	Portrait                 string  `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
@@ -14,28 +14,28 @@ type Character struct {
 	ReferenceImage           string  `json:"referenceImage,omitempty"`           // 参考图URL
 	PortraitGenerationStatus string  `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
 	Personality              string  `json:"personality,omitempty"`
-	Background      string  `json:"background,omitempty"`
-	ShortTermGoal   string  `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
-	LongTermGoal    string  `json:"longTermGoal,omitempty"`    // Overarching ambitions
-	HandlingStyle   string  `json:"handlingStyle,omitempty"`   // Approach to handling situations
-	CognitionRange  string  `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
-	AbilityFeatures string  `json:"abilityFeatures,omitempty"` // Special skills and capabilities
-	Appearance      string  `json:"appearance,omitempty"`      // Physical appearance and features
-	DressPreference string  `json:"dressPreference,omitempty"` // Clothing preferences and style
-	TraitsJSON      string  `json:"-"`                         // Internal storage for DB conversion
-	SkillsJSON      string  `json:"-"`                         // Internal storage for DB conversion
-	IsPublic        bool    `json:"isPublic"`
-	SourceType      string  `json:"sourceType,omitempty"`
-	SourcePrompt    string  `json:"sourcePrompt,omitempty"`
-	SourceImage     string  `json:"sourceImage,omitempty"`
-	CreatedBy       string  `json:"createdBy,omitempty"`
-	LastEditedBy    string  `json:"lastEditedBy,omitempty"`
-	GroupID         *string `json:"groupId,omitempty"`
-	Likes           int     `json:"likes"`
-	Followers       int     `json:"followers"`
-	Stories         int     `json:"stories"`
-	CreatedAt       int64   `json:"createdAt"`
-	UpdatedAt       int64   `json:"updatedAt"`
+	Background               string  `json:"background,omitempty"`
+	ShortTermGoal            string  `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
+	LongTermGoal             string  `json:"longTermGoal,omitempty"`    // Overarching ambitions
+	HandlingStyle            string  `json:"handlingStyle,omitempty"`   // Approach to handling situations
+	CognitionRange           string  `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
+	AbilityFeatures          string  `json:"abilityFeatures,omitempty"` // Special skills and capabilities
+	Appearance               string  `json:"appearance,omitempty"`      // Physical appearance and features
+	DressPreference          string  `json:"dressPreference,omitempty"` // Clothing preferences and style
+	TraitsJSON               string  `json:"-"`                         // Internal storage for DB conversion
+	SkillsJSON               string  `json:"-"`                         // Internal storage for DB conversion
+	IsPublic                 bool    `json:"isPublic"`
+	SourceType               string  `json:"sourceType,omitempty"`
+	SourcePrompt             string  `json:"sourcePrompt,omitempty"`
+	SourceImage              string  `json:"sourceImage,omitempty"`
+	CreatedBy                string  `json:"createdBy,omitempty"`
+	LastEditedBy             string  `json:"lastEditedBy,omitempty"`
+	GroupID                  *string `json:"groupId,omitempty"`
+	Likes                    int     `json:"likes"`
+	Followers                int     `json:"followers"`
+	Stories                  int     `json:"stories"`
+	CreatedAt                int64   `json:"createdAt"`
+	UpdatedAt                int64   `json:"updatedAt"`
 
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
@@ -108,11 +108,11 @@ type CharacterPoster struct {
 	Status      PosterStatus `json:"status"`              // draft, generating, generated, published, failed
 
 	// AI Generation fields
-	ReferenceStoryEnabled bool                       `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
-	PosterConceptJSON     string                     `json:"-"`                               // LLM generated poster concept JSON (internal storage)
-	PosterConcept         *PosterConceptDetails      `json:"posterConcept,omitempty"`         // Structured poster concept for client editing
-	FinalImagePrompt      string                     `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
-	ErrorMessage          string                     `json:"errorMessage,omitempty"`          // Error message if generation failed
+	ReferenceStoryEnabled bool                  `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
+	PosterConceptJSON     string                `json:"-"`                               // LLM generated poster concept JSON (internal storage)
+	PosterConcept         *PosterConceptDetails `json:"posterConcept,omitempty"`         // Structured poster concept for client editing
+	FinalImagePrompt      string                `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
+	ErrorMessage          string                `json:"errorMessage,omitempty"`          // Error message if generation failed
 
 	// AI Generation Record IDs (for tracking both AI steps)
 	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)

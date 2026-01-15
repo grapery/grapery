@@ -33,31 +33,31 @@ const (
 // TokenUsageLog Token用量日志模型（详细记录）
 type TokenUsageLog struct {
 	IDBase
-	UserID        int64         `gorm:"column:user_id;not null;index:idx_user_id" json:"user_id"`                    // 用户ID
-	EntityType    EntityType    `gorm:"column:entity_type;size:50;not null;index:idx_entity;index:idx_user_entity" json:"entity_type"` // 业务实体类型
-	EntityID      string        `gorm:"column:entity_id;size:36;not null;index:idx_entity;index:idx_user_entity" json:"entity_id"`       // 业务实体ID
-	OperationType OperationType `gorm:"column:operation_type;size:50;not null" json:"operation_type"`                                  // 操作类型
-	UsageType     TokenUsageType `gorm:"column:usage_type;not null" json:"usage_type"`                                                 // Token使用类型
+	UserID        int64          `gorm:"column:user_id;not null;index:idx_user_id" json:"user_id"`                                      // 用户ID
+	EntityType    EntityType     `gorm:"column:entity_type;size:50;not null;index:idx_entity;index:idx_user_entity" json:"entity_type"` // 业务实体类型
+	EntityID      string         `gorm:"column:entity_id;size:36;not null;index:idx_entity;index:idx_user_entity" json:"entity_id"`     // 业务实体ID
+	OperationType OperationType  `gorm:"column:operation_type;size:50;not null" json:"operation_type"`                                  // 操作类型
+	UsageType     TokenUsageType `gorm:"column:usage_type;not null" json:"usage_type"`                                                  // Token使用类型
 
 	// Token 使用详情
 	InputTokens  int `gorm:"column:input_tokens;default:0" json:"input_tokens"`   // 输入Token数
-	OutputTokens int `gorm:"column:output_tokens;default:0" json:"output_tokens"`  // 输出Token数
-	TotalTokens  int `gorm:"column:total_tokens;default:0" json:"total_tokens"`    // 总Token数
+	OutputTokens int `gorm:"column:output_tokens;default:0" json:"output_tokens"` // 输出Token数
+	TotalTokens  int `gorm:"column:total_tokens;default:0" json:"total_tokens"`   // 总Token数
 
 	// 模型和功能信息
-	ModelName   string `gorm:"column:model_name;size:100" json:"model_name"`   // 使用的模型名称
-	Provider    string `gorm:"column:provider;size:50" json:"provider"`        // 提供商: gemini, hailuo等
+	ModelName   string `gorm:"column:model_name;size:100" json:"model_name"`     // 使用的模型名称
+	Provider    string `gorm:"column:provider;size:50" json:"provider"`          // 提供商: gemini, hailuo等
 	FeatureName string `gorm:"column:feature_name;size:100" json:"feature_name"` // 功能名称
 
 	// 关联信息
-	TaskID  string `gorm:"column:task_id;size:36;index:idx_task_id" json:"task_id"`   // 关联的AI任务ID
+	TaskID  string `gorm:"column:task_id;size:36;index:idx_task_id" json:"task_id"`    // 关联的AI任务ID
 	StoryID string `gorm:"column:story_id;size:36;index:idx_story_id" json:"story_id"` // 关联的故事ID（如果适用）
 
 	// 成本和计费
-	CostAmount float64 `gorm:"column:cost_amount;type:decimal(10,4);default:0" json:"cost_amount"` // 成本金额
-	Currency   string  `gorm:"column:currency;size:10;default:'USD'" json:"currency"`              // 货币类型
+	CostAmount float64 `gorm:"column:cost_amount;type:decimal(10,4);default:0" json:"cost_amount"`  // 成本金额
+	Currency   string  `gorm:"column:currency;size:10;default:'USD'" json:"currency"`               // 货币类型
 	IsBilled   bool    `gorm:"column:is_billed;default:false;index:idx_is_billed" json:"is_billed"` // 是否已计费
-	BillingID  string  `gorm:"column:billing_id;size:36" json:"billing_id"`                          // 计费记录ID
+	BillingID  string  `gorm:"column:billing_id;size:36" json:"billing_id"`                         // 计费记录ID
 
 	// 元数据
 	Metadata string `gorm:"column:metadata;type:json" json:"metadata"` // 扩展元数据（JSON格式）
@@ -128,14 +128,14 @@ func GetTokenUsageLogsByTimeRange(ctx context.Context, userID int64, startTime, 
 	query := DataBase().WithContext(ctx).
 		Where("user_id = ? AND created_at >= ? AND created_at < ?", userID, startTime, endTime).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 	if offset > 0 {
 		query = query.Offset(offset)
 	}
-	
+
 	err := query.Find(&logs).Error
 	return logs, err
 }
@@ -259,10 +259,10 @@ func GetTokenUsageSummaryByEntityType(ctx context.Context, userID int64, startTi
 	for _, s := range summaries {
 		result[s.EntityType] = map[string]interface{}{
 			"total_input_tokens":  s.TotalInputTokens,
-			"total_output_tokens":  s.TotalOutputTokens,
-			"total_tokens":         s.TotalTokens,
-			"total_cost":           s.TotalCost,
-			"record_count":         s.RecordCount,
+			"total_output_tokens": s.TotalOutputTokens,
+			"total_tokens":        s.TotalTokens,
+			"total_cost":          s.TotalCost,
+			"record_count":        s.RecordCount,
 		}
 	}
 

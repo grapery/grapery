@@ -110,5 +110,3 @@ func (h *Handler) GetTrendingStoryboards(c *gin.Context) {
 		"offset":      offset,
 	})
 }
-
-

@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	SMTPServer = ""
-	SMTPPort   = 0
+	SMTPServer   = ""
+	SMTPPort     = 0
 	SMTPUsername = ""
 	SMTPPassword = ""
 	SMTPFrom     = "support@grapery.xyz"

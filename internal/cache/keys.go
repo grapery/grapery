@@ -33,9 +33,9 @@ const (
 	PrefixActiveGroups      = "active:groups"
 
 	// 会话缓存
-	PrefixSession       = "session:"
-	PrefixPasswordReset = "pwd_reset:"
-	PrefixEmailVerify   = "email_verify:"
+	PrefixSession              = "session:"
+	PrefixPasswordReset        = "pwd_reset:"
+	PrefixEmailVerify          = "email_verify:"
 	PrefixEmailVerifyCode      = "email_verify_code:"
 	PrefixEmailVerifySendLimit = "email_verify_send_limit:"
 	PrefixEmailVerifyIPLimit   = "email_verify_ip_limit:"

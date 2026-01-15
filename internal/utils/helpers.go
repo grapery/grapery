@@ -36,5 +36,3 @@ func JSONMarshal(v interface{}) ([]byte, error) {
 func GenerateID() string {
 	return fmt.Sprintf("id_%d", time.Now().UnixNano())
 }
-
-

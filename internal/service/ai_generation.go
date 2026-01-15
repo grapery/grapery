@@ -969,17 +969,17 @@ func (s *AIGenerationService) GenerateVideoWithSubdivision(ctx context.Context, 
 }
 
 type subdivisionParams struct {
-	startFrame        string
-	endFrame          string
-	prompt            string
-	durationSecs      int
-	provider          string
-	aspectRatio       string
-	currentDepth      int
-	maxDepth          int
-	segmentIndex      int
-	currentSegments   int // Track current segment count to enforce limit
-	maxSegments       int // Maximum allowed segments
+	startFrame      string
+	endFrame        string
+	prompt          string
+	durationSecs    int
+	provider        string
+	aspectRatio     string
+	currentDepth    int
+	maxDepth        int
+	segmentIndex    int
+	currentSegments int // Track current segment count to enforce limit
+	maxSegments     int // Maximum allowed segments
 }
 
 // subdivideAndGenerate recursively evaluates frame gaps and generates video segments.

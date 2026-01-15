@@ -24,10 +24,10 @@ type StoryboardScene struct {
 	UpdatedAt     int64    `json:"updatedAt"`
 
 	// Keyframe Subdivision fields
-	VideoSegments    []VideoSegmentInfo `json:"videoSegments,omitempty"`   // Video segments when subdivision is applied
-	MiddleFrameURLs  []string           `json:"middleFrameUrls,omitempty"` // Generated middle frame URLs
-	IsSubdivided     bool               `json:"isSubdivided"`              // Whether keyframe subdivision was applied
-	VideoSegmentsJSON string            `json:"-"`                         // JSON storage for database
+	VideoSegments     []VideoSegmentInfo `json:"videoSegments,omitempty"`   // Video segments when subdivision is applied
+	MiddleFrameURLs   []string           `json:"middleFrameUrls,omitempty"` // Generated middle frame URLs
+	IsSubdivided      bool               `json:"isSubdivided"`              // Whether keyframe subdivision was applied
+	VideoSegmentsJSON string             `json:"-"`                         // JSON storage for database
 
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`

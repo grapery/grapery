@@ -57,12 +57,12 @@ func NewTokenUsageLogService(logger *logrus.Logger) TokenUsageLogService {
 // RecordUsageLog 记录用量日志
 func (s *TokenUsageLogServiceImpl) RecordUsageLog(ctx context.Context, log *paymodels.TokenUsageLog) error {
 	s.logger.WithFields(logrus.Fields{
-		"user_id":       log.UserID,
-		"entity_type":   log.EntityType,
-		"entity_id":     log.EntityID,
-		"operation":     log.OperationType,
-		"total_tokens":  log.TotalTokens,
-		"task_id":       log.TaskID,
+		"user_id":      log.UserID,
+		"entity_type":  log.EntityType,
+		"entity_id":    log.EntityID,
+		"operation":    log.OperationType,
+		"total_tokens": log.TotalTokens,
+		"task_id":      log.TaskID,
 	}).Debug("Recording token usage log")
 
 	err := paymodels.CreateTokenUsageLog(ctx, log)

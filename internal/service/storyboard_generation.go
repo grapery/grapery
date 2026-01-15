@@ -2587,7 +2587,7 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		if len(mainCharacters) > maxMainCharacters {
 			mainCharacters = mainCharacters[:maxMainCharacters]
 		}
-		
+
 		prompt.WriteString("\n## Scene Characters:\n")
 		prompt.WriteString("MAIN CHARACTERS (limit to maximum 5, must be accurately depicted):\n")
 		for i, charName := range mainCharacters {
@@ -2596,7 +2596,7 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 				break
 			}
 		}
-		
+
 		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
 		if len(gen.SceneCharacters) > maxMainCharacters {
 			prompt.WriteString(fmt.Sprintf("\nNOTE: There are %d total characters mentioned in the scene. ", len(gen.SceneCharacters)))
@@ -2604,7 +2604,7 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 			prompt.WriteString("You may include additional background characters, crowds, bystanders, or passersby as needed for the scene composition. ")
 			prompt.WriteString("These additional characters do not need to match specific reference images.\n")
 		}
-		
+
 		if len(gen.CharacterReferenceImages) > 0 {
 			prompt.WriteString("\nCharacter reference images are provided for the MAIN CHARACTERS listed above. ")
 			prompt.WriteString("The generated image MUST accurately depict these main characters consistent with the reference images. ")

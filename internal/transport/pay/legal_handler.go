@@ -66,5 +66,3 @@ func GetPrivacyPolicy(c *gin.Context) {
 		},
 	})
 }
-
-

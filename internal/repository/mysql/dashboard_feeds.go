@@ -232,42 +232,32 @@ func (r *Repository) TrendingStoryboards(ctx context.Context, userID string, lim
 		offset = 0
 	}
 
-	// Build base query with multiple conditions
+	// Build base query with multiple conditions using JOINs instead of IN subqueries
+	// This avoids MySQL's limitation with LIMIT in IN subqueries
 	base := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
 		Joins("JOIN stories ON stories.id = storyboards.story_id").
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories 
+			WHERE status = 'published'
+			ORDER BY likes DESC 
+			LIMIT 100
+		) top_likes ON top_likes.id = stories.id`).
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories 
+			WHERE status = 'published'
+			ORDER BY storyboard_count DESC 
+			LIMIT 100
+		) top_storyboards ON top_storyboards.id = stories.id`).
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories 
+			WHERE status = 'published'
+			ORDER BY followers DESC 
+			LIMIT 100
+		) top_followers ON top_followers.id = stories.id`).
+		Joins(`LEFT JOIN story_contributors sc ON sc.story_id = stories.id AND sc.user_id = ?`, userID).
 		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
-		Where(`(
-			-- Stories user contributed to
-			EXISTS (
-				SELECT 1 FROM story_contributors sc 
-				WHERE sc.story_id = stories.id AND sc.user_id = ?
-			)
-			OR
-			-- Top stories by likes (top 100)
-			stories.id IN (
-				SELECT id FROM stories 
-				WHERE workflow_status = 'published'
-				ORDER BY likes DESC 
-				LIMIT 100
-			)
-			OR
-			-- Top stories by storyboard_count (top 100)
-			stories.id IN (
-				SELECT id FROM stories 
-				WHERE workflow_status = 'published'
-				ORDER BY storyboard_count DESC 
-				LIMIT 100
-			)
-			OR
-			-- Top stories by followers (top 100)
-			stories.id IN (
-				SELECT id FROM stories 
-				WHERE workflow_status = 'published'
-				ORDER BY followers DESC 
-				LIMIT 100
-			)
-		)`, userID)
+		Where("(sc.user_id IS NOT NULL OR top_likes.id IS NOT NULL OR top_storyboards.id IS NOT NULL OR top_followers.id IS NOT NULL)")
 
 	// Count total distinct storyboards
 	var total int64
@@ -283,17 +273,14 @@ func (r *Repository) TrendingStoryboards(ctx context.Context, userID string, lim
 		ID string `gorm:"column:id"`
 	}
 	var idRows []idRow
-	// Build order clause with userID embedded (userID comes from auth middleware, safe to embed)
-	orderClause := fmt.Sprintf(`
-		MAX(CASE WHEN EXISTS (
-			SELECT 1 FROM story_contributors sc 
-			WHERE sc.story_id = stories.id AND sc.user_id = '%s'
-		) THEN 1 ELSE 0 END) DESC,
+	// Order by contribution status (using JOIN), then by story metrics
+	orderClause := `
+		MAX(CASE WHEN sc.user_id IS NOT NULL THEN 1 ELSE 0 END) DESC,
 		MAX(stories.likes) DESC,
 		MAX(stories.storyboard_count) DESC,
 		MAX(stories.followers) DESC,
 		MAX(storyboards.updated_at) DESC
-	`, userID)
+	`
 	if err := base.
 		Select("storyboards.id").
 		Group("storyboards.id").

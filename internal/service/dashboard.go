@@ -25,5 +25,3 @@ func (s *Service) DashboardCharacterStoryboards(ctx context.Context, userID stri
 func (s *Service) TrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	return s.repo.TrendingStoryboards(ctx, userID, limit, offset)
 }
-
-

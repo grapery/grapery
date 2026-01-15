@@ -217,9 +217,9 @@ type StoryboardVideoGeneration struct {
 	OutputTokens        int            `gorm:"default:0"`
 	TotalTokens         int            `gorm:"default:0;index"`
 	ErrorMessage        string         `gorm:"type:text"`
-	IsSubdivided        bool           `gorm:"default:false"`    // Whether keyframe subdivision was applied
-	VideoSegmentsJSON   string         `gorm:"type:text"`        // JSON storage for video segments
-	MiddleFrameURLsJSON string         `gorm:"type:text"`        // JSON storage for middle frame URLs
+	IsSubdivided        bool           `gorm:"default:false"` // Whether keyframe subdivision was applied
+	VideoSegmentsJSON   string         `gorm:"type:text"`     // JSON storage for video segments
+	MiddleFrameURLsJSON string         `gorm:"type:text"`     // JSON storage for middle frame URLs
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
 	CompletedAt         *time.Time     `gorm:"index"`
 	UpdatedAt           time.Time      `gorm:"autoUpdateTime"`
@@ -228,44 +228,44 @@ type StoryboardVideoGeneration struct {
 
 // Character database model
 type Character struct {
-	ID              string         `gorm:"primaryKey;size:36"`
-	StoryID         string         `gorm:"size:36;not null;index"`
-	Story           Story          `gorm:"foreignKey:StoryID"`
-	Name            string         `gorm:"size:100;not null;index"`
-	Description     string         `gorm:"type:text"`
+	ID                       string         `gorm:"primaryKey;size:36"`
+	StoryID                  string         `gorm:"size:36;not null;index"`
+	Story                    Story          `gorm:"foreignKey:StoryID"`
+	Name                     string         `gorm:"size:100;not null;index"`
+	Description              string         `gorm:"type:text"`
 	Avatar                   string         `gorm:"size:500"`
 	Poster                   string         `gorm:"size:500"`
-	Portrait                 string         `gorm:"size:500"`                              // 完整角色形象图URL（AI生成）
-	NeedsPortrait            bool           `gorm:"default:false"`                         // 是否需要生成形象
-	ReferenceImage           string         `gorm:"size:500"`                              // 参考图URL
-	PortraitGenerationStatus string         `gorm:"size:20;default:'none';index"`          // none/pending/generating/generated/failed
+	Portrait                 string         `gorm:"size:500"`                     // 完整角色形象图URL（AI生成）
+	NeedsPortrait            bool           `gorm:"default:false"`                // 是否需要生成形象
+	ReferenceImage           string         `gorm:"size:500"`                     // 参考图URL
+	PortraitGenerationStatus string         `gorm:"size:20;default:'none';index"` // none/pending/generating/generated/failed
 	AuthorID                 string         `gorm:"size:36;not null;index"`
-	Author          User           `gorm:"foreignKey:AuthorID"`
-	Personality     string         `gorm:"type:text"`
-	Background      string         `gorm:"type:text"`
-	ShortTermGoal   string         `gorm:"type:text"` // Immediate objectives in current story arc
-	LongTermGoal    string         `gorm:"type:text"` // Overarching ambitions
-	HandlingStyle   string         `gorm:"type:text"` // Approach to handling situations
-	CognitionRange  string         `gorm:"type:text"` // Knowledge and awareness of their world
-	AbilityFeatures string         `gorm:"type:text"` // Special skills and capabilities
-	Appearance      string         `gorm:"type:text"` // Physical appearance and features
-	DressPreference string         `gorm:"type:text"` // Clothing preferences and style
-	SourceType      string         `gorm:"size:20;not null;default:'manual';index"`
-	SourcePrompt    string         `gorm:"type:text"`
-	SourceImage     string         `gorm:"size:500"`
-	CreatedBy       string         `gorm:"size:36;not null;index"`
-	LastEditedBy    string         `gorm:"size:36;index"`
-	Likes           int            `gorm:"default:0;index"`
-	Followers       int            `gorm:"default:0"`
-	Stories         int            `gorm:"default:0"`
-	Traits          string         `gorm:"type:text"` // JSON array
-	Skills          string         `gorm:"type:text"` // JSON array
-	IsPublic        bool           `gorm:"default:true;index"`
-	GroupID         *string        `gorm:"size:36;index"`
-	Group           *Group         `gorm:"foreignKey:GroupID"`
-	CreatedAt       time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt       time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
+	Author                   User           `gorm:"foreignKey:AuthorID"`
+	Personality              string         `gorm:"type:text"`
+	Background               string         `gorm:"type:text"`
+	ShortTermGoal            string         `gorm:"type:text"` // Immediate objectives in current story arc
+	LongTermGoal             string         `gorm:"type:text"` // Overarching ambitions
+	HandlingStyle            string         `gorm:"type:text"` // Approach to handling situations
+	CognitionRange           string         `gorm:"type:text"` // Knowledge and awareness of their world
+	AbilityFeatures          string         `gorm:"type:text"` // Special skills and capabilities
+	Appearance               string         `gorm:"type:text"` // Physical appearance and features
+	DressPreference          string         `gorm:"type:text"` // Clothing preferences and style
+	SourceType               string         `gorm:"size:20;not null;default:'manual';index"`
+	SourcePrompt             string         `gorm:"type:text"`
+	SourceImage              string         `gorm:"size:500"`
+	CreatedBy                string         `gorm:"size:36;not null;index"`
+	LastEditedBy             string         `gorm:"size:36;index"`
+	Likes                    int            `gorm:"default:0;index"`
+	Followers                int            `gorm:"default:0"`
+	Stories                  int            `gorm:"default:0"`
+	Traits                   string         `gorm:"type:text"` // JSON array
+	Skills                   string         `gorm:"type:text"` // JSON array
+	IsPublic                 bool           `gorm:"default:true;index"`
+	GroupID                  *string        `gorm:"size:36;index"`
+	Group                    *Group         `gorm:"foreignKey:GroupID"`
+	CreatedAt                time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt                time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt                gorm.DeletedAt `gorm:"index"`
 }
 
 // StoryScene database model (story-scoped scene assets - static locations)
@@ -309,9 +309,9 @@ type StoryboardScene struct {
 	Characters        string         `gorm:"type:json"` // JSON array of character names
 	Mood              string         `gorm:"size:100"`
 	IsAIGenerated     bool           `gorm:"default:true"`
-	IsSubdivided      bool           `gorm:"default:false"`  // Whether keyframe subdivision was applied
-	VideoSegmentsJSON string         `gorm:"type:text"`      // JSON storage for video segments
-	MiddleFrameURLs   string         `gorm:"type:text"`      // JSON storage for middle frame URLs
+	IsSubdivided      bool           `gorm:"default:false"` // Whether keyframe subdivision was applied
+	VideoSegmentsJSON string         `gorm:"type:text"`     // JSON storage for video segments
+	MiddleFrameURLs   string         `gorm:"type:text"`     // JSON storage for middle frame URLs
 	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt         time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt         gorm.DeletedAt `gorm:"index"`
