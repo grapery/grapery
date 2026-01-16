@@ -43,7 +43,9 @@ func (h *Handler) GetGroup(c *gin.Context) {
 		return
 	}
 
-	group, err := h.svc.GetGroup(c.Request.Context(), groupID)
+	userID := authPkg.GetUserID(c)
+
+	group, err := h.svc.GetGroup(c.Request.Context(), groupID, userID)
 	if err != nil {
 		if err.Error() == "group not found" {
 			NotFound(c, "group not found")

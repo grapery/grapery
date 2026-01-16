@@ -116,9 +116,10 @@ func (s *Service) CreateGroup(ctx context.Context, userID string, req CreateGrou
 }
 
 // GetGroup 获取群组详情（带缓存）
-func (s *Service) GetGroup(ctx context.Context, groupID string) (*domain.Group, error) {
+func (s *Service) GetGroup(ctx context.Context, groupID, userID string) (*domain.Group, error) {
 	s.logger.Info("getting group",
-		zap.String("groupID", groupID))
+		zap.String("groupID", groupID),
+		zap.String("userID", userID))
 
 	// 尝试从缓存获取
 	c := s.getCache()
@@ -128,6 +129,17 @@ func (s *Service) GetGroup(ctx context.Context, groupID string) (*domain.Group, 
 		if err := c.Get(ctx, key, &cachedGroup); err == nil {
 			s.logger.Debug("group cache hit",
 				zap.String("groupID", groupID))
+			// 缓存命中后，仍然需要查询实时的角色和关注状态
+			if userID != "" {
+				role, err := s.repo.GetMemberRole(ctx, groupID, userID)
+				if err == nil {
+					cachedGroup.MyRole = &role
+				}
+				isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, groupID)
+				if err == nil {
+					cachedGroup.IsFollowing = &isFollowing
+				}
+			}
 			return &cachedGroup, nil
 		} else {
 			s.logger.Debug("group cache miss",
@@ -148,6 +160,18 @@ func (s *Service) GetGroup(ctx context.Context, groupID string) (*domain.Group, 
 			zap.String("groupID", groupID),
 			zap.Error(err))
 		return nil, errors.New("failed to get group")
+	}
+
+	// 查询用户角色和关注状态
+	if userID != "" {
+		role, err := s.repo.GetMemberRole(ctx, groupID, userID)
+		if err == nil {
+			group.MyRole = &role
+		}
+		isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, groupID)
+		if err == nil {
+			group.IsFollowing = &isFollowing
+		}
 	}
 
 	// 写入缓存
@@ -194,11 +218,17 @@ func (s *Service) ListGroups(ctx context.Context, userID string, req GroupListRe
 			s.logger.Error("failed to list my groups", zap.Error(err))
 			return nil, errors.New("failed to list my groups")
 		}
-		// 为每个群组查询当前用户的角色
+			// 为每个群组查询当前用户的角色和关注状态
 		for _, group := range groups {
 			role, err := s.repo.GetMemberRole(ctx, group.ID, userID)
 			if err == nil {
 				group.MyRole = &role
+			}
+
+			// 查询关注状态
+			isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, group.ID)
+			if err == nil {
+				group.IsFollowing = &isFollowing
 			}
 		}
 	} else if req.MyGroups != nil && !*req.MyGroups {
@@ -208,19 +238,34 @@ func (s *Service) ListGroups(ctx context.Context, userID string, req GroupListRe
 			s.logger.Error("failed to list public groups", zap.Error(err))
 			return nil, errors.New("failed to list public groups")
 		}
+		// 为每个群组查询关注状态
+		for _, group := range groups {
+			if userID != "" {
+				isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, group.ID)
+				if err == nil {
+					group.IsFollowing = &isFollowing
+				}
+			}
+		}
 	} else {
-		// 返回所有群组（兼容旧接口）
+		// 返回所有群组(兼容旧接口)
 		groups, err = s.repo.ListGroups(ctx, req.Limit, req.Offset)
 		if err != nil {
 			s.logger.Error("failed to list groups", zap.Error(err))
 			return nil, errors.New("failed to list groups")
 		}
-		// 为每个群组查询当前用户的角色
+		// 为每个群组查询当前用户的角色和关注状态
 		if userID != "" {
 			for _, group := range groups {
 				role, err := s.repo.GetMemberRole(ctx, group.ID, userID)
 				if err == nil {
 					group.MyRole = &role
+				}
+
+				// 查询关注状态
+				isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, group.ID)
+				if err == nil {
+					group.IsFollowing = &isFollowing
 				}
 			}
 		}
@@ -895,4 +940,175 @@ func (s *Service) UpdateMemberRoleByCode(ctx context.Context, operatorID, groupI
 
 	s.logger.Info("member role updated successfully")
 	return nil
+}
+
+// ========== Group Follow Management ==========
+
+// FollowGroup 关注群组
+func (s *Service) FollowGroup(ctx context.Context, userID, groupID string) (*domain.Group, error) {
+	s.logger.Info("following group",
+		zap.String("userID", userID),
+		zap.String("groupID", groupID),
+	)
+
+	// 检查群组是否存在
+	group, err := s.repo.GroupByID(ctx, groupID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("group not found")
+		}
+		return nil, errors.New("failed to get group")
+	}
+
+	// 检查是否已关注
+	isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, groupID)
+	if err != nil {
+		s.logger.Error("failed to check follow status", zap.Error(err))
+		return nil, errors.New("failed to check follow status")
+	}
+	if isFollowing {
+		return nil, errors.New("already following this group")
+	}
+
+	// 创建关注记录
+	if err := s.repo.FollowGroup(ctx, userID, groupID); err != nil {
+		s.logger.Error("failed to follow group", zap.Error(err))
+		return nil, errors.New("failed to follow group")
+	}
+
+	// 更新群组关注者数量
+	group.Followers++
+	group.UpdatedAt = time.Now().Unix()
+	if err := s.repo.UpdateGroup(ctx, group); err != nil {
+		s.logger.Error("failed to update follower count", zap.Error(err))
+	}
+
+	// 使缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		_ = c.Delete(ctx, key)
+	}
+
+	s.logger.Info("group followed successfully",
+		zap.String("groupID", groupID),
+		zap.Int("followers", group.Followers))
+
+	return group, nil
+}
+
+// UnfollowGroup 取消关注群组
+func (s *Service) UnfollowGroup(ctx context.Context, userID, groupID string) error {
+	s.logger.Info("unfollowing group",
+		zap.String("userID", userID),
+		zap.String("groupID", groupID),
+	)
+
+	// 检查群组是否存在
+	_, err := s.repo.GroupByID(ctx, groupID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return errors.New("group not found")
+		}
+		return errors.New("failed to get group")
+	}
+
+	// 检查是否已关注
+	isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, groupID)
+	if err != nil {
+		s.logger.Error("failed to check follow status", zap.Error(err))
+		return errors.New("failed to check follow status")
+	}
+	if !isFollowing {
+		return errors.New("not following this group")
+	}
+
+	// 删除关注记录
+	if err := s.repo.UnfollowGroup(ctx, userID, groupID); err != nil {
+		s.logger.Error("failed to unfollow group", zap.Error(err))
+		return errors.New("failed to unfollow group")
+	}
+
+	// 更新群组关注者数量
+	group, err := s.repo.GroupByID(ctx, groupID)
+	if err == nil {
+		if group.Followers > 0 {
+			group.Followers--
+		}
+		group.UpdatedAt = time.Now().Unix()
+		if err := s.repo.UpdateGroup(ctx, group); err != nil {
+			s.logger.Error("failed to update follower count", zap.Error(err))
+		}
+	}
+
+	// 使缓存失效
+	c := s.getCache()
+	if c != nil {
+		key := cache.GroupKey(groupID)
+		_ = c.Delete(ctx, key)
+	}
+
+	s.logger.Info("group unfollowed successfully",
+		zap.String("groupID", groupID))
+	return nil
+}
+
+// ListFollowedGroups 获取用户关注的群组列表
+func (s *Service) ListFollowedGroups(ctx context.Context, userID string, limit, offset int) ([]*domain.Group, error) {
+	s.logger.Info("listing followed groups",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset),
+	)
+
+	if limit == 0 {
+		limit = 20
+	}
+
+	groups, err := s.repo.ListFollowedGroups(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list followed groups", zap.Error(err))
+		return nil, errors.New("failed to list followed groups")
+	}
+
+	// 为每个群组设置关注状态
+	for _, group := range groups {
+		isFollowing := true
+		group.IsFollowing = &isFollowing
+	}
+
+	s.logger.Info("followed groups listed successfully", zap.Int("count", len(groups)))
+	return groups, nil
+}
+
+// ToggleGroupFollow 切换群组关注状态
+func (s *Service) ToggleGroupFollow(ctx context.Context, userID, groupID string) (*domain.Group, error) {
+	s.logger.Info("toggling group follow",
+		zap.String("userID", userID),
+		zap.String("groupID", groupID),
+	)
+
+	// 检查当前关注状态
+	isFollowing, err := s.repo.IsFollowingGroup(ctx, userID, groupID)
+	if err != nil {
+		s.logger.Error("failed to check follow status", zap.Error(err))
+		return nil, errors.New("failed to check follow status")
+	}
+
+	if isFollowing {
+		// 取消关注
+		if err := s.UnfollowGroup(ctx, userID, groupID); err != nil {
+			return nil, err
+		}
+		group, _ := s.repo.GroupByID(ctx, groupID)
+		if group != nil {
+			following := false
+			group.IsFollowing = &following
+			return group, nil
+		}
+		return nil, nil
+	} else {
+		// 关注
+		return s.FollowGroup(ctx, userID, groupID)
+	}
 }

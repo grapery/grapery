@@ -55,9 +55,11 @@ func (r *Repository) UpdateGroup(ctx context.Context, group *domain.Group) error
 		Name:        group.Name,
 		Description: group.Description,
 		Avatar:      group.Avatar,
+		CoverImage:  group.CoverImage,
 		CreatorID:   group.Creator.ID,
 		Members:     group.Members,
 		Stories:     group.Stories,
+		Followers:   group.Followers,
 		Public:      group.Public,
 		UpdatedAt:   time.Now(),
 	}
@@ -529,3 +531,86 @@ func (r *Repository) UpdateInvitationStatus(ctx context.Context, id, status stri
 
 	return nil
 }
+
+// ========== Group Follow Management ==========
+
+// FollowGroup 关注群组
+func (r *Repository) FollowGroup(ctx context.Context, userID, groupID string) error {
+	follow := GroupFollow{
+		ID:      uuid.New().String(),
+		GroupID: groupID,
+		UserID:  userID,
+	}
+
+	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		return err
+	}
+
+	// 更新群组关注者数量
+	if err := r.db.WithContext(ctx).Model(&Group{}).
+		Where("id = ?", groupID).
+		UpdateColumn("followers", gorm.Expr("followers + ?", 1)).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UnfollowGroup 取消关注群组
+func (r *Repository) UnfollowGroup(ctx context.Context, userID, groupID string) error {
+	result := r.db.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Delete(&GroupFollow{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("follow record not found")
+	}
+
+	// 更新群组关注者数量
+	if err := r.db.WithContext(ctx).Model(&Group{}).
+		Where("id = ?", groupID).
+		UpdateColumn("followers", gorm.Expr("GREATEST(followers - ?, 0)", 1)).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IsFollowingGroup 检查用户是否已关注群组
+func (r *Repository) IsFollowingGroup(ctx context.Context, userID, groupID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&GroupFollow{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// ListFollowedGroups 获取用户关注的群组列表
+func (r *Repository) ListFollowedGroups(ctx context.Context, userID string, limit, offset int) ([]*domain.Group, error) {
+	var follows []GroupFollow
+	query := r.db.WithContext(ctx).Preload("Group").Preload("Group.Creator").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&follows).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Group, len(follows))
+	for i, f := range follows {
+		refGroup := r.groupToDomain(f.Group)
+		result[i] = &refGroup
+	}
+	return result, nil
+}
+

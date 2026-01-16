@@ -238,6 +238,12 @@ type Repository interface {
 	GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*GroupInvitation, error)
 	UpdateInvitationStatus(ctx context.Context, id, status string) error
 
+	// Group follow
+	FollowGroup(ctx context.Context, userID, groupID string) error
+	UnfollowGroup(ctx context.Context, userID, groupID string) error
+	IsFollowingGroup(ctx context.Context, userID, groupID string) (bool, error)
+	ListFollowedGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
+
 	// ========== User Statistics operations ==========
 	CountAllUsers(ctx context.Context) (int, error)
 	CountNewUsersByDate(ctx context.Context, date time.Time) (int, error)

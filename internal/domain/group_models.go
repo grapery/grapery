@@ -42,15 +42,18 @@ type Group struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Avatar      string `json:"avatar,omitempty"`
+	CoverImage  string `json:"cover_image,omitempty"` // 封面图
 	Members     int    `json:"members"`
 	Stories     int    `json:"stories"`
+	Followers   int    `json:"followers,omitempty"` // 关注者数量
 	Public      bool   `json:"is_public"`
 	CreatedAt   int64  `json:"created_at"`
 	UpdatedAt   int64  `json:"updated_at"`
 
 	// Relations
-	Creator *User            `json:"creator,omitempty"`
-	MyRole  *GroupMemberRole `json:"my_role,omitempty"` // 当前用户在群组中的角色
+	Creator    *User            `json:"creator,omitempty"`
+	MyRole     *GroupMemberRole `json:"my_role,omitempty"` // 当前用户在群组中的角色
+	IsFollowing *bool            `json:"is_following,omitempty"` // 当前用户是否已关注此群组
 }
 
 // GroupMember 群组成员
@@ -60,6 +63,18 @@ type GroupMember struct {
 	UserID   string          `json:"user_id"`
 	Role     GroupMemberRole `json:"role"` // owner, admin, member
 	JoinedAt int64           `json:"joined_at"`
+
+	// Relations
+	Group *Group `json:"group,omitempty"`
+	User  *User  `json:"user,omitempty"`
+}
+
+// GroupFollow 群组关注记录
+type GroupFollow struct {
+	ID        string `json:"id"`
+	GroupID   string `json:"group_id"`
+	UserID    string `json:"user_id"`
+	CreatedAt int64  `json:"created_at"`
 
 	// Relations
 	Group *Group `json:"group,omitempty"`

@@ -352,8 +352,10 @@ type Group struct {
 	Name        string         `gorm:"size:100;not null;index"`
 	Description string         `gorm:"type:text"`
 	Avatar      string         `gorm:"size:500"`
+	CoverImage  string         `gorm:"size:500"`
 	Members     int            `gorm:"default:0"`
 	Stories     int            `gorm:"default:0"`
+	Followers   int            `gorm:"default:0"`
 	CreatorID   string         `gorm:"size:36;not null;index"`
 	Creator     User           `gorm:"foreignKey:CreatorID"`
 	Public      bool           `gorm:"default:true;index"`
@@ -594,6 +596,17 @@ type GroupInvitation struct {
 	Message   string         `gorm:"type:text"`
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	ExpiresAt time.Time      `gorm:"index"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+// GroupFollow 群组关注
+type GroupFollow struct {
+	ID        string         `gorm:"primaryKey;size:36"`
+	GroupID   string         `gorm:"size:36;not null;index:idx_user_group,unique"`
+	Group     Group          `gorm:"foreignKey:GroupID"`
+	UserID    string         `gorm:"size:36;not null;index:idx_user_group,unique;index"`
+	User      User           `gorm:"foreignKey:UserID"`
+	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
