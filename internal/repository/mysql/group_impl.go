@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -101,6 +102,12 @@ func (r *Repository) AddGroupMember(ctx context.Context, groupID, userID string,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&member).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		if strings.Contains(err.Error(), "Error 1062") ||
+		   strings.Contains(err.Error(), "Duplicate entry") ||
+		   strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyExists
+		}
 		return err
 	}
 
@@ -536,6 +543,18 @@ func (r *Repository) UpdateInvitationStatus(ctx context.Context, id, status stri
 
 // FollowGroup 关注群组
 func (r *Repository) FollowGroup(ctx context.Context, userID, groupID string) error {
+	// 检查是否已经关注
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&GroupFollow{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return domain.ErrAlreadyExists
+	}
+
 	follow := GroupFollow{
 		ID:      uuid.New().String(),
 		GroupID: groupID,
@@ -543,6 +562,12 @@ func (r *Repository) FollowGroup(ctx context.Context, userID, groupID string) er
 	}
 
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		if strings.Contains(err.Error(), "Error 1062") ||
+		   strings.Contains(err.Error(), "Duplicate entry") ||
+		   strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyExists
+		}
 		return err
 	}
 
@@ -567,7 +592,7 @@ func (r *Repository) UnfollowGroup(ctx context.Context, userID, groupID string) 
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("follow record not found")
+		return domain.ErrNotFound
 	}
 
 	// 更新群组关注者数量

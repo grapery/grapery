@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,7 +82,7 @@ func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) erro
 	}
 
 	if count > 0 {
-		return errors.New("already liked")
+		return domain.ErrAlreadyLiked
 	}
 
 	// 创建点赞记录
@@ -93,6 +94,13 @@ func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) erro
 	}
 
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		// This can happen due to race condition between check and insert
+		if strings.Contains(err.Error(), "Error 1062") ||
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyLiked
+		}
 		return err
 	}
 
@@ -118,7 +126,7 @@ func (r *Repository) UnlikeStory(ctx context.Context, userID, storyID string) er
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not liked")
+		return domain.ErrNotFound
 	}
 
 	// 更新故事的点赞数
@@ -142,7 +150,7 @@ func (r *Repository) FollowStory(ctx context.Context, userID, storyID string) er
 	}
 
 	if count > 0 {
-		return errors.New("already following")
+		return domain.ErrAlreadyExists
 	}
 
 	// 创建关注记录
@@ -179,7 +187,7 @@ func (r *Repository) UnfollowStory(ctx context.Context, userID, storyID string) 
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not following")
+		return domain.ErrNotFound
 	}
 
 	// 更新故事的关注数

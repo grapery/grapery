@@ -104,6 +104,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/groups/:id/members", h.GetGroupMembers)
 			authenticated.GET("/groups/:id/activities", h.GetGroupActivities)
 			authenticated.GET("/groups/:id/activities/heatmap", h.GetGroupActivityHeatmap)
+			authenticated.GET("/groups/followed", h.ListFollowedGroups) // 获取用户关注的群组列表
 			// 获取全局活动
 			authenticated.GET("/activities/global", h.GetGlobalActivities)
 
@@ -206,6 +207,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/groups/:id/members/:userId/role", h.UpdateMemberRole)
 			authenticated.POST("/groups/:id/members/:userId/role-by-code", h.UpdateMemberRoleByCode) // 使用角色代码更新角色
 			authenticated.POST("/groups/:id/leave", h.LeaveGroup)
+			authenticated.POST("/groups/:id/follow", h.FollowGroup)                    // 关注群组
+			authenticated.DELETE("/groups/:id/follow", h.UnfollowGroup)                // 取消关注群组
 			authenticated.GET("/groups/roles", h.ListGroupRoles)                       // 获取所有角色列表
 			authenticated.GET("/groups/roles/:code", h.GetGroupRoleByCode)             // 根据代码获取角色
 			authenticated.GET("/groups/roles/:code/permissions", h.GetRolePermissions) // 获取角色权限

@@ -612,3 +612,88 @@ func (h *Handler) UpdateMemberRoleByCode(c *gin.Context) {
 
 	Success(c, gin.H{"message": "member role updated successfully"})
 }
+
+// FollowGroup 关注群组
+// POST /api/groups/:id/follow
+func (h *Handler) FollowGroup(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	groupID := c.Param("id")
+	if groupID == "" {
+		InvalidParams(c, "group id is required")
+		return
+	}
+
+	group, err := h.svc.FollowGroup(c.Request.Context(), userID, groupID)
+	if err != nil {
+		if err.Error() == "group not found" {
+			NotFound(c, "group not found")
+			return
+		}
+		if err.Error() == "already following this group" {
+			Error(c, CodeError, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, group)
+}
+
+// UnfollowGroup 取消关注群组
+// DELETE /api/groups/:id/follow
+func (h *Handler) UnfollowGroup(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	groupID := c.Param("id")
+	if groupID == "" {
+		InvalidParams(c, "group id is required")
+		return
+	}
+
+	err := h.svc.UnfollowGroup(c.Request.Context(), userID, groupID)
+	if err != nil {
+		if err.Error() == "group not found" {
+			NotFound(c, "group not found")
+			return
+		}
+		if err.Error() == "not following this group" {
+			Error(c, CodeError, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "unfollowed group successfully"})
+}
+
+// ListFollowedGroups 获取用户关注的群组列表
+// GET /api/groups/followed
+func (h *Handler) ListFollowedGroups(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	groups, err := h.svc.ListFollowedGroups(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, groups)
+}

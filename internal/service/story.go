@@ -736,7 +736,7 @@ func (s *Service) LikeStory(ctx context.Context, userID, storyID string) error {
 		zap.String("storyID", storyID))
 	if err := s.repo.LikeStory(ctx, userID, storyID); err != nil {
 		// Treat "already liked" as success (idempotent operation)
-		if err.Error() == "already liked" {
+		if errors.Is(err, domain.ErrAlreadyLiked) {
 			s.logger.Info("story already liked",
 				zap.String("userID", userID),
 				zap.String("storyID", storyID))
@@ -765,6 +765,13 @@ func (s *Service) UnlikeStory(ctx context.Context, userID, storyID string) error
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
 	if err := s.repo.UnlikeStory(ctx, userID, storyID); err != nil {
+		// Treat "not liked" as success (idempotent operation)
+		if errors.Is(err, domain.ErrNotFound) {
+			s.logger.Info("story not liked (idempotent)",
+				zap.String("userID", userID),
+				zap.String("storyID", storyID))
+			return nil
+		}
 		s.logger.Error("failed to unlike story",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID),
@@ -808,7 +815,7 @@ func (s *Service) FollowStory(ctx context.Context, userID, storyID string) error
 		zap.String("storyID", storyID))
 	if err := s.repo.FollowStory(ctx, userID, storyID); err != nil {
 		// Treat "already following" as success (idempotent operation)
-		if err.Error() == "already following" {
+		if errors.Is(err, domain.ErrAlreadyExists) {
 			s.logger.Info("story already followed",
 				zap.String("userID", userID),
 				zap.String("storyID", storyID))
@@ -837,6 +844,13 @@ func (s *Service) UnfollowStory(ctx context.Context, userID, storyID string) err
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
 	if err := s.repo.UnfollowStory(ctx, userID, storyID); err != nil {
+		// Treat "not following" as success (idempotent operation)
+		if errors.Is(err, domain.ErrNotFound) {
+			s.logger.Info("story not followed (idempotent)",
+				zap.String("userID", userID),
+				zap.String("storyID", storyID))
+			return nil
+		}
 		s.logger.Error("failed to unfollow story",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID),

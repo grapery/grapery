@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -257,7 +258,21 @@ func (r *Repository) LikeComment(ctx context.Context, userID, commentID string, 
 	}
 
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
-		return fmt.Errorf("failed to create like: %w", err)
+		// Handle MySQL duplicate entry error (Error 1062) due to race condition
+		if strings.Contains(err.Error(), "Error 1062") ||
+		   strings.Contains(err.Error(), "Duplicate entry") ||
+		   strings.Contains(err.Error(), "23000") {
+			// Race condition: another request created the like
+			// Try to update instead
+			if err := r.db.WithContext(ctx).
+				Model(&CommentLike{}).
+				Where("user_id = ? AND comment_id = ?", userID, commentID).
+				Update("is_like", isLike).Error; err != nil {
+				return fmt.Errorf("failed to update like: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create like: %w", err)
+		}
 	}
 
 	// 更新评论的点赞/踩计数

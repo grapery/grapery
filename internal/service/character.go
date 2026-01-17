@@ -567,6 +567,13 @@ func (s *Service) FollowCharacter(ctx context.Context, userID, characterID strin
 	}
 
 	if err := s.repo.FollowCharacter(ctx, userID, characterID); err != nil {
+		// Treat "already following" as success (idempotent operation)
+		if errors.Is(err, domain.ErrAlreadyExists) {
+			s.logger.Info("character already followed",
+				zap.String("userID", userID),
+				zap.String("characterID", characterID))
+			return nil
+		}
 		s.logger.Error("failed to follow character", zap.Error(err))
 		return errors.New("failed to follow character")
 	}
@@ -583,6 +590,13 @@ func (s *Service) UnfollowCharacter(ctx context.Context, userID, characterID str
 	)
 
 	if err := s.repo.UnfollowCharacter(ctx, userID, characterID); err != nil {
+		// Treat "not following" as success (idempotent operation)
+		if errors.Is(err, domain.ErrNotFound) {
+			s.logger.Info("character not followed (idempotent)",
+				zap.String("userID", userID),
+				zap.String("characterID", characterID))
+			return nil
+		}
 		s.logger.Error("failed to unfollow character", zap.Error(err))
 		return errors.New("failed to unfollow character")
 	}

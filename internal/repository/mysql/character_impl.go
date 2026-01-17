@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -210,7 +211,7 @@ func (r *Repository) FollowCharacter(ctx context.Context, userID, characterID st
 	}
 
 	if count > 0 {
-		return errors.New("already following")
+		return domain.ErrAlreadyExists
 	}
 
 	// 创建关注记录
@@ -222,6 +223,12 @@ func (r *Repository) FollowCharacter(ctx context.Context, userID, characterID st
 	}
 
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		if strings.Contains(err.Error(), "Error 1062") ||
+		   strings.Contains(err.Error(), "Duplicate entry") ||
+		   strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyExists
+		}
 		return err
 	}
 
@@ -247,7 +254,7 @@ func (r *Repository) UnfollowCharacter(ctx context.Context, userID, characterID 
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not following")
+		return domain.ErrNotFound
 	}
 
 	// 更新角色的关注数

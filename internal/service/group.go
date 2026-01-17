@@ -972,8 +972,19 @@ func (s *Service) FollowGroup(ctx context.Context, userID, groupID string) (*dom
 
 	// 创建关注记录
 	if err := s.repo.FollowGroup(ctx, userID, groupID); err != nil {
-		s.logger.Error("failed to follow group", zap.Error(err))
-		return nil, errors.New("failed to follow group")
+		// Treat "already following" as success (idempotent operation)
+		if errors.Is(err, domain.ErrAlreadyExists) {
+			s.logger.Info("group already followed",
+				zap.String("userID", userID),
+				zap.String("groupID", groupID))
+			// Return the current group without incrementing followers
+			isFollowing := true
+			group.IsFollowing = &isFollowing
+			return group, nil
+		} else {
+			s.logger.Error("failed to follow group", zap.Error(err))
+			return nil, errors.New("failed to follow group")
+		}
 	}
 
 	// 更新群组关注者数量

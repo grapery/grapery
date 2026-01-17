@@ -99,7 +99,12 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
-	// 5) Ensure user_devices table exists for push notifications.
+	// 5) Ensure group_follows table exists for group following functionality.
+	if err := r.ensureGroupFollowsSchema(); err != nil {
+		return err
+	}
+
+	// 6) Ensure user_devices table exists for push notifications.
 	if err := r.ensureUserDevicesSchema(); err != nil {
 		return err
 	}
@@ -383,6 +388,20 @@ func (r *Repository) ensureGroupMembersSchema() error {
 	// This column references the group_roles table for flexible permission management.
 	if err := r.ensureColumn("group_members", "role_id", "VARCHAR(36) NULL"); err != nil {
 		return fmt.Errorf("ensure group_members.role_id: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ensureGroupFollowsSchema() error {
+	// Check if group_follows table exists
+	hasTable := r.db.Migrator().HasTable(&GroupFollow{})
+	if !hasTable {
+		r.log.Info("group_follows table not found, creating it...")
+		// Use AutoMigrate to create table with all its columns and indexes
+		if err := r.db.AutoMigrate(&GroupFollow{}); err != nil {
+			return fmt.Errorf("failed to create group_follows table: %w", err)
+		}
+		r.log.Info("group_follows table created successfully")
 	}
 	return nil
 }
