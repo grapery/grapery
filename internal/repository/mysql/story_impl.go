@@ -38,6 +38,7 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		Likes:       story.Likes,
 		Followers:   story.Followers,
 		Panels:      story.Panels,
+		IsCollaborationOpen: story.IsCollaborationOpen,
 		UpdatedAt:   time.Now(),
 	}
 

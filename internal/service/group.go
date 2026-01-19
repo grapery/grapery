@@ -218,7 +218,7 @@ func (s *Service) ListGroups(ctx context.Context, userID string, req GroupListRe
 			s.logger.Error("failed to list my groups", zap.Error(err))
 			return nil, errors.New("failed to list my groups")
 		}
-			// 为每个群组查询当前用户的角色和关注状态
+		// 为每个群组查询当前用户的角色和关注状态
 		for _, group := range groups {
 			role, err := s.repo.GetMemberRole(ctx, group.ID, userID)
 			if err == nil {

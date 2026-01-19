@@ -17,6 +17,7 @@ type Story struct {
 	Genre             string       `json:"genre"`
 	Style             *StyleConfig `json:"style,omitempty"` // AI生成风格配置（完整信息，可为空）
 	Status            string       `json:"status"`          // draft, published, rendering
+	IsCollaborationOpen bool           `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 	CreatedAt         int64        `json:"createdAt"`
 	UpdatedAt         int64        `json:"updatedAt"`
 

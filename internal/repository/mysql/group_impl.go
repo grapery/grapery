@@ -104,8 +104,8 @@ func (r *Repository) AddGroupMember(ctx context.Context, groupID, userID string,
 	if err := r.db.WithContext(ctx).Create(&member).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062)
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			return domain.ErrAlreadyExists
 		}
 		return err
@@ -564,8 +564,8 @@ func (r *Repository) FollowGroup(ctx context.Context, userID, groupID string) er
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062)
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			return domain.ErrAlreadyExists
 		}
 		return err
@@ -583,7 +583,9 @@ func (r *Repository) FollowGroup(ctx context.Context, userID, groupID string) er
 
 // UnfollowGroup 取消关注群组
 func (r *Repository) UnfollowGroup(ctx context.Context, userID, groupID string) error {
+	// 使用 Unscoped() 进行硬删除，避免软删除导致的唯一索引冲突
 	result := r.db.WithContext(ctx).
+		Unscoped().
 		Where("group_id = ? AND user_id = ?", groupID, userID).
 		Delete(&GroupFollow{})
 
@@ -638,4 +640,3 @@ func (r *Repository) ListFollowedGroups(ctx context.Context, userID string, limi
 	}
 	return result, nil
 }
-

@@ -65,8 +65,9 @@ type Story struct {
 	StoryboardCount   int            `gorm:"default:0;index"` // Number of storyboards in this story
 	DefaultSceneCount int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
 	Genre             string         `gorm:"size:50;index"`
-	Style             string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
-	Status            string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
+	Style             string         `gorm:"type:text"`                               // Story style JSON (完整的StyleConfig信息，可为空)
+	Status            string         `gorm:"size:20;default:'draft';index"`         // draft, published, rendering
+	IsCollaborationOpen bool           `gorm:"default:false;index"`                   // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt         time.Time      `gorm:"autoUpdateTime;index"`
 	DeletedAt         gorm.DeletedAt `gorm:"index"`

@@ -33,6 +33,9 @@ type CreateStoryRequest struct {
 	DefaultSceneCount int      `json:"defaultSceneCount"`                                // Default number of scenes for storyboards (2-8, default 3)
 	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
+	// Collaboration settings
+	IsCollaborationOpen bool                `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+
 	// AI 丰富选项（可选）
 	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
 	GenerateCover      bool                `json:"generateCover"`              // 是否使用AI生成封面/海报
@@ -67,6 +70,9 @@ type UpdateStoryRequest struct {
 	CoverImage  *string `json:"coverImage" binding:"omitempty,url"`
 	Genre       *string `json:"genre" binding:"omitempty"`
 	Status      *string `json:"status" binding:"omitempty,oneof=draft published rendering"`
+
+	// Collaboration settings
+	IsCollaborationOpen *bool   `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 }
 
 // StoryListRequest 故事列表请求
@@ -147,6 +153,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		CreatedAt:           now,
 		UpdatedAt:           now,
 		Style:               req.AIStyle,
+		IsCollaborationOpen: req.IsCollaborationOpen, // New field: default false (restricted)
 	}
 
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
@@ -625,6 +632,15 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 			zap.String("storyID", storyID),
 			zap.String("oldStatus", oldStatus),
 			zap.String("newStatus", story.Status))
+	}
+	if req.IsCollaborationOpen != nil {
+		oldIsOpen := story.IsCollaborationOpen
+		story.IsCollaborationOpen = *req.IsCollaborationOpen
+		fieldsUpdated = append(fieldsUpdated, "isCollaborationOpen")
+		s.logger.Debug("isCollaborationOpen updated",
+			zap.String("storyID", storyID),
+			zap.Bool("oldValue", oldIsOpen),
+			zap.Bool("newValue", *req.IsCollaborationOpen))
 	}
 
 	if len(fieldsUpdated) == 0 {

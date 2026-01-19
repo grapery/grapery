@@ -1077,6 +1077,7 @@ func (r *Repository) storyToDomain(s Story) domain.Story {
 		Genre:       s.Genre,
 		Style:       jsonToStyleConfig(s.Style),
 		Status:      s.Status,
+		IsCollaborationOpen: s.IsCollaborationOpen,
 		CreatedAt:   s.CreatedAt.Unix(),
 		UpdatedAt:   s.UpdatedAt.Unix(),
 	}
