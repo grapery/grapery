@@ -59,19 +59,19 @@ func (s *Service) CanEditStory(ctx context.Context, userID, storyID string) (boo
 			zap.Bool("isCollaborationOpen", false))
 
 		// Check if user is a group member
-		if story.GroupID != nil && *story.GroupID != "" {
-			isGroupMember, err := s.repo.IsGroupMember(ctx, *story.GroupID, userID)
+		if story.GroupID != "" {
+			isGroupMember, err := s.repo.IsGroupMember(ctx, story.GroupID, userID)
 			if err != nil {
 				s.logger.Error("failed to check group membership",
 					zap.String("userID", userID),
-					zap.String("groupID", *story.GroupID),
+					zap.String("groupID", story.GroupID),
 					zap.Error(err))
 				return false, errors.New("failed to verify permission")
 			}
 			if isGroupMember {
 				s.logger.Debug("user is group member, can edit",
 					zap.String("userID", userID),
-					zap.String("groupID", *story.GroupID))
+					zap.String("groupID", story.GroupID))
 				return true, nil
 			}
 		}

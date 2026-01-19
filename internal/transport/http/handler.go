@@ -124,17 +124,25 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/stories/:id/follow", h.FollowStory)
 			authenticated.DELETE("/stories/:id/follow", h.UnfollowStory)
 
-			// 故事渲染和发布
-			authenticated.POST("/stories/:id/render", h.RenderStory)            // AI渲染（同步）- 丰富描述+生成图片
-			authenticated.POST("/stories/:id/render-media", h.RenderStoryMedia) // 媒体渲染（异步）- 视频/图片集/动画
-			authenticated.GET("/stories/:id/render-status", h.GetRenderTaskStatus)
-			authenticated.POST("/stories/:id/publish", h.PublishStory)
-			authenticated.POST("/stories/:id/unpublish", h.UnpublishStory)
-			authenticated.GET("/stories/:id/contributors", h.GetStoryContributors)
-			authenticated.POST("/stories/:id/contributors", h.InviteStoryContributor)
-			authenticated.DELETE("/stories/:id/contributors/:userId", h.RemoveStoryContributor)
+		// 故事渲染和发布
+		authenticated.POST("/stories/:id/render", h.RenderStory)            // AI渲染（同步）- 丰富描述+生成图片
+		authenticated.POST("/stories/:id/render-media", h.RenderStoryMedia) // 媒体渲染（异步）- 视频/图片集/动画
+		authenticated.GET("/stories/:id/render-status", h.GetRenderTaskStatus)
+		authenticated.POST("/stories/:id/publish", h.PublishStory)
+		authenticated.POST("/stories/:id/unpublish", h.UnpublishStory)
+		authenticated.GET("/stories/:id/contributors", h.GetStoryContributors)
+		authenticated.POST("/stories/:id/contributors", h.InviteStoryContributor)
+		authenticated.DELETE("/stories/:id/contributors/:userId", h.RemoveStoryContributor)
 
-			// Storyboard 相关
+	// Story Scenes 相关
+	authenticated.GET("/stories/:id/scenes", h.ListStoryScenes)
+	authenticated.POST("/stories/:id/scenes", h.CreateStoryScene)
+	authenticated.POST("/stories/:id/scenes/register-image", h.UploadSceneImage)
+	authenticated.POST("/stories/:id/scenes/ai-generate-image", h.GenerateSceneImage)
+	authenticated.PUT("/stories/:id/scenes/:sceneId", h.UpdateStoryScene)
+	authenticated.DELETE("/stories/:id/scenes/:sceneId", h.DeleteStoryScene)
+
+		// Storyboard 相关
 			authenticated.POST("/storyboards", h.CreateStoryboard)
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)

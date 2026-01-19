@@ -12,12 +12,12 @@ type StoryScene struct {
 	SourceType   string `json:"sourceType"`   // manual, upload, ai
 	SourcePrompt string `json:"sourcePrompt"` // AI prompt or user input
 	SourceImage  string `json:"sourceImage"`  // optional original image
-	CreatedBy    string `json:"createdBy"`    // user id
+	CreatedBy    string `json:"createdBy"`  // user id
 	LastEditedBy string `json:"lastEditedBy"`
 	CreatedAt    int64  `json:"createdAt"`
 	UpdatedAt    int64  `json:"updatedAt"`
 	IsPublic     bool   `json:"isPublic"`
-
+	Tags         []string `json:"tags,omitempty"`
 	// Relations
 	Story *Story `json:"story,omitempty"`
 }

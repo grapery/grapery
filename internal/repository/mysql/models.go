@@ -286,6 +286,7 @@ type StoryScene struct {
 	CreatedBy    string         `gorm:"size:36;not null;index"`
 	LastEditedBy string         `gorm:"size:36;index"`
 	IsPublic     bool           `gorm:"default:false;index"`
+	Tags         string         `gorm:"type:json"`
 	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

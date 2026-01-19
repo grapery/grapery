@@ -591,6 +591,257 @@ func (h *Handler) GetStoryContributors(c *gin.Context) {
 	})
 }
 
+// ========== Story Scene Handlers ==========
+
+// CreateStoryScene 创建故事场景
+// POST /api/stories/:id/scenes
+func (h *Handler) CreateStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreateStorySceneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+	req.StoryID = storyID
+
+	scene, err := h.svc.CreateStoryScene(c.Request.Context(), userID, req)
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to create scenes for this story")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, scene)
+}
+
+// ListStoryScenes 获取故事场景列表
+// GET /api/stories/:id/scenes
+func (h *Handler) ListStoryScenes(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	scenes, err := h.svc.ListStoryScenes(c.Request.Context(), storyID, limit, offset)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"scenes": scenes,
+		"count":  len(scenes),
+	})
+}
+
+// UpdateStoryScene 更新故事场景
+// PUT /api/stories/:id/scenes/:sceneId
+func (h *Handler) UpdateStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	sceneID := c.Param("sceneId")
+	if sceneID == "" {
+		InvalidParams(c, "scene id is required")
+		return
+	}
+
+	var req service.UpdateStorySceneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	scene, err := h.svc.UpdateStoryScene(c.Request.Context(), userID, storyID, sceneID, req)
+	if err != nil {
+		if err.Error() == "scene not found" {
+			NotFound(c, "scene not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to update this scene")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, scene)
+}
+
+// DeleteStoryScene 删除故事场景
+// DELETE /api/stories/:id/scenes/:sceneId
+func (h *Handler) DeleteStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	sceneID := c.Param("sceneId")
+	if sceneID == "" {
+		InvalidParams(c, "scene id is required")
+		return
+	}
+
+	err := h.svc.DeleteStoryScene(c.Request.Context(), userID, storyID, sceneID)
+	if err != nil {
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to delete this scene")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "scene deleted successfully"})
+}
+
+// UploadSceneImage 接收场景图片OSS URL
+// POST /api/stories/:id/scenes/register-image
+func (h *Handler) UploadSceneImage(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req struct {
+		ImageURL string `json:"imageUrl" binding:"required,url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	// Verify story ownership
+	if err := h.svc.EnsureStoryOwnership(c.Request.Context(), storyID, userID); err != nil {
+		Forbidden(c, err.Error())
+		return
+	}
+
+	// Return the OSS URL to frontend
+	Success(c, gin.H{
+		"success": true,
+		"url":     req.ImageURL,
+	})
+}
+
+// GenerateSceneImage AI生成场景图片
+// POST /api/stories/:id/scenes/ai-generate-image
+func (h *Handler) GenerateSceneImage(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	// Get sceneId and custom prompt from request (JSON body is optional)
+	var req struct {
+		SceneID *string `json:"sceneId"`
+		Prompt  *string `json:"prompt"`
+	}
+	// Try to bind JSON, but don't fail if body is empty
+	c.ShouldBindJSON(&req)
+
+	// Also check query parameter for sceneId (for backward compatibility)
+	sceneID := ""
+	if req.SceneID != nil && *req.SceneID != "" {
+		sceneID = *req.SceneID
+	} else if querySceneID := c.Query("sceneId"); querySceneID != "" {
+		sceneID = querySceneID
+	}
+
+	customPrompt := ""
+	if req.Prompt != nil && *req.Prompt != "" {
+		customPrompt = *req.Prompt
+	}
+
+	// Call service method to generate image
+	imageURL, filename, err := h.svc.GenerateStorySceneImage(c.Request.Context(), storyID, sceneID, userID, customPrompt)
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "scene not found" {
+			NotFound(c, "scene not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to generate images for this story")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"success":  true,
+		"url":      imageURL,
+		"filename": filename,
+	})
+}
+
 // parseInt helper function for parsing integers
 func parseInt(s string) (int, error) {
 	var result int
