@@ -61,6 +61,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/users/:id/following", h.GetFollowing)
 			authenticated.GET("/users/:id/stories", h.GetUserStories)
 			authenticated.GET("/users/:id/characters", h.GetUserCharacters)
+			authenticated.GET("/users/:id/storyboards", h.GetUserStoryboards)
+			authenticated.GET("/users/:id/drafts", h.GetUserDrafts)
 			authenticated.GET("/users/:id/liked-stories", h.GetLikedStories)
 			authenticated.GET("/users/:id/liked-characters", h.GetLikedCharacters)
 			authenticated.GET("/users/:id/liked-storyboards", h.GetLikedStoryboards)
@@ -104,6 +106,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/groups/:id/members", h.GetGroupMembers)
 			authenticated.GET("/groups/:id/activities", h.GetGroupActivities)
 			authenticated.GET("/groups/:id/activities/heatmap", h.GetGroupActivityHeatmap)
+			authenticated.GET("/groups/:id/stories", h.GetGroupStories) // 获取群组的故事列表
 			authenticated.GET("/groups/followed", h.ListFollowedGroups) // 获取用户关注的群组列表
 			// 获取全局活动
 			authenticated.GET("/activities/global", h.GetGlobalActivities)
@@ -310,8 +313,9 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 		public := api.Group("")
 		{
 			public.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 验证邀请码（注册前验证）
-			// Dashboard Trending (guest-accessible)
+			// Public Trending (guest-accessible)
 			public.GET("/public/stories/trending", h.GetTrendingStoriesPublic)
+			public.GET("/public/trending/storyboards", h.GetPublicTrendingStoryboards)
 		}
 
 	}

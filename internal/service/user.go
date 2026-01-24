@@ -620,6 +620,89 @@ func (s *Service) GetDraftStoryboards(ctx context.Context, userID string, limit,
 	return s.repo.DraftStoryboardsByCreator(ctx, userID, limit, offset)
 }
 
+// GetUserStoryboards 获取用户的故事板列表（已发布的）
+func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Debug("getting user storyboards",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// 尝试从缓存获取
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserStoryboardsListKey(userID, limit, offset)
+		var cachedStoryboards []*domain.Storyboard
+		if err := c.Get(ctx, cacheKey, &cachedStoryboards); err == nil {
+			s.logger.Debug("user storyboards cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cachedStoryboards)))
+			return cachedStoryboards, nil
+		} else {
+			s.logger.Debug("user storyboards cache miss",
+				zap.String("userID", userID),
+				zap.Error(err))
+		}
+	}
+
+	// 从数据库获取
+	storyboards, err := s.repo.StoryboardsByCreator(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get user storyboards",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 写入缓存
+	if c != nil && len(storyboards) > 0 {
+		cacheKey := cache.UserStoryboardsListKey(userID, limit, offset)
+		if err := c.Set(ctx, cacheKey, storyboards, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache user storyboards",
+				zap.String("userID", userID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("user storyboards cached",
+				zap.String("userID", userID),
+				zap.Int("count", len(storyboards)))
+		}
+	}
+
+	return storyboards, nil
+}
+
+// GetUserDrafts 获取用户的草稿列表（包括草稿故事板）
+func (s *Service) GetUserDrafts(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Debug("getting user drafts",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// 直接返回草稿故事板
+	drafts, err := s.repo.DraftStoryboardsByCreator(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get user drafts",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return drafts, nil
+}
+
 // UpdateProfileRequest 更新资料请求
 type UpdateProfileRequest struct {
 	DisplayName         *string `json:"displayName"`

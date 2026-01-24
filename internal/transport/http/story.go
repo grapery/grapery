@@ -9,7 +9,9 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
-// GetTrendingStoriesPublic returns top trending stories in the last 24 hours (guest accessible).
+// GetTrendingStoriesPublic returns top trending stories (guest accessible).
+// Trending is determined by: followers > likes > updated_at.
+// No time range restriction - includes all published stories.
 // GET /api/public/stories/trending?limit=20
 func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))

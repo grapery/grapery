@@ -208,6 +208,10 @@ func UserCharactersListKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixUserCharactersList, userID, limit, offset)
 }
 
+func UserStoryboardsListKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:%d:%d", "user_storyboards_list:", userID, limit, offset)
+}
+
 func UserGroupsListKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixUserGroupsList, userID, limit, offset)
 }

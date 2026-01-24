@@ -67,6 +67,10 @@ type Repository interface {
 	// - Stories with high storyboard count
 	// - Stories with high followers
 	TrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// GetPublicTrendingStoryboards returns published trending storyboards accessible to all users.
+	// If userID is empty (guest), returns globally trending storyboards.
+	// If userID is provided (authenticated), returns personalized trending storyboards.
+	GetPublicTrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 
 	// ========== Story Contributor operations ==========
 	AddStoryContributor(ctx context.Context, contributor *StoryContributor) error

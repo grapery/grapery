@@ -697,3 +697,36 @@ func (h *Handler) ListFollowedGroups(c *gin.Context) {
 
 	Success(c, groups)
 }
+
+// GetGroupStories 获取群组的故事列表
+// GET /api/groups/:id/stories
+func (h *Handler) GetGroupStories(c *gin.Context) {
+	groupID := c.Param("id")
+	if groupID == "" {
+		InvalidParams(c, "group id is required")
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	// Build request with group filter
+	req := service.StoryListRequest{
+		GroupID: groupID,
+		Limit:   limit,
+		Offset:  offset,
+	}
+
+	stories, total, err := h.svc.ListStories(c.Request.Context(), req)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"stories": stories,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}

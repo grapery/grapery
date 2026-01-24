@@ -16,7 +16,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// GetTrendingStories24h returns up to `limit` published stories created in the last 24 hours.
+// GetTrendingStories24h returns up to `limit` trending published stories.
+// Trending is determined by: followers > likes > updated_at.
+// No time range restriction - includes all published stories.
 // Intended for the guest-accessible dashboard trending endpoint (backend caps limit to 20).
 func (s *Service) GetTrendingStories24h(ctx context.Context, limit int) ([]*domain.Story, error) {
 	return s.repo.TrendingStories(ctx, limit)

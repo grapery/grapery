@@ -254,6 +254,50 @@ func (h *Handler) GetUserCharacters(c *gin.Context) {
 	})
 }
 
+// GetUserStoryboards 获取用户的故事板列表
+// GET /api/users/:id/storyboards
+func (h *Handler) GetUserStoryboards(c *gin.Context) {
+	userID, ok := RequireParam(c, "id")
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	storyboards, err := h.svc.GetUserStoryboards(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"storyboards": storyboards,
+		"count":       len(storyboards),
+	})
+}
+
+// GetUserDrafts 获取用户的草稿列表
+// GET /api/users/:id/drafts
+func (h *Handler) GetUserDrafts(c *gin.Context) {
+	userID, ok := RequireParam(c, "id")
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	drafts, err := h.svc.GetUserDrafts(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"drafts": drafts,
+		"count":  len(drafts),
+	})
+}
+
 // GetLikedStories 获取用户点赞的故事
 // GET /api/users/:id/liked-stories
 func (h *Handler) GetLikedStories(c *gin.Context) {

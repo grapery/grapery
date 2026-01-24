@@ -321,3 +321,127 @@ func (r *Repository) TrendingStoryboards(ctx context.Context, userID string, lim
 	}
 	return result, total, nil
 }
+
+// GetPublicTrendingStoryboards returns published trending storyboards accessible to all users.
+// If userID is empty (guest), returns globally trending storyboards ordered by popularity.
+// If userID is provided (authenticated), returns personalized trending storyboards with user contributions prioritized.
+func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build base query for published storyboards
+	base := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Joins("JOIN stories ON stories.id = storyboards.story_id").
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories
+			WHERE status = 'published'
+			ORDER BY likes DESC
+			LIMIT 100
+		) top_likes ON top_likes.id = stories.id`).
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories
+			WHERE status = 'published'
+			ORDER BY storyboard_count DESC
+			LIMIT 100
+		) top_storyboards ON top_storyboards.id = stories.id`).
+		Joins(`LEFT JOIN (
+			SELECT id FROM stories
+			WHERE status = 'published'
+			ORDER BY followers DESC
+			LIMIT 100
+		) top_followers ON top_followers.id = stories.id`).
+		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished)
+
+	// If user is authenticated, add personalization with story_contributors
+	if userID != "" {
+		base = base.Joins(`LEFT JOIN story_contributors sc ON sc.story_id = stories.id AND sc.user_id = ?`, userID).
+			Where("(top_likes.id IS NOT NULL OR top_storyboards.id IS NOT NULL OR top_followers.id IS NOT NULL)")
+	} else {
+		// For guests, only show global trending
+		base = base.Where("(top_likes.id IS NOT NULL OR top_storyboards.id IS NOT NULL OR top_followers.id IS NOT NULL)")
+	}
+
+	// Count total distinct storyboards
+	var total int64
+	if err := base.
+		Select("storyboards.id").
+		Distinct().
+		Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("public trending storyboards count: %w", err)
+	}
+
+	// Get page of storyboard IDs
+	type idRow struct {
+		ID string `gorm:"column:id"`
+	}
+	var idRows []idRow
+
+	// Order differently based on authentication status
+	var orderClause string
+	if userID != "" {
+		// Authenticated: prioritize user contributions, then by story metrics
+		orderClause = `
+			MAX(CASE WHEN sc.user_id IS NOT NULL THEN 1 ELSE 0 END) DESC,
+			MAX(stories.likes) DESC,
+			MAX(stories.storyboard_count) DESC,
+			MAX(stories.followers) DESC,
+			MAX(storyboards.updated_at) DESC
+		`
+	} else {
+		// Guest: global ranking by popularity
+		orderClause = `
+			MAX(stories.likes) DESC,
+			MAX(stories.storyboard_count) DESC,
+			MAX(stories.followers) DESC,
+			MAX(storyboards.updated_at) DESC
+		`
+	}
+
+	if err := base.
+		Select("storyboards.id").
+		Group("storyboards.id").
+		Order(orderClause).
+		Limit(limit).
+		Offset(offset).
+		Scan(&idRows).Error; err != nil {
+		return nil, 0, fmt.Errorf("public trending storyboards ids: %w", err)
+	}
+
+	ids := make([]string, 0, len(idRows))
+	for _, row := range idRows {
+		ids = append(ids, row.ID)
+	}
+
+	if len(ids) == 0 {
+		return []*domain.Storyboard{}, total, nil
+	}
+
+	// Load storyboards with relations
+	var rows []Storyboard
+	if err := r.db.WithContext(ctx).
+		Preload("Creator").
+		Preload("Story").
+		Where("id IN ?", ids).
+		Order("updated_at DESC").
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("public trending storyboards load: %w", err)
+	}
+
+	result := make([]*domain.Storyboard, 0, len(rows))
+	for _, sb := range rows {
+		domainSb, err := r.storyboardToDomain(ctx, sb)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, &domainSb)
+	}
+	return result, total, nil
+}
