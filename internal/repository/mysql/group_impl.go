@@ -522,6 +522,22 @@ func (r *Repository) GetPendingInvitationsForUser(ctx context.Context, userID st
 	return result, nil
 }
 
+// ExpirePendingInvitations 将所有过期的待处理邀请标记为过期
+func (r *Repository) ExpirePendingInvitations(ctx context.Context) (int64, error) {
+	now := time.Now()
+	result := r.db.WithContext(ctx).
+		Model(&GroupInvitation{}).
+		Where("status = ? AND expires_at < ?", "pending", now).
+		Updates(map[string]interface{}{
+			"status": "expired",
+		})
+
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
 // UpdateInvitationStatus updates an invitation status
 func (r *Repository) UpdateInvitationStatus(ctx context.Context, id, status string) error {
 	result := r.db.WithContext(ctx).Model(&GroupInvitation{}).

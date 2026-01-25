@@ -203,3 +203,18 @@ func (s *Service) NotifyMention(ctx context.Context, targetUserID, actorID, acto
 	}
 	return s.CreateNotification(ctx, notification)
 }
+
+// NotifyGroupInvitation 群组邀请通知
+func (s *Service) NotifyGroupInvitation(ctx context.Context, inviteeID, inviterID, inviterName, inviterAvatar, groupID, groupName string) error {
+	notification := &domain.Notification{
+		UserID:      inviteeID,
+		Type:        "group_invite",
+		Title:       "群组邀请",
+		Content:     fmt.Sprintf("%s 邀请你加入群组「%s」", inviterName, groupName),
+		Link:        fmt.Sprintf("/groups/%s", groupID),
+		ActorID:     inviterID,
+		ActorName:   inviterName,
+		ActorAvatar: inviterAvatar,
+	}
+	return s.CreateNotification(ctx, notification)
+}

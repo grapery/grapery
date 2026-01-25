@@ -239,6 +239,10 @@ func main() {
 		logger.Info("User statistics task started")
 	}
 
+	// Start invitation expiry check task (runs hourly)
+	go startInvitationExpiryTask(ctx, svc, logger)
+	logger.Info("Invitation expiry check task started")
+
 	// Start server in goroutine
 	go func() {
 		logger.Info("server listening", zap.String("addr", cfg.Addr()))
@@ -292,8 +296,30 @@ func startUserStatisticsTask(ctx context.Context, statsService *service.UserStat
 			statsCtx := context.Background()
 			if err := statsService.PersistStatistics(statsCtx, time.Now()); err != nil {
 				logger.Warn("failed to persist user statistics", zap.Error(err))
-			} else {
-				logger.Info("user statistics persisted successfully")
+		} else {
+			logger.Info("user statistics persisted successfully")
+		}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// startInvitationExpiryTask 启动邀请过期检查任务（每小时执行）
+func startInvitationExpiryTask(ctx context.Context, svc *service.Service, logger *zap.Logger) {
+	// 立即执行一次（用于初始化）
+	if err := svc.CheckAndExpireInvitations(ctx); err != nil {
+		logger.Warn("failed to check expired invitations", zap.Error(err))
+	}
+	// 每小时执行一次
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := svc.CheckAndExpireInvitations(ctx); err != nil {
+				logger.Warn("failed to check expired invitations", zap.Error(err))
 			}
 		case <-ctx.Done():
 			return

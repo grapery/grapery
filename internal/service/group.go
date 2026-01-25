@@ -533,6 +533,25 @@ func (s *Service) InviteMember(ctx context.Context, inviterID, groupID string, r
 		return nil, errors.New("failed to create invitation")
 	}
 
+	// 发送邀请通知
+	inviter, err := s.repo.UserByID(ctx, inviterID)
+	if err == nil && inviter != nil {
+		if err := s.NotifyGroupInvitation(
+			ctx,
+			req.UserID,
+			inviterID,
+			inviter.DisplayName,
+			inviter.Avatar,
+			groupID,
+			invitation.Group.Name,
+		); err != nil {
+			s.logger.Error("failed to send invitation notification", zap.Error(err))
+			// 不影响主流程，仅记录错误
+		}
+	} else if err != nil {
+		s.logger.Error("failed to get inviter info", zap.Error(err))
+	}
+
 	s.logger.Info("invitation created successfully", zap.String("invitationID", invitation.ID))
 	return invitation, nil
 }
@@ -670,6 +689,18 @@ func (s *Service) GetPendingInvitations(ctx context.Context, userID string, limi
 	}
 
 	return invitations, nil
+}
+
+// CheckAndExpireInvitations 检查并更新过期的邀请
+func (s *Service) CheckAndExpireInvitations(ctx context.Context) error {
+	expiredCount, err := s.repo.ExpirePendingInvitations(ctx)
+	if err != nil {
+		return err
+	}
+	if expiredCount > 0 {
+		s.logger.Info("expired invitations updated", zap.Int64("count", expiredCount))
+	}
+	return nil
 }
 
 // RemoveMember 移除群组成员
