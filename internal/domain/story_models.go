@@ -2,24 +2,24 @@ package domain
 
 // Story captures a creation project
 type Story struct {
-	ID                string       `json:"id"`
-	AuthorID          string       `json:"-"`
-	GroupID           string       `json:"groupId,omitempty"` // Group ID if the story belongs to a group
-	Title             string       `json:"title"`
-	Description       string       `json:"description"`
-	CoverImage        string       `json:"coverImage"`
-	Likes             int          `json:"likes"`
-	Followers         int          `json:"followers"`
-	Panels            int          `json:"panels"`
-	StoryboardCount   int          `json:"storyboardCount"`   // Number of storyboards in this story
-	CharacterCount    int          `json:"characterCount"`    // Number of characters in the story
-	DefaultSceneCount int          `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
-	Genre             string       `json:"genre"`
-	Style             *StyleConfig `json:"style,omitempty"` // AI生成风格配置（完整信息，可为空）
-	Status            string       `json:"status"`          // draft, published, rendering
-	IsCollaborationOpen bool           `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
-	CreatedAt         int64        `json:"createdAt"`
-	UpdatedAt         int64        `json:"updatedAt"`
+	ID                  string       `json:"id"`
+	AuthorID            string       `json:"-"`
+	GroupID             string       `json:"groupId,omitempty"` // Group ID if the story belongs to a group
+	Title               string       `json:"title"`
+	Description         string       `json:"description"`
+	CoverImage          string       `json:"coverImage"`
+	Likes               int          `json:"likes"`
+	Followers           int          `json:"followers"`
+	Panels              int          `json:"panels"`
+	StoryboardCount     int          `json:"storyboardCount"`   // Number of storyboards in this story
+	CharacterCount      int          `json:"characterCount"`    // Number of characters in the story
+	DefaultSceneCount   int          `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
+	Genre               string       `json:"genre"`
+	Style               *StyleConfig `json:"style,omitempty"`     // AI生成风格配置（完整信息，可为空）
+	Status              string       `json:"status"`              // draft, published, rendering
+	IsCollaborationOpen bool         `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	CreatedAt           int64        `json:"createdAt"`
+	UpdatedAt           int64        `json:"updatedAt"`
 
 	// AI 丰富相关字段
 	OriginalDescription string `json:"originalDescription,omitempty"` // 用户原始描述（AI丰富前）

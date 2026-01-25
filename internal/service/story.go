@@ -36,7 +36,7 @@ type CreateStoryRequest struct {
 	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
 	// Collaboration settings
-	IsCollaborationOpen bool                `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 
 	// AI 丰富选项（可选）
 	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
@@ -74,7 +74,7 @@ type UpdateStoryRequest struct {
 	Status      *string `json:"status" binding:"omitempty,oneof=draft published rendering"`
 
 	// Collaboration settings
-	IsCollaborationOpen *bool   `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen *bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 }
 
 // StoryListRequest 故事列表请求
@@ -357,6 +357,14 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.String("storyID", story.ID),
 			zap.String("groupId", req.GroupID))
 		go s.RecordGroupStoryCreated(context.Background(), req.GroupID, userID, story.ID, story.Title)
+
+		// 增加群组的故事计数
+		if err := s.repo.IncrementGroupStoryCount(ctx, req.GroupID); err != nil {
+			s.logger.Warn("failed to increment group story count",
+				zap.String("groupId", req.GroupID),
+				zap.String("storyId", story.ID),
+				zap.Error(err))
+		}
 	} else {
 		s.logger.Debug("story not in group, skipping group activity",
 			zap.String("storyID", story.ID))
@@ -721,6 +729,17 @@ func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error
 	s.logger.Info("story deleted successfully",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID))
+
+	// 如果故事属于群组，减少群组的故事计数
+	if story.GroupID != "" {
+		if err := s.repo.DecrementGroupStoryCount(ctx, story.GroupID); err != nil {
+			s.logger.Warn("failed to decrement group story count",
+				zap.String("groupId", story.GroupID),
+				zap.String("storyId", storyID),
+				zap.Error(err))
+		}
+	}
+
 	return nil
 }
 

@@ -51,8 +51,8 @@ type Group struct {
 	UpdatedAt   int64  `json:"updated_at"`
 
 	// Relations
-	Creator    *User            `json:"creator,omitempty"`
-	MyRole     *GroupMemberRole `json:"my_role,omitempty"` // 当前用户在群组中的角色
+	Creator     *User            `json:"creator,omitempty"`
+	MyRole      *GroupMemberRole `json:"my_role,omitempty"`      // 当前用户在群组中的角色
 	IsFollowing *bool            `json:"is_following,omitempty"` // 当前用户是否已关注此群组
 }
 

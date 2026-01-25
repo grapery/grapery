@@ -160,6 +160,7 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 		DateOfBirth:         dateOfBirth,
 		Followers:           user.Followers,
 		Following:           user.Following,
+		StoryboardCount:     user.StoryboardCount,
 		Status:              user.Status,
 		EmailVerified:       user.EmailVerified,
 		LastLoginAt:         lastLoginAt,

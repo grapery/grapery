@@ -372,8 +372,8 @@ func (r *Repository) LikeStoryboard(ctx context.Context, userID, storyboardID st
 	if err := r.db.WithContext(ctx).Create(like).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062) due to race condition
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			return domain.ErrAlreadyLiked
 		}
 		return err
@@ -425,8 +425,8 @@ func (r *Repository) JoinGroup(ctx context.Context, groupID, userID, role string
 	if err := r.db.WithContext(ctx).Create(member).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062) due to race condition
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			return domain.ErrAlreadyExists
 		}
 		return err

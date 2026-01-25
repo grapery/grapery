@@ -51,26 +51,26 @@ type UserLoginRecord struct {
 
 // Story database model
 type Story struct {
-	ID                string         `gorm:"primaryKey;size:36"`
-	Title             string         `gorm:"size:200;not null;index"`
-	Description       string         `gorm:"type:text"`
-	CoverImage        string         `gorm:"size:500"`
-	AuthorID          string         `gorm:"size:36;not null;index"`
-	Author            User           `gorm:"foreignKey:AuthorID"`
-	GroupID           *string        `gorm:"size:36;index"` // Group ID if the story belongs to a group
-	Group             *Group         `gorm:"foreignKey:GroupID"`
-	Likes             int            `gorm:"default:0;index"`
-	Followers         int            `gorm:"default:0"`
-	Panels            int            `gorm:"default:0"`
-	StoryboardCount   int            `gorm:"default:0;index"` // Number of storyboards in this story
-	DefaultSceneCount int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
-	Genre             string         `gorm:"size:50;index"`
-	Style             string         `gorm:"type:text"`                               // Story style JSON (完整的StyleConfig信息，可为空)
-	Status            string         `gorm:"size:20;default:'draft';index"`         // draft, published, rendering
-	IsCollaborationOpen bool           `gorm:"default:false;index"`                   // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
-	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt         time.Time      `gorm:"autoUpdateTime;index"`
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
+	ID                  string         `gorm:"primaryKey;size:36"`
+	Title               string         `gorm:"size:200;not null;index"`
+	Description         string         `gorm:"type:text"`
+	CoverImage          string         `gorm:"size:500"`
+	AuthorID            string         `gorm:"size:36;not null;index"`
+	Author              User           `gorm:"foreignKey:AuthorID"`
+	GroupID             *string        `gorm:"size:36;index"` // Group ID if the story belongs to a group
+	Group               *Group         `gorm:"foreignKey:GroupID"`
+	Likes               int            `gorm:"default:0;index"`
+	Followers           int            `gorm:"default:0"`
+	Panels              int            `gorm:"default:0"`
+	StoryboardCount     int            `gorm:"default:0;index"` // Number of storyboards in this story
+	DefaultSceneCount   int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
+	Genre               string         `gorm:"size:50;index"`
+	Style               string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
+	Status              string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
+	IsCollaborationOpen bool           `gorm:"default:false;index"`           // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt           time.Time      `gorm:"autoUpdateTime;index"`
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
 // StoryContributor database model (贡献者：创建故事板或初始化故事的参与者)

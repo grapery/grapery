@@ -640,3 +640,17 @@ func (r *Repository) ListFollowedGroups(ctx context.Context, userID string, limi
 	}
 	return result, nil
 }
+
+// IncrementGroupStoryCount increments the story count for a group
+func (r *Repository) IncrementGroupStoryCount(ctx context.Context, groupID string) error {
+	return r.db.WithContext(ctx).Model(&Group{}).
+		Where("id = ?", groupID).
+		UpdateColumn("stories", gorm.Expr("stories + ?", 1)).Error
+}
+
+// DecrementGroupStoryCount decrements the story count for a group
+func (r *Repository) DecrementGroupStoryCount(ctx context.Context, groupID string) error {
+	return r.db.WithContext(ctx).Model(&Group{}).
+		Where("id = ?", groupID).
+		UpdateColumn("stories", gorm.Expr("GREATEST(stories - ?, 0)", 1)).Error
+}

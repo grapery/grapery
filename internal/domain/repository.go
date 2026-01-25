@@ -248,6 +248,10 @@ type Repository interface {
 	IsFollowingGroup(ctx context.Context, userID, groupID string) (bool, error)
 	ListFollowedGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
 
+	// Group story count
+	IncrementGroupStoryCount(ctx context.Context, groupID string) error
+	DecrementGroupStoryCount(ctx context.Context, groupID string) error
+
 	// ========== User Statistics operations ==========
 	CountAllUsers(ctx context.Context) (int, error)
 	CountNewUsersByDate(ctx context.Context, date time.Time) (int, error)

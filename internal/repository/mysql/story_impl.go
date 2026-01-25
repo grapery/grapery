@@ -27,19 +27,21 @@ func (r *Repository) StoryByID(ctx context.Context, id string) (*domain.Story, e
 // UpdateStory updates an existing story
 func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error {
 	dbStory := Story{
-		ID:          story.ID,
-		Title:       story.Title,
-		Description: story.Description,
-		CoverImage:  story.CoverImage,
-		AuthorID:    story.Author.ID,
-		GroupID:     &story.GroupID,
-		Genre:       story.Genre,
-		Status:      story.Status,
-		Likes:       story.Likes,
-		Followers:   story.Followers,
-		Panels:      story.Panels,
+		ID:                  story.ID,
+		Title:               story.Title,
+		Description:         story.Description,
+		CoverImage:          story.CoverImage,
+		AuthorID:            story.Author.ID,
+		GroupID:             &story.GroupID,
+		Genre:               story.Genre,
+		Status:              story.Status,
+		Likes:               story.Likes,
+		Followers:           story.Followers,
+		Panels:              story.Panels,
+		StoryboardCount:     story.StoryboardCount,
+		DefaultSceneCount:   story.DefaultSceneCount,
 		IsCollaborationOpen: story.IsCollaborationOpen,
-		UpdatedAt:   time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 
 	if story.GroupID == "" {

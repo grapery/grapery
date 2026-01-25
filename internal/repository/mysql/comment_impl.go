@@ -260,8 +260,8 @@ func (r *Repository) LikeComment(ctx context.Context, userID, commentID string, 
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062) due to race condition
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			// Race condition: another request created the like
 			// Try to update instead
 			if err := r.db.WithContext(ctx).

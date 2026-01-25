@@ -30,8 +30,8 @@ func (r *Repository) CreateStoryScene(ctx context.Context, scene *domain.StorySc
 
 	// Exclude Tags field from insert until database column exists
 	if err := r.db.WithContext(ctx).
-		Select("id", "story_id", "title", "description", "image", "location", "time_of_day", 
-			"source_type", "source_prompt", "source_image", "created_by", "last_edited_by", 
+		Select("id", "story_id", "title", "description", "image", "location", "time_of_day",
+			"source_type", "source_prompt", "source_image", "created_by", "last_edited_by",
 			"is_public", "created_at", "updated_at", "deleted_at").
 		Create(dbModel).Error; err != nil {
 		return fmt.Errorf("create story scene: %w", err)

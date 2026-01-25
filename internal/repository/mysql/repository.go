@@ -1064,22 +1064,23 @@ func (r *Repository) storyToDomain(s Story) domain.Story {
 		groupID = *s.GroupID
 	}
 	return domain.Story{
-		ID:          s.ID,
-		AuthorID:    s.AuthorID,
-		GroupID:     groupID,
-		Title:       s.Title,
-		Description: s.Description,
-		CoverImage:  s.CoverImage,
-		Author:      &author,
-		Likes:       s.Likes,
-		Followers:   s.Followers,
-		Panels:      s.Panels,
-		Genre:       s.Genre,
-		Style:       jsonToStyleConfig(s.Style),
-		Status:      s.Status,
+		ID:                  s.ID,
+		AuthorID:            s.AuthorID,
+		GroupID:             groupID,
+		Title:               s.Title,
+		Description:         s.Description,
+		CoverImage:          s.CoverImage,
+		Author:              &author,
+		Likes:               s.Likes,
+		Followers:           s.Followers,
+		Panels:              s.Panels,
+		StoryboardCount:     s.StoryboardCount,
+		Genre:               s.Genre,
+		Style:               jsonToStyleConfig(s.Style),
+		Status:              s.Status,
 		IsCollaborationOpen: s.IsCollaborationOpen,
-		CreatedAt:   s.CreatedAt.Unix(),
-		UpdatedAt:   s.UpdatedAt.Unix(),
+		CreatedAt:           s.CreatedAt.Unix(),
+		UpdatedAt:           s.UpdatedAt.Unix(),
 	}
 }
 

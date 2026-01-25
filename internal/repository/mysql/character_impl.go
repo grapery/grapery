@@ -225,8 +225,8 @@ func (r *Repository) FollowCharacter(ctx context.Context, userID, characterID st
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
 		// Handle MySQL duplicate entry error (Error 1062)
 		if strings.Contains(err.Error(), "Error 1062") ||
-		   strings.Contains(err.Error(), "Duplicate entry") ||
-		   strings.Contains(err.Error(), "23000") {
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
 			return domain.ErrAlreadyExists
 		}
 		return err
