@@ -323,8 +323,8 @@ func (r *Repository) TrendingStoryboards(ctx context.Context, userID string, lim
 }
 
 // GetPublicTrendingStoryboards returns published trending storyboards accessible to all users.
-// If userID is empty (guest), returns globally trending storyboards ordered by popularity.
-// If userID is provided (authenticated), returns personalized trending storyboards with user contributions prioritized.
+// Returns ALL published storyboards ordered by popularity metrics (likes, storyboard_count, followers, updated_at).
+// If userID is provided (authenticated), user contributions are prioritized in the ranking.
 func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	if limit <= 0 {
 		limit = 20
@@ -336,37 +336,15 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 		offset = 0
 	}
 
-	// Build base query for published storyboards
+	// Build base query for ALL published storyboards (no time or count restrictions)
 	base := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
 		Joins("JOIN stories ON stories.id = storyboards.story_id").
-		Joins(`LEFT JOIN (
-			SELECT id FROM stories
-			WHERE status = 'published'
-			ORDER BY likes DESC
-			LIMIT 100
-		) top_likes ON top_likes.id = stories.id`).
-		Joins(`LEFT JOIN (
-			SELECT id FROM stories
-			WHERE status = 'published'
-			ORDER BY storyboard_count DESC
-			LIMIT 100
-		) top_storyboards ON top_storyboards.id = stories.id`).
-		Joins(`LEFT JOIN (
-			SELECT id FROM stories
-			WHERE status = 'published'
-			ORDER BY followers DESC
-			LIMIT 100
-		) top_followers ON top_followers.id = stories.id`).
 		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished)
 
 	// If user is authenticated, add personalization with story_contributors
 	if userID != "" {
-		base = base.Joins(`LEFT JOIN story_contributors sc ON sc.story_id = stories.id AND sc.user_id = ?`, userID).
-			Where("(top_likes.id IS NOT NULL OR top_storyboards.id IS NOT NULL OR top_followers.id IS NOT NULL)")
-	} else {
-		// For guests, only show global trending
-		base = base.Where("(top_likes.id IS NOT NULL OR top_storyboards.id IS NOT NULL OR top_followers.id IS NOT NULL)")
+		base = base.Joins(`LEFT JOIN story_contributors sc ON sc.story_id = stories.id AND sc.user_id = ?`, userID)
 	}
 
 	// Count total distinct storyboards
@@ -384,7 +362,7 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 	}
 	var idRows []idRow
 
-	// Order differently based on authentication status
+	// Order by popularity metrics - prioritized for authenticated users
 	var orderClause string
 	if userID != "" {
 		// Authenticated: prioritize user contributions, then by story metrics
@@ -396,7 +374,7 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 			MAX(storyboards.updated_at) DESC
 		`
 	} else {
-		// Guest: global ranking by popularity
+		// Guest: global ranking by popularity (no time restrictions)
 		orderClause = `
 			MAX(stories.likes) DESC,
 			MAX(stories.storyboard_count) DESC,
