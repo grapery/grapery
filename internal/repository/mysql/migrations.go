@@ -214,3 +214,29 @@ func (r *Repository) dropLegacyStoryboardColumns(logger *zap.Logger) error {
 
 	return nil
 }
+
+// EnsureIsCollaborationOpenColumn ensures is_collaboration_open column exists in stories table
+func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
+	migrator := r.db.Migrator()
+	type Story struct{}
+
+	if !migrator.HasColumn(&Story{}, "is_collaboration_open") {
+		logger.Info("Adding is_collaboration_open column to stories table")
+		if err := r.db.Exec("ALTER TABLE stories ADD COLUMN is_collaboration_open BOOLEAN DEFAULT FALSE NOT NULL COMMENT 'Whether collaboration is open: true=anyone can edit, false=only author and group members can edit'").Error; err != nil {
+			logger.Error("failed to add is_collaboration_open column", zap.Error(err))
+			return err
+		}
+
+		// Create index for query performance
+		if err := r.db.Exec("CREATE INDEX idx_stories_is_collaboration_open ON stories(is_collaboration_open)").Error; err != nil {
+			logger.Warn("failed to create index on is_collaboration_open", zap.Error(err))
+			// Don't return error - index creation is not critical
+		}
+
+		logger.Info("Successfully added is_collaboration_open column to stories table")
+	} else {
+		logger.Debug("is_collaboration_open column already exists in stories table")
+	}
+
+	return nil
+}

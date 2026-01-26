@@ -25,6 +25,8 @@ type User struct {
 	Followers           int            `gorm:"default:0;index"`
 	Following           int            `gorm:"default:0"`
 	StoryboardCount     int            `gorm:"default:0;index"`                // Number of storyboards created by this user
+	GroupsCount         int            `gorm:"default:0"`                     // Number of groups the user has joined
+	GroupsCreated       int            `gorm:"default:0"`                     // Number of groups created by this user
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
@@ -355,15 +357,16 @@ type Group struct {
 	Description string         `gorm:"type:text"`
 	Avatar      string         `gorm:"size:500"`
 	CoverImage  string         `gorm:"size:500"`
-	Members     int            `gorm:"default:0"`
-	Stories     int            `gorm:"default:0"`
-	Followers   int            `gorm:"default:0"`
-	CreatorID   string         `gorm:"size:36;not null;index"`
-	Creator     User           `gorm:"foreignKey:CreatorID"`
-	Public      bool           `gorm:"default:true;index"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt   time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	Members       int            `gorm:"default:0"`
+	Stories       int            `gorm:"default:0"`
+	Followers     int            `gorm:"default:0"`
+	BlockedCount  int            `gorm:"default:0"`                     // Number of blocked users
+	CreatorID     string         `gorm:"size:36;not null;index"`
+	Creator       User           `gorm:"foreignKey:CreatorID"`
+	Public        bool           `gorm:"default:true;index"`
+	CreatedAt     time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
 
 // Comment database model (支持嵌套回复和多目标类型)
@@ -608,6 +611,20 @@ type GroupFollow struct {
 	Group     Group          `gorm:"foreignKey:GroupID"`
 	UserID    string         `gorm:"size:36;not null;index:idx_user_group,unique;index"`
 	User      User           `gorm:"foreignKey:UserID"`
+	CreatedAt time.Time      `gorm:"autoCreateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+// GroupBlacklist 小组黑名单
+type GroupBlacklist struct {
+	ID        string         `gorm:"primaryKey;size:36"`
+	GroupID   string         `gorm:"size:36;not null;index:idx_group_blacklist,unique"`
+	Group     Group          `gorm:"foreignKey:GroupID"`
+	UserID    string         `gorm:"size:36;not null;index:idx_group_blacklist,unique;index"`
+	User      User           `gorm:"foreignKey:UserID"`
+	BlockedBy string         `gorm:"size:36;not null;index"`
+	Admin     User           `gorm:"foreignKey:BlockedBy"`
+	Reason    string         `gorm:"type:text"`
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 }

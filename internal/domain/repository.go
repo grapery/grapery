@@ -241,6 +241,7 @@ type Repository interface {
 	GetPendingInvitation(ctx context.Context, groupID, inviteeID string) (*GroupInvitation, error)
 	GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*GroupInvitation, error)
 	UpdateInvitationStatus(ctx context.Context, id, status string) error
+	ExpirePendingInvitations(ctx context.Context) (int64, error)
 
 	// Group follow
 	FollowGroup(ctx context.Context, userID, groupID string) error

@@ -124,6 +124,11 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
+	// 9) Ensure stories table has is_collaboration_open column.
+	if err := r.EnsureIsCollaborationOpenColumn(r.log); err != nil {
+		return err
+	}
+
 	r.log.Info("targeted schema migrations completed successfully")
 	return nil
 }
@@ -612,16 +617,17 @@ func (r *Repository) GetStory(ctx context.Context, id string) (domain.Story, err
 // CreateStory creates a new story
 func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error {
 	dbStory := Story{
-		ID:          uuid.New().String(),
-		Title:       story.Title,
-		Description: story.Description,
-		CoverImage:  story.CoverImage,
-		AuthorID:    story.Author.ID,
-		Genre:       story.Genre,
-		Status:      story.Status,
-		Likes:       0,
-		Followers:   0,
-		Panels:      0,
+		ID:                  uuid.New().String(),
+		Title:               story.Title,
+		Description:         story.Description,
+		CoverImage:          story.CoverImage,
+		AuthorID:            story.Author.ID,
+		Genre:               story.Genre,
+		Status:              story.Status,
+		Likes:               0,
+		Followers:           0,
+		Panels:              0,
+		IsCollaborationOpen: story.IsCollaborationOpen,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbStory).Error; err != nil {

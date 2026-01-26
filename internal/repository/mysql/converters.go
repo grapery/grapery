@@ -123,6 +123,8 @@ func UserToModel(d *domain.User) *User {
 		Followers:           d.Followers,
 		Following:           d.Following,
 		StoryboardCount:     d.StoryboardCount,
+		GroupsCount:         d.GroupsCount,
+		GroupsCreated:       d.GroupsCreated,
 		Status:              d.Status,
 		EmailVerified:       d.EmailVerified,
 		LastLoginAt:         int64PtrToInt64(d.LastLoginAt),
@@ -152,6 +154,8 @@ func ModelToUser(m *User) *domain.User {
 		Followers:           m.Followers,
 		Following:           m.Following,
 		StoryboardCount:     m.StoryboardCount,
+		GroupsCount:         m.GroupsCount,
+		GroupsCreated:       m.GroupsCreated,
 		Status:              m.Status,
 		EmailVerified:       m.EmailVerified,
 		LastLoginAt:         int64ToInt64Ptr(m.LastLoginAt),
@@ -478,16 +482,19 @@ func GroupToModel(d *domain.Group) *Group {
 		return nil
 	}
 	return &Group{
-		ID:          d.ID,
-		Name:        d.Name,
-		Description: d.Description,
-		Avatar:      d.Avatar,
-		Members:     d.Members,
-		Stories:     d.Stories,
-		CreatorID:   d.CreatorID,
-		Public:      d.Public,
-		CreatedAt:   unixToTime(d.CreatedAt),
-		UpdatedAt:   unixToTime(d.UpdatedAt),
+		ID:           d.ID,
+		Name:         d.Name,
+		Description:  d.Description,
+		Avatar:       d.Avatar,
+		CoverImage:   d.CoverImage,
+		Members:      d.Members,
+		Stories:      d.Stories,
+		Followers:    d.Followers,
+		BlockedCount: d.BlockedCount,
+		CreatorID:    d.CreatorID,
+		Public:       d.Public,
+		CreatedAt:    unixToTime(d.CreatedAt),
+		UpdatedAt:    unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -497,16 +504,19 @@ func ModelToGroup(m *Group) *domain.Group {
 		return nil
 	}
 	d := &domain.Group{
-		ID:          m.ID,
-		CreatorID:   m.CreatorID,
-		Name:        m.Name,
-		Description: m.Description,
-		Avatar:      m.Avatar,
-		Members:     m.Members,
-		Stories:     m.Stories,
-		Public:      m.Public,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-		UpdatedAt:   timeToUnix(m.UpdatedAt),
+		ID:           m.ID,
+		CreatorID:    m.CreatorID,
+		Name:         m.Name,
+		Description:  m.Description,
+		Avatar:       m.Avatar,
+		CoverImage:   m.CoverImage,
+		Members:      m.Members,
+		Stories:      m.Stories,
+		Followers:    m.Followers,
+		BlockedCount: m.BlockedCount,
+		Public:       m.Public,
+		CreatedAt:    timeToUnix(m.CreatedAt),
+		UpdatedAt:    timeToUnix(m.UpdatedAt),
 	}
 	if m.Creator.ID != "" {
 		d.Creator = ModelToUser(&m.Creator)
@@ -2914,4 +2924,68 @@ func jsonToPosterConceptDetails(jsonStr string) *domain.PosterConceptDetails {
 		return nil
 	}
 	return &details
+}
+
+// ========== Group Blacklist 转换 ==========
+
+// BlacklistToModel 将 domain.GroupBlacklist 转换为 MySQL GroupBlacklist 模型
+func BlacklistToModel(d *domain.GroupBlacklist) *GroupBlacklist {
+	if d == nil {
+		return nil
+	}
+	return &GroupBlacklist{
+		ID:        d.ID,
+		GroupID:   d.GroupID,
+		UserID:    d.UserID,
+		BlockedBy: d.BlockedBy,
+		Reason:    d.Reason,
+		CreatedAt: unixToTime(d.CreatedAt),
+	}
+}
+
+// ModelToGroupBlacklist 将 MySQL GroupBlacklist 模型转换为 domain.GroupBlacklist
+func ModelToGroupBlacklist(m *GroupBlacklist) *domain.GroupBlacklist {
+	if m == nil {
+		return nil
+	}
+	d := &domain.GroupBlacklist{
+		ID:        m.ID,
+		GroupID:   m.GroupID,
+		UserID:    m.UserID,
+		BlockedBy: m.BlockedBy,
+		Reason:    m.Reason,
+		CreatedAt: timeToUnix(m.CreatedAt),
+	}
+	if m.Group.ID != "" {
+		d.Group = ModelToGroup(&m.Group)
+	}
+	if m.User.ID != "" {
+		d.User = ModelToUser(&m.User)
+	}
+	if m.Admin.ID != "" {
+		d.Admin = ModelToUser(&m.Admin)
+	}
+	return d
+}
+
+// ModelToGroupBlacklistInfo 将 MySQL GroupBlacklist 模型转换为 domain.GroupBlacklistInfo（扩展信息）
+func ModelToGroupBlacklistInfo(m *GroupBlacklist) *domain.GroupBlacklistInfo {
+	if m == nil {
+		return nil
+	}
+	d := &domain.GroupBlacklistInfo{
+		ID:        m.ID,
+		GroupID:   m.GroupID,
+		UserID:    m.UserID,
+		BlockedBy: m.BlockedBy,
+		Reason:    m.Reason,
+		CreatedAt: timeToUnix(m.CreatedAt),
+	}
+	if m.User.ID != "" {
+		d.User = ModelToUser(&m.User)
+	}
+	if m.Admin.ID != "" {
+		d.Admin = ModelToUser(&m.Admin)
+	}
+	return d
 }
