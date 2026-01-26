@@ -163,11 +163,11 @@ func (s *WritersRoomService) SyncParticipants(ctx context.Context, roomID string
 
 		// Create participant
 		participant := &domain.WritersRoomParticipant{
-			ID:        uuid.New().String(),
-			RoomID:    roomID,
-			UserID:    contributor.UserID,
-			Role:      role,
-			JoinedAt:  time.Now().Unix(),
+			ID:         uuid.New().String(),
+			RoomID:     roomID,
+			UserID:     contributor.UserID,
+			Role:       role,
+			JoinedAt:   time.Now().Unix(),
 			LastReadAt: time.Now().Unix(),
 		}
 
@@ -270,8 +270,8 @@ func (s *WritersRoomService) SendMessage(ctx context.Context, req *domain.Writer
 		SenderID:    senderID,
 		Content:     req.Content,
 		MessageType: messageType,
-		Attachments:  req.Attachments,
-		Mentions:     req.Mentions,
+		Attachments: req.Attachments,
+		Mentions:    req.Mentions,
 		CreatedAt:   time.Now().Unix(),
 		UpdatedAt:   time.Now().Unix(),
 	}
@@ -422,8 +422,8 @@ func (s *WritersRoomService) AddReaction(ctx context.Context, messageID, userID,
 		ID:           uuid.New().String(),
 		MessageID:    messageID,
 		UserID:       userID,
-		ReactionType:  reactionType,
-		EmojiCode:     emojiCode,
+		ReactionType: reactionType,
+		EmojiCode:    emojiCode,
 		CreatedAt:    time.Now().Unix(),
 	}
 
@@ -484,19 +484,19 @@ func (s *WritersRoomService) UnreadCount(ctx context.Context, roomID, userID str
 // enrichMessage enriches a message with additional information
 func (s *WritersRoomService) enrichMessage(ctx context.Context, msg *domain.WritersRoomMessage, userID string) *domain.WritersRoomMessageResponse {
 	response := &domain.WritersRoomMessageResponse{
-		ID:             msg.ID,
-		RoomID:         msg.RoomID,
-		Sender:         domain.MessageSenderInfo{
+		ID:     msg.ID,
+		RoomID: msg.RoomID,
+		Sender: domain.MessageSenderInfo{
 			ID:     msg.SenderID,
 			Name:   msg.SenderName,
 			Avatar: msg.SenderAvatar,
 		},
-		Content:        msg.Content,
-		MessageType:    msg.MessageType,
-		Attachments:    msg.Attachments,
+		Content:          msg.Content,
+		MessageType:      msg.MessageType,
+		Attachments:      msg.Attachments,
 		ReplyToMessageID: msg.ReplyToMessageID,
-		CreatedAt:      msg.CreatedAt,
-		IsMine:         false, // Will be set below
+		CreatedAt:        msg.CreatedAt,
+		IsMine:           false, // Will be set below
 	}
 
 	// Check if message is from current user
@@ -531,7 +531,7 @@ func (s *WritersRoomService) enrichMessage(ctx context.Context, msg *domain.Writ
 			if reactionMap[key] == nil {
 				reactionMap[key] = &domain.ReactionSummary{
 					ReactionType: r.ReactionType,
-					EmojiCode:     r.EmojiCode,
+					EmojiCode:    r.EmojiCode,
 					Count:        0,
 					Users:        []string{},
 				}
@@ -554,9 +554,9 @@ func (s *WritersRoomService) enrichMessage(ctx context.Context, msg *domain.Writ
 		receiptInfos := make([]domain.ReadReceiptInfo, 0, len(receipts))
 		for _, r := range receipts {
 			receiptInfos = append(receiptInfos, domain.ReadReceiptInfo{
-				UserID: r.UserID,
+				UserID:   r.UserID,
 				UserName: r.UserName,
-				ReadAt:  r.ReadAt,
+				ReadAt:   r.ReadAt,
 			})
 		}
 		response.ReadReceipts = receiptInfos

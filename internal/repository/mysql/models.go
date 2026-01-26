@@ -1333,11 +1333,11 @@ type WritersRoomDB struct {
 
 // WritersRoomParticipantDB writers room participant database model
 type WritersRoomParticipantDB struct {
-	ID        string `gorm:"primaryKey;size:36"`
-	RoomID    string `gorm:"size:36;not null;index:idx_room_user"`
-	UserID    string `gorm:"size:36;not null;index:idx_room_user"`
-	Role      string `gorm:"size:20;not null;default:'member'"` // owner, admin, member
-	JoinedAt  int64  `gorm:"type:bigint;not null"`
+	ID         string `gorm:"primaryKey;size:36"`
+	RoomID     string `gorm:"size:36;not null;index:idx_room_user"`
+	UserID     string `gorm:"size:36;not null;index:idx_room_user"`
+	Role       string `gorm:"size:20;not null;default:'member'"` // owner, admin, member
+	JoinedAt   int64  `gorm:"type:bigint;not null"`
 	LastReadAt int64  `gorm:"type:bigint;default:0"`
 
 	User User `gorm:"foreignKey:UserID"`
@@ -1345,16 +1345,16 @@ type WritersRoomParticipantDB struct {
 
 // WritersRoomMessageDB writers room message database model
 type WritersRoomMessageDB struct {
-	ID               string `gorm:"primaryKey;size:36"`
-	RoomID           string `gorm:"size:36;not null;index:idx_room_id_created_at"`
-	SenderID         string `gorm:"size:36;not null;index:idx_sender_id"`
-	Content          string `gorm:"type:text;not null"`
-	MessageType      string `gorm:"size:20;not null;default:'text'"` // text, image, mixed, system
-	AttachmentsJSON  string `gorm:"type:json"`
-	MentionsJSON     string `gorm:"type:json"`
+	ID               string  `gorm:"primaryKey;size:36"`
+	RoomID           string  `gorm:"size:36;not null;index:idx_room_id_created_at"`
+	SenderID         string  `gorm:"size:36;not null;index:idx_sender_id"`
+	Content          string  `gorm:"type:text;not null"`
+	MessageType      string  `gorm:"size:20;not null;default:'text'"` // text, image, mixed, system
+	AttachmentsJSON  string  `gorm:"type:json"`
+	MentionsJSON     string  `gorm:"type:json"`
 	ReplyToMessageID *string `gorm:"size:36;index:idx_reply_to_message_id"`
-	CreatedAt        int64  `gorm:"type:bigint;not null"`
-	UpdatedAt        int64  `gorm:"type:bigint;not null"`
+	CreatedAt        int64   `gorm:"type:bigint;not null"`
+	UpdatedAt        int64   `gorm:"type:bigint;not null"`
 
 	Sender *WritersRoomParticipantDB `gorm:"foreignKey:SenderID"`
 }
@@ -1368,7 +1368,7 @@ type WritersRoomMessageReactionDB struct {
 	EmojiCode    string `gorm:"size:50"`
 	CreatedAt    int64  `gorm:"type:bigint;not null"`
 
-	User    User                     `gorm:"foreignKey:UserID"`
+	User    User                  `gorm:"foreignKey:UserID"`
 	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
 }
 
@@ -1379,6 +1379,6 @@ type MessageReadReceiptDB struct {
 	UserID    string `gorm:"size:36;not null;index:idx_user_id"`
 	ReadAt    int64  `gorm:"type:bigint;not null;index:idx_message_user"`
 
-	User    User                     `gorm:"foreignKey:UserID"`
+	User    User                  `gorm:"foreignKey:UserID"`
 	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
 }

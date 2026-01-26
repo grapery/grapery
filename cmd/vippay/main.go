@@ -228,6 +228,15 @@ func initializeServices(logger *zap.Logger) error {
 		return err
 	}
 
+	// 初始化 Web 支付表
+	err = paymodels.AutoMigrateWebPayments()
+	if err != nil {
+		logger.Warn("failed to auto-migrate web payments table", zap.Error(err))
+		// 不阻断启动，只记录警告
+	} else {
+		logger.Info("web payments table migrated successfully")
+	}
+
 	logger.Info("init vippay database success")
 	return nil
 }
@@ -860,6 +869,38 @@ func registerRoutes(router *gin.Engine) {
 				// 标记为已计费
 				logs.POST("/mark-billed", usageLogHandler.MarkAsBilled)
 			}
+		}
+
+		// Web 支付相关路由 - 增量添加
+		web := api.Group("/web")
+		{
+			// 创建日志记录器
+			webLogger := &logrus.Logger{
+				Out:       os.Stderr,
+				Formatter: new(logrus.TextFormatter),
+				Hooks:     make(logrus.LevelHooks),
+				Level:     logrus.InfoLevel,
+			}
+
+			// 创建 Web 支付服务
+			webPaymentService := paypkg.NewWebPaymentService(webLogger)
+
+			// 创建 Web 支付处理器
+			webPaymentHandler := pay.NewWebPaymentHandler(webPaymentService, webLogger)
+
+			// 需要鉴权的接口
+			authWeb := web.Group("")
+			authWeb.Use(paymiddleware.AuthMiddleware())
+			{
+				// 支付管理
+				authWeb.POST("/payments", webPaymentHandler.CreatePayment)
+				authWeb.GET("/payments/:id", webPaymentHandler.GetPayment)
+				authWeb.GET("/payments/user/:userId", webPaymentHandler.GetUserPayments)
+			}
+
+			// Webhook 接口（无需鉴权，由支付服务商直接调用）
+			web.POST("/webhooks/stripe", webPaymentHandler.HandleStripeWebhook)
+			web.POST("/webhooks/alipay", webPaymentHandler.HandleAlipayWebhook)
 		}
 	}
 }

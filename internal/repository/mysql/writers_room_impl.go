@@ -67,11 +67,11 @@ func (r *Repository) UpdateWritersRoom(ctx context.Context, room *domain.Writers
 
 	if err := r.db.WithContext(ctx).Model(&dbRoom).Updates(map[string]interface{}{
 		"title":             dbRoom.Title,
-		"last_message":       dbRoom.LastMessage,
-		"last_message_time":   dbRoom.LastMessageTime,
-		"message_count":      dbRoom.MessageCount,
-		"participant_count":   dbRoom.ParticipantCount,
-		"updated_at":         dbRoom.UpdatedAt,
+		"last_message":      dbRoom.LastMessage,
+		"last_message_time": dbRoom.LastMessageTime,
+		"message_count":     dbRoom.MessageCount,
+		"participant_count": dbRoom.ParticipantCount,
+		"updated_at":        dbRoom.UpdatedAt,
 	}).Error; err != nil {
 		r.log.Error("failed to update writers room", zap.Error(err))
 		return fmt.Errorf("failed to update writers room: %w", err)
@@ -113,11 +113,11 @@ func (r *Repository) WritersRoomParticipants(ctx context.Context, roomID string)
 // AddWritersRoomParticipant adds a participant to a writers room
 func (r *Repository) AddWritersRoomParticipant(ctx context.Context, participant *domain.WritersRoomParticipant) error {
 	dbParticipant := WritersRoomParticipantDB{
-		ID:        participant.ID,
-		RoomID:    participant.RoomID,
-		UserID:    participant.UserID,
-		Role:      participant.Role,
-		JoinedAt:  participant.JoinedAt,
+		ID:         participant.ID,
+		RoomID:     participant.RoomID,
+		UserID:     participant.UserID,
+		Role:       participant.Role,
+		JoinedAt:   participant.JoinedAt,
 		LastReadAt: participant.LastReadAt,
 	}
 
@@ -266,9 +266,9 @@ func (r *Repository) CreateWritersRoomMessage(ctx context.Context, msg *domain.W
 		RoomID:           msg.RoomID,
 		SenderID:         msg.SenderID,
 		Content:          msg.Content,
-		MessageType:       msg.MessageType,
-		AttachmentsJSON:   attachmentsJSON,
-		MentionsJSON:      mentionsJSON,
+		MessageType:      msg.MessageType,
+		AttachmentsJSON:  attachmentsJSON,
+		MentionsJSON:     mentionsJSON,
 		ReplyToMessageID: msg.ReplyToMessageID,
 		CreatedAt:        msg.CreatedAt,
 		UpdatedAt:        msg.UpdatedAt,
@@ -307,9 +307,9 @@ func (r *Repository) UpdateRoomLastMessage(ctx context.Context, roomID string, l
 	if err := r.db.WithContext(ctx).Model(&WritersRoomDB{}).
 		Where("id = ?", roomID).
 		Updates(map[string]interface{}{
-			"last_message":       lastMessage,
-			"last_message_time":   lastMessageTime,
-			"updated_at":         time.Now().Unix(),
+			"last_message":      lastMessage,
+			"last_message_time": lastMessageTime,
+			"updated_at":        time.Now().Unix(),
 		}).Error; err != nil {
 		r.log.Error("failed to update room last message", zap.Error(err))
 		return fmt.Errorf("failed to update room last message: %w", err)

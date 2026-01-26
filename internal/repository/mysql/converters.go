@@ -3021,11 +3021,11 @@ func ModelToWritersRoomParticipant(m *WritersRoomParticipantDB) *domain.WritersR
 		return nil
 	}
 	d := &domain.WritersRoomParticipant{
-		ID:        m.ID,
-		RoomID:    m.RoomID,
-		UserID:    m.UserID,
-		Role:      m.Role,
-		JoinedAt:  m.JoinedAt,
+		ID:         m.ID,
+		RoomID:     m.RoomID,
+		UserID:     m.UserID,
+		Role:       m.Role,
+		JoinedAt:   m.JoinedAt,
 		LastReadAt: m.LastReadAt,
 	}
 	if m.User.ID != "" {
@@ -3049,7 +3049,7 @@ func ModelToWritersRoomMessage(m *WritersRoomMessageDB) *domain.WritersRoomMessa
 		RoomID:      m.RoomID,
 		SenderID:    m.SenderID,
 		Content:     m.Content,
-		MessageType:  m.MessageType,
+		MessageType: m.MessageType,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
 	}
@@ -3099,8 +3099,8 @@ func ModelToWritersRoomMessageReaction(m *WritersRoomMessageReactionDB) *domain.
 		ID:           m.ID,
 		MessageID:    m.MessageID,
 		UserID:       m.UserID,
-		ReactionType:  m.ReactionType,
-		EmojiCode:     m.EmojiCode,
+		ReactionType: m.ReactionType,
+		EmojiCode:    m.EmojiCode,
 		CreatedAt:    m.CreatedAt,
 	}
 	if m.User.ID != "" {

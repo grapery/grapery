@@ -202,7 +202,7 @@ func (h *Handler) AddWritersRoomMessageReaction(c *gin.Context) {
 
 	var req struct {
 		ReactionType string `json:"reactionType" binding:"required"`
-		EmojiCode     string `json:"emojiCode"`
+		EmojiCode    string `json:"emojiCode"`
 	}
 	if !BindJSON(c, &req) {
 		return

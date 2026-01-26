@@ -37,19 +37,19 @@ type GroupRolePermission struct {
 
 // Group represents a collaboration group
 type Group struct {
-	ID             string `json:"id"`
-	CreatorID      string `json:"-"` // 内部使用，不序列化到JSON
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	Avatar         string `json:"avatar,omitempty"`
-	CoverImage     string `json:"cover_image,omitempty"` // 封面图
-	Members        int    `json:"members"`
-	Stories        int    `json:"stories"`
-	Followers      int    `json:"followers,omitempty"` // 关注者数量
-	BlockedCount   int    `json:"blocked_count,omitempty"` // 黑名单用户数量
-	Public         bool   `json:"is_public"`
-	CreatedAt      int64  `json:"created_at"`
-	UpdatedAt      int64  `json:"updated_at"`
+	ID           string `json:"id"`
+	CreatorID    string `json:"-"` // 内部使用，不序列化到JSON
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Avatar       string `json:"avatar,omitempty"`
+	CoverImage   string `json:"cover_image,omitempty"` // 封面图
+	Members      int    `json:"members"`
+	Stories      int    `json:"stories"`
+	Followers    int    `json:"followers,omitempty"`     // 关注者数量
+	BlockedCount int    `json:"blocked_count,omitempty"` // 黑名单用户数量
+	Public       bool   `json:"is_public"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
 
 	// Relations
 	Creator     *User            `json:"creator,omitempty"`
@@ -75,7 +75,7 @@ type GroupFollow struct {
 	ID        string `json:"id"`
 	GroupID   string `json:"group_id"`
 	UserID    string `json:"user_id"`
-	CreatedAt int64 `json:"created_at"`
+	CreatedAt int64  `json:"created_at"`
 
 	// Relations
 	Group *Group `json:"group,omitempty"`
@@ -103,8 +103,8 @@ type GroupInvitation struct {
 	InviteeID string `json:"invitee_id"`
 	Status    string `json:"status"` // pending, accepted, rejected, expired
 	Message   string `json:"message,omitempty"`
-	CreatedAt int64 `json:"created_at"`
-	ExpiresAt int64 `json:"expires_at"`
+	CreatedAt int64  `json:"created_at"`
+	ExpiresAt int64  `json:"expires_at"`
 
 	// Relations
 	Group   *Group `json:"group,omitempty"`

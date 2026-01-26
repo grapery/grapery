@@ -2,17 +2,17 @@ package domain
 
 // WritersRoomMessageType enum constants
 const (
-	WritersRoomMsgTypeText    = "text"
-	WritersRoomMsgTypeImage   = "image"
-	WritersRoomMsgTypeMixed   = "mixed"
-	WritersRoomMsgTypeSystem  = "system"
+	WritersRoomMsgTypeText   = "text"
+	WritersRoomMsgTypeImage  = "image"
+	WritersRoomMsgTypeMixed  = "mixed"
+	WritersRoomMsgTypeSystem = "system"
 )
 
 // WritersRoomParticipantRole enum constants
 const (
-	WritersRoomRoleOwner   = "owner"
-	WritersRoomRoleAdmin   = "admin"
-	WritersRoomRoleMember  = "member"
+	WritersRoomRoleOwner  = "owner"
+	WritersRoomRoleAdmin  = "admin"
+	WritersRoomRoleMember = "member"
 )
 
 // WritersRoom represents a collaborative chat room for story participants
@@ -28,17 +28,17 @@ type WritersRoom struct {
 	UpdatedAt        int64  `json:"updatedAt"`
 
 	// Relations
-	Story        *Story                   `json:"story,omitempty"`
+	Story        *Story                    `json:"story,omitempty"`
 	Participants []*WritersRoomParticipant `json:"participants,omitempty"`
 }
 
 // WritersRoomParticipant represents a user who can access the writers room
 type WritersRoomParticipant struct {
-	ID        string `json:"id"`
-	RoomID    string `json:"roomId"`
-	UserID    string `json:"userId"`
-	Role      string `json:"role"` // owner, admin, member
-	JoinedAt  int64  `json:"joinedAt"`
+	ID         string `json:"id"`
+	RoomID     string `json:"roomId"`
+	UserID     string `json:"userId"`
+	Role       string `json:"role"` // owner, admin, member
+	JoinedAt   int64  `json:"joinedAt"`
 	LastReadAt int64  `json:"lastReadAt"`
 
 	// Flattened fields for client display (populated from User relation)
@@ -46,22 +46,22 @@ type WritersRoomParticipant struct {
 	Avatar string `json:"avatar,omitempty"`
 
 	// Relations
-	User *User         `json:"user,omitempty"`
+	User *User        `json:"user,omitempty"`
 	Room *WritersRoom `json:"room,omitempty"`
 }
 
 // WritersRoomMessage represents a message in the writers room
 type WritersRoomMessage struct {
-	ID               string `json:"id"`
-	RoomID           string `json:"roomId"`
-	SenderID         string `json:"senderId"`
-	Content          string `json:"content"`
-	MessageType      string `json:"messageType"` // text, image, mixed, system
+	ID               string   `json:"id"`
+	RoomID           string   `json:"roomId"`
+	SenderID         string   `json:"senderId"`
+	Content          string   `json:"content"`
+	MessageType      string   `json:"messageType"` // text, image, mixed, system
 	Attachments      []string `json:"attachments,omitempty"`
 	Mentions         []string `json:"mentions,omitempty"`
 	ReplyToMessageID *string  `json:"replyToMessageId,omitempty"`
-	CreatedAt        int64  `json:"createdAt"`
-	UpdatedAt        int64  `json:"updatedAt"`
+	CreatedAt        int64    `json:"createdAt"`
+	UpdatedAt        int64    `json:"updatedAt"`
 
 	// Flattened fields for client display (populated from User relation)
 	SenderName   string `json:"senderName,omitempty"`
@@ -69,10 +69,10 @@ type WritersRoomMessage struct {
 
 	// Relations
 	Sender         *WritersRoomParticipant `json:"sender,omitempty"`
-	Room           *WritersRoom         `json:"room,omitempty"`
-	ReplyToMessage *WritersRoomMessage  `json:"replyToMessage,omitempty"`
-	Reactions      []*MessageReaction    `json:"reactions,omitempty"`
-	ReadReceipts   []*MessageReadReceipt `json:"readReceipts,omitempty"`
+	Room           *WritersRoom            `json:"room,omitempty"`
+	ReplyToMessage *WritersRoomMessage     `json:"replyToMessage,omitempty"`
+	Reactions      []*MessageReaction      `json:"reactions,omitempty"`
+	ReadReceipts   []*MessageReadReceipt   `json:"readReceipts,omitempty"`
 }
 
 // WritersRoomMessageReaction represents a user reaction to a message
@@ -88,8 +88,8 @@ type WritersRoomMessageReaction struct {
 	UserName string `json:"userName,omitempty"`
 
 	// Relations
-	User    *User                `json:"user,omitempty"`
-	Message *WritersRoomMessage  `json:"message,omitempty"`
+	User    *User               `json:"user,omitempty"`
+	Message *WritersRoomMessage `json:"message,omitempty"`
 }
 
 // MessageReadReceipt represents when a user has read a message
@@ -103,19 +103,19 @@ type MessageReadReceipt struct {
 	UserName string `json:"userName,omitempty"`
 
 	// Relations
-	User    *User                `json:"user,omitempty"`
-	Message *WritersRoomMessage  `json:"message,omitempty"`
+	User    *User               `json:"user,omitempty"`
+	Message *WritersRoomMessage `json:"message,omitempty"`
 }
 
 // ========== Request Types ===========
 
 // WritersRoomSendMessageRequest request to send a message in writers room
 type WritersRoomSendMessageRequest struct {
-	RoomID          string   `json:"roomId"`
-	Content         string   `json:"content"`
-	MessageType     string   `json:"messageType"` // text, image, mixed
-	Attachments     []string `json:"attachments,omitempty"`
-	Mentions        []string `json:"mentions,omitempty"`
+	RoomID           string   `json:"roomId"`
+	Content          string   `json:"content"`
+	MessageType      string   `json:"messageType"` // text, image, mixed
+	Attachments      []string `json:"attachments,omitempty"`
+	Mentions         []string `json:"mentions,omitempty"`
 	ReplyToMessageID string   `json:"replyToMessageId,omitempty"`
 }
 
@@ -136,19 +136,19 @@ type AddReactionRequest struct {
 
 // WritersRoomMessageResponse enhanced message response with sender info
 type WritersRoomMessageResponse struct {
-	ID             string                   `json:"id"`
-	RoomID         string                   `json:"roomId"`
-	Sender         MessageSenderInfo         `json:"sender"`
-	Content        string                   `json:"content"`
-	MessageType    string                   `json:"messageType"`
-	Attachments    []string                 `json:"attachments,omitempty"`
-	Mentions       []MentionInfo            `json:"mentions,omitempty"`
-	ReplyToMessageID *string                `json:"replyToMessageId,omitempty"`
-	ReplyToMessage *WritersRoomMessage      `json:"replyToMessage,omitempty"`
-	Reactions      []ReactionSummary        `json:"reactions,omitempty"`
-	ReadReceipts   []ReadReceiptInfo       `json:"readReceipts,omitempty"`
-	CreatedAt      int64                   `json:"createdAt"`
-	IsMine         bool                    `json:"isMine"`
+	ID               string              `json:"id"`
+	RoomID           string              `json:"roomId"`
+	Sender           MessageSenderInfo   `json:"sender"`
+	Content          string              `json:"content"`
+	MessageType      string              `json:"messageType"`
+	Attachments      []string            `json:"attachments,omitempty"`
+	Mentions         []MentionInfo       `json:"mentions,omitempty"`
+	ReplyToMessageID *string             `json:"replyToMessageId,omitempty"`
+	ReplyToMessage   *WritersRoomMessage `json:"replyToMessage,omitempty"`
+	Reactions        []ReactionSummary   `json:"reactions,omitempty"`
+	ReadReceipts     []ReadReceiptInfo   `json:"readReceipts,omitempty"`
+	CreatedAt        int64               `json:"createdAt"`
+	IsMine           bool                `json:"isMine"`
 }
 
 // MessageSenderInfo message sender information
@@ -174,15 +174,15 @@ type ReactionSummary struct {
 
 // ReadReceiptInfo read receipt information
 type ReadReceiptInfo struct {
-	UserID string `json:"userId"`
+	UserID   string `json:"userId"`
 	UserName string `json:"userName"`
-	ReadAt  int64  `json:"readAt"`
+	ReadAt   int64  `json:"readAt"`
 }
 
 // MessagesListResponse response for listing messages
 type MessagesListResponse struct {
 	Messages    []*WritersRoomMessageResponse `json:"messages"`
-	Count       int                         `json:"count"`
-	HasMore     bool                        `json:"hasMore"`
-	UnreadCount int                         `json:"unreadCount"`
+	Count       int                           `json:"count"`
+	HasMore     bool                          `json:"hasMore"`
+	UnreadCount int                           `json:"unreadCount"`
 }
