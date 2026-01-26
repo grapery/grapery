@@ -525,6 +525,39 @@ type Repository interface {
 	GetLastStoryboardChatMessage(ctx context.Context, sessionID string) (*StoryboardChatMessage, error)
 	DeleteStoryboardChatMessage(ctx context.Context, id string) error
 
+	// ========== Writers Room operations ==========
+	WritersRoomByStoryID(ctx context.Context, storyID string) (*WritersRoom, error)
+	CreateWritersRoom(ctx context.Context, room *WritersRoom) error
+	UpdateWritersRoom(ctx context.Context, room *WritersRoom) error
+	DeleteWritersRoom(ctx context.Context, roomID string) error
+
+	WritersRoomParticipants(ctx context.Context, roomID string) ([]*WritersRoomParticipant, error)
+	AddWritersRoomParticipant(ctx context.Context, participant *WritersRoomParticipant) error
+	RemoveWritersRoomParticipant(ctx context.Context, roomID, userID string) error
+	IsWritersRoomParticipant(ctx context.Context, roomID, userID string) (bool, error)
+	UpdateParticipantLastRead(ctx context.Context, roomID, userID string) error
+	IncrementParticipantCount(ctx context.Context, roomID string) error
+	DecrementParticipantCount(ctx context.Context, roomID string) error
+
+	WritersRoomMessages(ctx context.Context, roomID string, limit, offset int) ([]*WritersRoomMessage, error)
+	CreateWritersRoomMessage(ctx context.Context, msg *WritersRoomMessage) error
+	DeleteWritersRoomMessage(ctx context.Context, messageID string) error
+	WritersRoomMessageByID(ctx context.Context, messageID string) (*WritersRoomMessage, error)
+	IncrementMessageCount(ctx context.Context, roomID string) error
+	UpdateRoomLastMessage(ctx context.Context, roomID string, lastMessage string, lastMessageTime int64) error
+
+	WritersRoomMessageReactionByID(ctx context.Context, reactionID string) (*WritersRoomMessageReaction, error)
+	CreateWritersRoomMessageReaction(ctx context.Context, reaction *WritersRoomMessageReaction) error
+	DeleteWritersRoomMessageReaction(ctx context.Context, messageID, userID string) error
+	WritersRoomMessageReactions(ctx context.Context, messageID string) ([]*WritersRoomMessageReaction, error)
+
+	MessageReadReceipts(ctx context.Context, messageID string) ([]*MessageReadReceipt, error)
+	CreateMessageReadReceipt(ctx context.Context, receipt *MessageReadReceipt) error
+	UpdateMessageReadReceipt(ctx context.Context, messageID, userID string) error
+	MarkMessageAsRead(ctx context.Context, messageID, userID string) error
+
+	WritersRoomUnreadCount(ctx context.Context, roomID, userID string) (int, error)
+
 	// ========== Third Party Login operations ==========
 	// 第三方登录账户关联（支持 Google/Apple 跨设备登录）
 	CreateThirdPartyLogin(ctx context.Context, login *ThirdPartyLogin) error

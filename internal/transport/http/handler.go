@@ -10,17 +10,19 @@ import (
 
 // Handler handles HTTP requests
 type Handler struct {
-	svc       *service.Service
-	aiService *service.AIService
-	logger    *zap.Logger
+	svc            *service.Service
+	aiService      *service.AIService
+	writersRoomSvc *service.WritersRoomService
+	logger         *zap.Logger
 }
 
 // NewHandler creates a new HTTP handler
-func NewHandler(svc *service.Service, aiService *service.AIService, logger *zap.Logger) *Handler {
+func NewHandler(svc *service.Service, aiService *service.AIService, writersRoomSvc *service.WritersRoomService, logger *zap.Logger) *Handler {
 	return &Handler{
-		svc:       svc,
-		aiService: aiService,
-		logger:    logger,
+		svc:            svc,
+		aiService:      aiService,
+		writersRoomSvc: writersRoomSvc,
+		logger:         logger,
 	}
 }
 

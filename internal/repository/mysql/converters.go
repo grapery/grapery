@@ -2989,3 +2989,151 @@ func ModelToGroupBlacklistInfo(m *GroupBlacklist) *domain.GroupBlacklistInfo {
 	}
 	return d
 }
+
+// ========== Writers Room Converters ==========
+
+// ModelToWritersRoom 将 MySQL WritersRoomDB 模型转换为 domain.WritersRoom
+func ModelToWritersRoom(m *WritersRoomDB) *domain.WritersRoom {
+	if m == nil {
+		return nil
+	}
+	return &domain.WritersRoom{
+		ID:               m.ID,
+		StoryID:          m.StoryID,
+		Title:            m.Title,
+		LastMessage:      m.LastMessage,
+		LastMessageTime:  m.LastMessageTime,
+		MessageCount:     m.MessageCount,
+		ParticipantCount: m.ParticipantCount,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
+	}
+}
+
+// WritersRoomDB.ToDomain 将 MySQL WritersRoomDB 模型转换为 domain.WritersRoom
+func (m *WritersRoomDB) ToDomain() *domain.WritersRoom {
+	return ModelToWritersRoom(m)
+}
+
+// ModelToWritersRoomParticipant 将 MySQL WritersRoomParticipantDB 模型转换为 domain.WritersRoomParticipant
+func ModelToWritersRoomParticipant(m *WritersRoomParticipantDB) *domain.WritersRoomParticipant {
+	if m == nil {
+		return nil
+	}
+	d := &domain.WritersRoomParticipant{
+		ID:        m.ID,
+		RoomID:    m.RoomID,
+		UserID:    m.UserID,
+		Role:      m.Role,
+		JoinedAt:  m.JoinedAt,
+		LastReadAt: m.LastReadAt,
+	}
+	if m.User.ID != "" {
+		d.User = ModelToUser(&m.User)
+	}
+	return d
+}
+
+// WritersRoomParticipantDB.ToDomain 将 MySQL WritersRoomParticipantDB 模型转换为 domain.WritersRoomParticipant
+func (m *WritersRoomParticipantDB) ToDomain() *domain.WritersRoomParticipant {
+	return ModelToWritersRoomParticipant(m)
+}
+
+// ModelToWritersRoomMessage 将 MySQL WritersRoomMessageDB 模型转换为 domain.WritersRoomMessage
+func ModelToWritersRoomMessage(m *WritersRoomMessageDB) *domain.WritersRoomMessage {
+	if m == nil {
+		return nil
+	}
+	d := &domain.WritersRoomMessage{
+		ID:          m.ID,
+		RoomID:      m.RoomID,
+		SenderID:    m.SenderID,
+		Content:     m.Content,
+		MessageType:  m.MessageType,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+
+	// Parse attachments JSON
+	if m.AttachmentsJSON != "" {
+		var attachments []string
+		if err := json.Unmarshal([]byte(m.AttachmentsJSON), &attachments); err == nil {
+			d.Attachments = attachments
+		}
+	}
+
+	// Parse mentions JSON
+	if m.MentionsJSON != "" {
+		var mentions []string
+		if err := json.Unmarshal([]byte(m.MentionsJSON), &mentions); err == nil {
+			d.Mentions = mentions
+		}
+	}
+
+	// Handle reply to message
+	if m.ReplyToMessageID != nil && *m.ReplyToMessageID != "" {
+		d.ReplyToMessageID = m.ReplyToMessageID
+	}
+
+	// Load sender info
+	if m.Sender != nil {
+		d.SenderName = m.Sender.User.DisplayName
+		d.SenderAvatar = m.Sender.User.Avatar
+		d.Sender = ModelToWritersRoomParticipant(m.Sender)
+	}
+
+	return d
+}
+
+// WritersRoomMessageDB.ToDomain 将 MySQL WritersRoomMessageDB 模型转换为 domain.WritersRoomMessage
+func (m *WritersRoomMessageDB) ToDomain() *domain.WritersRoomMessage {
+	return ModelToWritersRoomMessage(m)
+}
+
+// ModelToWritersRoomMessageReaction 将 MySQL WritersRoomMessageReactionDB 模型转换为 domain.WritersRoomMessageReaction
+func ModelToWritersRoomMessageReaction(m *WritersRoomMessageReactionDB) *domain.WritersRoomMessageReaction {
+	if m == nil {
+		return nil
+	}
+	d := &domain.WritersRoomMessageReaction{
+		ID:           m.ID,
+		MessageID:    m.MessageID,
+		UserID:       m.UserID,
+		ReactionType:  m.ReactionType,
+		EmojiCode:     m.EmojiCode,
+		CreatedAt:    m.CreatedAt,
+	}
+	if m.User.ID != "" {
+		d.UserName = m.User.DisplayName
+		d.User = ModelToUser(&m.User)
+	}
+	return d
+}
+
+// WritersRoomMessageReactionDB.ToDomain 将 MySQL WritersRoomMessageReactionDB 模型转换为 domain.WritersRoomMessageReaction
+func (m *WritersRoomMessageReactionDB) ToDomain() *domain.WritersRoomMessageReaction {
+	return ModelToWritersRoomMessageReaction(m)
+}
+
+// ModelToMessageReadReceipt 将 MySQL MessageReadReceiptDB 模型转换为 domain.MessageReadReceipt
+func ModelToMessageReadReceipt(m *MessageReadReceiptDB) *domain.MessageReadReceipt {
+	if m == nil {
+		return nil
+	}
+	d := &domain.MessageReadReceipt{
+		ID:        m.ID,
+		MessageID: m.MessageID,
+		UserID:    m.UserID,
+		ReadAt:    m.ReadAt,
+	}
+	if m.User.ID != "" {
+		d.UserName = m.User.DisplayName
+		d.User = ModelToUser(&m.User)
+	}
+	return d
+}
+
+// MessageReadReceiptDB.ToDomain 将 MySQL MessageReadReceiptDB 模型转换为 domain.MessageReadReceipt
+func (m *MessageReadReceiptDB) ToDomain() *domain.MessageReadReceipt {
+	return ModelToMessageReadReceipt(m)
+}

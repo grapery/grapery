@@ -194,6 +194,10 @@ func main() {
 	storyboardChatService := service.NewStoryboardChatService(repo, storyService, logger)
 	logger.Info("storyboard chat service initialized")
 
+	// Initialize Writers Room Service
+	writersRoomService := service.NewWritersRoomService(repo, logger)
+	logger.Info("writers room service initialized")
+
 	// Setup Gin router
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -243,13 +247,25 @@ func main() {
 			})
 		})
 
-		// Setup Agent Chat Handler and register routes
-		agentChatHandler := transport.NewAgentChatHandler(agentChatService, logger)
-		agentChatHandler.RegisterRoutes(api, authPkg.AuthMiddleware())
+		// Create agent group for all agent-related routes
+		agent := api.Group("/agent")
+		{
+			// Setup Agent Chat Handler and register routes
+			// Routes: /api/agent/chat/*
+			agentChatHandler := transport.NewAgentChatHandler(agentChatService, logger)
+			agentChatHandler.RegisterRoutes(agent.Group("/chat"), authPkg.AuthMiddleware())
 
-		// Setup Storyboard Chat Handler and register routes
-		storyboardChatHandler := transport.NewStoryboardChatHandler(storyboardChatService, logger)
-		storyboardChatHandler.RegisterRoutes(api.Group("/agent"), authPkg.AuthMiddleware())
+			// Setup Storyboard Chat Handler and register routes
+			// Routes: /api/agent/storyboard/*
+			storyboardChatHandler := transport.NewStoryboardChatHandler(storyboardChatService, logger)
+			storyboardChatHandler.RegisterRoutes(agent.Group("/storyboard"), authPkg.AuthMiddleware())
+
+			// Setup Writers Room Handler and register routes
+			// Routes: /api/agent/writers/stories/:storyId/writers-room
+			//         /api/agent/writers/rooms/:roomId/*
+			writersRoomHandler := transport.NewHandler(nil, nil, writersRoomService, logger)
+			writersRoomHandler.RegisterWritersRoomRoutes(agent.Group("/writers/stories"), agent.Group("/writers/rooms"))
+		}
 	}
 
 	// Log all registered routes

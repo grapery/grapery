@@ -6,9 +6,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
-	"go.uber.org/zap"
 )
 
 // AgentChatHandler 处理Agent聊天相关的HTTP请求
@@ -874,7 +875,7 @@ func (h *AgentChatHandler) LoadMoreMessages(c *gin.Context) {
 
 // RegisterRoutes 注册Agent聊天相关的路由
 func (h *AgentChatHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
-	agentGroup := r.Group("/agent")
+	agentGroup := r.Group("/chat")
 	agentGroup.Use(authMiddleware) // 需要认证
 
 	// 聊天相关

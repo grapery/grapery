@@ -25,8 +25,8 @@ type User struct {
 	Followers           int            `gorm:"default:0;index"`
 	Following           int            `gorm:"default:0"`
 	StoryboardCount     int            `gorm:"default:0;index"`                // Number of storyboards created by this user
-	GroupsCount         int            `gorm:"default:0"`                     // Number of groups the user has joined
-	GroupsCreated       int            `gorm:"default:0"`                     // Number of groups created by this user
+	GroupsCount         int            `gorm:"default:0"`                      // Number of groups the user has joined
+	GroupsCreated       int            `gorm:"default:0"`                      // Number of groups created by this user
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
@@ -352,21 +352,21 @@ type StoryboardSceneLink struct {
 
 // Group database model
 type Group struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	Name        string         `gorm:"size:100;not null;index"`
-	Description string         `gorm:"type:text"`
-	Avatar      string         `gorm:"size:500"`
-	CoverImage  string         `gorm:"size:500"`
-	Members       int            `gorm:"default:0"`
-	Stories       int            `gorm:"default:0"`
-	Followers     int            `gorm:"default:0"`
-	BlockedCount  int            `gorm:"default:0"`                     // Number of blocked users
-	CreatorID     string         `gorm:"size:36;not null;index"`
-	Creator       User           `gorm:"foreignKey:CreatorID"`
-	Public        bool           `gorm:"default:true;index"`
-	CreatedAt     time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt     gorm.DeletedAt `gorm:"index"`
+	ID           string         `gorm:"primaryKey;size:36"`
+	Name         string         `gorm:"size:100;not null;index"`
+	Description  string         `gorm:"type:text"`
+	Avatar       string         `gorm:"size:500"`
+	CoverImage   string         `gorm:"size:500"`
+	Members      int            `gorm:"default:0"`
+	Stories      int            `gorm:"default:0"`
+	Followers    int            `gorm:"default:0"`
+	BlockedCount int            `gorm:"default:0"` // Number of blocked users
+	CreatorID    string         `gorm:"size:36;not null;index"`
+	Creator      User           `gorm:"foreignKey:CreatorID"`
+	Public       bool           `gorm:"default:true;index"`
+	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 // Comment database model (支持嵌套回复和多目标类型)
@@ -1287,6 +1287,13 @@ func migrate(db *gorm.DB) error {
 
 		// 用户设备（推送通知）
 		&UserDevice{},
+
+		// Writers Room 聊天室
+		&WritersRoomDB{},
+		&WritersRoomParticipantDB{},
+		&WritersRoomMessageDB{},
+		&WritersRoomMessageReactionDB{},
+		&MessageReadReceiptDB{},
 	)
 }
 
@@ -1307,4 +1314,71 @@ type ThirdPartyLogin struct {
 	CreatedAt        int64          `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt        int64          `gorm:"type:bigint;autoUpdateTime"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
+}
+
+// ========== Writers Room Database Models ==========
+
+// WritersRoomDB writers room database model
+type WritersRoomDB struct {
+	ID               string `gorm:"primaryKey;size:36"`
+	StoryID          string `gorm:"size:36;not null;uniqueIndex:idx_story_id"`
+	Title            string `gorm:"size:255;not null"`
+	LastMessage      string `gorm:"type:text"`
+	LastMessageTime  int64  `gorm:"type:bigint"`
+	MessageCount     int    `gorm:"default:0"`
+	ParticipantCount int    `gorm:"default:0"`
+	CreatedAt        int64  `gorm:"type:bigint;not null"`
+	UpdatedAt        int64  `gorm:"type:bigint;not null;index"`
+}
+
+// WritersRoomParticipantDB writers room participant database model
+type WritersRoomParticipantDB struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	RoomID    string `gorm:"size:36;not null;index:idx_room_user"`
+	UserID    string `gorm:"size:36;not null;index:idx_room_user"`
+	Role      string `gorm:"size:20;not null;default:'member'"` // owner, admin, member
+	JoinedAt  int64  `gorm:"type:bigint;not null"`
+	LastReadAt int64  `gorm:"type:bigint;default:0"`
+
+	User User `gorm:"foreignKey:UserID"`
+}
+
+// WritersRoomMessageDB writers room message database model
+type WritersRoomMessageDB struct {
+	ID               string `gorm:"primaryKey;size:36"`
+	RoomID           string `gorm:"size:36;not null;index:idx_room_id_created_at"`
+	SenderID         string `gorm:"size:36;not null;index:idx_sender_id"`
+	Content          string `gorm:"type:text;not null"`
+	MessageType      string `gorm:"size:20;not null;default:'text'"` // text, image, mixed, system
+	AttachmentsJSON  string `gorm:"type:json"`
+	MentionsJSON     string `gorm:"type:json"`
+	ReplyToMessageID *string `gorm:"size:36;index:idx_reply_to_message_id"`
+	CreatedAt        int64  `gorm:"type:bigint;not null"`
+	UpdatedAt        int64  `gorm:"type:bigint;not null"`
+
+	Sender *WritersRoomParticipantDB `gorm:"foreignKey:SenderID"`
+}
+
+// WritersRoomMessageReactionDB writers room message reaction database model
+type WritersRoomMessageReactionDB struct {
+	ID           string `gorm:"primaryKey;size:36"`
+	MessageID    string `gorm:"size:36;not null;index:idx_message_id"`
+	UserID       string `gorm:"size:36;not null;index:idx_user_id"`
+	ReactionType string `gorm:"size:50;not null;index:idx_message_user_reaction"`
+	EmojiCode    string `gorm:"size:50"`
+	CreatedAt    int64  `gorm:"type:bigint;not null"`
+
+	User    User                     `gorm:"foreignKey:UserID"`
+	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
+}
+
+// MessageReadReceiptDB message read receipt database model
+type MessageReadReceiptDB struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	MessageID string `gorm:"size:36;not null;index:idx_message_id"`
+	UserID    string `gorm:"size:36;not null;index:idx_user_id"`
+	ReadAt    int64  `gorm:"type:bigint;not null;index:idx_message_user"`
+
+	User    User                     `gorm:"foreignKey:UserID"`
+	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
 }

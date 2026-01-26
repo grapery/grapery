@@ -180,9 +180,11 @@ func main() {
 	// Initialize Storyboard Chat Service
 	storyboardChatService := service.NewStoryboardChatService(repo, svc, logger)
 	logger.Info("storyboard chat service initialized")
-
+	// Initialize Writers Room Service
+	writersRoomService := service.NewWritersRoomService(repo, logger)
+	logger.Info("writers room service initialized")
 	// Initialize HTTP handler
-	handler := transport.NewHandler(svc, nil, logger)
+	handler := transport.NewHandler(svc, nil, writersRoomService, logger)
 	router := transport.SetupRouter(handler, logger)
 
 	// Register Storyboard Chat routes
@@ -217,12 +219,15 @@ func main() {
 		logger.Info("Metrics endpoint registered", zap.String("path", cfg.Telemetry.Prometheus.Path))
 	}
 
+	// Setup Writers Room Handler and register routes
+	writersRoomHandler := transport.NewHandler(nil, nil, writersRoomService, logger)
+	writersRoomHandler.RegisterWritersRoomRoutes(apiGroup.Group("/stories"), apiGroup.Group("/writers-rooms"))
+	// Setup graceful shutdown
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// Initialize server
 	srv := server.New(cfg, router)
-
-	// Setup graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	// Start metrics pusher if configured
 	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.PushGateway != "" {
@@ -235,12 +240,12 @@ func main() {
 
 	// Start user statistics persistence task (runs daily at midnight)
 	if svc.UserStatsService() != nil {
-		go startUserStatisticsTask(ctx, svc.UserStatsService(), logger)
+		go startUserStatisticsTask(shutdownCtx, svc.UserStatsService(), logger)
 		logger.Info("User statistics task started")
 	}
 
 	// Start invitation expiry check task (runs hourly)
-	go startInvitationExpiryTask(ctx, svc, logger)
+	go startInvitationExpiryTask(shutdownCtx, svc, logger)
 	logger.Info("Invitation expiry check task started")
 
 	// Start server in goroutine
@@ -252,7 +257,7 @@ func main() {
 	}()
 
 	// Wait for interrupt signal
-	<-ctx.Done()
+	<-shutdownCtx.Done()
 	logger.Info("shutdown signal received")
 
 	// Graceful shutdown
@@ -296,9 +301,9 @@ func startUserStatisticsTask(ctx context.Context, statsService *service.UserStat
 			statsCtx := context.Background()
 			if err := statsService.PersistStatistics(statsCtx, time.Now()); err != nil {
 				logger.Warn("failed to persist user statistics", zap.Error(err))
-		} else {
-			logger.Info("user statistics persisted successfully")
-		}
+			} else {
+				logger.Info("user statistics persisted successfully")
+			}
 		case <-ctx.Done():
 			return
 		}
