@@ -10,14 +10,14 @@ import (
 // ========== Writers Room Handlers ==========
 
 // GetOrCreateWritersRoom gets or creates a writers room for a story
-// GET /api/stories/:storyId/writers-room
+// GET /api/stories/:id/writers-room
 func (h *Handler) GetOrCreateWritersRoom(c *gin.Context) {
 	_, ok := RequireUserID(c)
 	if !ok {
 		return
 	}
 
-	storyID, ok := RequireParam(c, "storyId")
+	storyID, ok := RequireParam(c, "id")
 	if !ok {
 		return
 	}
@@ -267,7 +267,7 @@ func (h *Handler) GetWritersRoomUnreadCount(c *gin.Context) {
 // RegisterWritersRoomRoutes registers writers room routes
 func (h *Handler) RegisterWritersRoomRoutes(storiesGroup *gin.RouterGroup, roomsGroup *gin.RouterGroup) {
 	// Story-related routes
-	storiesGroup.GET("/:storyId/writers-room", h.GetOrCreateWritersRoom)
+	storiesGroup.GET("/:id/writers-room", h.GetOrCreateWritersRoom)
 
 	// Room-related routes
 	roomsGroup.GET("/:roomId", h.GetWritersRoom)
