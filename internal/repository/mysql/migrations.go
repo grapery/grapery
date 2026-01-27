@@ -240,3 +240,33 @@ func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
 
 	return nil
 }
+
+// EnsureUserGroupCountColumns ensures groups_count and groups_created columns exist in users table
+func (r *Repository) EnsureUserGroupCountColumns(logger *zap.Logger) error {
+	migrator := r.db.Migrator()
+	type User struct{}
+
+	if !migrator.HasColumn(&User{}, "groups_count") {
+		logger.Info("Adding groups_count column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN groups_count INT DEFAULT 0 NOT NULL COMMENT 'Number of groups the user has joined'").Error; err != nil {
+			logger.Error("failed to add groups_count column", zap.Error(err))
+			return err
+		}
+		logger.Info("Successfully added groups_count column to users table")
+	} else {
+		logger.Debug("groups_count column already exists in users table")
+	}
+
+	if !migrator.HasColumn(&User{}, "groups_created") {
+		logger.Info("Adding groups_created column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN groups_created INT DEFAULT 0 NOT NULL COMMENT 'Number of groups created by this user'").Error; err != nil {
+			logger.Error("failed to add groups_created column", zap.Error(err))
+			return err
+		}
+		logger.Info("Successfully added groups_created column to users table")
+	} else {
+		logger.Debug("groups_created column already exists in users table")
+	}
+
+	return nil
+}

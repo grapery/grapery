@@ -129,6 +129,11 @@ func (r *Repository) migrate() error {
 		return err
 	}
 
+	// 10) Ensure users table has groups_count and groups_created columns.
+	if err := r.EnsureUserGroupCountColumns(r.log); err != nil {
+		return err
+	}
+
 	r.log.Info("targeted schema migrations completed successfully")
 	return nil
 }
