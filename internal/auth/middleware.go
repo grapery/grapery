@@ -21,7 +21,7 @@ const (
 	EmailKey contextKey = "email"
 )
 
-var logger = logrus.WithField("module", "auth-middleware")
+var authLogger = logrus.WithField("module", "auth-middleware")
 
 // ContextWithUserID adds user ID to context
 func ContextWithUserID(ctx context.Context, userID string) context.Context {
@@ -66,7 +66,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 
-		logger.WithFields(logrus.Fields{
+		authLogger.WithFields(logrus.Fields{
 			"method": method,
 			"path":   path,
 		}).Debug("Auth middleware called")
@@ -74,7 +74,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 从 Header 获取 Token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method": method,
 				"path":   path,
 			}).Warn("Missing authorization header")
@@ -90,7 +90,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 检查格式: Bearer <token>
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method":      method,
 				"path":        path,
 				"header_len":  len(authHeader),
@@ -106,7 +106,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		logger.WithFields(logrus.Fields{
+		authLogger.WithFields(logrus.Fields{
 			"method":      method,
 			"path":        path,
 			"token_len":   len(tokenString),
@@ -116,7 +116,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 解析 Token
 		claims, err := ParseToken(tokenString)
 		if err != nil {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method":     method,
 				"path":       path,
 				"error":      err,
@@ -149,7 +149,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		ctx := ContextWithUserInfo(c.Request.Context(), claims.UserID, claims.Username, claims.Email)
 		c.Request = c.Request.WithContext(ctx)
 
-		logger.WithFields(logrus.Fields{
+		authLogger.WithFields(logrus.Fields{
 			"method":   method,
 			"path":     path,
 			"user_id":  claims.UserID,
@@ -174,14 +174,14 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 
-		logger.WithFields(logrus.Fields{
+		authLogger.WithFields(logrus.Fields{
 			"method": method,
 			"path":   path,
 		}).Debug("Optional auth middleware called")
 
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method": method,
 				"path":   path,
 			}).Debug("No authorization header provided (optional auth)")
@@ -191,7 +191,7 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method":      method,
 				"path":        path,
 				"header_len":  len(authHeader),
@@ -213,7 +213,7 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 			ctx := ContextWithUserInfo(c.Request.Context(), claims.UserID, claims.Username, claims.Email)
 			c.Request = c.Request.WithContext(ctx)
 
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method":   method,
 				"path":     path,
 				"user_id":  claims.UserID,
@@ -221,7 +221,7 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 				"email":    claims.Email,
 			}).Info("User authenticated via optional auth")
 		} else {
-			logger.WithFields(logrus.Fields{
+			authLogger.WithFields(logrus.Fields{
 				"method": method,
 				"path":   path,
 				"error":  err,

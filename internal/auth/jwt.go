@@ -16,7 +16,7 @@ var (
 	ErrExpiredToken = errors.New("token expired")
 )
 
-var logger = logrus.WithField("module", "jwt")
+var jwtLogger = logrus.WithField("module", "jwt")
 
 // Claims JWT 声明
 type Claims struct {
@@ -47,14 +47,14 @@ func GenerateToken(userID, username, email string) (string, error) {
 	tokenString, err := token.SignedString(jwtSecret)
 
 	if err != nil {
-		logger.WithFields(logrus.Fields{
+		jwtLogger.WithFields(logrus.Fields{
 			"user_id":  userID,
 			"username": username,
 			"email":    email,
 			"error":    err,
 		}).Error("Failed to generate JWT token")
 	} else {
-		logger.WithFields(logrus.Fields{
+		jwtLogger.WithFields(logrus.Fields{
 			"user_id":    userID,
 			"username":   username,
 			"email":      email,
@@ -92,21 +92,21 @@ func ParseToken(tokenString string) (*Claims, error) {
 	})
 
 	if err != nil {
-		logger.WithFields(logrus.Fields{
+		jwtLogger.WithFields(logrus.Fields{
 			"error":     err,
 			"token_len": len(tokenString),
 		}).Warn("Failed to parse JWT token")
 
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			logger.Warn("Token expired")
+			jwtLogger.Warn("Token expired")
 			return nil, ErrExpiredToken
 		}
-		logger.Warn("Invalid token")
+		jwtLogger.Warn("Invalid token")
 		return nil, ErrInvalidToken
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		logger.WithFields(logrus.Fields{
+		jwtLogger.WithFields(logrus.Fields{
 			"user_id":       claims.UserID,
 			"username":      claims.Username,
 			"email":         claims.Email,
@@ -117,7 +117,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 		return claims, nil
 	}
 
-	logger.Warn("Invalid token claims")
+	jwtLogger.Warn("Invalid token claims")
 	return nil, ErrInvalidToken
 }
 
@@ -135,7 +135,7 @@ func SetJWTSecret(secret string) {
 	if len(secret) > 10 {
 		secretDisplay = secret[:10] + "..."
 	}
-	logger.WithFields(logrus.Fields{
+	jwtLogger.WithFields(logrus.Fields{
 		"secret_length":  len(secret),
 		"secret_preview": secretDisplay,
 		"secret_changed": oldSecret != secret,
