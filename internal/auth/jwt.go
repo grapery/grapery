@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -14,6 +15,8 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrExpiredToken = errors.New("token expired")
 )
+
+var logger = logrus.WithField("module", "jwt")
 
 // Claims JWT 声明
 type Claims struct {
@@ -41,7 +44,26 @@ func GenerateToken(userID, username, email string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(jwtSecret)
+
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"user_id":  userID,
+			"username": username,
+			"email":    email,
+			"error":    err,
+		}).Error("Failed to generate JWT token")
+	} else {
+		logger.WithFields(logrus.Fields{
+			"user_id":    userID,
+			"username":   username,
+			"email":      email,
+			"expires_at": expiresAt.Unix(),
+			"issued_at":  now.Unix(),
+		}).Info("JWT token generated successfully")
+	}
+
+	return tokenString, err
 }
 
 // GenerateRefreshToken 生成刷新 Token（7天过期）
@@ -70,16 +92,32 @@ func ParseToken(tokenString string) (*Claims, error) {
 	})
 
 	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"error":     err,
+			"token_len": len(tokenString),
+		}).Warn("Failed to parse JWT token")
+
 		if errors.Is(err, jwt.ErrTokenExpired) {
+			logger.Warn("Token expired")
 			return nil, ErrExpiredToken
 		}
+		logger.Warn("Invalid token")
 		return nil, ErrInvalidToken
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		logger.WithFields(logrus.Fields{
+			"user_id":       claims.UserID,
+			"username":      claims.Username,
+			"email":         claims.Email,
+			"expires_at":    claims.ExpiresAt.Time.Unix(),
+			"issued_at":     claims.IssuedAt.Time.Unix(),
+			"remaining_sec": claims.ExpiresAt.Time.Sub(time.Now()).Seconds(),
+		}).Info("JWT token validated successfully")
 		return claims, nil
 	}
 
+	logger.Warn("Invalid token claims")
 	return nil, ErrInvalidToken
 }
 
@@ -91,5 +129,16 @@ func ValidateToken(tokenString string) bool {
 
 // SetJWTSecret 设置 JWT 密钥（用于配置）
 func SetJWTSecret(secret string) {
+	oldSecret := string(jwtSecret)
 	jwtSecret = []byte(secret)
+	secretDisplay := secret
+	if len(secret) > 10 {
+		secretDisplay = secret[:10] + "..."
+	}
+	logger.WithFields(logrus.Fields{
+		"secret_length":  len(secret),
+		"secret_preview": secretDisplay,
+		"secret_changed": oldSecret != secret,
+		"was_default":    oldSecret == "grapery-secret-key-change-in-production",
+	}).Info("JWT secret configured")
 }

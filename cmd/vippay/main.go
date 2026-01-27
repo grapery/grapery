@@ -135,18 +135,32 @@ func main() {
 	)
 
 	// 配置 JWT Secret
+	logger.Info("========== JWT Configuration ==========")
+
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
+		logger.Info("JWT_SECRET environment variable not set")
 		jwtSecret = cfg.JWT.Secret
 		if jwtSecret == "" {
 			jwtSecret = "grapery-secret-key-change-in-production" // 默认值，仅用于开发
 			logger.Warn("JWT_SECRET not set, using default (NOT FOR PRODUCTION)")
+		} else {
+			logger.Info("JWT Secret loaded from config file")
 		}
+	} else {
+		logger.Info("JWT Secret loaded from environment variable")
 	}
-	auth.SetJWTSecret(jwtSecret)
-	logger.Info("JWT secret configured",
+
+	// 记录JWT Secret的长度和预览（安全性考虑不记录完整值）
+	logger.Info("JWT Secret configuration",
+		zap.Int("secret_length", len(jwtSecret)),
+		zap.String("secret_preview", jwtSecret[:min(len(jwtSecret), 10)]+"..."),
 		zap.Bool("from_env", os.Getenv("JWT_SECRET") != ""),
+		zap.Bool("is_default", jwtSecret == "grapery-secret-key-change-in-production"),
 	)
+
+	auth.SetJWTSecret(jwtSecret)
+	logger.Info("=========================================")
 
 	// 初始化数据库
 	err = initializeServices(logger)
@@ -1026,4 +1040,11 @@ func getVipPayDomain() string {
 		return domain
 	}
 	return "https://www.grapery.xyz"
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

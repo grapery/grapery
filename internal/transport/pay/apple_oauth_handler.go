@@ -234,9 +234,18 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 	}
 
 	// 生成 JWT token
+	logrus.WithFields(logrus.Fields{
+		"user_id":  user.ID,
+		"username": user.Username,
+		"email":    user.Email,
+	}).Info("Generating JWT token for user")
+
 	jwtToken, err := auth.GenerateToken(user.ID, user.Username, user.Email)
 	if err != nil {
-		logrus.Errorf("Failed to generate JWT token: %v", err)
+		logrus.WithFields(logrus.Fields{
+			"user_id": user.ID,
+			"error":   err,
+		}).Error("Failed to generate JWT token")
 		c.JSON(http.StatusInternalServerError, VipPayAPIResponse{
 			Code:    500,
 			Msg:     "Failed to generate access token",
@@ -246,11 +255,26 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 		return
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"user_id":     user.ID,
+		"token_len":   len(jwtToken),
+		"token_start": jwtToken[:min(len(jwtToken), 30)] + "...",
+	}).Info("JWT token generated successfully")
+
 	// 生成 Refresh Token
 	refreshToken, err := auth.GenerateRefreshToken(user.ID)
 	if err != nil {
-		logrus.Errorf("Failed to generate refresh token: %v", err)
+		logrus.WithFields(logrus.Fields{
+			"user_id": user.ID,
+			"error":   err,
+		}).Warn("Failed to generate refresh token (continuing without it)")
 		// 不阻塞登录流程，refresh token 可以为空
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"user_id":       user.ID,
+			"refresh_len":   len(refreshToken),
+			"refresh_start": refreshToken[:min(len(refreshToken), 30)] + "...",
+		}).Info("Refresh token generated successfully")
 	}
 
 	expiresIn := int64(24 * 3600) // 24小时
@@ -292,6 +316,13 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 func sha256Hex(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // findOrCreateUser 查找或创建 OAuth 用户（支持跨设备、跨登录方式的账户关联）

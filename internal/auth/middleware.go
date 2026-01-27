@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // Context key types for type safety
@@ -19,6 +20,8 @@ const (
 	// EmailKey is the context key for email
 	EmailKey contextKey = "email"
 )
+
+var logger = logrus.WithField("module", "auth-middleware")
 
 // ContextWithUserID adds user ID to context
 func ContextWithUserID(ctx context.Context, userID string) context.Context {
@@ -60,9 +63,21 @@ func EmailFromContext(ctx context.Context) string {
 // AuthMiddleware JWT 认证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		method := c.Request.Method
+		path := c.Request.URL.Path
+
+		logger.WithFields(logrus.Fields{
+			"method": method,
+			"path":   path,
+		}).Debug("Auth middleware called")
+
 		// 从 Header 获取 Token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			logger.WithFields(logrus.Fields{
+				"method": method,
+				"path":   path,
+			}).Warn("Missing authorization header")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    -2,
 				"message": "missing authorization header",
@@ -75,6 +90,12 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 检查格式: Bearer <token>
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			logger.WithFields(logrus.Fields{
+				"method":      method,
+				"path":        path,
+				"header_len":  len(authHeader),
+				"parts_count": len(parts),
+			}).Warn("Invalid authorization header format")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    -9,
 				"message": "invalid token",
@@ -85,10 +106,23 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
+		logger.WithFields(logrus.Fields{
+			"method":      method,
+			"path":        path,
+			"token_len":   len(tokenString),
+			"token_start": tokenString[:min(len(tokenString), 20)] + "...",
+		}).Debug("Token received for validation")
 
 		// 解析 Token
 		claims, err := ParseToken(tokenString)
 		if err != nil {
+			logger.WithFields(logrus.Fields{
+				"method":     method,
+				"path":       path,
+				"error":      err,
+				"is_expired": err == ErrExpiredToken,
+			}).Error("Token validation failed")
+
 			if err == ErrExpiredToken {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"code":    -8,
@@ -115,21 +149,54 @@ func AuthMiddleware() gin.HandlerFunc {
 		ctx := ContextWithUserInfo(c.Request.Context(), claims.UserID, claims.Username, claims.Email)
 		c.Request = c.Request.WithContext(ctx)
 
+		logger.WithFields(logrus.Fields{
+			"method":   method,
+			"path":     path,
+			"user_id":  claims.UserID,
+			"username": claims.Username,
+			"email":    claims.Email,
+		}).Info("User authenticated successfully")
+
 		c.Next()
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // OptionalAuthMiddleware 可选认证中间件（不强制要求登录）
 func OptionalAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		method := c.Request.Method
+		path := c.Request.URL.Path
+
+		logger.WithFields(logrus.Fields{
+			"method": method,
+			"path":   path,
+		}).Debug("Optional auth middleware called")
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			logger.WithFields(logrus.Fields{
+				"method": method,
+				"path":   path,
+			}).Debug("No authorization header provided (optional auth)")
 			c.Next()
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			logger.WithFields(logrus.Fields{
+				"method":      method,
+				"path":        path,
+				"header_len":  len(authHeader),
+				"parts_count": len(parts),
+			}).Warn("Invalid authorization header format (optional auth)")
 			c.Next()
 			return
 		}
@@ -145,6 +212,20 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 			// 将用户信息注入到 request context 中
 			ctx := ContextWithUserInfo(c.Request.Context(), claims.UserID, claims.Username, claims.Email)
 			c.Request = c.Request.WithContext(ctx)
+
+			logger.WithFields(logrus.Fields{
+				"method":   method,
+				"path":     path,
+				"user_id":  claims.UserID,
+				"username": claims.Username,
+				"email":    claims.Email,
+			}).Info("User authenticated via optional auth")
+		} else {
+			logger.WithFields(logrus.Fields{
+				"method": method,
+				"path":   path,
+				"error":  err,
+			}).Warn("Optional auth token validation failed (continuing without auth)")
 		}
 
 		c.Next()
