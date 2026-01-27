@@ -111,13 +111,10 @@ func NewOAuthRepository() *OAuthRepository {
 		return nil
 	}
 
-	// 自动迁移相关表
-	db.AutoMigrate(
-		&OAuthUser{},
-		&OAuthUserSettings{},
-		&OAuthMembership{},
-		&OAuthThirdPartyLogin{},
-	)
+	// 注意：OAuth 相关表的迁移现在统一由 migrations 包管理
+	// OAuthUser, OAuthUserSettings, OAuthMembership, OAuthThirdPartyLogin
+	// 这些表实际上映射到 mysql 包的表（users, user_settings, memberships, third_party_logins）
+	// 迁移步骤在 mysql/migrations_register.go 中注册
 
 	return &OAuthRepository{db: db}
 }

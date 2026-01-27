@@ -1196,8 +1196,15 @@ type InvitationCode struct {
 }
 
 // migrate runs database migrations
+// 注意：此函数已废弃，迁移现在统一由 migrations 包管理
+// 迁移步骤在 mysql/migrations_register.go 中注册
+// 保留此函数仅用于向后兼容，实际不会被调用
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	// 此函数已废弃，迁移现在由统一的 migrations 系统处理
+	// 如果需要手动执行迁移，请使用 migrations.GetRegistry().ExecuteAll()
+	return nil
+	// 以下是旧的迁移代码，已废弃：
+	/*return db.AutoMigrate(
 		// 核心实体
 		&User{},
 		&Story{},
@@ -1294,7 +1301,7 @@ func migrate(db *gorm.DB) error {
 		&WritersRoomMessageDB{},
 		&WritersRoomMessageReactionDB{},
 		&MessageReadReceiptDB{},
-	)
+	)*/
 }
 
 // ThirdPartyLogin 第三方登录表（支持 Google/Apple 跨设备登录）

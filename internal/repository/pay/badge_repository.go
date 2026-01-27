@@ -20,31 +20,11 @@ func NewBadgeRepository() *BadgeRepository {
 		return nil
 	}
 
-	// 自动迁移相关表
-	db.AutoMigrate(
-		&Badge{},
-		&UserBadge{},
-		&UserBadgeStats{},
-	)
-
-	// 初始化预定义徽章
-	initPredefinedBadges(db)
+	// 注意：表的迁移现在统一由 migrations 包管理
+	// 迁移步骤在 pay/migrations_register.go 中注册
+	// 预定义徽章的初始化也在 migrations 包中统一处理
 
 	return &BadgeRepository{db: db}
-}
-
-// initPredefinedBadges 初始化预定义徽章
-func initPredefinedBadges(db *gorm.DB) {
-	for _, badge := range PredefinedBadges {
-		var existing Badge
-		err := db.Where("code = ?", badge.Code).First(&existing).Error
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				badge.IsActive = true
-				db.Create(&badge)
-			}
-		}
-	}
 }
 
 // GetAllBadges 获取所有徽章定义

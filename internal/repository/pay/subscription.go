@@ -27,21 +27,21 @@ type Subscription struct {
 	StartTime       time.Time          `gorm:"column:start_time;not null" json:"start_time"`              // 开始时间
 	EndTime         time.Time          `gorm:"column:end_time;not null" json:"end_time"`                  // 结束时间
 	AutoRenew       bool               `gorm:"column:auto_renew;default:true" json:"auto_renew"`          // 自动续费
-	PaymentMethod   string             `gorm:"column:payment_method;size:50" json:"payment_method"`       // 支付方式
-	PaymentProvider string             `gorm:"column:payment_provider;size:50" json:"payment_provider"`   // 支付提供商
-	ProviderSubID   string             `gorm:"column:provider_sub_id;size:255" json:"provider_sub_id"`    // 第三方订阅ID
+	PaymentMethod   string             `gorm:"column:payment_method;size:100;index;comment:支付方式" json:"payment_method"`       // 支付方式（增加长度冗余）
+	PaymentProvider string             `gorm:"column:payment_provider;size:100;index;comment:支付提供商" json:"payment_provider"`   // 支付提供商（增加长度冗余）
+	ProviderSubID   string             `gorm:"column:provider_sub_id;size:512;index;comment:第三方订阅ID" json:"provider_sub_id"`    // 第三方订阅ID（增加长度冗余）
 	Amount          int64              `gorm:"column:amount;not null" json:"amount"`                      // 订阅金额（分）
 	Currency        string             `gorm:"column:currency;size:10;default:'CNY'" json:"currency"`     // 货币类型
 	QuotaLimit      int                `gorm:"column:quota_limit;default:1000" json:"quota_limit"`        // 额度限制
 	QuotaUsed       int                `gorm:"column:quota_used;default:0" json:"quota_used"`             // 已使用额度
 	MaxRoles        int                `gorm:"column:max_roles;default:2" json:"max_roles"`               // 最大角色数
 	MaxContexts     int                `gorm:"column:max_contexts;default:5" json:"max_contexts"`         // 最大上下文数
-	AvailableModels string             `gorm:"column:available_models;type:text" json:"available_models"` // 可用模型（JSON数组）
-	CancelReason    string             `gorm:"column:cancel_reason;size:255" json:"cancel_reason"`        // 取消原因
-	CanceledAt      *time.Time         `gorm:"column:canceled_at" json:"canceled_at"`                     // 取消时间
-	CanceledBy      int64              `gorm:"column:canceled_by" json:"canceled_by"`                     // 取消者ID
-	NextBillingDate *time.Time         `gorm:"column:next_billing_date" json:"next_billing_date"`         // 下次计费时间
-	Metadata        string             `gorm:"column:metadata;type:text" json:"metadata"`                 // 元数据（JSON）
+	AvailableModels string             `gorm:"column:available_models;type:json;comment:可用模型（JSON数组）" json:"available_models"` // 可用模型（JSON数组）
+	CancelReason    string             `gorm:"column:cancel_reason;size:512;comment:取消原因" json:"cancel_reason"`        // 取消原因（增加长度冗余）
+	CanceledAt      *time.Time         `gorm:"column:canceled_at;index;comment:取消时间" json:"canceled_at"`                     // 取消时间
+	CanceledBy      int64              `gorm:"column:canceled_by;index;comment:取消者ID" json:"canceled_by"`                     // 取消者ID
+	NextBillingDate *time.Time         `gorm:"column:next_billing_date;index;comment:下次计费时间" json:"next_billing_date"`         // 下次计费时间
+	Metadata        string             `gorm:"column:metadata;type:json;comment:元数据（JSON格式）" json:"metadata"`                 // 元数据（JSON）
 }
 
 func (s Subscription) TableName() string {

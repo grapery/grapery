@@ -29,8 +29,8 @@ type AppleReceipt struct {
 type AppleSubscription struct {
 	ID                     uint           `gorm:"primaryKey" json:"id"`
 	UserID                 uint64         `gorm:"index" json:"user_id"`
-	OriginalTransactionID  string         `gorm:"type:varchar(255);uniqueIndex" json:"original_transaction_id"`
-	ProductID              string         `gorm:"type:varchar(255);index" json:"product_id"`
+	OriginalTransactionID  string         `gorm:"type:varchar(512);uniqueIndex;not null;comment:原始交易ID" json:"original_transaction_id"` // 增加长度冗余
+	ProductID              string         `gorm:"type:varchar(255);not null;index;comment:产品ID" json:"product_id"`
 	PurchaseDate           time.Time      `gorm:"index" json:"purchase_date"`
 	ExpiresDate            *time.Time     `gorm:"index" json:"expires_date"`
 	Status                 string         `gorm:"type:varchar(50);index" json:"status"`      // Active, Expired, Canceled, Revoked
@@ -68,9 +68,9 @@ type AppleNotification struct {
 type GooglePurchase struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
 	UserID           uint64         `gorm:"index" json:"user_id"`
-	PurchaseToken    string         `gorm:"type:varchar(255);uniqueIndex" json:"purchase_token"`
-	ProductID        string         `gorm:"type:varchar(255);index" json:"product_id"`
-	PackageName      string         `gorm:"type:varchar(255);index" json:"package_name"`
+	PurchaseToken    string         `gorm:"type:varchar(512);uniqueIndex;not null;comment:购买令牌" json:"purchase_token"` // 增加长度冗余
+	ProductID        string         `gorm:"type:varchar(255);not null;index;comment:产品ID" json:"product_id"`
+	PackageName      string         `gorm:"type:varchar(255);not null;index;comment:包名" json:"package_name"`
 	PurchaseTime     time.Time      `gorm:"index" json:"purchase_time"`
 	PurchaseState    int            `gorm:"type:smallint;index" json:"purchase_state"`    // 0: Purchased, 1: Canceled
 	ConsumptionState int            `gorm:"type:smallint;index" json:"consumption_state"` // 0: Yet to be consumed, 1: Consumed
@@ -88,9 +88,9 @@ type GooglePurchase struct {
 type GoogleSubscription struct {
 	ID                   uint           `gorm:"primaryKey" json:"id"`
 	UserID               uint64         `gorm:"index" json:"user_id"`
-	PurchaseToken        string         `gorm:"type:varchar(255);uniqueIndex" json:"purchase_token"`
-	ProductID            string         `gorm:"type:varchar(255);index" json:"product_id"`
-	PackageName          string         `gorm:"type:varchar(255);index" json:"package_name"`
+	PurchaseToken        string         `gorm:"type:varchar(512);uniqueIndex;not null;comment:购买令牌" json:"purchase_token"` // 增加长度冗余
+	ProductID            string         `gorm:"type:varchar(255);not null;index;comment:产品ID" json:"product_id"`
+	PackageName          string         `gorm:"type:varchar(255);not null;index;comment:包名" json:"package_name"`
 	StartTime            time.Time      `gorm:"index" json:"start_time"`
 	ExpiryTime           time.Time      `gorm:"index" json:"expiry_time"`
 	AutoRenewing         bool           `gorm:"default:true" json:"auto_renewing"`
@@ -121,8 +121,8 @@ type GoogleNotification struct {
 	Version          string         `gorm:"type:varchar(50)" json:"version"`
 	NotificationType string         `gorm:"type:varchar(100);index" json:"notification_type"`
 	EventTimeMillis  int64          `gorm:"index" json:"event_time_millis"`
-	SubscriptionID   string         `gorm:"type:varchar(255);index" json:"subscription_id"`
-	PackageName      string         `gorm:"type:varchar(255);index" json:"package_name"`
+	SubscriptionID   string         `gorm:"type:varchar(512);not null;index;comment:订阅ID" json:"subscription_id"` // 增加长度冗余
+	PackageName      string         `gorm:"type:varchar(255);not null;index;comment:包名" json:"package_name"`
 	EventTime        time.Time      `gorm:"index" json:"event_time"`
 	RawData          string         `gorm:"type:text" json:"raw_data"`
 	ProcessedAt      time.Time      `gorm:"index" json:"processed_at"`
@@ -152,7 +152,7 @@ type IAPSubscriptionSync struct {
 	ID             uint           `gorm:"primaryKey" json:"id"`
 	UserID         uint64         `gorm:"index" json:"user_id"`
 	Platform       string         `gorm:"type:varchar(50);index" json:"platform"` // apple, google
-	SubscriptionID string         `gorm:"type:varchar(255);index" json:"subscription_id"`
+	SubscriptionID string         `gorm:"type:varchar(512);not null;index;comment:订阅ID" json:"subscription_id"` // 增加长度冗余
 	SyncType       string         `gorm:"type:varchar(50);index" json:"sync_type"`   // manual, auto, webhook
 	SyncStatus     string         `gorm:"type:varchar(50);index" json:"sync_status"` // success, failed, pending
 	ErrorMessage   string         `gorm:"type:text" json:"error_message"`

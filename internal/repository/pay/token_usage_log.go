@@ -40,24 +40,24 @@ type TokenUsageLog struct {
 	UsageType     TokenUsageType `gorm:"column:usage_type;not null" json:"usage_type"`                                                  // Token使用类型
 
 	// Token 使用详情
-	InputTokens  int `gorm:"column:input_tokens;default:0" json:"input_tokens"`   // 输入Token数
-	OutputTokens int `gorm:"column:output_tokens;default:0" json:"output_tokens"` // 输出Token数
-	TotalTokens  int `gorm:"column:total_tokens;default:0" json:"total_tokens"`   // 总Token数
+	InputTokens  int `gorm:"column:input_tokens;default:0;not null;comment:输入Token数" json:"input_tokens"`   // 输入Token数
+	OutputTokens int `gorm:"column:output_tokens;default:0;not null;comment:输出Token数" json:"output_tokens"` // 输出Token数
+	TotalTokens  int `gorm:"column:total_tokens;default:0;not null;comment:总Token数" json:"total_tokens"`   // 总Token数
 
 	// 模型和功能信息
-	ModelName   string `gorm:"column:model_name;size:100" json:"model_name"`     // 使用的模型名称
-	Provider    string `gorm:"column:provider;size:50" json:"provider"`          // 提供商: gemini, hailuo等
-	FeatureName string `gorm:"column:feature_name;size:100" json:"feature_name"` // 功能名称
+	ModelName   string `gorm:"column:model_name;size:200;index;comment:使用的模型名称" json:"model_name"`     // 使用的模型名称（增加长度冗余）
+	Provider    string `gorm:"column:provider;size:100;index;comment:提供商（gemini, hailuo等）" json:"provider"`          // 提供商（增加长度冗余）
+	FeatureName string `gorm:"column:feature_name;size:200;index;comment:功能名称" json:"feature_name"` // 功能名称（增加长度冗余）
 
 	// 关联信息
-	TaskID  string `gorm:"column:task_id;size:36;index:idx_task_id" json:"task_id"`    // 关联的AI任务ID
-	StoryID string `gorm:"column:story_id;size:36;index:idx_story_id" json:"story_id"` // 关联的故事ID（如果适用）
+	TaskID  string `gorm:"column:task_id;size:36;index:idx_task_id;comment:关联的AI任务ID" json:"task_id"`    // 关联的AI任务ID
+	StoryID string `gorm:"column:story_id;size:36;index:idx_story_id;comment:关联的故事ID" json:"story_id"` // 关联的故事ID（如果适用）
 
 	// 成本和计费
-	CostAmount float64 `gorm:"column:cost_amount;type:decimal(10,4);default:0" json:"cost_amount"`  // 成本金额
-	Currency   string  `gorm:"column:currency;size:10;default:'USD'" json:"currency"`               // 货币类型
-	IsBilled   bool    `gorm:"column:is_billed;default:false;index:idx_is_billed" json:"is_billed"` // 是否已计费
-	BillingID  string  `gorm:"column:billing_id;size:36" json:"billing_id"`                         // 计费记录ID
+	CostAmount float64 `gorm:"column:cost_amount;type:decimal(12,6);default:0;not null;comment:成本金额" json:"cost_amount"`  // 成本金额（增加精度冗余）
+	Currency   string  `gorm:"column:currency;size:10;default:'USD';not null;comment:货币类型" json:"currency"`               // 货币类型
+	IsBilled   bool    `gorm:"column:is_billed;default:false;index:idx_is_billed;comment:是否已计费" json:"is_billed"` // 是否已计费
+	BillingID  string  `gorm:"column:billing_id;size:36;index;comment:计费记录ID" json:"billing_id"`                         // 计费记录ID
 
 	// 元数据
 	Metadata string `gorm:"column:metadata;type:json" json:"metadata"` // 扩展元数据（JSON格式）
@@ -67,7 +67,7 @@ type TokenUsageLog struct {
 }
 
 func (tul TokenUsageLog) TableName() string {
-	return "token_usage_log"
+	return "token_usage_logs" // 使用复数形式，与迁移注册中的表名一致
 }
 
 // GetMetadata 获取元数据

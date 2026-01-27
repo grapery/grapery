@@ -35,36 +35,36 @@ const (
 // IAPProduct IAP 产品信息模型
 type IAPProduct struct {
 	IDBase
-	ProductID         string             `gorm:"type:varchar(255);uniqueIndex;not null" json:"product_id"` // 产品唯一标识符
-	Platform          IAPProductPlatform `gorm:"type:tinyint;not null;index" json:"platform"`              // 平台（Apple/Google）
-	ProductType       IAPProductType     `gorm:"type:tinyint;not null;index" json:"product_type"`          // 产品类型
-	Status            IAPProductStatus   `gorm:"type:tinyint;default:1" json:"status"`                     // 产品状态
-	Name              string             `gorm:"type:varchar(255);not null" json:"name"`                   // 产品名称
-	Description       string             `gorm:"type:text" json:"description"`                             // 产品描述
-	Price             float64            `gorm:"type:decimal(10,2);not null" json:"price"`                 // 价格
-	Currency          string             `gorm:"type:varchar(10);default:'USD'" json:"currency"`           // 货币
-	Duration          *string            `gorm:"type:varchar(50)" json:"duration"`                         // 订阅周期（如：P1M、P3M、P1Y）
-	TrialPeriod       *string            `gorm:"type:varchar(50)" json:"trial_period"`                     // 试用期（如：P7D、P14D）
-	IntroOffer        *string            `gorm:"type:varchar(255)" json:"intro_offer"`                     // 介绍优惠信息
-	SubscriptionGroup *string            `gorm:"type:varchar(255);index" json:"subscription_group"`        // 订阅组（用于升级/降级）
-	FamilyShareable   bool               `gorm:"default:false" json:"family_shareable"`                    // 是否支持家庭共享
+	ProductID         string             `gorm:"type:varchar(255);uniqueIndex;not null;comment:产品唯一标识符" json:"product_id"` // 产品唯一标识符
+	Platform          IAPProductPlatform `gorm:"type:tinyint;not null;index;comment:平台（Apple/Google）" json:"platform"`              // 平台（Apple/Google）
+	ProductType       IAPProductType     `gorm:"type:tinyint;not null;index;comment:产品类型" json:"product_type"`          // 产品类型
+	Status            IAPProductStatus   `gorm:"type:tinyint;default:1;index;comment:产品状态" json:"status"`                     // 产品状态
+	Name              string             `gorm:"type:varchar(255);not null;comment:产品名称" json:"name"`                   // 产品名称
+	Description       string             `gorm:"type:text;comment:产品描述" json:"description"`                             // 产品描述
+	Price             float64            `gorm:"type:decimal(10,2);not null;comment:价格" json:"price"`                 // 价格
+	Currency          string             `gorm:"type:varchar(10);default:'USD';not null;comment:货币" json:"currency"`           // 货币
+	Duration          *string            `gorm:"type:varchar(100);comment:订阅周期（如：P1M、P3M、P1Y）" json:"duration"`                         // 订阅周期（增加长度冗余）
+	TrialPeriod       *string            `gorm:"type:varchar(100);comment:试用期（如：P7D、P14D）" json:"trial_period"`                     // 试用期（增加长度冗余）
+	IntroOffer        *string            `gorm:"type:varchar(512);comment:介绍优惠信息" json:"intro_offer"`                     // 介绍优惠信息（增加长度冗余）
+	SubscriptionGroup *string            `gorm:"type:varchar(255);index;comment:订阅组（用于升级/降级）" json:"subscription_group"`        // 订阅组（用于升级/降级）
+	FamilyShareable   bool               `gorm:"default:false;index;comment:是否支持家庭共享" json:"family_shareable"`                    // 是否支持家庭共享
 	// 平台特定信息
-	AppleSKU        *string `gorm:"type:varchar(255)" json:"apple_sku"`         // Apple SKU
-	GoogleSKU       *string `gorm:"type:varchar(255)" json:"google_sku"`        // Google SKU
-	AppleProductID  *string `gorm:"type:varchar(255)" json:"apple_product_id"`  // Apple 产品ID
-	GoogleProductID *string `gorm:"type:varchar(255)" json:"google_product_id"` // Google 产品ID
+	AppleSKU        *string `gorm:"type:varchar(255);index;comment:Apple SKU" json:"apple_sku"`         // Apple SKU
+	GoogleSKU       *string `gorm:"type:varchar(255);index;comment:Google SKU" json:"google_sku"`        // Google SKU
+	AppleProductID  *string `gorm:"type:varchar(255);index;comment:Apple产品ID" json:"apple_product_id"`  // Apple 产品ID
+	GoogleProductID *string `gorm:"type:varchar(255);index;comment:Google产品ID" json:"google_product_id"` // Google 产品ID
 	// 同步信息
-	LastSyncTime *time.Time `gorm:"column:last_sync_time" json:"last_sync_time"`           // 最后同步时间
-	SyncStatus   string     `gorm:"type:varchar(50);default:'pending'" json:"sync_status"` // 同步状态
-	SyncError    *string    `gorm:"type:text" json:"sync_error"`                           // 同步错误信息
+	LastSyncTime *time.Time `gorm:"column:last_sync_time;index;comment:最后同步时间" json:"last_sync_time"`           // 最后同步时间
+	SyncStatus   string     `gorm:"type:varchar(50);default:'pending';index;comment:同步状态" json:"sync_status"` // 同步状态
+	SyncError    *string    `gorm:"type:text;comment:同步错误信息" json:"sync_error"`                           // 同步错误信息
 	// 本地配置
-	IsActive     bool   `gorm:"default:true" json:"is_active"`   // 是否激活
-	DisplayOrder int    `gorm:"default:0" json:"display_order"`  // 显示顺序
-	Featured     bool   `gorm:"default:false" json:"featured"`   // 是否为推荐产品
-	MaxRoles     int    `gorm:"default:2" json:"max_roles"`      // 最大角色数
-	MaxContexts  int    `gorm:"default:5" json:"max_contexts"`   // 最大上下文数
-	QuotaLimit   int    `gorm:"default:1000" json:"quota_limit"` // 额度限制
-	Metadata     string `gorm:"type:text" json:"metadata"`       // 元数据（JSON）
+	IsActive     bool   `gorm:"default:true;index;comment:是否激活" json:"is_active"`   // 是否激活
+	DisplayOrder int    `gorm:"default:0;index;comment:显示顺序" json:"display_order"`  // 显示顺序
+	Featured     bool   `gorm:"default:false;index;comment:是否为推荐产品" json:"featured"`   // 是否为推荐产品
+	MaxRoles     int    `gorm:"default:2;not null;comment:最大角色数" json:"max_roles"`      // 最大角色数
+	MaxContexts  int    `gorm:"default:5;not null;comment:最大上下文数" json:"max_contexts"`   // 最大上下文数
+	QuotaLimit   int    `gorm:"default:1000;not null;comment:额度限制" json:"quota_limit"` // 额度限制
+	Metadata     string `gorm:"type:json;comment:元数据（JSON格式）" json:"metadata"`       // 元数据（JSON）
 }
 
 func (p IAPProduct) TableName() string {

@@ -875,28 +875,24 @@ func (h *AgentChatHandler) LoadMoreMessages(c *gin.Context) {
 
 // RegisterRoutes 注册Agent聊天相关的路由
 func (h *AgentChatHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
-	agentGroup := r.Group("/chat")
-	agentGroup.Use(authMiddleware) // 需要认证
+	// r 已经是 /api/agent/chat 组，直接使用即可
+	r.Use(authMiddleware) // 需要认证
 
 	// 聊天相关
-	agentGroup.POST("/chat/send", h.SendMessage)
-	agentGroup.POST("/chat/send-stream", h.SendMessageStream) // HTTP/2 streaming
-	agentGroup.GET("/chat/history/:threadId", h.GetChatHistory)
-	agentGroup.GET("/chat/threads", h.ListChatThreads)
-	agentGroup.POST("/chat/threads", h.CreateChatThread) // Create new thread
-	agentGroup.GET("/chat/threads/:id/storyboard-branches", h.GetStoryboardBranches)
-	agentGroup.POST("/chat/threads/:id/select-branch", h.SelectStoryboardBranch)
-	agentGroup.GET("/chat/threads/:id/messages", h.LoadMoreMessages)
-	agentGroup.GET("/chat/threads/:id/stats", h.GetThreadStats)
-	agentGroup.POST("/chat/threads/:id/archive", h.ArchiveThread) // Archive thread
-	agentGroup.POST("/chat/messages/:id/react", h.ReactToMessage)
-	agentGroup.POST("/chat/messages/:id/archive", h.ArchiveMessage)
+	r.POST("/send", h.SendMessage)
+	r.POST("/send-stream", h.SendMessageStream) // HTTP/2 streaming
+	r.GET("/history/:threadId", h.GetChatHistory)
+	r.GET("/threads", h.ListChatThreads)
+	r.POST("/threads", h.CreateChatThread) // Create new thread
+	r.GET("/threads/:id/storyboard-branches", h.GetStoryboardBranches)
+	r.POST("/threads/:id/select-branch", h.SelectStoryboardBranch)
+	r.GET("/threads/:id/messages", h.LoadMoreMessages)
+	r.GET("/threads/:id/stats", h.GetThreadStats)
+	r.POST("/threads/:id/archive", h.ArchiveThread) // Archive thread
+	r.POST("/messages/:id/react", h.ReactToMessage)
+	r.POST("/messages/:id/archive", h.ArchiveMessage)
 
 	// Agent管理
-	agentGroup.GET("/character/:characterId", h.GetAgent)
-	agentGroup.PUT("/:agentId/config", h.UpdateAgentConfig) // 需要管理员权限
-
-	// agent—ui 相关的接口
-	agentGroup.GET("/agent-ui/chat/threads", h.ListChatThreads)
-
+	r.GET("/character/:characterId", h.GetAgent)
+	r.PUT("/:agentId/config", h.UpdateAgentConfig) // 需要管理员权限
 }

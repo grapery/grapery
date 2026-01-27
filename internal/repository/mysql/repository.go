@@ -43,14 +43,12 @@ func NewRepository(dsn string, log *zap.Logger) (*Repository, error) {
 
 	repo := &Repository{db: db, log: log}
 
-	// Auto migrate tables
-	log.Info("starting database migration...")
-	if err := repo.migrate(); err != nil {
-		log.Error("database migration failed", zap.Error(err))
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
-	}
+	// 注意：数据库迁移现在统一由 migrations 包管理
+	// 迁移步骤在 mysql/migrations_register.go 和 pay/migrations_register.go 中注册
+	// 迁移执行在应用启动时通过 migrations.GetRegistry().ExecuteAll() 统一调用
+	// 这里不再执行迁移，避免重复执行
 
-	log.Info("database connected and migrated successfully")
+	log.Info("database connected successfully")
 	// 注释：旧版 storyboard 数据迁移（scenes/characters 列）
 	// 新数据库无需此迁移，如有旧数据需要迁移可取消注释
 	// if err := repo.MigrateStoryboardLegacyData(context.Background(), 100, log); err != nil {
@@ -60,81 +58,13 @@ func NewRepository(dsn string, log *zap.Logger) (*Repository, error) {
 }
 
 // migrate runs database migrations
+// 注意：此函数已废弃，迁移现在统一由 migrations 包管理
+// Schema 修复步骤在 mysql/migrations_register.go 中注册
+// 保留此函数仅用于向后兼容，实际不会被调用
 func (r *Repository) migrate() error {
-	// NOTE:
-	// We intentionally avoid running global GORM AutoMigrate here.
-	// Reason: if an existing schema has incompatible indexes (e.g. an index on
-	// `stories.style`), AutoMigrate may try to change the column type to TEXT and
-	// fail with: "BLOB/TEXT column 'style' used in key specification..."
-	//
-	// Instead, we run a small set of targeted, backwards-compatible schema patches
-	// needed by the current code.
-
-	r.log.Info("running targeted schema migrations")
-
-	// 1) Ensure storyboard_video_generations has the new subdivision fields.
-	if err := r.ensureStoryboardVideoGenerationSchema(); err != nil {
-		return err
-	}
-
-	// 1b) Ensure storyboard_scenes has the new subdivision fields.
-	if err := r.ensureStoryboardScenesSchema(); err != nil {
-		return err
-	}
-
-	// 2) Ensure stories.style can store JSON (TEXT) and is not indexed.
-	// If an index exists on stories.style from older schemas, we drop it before
-	// converting the column to TEXT.
-	if err := r.ensureStoriesStyleSchema(); err != nil {
-		return err
-	}
-
-	// 3) Ensure ai_generation_records prompt fields can store Unicode (utf8mb4).
-	if err := r.ensureAIGenerationRecordsSchema(); err != nil {
-		return err
-	}
-
-	// 4) Ensure group_members has the role_id column for new role system.
-	if err := r.ensureGroupMembersSchema(); err != nil {
-		return err
-	}
-
-	// 5) Ensure group_follows table exists for group following functionality.
-	if err := r.ensureGroupFollowsSchema(); err != nil {
-		return err
-	}
-
-	// 6) Ensure user_devices table exists for push notifications.
-	if err := r.ensureUserDevicesSchema(); err != nil {
-		return err
-	}
-
-	// 6) Ensure storyboard_image_generations has prompt_details_json column.
-	if err := r.ensureStoryboardImageGenerationSchema(); err != nil {
-		return err
-	}
-
-	// 7) Ensure storyboard_video_generations has prompt_details_json column.
-	if err := r.ensureStoryboardVideoGenerationPromptDetailsSchema(); err != nil {
-		return err
-	}
-
-	// 8) Ensure characters table has portrait-related columns.
-	if err := r.ensureCharacterPortraitSchema(); err != nil {
-		return err
-	}
-
-	// 9) Ensure stories table has is_collaboration_open column.
-	if err := r.EnsureIsCollaborationOpenColumn(r.log); err != nil {
-		return err
-	}
-
-	// 10) Ensure users table has groups_count and groups_created columns.
-	if err := r.EnsureUserGroupCountColumns(r.log); err != nil {
-		return err
-	}
-
-	r.log.Info("targeted schema migrations completed successfully")
+	// 此函数已废弃，迁移现在由统一的 migrations 系统处理
+	// 如果需要手动执行迁移，请使用 migrations.GetRegistry().ExecuteAll()
+	r.log.Info("migrate() called but migration is now handled by migrations package")
 	return nil
 }
 

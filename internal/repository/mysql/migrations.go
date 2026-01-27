@@ -270,3 +270,22 @@ func (r *Repository) EnsureUserGroupCountColumns(logger *zap.Logger) error {
 
 	return nil
 }
+
+// ensureGroupsBlockedCountColumn ensures the groups table has the blocked_count column
+func (r *Repository) ensureGroupsBlockedCountColumn() error {
+	migrator := r.db.Migrator()
+	type Group struct{}
+
+	if !migrator.HasColumn(&Group{}, "blocked_count") {
+		r.log.Info("Adding blocked_count column to groups table")
+		if err := r.db.Exec("ALTER TABLE groups ADD COLUMN blocked_count INT DEFAULT 0 NOT NULL COMMENT 'Number of blocked users in this group'").Error; err != nil {
+			r.log.Error("failed to add blocked_count column", zap.Error(err))
+			return err
+		}
+		r.log.Info("Successfully added blocked_count column to groups table")
+	} else {
+		r.log.Debug("blocked_count column already exists in groups table")
+	}
+
+	return nil
+}

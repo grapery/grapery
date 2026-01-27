@@ -32,24 +32,24 @@ const (
 
 // Badge 徽章定义
 type Badge struct {
-	ID           uint           `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
-	Code         string         `gorm:"size:50;uniqueIndex;not null" json:"code"` // 徽章代码 (如: story_creator_bronze)
-	Name         string         `gorm:"size:100;not null" json:"name"`            // 徽章名称
-	NameZh       string         `gorm:"size:100" json:"name_zh"`                  // 中文名称
-	Description  string         `gorm:"size:500" json:"description"`              // 描述
-	DescZh       string         `gorm:"size:500" json:"desc_zh"`                  // 中文描述
-	Category     BadgeCategory  `gorm:"size:20;not null;index" json:"category"`   // 类别
-	Tier         BadgeTier      `gorm:"size:20;not null" json:"tier"`             // 等级
-	IconURL      string         `gorm:"size:500" json:"icon_url"`                 // 图标URL
-	IconEmoji    string         `gorm:"size:10" json:"icon_emoji"`                // 图标Emoji
-	ColorHex     string         `gorm:"size:10" json:"color_hex"`                 // 颜色
-	Threshold    int            `gorm:"default:0" json:"threshold"`               // 获得条件阈值
-	Points       int            `gorm:"default:0" json:"points"`                  // 徽章积分价值
-	IsActive     bool           `gorm:"default:true;index" json:"is_active"`      // 是否激活
-	DisplayOrder int            `gorm:"default:0" json:"display_order"`           // 显示顺序
-	CreatedAt    time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt    time.Time      `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at,omitempty"`
+	ID           uint           `gorm:"primaryKey;column:id;autoIncrement;comment:主键ID" json:"id"`
+	Code         string         `gorm:"size:100;uniqueIndex;not null;comment:徽章代码（如: story_creator_bronze）" json:"code"` // 徽章代码（增加长度冗余）
+	Name         string         `gorm:"size:200;not null;comment:徽章名称" json:"name"`            // 徽章名称（增加长度冗余）
+	NameZh       string         `gorm:"size:200;comment:中文名称" json:"name_zh"`                  // 中文名称（增加长度冗余）
+	Description  string         `gorm:"size:1000;comment:描述" json:"description"`              // 描述（增加长度冗余）
+	DescZh       string         `gorm:"size:1000;comment:中文描述" json:"desc_zh"`                  // 中文描述（增加长度冗余）
+	Category     BadgeCategory  `gorm:"size:50;not null;index;comment:类别" json:"category"`   // 类别（增加长度冗余）
+	Tier         BadgeTier      `gorm:"size:50;not null;index;comment:等级" json:"tier"`             // 等级（增加长度冗余）
+	IconURL      string         `gorm:"size:1024;comment:图标URL" json:"icon_url"`                 // 图标URL（增加长度冗余）
+	IconEmoji    string         `gorm:"size:20;comment:图标Emoji" json:"icon_emoji"`                // 图标Emoji（增加长度冗余）
+	ColorHex     string         `gorm:"size:20;comment:颜色（十六进制）" json:"color_hex"`                 // 颜色（增加长度冗余）
+	Threshold    int            `gorm:"default:0;not null;comment:获得条件阈值" json:"threshold"`               // 获得条件阈值
+	Points       int            `gorm:"default:0;not null;comment:徽章积分价值" json:"points"`                  // 徽章积分价值
+	IsActive     bool           `gorm:"default:true;index;comment:是否激活" json:"is_active"`      // 是否激活
+	DisplayOrder int            `gorm:"default:0;not null;index;comment:显示顺序" json:"display_order"`           // 显示顺序
+	CreatedAt    time.Time      `gorm:"column:created_at;autoCreateTime;comment:创建时间" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"column:updated_at;autoUpdateTime;comment:更新时间" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index;comment:删除时间（软删除）" json:"deleted_at,omitempty"`
 }
 
 func (Badge) TableName() string {
@@ -58,15 +58,15 @@ func (Badge) TableName() string {
 
 // UserBadge 用户已获得的徽章
 type UserBadge struct {
-	ID        uint           `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
-	UserID    string         `gorm:"size:36;not null;index:idx_user_badge" json:"user_id"`
-	BadgeID   uint           `gorm:"not null;index:idx_user_badge" json:"badge_id"`
-	EarnedAt  int64          `gorm:"type:bigint;not null" json:"earned_at"` // 获得时间戳
-	IsNew     bool           `gorm:"default:true" json:"is_new"`            // 是否新徽章（用户未查看）
-	IsPinned  bool           `gorm:"default:false" json:"is_pinned"`        // 是否置顶展示
-	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at,omitempty"`
+	ID        uint           `gorm:"primaryKey;column:id;autoIncrement;comment:主键ID" json:"id"`
+	UserID    string         `gorm:"size:36;not null;index:idx_user_badge;comment:用户ID" json:"user_id"`
+	BadgeID   uint           `gorm:"not null;index:idx_user_badge;comment:徽章ID" json:"badge_id"`
+	EarnedAt  int64          `gorm:"type:bigint;not null;index;comment:获得时间戳" json:"earned_at"` // 获得时间戳
+	IsNew     bool           `gorm:"default:true;index;comment:是否新徽章（用户未查看）" json:"is_new"`            // 是否新徽章（用户未查看）
+	IsPinned  bool           `gorm:"default:false;index;comment:是否置顶展示" json:"is_pinned"`        // 是否置顶展示
+	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime;comment:创建时间" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;autoUpdateTime;comment:更新时间" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index;comment:删除时间（软删除）" json:"deleted_at,omitempty"`
 
 	// Relations
 	Badge *Badge `gorm:"foreignKey:BadgeID" json:"badge,omitempty"`
@@ -78,21 +78,21 @@ func (UserBadge) TableName() string {
 
 // UserBadgeStats 用户徽章统计数据
 type UserBadgeStats struct {
-	ID              uint           `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
-	UserID          string         `gorm:"size:36;uniqueIndex;not null" json:"user_id"`
-	StoryCount      int            `gorm:"default:0" json:"story_count"`      // 创建的故事数量
-	StoryboardCount int            `gorm:"default:0" json:"storyboard_count"` // 创建的故事版数量
-	TotalLikes      int            `gorm:"default:0" json:"total_likes"`      // 获得的总点赞数
-	StoryLikes      int            `gorm:"default:0" json:"story_likes"`      // 故事获得的点赞数
-	StoryboardLikes int            `gorm:"default:0" json:"storyboard_likes"` // 故事版获得的点赞数
-	FollowerCount   int            `gorm:"default:0" json:"follower_count"`   // 粉丝数量
-	FollowingCount  int            `gorm:"default:0" json:"following_count"`  // 关注数量
-	TotalBadges     int            `gorm:"default:0" json:"total_badges"`     // 已获得徽章总数
-	TotalPoints     int            `gorm:"default:0" json:"total_points"`     // 徽章总积分
-	LastUpdated     int64          `gorm:"type:bigint" json:"last_updated"`   // 最后更新时间
-	CreatedAt       time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt       time.Time      `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at,omitempty"`
+	ID              uint           `gorm:"primaryKey;column:id;autoIncrement;comment:主键ID" json:"id"`
+	UserID          string         `gorm:"size:36;uniqueIndex;not null;comment:用户ID" json:"user_id"`
+	StoryCount      int            `gorm:"default:0;not null;comment:创建的故事数量" json:"story_count"`      // 创建的故事数量
+	StoryboardCount int            `gorm:"default:0;not null;comment:创建的故事版数量" json:"storyboard_count"` // 创建的故事版数量
+	TotalLikes      int            `gorm:"default:0;not null;comment:获得的总点赞数" json:"total_likes"`      // 获得的总点赞数
+	StoryLikes      int            `gorm:"default:0;not null;comment:故事获得的点赞数" json:"story_likes"`      // 故事获得的点赞数
+	StoryboardLikes int            `gorm:"default:0;not null;comment:故事版获得的点赞数" json:"storyboard_likes"` // 故事版获得的点赞数
+	FollowerCount   int            `gorm:"default:0;not null;comment:粉丝数量" json:"follower_count"`   // 粉丝数量
+	FollowingCount  int            `gorm:"default:0;not null;comment:关注数量" json:"following_count"`  // 关注数量
+	TotalBadges     int            `gorm:"default:0;not null;comment:已获得徽章总数" json:"total_badges"`     // 已获得徽章总数
+	TotalPoints     int            `gorm:"default:0;not null;comment:徽章总积分" json:"total_points"`     // 徽章总积分
+	LastUpdated     int64          `gorm:"type:bigint;index;comment:最后更新时间" json:"last_updated"`   // 最后更新时间
+	CreatedAt       time.Time      `gorm:"column:created_at;autoCreateTime;comment:创建时间" json:"created_at"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;autoUpdateTime;comment:更新时间" json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index;comment:删除时间（软删除）" json:"deleted_at,omitempty"`
 }
 
 func (UserBadgeStats) TableName() string {

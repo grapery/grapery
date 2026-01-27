@@ -65,26 +65,9 @@ func Init(uname, pwd, address, dbname string) error {
 	// database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 	// database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
-	database.AutoMigrate(&PaymentRecord{})
-	database.AutoMigrate(&Subscription{})
-	database.AutoMigrate(&UserSubscription{})
-	database.AutoMigrate(&IAPProduct{})
-	database.AutoMigrate(&AppleReceipt{})
-	database.AutoMigrate(&AppleSubscription{})
-	database.AutoMigrate(&AppleNotification{})
-	database.AutoMigrate(&GooglePurchase{})
-	database.AutoMigrate(&GoogleSubscription{})
-	database.AutoMigrate(&GoogleNotification{})
-	database.AutoMigrate(&IAPReceiptValidation{})
-	database.AutoMigrate(&IAPSubscriptionSync{})
-
-	// 徽章系统相关表
-	database.AutoMigrate(&Badge{})
-	database.AutoMigrate(&UserBadge{})
-	database.AutoMigrate(&UserBadgeStats{})
-
-	// Token用量日志表
-	database.AutoMigrate(&TokenUsageLog{})
+	// 注意：所有表的迁移现在统一由 migrations 包管理
+	// 迁移步骤在 pay/migrations_register.go 中注册
+	// 迁移执行在应用启动时通过 migrations.GetRegistry().ExecuteAll() 统一调用
 
 	return nil
 }

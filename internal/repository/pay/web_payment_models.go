@@ -30,22 +30,22 @@ const (
 
 // WebPayment represents a web payment record
 type WebPayment struct {
-	ID                    string                 `json:"id" gorm:"primaryKey"`
-	UserID                string                 `json:"userId" gorm:"index:idx_web_payments_user_id"`
-	PlanID                string                 `json:"planId" gorm:"index:idx_web_payments_plan_id"`
-	Amount                int                    `json:"amount"`
-	Currency              string                 `json:"currency" gorm:"default:'USD'"`
-	Status                WebPaymentStatus       `json:"status" gorm:"index:idx_web_payments_status"`
-	Method                WebPaymentMethod       `json:"method" gorm:"index:idx_web_payments_method"`
-	CreatedAt             int64                  `json:"createdAt" gorm:"index:idx_web_payments_created_at"`
-	UpdatedAt             int64                  `json:"updatedAt"`
-	Metadata              map[string]interface{} `json:"metadata" gorm:"type:jsonb"`
-	StripePaymentIntentID string                 `json:"stripePaymentIntentId,omitempty" gorm:"uniqueIndex:idx_web_payments_stripe_pi"`
-	StripeClientSecret    string                 `json:"stripeClientSecret,omitempty" gorm:"size:512"`
-	AlipayOutTradeNo      string                 `json:"alipayOutTradeNo,omitempty" gorm:"uniqueIndex:idx_web_payments_alipay_trade"`
-	AlipayQRCodeURL       string                 `json:"alipayQRCodeURL,omitempty" gorm:"size:512"`
-	FailureReason         string                 `json:"failureReason,omitempty" gorm:"size:256"`
-	FailureCode           string                 `json:"failureCode,omitempty" gorm:"size:64"`
+	ID                    string                 `json:"id" gorm:"primaryKey;size:36;not null"`
+	UserID                string                 `json:"userId" gorm:"size:36;not null;index:idx_web_payments_user_id"`
+	PlanID                string                 `json:"planId" gorm:"size:36;index:idx_web_payments_plan_id"`
+	Amount                int                    `json:"amount" gorm:"not null;comment:支付金额（分）"`
+	Currency              string                 `json:"currency" gorm:"size:10;default:'USD';not null;comment:货币类型"`
+	Status                WebPaymentStatus       `json:"status" gorm:"size:20;not null;index:idx_web_payments_status;comment:支付状态"`
+	Method                WebPaymentMethod       `json:"method" gorm:"size:20;not null;index:idx_web_payments_method;comment:支付方式"`
+	CreatedAt             int64                  `json:"createdAt" gorm:"type:bigint;not null;index:idx_web_payments_created_at;comment:创建时间"`
+	UpdatedAt             int64                  `json:"updatedAt" gorm:"type:bigint;not null;comment:更新时间"`
+	Metadata              map[string]interface{} `json:"metadata" gorm:"type:json;comment:元数据（JSON格式）"`
+	StripePaymentIntentID string                 `json:"stripePaymentIntentId,omitempty" gorm:"size:255;uniqueIndex:idx_web_payments_stripe_pi;comment:Stripe支付意图ID"`
+	StripeClientSecret    string                 `json:"stripeClientSecret,omitempty" gorm:"size:512;comment:Stripe客户端密钥"`
+	AlipayOutTradeNo      string                 `json:"alipayOutTradeNo,omitempty" gorm:"size:128;uniqueIndex:idx_web_payments_alipay_trade;comment:支付宝商户订单号"`
+	AlipayQRCodeURL       string                 `json:"alipayQRCodeURL,omitempty" gorm:"size:1024;comment:支付宝二维码URL"`
+	FailureReason         string                 `json:"failureReason,omitempty" gorm:"size:512;comment:失败原因"`
+	FailureCode           string                 `json:"failureCode,omitempty" gorm:"size:100;comment:失败错误码"`
 }
 
 // TableName specifies the table name for WebPayment
@@ -157,19 +157,13 @@ func (r *WebPaymentRepository) GetUserPaymentsByDateRange(userID string, startDa
 }
 
 // AutoMigrateWebPayments auto-migrates the web_payments table
+// 注意：此函数已废弃，web_payments 表的迁移现在统一由 migrations 包管理
+// 迁移步骤在 pay/migrations_register.go 中注册
+// 索引创建也在 migrations 包中统一处理
+// 保留此函数仅用于向后兼容
 func AutoMigrateWebPayments() error {
-	db := DataBase()
-
-	// Auto migrate
-	if err := db.AutoMigrate(&WebPayment{}); err != nil {
-		return err
-	}
-
-	// Create indexes
-	if err := createWebPaymentIndexes(db); err != nil {
-		return err
-	}
-
+	// 此函数已废弃，迁移现在由统一的 migrations 系统处理
+	// 如果需要手动迁移，请使用 migrations.GetRegistry().ExecuteAll()
 	return nil
 }
 
