@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
 
+	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
@@ -473,9 +475,45 @@ func (s *AIService) processImageGeneration(ctx context.Context, task *domain.AIT
 		tokensUsed = resp.Usage.TotalTokens
 	}
 
+	// 上传图片到 OSS 并生成多级别缩略图
+	processedURLs := make([]string, 0, len(resp.ImageURLs))
+	ossClient := aliyun.GetGlobalClient()
+
+	for i, imageURL := range resp.ImageURLs {
+		if ossClient != nil {
+			// 生成 OSS object key（包含多级别）
+			objectKey := fmt.Sprintf("ai-generated/images/%s/original.jpg", task.ID)
+
+			// 上传到 OSS（会自动生成不同 level 的图片）
+			ossURL, err := ossClient.UploadFileFromURL(objectKey, imageURL)
+			if err != nil {
+				s.logger.Warn("failed to upload image to OSS, using original URL",
+					zap.String("taskId", task.ID),
+					zap.Int("index", i),
+					zap.String("originalURL", imageURL),
+					zap.Error(err))
+				// 上传失败时使用原始 URL
+				processedURLs = append(processedURLs, imageURL)
+			} else {
+				// 清理 URL：移除查询参数，确保 HTTPS
+				ossURL = strings.Split(ossURL, "?")[0]
+				ossURL = strings.ReplaceAll(ossURL, "http://", "https://")
+				processedURLs = append(processedURLs, ossURL)
+				s.logger.Debug("image uploaded to OSS with multi-level support",
+					zap.String("taskId", task.ID),
+					zap.Int("index", i),
+					zap.String("ossURL", ossURL))
+			}
+		} else {
+			s.logger.Warn("OSS client not available, using original image URL",
+				zap.String("taskId", task.ID))
+			processedURLs = append(processedURLs, imageURL)
+		}
+	}
+
 	// 构建结果
 	result := &domain.AIImageGenerationResult{
-		URLs:       resp.ImageURLs,
+		URLs:       processedURLs,
 		TokensUsed: tokensUsed,
 	}
 
@@ -601,10 +639,60 @@ func (s *AIService) processVideoGeneration(ctx context.Context, task *domain.AIT
 		tokensUsed = resp.Usage.TotalTokens
 	}
 
+	// 上传视频到 OSS 并生成多级别缩略图
+	processedVideoURL := resp.VideoURL
+	processedThumbnailURL := resp.ThumbnailURL
+	ossClient := aliyun.GetGlobalClient()
+
+	if ossClient != nil {
+		// 上传视频文件
+		if resp.VideoURL != "" {
+			videoObjectKey := fmt.Sprintf("ai-generated/videos/%s/original.mp4", task.ID)
+			ossVideoURL, err := ossClient.UploadFileFromURL(videoObjectKey, resp.VideoURL)
+			if err != nil {
+				s.logger.Warn("failed to upload video to OSS, using original URL",
+					zap.String("taskId", task.ID),
+					zap.String("originalURL", resp.VideoURL),
+					zap.Error(err))
+			} else {
+				// 清理 URL
+				ossVideoURL = strings.Split(ossVideoURL, "?")[0]
+				ossVideoURL = strings.ReplaceAll(ossVideoURL, "http://", "https://")
+				processedVideoURL = ossVideoURL
+				s.logger.Debug("video uploaded to OSS",
+					zap.String("taskId", task.ID),
+					zap.String("ossURL", ossVideoURL))
+			}
+		}
+
+		// 上传缩略图
+		if resp.ThumbnailURL != "" {
+			thumbnailObjectKey := fmt.Sprintf("ai-generated/videos/%s/thumbnail.jpg", task.ID)
+			ossThumbnailURL, err := ossClient.UploadFileFromURL(thumbnailObjectKey, resp.ThumbnailURL)
+			if err != nil {
+				s.logger.Warn("failed to upload thumbnail to OSS, using original URL",
+					zap.String("taskId", task.ID),
+					zap.String("originalURL", resp.ThumbnailURL),
+					zap.Error(err))
+			} else {
+				// 清理 URL
+				ossThumbnailURL = strings.Split(ossThumbnailURL, "?")[0]
+				ossThumbnailURL = strings.ReplaceAll(ossThumbnailURL, "http://", "https://")
+				processedThumbnailURL = ossThumbnailURL
+				s.logger.Debug("thumbnail uploaded to OSS",
+					zap.String("taskId", task.ID),
+					zap.String("ossURL", ossThumbnailURL))
+			}
+		}
+	} else {
+		s.logger.Warn("OSS client not available, using original video URLs",
+			zap.String("taskId", task.ID))
+	}
+
 	// 构建生成结果
 	result := &domain.AIVideoGenerationResult{
-		VideoURL:     resp.VideoURL,
-		ThumbnailURL: resp.ThumbnailURL,
+		VideoURL:     processedVideoURL,
+		ThumbnailURL: processedThumbnailURL,
 		Duration:     req.Duration,
 		TokensUsed:   tokensUsed,
 	}

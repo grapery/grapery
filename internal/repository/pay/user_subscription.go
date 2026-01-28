@@ -25,49 +25,49 @@ const (
 
 // UserSubscription 用户订阅记录模型
 type UserSubscription struct {
-	IDBase // IDBase 已经包含了 ID 字段，不需要重复定义
-	UserID          int64                  `gorm:"column:user_id;not null;index" json:"user_id"`                     // 用户ID
-	PackagePlanID   uint                   `gorm:"column:package_plan_id;not null;index" json:"package_plan_id"`     // 套餐计划ID
-	OrderID         uint                   `gorm:"column:order_id;not null;index" json:"order_id"`                   // 订单ID
-	Status          UserSubscriptionStatus `gorm:"column:status;default:1" json:"status"`                            // 订阅状态
-	StartTime       time.Time              `gorm:"column:start_time;not null" json:"start_time"`                     // 开始时间
-	EndTime         time.Time              `gorm:"column:end_time;not null" json:"end_time"`                         // 结束时间
-	AutoRenew       bool                   `gorm:"column:auto_renew;default:true" json:"auto_renew"`                 // 自动续费
-	PaymentMethod   PaymentMethod          `gorm:"column:payment_method;not null;index;comment:支付方式" json:"payment_method"`             // 支付方式
+	IDBase                                 // IDBase 已经包含了 ID 字段，不需要重复定义
+	UserID          int64                  `gorm:"column:user_id;not null;index" json:"user_id"`                                          // 用户ID
+	PackagePlanID   uint                   `gorm:"column:package_plan_id;not null;index" json:"package_plan_id"`                          // 套餐计划ID
+	OrderID         uint                   `gorm:"column:order_id;not null;index" json:"order_id"`                                        // 订单ID
+	Status          UserSubscriptionStatus `gorm:"column:status;default:1" json:"status"`                                                 // 订阅状态
+	StartTime       time.Time              `gorm:"column:start_time;not null" json:"start_time"`                                          // 开始时间
+	EndTime         time.Time              `gorm:"column:end_time;not null" json:"end_time"`                                              // 结束时间
+	AutoRenew       bool                   `gorm:"column:auto_renew;default:true" json:"auto_renew"`                                      // 自动续费
+	PaymentMethod   PaymentMethod          `gorm:"column:payment_method;not null;index;comment:支付方式" json:"payment_method"`               // 支付方式
 	PaymentProvider string                 `gorm:"column:payment_provider;size:100;not null;index;comment:支付提供商" json:"payment_provider"` // 支付提供商（增加长度冗余）
-	ProviderSubID   string                 `gorm:"column:provider_sub_id;size:512;index;comment:第三方订阅ID" json:"provider_sub_id"`           // 第三方订阅ID（增加长度冗余）
-	Amount          int64                  `gorm:"column:amount;not null" json:"amount"`                             // 订阅金额（分）
-	Currency        string                 `gorm:"column:currency;size:10;default:'CNY'" json:"currency"`            // 货币类型
+	ProviderSubID   string                 `gorm:"column:provider_sub_id;size:512;index;comment:第三方订阅ID" json:"provider_sub_id"`          // 第三方订阅ID（增加长度冗余）
+	Amount          int64                  `gorm:"column:amount;not null" json:"amount"`                                                  // 订阅金额（分）
+	Currency        string                 `gorm:"column:currency;size:10;default:'CNY'" json:"currency"`                                 // 货币类型
 
 	// 服务能力配置（从套餐计划复制，便于查询）
-	QuotaLimit      int    `gorm:"column:quota_limit;default:1000" json:"quota_limit"`        // 额度限制
-	QuotaUsed       int    `gorm:"column:quota_used;default:0" json:"quota_used"`             // 已使用额度
-	MaxRoles        int    `gorm:"column:max_roles;default:2" json:"max_roles"`               // 最大角色数
-	MaxContexts     int    `gorm:"column:max_contexts;default:5" json:"max_contexts"`         // 最大上下文数
+	QuotaLimit      int    `gorm:"column:quota_limit;default:1000" json:"quota_limit"`                             // 额度限制
+	QuotaUsed       int    `gorm:"column:quota_used;default:0" json:"quota_used"`                                  // 已使用额度
+	MaxRoles        int    `gorm:"column:max_roles;default:2" json:"max_roles"`                                    // 最大角色数
+	MaxContexts     int    `gorm:"column:max_contexts;default:5" json:"max_contexts"`                              // 最大上下文数
 	AvailableModels string `gorm:"column:available_models;type:json;comment:可用模型（JSON数组）" json:"available_models"` // 可用模型（JSON数组）
 	Features        string `gorm:"column:features;type:json;comment:功能特性（JSON对象）" json:"features"`                 // 功能特性（JSON对象）
 
 	// 订阅管理
-	CancelReason    string     `gorm:"column:cancel_reason;size:512;comment:取消原因" json:"cancel_reason"` // 取消原因（增加长度冗余）
-	CanceledAt      *time.Time `gorm:"column:canceled_at;index;comment:取消时间" json:"canceled_at"`              // 取消时间
+	CancelReason    string     `gorm:"column:cancel_reason;size:512;comment:取消原因" json:"cancel_reason"`        // 取消原因（增加长度冗余）
+	CanceledAt      *time.Time `gorm:"column:canceled_at;index;comment:取消时间" json:"canceled_at"`               // 取消时间
 	CanceledBy      int64      `gorm:"column:canceled_by;index;comment:取消者ID" json:"canceled_by"`              // 取消者ID
-	NextBillingDate *time.Time `gorm:"column:next_billing_date;index;comment:下次计费时间" json:"next_billing_date"`  // 下次计费时间
-	TrialStartTime  *time.Time `gorm:"column:trial_start_time;index;comment:试用开始时间" json:"trial_start_time"`    // 试用开始时间
-	TrialEndTime    *time.Time `gorm:"column:trial_end_time;index;comment:试用结束时间" json:"trial_end_time"`        // 试用结束时间
-	PauseStartTime  *time.Time `gorm:"column:pause_start_time;index;comment:暂停开始时间" json:"pause_start_time"`    // 暂停开始时间
-	PauseEndTime    *time.Time `gorm:"column:pause_end_time;index;comment:暂停结束时间" json:"pause_end_time"`        // 暂停结束时间
-	UpgradeFromID   *uint      `gorm:"column:upgrade_from_id;index;comment:升级前订阅ID" json:"upgrade_from_id"`      // 升级前订阅ID
-	DowngradeToID   *uint      `gorm:"column:downgrade_to_id;index;comment:降级后订阅ID" json:"downgrade_to_id"`      // 降级后订阅ID
+	NextBillingDate *time.Time `gorm:"column:next_billing_date;index;comment:下次计费时间" json:"next_billing_date"` // 下次计费时间
+	TrialStartTime  *time.Time `gorm:"column:trial_start_time;index;comment:试用开始时间" json:"trial_start_time"`   // 试用开始时间
+	TrialEndTime    *time.Time `gorm:"column:trial_end_time;index;comment:试用结束时间" json:"trial_end_time"`       // 试用结束时间
+	PauseStartTime  *time.Time `gorm:"column:pause_start_time;index;comment:暂停开始时间" json:"pause_start_time"`   // 暂停开始时间
+	PauseEndTime    *time.Time `gorm:"column:pause_end_time;index;comment:暂停结束时间" json:"pause_end_time"`       // 暂停结束时间
+	UpgradeFromID   *uint      `gorm:"column:upgrade_from_id;index;comment:升级前订阅ID" json:"upgrade_from_id"`    // 升级前订阅ID
+	DowngradeToID   *uint      `gorm:"column:downgrade_to_id;index;comment:降级后订阅ID" json:"downgrade_to_id"`    // 降级后订阅ID
 
 	// 统计信息
-	TotalPaid    int64 `gorm:"column:total_paid;default:0;not null;comment:总支付金额（分）" json:"total_paid"`       // 总支付金额
-	PaymentCount int   `gorm:"column:payment_count;default:0;not null;comment:支付次数" json:"payment_count"` // 支付次数
-	RefundCount  int   `gorm:"column:refund_count;default:0;not null;comment:退款次数" json:"refund_count"`   // 退款次数
+	TotalPaid    int64 `gorm:"column:total_paid;default:0;not null;comment:总支付金额（分）" json:"total_paid"`      // 总支付金额
+	PaymentCount int   `gorm:"column:payment_count;default:0;not null;comment:支付次数" json:"payment_count"`    // 支付次数
+	RefundCount  int   `gorm:"column:refund_count;default:0;not null;comment:退款次数" json:"refund_count"`      // 退款次数
 	RefundAmount int64 `gorm:"column:refund_amount;default:0;not null;comment:退款金额（分）" json:"refund_amount"` // 退款金额
 
 	// 元数据
 	Metadata string `gorm:"column:metadata;type:json;comment:元数据（JSON格式）" json:"metadata"` // 元数据（JSON）
-	Notes    string `gorm:"column:notes;type:text;comment:备注" json:"notes"`       // 备注
+	Notes    string `gorm:"column:notes;type:text;comment:备注" json:"notes"`                // 备注
 }
 
 func (us UserSubscription) TableName() string {

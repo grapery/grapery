@@ -151,10 +151,10 @@ type IAPReceiptValidation struct {
 type IAPSubscriptionSync struct {
 	ID             uint           `gorm:"primaryKey" json:"id"`
 	UserID         uint64         `gorm:"index" json:"user_id"`
-	Platform       string         `gorm:"type:varchar(50);index" json:"platform"` // apple, google
+	Platform       string         `gorm:"type:varchar(50);index" json:"platform"`                               // apple, google
 	SubscriptionID string         `gorm:"type:varchar(512);not null;index;comment:订阅ID" json:"subscription_id"` // 增加长度冗余
-	SyncType       string         `gorm:"type:varchar(50);index" json:"sync_type"`   // manual, auto, webhook
-	SyncStatus     string         `gorm:"type:varchar(50);index" json:"sync_status"` // success, failed, pending
+	SyncType       string         `gorm:"type:varchar(50);index" json:"sync_type"`                              // manual, auto, webhook
+	SyncStatus     string         `gorm:"type:varchar(50);index" json:"sync_status"`                            // success, failed, pending
 	ErrorMessage   string         `gorm:"type:text" json:"error_message"`
 	PreviousStatus string         `gorm:"type:varchar(50)" json:"previous_status"`
 	NewStatus      string         `gorm:"type:varchar(50)" json:"new_status"`

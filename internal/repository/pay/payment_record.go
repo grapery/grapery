@@ -32,36 +32,36 @@ const (
 // PaymentRecord IAP 支付记录模型
 type PaymentRecord struct {
 	IDBase
-	UserID          int64         `gorm:"column:user_id;not null;index" json:"user_id"`                       // 用户ID
-	SubscriptionID  *uint         `gorm:"column:subscription_id;index" json:"subscription_id"`                // 关联的订阅ID（可选）
-	Amount          int64         `gorm:"column:amount;not null" json:"amount"`                               // 支付金额（分）
-	Currency        string        `gorm:"column:currency;size:10;default:'USD'" json:"currency"`              // 货币类型
-	Status          PaymentStatus `gorm:"column:status;default:1" json:"status"`                              // 支付状态
-	PaymentMethod   PaymentMethod `gorm:"column:payment_method;not null" json:"payment_method"`               // 支付方式（Apple Pay/Google Pay）
-	PaymentProvider string        `gorm:"column:payment_provider;size:100;not null;index;comment:支付提供商（App Store/Google Play）" json:"payment_provider"`   // 支付提供商（增加长度冗余）
-	TransactionID   string        `gorm:"column:transaction_id;size:512;uniqueIndex;not null;comment:IAP交易ID" json:"transaction_id"`   // IAP 交易ID（增加长度冗余）
-	OriginalTxID    string        `gorm:"column:original_tx_id;size:512;index;comment:原始交易ID（用于订阅续费）" json:"original_tx_id"`         // 原始交易ID（增加长度冗余）
-	ProductID       string        `gorm:"column:product_id;size:255;not null;index;comment:产品ID" json:"product_id"`                 // 产品ID
-	PurchaseToken   string        `gorm:"column:purchase_token;type:longtext;comment:购买令牌（Google IAP）" json:"purchase_token"`              // 购买令牌（Google IAP，使用longtext增加冗余）
-	ReceiptData     string        `gorm:"column:receipt_data;type:longtext;comment:收据数据（Apple IAP）" json:"receipt_data"`                  // 收据数据（Apple IAP，使用longtext增加冗余）
-	PaymentTime     *time.Time    `gorm:"column:payment_time;index;comment:支付时间" json:"payment_time"`                            // 支付时间
-	ExpiresTime     *time.Time    `gorm:"column:expires_time;index;comment:过期时间（订阅用）" json:"expires_time"`                            // 过期时间（订阅用）
-	RefundAmount    int64         `gorm:"column:refund_amount;default:0;not null;comment:退款金额（分）" json:"refund_amount"`                // 退款金额（分）
-	RefundTime      *time.Time    `gorm:"column:refund_time;index;comment:退款时间" json:"refund_time"`                              // 退款时间
-	RefundReason    string        `gorm:"column:refund_reason;size:512;comment:退款原因" json:"refund_reason"`                 // 退款原因（增加长度冗余）
-	ErrorCode       string        `gorm:"column:error_code;size:100;index;comment:错误代码" json:"error_code"`                       // 错误代码
-	ErrorMessage    string        `gorm:"column:error_message;type:text;comment:错误信息" json:"error_message"`                 // 错误信息（使用text增加冗余）
-	Environment     string        `gorm:"column:environment;size:50;default:'Production';index;comment:环境（Production/Sandbox）" json:"environment"` // 环境（增加长度冗余）
-	Metadata        string        `gorm:"column:metadata;type:json;comment:元数据（JSON格式）" json:"metadata"`                          // 元数据（JSON）
+	UserID          int64         `gorm:"column:user_id;not null;index" json:"user_id"`                                                                 // 用户ID
+	SubscriptionID  *uint         `gorm:"column:subscription_id;index" json:"subscription_id"`                                                          // 关联的订阅ID（可选）
+	Amount          int64         `gorm:"column:amount;not null" json:"amount"`                                                                         // 支付金额（分）
+	Currency        string        `gorm:"column:currency;size:10;default:'USD'" json:"currency"`                                                        // 货币类型
+	Status          PaymentStatus `gorm:"column:status;default:1" json:"status"`                                                                        // 支付状态
+	PaymentMethod   PaymentMethod `gorm:"column:payment_method;not null" json:"payment_method"`                                                         // 支付方式（Apple Pay/Google Pay）
+	PaymentProvider string        `gorm:"column:payment_provider;size:100;not null;index;comment:支付提供商（App Store/Google Play）" json:"payment_provider"` // 支付提供商（增加长度冗余）
+	TransactionID   string        `gorm:"column:transaction_id;size:512;uniqueIndex;not null;comment:IAP交易ID" json:"transaction_id"`                    // IAP 交易ID（增加长度冗余）
+	OriginalTxID    string        `gorm:"column:original_tx_id;size:512;index;comment:原始交易ID（用于订阅续费）" json:"original_tx_id"`                            // 原始交易ID（增加长度冗余）
+	ProductID       string        `gorm:"column:product_id;size:255;not null;index;comment:产品ID" json:"product_id"`                                     // 产品ID
+	PurchaseToken   string        `gorm:"column:purchase_token;type:longtext;comment:购买令牌（Google IAP）" json:"purchase_token"`                           // 购买令牌（Google IAP，使用longtext增加冗余）
+	ReceiptData     string        `gorm:"column:receipt_data;type:longtext;comment:收据数据（Apple IAP）" json:"receipt_data"`                                // 收据数据（Apple IAP，使用longtext增加冗余）
+	PaymentTime     *time.Time    `gorm:"column:payment_time;index;comment:支付时间" json:"payment_time"`                                                   // 支付时间
+	ExpiresTime     *time.Time    `gorm:"column:expires_time;index;comment:过期时间（订阅用）" json:"expires_time"`                                              // 过期时间（订阅用）
+	RefundAmount    int64         `gorm:"column:refund_amount;default:0;not null;comment:退款金额（分）" json:"refund_amount"`                                 // 退款金额（分）
+	RefundTime      *time.Time    `gorm:"column:refund_time;index;comment:退款时间" json:"refund_time"`                                                     // 退款时间
+	RefundReason    string        `gorm:"column:refund_reason;size:512;comment:退款原因" json:"refund_reason"`                                              // 退款原因（增加长度冗余）
+	ErrorCode       string        `gorm:"column:error_code;size:100;index;comment:错误代码" json:"error_code"`                                              // 错误代码
+	ErrorMessage    string        `gorm:"column:error_message;type:text;comment:错误信息" json:"error_message"`                                             // 错误信息（使用text增加冗余）
+	Environment     string        `gorm:"column:environment;size:50;default:'Production';index;comment:环境（Production/Sandbox）" json:"environment"`      // 环境（增加长度冗余）
+	Metadata        string        `gorm:"column:metadata;type:json;comment:元数据（JSON格式）" json:"metadata"`                                                // 元数据（JSON）
 	// IAP 特定字段
-	IsSubscription   bool   `gorm:"column:is_subscription;default:false" json:"is_subscription"` // 是否为订阅
-	IsTrial          bool   `gorm:"column:is_trial;default:false" json:"is_trial"`               // 是否为试用期
-	IsIntroOffer     bool   `gorm:"column:is_intro_offer;default:false" json:"is_intro_offer"`   // 是否为优惠价格
-	AutoRenewStatus  string `gorm:"column:auto_renew_status;size:20" json:"auto_renew_status"`   // 自动续费状态
-	LastNotification string `gorm:"column:last_notification;size:50" json:"last_notification"`   // 最后通知类型
-	VerificationHash string `gorm:"column:verification_hash;size:512;index;comment:验证哈希" json:"verification_hash"`  // 验证哈希（增加长度冗余）
-	IsTest           bool   `gorm:"column:is_test;default:false;index;comment:是否为测试支付" json:"is_test"`                 // 是否为测试支付
-	Notes            string `gorm:"column:notes;type:text;comment:备注" json:"notes"`                         // 备注
+	IsSubscription   bool   `gorm:"column:is_subscription;default:false" json:"is_subscription"`                   // 是否为订阅
+	IsTrial          bool   `gorm:"column:is_trial;default:false" json:"is_trial"`                                 // 是否为试用期
+	IsIntroOffer     bool   `gorm:"column:is_intro_offer;default:false" json:"is_intro_offer"`                     // 是否为优惠价格
+	AutoRenewStatus  string `gorm:"column:auto_renew_status;size:20" json:"auto_renew_status"`                     // 自动续费状态
+	LastNotification string `gorm:"column:last_notification;size:50" json:"last_notification"`                     // 最后通知类型
+	VerificationHash string `gorm:"column:verification_hash;size:512;index;comment:验证哈希" json:"verification_hash"` // 验证哈希（增加长度冗余）
+	IsTest           bool   `gorm:"column:is_test;default:false;index;comment:是否为测试支付" json:"is_test"`             // 是否为测试支付
+	Notes            string `gorm:"column:notes;type:text;comment:备注" json:"notes"`                                // 备注
 }
 
 func (p PaymentRecord) TableName() string {

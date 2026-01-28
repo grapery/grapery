@@ -21,11 +21,11 @@ type MigrationStep struct {
 
 // MigrationRegistry 注册和管理所有迁移
 type MigrationRegistry struct {
-	coreSteps       []MigrationStep
-	paymentSteps    []MigrationStep
-	schemaFixSteps  []MigrationStep
-	indexSteps      []MigrationStep
-	dataInitSteps   []MigrationStep
+	coreSteps      []MigrationStep
+	paymentSteps   []MigrationStep
+	schemaFixSteps []MigrationStep
+	indexSteps     []MigrationStep
+	dataInitSteps  []MigrationStep
 }
 
 // NewMigrationRegistry 创建新的迁移注册表
