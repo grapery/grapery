@@ -9,7 +9,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
-	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"     // Register payment migrations
+	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"   // Register payment migrations
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

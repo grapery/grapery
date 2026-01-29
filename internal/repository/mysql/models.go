@@ -565,8 +565,8 @@ type CharacterFollow struct {
 // GroupRole 群组角色定义表
 type GroupRole struct {
 	ID          string    `gorm:"primaryKey;size:36"`
-	RoleCode    string    `gorm:"size:50;not null;uniqueIndex;index"` // creator, admin, member, outsider
-	Name        string    `gorm:"size:100;not null"`                  // 小组创建者、小组管理员、小组成员、小组外部人员
+	RoleCode    string    `gorm:"size:50;not null;uniqueIndex"` // creator, admin, member, outsider
+	Name        string    `gorm:"size:100;not null"`            // 小组创建者、小组管理员、小组成员、小组外部人员
 	Description string    `gorm:"type:text"`
 	IsSystem    bool      `gorm:"default:true;index"` // 是否为系统内置角色
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
@@ -1179,7 +1179,7 @@ type TokenTransaction struct {
 // InvitationCode 邀请码表
 type InvitationCode struct {
 	ID          string         `gorm:"primaryKey;size:36"`
-	Code        string         `gorm:"size:50;not null;uniqueIndex;index"` // 邀请码（唯一）
+	Code        string         `gorm:"size:50;not null;uniqueIndex"` // 邀请码（唯一）
 	CreatedBy   string         `gorm:"size:36;not null;index"`
 	Creator     User           `gorm:"foreignKey:CreatedBy"`
 	UsedBy      string         `gorm:"size:36;index"` // 使用者用户ID（如果已使用）
