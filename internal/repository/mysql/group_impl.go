@@ -355,7 +355,10 @@ func (r *Repository) GetMemberRoleID(ctx context.Context, groupID, userID string
 		}
 		return "", err
 	}
-	return member.RoleID, nil
+	if member.RoleID != nil {
+		return *member.RoleID, nil
+	}
+	return "", nil
 }
 
 // groupRoleToDomain 将数据库模型转换为domain模型
