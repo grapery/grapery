@@ -68,6 +68,11 @@ func (r *Repository) migrate() error {
 	return nil
 }
 
+// DB returns the underlying GORM database instance
+func (r *Repository) DB() *gorm.DB {
+	return r.db
+}
+
 type columnInfo struct {
 	DataType   string `gorm:"column:data_type"`
 	ColumnType string `gorm:"column:column_type"`

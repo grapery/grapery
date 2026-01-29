@@ -581,8 +581,8 @@ type GroupMember struct {
 	UserID    string         `gorm:"size:36;not null;index:idx_group_user,unique;index"`
 	User      User           `gorm:"foreignKey:UserID"`
 	Role      string         `gorm:"size:20;not null"` // owner, admin, moderator, member (保留用于向后兼容)
-	RoleID    string         `gorm:"size:36;index"`    // 关联到GroupRole表
-	RoleRef   GroupRole      `gorm:"foreignKey:RoleID"`
+	RoleID    *string        `gorm:"size:36;index"`    // 关联到GroupRole表 (可为空)
+	RoleRef   *GroupRole     `gorm:"foreignKey:RoleID"`
 	InvitedBy string         `gorm:"size:36"`
 	JoinedAt  time.Time      `gorm:"autoCreateTime"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`

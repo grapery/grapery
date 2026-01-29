@@ -20,6 +20,9 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
+	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
+	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"     // Register payment migrations
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
 	"github.com/grapestree/fgrapery/grapery/internal/server"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
@@ -190,6 +193,15 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to initialize repository", zap.Error(err))
 	}
+
+	// Run database migrations
+	logger.Info("running database migrations")
+	registry := migrations.GetRegistry()
+	ctx := context.Background()
+	if err := registry.ExecuteAll(ctx, repo.DB(), logger); err != nil {
+		logger.Fatal("failed to run database migrations", zap.Error(err))
+	}
+	logger.Info("database migrations completed successfully")
 
 	// Initialize service
 	svc := service.New(repo, logger)
