@@ -289,3 +289,23 @@ func (r *Repository) ensureGroupsBlockedCountColumn() error {
 
 	return nil
 }
+
+// ensureUserFragmentsCountColumn ensures the users table has the fragments_count column
+func (r *Repository) ensureUserFragmentsCountColumn() error {
+	migrator := r.db.Migrator()
+	type User struct{}
+
+	if !migrator.HasColumn(&User{}, "fragments_count") {
+		r.log.Info("Adding fragments_count column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN fragments_count INT DEFAULT 0 NOT NULL COMMENT 'Number of fragments created by this user'").Error; err != nil {
+			r.log.Error("failed to add fragments_count column", zap.Error(err))
+			return err
+		}
+		r.log.Info("Successfully added fragments_count column to users table")
+	} else {
+		r.log.Debug("fragments_count column already exists in users table")
+	}
+
+	return nil
+}
+

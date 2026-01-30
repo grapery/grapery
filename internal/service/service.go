@@ -92,6 +92,11 @@ func (s *Service) AIGenerationService() *AIGenerationService {
 	return s.aiGenService
 }
 
+// AIService 获取AI服务（用于 FragmentGenerationService）
+func (s *Service) AIService() *AIService {
+	return NewAIService(s.genAPI, s.geminiClient, s.repo, s.logger)
+}
+
 // UserStatsService 获取用户统计服务
 func (s *Service) UserStatsService() *UserStatisticsService {
 	return s.userStatsService

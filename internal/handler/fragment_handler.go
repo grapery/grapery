@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grapestree/voyager/grapery/internal/domain"
-	"github.com/grapestree/voyager/grapery/internal/repository"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/repository"
 )
 
 type FragmentHandler struct {

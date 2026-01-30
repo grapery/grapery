@@ -20,6 +20,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
 	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"     // Register payment migrations
@@ -223,6 +224,17 @@ func main() {
 	// Initialize Writers Room Service
 	writersRoomService := service.NewWritersRoomService(repo, logger)
 	logger.Info("writers room service initialized")
+
+	// Initialize Fragment Generation Service
+	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
+	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, svc.AIService(), logger)
+	logger.Info("fragment generation service initialized")
+
+	// Initialize Fragment Interaction Service
+	fragmentRepo := repository.NewFragmentRepository(repo.DB())
+	fragmentInteractionRepo := repository.NewFragmentInteractionRepository(repo.DB())
+	logger.Info("fragment interaction repository initialized")
+
 	// Initialize HTTP handler
 	handler := transport.NewHandler(svc, nil, writersRoomService, logger)
 	router := transport.SetupRouter(handler, logger)
@@ -232,6 +244,16 @@ func main() {
 	apiGroup := router.Group("/api")
 	storyboardChatHandler.RegisterRoutes(apiGroup.Group("/agent"), authPkg.AuthMiddleware())
 	logger.Info("storyboard chat routes registered")
+
+	// Register Fragment Generation routes
+	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, logger)
+	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
+	logger.Info("fragment generation routes registered")
+
+	// Register Fragment Interaction routes (likes, comments, shares)
+	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, logger)
+	fragmentInteractionHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
+	logger.Info("fragment interaction routes registered")
 
 	// Configure CORS
 	router.Use(cors.New(cors.Config{

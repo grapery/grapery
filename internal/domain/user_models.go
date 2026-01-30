@@ -17,6 +17,7 @@ type User struct {
 	Followers           int    `json:"followers"`
 	Following           int    `json:"following"`
 	StoryboardCount     int    `json:"storyboardCount"` // Number of storyboards created by this user
+	FragmentsCount      int    `json:"fragmentsCount"`  // Number of fragments created by this user
 	GroupsCount         int    `json:"groupsCount"`     // Number of groups the user has joined
 	GroupsCreated       int    `json:"groupsCreated"`   // Number of groups created by this user
 	Status              string `json:"status"`          // active, suspended, deleted

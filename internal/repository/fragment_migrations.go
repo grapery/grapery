@@ -3,7 +3,7 @@ package repository
 import (
 	"fmt"
 
-	"github.com/grapestree/voyager/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
 

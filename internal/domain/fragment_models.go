@@ -22,19 +22,6 @@ func (Fragment) TableName() string {
 	return "fragments"
 }
 
-// FragmentLike represents a like relationship between a user and a fragment
-type FragmentLike struct {
-	ID         string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
-	FragmentID string    `json:"fragmentId" gorm:"column:fragment_id;type:varchar(36);not null;index:idx_fragment_user"`
-	UserID     string    `json:"userId" gorm:"column:user_id;type:varchar(36);not null;index:idx_fragment_user;index:idx_user"`
-	CreatedAt  time.Time `json:"createdAt" gorm:"column:created_at;type:datetime;autoCreateTime"`
-}
-
-// TableName specifies the table name for FragmentLike
-func (FragmentLike) TableName() string {
-	return "fragment_likes"
-}
-
 // FragmentVisibility constants
 const (
 	FragmentVisibilityPublic     = "public"

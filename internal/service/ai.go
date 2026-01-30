@@ -803,3 +803,93 @@ func ptrInt32(v int) *int32 {
 	i := int32(v)
 	return &i
 }
+
+// ============== Fragment Generation Helpers ==============
+
+// GenerateTextForFragment 生成文本内容（为 FragmentGenerationService 提供简化接口）
+func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
+	if s.geminiClient == nil {
+		return "", 0, fmt.Errorf("gemini client not available")
+	}
+
+	// 从 Input 字段解析 prompt
+	var prompt string
+	if err := json.Unmarshal([]byte(aiTask.Input), &prompt); err != nil {
+		// 如果解析失败，直接使用 Input 作为 prompt
+		prompt = aiTask.Input
+	}
+
+	// 配置生成参数
+	temperature := float32(0.7)
+	maxTokens := int32(1000)
+	genConfig := &genai.GenerateContentConfig{
+		Temperature:     &temperature,
+		MaxOutputTokens: maxTokens,
+	}
+
+	// 调用 Gemini 生成文本
+	text, geminiResp, err := s.geminiClient.GenerateText(ctx, "", prompt, genConfig)
+	if err != nil {
+		return "", 0, fmt.Errorf("gemini generate text failed: %w", err)
+	}
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if geminiResp != nil && geminiResp.UsageMetadata != nil {
+		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
+	}
+
+	return text, tokensUsed, nil
+}
+
+// GenerateImageForFragment 生成图片（为 FragmentGenerationService 提供简化接口）
+func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
+	if s.genAPI == nil {
+		return "", 0, fmt.Errorf("genAPI not available")
+	}
+
+	// 从 Input 字段解析 prompt
+	var prompt string
+	if err := json.Unmarshal([]byte(aiTask.Input), &prompt); err != nil {
+		// 如果解析失败，直接使用 Input 作为 prompt
+		prompt = aiTask.Input
+	}
+
+	// 构建图片生成请求
+	genReq := &genapi.GenerateRequest{
+		Operation:   genapi.OperationTextToImage,
+		Prompt:      prompt,
+		Size:        "1024x1024",
+		Quality:     "standard",
+		OutputCount: 1,
+	}
+
+	// 使用默认的图片提供商
+	providerName := "huoshan" // 火山引擎支持图片生成
+	if aiTask.Provider != "" {
+		providerName = aiTask.Provider
+	}
+
+	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
+	if err != nil {
+		return "", 0, fmt.Errorf("generate image failed: %w", err)
+	}
+
+	// 检查响应错误
+	if resp.Error != "" {
+		return "", 0, fmt.Errorf("provider returned error: %s", resp.Error)
+	}
+
+	// 计算 token 使用量
+	tokensUsed := 0
+	if resp.Usage != nil {
+		tokensUsed = resp.Usage.TotalTokens
+	}
+
+	// 返回第一张图片的 URL
+	if len(resp.ImageURLs) == 0 {
+		return "", tokensUsed, fmt.Errorf("no images generated")
+	}
+
+	return resp.ImageURLs[0], tokensUsed, nil
+}

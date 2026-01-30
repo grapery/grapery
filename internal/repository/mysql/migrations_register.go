@@ -699,10 +699,38 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_generation_tasks",
+		Description: "Create and migrate fragment_generation_tasks table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentGenerationTaskDB{})
+		},
+		Required: true,
+	})
+
+	// ========== Fragment Interaction 相关表 ==========
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_likes",
 		Description: "Create and migrate fragment_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return db.AutoMigrate(&FragmentLikeDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_comments",
+		Description: "Create and migrate fragment_comments table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentCommentDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_shares",
+		Description: "Create and migrate fragment_shares table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentShareDB{})
 		},
 		Required: true,
 	})
@@ -843,6 +871,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureGroupsBlockedCountColumn()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_user_fragments_count_column",
+		Description: "Ensure users has fragments_count column",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureUserFragmentsCountColumn()
 		},
 		Required: false,
 	})

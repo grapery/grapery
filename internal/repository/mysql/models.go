@@ -25,6 +25,7 @@ type User struct {
 	Followers           int            `gorm:"default:0;index"`
 	Following           int            `gorm:"default:0"`
 	StoryboardCount     int            `gorm:"default:0;index"`                // Number of storyboards created by this user
+	FragmentsCount      int            `gorm:"default:0;index"`                // Number of fragments created by this user
 	GroupsCount         int            `gorm:"default:0"`                      // Number of groups the user has joined
 	GroupsCreated       int            `gorm:"default:0"`                      // Number of groups created by this user
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
@@ -1414,18 +1415,85 @@ func (FragmentDB) TableName() string {
 	return "fragments"
 }
 
+// ========== Fragment Generation 相关表 ==========
+
+// FragmentGenerationTaskDB fragment generation task database model
+type FragmentGenerationTaskDB struct {
+	ID           string `gorm:"primaryKey;size:36"`
+	UserID       string `gorm:"size:36;not null;index:idx_fragment_gen_user"`
+	Status       string `gorm:"size:20;not null;default:'pending';index:idx_fragment_gen_status"`
+	RequestJSON  string `gorm:"type:text;not null"`    // JSON encoded FragmentGenerationRequest
+	ResultJSON   string `gorm:"type:text"`              // JSON encoded FragmentGenerationResult
+	Progress     int    `gorm:"type:int;default:0"`
+	CurrentStep  string `gorm:"size:50"`
+	ErrorMessage string `gorm:"type:text"`
+	TokensUsed   int    `gorm:"type:int;default:0"`
+	CreatedAt    int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_gen_created"`
+	StartedAt    *int64 `gorm:"type:bigint"`
+	CompletedAt  *int64 `gorm:"type:bigint"`
+	UpdatedAt    int64  `gorm:"type:bigint;autoUpdateTime"`
+
+	User User `gorm:"foreignKey:UserID"`
+}
+
+// TableName specifies the table name for FragmentGenerationTaskDB
+func (FragmentGenerationTaskDB) TableName() string {
+	return "fragment_generation_tasks"
+}
+
+// ========== Fragment Interaction 相关表 ==========
+
 // FragmentLikeDB fragment like database model
 type FragmentLikeDB struct {
-	ID         string `gorm:"primaryKey;size:36"`
-	FragmentID string `gorm:"size:36;not null;index:idx_fragment_fragment_id;index:idx_fragment_user_fragment"`
-	UserID     string `gorm:"size:36;not null;index:idx_fragment_user_id;index:idx_fragment_user_fragment"`
-	CreatedAt  int64  `gorm:"type:bigint;autoCreateTime"`
+	ID        string `gorm:"primaryKey;size:36"`
+	FragmentID string `gorm:"size:36;not null;index:idx_fragment_likes_fragment_user"`
+	UserID    string `gorm:"size:36;not null;index:idx_fragment_likes_fragment_user;index:idx_fragment_likes_user"`
+	CreatedAt int64  `gorm:"type:bigint;autoCreateTime"`
 
 	Fragment FragmentDB `gorm:"foreignKey:FragmentID"`
-	User     User       `gorm:"foreignKey:UserID"`
+	User     User      `gorm:"foreignKey:UserID"`
 }
 
 // TableName specifies the table name for FragmentLikeDB
 func (FragmentLikeDB) TableName() string {
 	return "fragment_likes"
 }
+
+// FragmentCommentDB fragment comment database model
+type FragmentCommentDB struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	FragmentID string `gorm:"size:36;not null;index:idx_fragment_comments_fragment"`
+	UserID    string `gorm:"size:36;not null;index:idx_fragment_comments_user"`
+	Content   string `gorm:"type:text;not null"`
+	ParentID  *string `gorm:"size:36;index:idx_fragment_comments_parent"` // 支持回复评论
+	CreatedAt int64  `gorm:"type:bigint;autoCreateTime"`
+	UpdatedAt int64  `gorm:"type:bigint;autoUpdateTime"`
+
+	Fragment FragmentDB            `gorm:"foreignKey:FragmentID"`
+	User     User                  `gorm:"foreignKey:UserID"`
+	Parent   *FragmentCommentDB    `gorm:"foreignKey:ParentID"`
+	Replies  []FragmentCommentDB   `gorm:"foreignKey:ParentID"`
+}
+
+// TableName specifies the table name for FragmentCommentDB
+func (FragmentCommentDB) TableName() string {
+	return "fragment_comments"
+}
+
+// FragmentShareDB fragment share database model
+type FragmentShareDB struct {
+	ID         string `gorm:"primaryKey;size:36"`
+	FragmentID string `gorm:"size:36;not null;index:idx_fragment_shares_fragment"`
+	UserID     string `gorm:"size:36;not null;index:idx_fragment_shares_user"`
+	Platform   string `gorm:"size:20;not null"` // wechat, twitter, local, etc.
+	CreatedAt  int64  `gorm:"type:bigint;autoCreateTime"`
+
+	Fragment FragmentDB `gorm:"foreignKey:FragmentID"`
+	User     User      `gorm:"foreignKey:UserID"`
+}
+
+// TableName specifies the table name for FragmentShareDB
+func (FragmentShareDB) TableName() string {
+	return "fragment_shares"
+}
+

@@ -2,9 +2,8 @@ package repository
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/grapestree/voyager/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
 
@@ -16,9 +15,25 @@ func NewFragmentRepository(db *gorm.DB) *FragmentRepository {
 	return &FragmentRepository{db: db}
 }
 
-// Create creates a new fragment
+// Create creates a new fragment and increments user's fragments count
 func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragment) error {
-	return r.db.WithContext(ctx).Create(fragment).Error
+	// Start a transaction
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Create the fragment
+		if err := tx.Create(fragment).Error; err != nil {
+			return err
+		}
+
+		// Increment user's fragments_count
+		if err := tx.Model(&domain.User{}).
+			Where("id = ?", fragment.CreatorID).
+			UpdateColumn("fragments_count", gorm.Expr("fragments_count + 1")).
+			Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // GetByID retrieves a fragment by ID
@@ -129,9 +144,32 @@ func (r *FragmentRepository) Update(ctx context.Context, fragment *domain.Fragme
 	return r.db.WithContext(ctx).Save(fragment).Error
 }
 
-// Delete deletes a fragment
+// Delete deletes a fragment and decrements user's fragments count
 func (r *FragmentRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&domain.Fragment{}).Error
+	// First get the fragment to know the creator ID
+	var fragment domain.Fragment
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&fragment).Error
+	if err != nil {
+		return err
+	}
+
+	// Start a transaction
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Delete the fragment
+		if err := tx.Where("id = ?", id).Delete(&domain.Fragment{}).Error; err != nil {
+			return err
+		}
+
+		// Decrement user's fragments_count
+		if err := tx.Model(&domain.User{}).
+			Where("id = ?", fragment.CreatorID).
+			UpdateColumn("fragments_count", gorm.Expr("fragments_count - 1")).
+			Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // IncrementLikes increments the likes count
