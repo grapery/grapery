@@ -1389,3 +1389,43 @@ type MessageReadReceiptDB struct {
 	User    User                  `gorm:"foreignKey:UserID"`
 	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
 }
+
+// ========== Fragment 相关表 ==========
+
+// FragmentDB fragment database model
+type FragmentDB struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	CreatorID string `gorm:"size:36;not null;index:idx_fragment_creator"`
+	Content   string `gorm:"type:text"`
+	ImageUrls string `gorm:"type:text"` // JSON array stored as text
+	Visibility string `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
+	Likes     int    `gorm:"type:int;default:0"`
+	Comments  int    `gorm:"type:int;default:0"`
+	Shares    int    `gorm:"type:int;default:0"`
+	Views     int    `gorm:"type:int;default:0"`
+	CreatedAt int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_created"`
+	UpdatedAt int64  `gorm:"type:bigint;autoUpdateTime"`
+
+	Creator User `gorm:"foreignKey:CreatorID"`
+}
+
+// TableName specifies the table name for FragmentDB
+func (FragmentDB) TableName() string {
+	return "fragments"
+}
+
+// FragmentLikeDB fragment like database model
+type FragmentLikeDB struct {
+	ID         string `gorm:"primaryKey;size:36"`
+	FragmentID string `gorm:"size:36;not null;index:idx_fragment_fragment_id;index:idx_fragment_user_fragment"`
+	UserID     string `gorm:"size:36;not null;index:idx_fragment_user_id;index:idx_fragment_user_fragment"`
+	CreatedAt  int64  `gorm:"type:bigint;autoCreateTime"`
+
+	Fragment FragmentDB `gorm:"foreignKey:FragmentID"`
+	User     User       `gorm:"foreignKey:UserID"`
+}
+
+// TableName specifies the table name for FragmentLikeDB
+func (FragmentLikeDB) TableName() string {
+	return "fragment_likes"
+}

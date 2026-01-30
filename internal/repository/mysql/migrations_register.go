@@ -688,6 +688,25 @@ func init() {
 		Required: true,
 	})
 
+	// ========== Fragment 相关表 ==========
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragments",
+		Description: "Create and migrate fragments table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_likes",
+		Description: "Create and migrate fragment_likes table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentLikeDB{})
+		},
+		Required: true,
+	})
+
 	// 注册 Schema 修复步骤
 	registerSchemaFixSteps(registry)
 
