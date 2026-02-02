@@ -672,6 +672,25 @@ func init() {
 		Required: true,
 	})
 
+	// ========== 多态关注/点赞表 ==========
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_follows",
+		Description: "Create and migrate follows table (polymorphic follow)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&Follow{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_likes",
+		Description: "Create and migrate likes table (polymorphic like)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&Like{})
+		},
+		Required: true,
+	})
+
 	// 注册 Schema 修复步骤
 	registerSchemaFixSteps(registry)
 

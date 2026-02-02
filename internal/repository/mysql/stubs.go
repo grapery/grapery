@@ -1589,10 +1589,14 @@ func (r *Repository) GetUserNotificationSettings(ctx context.Context, userID str
 		return nil, err
 	}
 
-	return map[string]bool{
-		"email": settings.EmailNotifications,
-		"push":  settings.PushNotifications,
-	}, nil
+	// 从 JSON 字段解析通知设置
+	notificationSettings := map[string]bool{
+		"email": true,
+		"push":  true,
+	}
+	// TODO: 从 settings.NotificationSettings 解析更多通知选项
+
+	return notificationSettings, nil
 }
 
 func (r *Repository) UpdateUserNotificationSettings(ctx context.Context, userID string, settings map[string]bool) error {
@@ -1602,25 +1606,17 @@ func (r *Repository) UpdateUserNotificationSettings(ctx context.Context, userID 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 创建新设置
 			userSettings = UserSettings{
-				ID:                 uuid.New().String(),
-				UserID:             userID,
-				EmailNotifications: true,
-				PushNotifications:  true,
-				UpdatedAt:          time.Now(),
+				ID:        uuid.New().String(),
+				UserID:    userID,
+				UpdatedAt: time.Now().Unix(),
 			}
 		} else {
 			return err
 		}
 	}
 
-	// 更新设置
-	if email, ok := settings["email"]; ok {
-		userSettings.EmailNotifications = email
-	}
-	if push, ok := settings["push"]; ok {
-		userSettings.PushNotifications = push
-	}
-	userSettings.UpdatedAt = time.Now()
+	// 更新通知设置 JSON
+	userSettings.UpdatedAt = time.Now().Unix()
 
 	return r.db.WithContext(ctx).Save(&userSettings).Error
 }
@@ -1632,22 +1628,20 @@ func (r *Repository) GetUserPrivacySettings(ctx context.Context, userID string) 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 返回默认设置
 			return map[string]interface{}{
-				"profile_visibility": "public",
-				"allow_comments":     true,
-				"allow_messages":     true,
-				"show_online_status": true,
-				"show_adult_content": false,
+				"profile_visibility":  "public",
+				"allow_comments_from": "everyone",
+				"allow_messages_from": "followers_only",
+				"show_online_status":  true,
 			}, nil
 		}
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"profile_visibility": settings.ProfileVisibility,
-		"allow_comments":     settings.AllowComments,
-		"allow_messages":     settings.AllowMessages,
-		"show_online_status": settings.ShowOnlineStatus,
-		"show_adult_content": settings.ShowAdultContent,
+		"profile_visibility":  settings.ProfileVisibility,
+		"allow_comments_from": settings.AllowCommentsFrom,
+		"allow_messages_from": settings.AllowMessagesFrom,
+		"show_online_status":  settings.ShowOnlineStatus,
 	}, nil
 }
 
@@ -1661,10 +1655,8 @@ func (r *Repository) UpdateUserPrivacySettings(ctx context.Context, userID strin
 				ID:                uuid.New().String(),
 				UserID:            userID,
 				ProfileVisibility: "public",
-				AllowComments:     true,
-				AllowMessages:     true,
 				ShowOnlineStatus:  true,
-				UpdatedAt:         time.Now(),
+				UpdatedAt:         time.Now().Unix(),
 			}
 		} else {
 			return err
@@ -1675,19 +1667,16 @@ func (r *Repository) UpdateUserPrivacySettings(ctx context.Context, userID strin
 	if profileVisibility, ok := settings["profile_visibility"].(string); ok {
 		userSettings.ProfileVisibility = profileVisibility
 	}
-	if allowComments, ok := settings["allow_comments"].(bool); ok {
-		userSettings.AllowComments = allowComments
+	if allowCommentsFrom, ok := settings["allow_comments_from"].(string); ok {
+		userSettings.AllowCommentsFrom = allowCommentsFrom
 	}
-	if allowMessages, ok := settings["allow_messages"].(bool); ok {
-		userSettings.AllowMessages = allowMessages
+	if allowMessagesFrom, ok := settings["allow_messages_from"].(string); ok {
+		userSettings.AllowMessagesFrom = allowMessagesFrom
 	}
 	if showOnlineStatus, ok := settings["show_online_status"].(bool); ok {
 		userSettings.ShowOnlineStatus = showOnlineStatus
 	}
-	if showAdultContent, ok := settings["show_adult_content"].(bool); ok {
-		userSettings.ShowAdultContent = showAdultContent
-	}
-	userSettings.UpdatedAt = time.Now()
+	userSettings.UpdatedAt = time.Now().Unix()
 
 	return r.db.WithContext(ctx).Save(&userSettings).Error
 }

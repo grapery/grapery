@@ -237,9 +237,36 @@ func main() {
 	fragmentHandler := handler.NewFragmentHandler(fragmentRepo)
 	logger.Info("fragment handler initialized")
 
-	// Initialize HTTP handler
-	httpHandler := transport.NewHandler(svc, nil, writersRoomService, logger)
-	router := transport.SetupRouter(httpHandler, logger)
+	// Initialize Follow Repository
+	followRepo := mysql.NewFollowRepository(repo.DB())
+	logger.Info("follow repository initialized")
+
+	// Initialize Like Repository
+	likeRepo := mysql.NewLikeRepository(repo.DB())
+	logger.Info("like repository initialized")
+
+	// Initialize User Settings Repository
+	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
+	logger.Info("user settings repository initialized")
+
+	// Initialize Interaction Service
+	interactionService := service.NewInteractionService(followRepo, likeRepo, repo, logger)
+	logger.Info("interaction service initialized")
+
+	// Initialize User Settings Service
+	userSettingsService := service.NewUserSettingsService(userSettingsRepo, logger)
+	logger.Info("user settings service initialized")
+
+	// Initialize HTTP handler with dependencies
+	deps := &transport.HandlerDependencies{
+		Service:             svc,
+		AIService:           nil,
+		WritersRoomService:  writersRoomService,
+		InteractionService:  interactionService,
+		UserSettingsService: userSettingsService,
+		Logger:              logger,
+	}
+	router := transport.SetupRouter(deps)
 
 	// Create API group for route registration
 	apiGroup := router.Group("/api")

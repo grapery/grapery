@@ -1195,18 +1195,24 @@ func UserSettingsToModel(d *domain.UserSettings) *UserSettings {
 		return nil
 	}
 	return &UserSettings{
-		ID:                 d.ID,
-		UserID:             d.UserID,
-		Language:           d.Language,
-		Theme:              d.Theme,
-		EmailNotifications: d.EmailNotifications,
-		PushNotifications:  d.PushNotifications,
-		ShowAdultContent:   d.ShowAdultContent,
-		ProfileVisibility:  d.ProfileVisibility,
-		AllowComments:      d.AllowComments,
-		AllowMessages:      d.AllowMessages,
-		ShowOnlineStatus:   d.ShowOnlineStatus,
-		UpdatedAt:          unixToTime(d.UpdatedAt),
+		ID:                        d.ID,
+		UserID:                    d.UserID,
+		Language:                  d.Language,
+		Theme:                     d.Theme,
+		FontSize:                  d.FontSize,
+		DataSaver:                 d.DataSaver,
+		ProfileVisibility:         d.ProfileVisibility,
+		DefaultStoryVisibility:    d.DefaultStoryVisibility,
+		DefaultFragmentVisibility: d.DefaultFragmentVisibility,
+		AllowFollowFrom:           d.AllowFollowFrom,
+		AllowCommentsFrom:         d.AllowCommentsFrom,
+		AllowMessagesFrom:         d.AllowMessagesFrom,
+		ShowOnlineStatus:          d.ShowOnlineStatus,
+		ShowReadReceipts:          d.ShowReadReceipts,
+		AIEnabled:                 d.AIEnabled,
+		AIDataSharing:             d.AIDataSharing,
+		NotificationSettings:      d.NotificationSettings,
+		UpdatedAt:                 d.UpdatedAt,
 	}
 }
 
@@ -1216,18 +1222,24 @@ func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 		return nil
 	}
 	return &domain.UserSettings{
-		ID:                 m.ID,
-		UserID:             m.UserID,
-		Language:           m.Language,
-		Theme:              m.Theme,
-		EmailNotifications: m.EmailNotifications,
-		PushNotifications:  m.PushNotifications,
-		ShowAdultContent:   m.ShowAdultContent,
-		ProfileVisibility:  m.ProfileVisibility,
-		AllowComments:      m.AllowComments,
-		AllowMessages:      m.AllowMessages,
-		ShowOnlineStatus:   m.ShowOnlineStatus,
-		UpdatedAt:          timeToUnix(m.UpdatedAt),
+		ID:                        m.ID,
+		UserID:                    m.UserID,
+		Language:                  m.Language,
+		Theme:                     m.Theme,
+		FontSize:                  m.FontSize,
+		DataSaver:                 m.DataSaver,
+		ProfileVisibility:         m.ProfileVisibility,
+		DefaultStoryVisibility:    m.DefaultStoryVisibility,
+		DefaultFragmentVisibility: m.DefaultFragmentVisibility,
+		AllowFollowFrom:           m.AllowFollowFrom,
+		AllowCommentsFrom:         m.AllowCommentsFrom,
+		AllowMessagesFrom:         m.AllowMessagesFrom,
+		ShowOnlineStatus:          m.ShowOnlineStatus,
+		ShowReadReceipts:          m.ShowReadReceipts,
+		AIEnabled:                 m.AIEnabled,
+		AIDataSharing:             m.AIDataSharing,
+		NotificationSettings:      m.NotificationSettings,
+		UpdatedAt:                 m.UpdatedAt,
 	}
 }
 
@@ -3031,4 +3043,84 @@ func ModelToMessageReadReceipt(m *MessageReadReceiptDB) *domain.MessageReadRecei
 // MessageReadReceiptDB.ToDomain 将 MySQL MessageReadReceiptDB 模型转换为 domain.MessageReadReceipt
 func (m *MessageReadReceiptDB) ToDomain() *domain.MessageReadReceipt {
 	return ModelToMessageReadReceipt(m)
+}
+
+// ========== Follow 转换 ==========
+
+// FollowToModel 将 domain.Follow 转换为 MySQL Follow 模型
+func FollowToModel(d *domain.Follow) *Follow {
+	if d == nil {
+		return nil
+	}
+	return &Follow{
+		ID:                   d.ID,
+		FollowerID:           d.FollowerID,
+		FollowableType:       string(d.FollowableType),
+		FollowableID:         d.FollowableID,
+		NotificationsEnabled: d.NotificationsEnabled,
+		CreatedAt:            d.CreatedAt,
+	}
+}
+
+// ModelToFollow 将 MySQL Follow 模型转换为 domain.Follow
+func ModelToFollow(m *Follow) *domain.Follow {
+	if m == nil {
+		return nil
+	}
+	return &domain.Follow{
+		ID:                   m.ID,
+		FollowerID:           m.FollowerID,
+		FollowableType:       domain.FollowableType(m.FollowableType),
+		FollowableID:         m.FollowableID,
+		NotificationsEnabled: m.NotificationsEnabled,
+		CreatedAt:            m.CreatedAt,
+	}
+}
+
+// ModelsToFollows 批量转换 Follow
+func ModelsToFollows(models []Follow) []*domain.Follow {
+	follows := make([]*domain.Follow, len(models))
+	for i := range models {
+		follows[i] = ModelToFollow(&models[i])
+	}
+	return follows
+}
+
+// ========== Like 转换 ==========
+
+// LikeToModel 将 domain.Like 转换为 MySQL Like 模型
+func LikeToModel(d *domain.Like) *Like {
+	if d == nil {
+		return nil
+	}
+	return &Like{
+		ID:           d.ID,
+		UserID:       d.UserID,
+		LikeableType: string(d.LikeableType),
+		LikeableID:   d.LikeableID,
+		CreatedAt:    d.CreatedAt,
+	}
+}
+
+// ModelToLike 将 MySQL Like 模型转换为 domain.Like
+func ModelToLike(m *Like) *domain.Like {
+	if m == nil {
+		return nil
+	}
+	return &domain.Like{
+		ID:           m.ID,
+		UserID:       m.UserID,
+		LikeableType: domain.LikeableType(m.LikeableType),
+		LikeableID:   m.LikeableID,
+		CreatedAt:    m.CreatedAt,
+	}
+}
+
+// ModelsToLikes 批量转换 Like
+func ModelsToLikes(models []Like) []*domain.Like {
+	likes := make([]*domain.Like, len(models))
+	for i := range models {
+		likes[i] = ModelToLike(&models[i])
+	}
+	return likes
 }

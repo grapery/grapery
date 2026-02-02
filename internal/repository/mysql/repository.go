@@ -17,8 +17,11 @@ import (
 
 // Repository implements data access with MySQL
 type Repository struct {
-	db  *gorm.DB
-	log *zap.Logger
+	db               *gorm.DB
+	log              *zap.Logger
+	FollowRepo       domain.FollowRepository
+	LikeRepo         domain.LikeRepository
+	UserSettingsRepo domain.UserSettingsRepository
 }
 
 // NewRepository creates a new MySQL repository
@@ -41,7 +44,13 @@ func NewRepository(dsn string, log *zap.Logger) (*Repository, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	repo := &Repository{db: db, log: log}
+	repo := &Repository{
+		db:               db,
+		log:              log,
+		FollowRepo:       NewFollowRepository(db),
+		LikeRepo:         NewLikeRepository(db),
+		UserSettingsRepo: NewUserSettingsRepository(db),
+	}
 
 	// 注意：数据库迁移现在统一由 migrations 包管理
 	// 迁移步骤在 mysql/migrations_register.go 和 pay/migrations_register.go 中注册

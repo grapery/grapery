@@ -616,20 +616,61 @@ type Notification struct {
 
 // UserSettings 用户设置
 type UserSettings struct {
-	ID                 string         `gorm:"primaryKey;size:36"`
-	UserID             string         `gorm:"uniqueIndex;size:36;not null"`
-	User               User           `gorm:"foreignKey:UserID"`
-	Language           string         `gorm:"size:10;default:'en'"`   // en, zh, ja
-	Theme              string         `gorm:"size:20;default:'auto'"` // light, dark, auto
-	EmailNotifications bool           `gorm:"default:true"`
-	PushNotifications  bool           `gorm:"default:true"`
-	ShowAdultContent   bool           `gorm:"default:false"`
-	ProfileVisibility  string         `gorm:"size:20;default:'public'"` // public, friends, private
-	AllowComments      bool           `gorm:"default:true"`
-	AllowMessages      bool           `gorm:"default:true"`
-	ShowOnlineStatus   bool           `gorm:"default:true"`
-	UpdatedAt          time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	ID                        string         `gorm:"primaryKey;size:36"`
+	UserID                    string         `gorm:"uniqueIndex;size:36;not null"`
+	User                      User           `gorm:"foreignKey:UserID"`
+	Language                  string         `gorm:"size:10;default:'zh-CN'"`
+	Theme                     string         `gorm:"size:20;default:'system'"`
+	FontSize                  string         `gorm:"size:20;default:'medium'"`
+	DataSaver                 bool           `gorm:"default:false"`
+	ProfileVisibility         string         `gorm:"size:50;default:'public'"`
+	DefaultStoryVisibility    string         `gorm:"size:50;default:'public'"`
+	DefaultFragmentVisibility string         `gorm:"size:50;default:'public'"`
+	AllowFollowFrom           string         `gorm:"size:50;default:'everyone'"`
+	AllowCommentsFrom         string         `gorm:"size:50;default:'everyone'"`
+	AllowMessagesFrom         string         `gorm:"size:50;default:'followers_only'"`
+	ShowOnlineStatus          bool           `gorm:"default:true"`
+	ShowReadReceipts          bool           `gorm:"default:true"`
+	AIEnabled                 bool           `gorm:"default:true"`
+	AIDataSharing             bool           `gorm:"default:true"`
+	NotificationSettings      string         `gorm:"type:json"`
+	UpdatedAt                 int64          `gorm:"autoUpdateTime"`
+	DeletedAt                 gorm.DeletedAt `gorm:"index"`
+}
+
+func (UserSettings) TableName() string {
+	return "user_settings"
+}
+
+// ========== 多态关注表 ==========
+
+// Follow 关注表（多态关联）
+type Follow struct {
+	ID                   string `gorm:"primaryKey;size:36"`
+	FollowerID           string `gorm:"size:36;index;not null"`
+	FollowableType       string `gorm:"size:50;index;not null"` // story, user, group, character
+	FollowableID         string `gorm:"size:36;index;not null"`
+	NotificationsEnabled bool   `gorm:"default:true"`
+	CreatedAt            int64  `gorm:"autoCreateTime"`
+}
+
+func (Follow) TableName() string {
+	return "follows"
+}
+
+// ========== 多态点赞表 ==========
+
+// Like 点赞表（多态关联）
+type Like struct {
+	ID           string `gorm:"primaryKey;size:36"`
+	UserID       string `gorm:"size:36;index;not null"`
+	LikeableType string `gorm:"size:50;index;not null"` // story, character, storyboard_node, fragment, character_poster
+	LikeableID   string `gorm:"size:36;index;not null"`
+	CreatedAt    int64  `gorm:"autoCreateTime"`
+}
+
+func (Like) TableName() string {
+	return "likes"
 }
 
 // ========== 会员系统 ==========

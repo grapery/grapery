@@ -16,7 +16,17 @@ type Handler struct {
 	logger         *zap.Logger
 }
 
-// NewHandler creates a new HTTP handler
+// HandlerDependencies 包含所有 handler 依赖的服务
+type HandlerDependencies struct {
+	Service               *service.Service
+	AIService             *service.AIService
+	WritersRoomService    *service.WritersRoomService
+	InteractionService    service.InteractionService
+	UserSettingsService   service.UserSettingsService
+	Logger                *zap.Logger
+}
+
+// NewHandler creates a new HTTP handler (legacy constructor)
 func NewHandler(svc *service.Service, aiService *service.AIService, writersRoomSvc *service.WritersRoomService, logger *zap.Logger) *Handler {
 	return &Handler{
 		svc:            svc,
@@ -26,8 +36,19 @@ func NewHandler(svc *service.Service, aiService *service.AIService, writersRoomS
 	}
 }
 
+// NewHandlerWithDeps creates a new HTTP handler with all dependencies
+func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
+	return &Handler{
+		svc:            deps.Service,
+		aiService:      deps.AIService,
+		writersRoomSvc: deps.WritersRoomService,
+		logger:         deps.Logger,
+	}
+}
+
 // SetupRouter configures and returns the Gin router
-func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
+func SetupRouter(deps *HandlerDependencies) *gin.Engine {
+	h := NewHandlerWithDeps(deps)
 	router := gin.New()
 	router.Use(gin.Recovery())
 
@@ -294,6 +315,14 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.GET("/invitation-codes/:id", h.GetInvitationCode)
 			authenticated.PUT("/invitation-codes/:id", h.UpdateInvitationCode)
 			authenticated.DELETE("/invitation-codes/:id", h.DeleteInvitationCode)
+
+			// 互动相关 (Interaction)
+			interactionHandler := NewInteractionHandler(deps.InteractionService)
+			interactionHandler.RegisterInteractionRoutes(authenticated)
+
+			// 用户设置相关 (User Settings)
+			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
+			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
 		}
 
 		// 公开接口（无需认证）
@@ -307,7 +336,7 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 
 	}
 
-	logger.Info("router configured successfully")
+	deps.Logger.Info("router configured successfully")
 	return router
 }
 
