@@ -235,6 +235,10 @@ func main() {
 	fragmentInteractionRepo := repository.NewFragmentInteractionRepository(repo.DB())
 	logger.Info("fragment interaction repository initialized")
 
+	// Initialize Fragment Handler
+	fragmentHandler := handler.NewFragmentHandler(fragmentRepo)
+	logger.Info("fragment handler initialized")
+
 	// Initialize HTTP handler
 	handler := transport.NewHandler(svc, nil, writersRoomService, logger)
 	router := transport.SetupRouter(handler, logger)
@@ -246,7 +250,7 @@ func main() {
 	logger.Info("storyboard chat routes registered")
 
 	// Register Fragment Generation routes
-	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, logger)
+	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
 	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment generation routes registered")
 

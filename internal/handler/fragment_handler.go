@@ -19,11 +19,70 @@ func NewFragmentHandler(fragmentRepo *repository.FragmentRepository) *FragmentHa
 	}
 }
 
+// FragmentStyle represents a fragment image style
+type FragmentStyle struct {
+	ID       string  `json:"id"`
+	Value    string  `json:"value"`
+	Name     string  `json:"name"`
+	Icon     string  `json:"icon"`
+	Category *string `json:"category,omitempty"`
+}
+
+// FragmentStyleListResponse represents the response for styles list
+type FragmentStyleListResponse struct {
+	Styles []FragmentStyle `json:"styles"`
+}
+
+// GetFragmentStyles handles GET /fragments/styles
+func (h *FragmentHandler) GetFragmentStyles(c *gin.Context) {
+	// TODO: In the future, these could be loaded from database or configuration
+	// For now, return hardcoded styles
+	styles := []FragmentStyle{
+		{ID: "style_001", Value: "photorealistic", Name: "超写实", Icon: "camera.metering.matrix", Category: stringPtr("photography")},
+		{ID: "style_002", Value: "cinematic", Name: "电影感", Icon: "film", Category: stringPtr("cinematic")},
+		{ID: "style_003", Value: "documentary", Name: "纪实摄影", Icon: "camera.viewfinder", Category: stringPtr("photography")},
+		{ID: "style_004", Value: "anime", Name: "日系动漫", Icon: "sparkles", Category: stringPtr("illustration")},
+		{ID: "style_005", Value: "cel_shading", Name: "赛璐璐", Icon: "paintbrush.pointed", Category: stringPtr("illustration")},
+		{ID: "style_006", Value: "chibi", Name: "Q版", Icon: "face.smiling", Category: stringPtr("illustration")},
+		{ID: "style_007", Value: "manga", Name: "漫画", Icon: "book.closed", Category: stringPtr("illustration")},
+		{ID: "style_008", Value: "digital_painting", Name: "数字绘画", Icon: "paintbrush", Category: stringPtr("digital")},
+		{ID: "style_009", Value: "concept_art", Name: "概念艺术", Icon: "lightbulb", Category: stringPtr("digital")},
+		{ID: "style_010", Value: "3d_render", Name: "3D渲染", Icon: "cube", Category: stringPtr("3d")},
+		{ID: "style_011", Value: "synthetic_impressionism", Name: "合成印象派", Icon: "scribble", Category: stringPtr("artistic")},
+		{ID: "style_012", Value: "cyberpunk", Name: "赛博朋克", Icon: "brain.head.profile", Category: stringPtr("scifi")},
+		{ID: "style_013", Value: "eco_futurism", Name: "生态未来主义", Icon: "leaf.fill", Category: stringPtr("scifi")},
+		{ID: "style_014", Value: "quantum_expressionism", Name: "量子表现主义", Icon: "atom", Category: stringPtr("abstract")},
+		{ID: "style_015", Value: "sci_fi_architecture", Name: "科幻建筑", Icon: "building.2", Category: stringPtr("architectural")},
+		{ID: "style_016", Value: "digital_renaissance", Name: "数字文艺复兴", Icon: "building.columns", Category: stringPtr("artistic")},
+		{ID: "style_017", Value: "neo_classical", Name: "新古典主义", Icon: "building", Category: stringPtr("architectural")},
+		{ID: "style_018", Value: "pop_surrealism", Name: "流行超现实主义", Icon: "theatermasks", Category: stringPtr("surreal")},
+		{ID: "style_019", Value: "abstract_cinematic", Name: "抽象电影叙事", Icon: "circle.circle", Category: stringPtr("cinematic")},
+		{ID: "style_020", Value: "ink_punk", Name: "水墨朋克", Icon: "drop", Category: stringPtr("artistic")},
+		{ID: "style_021", Value: "product_shot", Name: "产品静物", Icon: "photo.badge.plus", Category: stringPtr("commercial")},
+		{ID: "style_022", Value: "brand_style", Name: "品牌视觉", Icon: "tag", Category: stringPtr("commercial")},
+		{ID: "style_023", Value: "lifestyle_mockup", Name: "生活场景植入", Icon: "house", Category: stringPtr("commercial")},
+		{ID: "style_024", Value: "augmented_surrealism", Name: "增强超现实", Icon: "eyebrow", Category: stringPtr("surreal")},
+		{ID: "style_025", Value: "neural_abstract", Name: "神经抽象", Icon: "network", Category: stringPtr("abstract")},
+		{ID: "style_026", Value: "vaporwave", Name: "蒸汽波美学", Icon: "waveform.path", Category: stringPtr("aesthetic")},
+	}
+
+	c.JSON(http.StatusOK, FragmentStyleListResponse{
+		Styles: styles,
+	})
+}
+
+// Helper function to create string pointer
+func stringPtr(s string) *string {
+	return &s
+}
+
 // CreateFragmentRequest represents the request to create a fragment
 type CreateFragmentRequest struct {
-	Content   string   `json:"content" binding:"required,max=500"`
-	ImageUrls []string `json:"imageUrls" binding:"required,min=1,max=10"`
-	Visibility string  `json:"visibility" binding:"required,oneof=public followers private"`
+	Content      string   `json:"content" binding:"required,max=500"`
+	ImageUrls    []string `json:"imageUrls" binding:"required,min=1,max=10"`
+	Style        *string  `json:"style" binding:"omitempty"`
+	FragmentCount *int    `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
+	Visibility   string   `json:"visibility" binding:"required,oneof=public followers private"`
 }
 
 // UpdateFragmentRequest represents the request to update a fragment
@@ -53,19 +112,27 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		return
 	}
 
+	// Set default fragment count to 1 if not provided
+	fragmentCount := 1
+	if req.FragmentCount != nil {
+		fragmentCount = *req.FragmentCount
+	}
+
 	// TODO: Upload images and get URLs
 	// For now, use the provided URLs directly
 
 	fragment := &domain.Fragment{
-		ID:         generateUUID(), // Implement this
-		CreatorID:  userID,
-		Content:    req.Content,
-		ImageUrls:  stringifyArray(req.ImageUrls),
-		Visibility: req.Visibility,
-		Likes:      0,
-		Comments:   0,
-		Shares:     0,
-		Views:      0,
+		ID:            generateUUID(), // Implement this
+		CreatorID:     userID,
+		Content:       req.Content,
+		ImageUrls:     stringifyArray(req.ImageUrls),
+		Style:         req.Style,
+		FragmentCount: &fragmentCount,
+		Visibility:    req.Visibility,
+		Likes:         0,
+		Comments:      0,
+		Shares:        0,
+		Views:         0,
 	}
 
 	if err := h.fragmentRepo.Create(c.Request.Context(), fragment); err != nil {

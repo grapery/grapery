@@ -4,17 +4,20 @@ import "time"
 
 // Fragment represents a fragment story - short, complete stories shared by users
 type Fragment struct {
-	ID        string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
-	CreatorID string    `json:"creatorId" gorm:"column:creator_id;type:varchar(36);not null;index"`
-	Content   string    `json:"content" gorm:"column:content;type:text"`
-	ImageUrls string    `json:"imageUrls" gorm:"column:image_urls;type:text"` // JSON array stored as text
-	Visibility string   `json:"visibility" gorm:"column:visibility;type:varchar(20);not null;default:'public'"` // public, followers, private
-	Likes     int       `json:"likes,omitempty" gorm:"column:likes;type:int;default:0"`
-	Comments  int       `json:"comments,omitempty" gorm:"column:comments;type:int;default:0"`
-	Shares    int       `json:"shares,omitempty" gorm:"column:shares;type:int;default:0"`
-	Views     int       `json:"views,omitempty" gorm:"column:views;type:int;default:0"`
-	CreatedAt time.Time `json:"createdAt" gorm:"column:created_at;type:datetime;autoCreateTime"`
-	UpdatedAt time.Time `json:"updatedAt" gorm:"column:updated_at;type:datetime;autoUpdateTime"`
+	ID            string     `json:"id" gorm:"primaryKey;type:varchar(36)"`
+	CreatorID     string     `json:"creatorId" gorm:"column:creator_id;type:varchar(36);not null;index"`
+	Content       string     `json:"content" gorm:"column:content;type:text"`
+	ImageUrls     string     `json:"imageUrls" gorm:"column:image_urls;type:text"` // JSON array stored as text
+	Style         *string    `json:"style,omitempty" gorm:"column:style;type:varchar(50)"` // Image style
+	FragmentCount *int       `json:"fragmentCount,omitempty" gorm:"column:fragment_count;type:int;default:1"` // Number of fragments (1-16)
+	Visibility    string     `json:"visibility" gorm:"column:visibility;type:varchar(20);not null;default:'public'"` // public, followers, private
+	Likes         int        `json:"likes,omitempty" gorm:"column:likes;type:int;default:0"`
+	Comments      int        `json:"comments,omitempty" gorm:"column:comments;type:int;default:0"`
+	Shares        int        `json:"shares,omitempty" gorm:"column:shares;type:int;default:0"`
+	Views         int        `json:"views,omitempty" gorm:"column:views;type:int;default:0"`
+	IsLiked       *bool      `json:"isLiked,omitempty" gorm:"-"` // Not stored in DB, computed dynamically
+	CreatedAt     time.Time  `json:"createdAt" gorm:"column:created_at;type:datetime;autoCreateTime"`
+	UpdatedAt     time.Time  `json:"updatedAt" gorm:"column:updated_at;type:datetime;autoUpdateTime"`
 }
 
 // TableName specifies the table name for Fragment

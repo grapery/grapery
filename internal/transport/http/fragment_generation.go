@@ -5,18 +5,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/handler"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
 )
 
 type FragmentGenerationHandler struct {
 	fragmentGenService *service.FragmentGenerationService
+	fragmentHandler     *handler.FragmentHandler
 	logger             *zap.Logger
 }
 
-func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGenerationService, logger *zap.Logger) *FragmentGenerationHandler {
+func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGenerationService, fragmentHandler *handler.FragmentHandler, logger *zap.Logger) *FragmentGenerationHandler {
 	return &FragmentGenerationHandler{
 		fragmentGenService: fragmentGenService,
+		fragmentHandler:     fragmentHandler,
 		logger:             logger,
 	}
 }
@@ -140,4 +143,12 @@ func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, auth
 		fragmentGenGroup.GET("", h.ListGenerationTasks)
 		fragmentGenGroup.DELETE(":taskId", h.CancelGeneration)
 	}
+
+	// Public route for getting available styles (no auth required)
+	router.GET("/styles", h.GetFragmentStyles)
+}
+
+// GetFragmentStyles handles GET /fragments/styles
+func (h *FragmentGenerationHandler) GetFragmentStyles(c *gin.Context) {
+	h.fragmentHandler.GetFragmentStyles(c)
 }
