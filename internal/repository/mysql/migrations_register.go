@@ -840,6 +840,27 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		},
 		Required: false,
 	})
+
+	// ========== Migration 007: Add follows, likes tables and update settings ==========
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_stories_ai_enabled_column",
+		Description: "Ensure stories has ai_enabled column",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureStoriesAIEnabledColumn()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_characters_poster_creation_permission_column",
+		Description: "Ensure characters has poster_creation_permission column",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureCharactersPosterCreationPermissionColumn()
+		},
+		Required: false,
+	})
 }
 
 // registerIndexSteps 注册索引创建步骤

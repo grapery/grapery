@@ -71,6 +71,7 @@ type Story struct {
 	Style               string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
 	Status              string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
 	IsCollaborationOpen bool           `gorm:"default:false;index"`           // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	AIEnabled           bool           `gorm:"default:true"`                  // 是否允许AI辅助
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt           time.Time      `gorm:"autoUpdateTime;index"`
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
@@ -265,6 +266,7 @@ type Character struct {
 	Traits                   string         `gorm:"type:text"` // JSON array
 	Skills                   string         `gorm:"type:text"` // JSON array
 	IsPublic                 bool           `gorm:"default:true;index"`
+	PosterCreationPermission string         `gorm:"size:50;default:'creator_only'"` // 海报创建权限: creator_only, group_members, anyone
 	GroupID                  *string        `gorm:"size:36;index"`
 	Group                    *Group         `gorm:"foreignKey:GroupID"`
 	CreatedAt                time.Time      `gorm:"autoCreateTime;index"`

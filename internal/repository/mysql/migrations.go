@@ -309,3 +309,41 @@ func (r *Repository) ensureUserFragmentsCountColumn() error {
 	return nil
 }
 
+// ensureStoriesAIEnabledColumn ensures the stories table has the ai_enabled column
+func (r *Repository) ensureStoriesAIEnabledColumn() error {
+	migrator := r.db.Migrator()
+	type Story struct{}
+
+	if !migrator.HasColumn(&Story{}, "ai_enabled") {
+		r.log.Info("Adding ai_enabled column to stories table")
+		if err := r.db.Exec("ALTER TABLE stories ADD COLUMN ai_enabled BOOLEAN DEFAULT TRUE NOT NULL COMMENT '是否允许AI辅助'").Error; err != nil {
+			r.log.Error("failed to add ai_enabled column", zap.Error(err))
+			return err
+		}
+		r.log.Info("Successfully added ai_enabled column to stories table")
+	} else {
+		r.log.Debug("ai_enabled column already exists in stories table")
+	}
+
+	return nil
+}
+
+// ensureCharactersPosterCreationPermissionColumn ensures the characters table has the poster_creation_permission column
+func (r *Repository) ensureCharactersPosterCreationPermissionColumn() error {
+	migrator := r.db.Migrator()
+	type Character struct{}
+
+	if !migrator.HasColumn(&Character{}, "poster_creation_permission") {
+		r.log.Info("Adding poster_creation_permission column to characters table")
+		if err := r.db.Exec("ALTER TABLE characters ADD COLUMN poster_creation_permission VARCHAR(50) DEFAULT 'creator_only' NOT NULL COMMENT '海报创建权限: creator_only, group_members, anyone'").Error; err != nil {
+			r.log.Error("failed to add poster_creation_permission column", zap.Error(err))
+			return err
+		}
+		r.log.Info("Successfully added poster_creation_permission column to characters table")
+	} else {
+		r.log.Debug("poster_creation_permission column already exists in characters table")
+	}
+
+	return nil
+}
+
