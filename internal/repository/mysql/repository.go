@@ -750,72 +750,6 @@ func (r *Repository) loadCommentReplies(ctx context.Context, parentID string) []
 	return result
 }
 
-// // ChatThreads retrieves chat threads for a user
-// func (r *Repository) ChatThreads(ctx context.Context, userID string) ([]*domain.ChatThread, error) {
-// 	var threads []ChatThread
-// 	if err := r.db.WithContext(ctx).Preload("Character").Where("user_id = ?", userID).Order("last_message_time DESC").Find(&threads).Error; err != nil {
-// 		return nil, err
-// 	}
-
-// 	result := make([]*domain.ChatThread, len(threads))
-// 	for i, t := range threads {
-// 		thread := r.chatThreadToDomain(t)
-// 		result[i] = &thread
-// 	}
-// 	return result, nil
-// }
-
-// // ChatMessages retrieves messages for a thread
-// func (r *Repository) ChatMessages(ctx context.Context, threadID string, limit, offset int) ([]*domain.ChatMessage, error) {
-// 	var messages []ChatMessage
-// 	query := r.db.WithContext(ctx).Where("thread_id = ?", threadID).Order("created_at ASC")
-
-// 	if limit > 0 {
-// 		query = query.Limit(limit).Offset(offset)
-// 	}
-
-// 	if err := query.Find(&messages).Error; err != nil {
-// 		return nil, err
-// 	}
-
-// 	result := make([]*domain.ChatMessage, len(messages))
-// 	for i, m := range messages {
-// 		msg := r.chatMessageToDomain(m)
-// 		result[i] = &msg
-// 	}
-// 	return result, nil
-// }
-
-// AppendChatMessage adds a new message to a thread
-func (r *Repository) AppendChatMessage(ctx context.Context, msg domain.ChatMessage) error {
-	dbMsg := ChatMessage{
-		ID:           uuid.New().String(),
-		ThreadID:     msg.ThreadID,
-		SenderID:     msg.SenderID,
-		SenderName:   msg.SenderName,
-		SenderAvatar: msg.SenderAvatar,
-		Content:      msg.Content,
-		Image:        msg.Image,
-		IsUser:       msg.IsUser,
-	}
-
-	if err := r.db.WithContext(ctx).Create(&dbMsg).Error; err != nil {
-		return err
-	}
-
-	// Update thread
-	updates := map[string]interface{}{
-		"last_message":      msg.Content,
-		"last_message_time": time.Now(),
-		"message_count":     gorm.Expr("message_count + 1"),
-	}
-	if !msg.IsUser {
-		updates["unread_count"] = gorm.Expr("unread_count + 1")
-	}
-
-	return r.db.WithContext(ctx).Model(&ChatThread{}).Where("id = ?", msg.ThreadID).Updates(updates).Error
-}
-
 // StoryCompositions retrieves all story compositions
 func (r *Repository) StoryCompositions(ctx context.Context) ([]domain.StoryComposition, error) {
 	var compositions []StoryComposition
@@ -1126,38 +1060,6 @@ func (r *Repository) groupToDomain(g Group) domain.Group {
 		UpdatedAt:   g.UpdatedAt.Unix(),
 	}
 }
-
-// // commentToDomain 已移至 comment_impl.go
-
-// func (r *Repository) chatThreadToDomain(t ChatThread) domain.ChatThread {
-// 	return domain.ChatThread{
-// 		ID:                   t.ID,
-// 		CharacterID:          t.CharacterID,
-// 		CharacterName:        t.Character.Name,
-// 		CharacterAvatar:      t.Character.Avatar,
-// 		StoryTitle:           t.StoryTitle,
-// 		LastMessage:          t.LastMessage,
-// 		LastMessageTime:      t.LastMessageTime,
-// 		UnreadCount:          t.UnreadCount,
-// 		MessageCount:         t.MessageCount,
-// 		InteractionFrequency: t.InteractionFrequency,
-// 		CreatedAt: t.CreatedAt.Unix(),
-// 	}
-// }
-
-// func (r *Repository) chatMessageToDomain(m ChatMessage) domain.ChatMessage {
-// 	return domain.ChatMessage{
-// 		ID:           m.ID,
-// 		ThreadID:     m.ThreadID,
-// 		SenderID:     m.SenderID,
-// 		SenderName:   m.SenderName,
-// 		SenderAvatar: m.SenderAvatar,
-// 		Content:      m.Content,
-// 		Image:        m.Image,
-// 		Timestamp:    m.CreatedAt,
-// 		IsUser:       m.IsUser,
-// 	}
-// }
 
 func (r *Repository) compositionToDomain(c StoryComposition, ctx context.Context) domain.StoryComposition {
 	var participants []StoryParticipant

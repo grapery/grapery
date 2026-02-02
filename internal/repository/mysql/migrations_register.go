@@ -195,24 +195,6 @@ func init() {
 		Required: true,
 	})
 
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_storyboard_chat_sessions",
-		Description: "Create and migrate storyboard_chat_sessions table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardChatSession{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_storyboard_chat_messages",
-		Description: "Create and migrate storyboard_chat_messages table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardChatMessage{})
-		},
-		Required: true,
-	})
-
 	// ========== 角色相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_characters",
@@ -360,7 +342,7 @@ func init() {
 		Required: true,
 	})
 
-	// ========== 评论和聊天表 ==========
+	// ========== 评论表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_comments",
 		Description: "Create and migrate comments table",
@@ -375,51 +357,6 @@ func init() {
 		Description: "Create and migrate comment_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return db.AutoMigrate(&CommentLike{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_chat_threads",
-		Description: "Create and migrate chat_threads table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ChatThread{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_chat_messages",
-		Description: "Create and migrate chat_messages table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ChatMessage{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_chat_thread_storyboard_branches",
-		Description: "Create and migrate chat_thread_storyboard_branches table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ChatThreadStoryboardBranch{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_chat_message_reactions",
-		Description: "Create and migrate chat_message_reactions table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ChatMessageReaction{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_chat_message_tokens",
-		Description: "Create and migrate chat_message_tokens table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ChatMessageToken{})
 		},
 		Required: true,
 	})

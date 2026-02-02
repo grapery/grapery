@@ -572,93 +572,6 @@ func ModelToComment(m *Comment) *domain.Comment {
 	return d
 }
 
-// ========== ChatThread 转换 ==========
-
-// ChatThreadToModel 将 domain.ChatThread 转换为 MySQL ChatThread 模型
-func ChatThreadToModel(d *domain.ChatThread) *ChatThread {
-	if d == nil {
-		return nil
-	}
-	return &ChatThread{
-		ID:                   d.ID,
-		CharacterID:          d.CharacterID,
-		UserID:               d.UserID,
-		StoryTitle:           d.StoryTitle,
-		LastMessage:          d.LastMessage,
-		LastMessageTime:      unixToTime(d.LastMessageTime),
-		UnreadCount:          d.UnreadCount,
-		MessageCount:         d.MessageCount,
-		InteractionFrequency: d.InteractionFrequency,
-		CreatedAt:            unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToChatThread 将 MySQL ChatThread 模型转换为 domain.ChatThread
-func ModelToChatThread(m *ChatThread) *domain.ChatThread {
-	if m == nil {
-		return nil
-	}
-	d := &domain.ChatThread{
-		ID:                   m.ID,
-		UserID:               m.UserID,
-		CharacterID:          m.CharacterID,
-		CharacterName:        m.Character.Name,
-		CharacterAvatar:      m.Character.Avatar,
-		StoryTitle:           m.StoryTitle,
-		LastMessage:          m.LastMessage,
-		LastMessageTime:      timeToUnix(m.LastMessageTime),
-		UnreadCount:          m.UnreadCount,
-		MessageCount:         m.MessageCount,
-		InteractionFrequency: m.InteractionFrequency,
-		CreatedAt:            timeToUnix(m.CreatedAt),
-	}
-	if m.User.ID != "" {
-		d.User = ModelToUser(&m.User)
-	}
-	if m.Character.ID != "" {
-		d.Character = ModelToCharacter(&m.Character)
-	}
-	return d
-}
-
-// ========== ChatMessage 转换 ==========
-
-// ChatMessageToModel 将 domain.ChatMessage 转换为 MySQL ChatMessage 模型
-func ChatMessageToModel(d *domain.ChatMessage) *ChatMessage {
-	if d == nil {
-		return nil
-	}
-	return &ChatMessage{
-		ID:           d.ID,
-		ThreadID:     d.ThreadID,
-		SenderID:     d.SenderID,
-		SenderName:   d.SenderName,
-		SenderAvatar: d.SenderAvatar,
-		Content:      d.Content,
-		Image:        d.Image,
-		IsUser:       d.IsUser,
-		CreatedAt:    unixToTime(d.Timestamp),
-	}
-}
-
-// ModelToChatMessage 将 MySQL ChatMessage 模型转换为 domain.ChatMessage
-func ModelToChatMessage(m *ChatMessage) *domain.ChatMessage {
-	if m == nil {
-		return nil
-	}
-	return &domain.ChatMessage{
-		ID:           m.ID,
-		ThreadID:     m.ThreadID,
-		SenderID:     m.SenderID,
-		SenderName:   m.SenderName,
-		SenderAvatar: m.SenderAvatar,
-		Content:      m.Content,
-		Image:        m.Image,
-		Timestamp:    timeToUnix(m.CreatedAt),
-		IsUser:       m.IsUser,
-	}
-}
-
 // ========== 关系表转换 ==========
 
 // UserFollowToModel 将 domain.UserFollow 转换为 MySQL UserFollow 模型
@@ -2137,24 +2050,6 @@ func ModelsToStoryboards(models []Storyboard) []*domain.Storyboard {
 		storyboards[i] = ModelToStoryboard(&models[i])
 	}
 	return storyboards
-}
-
-// ModelsToChatThreads 批量转换 ChatThread
-func ModelsToChatThreads(models []ChatThread) []*domain.ChatThread {
-	threads := make([]*domain.ChatThread, len(models))
-	for i := range models {
-		threads[i] = ModelToChatThread(&models[i])
-	}
-	return threads
-}
-
-// ModelsToChatMessages 批量转换 ChatMessage
-func ModelsToChatMessages(models []ChatMessage) []*domain.ChatMessage {
-	messages := make([]*domain.ChatMessage, len(models))
-	for i := range models {
-		messages[i] = ModelToChatMessage(&models[i])
-	}
-	return messages
 }
 
 // ModelsToNotifications 批量转换 Notification

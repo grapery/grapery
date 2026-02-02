@@ -232,17 +232,6 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.POST("/invitations/:id/accept", h.AcceptInvitation)
 			authenticated.POST("/invitations/:id/reject", h.RejectInvitation)
 
-			// 聊天相关
-			authenticated.GET("/chats", h.ListChatThreads)
-			authenticated.GET("/chats/unread/count", h.GetUnreadChatCount)
-			authenticated.GET("/chats/:id", h.GetChatThread)
-			authenticated.POST("/chats", h.CreateChatThread)
-			authenticated.DELETE("/chats/:id", h.DeleteChatThread)
-			authenticated.POST("/chats/:id/read", h.MarkChatThreadAsRead)
-			authenticated.GET("/chats/:id/messages", h.ListChatMessages)
-			authenticated.POST("/chats/:id/messages", h.SendChatMessage)
-			authenticated.DELETE("/chats/:id/messages/:messageId", h.DeleteChatMessage)
-
 			// 文件上传相关
 			authenticated.POST("/upload/image", h.UploadImage)
 			authenticated.POST("/upload/avatar", h.UploadAvatar)
@@ -269,12 +258,8 @@ func SetupRouter(h *Handler, logger *zap.Logger) *gin.Engine {
 			authenticated.DELETE("/assets/:id", h.DeleteAsset)
 
 			// SSE 实时推送（HTTP Server-Sent Events）
-			authenticated.GET("/sse/chat/:threadId", h.SSEChatStream)
 			authenticated.GET("/sse/notifications", h.SSENotificationStream)
 			authenticated.GET("/sse/activities", h.SSEActivityStream)
-
-			// Long Polling 降级方案
-			authenticated.GET("/poll/chat/:threadId/messages", h.LongPollChatMessages)
 
 			// 设备管理（APNs推送）
 			authenticated.POST("/devices/register", h.RegisterDevice)

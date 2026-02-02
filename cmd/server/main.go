@@ -20,6 +20,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/handler"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
@@ -218,9 +219,6 @@ func main() {
 	// Initialize AI clients
 	initAIClients(cfg, svc, logger)
 
-	// Initialize Storyboard Chat Service
-	storyboardChatService := service.NewStoryboardChatService(repo, svc, logger)
-	logger.Info("storyboard chat service initialized")
 	// Initialize Writers Room Service
 	writersRoomService := service.NewWritersRoomService(repo, logger)
 	logger.Info("writers room service initialized")
@@ -240,14 +238,11 @@ func main() {
 	logger.Info("fragment handler initialized")
 
 	// Initialize HTTP handler
-	handler := transport.NewHandler(svc, nil, writersRoomService, logger)
-	router := transport.SetupRouter(handler, logger)
+	httpHandler := transport.NewHandler(svc, nil, writersRoomService, logger)
+	router := transport.SetupRouter(httpHandler, logger)
 
-	// Register Storyboard Chat routes
-	storyboardChatHandler := transport.NewStoryboardChatHandler(storyboardChatService, logger)
+	// Create API group for route registration
 	apiGroup := router.Group("/api")
-	storyboardChatHandler.RegisterRoutes(apiGroup.Group("/agent"), authPkg.AuthMiddleware())
-	logger.Info("storyboard chat routes registered")
 
 	// Register Fragment Generation routes
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
@@ -288,6 +283,7 @@ func main() {
 	// Setup Writers Room Handler and register routes
 	writersRoomHandler := transport.NewHandler(nil, nil, writersRoomService, logger)
 	writersRoomHandler.RegisterWritersRoomRoutes(apiGroup.Group("/stories"), apiGroup.Group("/writers-rooms"))
+	logger.Info("writers room routes registered")
 	// Setup graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

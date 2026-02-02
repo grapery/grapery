@@ -138,43 +138,6 @@ type Repository interface {
 	CommentsByStory(ctx context.Context, storyID string) ([]*Comment, error)
 	CommentsByParent(ctx context.Context, parentID string) ([]*Comment, error)
 
-	// ========== Chat operations ==========
-	ChatThreadByID(ctx context.Context, id string) (*ChatThread, error)
-	ChatThreads(ctx context.Context, userID string) ([]*ChatThread, error)
-	CreateChatThread(ctx context.Context, thread *ChatThread) error
-	UpdateChatThread(ctx context.Context, thread *ChatThread) error
-	DeleteChatThread(ctx context.Context, id string) error
-
-	ChatMessageByID(ctx context.Context, id string) (*ChatMessage, error)
-	ChatMessages(ctx context.Context, threadID string, limit, offset int) ([]*ChatMessage, error)
-	CreateChatMessage(ctx context.Context, msg *ChatMessage) error
-	DeleteChatMessage(ctx context.Context, id string) error
-
-	// ========== Chat Storyboard Branch operations ==========
-	StoryboardLeafNodesByCharacter(ctx context.Context, characterID string) ([]*Storyboard, error)
-	TraceStoryboardAncestors(ctx context.Context, leafNodeID, characterID string, limit int) ([]*Storyboard, error)
-	CreateStoryboardBranch(ctx context.Context, branch *StoryboardBranch) error
-	GetStoryboardBranchByThread(ctx context.Context, threadID string) (*StoryboardBranch, error)
-
-	// ========== Chat Message Reaction operations ==========
-	CreateMessageReaction(ctx context.Context, reaction *MessageReaction) error
-	GetMessageReactions(ctx context.Context, messageID string) ([]*MessageReaction, error)
-	DeleteMessageReaction(ctx context.Context, messageID, userID, reactionType, emojiCode string) error
-	GetUserMessageReaction(ctx context.Context, messageID, userID string) (*MessageReaction, error)
-
-	// ========== Chat Message Token operations ==========
-	CreateMessageTokenUsage(ctx context.Context, tokenUsage *TokenUsage) error
-	GetMessageTokenUsage(ctx context.Context, messageID string) (*TokenUsage, error)
-	UpdateThreadTokenUsage(ctx context.Context, threadID string, tokens int64) error
-
-	// ========== Chat Message Archive operations ==========
-	ArchiveMessage(ctx context.Context, messageID, userID string) error
-	UnarchiveMessage(ctx context.Context, messageID, userID string) error
-	ArchiveThread(ctx context.Context, threadID, userID string) error
-	UnarchiveThread(ctx context.Context, threadID, userID string) error
-	ChatMessagesBefore(ctx context.Context, threadID, beforeMessageID string, limit int) ([]*ChatMessage, error)
-	ChatMessagesArchived(ctx context.Context, threadID string, limit, offset int) ([]*ChatMessage, error)
-
 	// ========== Storyboard operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
 
@@ -509,21 +472,6 @@ type Repository interface {
 	DeleteInvitationCode(ctx context.Context, id string) error
 	UseInvitationCode(ctx context.Context, code string, userID string) error
 	ValidateInvitationCode(ctx context.Context, code string) error
-
-	// ========== Storyboard Chat Session operations ==========
-	CreateStoryboardChatSession(ctx context.Context, session *StoryboardChatSession) error
-	GetStoryboardChatSession(ctx context.Context, id string) (*StoryboardChatSession, error)
-	GetActiveStoryboardChatSession(ctx context.Context, userID, storyID string) (*StoryboardChatSession, error)
-	ListStoryboardChatSessions(ctx context.Context, userID string, limit, offset int) ([]*StoryboardChatSession, error)
-	UpdateStoryboardChatSession(ctx context.Context, session *StoryboardChatSession) error
-	DeleteStoryboardChatSession(ctx context.Context, id string) error
-
-	// ========== Storyboard Chat Message operations ==========
-	CreateStoryboardChatMessage(ctx context.Context, msg *StoryboardChatMessage) error
-	GetStoryboardChatMessage(ctx context.Context, id string) (*StoryboardChatMessage, error)
-	ListStoryboardChatMessages(ctx context.Context, sessionID string, limit, offset int) ([]*StoryboardChatMessage, error)
-	GetLastStoryboardChatMessage(ctx context.Context, sessionID string) (*StoryboardChatMessage, error)
-	DeleteStoryboardChatMessage(ctx context.Context, id string) error
 
 	// ========== Writers Room operations ==========
 	WritersRoomByStoryID(ctx context.Context, storyID string) (*WritersRoom, error)

@@ -71,7 +71,7 @@ type WritersRoomMessage struct {
 	Sender         *WritersRoomParticipant `json:"sender,omitempty"`
 	Room           *WritersRoom            `json:"room,omitempty"`
 	ReplyToMessage *WritersRoomMessage     `json:"replyToMessage,omitempty"`
-	Reactions      []*MessageReaction      `json:"reactions,omitempty"`
+	Reactions      []*WritersRoomMessageReaction `json:"reactions,omitempty"`
 	ReadReceipts   []*MessageReadReceipt   `json:"readReceipts,omitempty"`
 }
 
