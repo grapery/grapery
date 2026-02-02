@@ -30,6 +30,9 @@ type Story struct {
 	PosterImage         string `json:"posterImage,omitempty"`         // AI 生成的海报图片
 	BackgroundImage     string `json:"backgroundImage,omitempty"`     // AI 生成的背景图片
 
+	// AI开关（创建时确定，不可更改）
+	AIEnabled bool `json:"aiEnabled"`
+
 	// Token 消耗统计
 	TokensUsed       int `json:"tokensUsed"`       // 故事创建过程中消耗的总token
 	TextTokensUsed   int `json:"textTokensUsed"`   // 文本生成消耗的token
@@ -127,3 +130,21 @@ type StoryContributor struct {
 	Inviter *User  `json:"inviter,omitempty"`
 	Story   *Story `json:"story,omitempty"`
 }
+
+// StoryVisibility 故事可见性
+type StoryVisibility string
+
+const (
+	StoryVisibilityPublic    StoryVisibility = "public"
+	StoryVisibilityUnlisted  StoryVisibility = "unlisted"
+	StoryVisibilityPrivate   StoryVisibility = "private"
+)
+
+// StoryStatus 故事状态
+type StoryStatus string
+
+const (
+	StoryStatusDraft      StoryStatus = "draft"
+	StoryStatusPublished  StoryStatus = "published"
+	StoryStatusRendering  StoryStatus = "rendering"
+)

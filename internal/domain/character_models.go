@@ -37,6 +37,9 @@ type Character struct {
 	CreatedAt                int64   `json:"createdAt"`
 	UpdatedAt                int64   `json:"updatedAt"`
 
+	// 海报创建权限
+	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, group_members, anyone
+
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
@@ -118,10 +121,11 @@ type CharacterPoster struct {
 	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)
 	ImageGenerationID   string `json:"imageGenerationId,omitempty"`   // AI record for image generation (Step 2)
 
-	Likes     int   `json:"likes"`
-	Shares    int   `json:"shares"`
-	CreatedAt int64 `json:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt,omitempty"`
+	LikesCount int   `json:"likesCount"`
+	Likes      int   `json:"likes"`
+	Shares     int   `json:"shares"`
+	CreatedAt  int64 `json:"createdAt"`
+	UpdatedAt  int64 `json:"updatedAt,omitempty"`
 
 	// Relations
 	Character *Character `json:"character,omitempty"`
@@ -140,3 +144,12 @@ type CharacterAnalytics struct {
 	// Relations
 	Character *Character `json:"character,omitempty"`
 }
+
+// PosterCreationPermissionType 海报创建权限类型
+type PosterCreationPermissionType string
+
+const (
+	PosterCreationPermissionCreatorOnly   PosterCreationPermissionType = "creator_only"
+	PosterCreationPermissionGroupMembers  PosterCreationPermissionType = "group_members"
+	PosterCreationPermissionAnyone        PosterCreationPermissionType = "anyone"
+)

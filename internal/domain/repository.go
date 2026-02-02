@@ -532,3 +532,32 @@ type Repository interface {
 	DeactivateUserDevice(ctx context.Context, deviceToken string) error
 	UpdateUserDeviceLastActive(ctx context.Context, deviceToken string, lastActiveAt int64) error
 }
+
+// FollowRepository 关注相关操作（多态关联）
+type FollowRepository interface {
+	CreateFollow(ctx context.Context, follow *Follow) error
+	DeleteFollow(ctx context.Context, id string) error
+	GetFollowByID(ctx context.Context, id string) (*Follow, error)
+	GetFollowsByFollower(ctx context.Context, userID string, followableType FollowableType) ([]*Follow, error)
+	GetFollowsByFollowable(ctx context.Context, followableType FollowableType, followableID string) ([]*Follow, error)
+	CheckFollowStatus(ctx context.Context, followerID string, followableType FollowableType, followableID string) (bool, error)
+	GetFollowersCount(ctx context.Context, followableType FollowableType, followableID string) (int, error)
+}
+
+// LikeRepository 点赞相关操作（多态关联）
+type LikeRepository interface {
+	CreateLike(ctx context.Context, like *Like) error
+	DeleteLike(ctx context.Context, id string) error
+	GetLikeByID(ctx context.Context, id string) (*Like, error)
+	GetLikesByUser(ctx context.Context, userID string, likeableType LikeableType) ([]*Like, error)
+	GetLikesByLikeable(ctx context.Context, likeableType LikeableType, likeableID string) ([]*Like, error)
+	CheckLikeStatus(ctx context.Context, userID string, likeableType LikeableType, likeableID string) (bool, error)
+	GetLikesCount(ctx context.Context, likeableType LikeableType, likeableID string) (int, error)
+}
+
+// UserSettingsRepository 用户设置操作
+type UserSettingsRepository interface {
+	GetUserSettings(userID string) (*UserSettings, error)
+	CreateUserSettings(settings *UserSettings) error
+	UpdateUserSettings(settings *UserSettings) error
+}

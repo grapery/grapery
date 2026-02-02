@@ -37,33 +37,44 @@ type GroupRolePermission struct {
 
 // Group represents a collaboration group
 type Group struct {
-	ID           string `json:"id"`
-	CreatorID    string `json:"-"` // 内部使用，不序列化到JSON
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	Avatar       string `json:"avatar,omitempty"`
-	CoverImage   string `json:"cover_image,omitempty"` // 封面图
-	Members      int    `json:"members"`
-	Stories      int    `json:"stories"`
-	Followers    int    `json:"followers,omitempty"`     // 关注者数量
-	BlockedCount int    `json:"blocked_count,omitempty"` // 黑名单用户数量
-	Public       bool   `json:"is_public"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
+	ID             string   `json:"id"`
+	CreatorID      string   `json:"-"` // 内部使用，不序列化到JSON
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Avatar         string   `json:"avatar,omitempty"`
+	CoverImage     string   `json:"coverImage,omitempty"`
+	Category       string   `json:"category,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	Visibility     string   `json:"visibility"`   // 可见性: public, private, hidden
+	JoinType       string   `json:"joinType"`     // 加入类型: open, apply, invite_only
+	MaxMembers     int      `json:"maxMembers"`   // 最大成员数
+	Status         string   `json:"status"`       // 状态: active, inactive, banned
+	MembersCount   int      `json:"membersCount"`   // 成员数
+	StoriesCount   int      `json:"storiesCount"`   // 故事数
+	FollowersCount int      `json:"followersCount"` // 关注者数
+	CreatedAt      int64    `json:"createdAt"`
+	UpdatedAt      int64    `json:"updatedAt"`
+
+	// 向后兼容的字段（内部使用）
+	Members      int  `json:"members"`       // 兼容旧代码
+	Stories      int  `json:"stories"`       // 兼容旧代码
+	Followers    int  `json:"followers"`     // 兼容旧代码
+	BlockedCount int  `json:"blockedCount"`  // 兼容旧代码
+	Public       bool `json:"isPublic"`      // 兼容旧代码
 
 	// Relations
 	Creator     *User            `json:"creator,omitempty"`
-	MyRole      *GroupMemberRole `json:"my_role,omitempty"`      // 当前用户在群组中的角色
-	IsFollowing *bool            `json:"is_following,omitempty"` // 当前用户是否已关注此群组
+	MyRole      *GroupMemberRole `json:"myRole,omitempty"`      // 当前用户在群组中的角色
+	IsFollowing *bool            `json:"isFollowing,omitempty"` // 当前用户是否已关注此群组
 }
 
 // GroupMember 群组成员
 type GroupMember struct {
 	ID       string          `json:"id"`
-	GroupID  string          `json:"group_id"`
-	UserID   string          `json:"user_id"`
+	GroupID  string          `json:"groupId"`
+	UserID   string          `json:"userId"`
 	Role     GroupMemberRole `json:"role"` // owner, admin, member
-	JoinedAt int64           `json:"joined_at"`
+	JoinedAt int64           `json:"joinedAt"`
 
 	// Relations
 	Group *Group `json:"group,omitempty"`
@@ -73,9 +84,9 @@ type GroupMember struct {
 // GroupFollow 群组关注记录
 type GroupFollow struct {
 	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	UserID    string `json:"user_id"`
-	CreatedAt int64  `json:"created_at"`
+	GroupID   string `json:"groupId"`
+	UserID    string `json:"userId"`
+	CreatedAt int64  `json:"createdAt"`
 
 	// Relations
 	Group *Group `json:"group,omitempty"`
@@ -85,11 +96,11 @@ type GroupFollow struct {
 // GroupMemberInfo 群组成员信息（扩展信息）
 type GroupMemberInfo struct {
 	ID        string          `json:"id"`
-	GroupID   string          `json:"group_id"`
-	UserID    string          `json:"user_id"`
+	GroupID   string          `json:"groupId"`
+	UserID    string          `json:"userId"`
 	Role      GroupMemberRole `json:"role"`
-	JoinedAt  int64           `json:"joined_at"`
-	InvitedBy string          `json:"invited_by,omitempty"`
+	JoinedAt  int64           `json:"joinedAt"`
+	InvitedBy string          `json:"invitedBy,omitempty"`
 
 	// Relations
 	User *User `json:"user,omitempty"`
@@ -98,13 +109,13 @@ type GroupMemberInfo struct {
 // GroupInvitation 群组邀请
 type GroupInvitation struct {
 	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	InviterID string `json:"inviter_id"`
-	InviteeID string `json:"invitee_id"`
+	GroupID   string `json:"groupId"`
+	InviterID string `json:"inviterId"`
+	InviteeID string `json:"inviteeId"`
 	Status    string `json:"status"` // pending, accepted, rejected, expired
 	Message   string `json:"message,omitempty"`
-	CreatedAt int64  `json:"created_at"`
-	ExpiresAt int64  `json:"expires_at"`
+	CreatedAt int64  `json:"createdAt"`
+	ExpiresAt int64  `json:"expiresAt"`
 
 	// Relations
 	Group   *Group `json:"group,omitempty"`
@@ -115,21 +126,21 @@ type GroupInvitation struct {
 // GroupActivity represents an activity in a group feed
 type GroupActivity struct {
 	ID         string `json:"id"`
-	GroupID    string `json:"-"`
+	GroupID    string `json:"groupId,omitempty"`
 	Type       string `json:"type"`
-	UserID     string `json:"user_id"`
-	UserName   string `json:"user_name"`
-	UserAvatar string `json:"user_avatar"`
-	StoryID    string `json:"story_id,omitempty"`
-	StoryTitle string `json:"story_title,omitempty"`
+	UserID     string `json:"userId"`
+	UserName   string `json:"userName"`
+	UserAvatar string `json:"userAvatar"`
+	StoryID    string `json:"storyId,omitempty"`
+	StoryTitle string `json:"storyTitle,omitempty"`
 	Message    string `json:"message"`
 	Timestamp  int64  `json:"timestamp"`
 	Date       string `json:"date,omitempty"` // YYYY-MM-DD format for heatmap grouping
 
 	// Relations
-	Group *Group `json:"group,omitempty"`
-	User  *User  `json:"user,omitempty"`
-	Story *Story `json:"story,omitempty"`
+	Group *Group  `json:"group,omitempty"`
+	User  *User   `json:"user,omitempty"`
+	Story *Story  `json:"story,omitempty"`
 }
 
 // ActivityTimeRange represents the time range for activity queries
@@ -149,17 +160,17 @@ type ActivityHeatmapData struct {
 
 // ActivityHeatmapResponse contains heatmap data and activity list
 type ActivityHeatmapResponse struct {
-	TimeRange   ActivityTimeRange     `json:"time_range"`
-	StartDate   string                `json:"start_date"`
-	EndDate     string                `json:"end_date"`
-	HeatmapData []ActivityHeatmapData `json:"heatmap_data"`
-	TotalCount  int                   `json:"total_count"`
+	TimeRange   ActivityTimeRange     `json:"timeRange"`
+	StartDate   string                `json:"startDate"`
+	EndDate     string                `json:"endDate"`
+	HeatmapData []ActivityHeatmapData `json:"heatmapData"`
+	TotalCount  int                   `json:"totalCount"`
 }
 
 // ActivityListRequest represents a request for filtered activities
 type ActivityListRequest struct {
-	GroupID   string            `json:"group_id"`
-	TimeRange ActivityTimeRange `json:"time_range,omitempty"`
+	GroupID   string            `json:"groupId"`
+	TimeRange ActivityTimeRange `json:"timeRange,omitempty"`
 	Date      string            `json:"date,omitempty"` // Filter by specific date (YYYY-MM-DD)
 	Limit     int               `json:"limit,omitempty"`
 	Offset    int               `json:"offset,omitempty"`
@@ -306,11 +317,11 @@ func GetRolePermissions(roleCode string) GroupRolePermission {
 // GroupBlacklist 小组黑名单
 type GroupBlacklist struct {
 	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`   // 小组ID
-	UserID    string `json:"user_id"`    // 被拉黑的用户ID
-	BlockedBy string `json:"blocked_by"` // 操作者ID（谁拉黑的）
-	Reason    string `json:"reason"`     // 拉黑原因（可选）
-	CreatedAt int64  `json:"created_at"`
+	GroupID   string `json:"groupId"`   // 小组ID
+	UserID    string `json:"userId"`    // 被拉黑的用户ID
+	BlockedBy string `json:"blockedBy"` // 操作者ID（谁拉黑的）
+	Reason    string `json:"reason"`    // 拉黑原因（可选）
+	CreatedAt int64  `json:"createdAt"`
 
 	// Relations
 	Group *Group `json:"group,omitempty"`
@@ -321,13 +332,40 @@ type GroupBlacklist struct {
 // GroupBlacklistInfo 黑名单信息（扩展）
 type GroupBlacklistInfo struct {
 	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	UserID    string `json:"user_id"`
-	BlockedBy string `json:"blocked_by"`
+	GroupID   string `json:"groupId"`
+	UserID    string `json:"userId"`
+	BlockedBy string `json:"blockedBy"`
 	Reason    string `json:"reason,omitempty"`
-	CreatedAt int64  `json:"created_at"`
+	CreatedAt int64  `json:"createdAt"`
 
 	// Relations
 	User  *User `json:"user,omitempty"`
 	Admin *User `json:"admin,omitempty"`
 }
+
+// GroupVisibility 群组可见性
+type GroupVisibility string
+
+const (
+	GroupVisibilityPublic  GroupVisibility = "public"
+	GroupVisibilityPrivate GroupVisibility = "private"
+	GroupVisibilityHidden  GroupVisibility = "hidden"
+)
+
+// GroupJoinType 群组加入类型
+type GroupJoinType string
+
+const (
+	GroupJoinTypeOpen       GroupJoinType = "open"
+	GroupJoinTypeApply      GroupJoinType = "apply"
+	GroupJoinTypeInviteOnly GroupJoinType = "invite_only"
+)
+
+// GroupStatus 群组状态
+type GroupStatus string
+
+const (
+	GroupStatusActive   GroupStatus = "active"
+	GroupStatusInactive GroupStatus = "inactive"
+	GroupStatusBanned   GroupStatus = "banned"
+)

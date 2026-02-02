@@ -46,19 +46,39 @@ type UserFollow struct {
 type UserSettings struct {
 	ID                 string `json:"id"`
 	UserID             string `json:"userId"`
-	Language           string `json:"language"` // en, zh, ja
-	Theme              string `json:"theme"`    // light, dark, auto
-	EmailNotifications bool   `json:"emailNotifications"`
-	PushNotifications  bool   `json:"pushNotifications"`
-	ShowAdultContent   bool   `json:"showAdultContent"`
-	ProfileVisibility  string `json:"profileVisibility"` // public, friends, private
-	AllowComments      bool   `json:"allowComments"`
-	AllowMessages      bool   `json:"allowMessages"`
-	ShowOnlineStatus   bool   `json:"showOnlineStatus"`
-	UpdatedAt          int64  `json:"updatedAt"`
+	Language           string `json:"language"` // en, zh-CN, zh-TW, ja, ko
+	Theme              string `json:"theme"`    // light, dark, system
+	FontSize           string `json:"fontSize"` // small, medium, large
+	DataSaver          bool   `json:"dataSaver"`
+
+	// 隐私设置
+	ProfileVisibility         string `json:"profileVisibility"`         // public, followers_only, private
+	DefaultStoryVisibility    string `json:"defaultStoryVisibility"`    // public, unlisted, private
+	DefaultFragmentVisibility string `json:"defaultFragmentVisibility"` // public, followers_only, private
+	AllowFollowFrom           string `json:"allowFollowFrom"`           // everyone, followers_only, followers_of_followers, no_one
+	AllowCommentsFrom         string `json:"allowCommentsFrom"`         // everyone, followers_only, followers_of_followers, no_one
+	AllowMessagesFrom         string `json:"allowMessagesFrom"`         // everyone, followers_only, followers_of_followers, no_one
+	ShowOnlineStatus          bool   `json:"showOnlineStatus"`
+	ShowReadReceipts          bool   `json:"showReadReceipts"`
+
+	// AI设置
+	AIEnabled     bool `json:"aiEnabled"`
+	AIDataSharing bool `json:"aiDataSharing"`
+
+	// 通知设置 (JSON)
+	NotificationSettings string `json:"notificationSettings"` // JSON string
+
+	UpdatedAt int64 `json:"updatedAt"`
 
 	// Relations
 	User *User `json:"user,omitempty"`
+
+	// 向后兼容字段（内部使用）
+	EmailNotifications bool   `json:"emailNotifications"` // 兼容旧代码
+	PushNotifications  bool   `json:"pushNotifications"`  // 兼容旧代码
+	ShowAdultContent   bool   `json:"showAdultContent"`   // 兼容旧代码
+	AllowComments      bool   `json:"allowComments"`      // 兼容旧代码
+	AllowMessages      bool   `json:"allowMessages"`      // 兼容旧代码
 }
 
 // UserActivity 用户活动记录
@@ -130,3 +150,52 @@ type PushNotificationResult struct {
 	Error       string `json:"error,omitempty"`
 	MessageID   string `json:"messageId,omitempty"`
 }
+
+// VisibilityType 可见性类型
+type VisibilityType string
+
+const (
+	VisibilityPublic        VisibilityType = "public"
+	VisibilityFollowersOnly VisibilityType = "followers_only"
+	VisibilityPrivate       VisibilityType = "private"
+	VisibilityUnlisted      VisibilityType = "unlisted"
+)
+
+// AllowFromType 允许来源类型
+type AllowFromType string
+
+const (
+	AllowFromEveryone             AllowFromType = "everyone"
+	AllowFromFollowersOnly        AllowFromType = "followers_only"
+	AllowFromFollowersOfFollowers AllowFromType = "followers_of_followers"
+	AllowFromNoOne                AllowFromType = "no_one"
+)
+
+// FontSizeType 字体大小类型
+type FontSizeType string
+
+const (
+	FontSizeSmall  FontSizeType = "small"
+	FontSizeMedium FontSizeType = "medium"
+	FontSizeLarge  FontSizeType = "large"
+)
+
+// ThemeType 主题类型
+type ThemeType string
+
+const (
+	ThemeLight  ThemeType = "light"
+	ThemeDark   ThemeType = "dark"
+	ThemeSystem ThemeType = "system"
+)
+
+// LanguageType 语言类型
+type LanguageType string
+
+const (
+	LanguageEnglish   LanguageType = "en"
+	LanguageChineseCN LanguageType = "zh-CN"
+	LanguageChineseTW LanguageType = "zh-TW"
+	LanguageJapanese  LanguageType = "ja"
+	LanguageKorean    LanguageType = "ko"
+)
