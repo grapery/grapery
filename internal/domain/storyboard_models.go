@@ -86,6 +86,12 @@ type Storyboard struct {
 	// Relations
 	Story   *Story `json:"story,omitempty"`
 	Creator *User  `json:"creator,omitempty"`
+
+	// 是否是默认路径节点
+	IsInDefaultPath bool `json:"isInDefaultPath,omitempty" gorm:"default:false"`
+
+	// 在默认路径中的顺序（用于排序）
+	DefaultPathOrder int `json:"defaultPathOrder,omitempty" gorm:"default:0"`
 }
 
 // StoryboardLike Storyboard 点赞

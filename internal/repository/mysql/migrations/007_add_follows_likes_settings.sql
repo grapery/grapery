@@ -96,3 +96,18 @@ ALTER TABLE stories
 -- =============================================
 ALTER TABLE characters 
     ADD COLUMN IF NOT EXISTS poster_creation_permission VARCHAR(50) DEFAULT 'creator_only' COMMENT '海报创建权限: creator_only, group_members, anyone';
+
+-- =============================================
+-- stories 表: 添加默认路径相关字段
+-- =============================================
+ALTER TABLE stories 
+    ADD COLUMN IF NOT EXISTS default_path_node_ids JSON DEFAULT '[]' COMMENT '默认路径节点ID列表',
+    ADD COLUMN IF NOT EXISTS default_path_updated_at BIGINT DEFAULT NULL COMMENT '路径更新时间',
+    ADD COLUMN IF NOT EXISTS default_path_type VARCHAR(20) DEFAULT 'manual' COMMENT '路径类型: manual/auto';
+
+-- =============================================
+-- storyboards 表: 添加默认路径标记
+-- =============================================
+ALTER TABLE storyboards 
+    ADD COLUMN IF NOT EXISTS is_in_default_path BOOLEAN DEFAULT FALSE COMMENT '是否在默认路径中',
+    ADD COLUMN IF NOT EXISTS default_path_order INT DEFAULT 0 COMMENT '在默认路径中的顺序';

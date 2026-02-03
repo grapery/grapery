@@ -10,10 +10,11 @@ import (
 
 // Handler handles HTTP requests
 type Handler struct {
-	svc            *service.Service
-	aiService      *service.AIService
-	writersRoomSvc *service.WritersRoomService
-	logger         *zap.Logger
+	svc                 *service.Service
+	aiService           *service.AIService
+	writersRoomSvc      *service.WritersRoomService
+	storyboardPathSvc   *service.StoryboardPathService
+	logger              *zap.Logger
 }
 
 // HandlerDependencies 包含所有 handler 依赖的服务
@@ -21,6 +22,7 @@ type HandlerDependencies struct {
 	Service               *service.Service
 	AIService             *service.AIService
 	WritersRoomService    *service.WritersRoomService
+	StoryboardPathService *service.StoryboardPathService
 	InteractionService    service.InteractionService
 	UserSettingsService   service.UserSettingsService
 	Logger                *zap.Logger
@@ -39,10 +41,11 @@ func NewHandler(svc *service.Service, aiService *service.AIService, writersRoomS
 // NewHandlerWithDeps creates a new HTTP handler with all dependencies
 func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 	return &Handler{
-		svc:            deps.Service,
-		aiService:      deps.AIService,
-		writersRoomSvc: deps.WritersRoomService,
-		logger:         deps.Logger,
+		svc:                 deps.Service,
+		aiService:           deps.AIService,
+		writersRoomSvc:      deps.WritersRoomService,
+		storyboardPathSvc:   deps.StoryboardPathService,
+		logger:              deps.Logger,
 	}
 }
 
@@ -167,6 +170,11 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/stories/:id/scenes/ai-generate-image", h.GenerateSceneImage)
 			authenticated.PUT("/stories/:id/scenes/:sceneId", h.UpdateStoryScene)
 			authenticated.DELETE("/stories/:id/scenes/:sceneId", h.DeleteStoryScene)
+
+			// 故事默认路径相关
+			authenticated.POST("/stories/:id/default-path", h.SetDefaultPath)
+			authenticated.POST("/stories/:id/default-path/auto", h.CalculateAutoPath)
+			authenticated.GET("/stories/:id/default-path", h.GetDefaultPath)
 
 			// Storyboard 相关
 			authenticated.POST("/storyboards", h.CreateStoryboard)
@@ -323,6 +331,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// 用户设置相关 (User Settings)
 			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
 			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
+
+			// 碎片相关 (Fragments)
+			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
 		}
 
 		// 公开接口（无需认证）
@@ -561,4 +572,70 @@ func (h *Handler) CurrentUser(c *gin.Context) {
 	}
 
 	Success(c, user)
+}
+
+// ========== 故事默认路径相关端点 ==========
+
+// SetDefaultPathRequest 设置默认路径请求
+type SetDefaultPathRequest struct {
+	NodeIDs []string `json:"nodeIds" binding:"required"`
+}
+
+// SetDefaultPath 设置故事的默认路径
+func (h *Handler) SetDefaultPath(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+
+	var req SetDefaultPathRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	if err := h.storyboardPathSvc.SetDefaultPath(c.Request.Context(), storyID, userID, req.NodeIDs); err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "default path set successfully"})
+}
+
+// CalculateAutoPath 自动计算默认路径
+func (h *Handler) CalculateAutoPath(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+
+	path, err := h.storyboardPathSvc.CalculateAutoPath(c.Request.Context(), storyID, userID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"nodeIds": path,
+		"count":   len(path),
+	})
+}
+
+// GetDefaultPath 获取故事的默认路径
+func (h *Handler) GetDefaultPath(c *gin.Context) {
+	storyID := c.Param("id")
+
+	path, err := h.storyboardPathSvc.GetDefaultPath(c.Request.Context(), storyID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"path":  path,
+		"count": len(path),
+	})
 }

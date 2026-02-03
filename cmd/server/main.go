@@ -257,14 +257,19 @@ func main() {
 	userSettingsService := service.NewUserSettingsService(userSettingsRepo, logger)
 	logger.Info("user settings service initialized")
 
+	// Initialize Storyboard Path Service
+	storyboardPathService := service.NewStoryboardPathService(repo, likeRepo, logger)
+	logger.Info("storyboard path service initialized")
+
 	// Initialize HTTP handler with dependencies
 	deps := &transport.HandlerDependencies{
-		Service:             svc,
-		AIService:           nil,
-		WritersRoomService:  writersRoomService,
-		InteractionService:  interactionService,
-		UserSettingsService: userSettingsService,
-		Logger:              logger,
+		Service:               svc,
+		AIService:             nil,
+		WritersRoomService:    writersRoomService,
+		StoryboardPathService: storyboardPathService,
+		InteractionService:    interactionService,
+		UserSettingsService:   userSettingsService,
+		Logger:                logger,
 	}
 	router := transport.SetupRouter(deps)
 

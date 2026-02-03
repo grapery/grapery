@@ -2775,3 +2775,194 @@ func (s *Service) GetStoryContributors(ctx context.Context, storyID string, limi
 
 	return contributors, nil
 }
+
+// ========== 碎片转故事功能 ==========
+
+// ConvertFragmentToStory 将碎片转换为故事
+func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fragmentID string, req domain.ConvertFragmentRequest) (*domain.ConvertFragmentResponse, error) {
+	s.logger.Info("converting fragment to story",
+		zap.String("userID", userID),
+		zap.String("fragmentID", fragmentID),
+		zap.String("title", req.Title),
+	)
+
+	// 1. 获取碎片信息 - 需要查询数据库获取完整的碎片信息
+	// 从 repository 中获取 fragment repository
+	fragment, err := s.getFragmentByID(ctx, fragmentID)
+	if err != nil {
+		s.logger.Error("failed to get fragment",
+			zap.String("fragmentID", fragmentID),
+			zap.Error(err))
+		return nil, fmt.Errorf("fragment not found: %w", err)
+	}
+
+	// 2. 检查权限（只能转换自己的碎片）
+	if fragment.AuthorID != userID && fragment.CreatorID != userID {
+		s.logger.Warn("permission denied: not fragment owner",
+			zap.String("userID", userID),
+			zap.String("fragmentID", fragmentID),
+			zap.String("authorID", fragment.AuthorID),
+			zap.String("creatorID", fragment.CreatorID))
+		return nil, errors.New("permission denied: not fragment owner")
+	}
+
+	s.logger.Debug("fragment retrieved",
+		zap.String("fragmentID", fragmentID),
+		zap.String("content", fragment.Content),
+		zap.Int("mediaCount", len(fragment.MediaURLs)))
+
+	// 3. 设置默认值
+	sceneCount := req.SceneCount
+	if sceneCount < 2 || sceneCount > 8 {
+		sceneCount = 3 // 默认3个场景
+	}
+
+	isCollaborationOpen := req.CollaborationType == "open"
+
+	now := time.Now().Unix()
+
+	// 4. 创建故事
+	story := &domain.Story{
+		ID:                  utils.GenerateID(),
+		Title:               req.Title,
+		Description:         req.Description,
+		CoverImage:          req.CoverImage,
+		Genre:               req.Genre,
+		AuthorID:            userID,
+		Status:              "draft",
+		IsCollaborationOpen: isCollaborationOpen,
+		AIEnabled:           req.IsAIEnabled,
+		DefaultSceneCount:   sceneCount,
+		OriginalDescription: fragment.Content, // 保留原始内容
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+
+	// 获取作者信息
+	author, err := s.repo.UserByID(ctx, userID)
+	if err != nil {
+		s.logger.Error("failed to get author",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, errors.New("author not found")
+	}
+	story.Author = author
+
+	s.logger.Debug("creating story",
+		zap.String("storyID", story.ID),
+		zap.String("title", story.Title),
+		zap.Int("sceneCount", sceneCount))
+
+	if err := s.repo.CreateStory(ctx, story); err != nil {
+		s.logger.Error("failed to create story",
+			zap.String("storyID", story.ID),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to create story: %w", err)
+	}
+
+	s.logger.Info("story created",
+		zap.String("storyID", story.ID),
+		zap.String("title", story.Title))
+
+	// 5. 创建根故事板
+	storyboard := &domain.Storyboard{
+		ID:             utils.GenerateID(),
+		StoryID:        story.ID,
+		ParentID:       domain.StoryboardRootMarker, // "__root__"
+		CreatorID:      userID,
+		CreatorName:    author.DisplayName,
+		CreatorAvatar:  author.Avatar,
+		Title:          "Chapter 1",
+		Content:        fragment.Content, // 碎片内容作为初始内容
+		RawInput:       fragment.Content,
+		SceneCount:     sceneCount,
+		WorkflowStatus: "draft",
+		CurrentStep:    1,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	s.logger.Debug("creating root storyboard",
+		zap.String("storyboardID", storyboard.ID),
+		zap.String("storyID", story.ID))
+
+	if err := s.repo.CreateStoryboard(ctx, storyboard); err != nil {
+		s.logger.Error("failed to create storyboard",
+			zap.String("storyboardID", storyboard.ID),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to create storyboard: %w", err)
+	}
+
+	s.logger.Info("root storyboard created",
+		zap.String("storyboardID", storyboard.ID),
+		zap.String("storyID", story.ID))
+
+	// 6. 迁移碎片媒体资源到故事板场景
+	scenesCreated := 0
+	if len(fragment.MediaURLs) > 0 {
+		s.logger.Debug("migrating fragment media to storyboard scenes",
+			zap.Int("mediaCount", len(fragment.MediaURLs)),
+			zap.Int("sceneCount", sceneCount))
+
+		for i, mediaURL := range fragment.MediaURLs {
+			if i >= sceneCount {
+				break // 不超过设定的场景数
+			}
+			scene := &domain.StoryboardScene{
+				ID:           utils.GenerateID(),
+				StoryboardID: storyboard.ID,
+				Sequence:     i + 1,
+				Title:        fmt.Sprintf("Scene %d", i+1),
+				Image:        mediaURL,
+				Description:  "", // 可以从 fragment content 中解析或留空
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			if err := s.repo.CreateStoryboardScenes(ctx, storyboard.ID, []*domain.StoryboardScene{scene}); err != nil {
+				s.logger.Warn("failed to create scene",
+					zap.String("storyboardID", storyboard.ID),
+					zap.Int("sequence", i+1),
+					zap.Error(err))
+			} else {
+				scenesCreated++
+			}
+		}
+	}
+
+	s.logger.Info("storyboard scenes created",
+		zap.Int("scenesCreated", scenesCreated))
+
+	// 7. 更新故事根故事板ID
+	story.RootStoryboardID = storyboard.ID
+	if err := s.repo.UpdateStory(ctx, story); err != nil {
+		s.logger.Warn("failed to update story root storyboard",
+			zap.String("storyID", story.ID),
+			zap.String("storyboardID", storyboard.ID),
+			zap.Error(err))
+		// 非致命错误，继续返回成功
+	} else {
+		s.logger.Debug("story root storyboard updated",
+			zap.String("storyID", story.ID),
+			zap.String("rootStoryboardID", storyboard.ID))
+	}
+
+	// 8. 记录用户活动
+	go s.RecordStoryCreated(context.Background(), userID, story.ID, story.Title)
+
+	s.logger.Info("fragment converted to story successfully",
+		zap.String("fragmentID", fragmentID),
+		zap.String("storyID", story.ID),
+		zap.String("storyboardID", storyboard.ID),
+		zap.Int("scenesCreated", scenesCreated))
+
+	return &domain.ConvertFragmentResponse{
+		Story:      story,
+		Storyboard: storyboard,
+		FragmentID: fragmentID,
+	}, nil
+}
+
+// getFragmentByID 从数据库获取碎片信息
+func (s *Service) getFragmentByID(ctx context.Context, fragmentID string) (*domain.Fragment, error) {
+	return s.repo.FragmentByID(ctx, fragmentID)
+}

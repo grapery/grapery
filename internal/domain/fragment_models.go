@@ -75,3 +75,21 @@ func ValidFragmentVisibility(visibility string) bool {
 		return false
 	}
 }
+
+// ConvertFragmentRequest 碎片转故事请求
+type ConvertFragmentRequest struct {
+	Title             string `json:"title" binding:"required"`           // 故事标题
+	Description       string `json:"description,omitempty"`              // 故事描述
+	Genre             string `json:"genre,omitempty"`                    // 故事类型
+	CoverImage        string `json:"coverImage,omitempty"`               // 封面图片
+	SceneCount        int    `json:"sceneCount,omitempty"`               // 场景数量 (2-8, 默认3)
+	IsAIEnabled       bool   `json:"isAIEnabled,omitempty"`              // 是否启用AI
+	CollaborationType string `json:"collaborationType,omitempty"`        // 协作类型: open, restricted, closed
+}
+
+// ConvertFragmentResponse 碎片转故事响应
+type ConvertFragmentResponse struct {
+	Story      *Story      `json:"story"`      // 创建的故事
+	Storyboard *Storyboard `json:"storyboard"` // 创建的故事板
+	FragmentID string      `json:"fragmentId"` // 原碎片ID
+}

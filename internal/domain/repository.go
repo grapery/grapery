@@ -518,6 +518,18 @@ type Repository interface {
 	// 通过任意第三方登录（Google 或 Apple）的 email 查找关联的用户
 	GetUserByThirdPartyEmail(ctx context.Context, email string) (*User, error)
 
+	// ========== Fragment operations ==========
+	// FragmentByID retrieves a fragment by ID
+	FragmentByID(ctx context.Context, id string) (*Fragment, error)
+	// ListFragments retrieves fragments with pagination
+	ListFragments(ctx context.Context, limit, offset int, visibility string) ([]*Fragment, int64, error)
+	// CreateFragment creates a new fragment
+	CreateFragment(ctx context.Context, fragment *Fragment) error
+	// UpdateFragment updates a fragment
+	UpdateFragment(ctx context.Context, fragment *Fragment) error
+	// DeleteFragment deletes a fragment
+	DeleteFragment(ctx context.Context, id string) error
+
 	// ========== User Device operations ==========
 	// 用户设备管理（APNs/FCM 推送通知）
 	CreateUserDevice(ctx context.Context, device *UserDevice) error

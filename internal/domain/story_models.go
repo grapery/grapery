@@ -18,6 +18,7 @@ type Story struct {
 	Style               *StyleConfig `json:"style,omitempty"`     // AI生成风格配置（完整信息，可为空）
 	Status              string       `json:"status"`              // draft, published, rendering
 	IsCollaborationOpen bool         `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	RootStoryboardID    string       `json:"rootStoryboardId,omitempty"` // 根故事板ID
 	CreatedAt           int64        `json:"createdAt"`
 	UpdatedAt           int64        `json:"updatedAt"`
 
@@ -44,6 +45,15 @@ type Story struct {
 	Characters   []*Character        `json:"characters,omitempty"`
 	Scenes       []*StoryScene       `json:"scenes,omitempty"`
 	Contributors []*StoryContributor `json:"contributors,omitempty"`
+
+	// 默认路径节点ID列表（按顺序）
+	DefaultPathNodeIDs []string `json:"defaultPathNodeIds,omitempty" gorm:"type:json;default:'[]'"`
+
+	// 路径更新时间
+	DefaultPathUpdatedAt *int64 `json:"defaultPathUpdatedAt,omitempty"`
+
+	// 路径类型: manual(手动设置) | auto(自动计算)
+	DefaultPathType string `json:"defaultPathType,omitempty" gorm:"default:'manual'"`
 }
 
 // Panel describes a storyboard panel
