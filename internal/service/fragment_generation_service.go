@@ -13,17 +13,20 @@ import (
 
 type FragmentGenerationService struct {
 	fragmentGenRepo *repository.FragmentGenerationRepository
+	fragmentRepo    *repository.FragmentRepository
 	aiService        *AIService
 	logger           *zap.Logger
 }
 
 func NewFragmentGenerationService(
 	fragmentGenRepo *repository.FragmentGenerationRepository,
+	fragmentRepo *repository.FragmentRepository,
 	aiService *AIService,
 	logger *zap.Logger,
 ) *FragmentGenerationService {
 	return &FragmentGenerationService{
 		fragmentGenRepo: fragmentGenRepo,
+		fragmentRepo:    fragmentRepo,
 		aiService:        aiService,
 		logger:           logger,
 	}
@@ -99,6 +102,36 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	// 更新为完成状态
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "completed")
+
+	// 步骤4: 创建碎片
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "creating_fragment")
+	
+	fragment := &domain.Fragment{
+		ID:            uuid.New().String(),
+		CreatorID:     task.UserID,
+		Content:       result.Content,
+		ImageUrls:     stringifyArray(result.ImageUrls),
+		Style:         &task.Request.Style,
+		FragmentCount: intPtr(len(result.ImageUrls)),
+		Visibility:    task.Request.Visibility,
+		SourceType:    string(domain.FragmentSourceOriginal), // AI生成的碎片为原创内容
+		SourceID:      "",                                    // 原创碎片无来源ID
+		Likes:         0,
+		Comments:      0,
+		Shares:        0,
+		Views:         0,
+	}
+	
+	if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
+		s.logger.Error("Failed to create fragment from generation task",
+			zap.String("task_id", taskID),
+			zap.Error(err))
+		// 继续，因为任务本身已完成，只是创建碎片失败
+	} else {
+		s.logger.Info("Fragment created from generation task",
+			zap.String("task_id", taskID),
+			zap.String("fragment_id", fragment.ID))
+	}
 
 	s.logger.Info("Fragment generation completed",
 		zap.String("task_id", taskID),
@@ -318,4 +351,21 @@ func extractKeywords(text string, maxWords int) string {
 // currentTime 获取当前时间戳
 func currentTime() int64 {
 	return time.Now().Unix()
+}
+
+// stringifyArray 将字符串数组转换为逗号分隔的字符串
+func stringifyArray(arr []string) string {
+	result := ""
+	for i, s := range arr {
+		if i > 0 {
+			result += ","
+		}
+		result += s
+	}
+	return result
+}
+
+// intPtr 返回int的指针
+func intPtr(i int) *int {
+	return &i
 }

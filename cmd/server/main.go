@@ -223,13 +223,13 @@ func main() {
 	writersRoomService := service.NewWritersRoomService(repo, logger)
 	logger.Info("writers room service initialized")
 
-	// Initialize Fragment Generation Service
+	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
-	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, svc.AIService(), logger)
+	fragmentRepo := repository.NewFragmentRepository(repo.DB())
+	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, svc.AIService(), logger)
 	logger.Info("fragment generation service initialized")
 
 	// Initialize Fragment Interaction Service
-	fragmentRepo := repository.NewFragmentRepository(repo.DB())
 	fragmentInteractionRepo := repository.NewFragmentInteractionRepository(repo.DB())
 	logger.Info("fragment interaction repository initialized")
 
