@@ -1361,6 +1361,8 @@ type FragmentDB struct {
 	Content   string `gorm:"type:text"`
 	ImageUrls string `gorm:"type:text"` // JSON array stored as text
 	Visibility string `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
+	SourceType string `gorm:"size:30;default:'original';index:idx_fragment_source_type"` // original, story_excerpt, storyboard_node
+	SourceID   string `gorm:"size:36;index:idx_fragment_source_id"`                     // 来源ID
 	Likes     int    `gorm:"type:int;default:0"`
 	Comments  int    `gorm:"type:int;default:0"`
 	Shares    int    `gorm:"type:int;default:0"`

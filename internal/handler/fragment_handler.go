@@ -129,6 +129,8 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		Style:         req.Style,
 		FragmentCount: &fragmentCount,
 		Visibility:    req.Visibility,
+		SourceType:    string(domain.FragmentSourceOriginal), // 用户手动创建的碎片为原创
+		SourceID:      "",                                    // 原创碎片无来源ID
 		Likes:         0,
 		Comments:      0,
 		Shares:        0,

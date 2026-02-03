@@ -96,18 +96,20 @@ func (r *Repository) fragmentToDomain(f FragmentDB) domain.Fragment {
 	}
 
 	fragment := domain.Fragment{
-		ID:         f.ID,
-		AuthorID:   f.CreatorID,
-		Content:    f.Content,
-		MediaURLs:  mediaURLs,
-		Visibility: f.Visibility,
-		Status:     "active", // 默认状态
-		LikesCount: f.Likes,
+		ID:            f.ID,
+		AuthorID:      f.CreatorID,
+		Content:       f.Content,
+		MediaURLs:     mediaURLs,
+		Visibility:    f.Visibility,
+		SourceType:    f.SourceType,
+		SourceID:      f.SourceID,
+		Status:        "active", // 默认状态
+		LikesCount:    f.Likes,
 		CommentsCount: f.Comments,
-		SharesCount: f.Shares,
-		ViewsCount: f.Views,
-		CreatedAt:  f.CreatedAt,
-		UpdatedAt:  f.UpdatedAt,
+		SharesCount:   f.Shares,
+		ViewsCount:    f.Views,
+		CreatedAt:     f.CreatedAt,
+		UpdatedAt:     f.UpdatedAt,
 		// 兼容字段
 		CreatorID: f.CreatorID,
 		ImageUrls: f.ImageUrls,
@@ -143,16 +145,18 @@ func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
 	}
 
 	return &FragmentDB{
-		ID:        f.ID,
-		CreatorID: creatorID,
-		Content:   f.Content,
-		ImageUrls: imageUrlsJSON,
+		ID:         f.ID,
+		CreatorID:  creatorID,
+		Content:    f.Content,
+		ImageUrls:  imageUrlsJSON,
 		Visibility: f.Visibility,
-		Likes:     f.LikesCount,
-		Comments:  f.CommentsCount,
-		Shares:    f.SharesCount,
-		Views:     f.ViewsCount,
-		CreatedAt: f.CreatedAt,
-		UpdatedAt: f.UpdatedAt,
+		SourceType: f.SourceType,
+		SourceID:   f.SourceID,
+		Likes:      f.LikesCount,
+		Comments:   f.CommentsCount,
+		Shares:     f.SharesCount,
+		Views:      f.ViewsCount,
+		CreatedAt:  f.CreatedAt,
+		UpdatedAt:  f.UpdatedAt,
 	}
 }

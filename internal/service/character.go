@@ -34,6 +34,9 @@ type CreateCharacterRequest struct {
 	Tags            []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 	NeedsPortrait   bool     `json:"needsPortrait"`                                    // 是否需要生成形象
 	ReferenceImage  string   `json:"referenceImage" binding:"omitempty,url"`           // 参考图URL
+
+	// 新增：海报创建权限
+	PosterCreationPermission string `json:"posterCreationPermission" binding:"omitempty,oneof=creator_only group_members anyone"`
 }
 
 // UpdateCharacterRequest 更新角色请求
@@ -159,6 +162,17 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		portraitStatus = "pending"
 	}
 
+	// 确定海报创建权限
+	posterPerm := req.PosterCreationPermission
+	if posterPerm == "" {
+		// 默认值：如果是公开角色则为 anyone，否则为 creator_only
+		if req.IsPublic {
+			posterPerm = "anyone"
+		} else {
+			posterPerm = "creator_only"
+		}
+	}
+
 	// 创建角色
 	character := &domain.Character{
 		StoryID:                  req.StoryID,
@@ -191,6 +205,7 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		Stories:                  0,
 		CreatedAt:                time.Now().Unix(),
 		UpdatedAt:                time.Now().Unix(),
+		PosterCreationPermission: posterPerm,
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
@@ -769,43 +784,87 @@ func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID
 		return nil, errors.New("failed to get character")
 	}
 
-	// 检查权限：公开角色任何人都可以创建海报，私有角色只有小组成员可以创建
-	if !character.IsPublic && character.GroupID != nil {
-		s.logger.Debug("checking group membership for private character",
-			zap.String("userID", userID),
-			zap.String("characterID", characterID),
-			zap.String("groupID", *character.GroupID),
-		)
+	// 根据 PosterCreationPermission 检查权限
+	perm := character.PosterCreationPermission
+	if perm == "" {
+		perm = "creator_only" // 默认权限
+	}
 
-		isMember, err := s.repo.IsGroupMember(ctx, *character.GroupID, userID)
-		if err != nil {
-			s.logger.Error("failed to check group membership",
-				zap.String("userID", userID),
-				zap.String("groupID", *character.GroupID),
-				zap.Error(err),
-			)
-			return nil, errors.New("failed to verify group membership")
-		}
+	s.logger.Debug("checking poster creation permission",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+		zap.String("permission", perm),
+	)
 
-		if !isMember {
+	switch perm {
+	case "creator_only":
+		// 仅角色创建者可创建海报
+		if userID != character.AuthorID {
 			s.logger.Warn("unauthorized poster creation attempt",
 				zap.String("userID", userID),
 				zap.String("characterID", characterID),
-				zap.String("groupID", *character.GroupID),
+				zap.String("authorID", character.AuthorID),
+				zap.String("permission", perm),
 			)
-			return nil, errors.New("unauthorized: not a group member")
+			return nil, errors.New("unauthorized: only character creator can create posters")
 		}
 
-		s.logger.Debug("group membership verified",
-			zap.String("userID", userID),
-			zap.String("groupID", *character.GroupID),
-		)
-	} else {
-		s.logger.Debug("character is public, skipping group membership check",
+	case "group_members":
+		// 小组成员可创建
+		if character.GroupID != nil {
+			isMember, err := s.repo.IsGroupMember(ctx, *character.GroupID, userID)
+			if err != nil {
+				s.logger.Error("failed to check group membership",
+					zap.String("userID", userID),
+					zap.String("groupID", *character.GroupID),
+					zap.Error(err),
+				)
+				return nil, errors.New("failed to verify group membership")
+			}
+			if !isMember {
+				s.logger.Warn("unauthorized poster creation attempt",
+					zap.String("userID", userID),
+					zap.String("characterID", characterID),
+					zap.String("groupID", *character.GroupID),
+					zap.String("permission", perm),
+				)
+				return nil, errors.New("unauthorized: only group members can create posters")
+			}
+		} else {
+			// 非小组角色，回退到 creator_only
+			if userID != character.AuthorID {
+				s.logger.Warn("unauthorized poster creation attempt",
+					zap.String("userID", userID),
+					zap.String("characterID", characterID),
+					zap.String("permission", perm),
+				)
+				return nil, errors.New("unauthorized: only character creator can create posters")
+			}
+		}
+
+	case "anyone":
+		// 任何人都可以创建，不需要额外检查
+		s.logger.Debug("anyone can create poster for this character",
 			zap.String("characterID", characterID),
-			zap.Bool("isPublic", character.IsPublic),
+			zap.String("userID", userID),
 		)
+
+	default:
+		// 默认使用 creator_only
+		s.logger.Warn("unknown poster creation permission, defaulting to creator_only",
+			zap.String("characterID", characterID),
+			zap.String("permission", perm),
+		)
+		if userID != character.AuthorID {
+			return nil, errors.New("unauthorized: only character creator can create posters")
+		}
 	}
+
+	s.logger.Debug("poster creation permission verified",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+		zap.String("permission", perm),
+	)
 
 	// 获取作者信息
 	author, err := s.repo.UserByID(ctx, userID)

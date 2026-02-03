@@ -38,6 +38,9 @@ type CreateStoryRequest struct {
 	// Collaboration settings
 	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 
+	// AI 策略设置（新增）
+	AIEnabled *bool `json:"aiEnabled"` // 是否允许AI辅助，默认 true
+
 	// AI 丰富选项（可选）
 	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
 	GenerateCover      bool                `json:"generateCover"`              // 是否使用AI生成封面/海报
@@ -138,6 +141,17 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.Int("sceneCount", defaultSceneCount))
 	}
 
+	// 确定 AIEnabled 值
+	aiEnabled := true // 默认值
+	if req.AIEnabled != nil {
+		aiEnabled = *req.AIEnabled
+	}
+
+	// 如果用户选择了 AI 生成选项，自动启用 AI
+	if req.UseAIEnrich || req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
+		aiEnabled = true
+	}
+
 	// 创建故事基本信息
 	story := &domain.Story{
 		Title:               req.Title,
@@ -156,6 +170,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		UpdatedAt:           now,
 		Style:               req.AIStyle,
 		IsCollaborationOpen: req.IsCollaborationOpen, // New field: default false (restricted)
+		AIEnabled:           aiEnabled,               // 新增
 	}
 
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
