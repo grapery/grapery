@@ -57,8 +57,8 @@ type Fragment struct {
 	UpdatedAtTime time.Time `json:"-" gorm:"column:updated_at;type:datetime;autoUpdateTime"`       // 兼容旧代码
 
 	// 非持久化字段
-	IsLikedNew *bool `json:"isLiked,omitempty" gorm:"-"` // 当前用户是否点赞
-	Author     *User `json:"author,omitempty"`           // 作者信息
+	IsLikedNew *bool `json:"isLikedNew,omitempty" gorm:"-"` // 当前用户是否点赞
+	Author     *User `json:"author,omitempty"`              // 作者信息
 }
 
 // TableName specifies the table name for Fragment
