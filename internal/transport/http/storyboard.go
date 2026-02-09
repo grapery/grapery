@@ -25,6 +25,7 @@ type sceneRefPayload struct {
 // CreateStoryboard 创建 storyboard
 func (h *Handler) CreateStoryboard(c *gin.Context) {
 	userID, _ := c.Get("userID")
+	uid := userID.(string)
 
 	var req struct {
 		StoryID       string                `json:"storyId" binding:"required"`
@@ -44,10 +45,25 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		return
 	}
 
+	// 检查用户是否有权限在该故事中创建 storyboard
+	canCreate, err := h.svc.CanCreateStoryboard(c.Request.Context(), req.StoryID, uid)
+	if err != nil {
+		h.logger.Error("failed to check create permission",
+			zap.String("storyId", req.StoryID),
+			zap.String("userId", uid),
+			zap.Error(err))
+		InternalError(c, "failed to check permission")
+		return
+	}
+	if !canCreate {
+		Forbidden(c, "you don't have permission to create storyboard in this story")
+		return
+	}
+
 	h.logger.Info("CreateStoryboard called",
 		zap.String("storyId", req.StoryID),
 		zap.String("title", req.Title),
-		zap.String("userId", userID.(string)))
+		zap.String("userId", uid))
 
 	// Default scene count to 3 if not specified or out of range
 	sceneCount := req.SceneCount

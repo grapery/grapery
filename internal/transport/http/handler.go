@@ -25,6 +25,7 @@ type HandlerDependencies struct {
 	StoryboardPathService *service.StoryboardPathService
 	InteractionService    service.InteractionService
 	UserSettingsService   service.UserSettingsService
+	GroupShowcaseService  GroupShowcaseService
 	Logger                *zap.Logger
 }
 
@@ -130,6 +131,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/groups", h.ListGroups)
 			authenticated.GET("/groups/:id", h.GetGroup)
 			authenticated.GET("/groups/:id/members", h.GetGroupMembers)
+			authenticated.GET("/groups/:id/membership", h.CheckGroupMembership) // 检查成员资格
 			authenticated.GET("/groups/:id/activities", h.GetGroupActivities)
 			authenticated.GET("/groups/:id/activities/heatmap", h.GetGroupActivityHeatmap)
 			authenticated.GET("/groups/:id/stories", h.GetGroupStories) // 获取群组的故事列表
@@ -188,6 +190,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/storyboards/:id/generate/content", h.GenerateContent)
 			authenticated.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
 			authenticated.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
+			authenticated.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)
 			authenticated.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
 			authenticated.GET("/storyboards/:id/generation-progress", h.GetGenerationProgress)
 			authenticated.POST("/storyboards/:id/publish", h.PublishStoryboard)
@@ -331,6 +334,13 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// 用户设置相关 (User Settings)
 			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
 			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
+
+			// 小组展示相关 (Group Showcases)
+			showcaseHandler := NewGroupShowcaseHandler(deps.GroupShowcaseService)
+			authenticated.GET("/groups/:id/showcases", showcaseHandler.GetGroupShowcases)
+			authenticated.POST("/groups/:id/showcases", showcaseHandler.AddShowcase)
+			authenticated.DELETE("/groups/:id/showcases/:showcaseId", showcaseHandler.RemoveShowcase)
+			authenticated.PUT("/groups/:id/showcases/:showcaseId/order", showcaseHandler.UpdateShowcaseOrder)
 
 			// 碎片相关 (Fragments)
 			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)

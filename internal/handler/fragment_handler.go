@@ -223,9 +223,9 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	})
 }
 
-// GetUserFragments handles GET /users/:userId/fragments
+// GetUserFragments handles GET /users/:id/fragments
 func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
-	userID := c.Param("userId")
+	userID := c.Param("id")
 	currentUserID := c.GetString("user_id")
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

@@ -39,7 +39,8 @@ type CreateStoryRequest struct {
 	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
 
 	// AI 策略设置（新增）
-	AIEnabled *bool `json:"aiEnabled"` // 是否允许AI辅助，默认 true
+	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作，默认 true
+	AIAssistanceOptions *domain.AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
 
 	// AI 丰富选项（可选）
 	UseAIEnrich        bool                `json:"useAIEnrich"`                // 是否使用AI丰富故事描述
@@ -141,15 +142,13 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.Int("sceneCount", defaultSceneCount))
 	}
 
-	// 确定 AIEnabled 值
-	aiEnabled := true // 默认值
-	if req.AIEnabled != nil {
-		aiEnabled = *req.AIEnabled
-	}
-
-	// 如果用户选择了 AI 生成选项，自动启用 AI
-	if req.UseAIEnrich || req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
-		aiEnabled = true
+	// 确定 UseAI 值（AI策略，创建时确定，不可更改）
+	useAI := req.UseAI // 默认使用请求中的值
+	if !useAI {
+		// 如果用户选择了 AI 生成选项，自动启用 AI
+		if req.UseAIEnrich || req.GenerateCover || req.GeneratePoster || req.GenerateBackground {
+			useAI = true
+		}
 	}
 
 	// 创建故事基本信息
@@ -170,7 +169,8 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		UpdatedAt:           now,
 		Style:               req.AIStyle,
 		IsCollaborationOpen: req.IsCollaborationOpen, // New field: default false (restricted)
-		AIEnabled:           aiEnabled,               // 新增
+		UseAI:               useAI,                   // AI策略（创建时确定）
+		AIAssistanceOptions: req.AIAssistanceOptions, // AI辅助选项
 	}
 
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
@@ -2846,9 +2846,10 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		AuthorID:            userID,
 		Status:              "draft",
 		IsCollaborationOpen: isCollaborationOpen,
-		AIEnabled:           req.IsAIEnabled,
+		UseAI:               req.UseAI,
 		DefaultSceneCount:   sceneCount,
 		OriginalDescription: fragment.Content, // 保留原始内容
+		SourceFragmentID:    &fragmentID,       // 记录来源碎片ID
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
@@ -2961,7 +2962,22 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 			zap.String("rootStoryboardID", storyboard.ID))
 	}
 
-	// 8. 记录用户活动
+	// 8. 更新碎片的转换状态（保留原始碎片，标记为已转换）
+	fragment.ConvertedToStoryID = &story.ID
+	fragment.IsConverted = true
+	if err := s.updateFragmentConvertedStatus(ctx, fragment); err != nil {
+		s.logger.Warn("failed to update fragment converted status",
+			zap.String("fragmentID", fragmentID),
+			zap.String("storyID", story.ID),
+			zap.Error(err))
+		// 非致命错误，继续返回成功
+	} else {
+		s.logger.Debug("fragment converted status updated",
+			zap.String("fragmentID", fragmentID),
+			zap.String("storyID", story.ID))
+	}
+
+	// 9. 记录用户活动
 	go s.RecordStoryCreated(context.Background(), userID, story.ID, story.Title)
 
 	s.logger.Info("fragment converted to story successfully",
@@ -2980,4 +2996,9 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 // getFragmentByID 从数据库获取碎片信息
 func (s *Service) getFragmentByID(ctx context.Context, fragmentID string) (*domain.Fragment, error) {
 	return s.repo.FragmentByID(ctx, fragmentID)
+}
+
+// updateFragmentConvertedStatus 更新碎片的转换状态
+func (s *Service) updateFragmentConvertedStatus(ctx context.Context, fragment *domain.Fragment) error {
+	return s.repo.UpdateFragment(ctx, fragment)
 }

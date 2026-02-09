@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
 )
@@ -150,6 +151,109 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 	}
 
 	Success(c, gen)
+}
+
+// GenerateAllStoryboardImages generates images for all scenes (Batch operation)
+// POST /api/storyboards/:id/generate/images
+//
+// Request body:
+//   - regenerateAll (optional): If true, regenerate images even if they exist
+//   - storyStyleId (optional): Story style configuration ID
+//
+// Response: Array of image generation records
+func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	var req struct {
+		RegenerateAll bool   `json:"regenerateAll"`
+		StoryStyleID  string `json:"storyStyleId"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Default to empty request (regenerateAll = false)
+		req = struct {
+			RegenerateAll bool   `json:"regenerateAll"`
+			StoryStyleID  string `json:"storyStyleId"`
+		}{}
+	}
+
+	h.logger.Info("GenerateAllStoryboardImages called",
+		zap.String("storyboardId", storyboardID),
+		zap.Bool("regenerateAll", req.RegenerateAll))
+
+	// Get storyboard to access scenes
+	storyboard, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
+	if err != nil {
+		h.logger.Error("failed to get storyboard for batch image generation",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		Error(c, CodeInternalError, err.Error())
+		return
+	}
+
+	if len(storyboard.StoryboardScenes) == 0 {
+		Error(c, CodeInvalidParams, "no scenes found in storyboard")
+		return
+	}
+
+	// Generate images for all scenes
+	var generations []*domain.StoryboardImageGeneration
+	for _, scene := range storyboard.StoryboardScenes {
+		// Skip if already has image and not regenerating
+		if !req.RegenerateAll && scene.Image != "" {
+			h.logger.Debug("skipping scene with existing image",
+				zap.String("sceneId", scene.ID))
+			continue
+		}
+
+		// Build character reference images for this scene
+		// First collect all character portraits from storyboard character refs
+		characterPortraitMap := make(map[string]string)
+		for _, charRef := range storyboard.CharacterRefs {
+			if charRef.Character != nil && charRef.Character.Portrait != "" {
+				characterPortraitMap[charRef.Character.Name] = charRef.Character.Portrait
+			}
+		}
+		
+		// Match scene characters with portraits
+		var referenceImages []string
+		for _, charName := range scene.Characters {
+			if portrait, ok := characterPortraitMap[charName]; ok {
+				referenceImages = append(referenceImages, portrait)
+			}
+		}
+
+		genReq := &service.ImageGenerationRequest{
+			StoryboardID:             storyboardID,
+			SceneID:                  scene.ID,
+			SceneTitle:               scene.Title,
+			SceneDescription:         scene.Description,
+			ReferenceImages:          referenceImages,
+			SceneCharacters:          scene.Characters,
+			CharacterReferenceImages: referenceImages,
+			// StoryStyle 由服务层自动从故事中获取
+		}
+
+		gen, genErr := h.svc.GenerateSceneImage(c.Request.Context(), genReq)
+		if genErr != nil {
+			h.logger.Warn("failed to generate image for scene",
+				zap.String("sceneId", scene.ID),
+				zap.Error(genErr))
+			continue
+		}
+
+		generations = append(generations, gen)
+	}
+
+	h.logger.Info("GenerateAllStoryboardImages completed",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("scenesProcessed", len(generations)))
+
+	Success(c, generations)
 }
 
 // GenerateStoryboardVideo generates a video for a scene (Step 4)

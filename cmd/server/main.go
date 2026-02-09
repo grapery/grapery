@@ -261,6 +261,10 @@ func main() {
 	storyboardPathService := service.NewStoryboardPathService(repo, likeRepo, logger)
 	logger.Info("storyboard path service initialized")
 
+	// Initialize Group Showcase Service
+	groupShowcaseService := service.NewGroupShowcaseService(repo, logger)
+	logger.Info("group showcase service initialized")
+
 	// Initialize HTTP handler with dependencies
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
@@ -269,6 +273,7 @@ func main() {
 		StoryboardPathService: storyboardPathService,
 		InteractionService:    interactionService,
 		UserSettingsService:   userSettingsService,
+		GroupShowcaseService:  groupShowcaseService,
 		Logger:                logger,
 	}
 	router := transport.SetupRouter(deps)
@@ -285,6 +290,16 @@ func main() {
 	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, logger)
 	fragmentInteractionHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment interaction routes registered")
+
+	// Register Fragment CRUD routes (list, get, create)
+	apiGroup.GET("/fragments", fragmentHandler.ListFragments)
+	apiGroup.GET("/fragments/:id", fragmentHandler.GetFragment)
+	apiGroup.POST("/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
+	logger.Info("fragment CRUD routes registered")
+
+	// Register User Fragments route
+	apiGroup.GET("/users/:id/fragments", fragmentHandler.GetUserFragments)
+	logger.Info("user fragments route registered")
 
 	// Configure CORS
 	router.Use(cors.New(cors.Config{

@@ -31,7 +31,11 @@ type Story struct {
 	PosterImage         string `json:"posterImage,omitempty"`         // AI 生成的海报图片
 	BackgroundImage     string `json:"backgroundImage,omitempty"`     // AI 生成的背景图片
 
-	// AI开关（创建时确定，不可更改）
+	// AI使用策略（故事级别开关，创建时确定，不可更改）
+	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作
+	AIAssistanceOptions *AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
+
+	// 已废弃：使用 UseAI 替代
 	AIEnabled bool `json:"aiEnabled"`
 
 	// Token 消耗统计
@@ -46,6 +50,9 @@ type Story struct {
 	Scenes       []*StoryScene       `json:"scenes,omitempty"`
 	Contributors []*StoryContributor `json:"contributors,omitempty"`
 
+	// 来源追踪
+	SourceFragmentID *string `json:"sourceFragmentId,omitempty" gorm:"column:source_fragment_id;type:varchar(36);index"` // 来源碎片ID（如果是从碎片转换而来），支持数据库级联表查询
+
 	// 默认路径节点ID列表（按顺序）
 	DefaultPathNodeIDs []string `json:"defaultPathNodeIds,omitempty" gorm:"type:json;default:'[]'"`
 
@@ -54,6 +61,34 @@ type Story struct {
 
 	// 路径类型: manual(手动设置) | auto(自动计算)
 	DefaultPathType string `json:"defaultPathType,omitempty" gorm:"default:'manual'"`
+}
+
+// AIAssistanceOptions AI辅助选项
+type AIAssistanceOptions struct {
+	GenerateMetadata  bool `json:"generateMetadata"`  // 生成标题/描述
+	GenerateVisuals   bool `json:"generateVisuals"`   // 生成背景图/封面
+	AssistStoryboard  bool `json:"assistStoryboard"`  // 故事板 AI 辅助
+	GenerateVideo     bool `json:"generateVideo"`     // 生成视频（可选）
+}
+
+// DefaultAIAssistanceOptions 返回默认的AI辅助选项
+func DefaultAIAssistanceOptions() *AIAssistanceOptions {
+	return &AIAssistanceOptions{
+		GenerateMetadata: true,
+		GenerateVisuals:  true,
+		AssistStoryboard: true,
+		GenerateVideo:    false,
+	}
+}
+
+// DisabledAIAssistanceOptions 返回全部禁用的AI辅助选项
+func DisabledAIAssistanceOptions() *AIAssistanceOptions {
+	return &AIAssistanceOptions{
+		GenerateMetadata: false,
+		GenerateVisuals:  false,
+		AssistStoryboard: false,
+		GenerateVideo:    false,
+	}
 }
 
 // Panel describes a storyboard panel

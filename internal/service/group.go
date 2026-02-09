@@ -498,6 +498,50 @@ func (s *Service) GetGroupMembers(ctx context.Context, groupID string, limit, of
 	return members, nil
 }
 
+// CheckGroupMembership 检查用户是否是小组成员
+func (s *Service) CheckGroupMembership(ctx context.Context, groupID, userID string) (bool, string, error) {
+	s.logger.Info("checking group membership",
+		zap.String("groupID", groupID),
+		zap.String("userID", userID))
+
+	// 检查群组是否存在
+	_, err := s.repo.GroupByID(ctx, groupID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			s.logger.Warn("group not found",
+				zap.String("groupID", groupID))
+			return false, "", errors.New("group not found")
+		}
+		s.logger.Error("failed to get group",
+			zap.String("groupID", groupID),
+			zap.Error(err))
+		return false, "", errors.New("failed to get group")
+	}
+
+	// 检查成员关系
+	role, err := s.repo.GetMemberRole(ctx, groupID, userID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			s.logger.Debug("user is not a group member",
+				zap.String("groupID", groupID),
+				zap.String("userID", userID))
+			return false, "", nil
+		}
+		s.logger.Error("failed to get group member role",
+			zap.String("groupID", groupID),
+			zap.String("userID", userID),
+			zap.Error(err))
+		return false, "", errors.New("failed to check membership")
+	}
+
+	s.logger.Info("user is group member",
+		zap.String("groupID", groupID),
+		zap.String("userID", userID),
+		zap.String("role", string(role)))
+
+	return true, string(role), nil
+}
+
 // InviteMember 邀请成员加入群组
 func (s *Service) InviteMember(ctx context.Context, inviterID, groupID string, req InviteMemberRequest) (*domain.GroupInvitation, error) {
 	s.logger.Info("inviting member",

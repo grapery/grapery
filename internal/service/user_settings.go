@@ -18,9 +18,11 @@ type UserSettingsService interface {
 	UpdateSettings(ctx context.Context, userID string, updates map[string]interface{}) (*domain.UserSettings, error)
 	UpdateLanguage(ctx context.Context, userID string, language string) error
 	UpdateTheme(ctx context.Context, userID string, theme string) error
+	UpdateFontSize(ctx context.Context, userID string, fontSize string) error
 	UpdatePrivacy(ctx context.Context, userID string, privacy map[string]string) error
 	UpdateAISettings(ctx context.Context, userID string, aiEnabled, aiDataSharing bool) error
 	UpdateNotificationSettings(ctx context.Context, userID string, settings map[string]interface{}) error
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 }
 
 // userSettingsService 用户设置服务实现
@@ -403,7 +405,7 @@ func (s *userSettingsService) getDefaultNotificationSettingsMap() map[string]int
 
 func (s *userSettingsService) isValidLanguage(language string) bool {
 	switch domain.LanguageType(language) {
-	case domain.LanguageEnglish, domain.LanguageChineseCN, domain.LanguageChineseTW, domain.LanguageJapanese, domain.LanguageKorean:
+	case domain.LanguageSystem, domain.LanguageEnglish, domain.LanguageChineseCN, domain.LanguageJapanese:
 		return true
 	default:
 		return false
@@ -444,4 +446,51 @@ func (s *userSettingsService) isValidAllowFrom(allowFrom string) bool {
 	default:
 		return false
 	}
+}
+
+
+// UpdateFontSize 更新字体大小
+func (s *userSettingsService) UpdateFontSize(ctx context.Context, userID string, fontSize string) error {
+	s.logger.Info("updating font size",
+		zap.String("userID", userID),
+		zap.String("fontSize", fontSize))
+
+	if !s.isValidFontSize(fontSize) {
+		return fmt.Errorf("invalid font size: %s", fontSize)
+	}
+
+	settings, err := s.GetSettings(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	settings.FontSize = fontSize
+	settings.UpdatedAt = time.Now().Unix()
+
+	if err := s.settingsRepo.UpdateUserSettings(settings); err != nil {
+		s.logger.Error("failed to update font size",
+			zap.Error(err),
+			zap.String("userID", userID))
+		return fmt.Errorf("failed to update font size: %w", err)
+	}
+
+	return nil
+}
+
+// ChangePassword 修改密码
+func (s *userSettingsService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	s.logger.Info("changing password",
+		zap.String("userID", userID))
+
+	// 验证密码长度
+	if len(newPassword) < 8 {
+		return fmt.Errorf("new password must be at least 8 characters long")
+	}
+
+	// 调用 user service 验证当前密码并更新
+	// 这个需要在 UserService 中实现，这里先保留接口
+	s.logger.Warn("change password requires UserService integration",
+		zap.String("userID", userID))
+
+	return fmt.Errorf("change password not fully implemented yet")
 }

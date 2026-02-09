@@ -206,6 +206,18 @@ type Repository interface {
 	UpdateInvitationStatus(ctx context.Context, id, status string) error
 	ExpirePendingInvitations(ctx context.Context) (int64, error)
 
+	// ========== Group Showcase operations ==========
+	// 添加展示内容到小组
+	AddGroupShowcase(ctx context.Context, showcase *GroupShowcase) error
+	// 移除小组展示内容
+	RemoveGroupShowcase(ctx context.Context, showcaseID string) error
+	// 获取小组展示列表
+	GetGroupShowcases(ctx context.Context, groupID string, contentType GroupShowcaseRelationType, limit, offset int) ([]*GroupShowcase, int64, error)
+	// 获取小组展示详情
+	GetGroupShowcaseByID(ctx context.Context, showcaseID string) (*GroupShowcase, error)
+	// 更新小组展示排序
+	UpdateGroupShowcaseOrder(ctx context.Context, showcaseID string, sortOrder int) error
+
 	// Group follow
 	FollowGroup(ctx context.Context, userID, groupID string) error
 	UnfollowGroup(ctx context.Context, userID, groupID string) error
@@ -573,3 +585,5 @@ type UserSettingsRepository interface {
 	CreateUserSettings(settings *UserSettings) error
 	UpdateUserSettings(settings *UserSettings) error
 }
+
+

@@ -28,20 +28,22 @@ const (
 
 // Fragment represents a fragment story - short, complete stories shared by users
 type Fragment struct {
-	ID            string   `json:"id"`
-	AuthorID      string   `json:"authorId"`      // 作者ID
-	Content       string   `json:"content"`       // 内容
-	MediaURLs     []string `json:"mediaUrls"`     // 媒体URL列表
-	SourceType    string   `json:"sourceType"`    // 来源类型: original, story_excerpt, storyboard_node
-	SourceID      string   `json:"sourceId"`      // 来源ID
-	Visibility    string   `json:"visibility"`    // 可见性: public, followers_only, private
-	Status        string   `json:"status"`        // 状态: active, deleted
-	ViewsCount    int      `json:"viewsCount"`    // 浏览数
-	LikesCount    int      `json:"likesCount"`    // 点赞数
-	CommentsCount int      `json:"commentsCount"` // 评论数
-	SharesCount   int      `json:"sharesCount"`   // 分享数
-	CreatedAt     int64    `json:"createdAt"`     // 创建时间
-	UpdatedAt     int64    `json:"updatedAt"`     // 更新时间
+	ID               string   `json:"id"`
+	AuthorID         string   `json:"authorId"`         // 作者ID
+	Content          string   `json:"content"`          // 内容
+	MediaURLs        []string `json:"mediaUrls"`        // 媒体URL列表
+	SourceType       string   `json:"sourceType"`       // 来源类型: original, story_excerpt, storyboard_node
+	SourceID         string   `json:"sourceId"`         // 来源ID
+	Visibility       string   `json:"visibility"`       // 可见性: public, followers_only, private
+	Status           string   `json:"status"`           // 状态: active, deleted
+	ViewsCount       int      `json:"viewsCount"`       // 浏览数
+	LikesCount       int      `json:"likesCount"`       // 点赞数
+	CommentsCount    int      `json:"commentsCount"`    // 评论数
+	SharesCount      int      `json:"sharesCount"`      // 分享数
+	CreatedAt        int64    `json:"createdAt"`        // 创建时间
+	UpdatedAt        int64    `json:"updatedAt"`        // 更新时间
+	ConvertedToStoryID *string `json:"convertedToStoryId,omitempty" gorm:"column:converted_to_story_id;type:varchar(36);index"` // 转换为的故事ID
+	IsConverted      bool     `json:"isConverted" gorm:"column:is_converted;type:tinyint(1);default:0;index"` // 是否已转换为故事
 
 	// 向后兼容字段（内部使用）
 	CreatorID string    `json:"creatorId" gorm:"column:creator_id;type:varchar(36);not null;index"` // 兼容旧代码
@@ -83,7 +85,7 @@ type ConvertFragmentRequest struct {
 	Genre             string `json:"genre,omitempty"`                    // 故事类型
 	CoverImage        string `json:"coverImage,omitempty"`               // 封面图片
 	SceneCount        int    `json:"sceneCount,omitempty"`               // 场景数量 (2-8, 默认3)
-	IsAIEnabled       bool   `json:"isAIEnabled,omitempty"`              // 是否启用AI
+	UseAI             bool   `json:"useAI,omitempty"`                    // 是否使用AI辅助创作
 	CollaborationType string `json:"collaborationType,omitempty"`        // 协作类型: open, restricted, closed
 }
 

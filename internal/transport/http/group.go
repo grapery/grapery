@@ -263,6 +263,32 @@ func (h *Handler) GetGroupMembers(c *gin.Context) {
 	})
 }
 
+// CheckGroupMembership 检查当前用户是否是小组成员
+func (h *Handler) CheckGroupMembership(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	groupID := c.Param("id")
+	if groupID == "" {
+		InvalidParams(c, "group id is required")
+		return
+	}
+
+	isMember, role, err := h.svc.CheckGroupMembership(c.Request.Context(), groupID, userID)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"isMember": isMember,
+		"role":     role,
+	})
+}
+
 // InviteMember 邀请成员
 func (h *Handler) InviteMember(c *gin.Context) {
 	userID := authPkg.GetUserID(c)

@@ -324,11 +324,18 @@ func (r *Repository) storyContributorToDomain(c StoryContributor) *domain.StoryC
 		Role:      domain.StoryContributorRole(c.Role),
 		InvitedBy: c.InvitedBy,
 		JoinedAt:  c.JoinedAt.Unix(),
+		BadgeStyle: domain.StoryContributorRole(c.Role), // 使用 role 作为 badge_style
 	}
 
 	if c.User.ID != "" {
 		user := r.userToDomain(c.User)
 		contributor.User = &user
+		// 填充扁平化字段供客户端显示
+		contributor.Name = user.DisplayName
+		if contributor.Name == "" {
+			contributor.Name = user.Username
+		}
+		contributor.Avatar = user.Avatar
 	}
 
 	if c.Inviter.ID != "" {

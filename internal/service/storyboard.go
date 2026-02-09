@@ -1694,6 +1694,7 @@ func (s *Service) getAncestorStoryboards(ctx context.Context, storyboard *domain
 }
 
 // buildStoryboardContext 构建 storyboard 生成上下文
+// AI 自动从故事的完整角色和场景列表中选择合适的元素
 func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story) string {
 	s.logger.Debug("building storyboard context",
 		zap.String("storyboardId", storyboard.ID),
@@ -1734,45 +1735,43 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 		}
 	}
 
-	// 添加选定的角色信息
-	if len(storyboard.CharacterRefs) > 0 {
-		s.logger.Debug("adding character references to context",
+	// 获取故事的所有角色供 AI 选择
+	characters, err := s.repo.CharactersByStory(ctx, story.ID)
+	if err == nil && len(characters) > 0 {
+		s.logger.Debug("adding all story characters to context",
 			zap.String("storyboardId", storyboard.ID),
-			zap.Int("characterCount", len(storyboard.CharacterRefs)))
-		context += "参与角色：\n"
-		for _, ref := range storyboard.CharacterRefs {
-			if ref.Character != nil {
-				context += fmt.Sprintf("- %s [角色ID: %s]", ref.Character.Name, ref.Character.ID)
-				if ref.Character.Description != "" {
-					context += fmt.Sprintf(": %s", truncateForLog(ref.Character.Description, 100))
-				}
-				context += "\n"
+			zap.Int("characterCount", len(characters)))
+		context += "故事中的可用角色（AI 请根据剧情需要智能选择）：\n"
+		for _, char := range characters {
+			context += fmt.Sprintf("- %s [角色ID: %s]", char.Name, char.ID)
+			if char.Description != "" {
+				context += fmt.Sprintf(": %s", truncateForLog(char.Description, 100))
 			}
+			context += "\n"
 		}
 		context += "\n"
-		context += "重要提示：在生成场景时，如果使用上述角色，必须在characters数组中为每个角色提供对象，包含name（角色完整名称）和id（对应的角色ID）字段。\n\n"
+		context += "重要提示：AI 应根据用户描述的故事情节，智能选择合适的角色。只有确实参与场景的角色才需要包含在characters数组中，每个角色对象必须包含name（角色完整名称）和id（对应的角色ID）。\n\n"
 	}
 
-	// 添加选定的故事场景（静态地点）作为可用场景
-	if len(storyboard.SceneRefs) > 0 {
-		s.logger.Debug("adding scene references to context",
+	// 获取故事的所有场景供 AI 选择
+	scenes, err := s.repo.StoryScenes(ctx, story.ID, 100, 0)
+	if err == nil && len(scenes) > 0 {
+		s.logger.Debug("adding all story scenes to context",
 			zap.String("storyboardId", storyboard.ID),
-			zap.Int("sceneCount", len(storyboard.SceneRefs)))
-		context += "可用场景地点（剧情应发生在这些场景中）：\n"
-		for _, ref := range storyboard.SceneRefs {
-			if ref.StoryScene != nil {
-				context += fmt.Sprintf("- %s [场景ID: %s]", ref.StoryScene.Title, ref.StoryScene.ID)
-				if ref.StoryScene.Description != "" {
-					context += fmt.Sprintf(": %s", truncateForLog(ref.StoryScene.Description, 100))
-				}
-				if ref.StoryScene.Location != "" {
-					context += fmt.Sprintf(" (地点: %s)", ref.StoryScene.Location)
-				}
-				context += "\n"
+			zap.Int("sceneCount", len(scenes)))
+		context += "故事中的可用场景地点（AI 请根据剧情需要智能选择）：\n"
+		for _, scene := range scenes {
+			context += fmt.Sprintf("- %s [场景ID: %s]", scene.Title, scene.ID)
+			if scene.Description != "" {
+				context += fmt.Sprintf(": %s", truncateForLog(scene.Description, 100))
 			}
+			if scene.Location != "" {
+				context += fmt.Sprintf(" (地点: %s)", scene.Location)
+			}
+			context += "\n"
 		}
 		context += "\n"
-		context += "重要提示：在生成场景时，如果使用上述场景地点，应在storySceneId字段中提供对应的场景ID，以便精确关联。\n\n"
+		context += "重要提示：AI 应根据用户描述的故事情节，智能选择合适的场景。如果场景地点与剧情相关，应在storySceneId字段中提供对应的场景ID。\n\n"
 	}
 
 	s.logger.Debug("storyboard context built",
@@ -1788,13 +1787,18 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("requestedSceneCount", storyboard.SceneCount))
 
-	prompt := "作为专业的故事创作者，请根据以下信息生成精彩的故事分镜内容：\n\n"
+	prompt := "作为专业的故事创作者，请根据用户的自然语言描述，创作精彩的故事分镜内容。\n\n"
+	prompt += "**创作指南**：\n"
+	prompt += "1. 深入理解用户的描述意图，把握故事的核心情感和情节走向\n"
+	prompt += "2. 从提供的角色列表中选择最适合情节的角色，不必使用所有角色\n"
+	prompt += "3. 从提供的场景列表中选择最适合氛围的地点，或根据描述创造合适的场景\n"
+	prompt += "4. 让情节自然展开，角色互动应符合其性格设定\n\n"
 
 	if contextInfo != "" {
 		prompt += contextInfo
 	}
 
-	prompt += fmt.Sprintf("用户输入: %s\n\n", storyboard.RawInput)
+	prompt += fmt.Sprintf("**用户的故事描述**: %s\n\n", storyboard.RawInput)
 
 	// Determine scene count (default to 3 if not set or out of range)
 	sceneCount := storyboard.SceneCount
@@ -1815,7 +1819,7 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "      \"description\": \"场景描述（100-200字）\",\n"
 	prompt += "      \"location\": \"地点\",\n"
 	prompt += "      \"timeOfDay\": \"时间\",\n"
-	prompt += "      \"storySceneId\": \"场景ID（如果使用了提供的场景地点，必须填写对应的场景ID）\",\n"
+	prompt += "      \"storySceneId\": \"场景ID（仅当使用提供的场景时填写）\",\n"
 	prompt += "      \"characters\": [\n"
 	prompt += "        {\n"
 	prompt += "          \"name\": \"角色名\",\n"
@@ -1828,7 +1832,9 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "  \"generateImages\": false\n"
 	prompt += "}\n"
 	prompt += fmt.Sprintf("\n重要：请生成恰好 %d 个场景，确保JSON格式完整闭合。", sceneCount)
-	prompt += "\n重要：content字段必须严格控制在420字以内，超出部分将被截断。如果场景中使用了提供的角色，characters数组中的每个角色对象必须包含对应的角色ID。如果场景使用了提供的场景地点，storySceneId字段必须填写对应的场景ID。"
+	prompt += "\n重要：content字段必须严格控制在420字以内。"
+	prompt += "\n重要：只在characters数组中包含确实参与该场景的角色，并为每个角色提供正确的ID。"
+	prompt += "\n重要：如果使用了提供的场景地点，请填写对应的storySceneId。"
 
 	s.logger.Debug("storyboard prompt built",
 		zap.String("storyboardId", storyboard.ID),
@@ -1849,15 +1855,23 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 - 场景视觉化：能够将抽象概念转化为具体的视觉场景描述
 - 角色刻画：善于通过场景互动展现角色性格和关系
 - 氛围营造：精准把握不同场景的情感基调和环境氛围
+- 智能选择：能够根据故事情节需要，从可用资源中智能选择合适的角色和场景
 
 # 创作原则
-1. **连贯性**：确保场景之间有自然的过渡和逻辑联系
-2. **画面感**：每个场景描述应具有强烈的视觉冲击力，便于后续图像/视频生成
-3. **角色一致性**：严格遵循提供的角色设定，保持人物行为和性格的连贯
-4. **场景利用**：优先使用用户提供的场景地点，确保故事发生在合理的空间内
-5. **情感递进**：场景间应有情感的起伏变化，避免单调
+1. **用户意图优先**：以用户的自然语言描述为核心，理解用户的创作意图
+2. **自由发挥**：根据故事主旨和情节需要，智能选择最合适的角色和场景，不必拘泥于使用所有可用资源
+3. **连贯性**：确保场景之间有自然的过渡和逻辑联系
+4. **画面感**：每个场景描述应具有强烈的视觉冲击力，便于后续图像/视频生成
+5. **角色一致性**：使用角色时严格遵循其设定，保持人物行为和性格的连贯
+6. **情感递进**：场景间应有情感的起伏变化，避免单调
 
 ` + genreGuidance + `
+
+# 角色和场景选择指南
+- **智能选择**：根据用户描述的故事情节，选择最相关的角色参与场景
+- **不必求全**：不需要使用所有角色，只选择对情节发展有作用的角色
+- **场景匹配**：选择与故事氛围和情节相符的场景地点
+- **灵活创作**：如果用户描述需要，可以创造新的场景感，不必严格限制在提供的场景列表中
 
 # 输出格式要求
 **重要**：直接返回纯JSON，不要使用markdown代码块包裹（不要用` + "`" + "`" + "`" + `json或` + "`" + "`" + "`" + `）
@@ -1873,6 +1887,7 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 - 场景描述：100-200字，包含环境、动作、情感三个维度
 - 地点和时间：具体明确，与场景内容呼应
 - 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）
+- 角色选择：只在characters数组中包含确实参与该场景的角色
 
 # 长度限制说明
 **极其重要**：content字段长度限制为420字是硬性要求，这是为了避免后续处理时的内容截断问题。系统内部最多可处理1024字符，但为确保质量和完整性，生成内容应控制在420字以内。`

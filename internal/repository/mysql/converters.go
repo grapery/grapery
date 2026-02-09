@@ -100,6 +100,30 @@ func jsonToStyleConfig(jsonStr string) *domain.StyleConfig {
 	return &style
 }
 
+// aiAssistanceOptionsToJSON 将 *domain.AIAssistanceOptions 序列化为 JSON 字符串
+func aiAssistanceOptionsToJSON(options *domain.AIAssistanceOptions) string {
+	if options == nil {
+		return ""
+	}
+	data, err := json.Marshal(options)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToAIAssistanceOptions 将 JSON 字符串反序列化为 *domain.AIAssistanceOptions
+func jsonToAIAssistanceOptions(jsonStr string) *domain.AIAssistanceOptions {
+	if jsonStr == "" {
+		return nil
+	}
+	var options domain.AIAssistanceOptions
+	if err := json.Unmarshal([]byte(jsonStr), &options); err != nil {
+		return nil
+	}
+	return &options
+}
+
 // ========== User 转换 ==========
 
 // UserToModel 将 domain.User 转换为 MySQL User 模型
@@ -172,22 +196,26 @@ func StoryToModel(d *domain.Story) *Story {
 		return nil
 	}
 	return &Story{
-		ID:                d.ID,
-		Title:             d.Title,
-		Description:       d.Description,
-		CoverImage:        d.CoverImage,
-		AuthorID:          d.AuthorID,
-		GroupID:           stringToStringPtr(d.GroupID),
-		Likes:             d.Likes,
-		Followers:         d.Followers,
-		Panels:            d.Panels,
-		StoryboardCount:   d.StoryboardCount,
-		DefaultSceneCount: d.DefaultSceneCount,
-		Genre:             d.Genre,
-		Style:             styleConfigToJSON(d.Style),
-		Status:            d.Status,
-		CreatedAt:         unixToTime(d.CreatedAt),
-		UpdatedAt:         unixToTime(d.UpdatedAt),
+		ID:                  d.ID,
+		Title:               d.Title,
+		Description:         d.Description,
+		CoverImage:          d.CoverImage,
+		AuthorID:            d.AuthorID,
+		GroupID:             stringToStringPtr(d.GroupID),
+		SourceFragmentID:    d.SourceFragmentID,
+		Likes:               d.Likes,
+		Followers:           d.Followers,
+		Panels:              d.Panels,
+		StoryboardCount:     d.StoryboardCount,
+		DefaultSceneCount:   d.DefaultSceneCount,
+		Genre:               d.Genre,
+		Style:               styleConfigToJSON(d.Style),
+		Status:              d.Status,
+		IsCollaborationOpen: d.IsCollaborationOpen,
+		UseAI:               d.UseAI,
+		AIAssistanceOptions: aiAssistanceOptionsToJSON(d.AIAssistanceOptions),
+		CreatedAt:           unixToTime(d.CreatedAt),
+		UpdatedAt:           unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -197,22 +225,26 @@ func ModelToStory(m *Story) *domain.Story {
 		return nil
 	}
 	d := &domain.Story{
-		ID:                m.ID,
-		Title:             m.Title,
-		Description:       m.Description,
-		CoverImage:        m.CoverImage,
-		AuthorID:          m.AuthorID,
-		GroupID:           stringPtrToString(m.GroupID),
-		Likes:             m.Likes,
-		Followers:         m.Followers,
-		Panels:            m.Panels,
-		StoryboardCount:   m.StoryboardCount,
-		DefaultSceneCount: m.DefaultSceneCount,
-		Genre:             m.Genre,
-		Style:             jsonToStyleConfig(m.Style),
-		Status:            m.Status,
-		CreatedAt:         timeToUnix(m.CreatedAt),
-		UpdatedAt:         timeToUnix(m.UpdatedAt),
+		ID:                  m.ID,
+		Title:               m.Title,
+		Description:         m.Description,
+		CoverImage:          m.CoverImage,
+		AuthorID:            m.AuthorID,
+		GroupID:             stringPtrToString(m.GroupID),
+		SourceFragmentID:    m.SourceFragmentID,
+		Likes:               m.Likes,
+		Followers:           m.Followers,
+		Panels:              m.Panels,
+		StoryboardCount:     m.StoryboardCount,
+		DefaultSceneCount:   m.DefaultSceneCount,
+		Genre:               m.Genre,
+		Style:               jsonToStyleConfig(m.Style),
+		Status:              m.Status,
+		IsCollaborationOpen: m.IsCollaborationOpen,
+		UseAI:               m.UseAI,
+		AIAssistanceOptions: jsonToAIAssistanceOptions(m.AIAssistanceOptions),
+		CreatedAt:           timeToUnix(m.CreatedAt),
+		UpdatedAt:           timeToUnix(m.UpdatedAt),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)

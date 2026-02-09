@@ -47,6 +47,7 @@ type UserSettings struct {
 	ID                 string `json:"id"`
 	UserID             string `json:"userId"`
 	Language           string `json:"language"` // en, zh-CN, zh-TW, ja, ko
+	Region             string `json:"region"`   // CN, US, JP, KR, EU, OTHER
 	Theme              string `json:"theme"`    // light, dark, system
 	FontSize           string `json:"fontSize"` // small, medium, large
 	DataSaver          bool   `json:"dataSaver"`
@@ -56,8 +57,8 @@ type UserSettings struct {
 	DefaultStoryVisibility    string `json:"defaultStoryVisibility"`    // public, unlisted, private
 	DefaultFragmentVisibility string `json:"defaultFragmentVisibility"` // public, followers_only, private
 	AllowFollowFrom           string `json:"allowFollowFrom"`           // everyone, followers_only, followers_of_followers, no_one
-	AllowCommentsFrom         string `json:"allowCommentsFrom"`         // everyone, followers_only, followers_of_followers, no_one
-	AllowMessagesFrom         string `json:"allowMessagesFrom"`         // everyone, followers_only, followers_of_followers, no_one
+	AllowCommentsFrom         string `json:"allowCommentsFrom"`         // everyone, followers_only, no_one
+	AllowMessagesFrom         string `json:"allowMessagesFrom"`         // everyone, followers_only, no_one
 	ShowOnlineStatus          bool   `json:"showOnlineStatus"`
 	ShowReadReceipts          bool   `json:"showReadReceipts"`
 
@@ -68,6 +69,7 @@ type UserSettings struct {
 	// 通知设置 (JSON)
 	NotificationSettings string `json:"notificationSettings"` // JSON string
 
+	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 
 	// Relations
@@ -193,9 +195,128 @@ const (
 type LanguageType string
 
 const (
+	LanguageSystem    LanguageType = "system"
 	LanguageEnglish   LanguageType = "en"
-	LanguageChineseCN LanguageType = "zh-CN"
-	LanguageChineseTW LanguageType = "zh-TW"
+	LanguageChineseCN LanguageType = "zh-Hans"
 	LanguageJapanese  LanguageType = "ja"
-	LanguageKorean    LanguageType = "ko"
 )
+
+
+// MARK: - 登录历史管理
+
+// LoginHistory 用户登录历史
+type LoginHistory struct {
+	ID           string `json:"id"`
+	UserID       string `json:"userId"`
+	DeviceType   string `json:"deviceType"`   // iPhone, iPad, Web
+	DeviceName   string `json:"deviceName"`   // "iPhone 15 Pro"
+	DeviceID     string `json:"deviceId"`     // 设备唯一标识
+	IPAddress    string `json:"ipAddress"`
+	Location     string `json:"location"`
+	LoginMethod  string `json:"loginMethod"`  // password, apple, google, wechat, sms
+	LoggedInAt   int64  `json:"loggedInAt"`
+	LastActiveAt int64  `json:"lastActiveAt"`
+	LoggedOutAt  int64  `json:"loggedOutAt,omitempty"`
+	IsActive     bool   `json:"isActive"`
+}
+
+// MARK: - 连接账号管理
+
+// ConnectedAccount 用户已连接的第三方账号
+type ConnectedAccount struct {
+	ID             string `json:"id"`
+	UserID         string `json:"userId"`
+	Provider       string `json:"provider"`       // apple, google, wechat, weibo
+	ProviderUserID string `json:"providerUserId"` // 第三方账号ID
+	Email          string `json:"email,omitempty"`
+	DisplayName    string `json:"displayName,omitempty"`
+	AvatarURL      string `json:"avatarUrl,omitempty"`
+	ConnectedAt    int64  `json:"connectedAt"`
+	LastUsedAt     int64  `json:"lastUsedAt"`
+}
+
+// AuthProvider 认证提供商类型
+type AuthProvider string
+
+const (
+	AuthProviderApple  AuthProvider = "apple"
+	AuthProviderGoogle AuthProvider = "google"
+	AuthProviderWechat AuthProvider = "wechat"
+	AuthProviderWeibo  AuthProvider = "weibo"
+)
+
+// MARK: - 账号删除管理
+
+// AccountDeletionRequest 账号删除申请
+type AccountDeletionRequest struct {
+	ID                  string `json:"id"`
+	UserID              string `json:"userId"`
+	Reason              string `json:"reason,omitempty"`
+	Feedback            string `json:"feedback,omitempty"`
+	RequestedAt         int64  `json:"requestedAt"`
+	ScheduledDeletionAt int64  `json:"scheduledDeletionAt"`
+	Status              string `json:"status"` // pending, processing, completed, cancelled
+	CancelledAt         int64  `json:"cancelledAt,omitempty"`
+	CancelledReason     string `json:"cancelledReason,omitempty"`
+	ProcessedAt         int64  `json:"processedAt,omitempty"`
+	ProcessedBy         string `json:"processedBy,omitempty"`
+}
+
+// DeletionStatus 删除状态类型
+type DeletionStatus string
+
+const (
+	DeletionStatusPending    DeletionStatus = "pending"
+	DeletionStatusProcessing DeletionStatus = "processing"
+	DeletionStatusCompleted  DeletionStatus = "completed"
+	DeletionStatusCancelled  DeletionStatus = "cancelled"
+)
+
+// DeletionReason 删除原因类型
+type DeletionReason string
+
+const (
+	DeletionReasonNotUsing           DeletionReason = "not_using"
+	DeletionReasonTooComplicated     DeletionReason = "too_complicated"
+	DeletionReasonPrivacyConcern     DeletionReason = "privacy_concern"
+	DeletionReasonCreatingNewAccount DeletionReason = "creating_new_account"
+	DeletionReasonOther              DeletionReason = "other"
+)
+
+// MARK: - 通知设置结构
+
+// NotificationSettings 通知设置结构
+type NotificationSettings struct {
+	Push   PushNotificationSettings   `json:"push"`
+	Email  EmailNotificationSettings  `json:"email"`
+	InApp  InAppNotificationSettings  `json:"inApp"`
+}
+
+// PushNotificationSettings 推送通知设置
+type PushNotificationSettings struct {
+	Enabled            bool `json:"enabled"`
+	NewFollower        bool `json:"newFollower"`
+	NewLike            bool `json:"newLike"`
+	NewComment         bool `json:"newComment"`
+	StoryUpdate        bool `json:"storyUpdate"`
+	DirectMessage      bool `json:"directMessage"`
+	SystemAnnouncement bool `json:"systemAnnouncement"`
+	Marketing          bool `json:"marketing"`
+}
+
+// EmailNotificationSettings 邮件通知设置
+type EmailNotificationSettings struct {
+	Enabled       bool `json:"enabled"`
+	WeeklyDigest  bool `json:"weeklyDigest"`
+	SecurityAlert bool `json:"securityAlert"`
+	Marketing     bool `json:"marketing"`
+	ProductUpdates bool `json:"productUpdates"`
+}
+
+// InAppNotificationSettings 站内通知设置
+type InAppNotificationSettings struct {
+	Enabled            bool `json:"enabled"`
+	ShowPreview        bool `json:"showPreview"`
+	SoundEnabled       bool `json:"soundEnabled"`
+	VibrationEnabled   bool `json:"vibrationEnabled"`
+}

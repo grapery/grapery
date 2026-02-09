@@ -23,6 +23,7 @@ func (h *UserSettingsHandler) RegisterUserSettingsRoutes(r *gin.RouterGroup) {
 		settings.PUT("", h.UpdateSettings)
 		settings.PUT("/language", h.UpdateLanguage)
 		settings.PUT("/theme", h.UpdateTheme)
+		settings.PUT("/font-size", h.UpdateFontSize)
 		settings.PUT("/privacy", h.UpdatePrivacy)
 		settings.PUT("/ai", h.UpdateAISettings)
 		settings.PUT("/notifications", h.UpdateNotificationSettings)
@@ -180,6 +181,31 @@ func (h *UserSettingsHandler) UpdateTheme(c *gin.Context) {
 	}
 
 	Success(c, gin.H{"message": "theme updated successfully"})
+}
+
+// UpdateFontSizeRequest 更新字体大小请求
+type UpdateFontSizeRequest struct {
+	FontSize string `json:"fontSize" binding:"required"`
+}
+
+// UpdateFontSize 更新字体大小
+func (h *UserSettingsHandler) UpdateFontSize(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	var req UpdateFontSizeRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	if err := h.settingsService.UpdateFontSize(c.Request.Context(), userID, req.FontSize); err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "font size updated successfully"})
 }
 
 // UpdatePrivacyRequest 更新隐私请求

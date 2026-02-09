@@ -14,7 +14,7 @@ type ConvertFragmentToStoryRequest struct {
 	Genre             string `json:"genre,omitempty"`
 	CoverImage        string `json:"coverImage,omitempty"`
 	SceneCount        int    `json:"sceneCount,omitempty"`
-	IsAIEnabled       bool   `json:"isAIEnabled,omitempty"`
+	UseAI             bool   `json:"useAI,omitempty"`
 	CollaborationType string `json:"collaborationType,omitempty"`
 }
 

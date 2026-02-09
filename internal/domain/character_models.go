@@ -2,8 +2,10 @@ package domain
 
 // Character represents a story character
 type Character struct {
-	ID                       string  `json:"id"`
-	StoryID                  string  `json:"storyId"`
+	ID      string `json:"id"`
+	StoryID string `json:"storyId"`
+	// AuthorID 角色创建者ID
+	// 核心规则：只有故事创作者可以创建角色，所以 AuthorID 应该等于 Story.AuthorID
 	AuthorID                 string  `json:"-"`
 	Name                     string  `json:"name"`
 	Description              string  `json:"description"`

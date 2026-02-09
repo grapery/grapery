@@ -691,6 +691,16 @@ func init() {
 		Required: true,
 	})
 
+	// ========== Group Showcase 表 ==========
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_group_showcases",
+		Description: "Create and migrate group_showcases table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&GroupShowcase{})
+		},
+		Required: true,
+	})
+
 	// 注册 Schema 修复步骤
 	registerSchemaFixSteps(registry)
 
@@ -858,6 +868,34 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureCharactersPosterCreationPermissionColumn()
+		},
+		Required: false,
+	})
+
+	// ========== Migration 008: Add fragment and story source tracking columns ==========
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_stories_source_fragment_id_column",
+		Description: "Ensure stories has source_fragment_id column",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&Story{})
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_stories_use_ai_columns",
+		Description: "Ensure stories has use_ai and ai_assistance_options columns",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&Story{})
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_fragments_converted_columns",
+		Description: "Ensure fragments has converted_to_story_id and is_converted columns",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&FragmentDB{})
 		},
 		Required: false,
 	})

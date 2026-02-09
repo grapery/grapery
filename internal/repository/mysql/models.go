@@ -62,6 +62,7 @@ type Story struct {
 	Author              User           `gorm:"foreignKey:AuthorID"`
 	GroupID             *string        `gorm:"size:36;index"` // Group ID if the story belongs to a group
 	Group               *Group         `gorm:"foreignKey:GroupID"`
+	SourceFragmentID    *string        `gorm:"size:36;index"` // 来源碎片ID（当故事从碎片转换而来时）
 	Likes               int            `gorm:"default:0;index"`
 	Followers           int            `gorm:"default:0"`
 	Panels              int            `gorm:"default:0"`
@@ -71,7 +72,8 @@ type Story struct {
 	Style               string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
 	Status              string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
 	IsCollaborationOpen bool           `gorm:"default:false;index"`           // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
-	AIEnabled           bool           `gorm:"default:true"`                  // 是否允许AI辅助
+	UseAI               bool           `gorm:"default:true"`                  // AI开关（创建时确定）
+	AIAssistanceOptions string         `gorm:"type:text"`                     // AI辅助选项 JSON
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt           time.Time      `gorm:"autoUpdateTime;index"`
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
@@ -1356,19 +1358,21 @@ type MessageReadReceiptDB struct {
 
 // FragmentDB fragment database model
 type FragmentDB struct {
-	ID        string `gorm:"primaryKey;size:36"`
-	CreatorID string `gorm:"size:36;not null;index:idx_fragment_creator"`
-	Content   string `gorm:"type:text"`
-	ImageUrls string `gorm:"type:text"` // JSON array stored as text
-	Visibility string `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
-	SourceType string `gorm:"size:30;default:'original';index:idx_fragment_source_type"` // original, story_excerpt, storyboard_node
-	SourceID   string `gorm:"size:36;index:idx_fragment_source_id"`                     // 来源ID
-	Likes     int    `gorm:"type:int;default:0"`
-	Comments  int    `gorm:"type:int;default:0"`
-	Shares    int    `gorm:"type:int;default:0"`
-	Views     int    `gorm:"type:int;default:0"`
-	CreatedAt int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_created"`
-	UpdatedAt int64  `gorm:"type:bigint;autoUpdateTime"`
+	ID               string `gorm:"primaryKey;size:36"`
+	CreatorID        string `gorm:"size:36;not null;index:idx_fragment_creator"`
+	Content          string `gorm:"type:text"`
+	ImageUrls        string `gorm:"type:text"` // JSON array stored as text
+	Visibility       string `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
+	SourceType       string `gorm:"size:30;default:'original';index:idx_fragment_source_type"` // original, story_excerpt, storyboard_node
+	SourceID         string `gorm:"size:36;index:idx_fragment_source_id"`                     // 来源ID
+	ConvertedToStoryID *string `gorm:"size:36;index"`                                           // 转换为的故事ID
+	IsConverted      bool   `gorm:"default:false;index"`                                        // 是否已转换
+	Likes            int    `gorm:"type:int;default:0"`
+	Comments         int    `gorm:"type:int;default:0"`
+	Shares           int    `gorm:"type:int;default:0"`
+	Views            int    `gorm:"type:int;default:0"`
+	CreatedAt        int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_created"`
+	UpdatedAt        int64  `gorm:"type:bigint;autoUpdateTime"`
 
 	Creator User `gorm:"foreignKey:CreatorID"`
 }
