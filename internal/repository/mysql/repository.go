@@ -497,9 +497,6 @@ func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter)
 	if filter.AuthorID != "" {
 		query = query.Where("author_id = ?", filter.AuthorID)
 	}
-	if filter.GroupID != "" {
-		query = query.Where("group_id = ?", filter.GroupID)
-	}
 	if filter.Search != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
 	}

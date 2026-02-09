@@ -9,7 +9,6 @@ import (
 type StoryFilter struct {
 	Status   string
 	AuthorID string
-	GroupID  string
 	Search   string
 	Genre    string
 	Limit    int
@@ -57,8 +56,6 @@ type Repository interface {
 	// ========== Dashboard feeds ==========
 	// DashboardStoryboards returns storyboards from stories the user created OR follows.
 	DashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
-	// DashboardGroupStoryboards returns storyboards from stories that belong to groups the user joined.
-	DashboardGroupStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	// DashboardCharacterStoryboards returns storyboards that followed characters participate in.
 	DashboardCharacterStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	// TrendingStoryboards returns published storyboards from trending stories:
@@ -122,17 +119,6 @@ type Repository interface {
 	IncrementPosterLikes(ctx context.Context, posterID string) error
 	IncrementPosterShares(ctx context.Context, posterID string) error
 
-	// ========== Group basic operations ==========
-	ListGroups(ctx context.Context, limit, offset int) ([]*Group, error)
-	ListMyGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
-	ListPublicGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
-	GroupsByUser(ctx context.Context, userID string) ([]*Group, error)
-	GroupActivities(ctx context.Context, groupID string, limit int) ([]*GroupActivity, error)
-	GroupActivitiesByTimeRange(ctx context.Context, groupID string, startTime, endTime int64, limit, offset int) ([]*GroupActivity, error)
-	GroupActivitiesByDate(ctx context.Context, groupID string, date string, limit, offset int) ([]*GroupActivity, error)
-	GroupActivityHeatmap(ctx context.Context, groupID string, startTime, endTime int64) ([]*ActivityHeatmapData, error)
-	CreateGroupActivity(ctx context.Context, activity *GroupActivity) error
-
 	// ========== Comment operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
 	CommentsByStory(ctx context.Context, storyID string) ([]*Comment, error)
@@ -169,64 +155,6 @@ type Repository interface {
 	FollowCharacter(ctx context.Context, userID, characterID string) error
 	UnfollowCharacter(ctx context.Context, userID, characterID string) error
 	IsCharacterFollowing(ctx context.Context, userID, characterID string) (bool, error)
-
-	// Liked content
-	LikedStories(ctx context.Context, userID string, limit, offset int) ([]*Story, error)
-	LikedCharacters(ctx context.Context, userID string, limit, offset int) ([]*Character, error)
-	LikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, error)
-
-	// ========== Group operations ==========
-	GroupByID(ctx context.Context, id string) (*Group, error)
-	CreateGroup(ctx context.Context, group *Group) error
-	UpdateGroup(ctx context.Context, group *Group) error
-	DeleteGroup(ctx context.Context, id string) error
-
-	// Group membership
-	AddGroupMember(ctx context.Context, groupID, userID string, role GroupMemberRole, invitedBy string) error
-	RemoveGroupMember(ctx context.Context, groupID, userID string) error
-	GetGroupMembers(ctx context.Context, groupID string, limit, offset int) ([]*GroupMemberInfo, error)
-	GetMemberRole(ctx context.Context, groupID, userID string) (GroupMemberRole, error)
-	UpdateMemberRole(ctx context.Context, groupID, userID string, role GroupMemberRole) error
-	IsGroupMember(ctx context.Context, groupID, userID string) (bool, error)
-
-	// Group roles
-	CreateGroupRole(ctx context.Context, role *GroupRole) error
-	GetGroupRoleByCode(ctx context.Context, code string) (*GroupRole, error)
-	GetGroupRoleByID(ctx context.Context, id string) (*GroupRole, error)
-	ListGroupRoles(ctx context.Context) ([]*GroupRole, error)
-	InitializeGroupRoles(ctx context.Context) error
-	UpdateMemberRoleID(ctx context.Context, groupID, userID, roleID string) error
-	GetMemberRoleID(ctx context.Context, groupID, userID string) (string, error)
-
-	// Group invitations
-	CreateGroupInvitation(ctx context.Context, groupID, inviterID, inviteeID, message string) (*GroupInvitation, error)
-	GetInvitationByID(ctx context.Context, id string) (*GroupInvitation, error)
-	GetPendingInvitation(ctx context.Context, groupID, inviteeID string) (*GroupInvitation, error)
-	GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*GroupInvitation, error)
-	UpdateInvitationStatus(ctx context.Context, id, status string) error
-	ExpirePendingInvitations(ctx context.Context) (int64, error)
-
-	// ========== Group Showcase operations ==========
-	// 添加展示内容到小组
-	AddGroupShowcase(ctx context.Context, showcase *GroupShowcase) error
-	// 移除小组展示内容
-	RemoveGroupShowcase(ctx context.Context, showcaseID string) error
-	// 获取小组展示列表
-	GetGroupShowcases(ctx context.Context, groupID string, contentType GroupShowcaseRelationType, limit, offset int) ([]*GroupShowcase, int64, error)
-	// 获取小组展示详情
-	GetGroupShowcaseByID(ctx context.Context, showcaseID string) (*GroupShowcase, error)
-	// 更新小组展示排序
-	UpdateGroupShowcaseOrder(ctx context.Context, showcaseID string, sortOrder int) error
-
-	// Group follow
-	FollowGroup(ctx context.Context, userID, groupID string) error
-	UnfollowGroup(ctx context.Context, userID, groupID string) error
-	IsFollowingGroup(ctx context.Context, userID, groupID string) (bool, error)
-	ListFollowedGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
-
-	// Group story count
-	IncrementGroupStoryCount(ctx context.Context, groupID string) error
-	DecrementGroupStoryCount(ctx context.Context, groupID string) error
 
 	// ========== User Statistics operations ==========
 	CountAllUsers(ctx context.Context) (int, error)
@@ -364,7 +292,6 @@ type Repository interface {
 	SearchStories(ctx context.Context, query string, limit, offset int) ([]*Story, error)
 	SearchCharacters(ctx context.Context, query string, limit, offset int) ([]*Character, error)
 	SearchUsers(ctx context.Context, query string, limit, offset int) ([]*User, error)
-	SearchGroups(ctx context.Context, query string, limit, offset int) ([]*Group, error)
 	CreateSearchHistory(ctx context.Context, history *SearchHistory) error
 
 	// Advanced search
@@ -439,8 +366,8 @@ type Repository interface {
 	CreateStyleConfig(ctx context.Context, styleConfig *StyleConfig) error
 	GetStyleConfigByID(ctx context.Context, id string) (*StyleConfig, error)
 	GetStyleConfigByStyle(ctx context.Context, styleName string) (*StyleConfig, error)
-	ListStyleConfigs(ctx context.Context, groupID string, limit, offset int) ([]*StyleConfig, int64, error)
-	SearchStyleConfigs(ctx context.Context, keyword, groupID string, limit, offset int) ([]*StyleConfig, int64, error)
+	ListStyleConfigs(ctx context.Context, limit, offset int) ([]*StyleConfig, int64, error)
+	SearchStyleConfigs(ctx context.Context, keyword string, limit, offset int) ([]*StyleConfig, int64, error)
 	UpdateStyleConfig(ctx context.Context, styleConfig *StyleConfig) error
 	DeleteStyleConfig(ctx context.Context, id string) error
 	BatchCreateStyleConfigs(ctx context.Context, styleConfigs []*StyleConfig) error
@@ -485,39 +412,6 @@ type Repository interface {
 	DeleteInvitationCode(ctx context.Context, id string) error
 	UseInvitationCode(ctx context.Context, code string, userID string) error
 	ValidateInvitationCode(ctx context.Context, code string) error
-
-	// ========== Writers Room operations ==========
-	WritersRoomByStoryID(ctx context.Context, storyID string) (*WritersRoom, error)
-	CreateWritersRoom(ctx context.Context, room *WritersRoom) error
-	UpdateWritersRoom(ctx context.Context, room *WritersRoom) error
-	DeleteWritersRoom(ctx context.Context, roomID string) error
-
-	WritersRoomParticipants(ctx context.Context, roomID string) ([]*WritersRoomParticipant, error)
-	AddWritersRoomParticipant(ctx context.Context, participant *WritersRoomParticipant) error
-	RemoveWritersRoomParticipant(ctx context.Context, roomID, userID string) error
-	IsWritersRoomParticipant(ctx context.Context, roomID, userID string) (bool, error)
-	UpdateParticipantLastRead(ctx context.Context, roomID, userID string) error
-	IncrementParticipantCount(ctx context.Context, roomID string) error
-	DecrementParticipantCount(ctx context.Context, roomID string) error
-
-	WritersRoomMessages(ctx context.Context, roomID string, limit, offset int) ([]*WritersRoomMessage, error)
-	CreateWritersRoomMessage(ctx context.Context, msg *WritersRoomMessage) error
-	DeleteWritersRoomMessage(ctx context.Context, messageID string) error
-	WritersRoomMessageByID(ctx context.Context, messageID string) (*WritersRoomMessage, error)
-	IncrementMessageCount(ctx context.Context, roomID string) error
-	UpdateRoomLastMessage(ctx context.Context, roomID string, lastMessage string, lastMessageTime int64) error
-
-	WritersRoomMessageReactionByID(ctx context.Context, reactionID string) (*WritersRoomMessageReaction, error)
-	CreateWritersRoomMessageReaction(ctx context.Context, reaction *WritersRoomMessageReaction) error
-	DeleteWritersRoomMessageReaction(ctx context.Context, messageID, userID string) error
-	WritersRoomMessageReactions(ctx context.Context, messageID string) ([]*WritersRoomMessageReaction, error)
-
-	MessageReadReceipts(ctx context.Context, messageID string) ([]*MessageReadReceipt, error)
-	CreateMessageReadReceipt(ctx context.Context, receipt *MessageReadReceipt) error
-	UpdateMessageReadReceipt(ctx context.Context, messageID, userID string) error
-	MarkMessageAsRead(ctx context.Context, messageID, userID string) error
-
-	WritersRoomUnreadCount(ctx context.Context, roomID, userID string) (int, error)
 
 	// ========== Third Party Login operations ==========
 	// 第三方登录账户关联（支持 Google/Apple 跨设备登录）

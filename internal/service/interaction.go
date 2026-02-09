@@ -443,11 +443,6 @@ func (s *interactionService) checkFollowableExists(ctx context.Context, followab
 		if err != nil {
 			return fmt.Errorf("user not found: %w", err)
 		}
-	case domain.FollowableTypeGroup:
-		_, err := s.repo.GroupByID(ctx, followableID)
-		if err != nil {
-			return fmt.Errorf("group not found: %w", err)
-		}
 	case domain.FollowableTypeCharacter:
 		_, err := s.repo.CharacterByID(ctx, followableID)
 		if err != nil {

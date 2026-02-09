@@ -809,39 +809,6 @@ func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID
 			return nil, errors.New("unauthorized: only character creator can create posters")
 		}
 
-	case "group_members":
-		// 小组成员可创建
-		if character.GroupID != nil {
-			isMember, err := s.repo.IsGroupMember(ctx, *character.GroupID, userID)
-			if err != nil {
-				s.logger.Error("failed to check group membership",
-					zap.String("userID", userID),
-					zap.String("groupID", *character.GroupID),
-					zap.Error(err),
-				)
-				return nil, errors.New("failed to verify group membership")
-			}
-			if !isMember {
-				s.logger.Warn("unauthorized poster creation attempt",
-					zap.String("userID", userID),
-					zap.String("characterID", characterID),
-					zap.String("groupID", *character.GroupID),
-					zap.String("permission", perm),
-				)
-				return nil, errors.New("unauthorized: only group members can create posters")
-			}
-		} else {
-			// 非小组角色，回退到 creator_only
-			if userID != character.AuthorID {
-				s.logger.Warn("unauthorized poster creation attempt",
-					zap.String("userID", userID),
-					zap.String("characterID", characterID),
-					zap.String("permission", perm),
-				)
-				return nil, errors.New("unauthorized: only character creator can create posters")
-			}
-		}
-
 	case "anyone":
 		// 任何人都可以创建，不需要额外检查
 		s.logger.Debug("anyone can create poster for this character",
