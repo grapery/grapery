@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
@@ -26,8 +27,8 @@ type AIGenerationService struct {
 	genAPI              *genapi.GenAPI
 	logger              *zap.Logger
 	metrics             *telemetry.Metrics // Prometheus metrics (optional)
-	quotaReservation    *QuotaReservationService
-	distributedLock     *DistributedLock
+	quotaReservation    *RedisQuotaReservationService
+	redisDistributedLock *RedisDistributedLock
 	enableQuotaReservation bool // 是否启用配额预留（默认关闭，逐步迁移）
 }
 
@@ -38,10 +39,17 @@ func NewAIGenerationService(repo domain.Repository, geminiClient *gemini.Client,
 		geminiClient:        geminiClient,
 		genAPI:              genAPI,
 		logger:              logger,
-		quotaReservation:    NewQuotaReservationService(logger, repo),
-		distributedLock:     NewDistributedLock(logger),
+		quotaReservation:    nil, // 在 SetRedisClient 中设置
+		redisDistributedLock: nil, // 在 SetRedisClient 中设置
 		enableQuotaReservation: false, // 默认关闭，可通过配置启用
 	}
+}
+
+// SetRedisClient 设置 Redis 客户端（用于分布式锁和配额预留）
+func (s *AIGenerationService) SetRedisClient(client *redis.Client) {
+	s.redisDistributedLock = NewRedisDistributedLock(client, s.logger)
+	s.quotaReservation = NewRedisQuotaReservationService(s.logger, s.repo, client)
+	s.logger.Info("Redis services initialized for distributed locking and quota reservation")
 }
 
 // SetMetrics 设置 Prometheus metrics
