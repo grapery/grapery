@@ -22,27 +22,33 @@ import (
 // AIGenerationService 统一的AI生成任务管理服务
 // 负责记录AI能力使用数据，用于任务管理和Token计费
 type AIGenerationService struct {
-	repo                domain.Repository
-	geminiClient        *gemini.Client
-	genAPI              *genapi.GenAPI
-	logger              *zap.Logger
-	metrics             *telemetry.Metrics // Prometheus metrics (optional)
-	quotaReservation    *RedisQuotaReservationService
-	redisDistributedLock *RedisDistributedLock
-	enableQuotaReservation bool // 是否启用配额预留（默认关闭，逐步迁移）
+	repo                       domain.Repository
+	geminiClient               *gemini.Client
+	genAPI                     *genapi.GenAPI
+	logger                     *zap.Logger
+	metrics                    *telemetry.Metrics // Prometheus metrics (optional)
+	quotaReservation           *RedisQuotaReservationService
+	redisDistributedLock       *RedisDistributedLock
+	asyncVideoCompletion       *AsyncVideoCompletionService // 异步视频完成处理服务
+	enableQuotaReservation      bool // 是否启用配额预留（默认关闭，逐步迁移）
 }
 
 // NewAIGenerationService 创建AI生成服务
 func NewAIGenerationService(repo domain.Repository, geminiClient *gemini.Client, genAPI *genapi.GenAPI, logger *zap.Logger) *AIGenerationService {
-	return &AIGenerationService{
-		repo:                repo,
-		geminiClient:        geminiClient,
-		genAPI:              genAPI,
-		logger:              logger,
-		quotaReservation:    nil, // 在 SetRedisClient 中设置
-		redisDistributedLock: nil, // 在 SetRedisClient 中设置
+	svc := &AIGenerationService{
+		repo:                   repo,
+		geminiClient:           geminiClient,
+		genAPI:                 genAPI,
+		logger:                 logger,
+		quotaReservation:       nil, // 在 SetRedisClient 中设置
+		redisDistributedLock:   nil, // 在 SetRedisClient 中设置
 		enableQuotaReservation: false, // 默认关闭，可通过配置启用
 	}
+
+	// 创建异步视频完成处理服务
+	svc.asyncVideoCompletion = NewAsyncVideoCompletionService(svc, repo, logger)
+
+	return svc
 }
 
 // SetRedisClient 设置 Redis 客户端（用于分布式锁和配额预留）
@@ -62,6 +68,11 @@ func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
 	s.enableQuotaReservation = enabled
 	s.logger.Info("quota reservation mechanism updated",
 		zap.Bool("enabled", enabled))
+}
+
+// GetAsyncVideoCompletionService 获取异步视频完成处理服务
+func (s *AIGenerationService) GetAsyncVideoCompletionService() *AsyncVideoCompletionService {
+	return s.asyncVideoCompletion
 }
 
 // GenerateTextRequest 文本生成请求
@@ -94,6 +105,77 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	}
 
 	startTime := time.Now()
+
+	// ============== 配额预留和分布式锁 ==============
+	// 估算 token 数量（使用 maxTokens 或默认值 1000）
+	estimatedTokens := int(req.MaxTokens)
+	if estimatedTokens == 0 {
+		estimatedTokens = 1000 // 默认预留 1000 tokens
+	}
+
+	// 生成请求 ID 用于分布式锁
+	requestID := fmt.Sprintf("text_gen_%s_%d", req.UserID, time.Now().UnixNano())
+	lockKey := fmt.Sprintf("ai_generation_lock:text:%s", req.UserID)
+
+	var reservation *QuotaReservation
+	var lockAcquired bool
+
+	// 1. 获取分布式锁（防止同一用户的并发请求）
+	if s.enableQuotaReservation && s.redisDistributedLock != nil {
+		var err error
+		lockAcquired, err = s.redisDistributedLock.AcquireLock(ctx, lockKey, requestID, 30*time.Second)
+		if err != nil {
+			s.logger.Error("failed to acquire distributed lock",
+				zap.String("userID", req.UserID),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		if !lockAcquired {
+			s.logger.Warn("another request is in progress, please wait",
+				zap.String("userID", req.UserID))
+			return nil, fmt.Errorf("another AI generation request is in progress, please try again later")
+		}
+		defer func() {
+			if lockAcquired {
+				s.redisDistributedLock.ReleaseLock(ctx, lockKey, requestID)
+			}
+		}()
+	}
+
+	// 2. 预留配额
+	if s.enableQuotaReservation && s.quotaReservation != nil {
+		var err error
+		metadata := map[string]interface{}{
+			"model":    req.Model,
+			"prompt":   truncateString(req.OriginalPrompt, 100),
+			"type":     "text",
+			"requestID": requestID,
+		}
+		reservation, err = s.quotaReservation.ReserveQuota(ctx, req.UserID, estimatedTokens, "ai_text_generation", metadata)
+		if err != nil {
+			s.logger.Error("failed to reserve quota",
+				zap.String("userID", req.UserID),
+				zap.Int("estimatedTokens", estimatedTokens),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to reserve quota: %w", err)
+		}
+		s.logger.Info("quota reserved successfully",
+			zap.String("reservationID", reservation.ReservationID),
+			zap.String("userID", req.UserID),
+			zap.Int("estimatedTokens", estimatedTokens))
+	}
+
+	// 确保在失败时释放预留
+	defer func() {
+		if reservation != nil && reservation.Status == "pending" {
+			if err := s.quotaReservation.ReleaseQuota(ctx, reservation.ReservationID); err != nil {
+				s.logger.Error("failed to release quota reservation",
+					zap.String("reservationID", reservation.ReservationID),
+					zap.Error(err))
+			}
+		}
+	}()
+	// ============== 配额预留和分布式锁结束 ==============
 
 	// 1. 创建AI生成记录（状态：pending）
 	record := &domain.AIGenerationRecord{
@@ -196,24 +278,33 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
 	}
 
-	// 扣减用户配额（如果使用了 token）
-	if record.TotalTokens > 0 {
-		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -record.TotalTokens, "ai_text_generation", fmt.Sprintf("AI text generation consumed %d tokens", record.TotalTokens))
-		if err != nil {
-			s.logger.Error("failed to deduct token balance for text generation",
-				zap.String("userID", req.UserID),
+	// ============== 确认配额预留 ==============
+	// 如果启用了配额预留，确认实际使用量
+	if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+		actualTokens := record.TotalTokens
+		if actualTokens == 0 {
+			actualTokens = 1 // 至少扣减 1 个 token
+		}
+
+		if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
+			s.logger.Error("failed to confirm quota reservation",
+				zap.String("reservationID", reservation.ReservationID),
 				zap.String("recordId", record.ID),
-				zap.Int("tokensUsed", record.TotalTokens),
+				zap.Int("actualTokens", actualTokens),
 				zap.Error(err))
-			// 配额扣减失败是严重错误，但记录已成功生成，记录警告并继续
-			// 考虑是否需要重试或补偿机制
+			// 确认失败不影响返回结果，但需要记录警告
+			// 预留会在过期时自动释放，多余 token 会退还
 		} else {
-			s.logger.Info("token balance deducted successfully",
-				zap.String("userID", req.UserID),
+			s.logger.Info("quota reservation confirmed",
+				zap.String("reservationID", reservation.ReservationID),
 				zap.String("recordId", record.ID),
-				zap.Int("tokensUsed", record.TotalTokens))
+				zap.Int("estimatedTokens", reservation.EstimatedTokens),
+				zap.Int("actualTokens", actualTokens))
+			// 预留已确认，清除引用以避免 defer 中释放
+			reservation = nil
 		}
 	}
+	// ============== 配额预留确认结束 ==============
 
 	// Record metrics
 	if s.metrics != nil {
@@ -265,6 +356,79 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	startTime := time.Now()
+
+	// ============== 配额预留和分布式锁 ==============
+	// 估算 token 数量（图片生成通常按次数计费，每张图片约 1000 tokens）
+	estimatedTokens := req.OutputCount * 1000
+	if estimatedTokens == 0 {
+		estimatedTokens = 1000 // 默认预留 1000 tokens（1张图片）
+	}
+
+	// 生成请求 ID 用于分布式锁
+	requestID := fmt.Sprintf("image_gen_%s_%d", req.UserID, time.Now().UnixNano())
+	lockKey := fmt.Sprintf("ai_generation_lock:image:%s", req.UserID)
+
+	var reservation *QuotaReservation
+	var lockAcquired bool
+
+	// 1. 获取分布式锁（防止同一用户的并发请求）
+	if s.enableQuotaReservation && s.redisDistributedLock != nil {
+		var err error
+		lockAcquired, err = s.redisDistributedLock.AcquireLock(ctx, lockKey, requestID, 60*time.Second)
+		if err != nil {
+			s.logger.Error("failed to acquire distributed lock for image generation",
+				zap.String("userID", req.UserID),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		if !lockAcquired {
+			s.logger.Warn("another image generation request is in progress, please wait",
+				zap.String("userID", req.UserID))
+			return nil, fmt.Errorf("another AI generation request is in progress, please try again later")
+		}
+		defer func() {
+			if lockAcquired {
+				s.redisDistributedLock.ReleaseLock(ctx, lockKey, requestID)
+			}
+		}()
+	}
+
+	// 2. 预留配额
+	if s.enableQuotaReservation && s.quotaReservation != nil {
+		metadata := map[string]interface{}{
+			"provider":   req.Provider,
+			"model":      req.Model,
+			"prompt":     truncateString(req.Prompt, 100),
+			"type":       "image",
+			"outputCount": req.OutputCount,
+			"requestID":  requestID,
+		}
+		var err error
+		reservation, err = s.quotaReservation.ReserveQuota(ctx, req.UserID, estimatedTokens, "ai_image_generation", metadata)
+		if err != nil {
+			s.logger.Error("failed to reserve quota for image generation",
+				zap.String("userID", req.UserID),
+				zap.Int("estimatedTokens", estimatedTokens),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to reserve quota: %w", err)
+		}
+		s.logger.Info("quota reserved successfully for image generation",
+			zap.String("reservationID", reservation.ReservationID),
+			zap.String("userID", req.UserID),
+			zap.Int("estimatedTokens", estimatedTokens))
+	}
+
+	// 确保在失败时释放预留
+	defer func() {
+		if reservation != nil && reservation.Status == "pending" {
+			if err := s.quotaReservation.ReleaseQuota(ctx, reservation.ReservationID); err != nil {
+				s.logger.Error("failed to release quota reservation",
+					zap.String("reservationID", reservation.ReservationID),
+					zap.Error(err))
+			}
+		}
+	}()
+	// ============== 配额预留和分布式锁结束 ==============
 
 	// 1. 创建AI生成记录
 	record := &domain.AIGenerationRecord{
@@ -419,32 +583,48 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
 	}
 
-	// 扣减用户配额（如果使用了 token 或生成了图片）
-	// 图片生成通常按次数计费，这里我们根据返回的使用量来扣减
-	if record.TotalTokens > 0 || record.ImageCount > 0 {
-		// 对于图片生成，我们计算等效 token 数
-		// 如果返回了 token 数量就使用，否则按图片数量计算（假设每张图片 = 1000 tokens）
-		tokensToDeduct := record.TotalTokens
-		if tokensToDeduct == 0 && record.ImageCount > 0 {
-			tokensToDeduct = record.ImageCount * 1000 // 每张图片 1000 tokens
-		}
+	// ============== 确认配额预留 ==============
+	// 计算实际使用的 token 数量
+	actualTokens := record.TotalTokens
+	if actualTokens == 0 && record.ImageCount > 0 {
+		actualTokens = record.ImageCount * 1000 // 每张图片 1000 tokens
+	}
+	if actualTokens == 0 {
+		actualTokens = 1000 // 至少扣减 1000 tokens
+	}
 
-		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -tokensToDeduct, "ai_image_generation", fmt.Sprintf("AI image generation consumed %d tokens (%d images)", tokensToDeduct, record.ImageCount))
+	// 如果启用了配额预留，确认实际使用量
+	if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+		if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
+			s.logger.Error("failed to confirm quota reservation for image generation",
+				zap.String("reservationID", reservation.ReservationID),
+				zap.String("recordId", record.ID),
+				zap.Int("actualTokens", actualTokens),
+				zap.Error(err))
+			// 确认失败不影响返回结果，但需要记录警告
+		} else {
+			s.logger.Info("quota reservation confirmed for image generation",
+				zap.String("reservationID", reservation.ReservationID),
+				zap.String("recordId", record.ID),
+				zap.Int("estimatedTokens", reservation.EstimatedTokens),
+				zap.Int("actualTokens", actualTokens),
+				zap.Int("imageCount", record.ImageCount))
+			// 预留已确认，清除引用以避免 defer 中释放
+			reservation = nil
+		}
+	} else {
+		// 如果没有启用配额预留，直接扣减（向后兼容）
+		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -actualTokens, "ai_image_generation", fmt.Sprintf("AI image generation consumed %d tokens (%d images)", actualTokens, record.ImageCount))
 		if err != nil {
 			s.logger.Error("failed to deduct token balance for image generation",
 				zap.String("userID", req.UserID),
 				zap.String("recordId", record.ID),
 				zap.Int("imageCount", record.ImageCount),
-				zap.Int("tokensUsed", tokensToDeduct),
+				zap.Int("tokensUsed", actualTokens),
 				zap.Error(err))
-		} else {
-			s.logger.Info("token balance deducted successfully for image generation",
-				zap.String("userID", req.UserID),
-				zap.String("recordId", record.ID),
-				zap.Int("imageCount", record.ImageCount),
-				zap.Int("tokensUsed", tokensToDeduct))
 		}
 	}
+	// ============== 配额预留确认结束 ==============
 
 	s.logger.Info("AI image generation completed",
 		zap.String("recordId", record.ID),
@@ -490,6 +670,76 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 	}
 
 	startTime := time.Now()
+
+	// ============== 配额预留和分布式锁 ==============
+	// 估算 token 数量（视频生成通常按时长和复杂度计费，每个视频约 5000 tokens）
+	estimatedTokens := 5000 // 默认预留 5000 tokens
+
+	// 生成请求 ID 用于分布式锁
+	requestID := fmt.Sprintf("video_gen_%s_%d", req.UserID, time.Now().UnixNano())
+	lockKey := fmt.Sprintf("ai_generation_lock:video:%s", req.UserID)
+
+	var reservation *QuotaReservation
+	var lockAcquired bool
+
+	// 1. 获取分布式锁（防止同一用户的并发请求）
+	if s.enableQuotaReservation && s.redisDistributedLock != nil {
+		var err error
+		lockAcquired, err = s.redisDistributedLock.AcquireLock(ctx, lockKey, requestID, 120*time.Second)
+		if err != nil {
+			s.logger.Error("failed to acquire distributed lock for video generation",
+				zap.String("userID", req.UserID),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		if !lockAcquired {
+			s.logger.Warn("another video generation request is in progress, please wait",
+				zap.String("userID", req.UserID))
+			return nil, fmt.Errorf("another AI generation request is in progress, please try again later")
+		}
+		defer func() {
+			if lockAcquired {
+				s.redisDistributedLock.ReleaseLock(ctx, lockKey, requestID)
+			}
+		}()
+	}
+
+	// 2. 预留配额
+	if s.enableQuotaReservation && s.quotaReservation != nil {
+		metadata := map[string]interface{}{
+			"provider":          req.Provider,
+			"model":             req.Model,
+			"prompt":            truncateString(req.Prompt, 100),
+			"type":              "video",
+			"durationSeconds":   req.DurationSeconds,
+			"hasReferenceImage": req.ReferenceImageURL != "",
+			"hasEndFrame":       req.EndFrameURL != "",
+			"requestID":         requestID,
+		}
+		var err error
+		reservation, err = s.quotaReservation.ReserveQuota(ctx, req.UserID, estimatedTokens, "ai_video_generation", metadata)
+		if err != nil {
+			s.logger.Error("failed to reserve quota for video generation",
+				zap.String("userID", req.UserID),
+				zap.Int("estimatedTokens", estimatedTokens),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to reserve quota: %w", err)
+		}
+		s.logger.Info("quota reserved successfully for video generation",
+			zap.String("reservationID", reservation.ReservationID),
+			zap.String("userID", req.UserID),
+			zap.Int("estimatedTokens", estimatedTokens))
+	}
+
+	// 保存 reservation ID 到 metadata，供异步完成时使用
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
+	}
+	if reservation != nil {
+		req.Metadata["reservationID"] = reservation.ReservationID
+		req.Metadata["estimatedTokens"] = estimatedTokens
+	}
+	// ============== 配额预留和分布式锁结束 ==============
 
 	// 1. 创建AI生成记录
 	record := &domain.AIGenerationRecord{
@@ -641,38 +891,73 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
 	}
 
-	// 扣减用户配额
-	// 对于同步完成的视频，立即扣减配额
-	// 对于异步任务，配额将在任务完成时扣减
-	if resp.Status == "completed" {
-		tokensToDeduct := record.TotalTokens
-		if tokensToDeduct == 0 && record.VideoCount > 0 {
-			// 视频生成默认配额：每个视频 = 5000 tokens
-			tokensToDeduct = record.VideoCount * 5000
-		}
+	// ============== 确认配额预留 ==============
+	// 计算实际使用的 token 数量
+	actualTokens := record.TotalTokens
+	if actualTokens == 0 && record.VideoCount > 0 {
+		actualTokens = record.VideoCount * 5000 // 每个视频 5000 tokens
+	}
+	if actualTokens == 0 {
+		actualTokens = 5000 // 至少扣减 5000 tokens
+	}
 
-		if tokensToDeduct > 0 {
-			_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -tokensToDeduct, "ai_video_generation", fmt.Sprintf("AI video generation consumed %d tokens", tokensToDeduct))
+	if resp.Status == "completed" {
+		// 同步完成：确认配额预留
+		if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+			if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
+				s.logger.Error("failed to confirm quota reservation for video generation",
+					zap.String("reservationID", reservation.ReservationID),
+					zap.String("recordId", record.ID),
+					zap.Int("actualTokens", actualTokens),
+					zap.Error(err))
+			} else {
+				s.logger.Info("quota reservation confirmed for video generation",
+					zap.String("reservationID", reservation.ReservationID),
+					zap.String("recordId", record.ID),
+					zap.Int("estimatedTokens", reservation.EstimatedTokens),
+					zap.Int("actualTokens", actualTokens))
+				// 预留已确认，清除引用以避免 defer 中释放
+				reservation = nil
+			}
+		} else {
+			// 如果没有启用配额预留，直接扣减（向后兼容）
+			_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -actualTokens, "ai_video_generation", fmt.Sprintf("AI video generation consumed %d tokens", actualTokens))
 			if err != nil {
 				s.logger.Error("failed to deduct token balance for video generation",
 					zap.String("userID", req.UserID),
 					zap.String("recordId", record.ID),
-					zap.Int("tokensUsed", tokensToDeduct),
+					zap.Int("tokensUsed", actualTokens),
 					zap.Error(err))
-			} else {
-				s.logger.Info("token balance deducted successfully for video generation",
-					zap.String("userID", req.UserID),
-					zap.String("recordId", record.ID),
-					zap.Int("tokensUsed", tokensToDeduct))
 			}
 		}
 	} else {
-		// 异步任务 - 记录需要稍后扣减配额
-		s.logger.Info("video generation is async, token deduction will be processed on completion",
-			zap.String("recordId", record.ID),
+		// 异步任务 - 配额将在任务完成时确认
+		// 注册到轮询服务
+		reservationID := ""
+		estimatedTokens := 0
+		if reservation != nil {
+			reservationID = reservation.ReservationID
+			estimatedTokens = reservation.EstimatedTokens
+			// 防止 defer 释放预留，因为异步任务还需要确认
+			reservation = nil
+		}
+
+		s.asyncVideoCompletion.RegisterTask(
+			resp.TaskID,
+			record.ID,
+			req.UserID,
+			req.Provider,
+			reservationID,
+			estimatedTokens,
+		)
+
+		s.logger.Info("async video task registered for polling",
 			zap.String("taskId", resp.TaskID),
-			zap.String("status", resp.Status))
+			zap.String("recordId", record.ID),
+			zap.String("reservationID", reservationID),
+			zap.Int("estimatedTokens", estimatedTokens))
 	}
+	// ============== 配额预留确认结束 ==============
 
 	s.logger.Info("AI video generation initiated",
 		zap.String("recordId", record.ID),
@@ -927,6 +1212,13 @@ func truncateURL(url string) string {
 		return url[:80] + "..."
 	}
 	return url
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
+	}
+	return s
 }
 
 func floatPtr(f float32) *float32 {

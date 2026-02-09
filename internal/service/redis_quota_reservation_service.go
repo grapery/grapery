@@ -11,6 +11,21 @@ import (
 	"go.uber.org/zap"
 )
 
+// QuotaReservation 配额预留记录
+type QuotaReservation struct {
+	ReservationID   string                 `json:"reservation_id"`
+	UserID          string                 `json:"user_id"`
+	EstimatedTokens int                    `json:"estimated_tokens"`
+	ActualTokens    int                    `json:"actual_tokens"`
+	SourceType      string                 `json:"source_type"`
+	Status          string                 `json:"status"` // pending, confirmed, released
+	CreatedAt       time.Time              `json:"created_at"`
+	ExpiresAt       time.Time              `json:"expires_at"`
+	ConfirmedAt     *time.Time             `json:"confirmed_at,omitempty"`
+	ReleasedAt      *time.Time             `json:"released_at,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
 // RedisQuotaReservationService Redis 版本的配额预留服务
 // 使用 Redis 存储预留记录，支持分布式部署
 type RedisQuotaReservationService struct {
