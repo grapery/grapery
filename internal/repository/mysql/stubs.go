@@ -642,6 +642,38 @@ func (r *Repository) GetUserTokenStats(ctx context.Context, userID string, start
 	}, nil
 }
 
+// GetPendingAIGenerationRecords 获取待处理的AI生成记录（用于服务重启恢复）
+func (r *Repository) GetPendingAIGenerationRecords(ctx context.Context, statuses []domain.AITaskStatus, limit int) ([]*domain.AIGenerationRecord, error) {
+	var records []AIGenerationRecord
+
+	// 将状态转换为字符串数组
+	statusStrings := make([]string, len(statuses))
+	for i, status := range statuses {
+		statusStrings[i] = string(status)
+	}
+
+	query := r.db.WithContext(ctx).
+		Preload("User").
+		Where("status IN ?", statusStrings).
+		Where("type = ?", domain.AITaskGenerateVideo). // 只获取视频生成任务
+		Order("created_at ASC")
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	err := query.Find(&records).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.AIGenerationRecord, len(records))
+	for i := range records {
+		result[i] = ModelToAIGenerationRecord(&records[i])
+	}
+	return result, nil
+}
+
 // ========== Asset operations ==========
 
 func (r *Repository) AssetByID(ctx context.Context, id string) (*domain.Asset, error) {

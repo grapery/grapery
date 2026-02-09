@@ -351,6 +351,7 @@ type Repository interface {
 	ListAIGenerationRecordsByEntity(ctx context.Context, entityType, entityID string, limit, offset int) ([]*AIGenerationRecord, error)
 	AIGenerationRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*AIGenerationRecord, error)
 	GetUserTokenStats(ctx context.Context, userID string, startTime, endTime int64) (map[string]interface{}, error)
+	GetPendingAIGenerationRecords(ctx context.Context, statuses []AITaskStatus, limit int) ([]*AIGenerationRecord, error)
 
 	// ========== Asset operations ==========
 	AssetByID(ctx context.Context, id string) (*Asset, error)

@@ -191,8 +191,10 @@ func (dl *RedisDistributedLock) GetLockInfo(ctx context.Context, key string) (ho
 	}
 
 	var expiresAtTime time.Time
-	if exp, err := time.ParseDuration(fmt.Sprintf("%ds", expiresAtStr)); err == nil {
-		expiresAtTime = time.Unix(0, 0).Add(exp)
+	// expiresAtStr 是 Unix 时间戳字符串，需要转换为 int64 后再转为 time.Time
+	var expiresAtUnix int64
+	if _, err := fmt.Sscanf(expiresAtStr, "%d", &expiresAtUnix); err == nil {
+		expiresAtTime = time.Unix(expiresAtUnix, 0)
 	}
 
 	return holderIDStr, expiresAtTime, true
