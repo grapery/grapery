@@ -69,7 +69,7 @@ func main() {
 	telemetryConfig := telemetry.TelemetryManagerConfig{
 		LogLevel: cfg.LogLevel,
 	}
-
+	cfg.Telemetry.SLS.Enabled = false // Disable SLS by default for vippay service
 	// Configure SLS if enabled
 	if cfg.Telemetry.SLS.Enabled && cfg.Telemetry.SLS.Endpoint != "" {
 		telemetryConfig.SLS = &telemetry.SLSConfig{
@@ -82,7 +82,7 @@ func main() {
 			Source:          cfg.Telemetry.SLS.Source,
 		}
 	}
-
+	cfg.Telemetry.Prometheus.Enabled = false // Disable Prometheus for vippay service
 	// Configure Prometheus if enabled
 	if cfg.Telemetry.Prometheus.Enabled {
 		fmt.Println("telemetry Prometheus enable")
@@ -106,6 +106,7 @@ func main() {
 		fmt.Println("telemetry Prometheus disable")
 	}
 
+	cfg.Telemetry.Tracing.Enabled = false
 	// Configure tracing if enabled
 	if cfg.Telemetry.Tracing.Enabled {
 		telemetryConfig.Tracing = &telemetry.TracingConfig{

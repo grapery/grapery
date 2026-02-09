@@ -1,6 +1,6 @@
 .PHONY: run run-with-config test lint build docker migrate \
-        run-server run-chatmcp run-vippay \
-        build-server build-chatmcp build-vippay build-all \
+        run-server run-vippay \
+        build-server build-vippay build-all \
         clean help
 
 # ========== Default Targets ==========
@@ -18,11 +18,9 @@ run-with-config:
 
 # ========== Port Configuration ==========
 # server:  8080 (default)
-# chatmcp: 8050
 # vippay:  8060
 
 SERVER_PORT ?= 8080
-CHATMCP_PORT ?= 8050
 VIPPAY_PORT ?= 8060
 
 # ========== Database Configuration ==========
@@ -42,15 +40,6 @@ run-server:
 	DB_ADDRESS=$(DB_ADDRESS) \
 	DB_DATABASE=$(DB_DATABASE) \
 	go run ./cmd/server
-
-run-chatmcp:
-	@echo "🚀 Starting Chat MCP Service on port $(CHATMCP_PORT)..."
-	GRAPERY_HTTP_PORT=$(CHATMCP_PORT) \
-	DB_USERNAME=$(DB_USERNAME) \
-	DB_PASSWORD=$(DB_PASSWORD) \
-	DB_ADDRESS=$(DB_ADDRESS) \
-	DB_DATABASE=$(DB_DATABASE) \
-	go run ./cmd/chatmcp
 
 run-vippay:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT)..."
@@ -77,20 +66,6 @@ run-server-with-config:
 	DB_DATABASE=$(DB_DATABASE) \
 	go run ./cmd/server -config config.yaml
 
-run-chatmcp-with-config:
-	@if [ ! -f config.yaml ]; then \
-		echo "⚠️  config.yaml not found, creating from example..."; \
-		cp config.yaml.example config.yaml; \
-		echo "✅ config.yaml created. Please edit it with your settings."; \
-	fi
-	@echo "🚀 Starting Chat MCP Service on port $(CHATMCP_PORT) with config..."
-	GRAPERY_HTTP_PORT=$(CHATMCP_PORT) \
-	DB_USERNAME=$(DB_USERNAME) \
-	DB_PASSWORD=$(DB_PASSWORD) \
-	DB_ADDRESS=$(DB_ADDRESS) \
-	DB_DATABASE=$(DB_DATABASE) \
-	go run ./cmd/chatmcp -config config.yaml
-
 run-vippay-with-config:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT) with config..."
 	VIPPAY_PORT=$(VIPPAY_PORT) \
@@ -109,11 +84,6 @@ build-server:
 	go build -o bin/grapery-server ./cmd/server
 	@echo "✅ Built: bin/grapery-server"
 
-build-chatmcp:
-	@echo "🔨 Building Chat MCP Service..."
-	go build -o bin/grapery-chatmcp ./cmd/chatmcp
-	@echo "✅ Built: bin/grapery-chatmcp"
-
 build-vippay:
 	@echo "🔨 Building VIP Payment Service..."
 	go build -o bin/grapery-vippay ./cmd/vippay
@@ -123,7 +93,6 @@ build-all:
 	@echo "🔨 Building all services..."
 	@mkdir -p bin
 	@$(MAKE) build-server
-	@$(MAKE) build-chatmcp
 	@$(MAKE) build-vippay
 	@echo ""
 	@echo "✅ All services built successfully!"
@@ -151,9 +120,6 @@ docker:
 docker-server:
 	docker build -t grapery-server -f Dockerfile --target server ..
 
-docker-chatmcp:
-	docker build -t grapery-chatmcp -f Dockerfile --target chatmcp ..
-
 docker-vippay:
 	docker build -t grapery-vippay -f Dockerfile --target vippay ..
 
@@ -169,23 +135,19 @@ help:
 	@echo ""
 	@echo "Services:"
 	@echo "  server   - Main Grapery API Server  (port $(SERVER_PORT))"
-	@echo "  chatmcp  - Agent Chat MCP Service   (port $(CHATMCP_PORT))"
 	@echo "  vippay   - VIP Payment Service      (port $(VIPPAY_PORT))"
 	@echo ""
 	@echo "Run Commands:"
 	@echo "  make run                    - Run server (default, port $(SERVER_PORT))"
 	@echo "  make run-server             - Run Grapery Server (port $(SERVER_PORT))"
-	@echo "  make run-chatmcp            - Run Chat MCP Service (port $(CHATMCP_PORT))"
 	@echo "  make run-vippay             - Run VIP Payment Service (port $(VIPPAY_PORT))"
 	@echo "  make run-server-with-config - Run Server with config.yaml"
-	@echo "  make run-chatmcp-with-config- Run Chat MCP with config.yaml"
 	@echo "  make run-vippay-with-config - Run VIP Pay with vippay.json"
 	@echo ""
 	@echo "Build Commands:"
 	@echo "  make build                  - Build all services"
 	@echo "  make build-all              - Build all services"
 	@echo "  make build-server           - Build Grapery Server"
-	@echo "  make build-chatmcp          - Build Chat MCP Service"
 	@echo "  make build-vippay           - Build VIP Payment Service"
 	@echo ""
 	@echo "Development:"
@@ -196,7 +158,6 @@ help:
 	@echo "Docker:"
 	@echo "  make docker                 - Build main Docker image"
 	@echo "  make docker-server          - Build Server Docker image"
-	@echo "  make docker-chatmcp         - Build Chat MCP Docker image"
 	@echo "  make docker-vippay          - Build VIP Pay Docker image"
 	@echo ""
 	@echo "Database Configuration (override with env vars):"

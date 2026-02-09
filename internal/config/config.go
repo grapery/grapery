@@ -117,7 +117,7 @@ type TracingConfig struct {
 
 // LoadFromFile loads configuration from a YAML file
 // Environment variables will override file values
-// app parameter identifies which backend service is running (e.g., "api-server", "chatmcp", "vippay")
+// app parameter identifies which backend service is running (e.g., "api-server", "vippay")
 func LoadFromFile(configPath string, app string) (Config, error) {
 	// Start with default config
 	cfg := getDefaultConfig()
@@ -141,7 +141,7 @@ func LoadFromFile(configPath string, app string) (Config, error) {
 }
 
 // Load builds a Config from environment variables (backward compatible)
-// app parameter identifies which backend service is running (e.g., "api-server", "chatmcp", "vippay")
+// app parameter identifies which backend service is running (e.g., "api-server", "vippay")
 func Load(app string) Config {
 	redisDB, _ := strconv.Atoi(getEnv("REDIS_DATABASE", "0"))
 	pingInterval, _ := strconv.Atoi(getEnv("REDIS_PING_INTERVAL", "30"))

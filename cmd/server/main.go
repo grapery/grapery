@@ -23,9 +23,9 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/handler"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
-	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
-	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"     // Register payment migrations
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
+	_ "github.com/grapestree/fgrapery/grapery/internal/repository/mysql" // Register migrations
+	_ "github.com/grapestree/fgrapery/grapery/internal/repository/pay"   // Register payment migrations
 	"github.com/grapestree/fgrapery/grapery/internal/server"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
@@ -74,6 +74,7 @@ func main() {
 		LogLevel: cfg.LogLevel,
 	}
 
+	cfg.Telemetry.SLS.Enabled = false
 	// Configure SLS if enabled
 	if cfg.Telemetry.SLS.Enabled {
 		telemetryConfig.SLS = &telemetry.SLSConfig{
@@ -87,6 +88,7 @@ func main() {
 		}
 	}
 
+	cfg.Telemetry.Prometheus.Enabled = false
 	// Configure Prometheus if enabled
 	if cfg.Telemetry.Prometheus.Enabled {
 		fmt.Println("telemetry Prometheus enable")
@@ -110,6 +112,7 @@ func main() {
 		fmt.Println("telemetry Prometheus disable")
 	}
 
+	cfg.Telemetry.Tracing.Enabled = false
 	// Configure tracing if enabled
 	if cfg.Telemetry.Tracing.Enabled {
 		telemetryConfig.Tracing = &telemetry.TracingConfig{

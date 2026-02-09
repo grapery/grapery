@@ -1,6 +1,6 @@
 # API 错误码规范
 
-本文档定义了 Grapery 三个服务（server、chatmcp、vippay）的统一错误码规范。
+本文档定义了 Grapery 服务（server、vippay）的统一错误码规范。
 
 ## 统一响应格式
 
@@ -19,7 +19,7 @@
 ## 错误码定义
 
 ### 成功码
-- `1`: 操作成功（server/chatmcp）
+- `1`: 操作成功（server）
 - `0`: 操作成功（vippay，历史兼容）
 
 ### 业务错误码（负数）
