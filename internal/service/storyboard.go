@@ -238,14 +238,6 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		}
 	}
 
-	// 如果故事属于群组，记录群组活动
-	if story.GroupID != "" {
-		s.logger.Debug("recording group activity for storyboard creation",
-			zap.String("groupId", story.GroupID),
-			zap.String("storyboardId", storyboard.ID))
-		go s.RecordGroupStoryboardCreated(context.Background(), story.GroupID, storyboard.CreatorID, story.ID, story.Title)
-	}
-
 	// 记录用户活动
 	s.logger.Debug("recording user activity for storyboard creation",
 		zap.String("userId", storyboard.CreatorID),

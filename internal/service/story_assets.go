@@ -161,20 +161,10 @@ func (s *Service) ensureStoryOwnership(ctx context.Context, storyID, userID stri
 		return nil
 	}
 
-	// Check if user is a group member (for group stories)
-	if story.GroupID != "" {
-		isMember, err := s.repo.IsGroupMember(ctx, story.GroupID, userID)
-		if err == nil && isMember {
-			s.logger.Info("story ownership checked: group member", zap.String("storyID", storyID), zap.String("userID", userID))
-			return nil
-		}
-	}
-
 	s.logger.Warn("permission denied for story",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID),
-		zap.String("storyAuthorID", story.AuthorID),
-		zap.String("groupID", story.GroupID))
+		zap.String("storyAuthorID", story.AuthorID))
 	return fmt.Errorf("permission denied: insufficient rights")
 }
 

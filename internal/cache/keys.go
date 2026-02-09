@@ -236,11 +236,8 @@ func UserActivitiesKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixUserActivities, userID, limit, offset)
 }
 
-func StyleConfigsListKey(groupID string, limit, offset int) string {
-	if groupID == "" {
-		return fmt.Sprintf("%sall:%d:%d", PrefixStyleConfigs, limit, offset)
-	}
-	return fmt.Sprintf("%s%s:%d:%d", PrefixStyleConfigs, groupID, limit, offset)
+func StyleConfigsListKey(limit, offset int) string {
+	return fmt.Sprintf("%sall:%d:%d", PrefixStyleConfigs, limit, offset)
 }
 
 func StyleConfigByIDKey(id string) string {

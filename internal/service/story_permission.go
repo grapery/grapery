@@ -46,25 +46,8 @@ func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (boo
 		return true, nil
 
 	case "draft", "rendering":
-		// 草稿/渲染中的故事：需要检查权限
-		// 如果故事属于小组，小组成员可以查看
-		if story.GroupID != "" && userID != "" {
-			isGroupMember, err := s.repo.IsGroupMember(ctx, story.GroupID, userID)
-			if err != nil {
-				s.logger.Error("failed to check group membership for view",
-					zap.String("userID", userID),
-					zap.String("groupID", story.GroupID),
-					zap.Error(err))
-				return false, errors.New("failed to verify permission")
-			}
-			if isGroupMember {
-				s.logger.Debug("user is group member, allowing view of draft story",
-					zap.String("userID", userID),
-					zap.String("storyID", storyID))
-				return true, nil
-			}
-		}
-		s.logger.Warn("draft story view denied",
+		// 草稿/渲染中的故事：只有作者可以查看（V1/V2 MVP）
+		s.logger.Warn("draft story view denied - author only",
 			zap.String("storyID", storyID),
 			zap.String("userID", userID))
 		return false, nil
@@ -126,24 +109,8 @@ func (s *Service) CanEditStory(ctx context.Context, userID, storyID string) (boo
 		return true, nil
 
 	case domain.CollaborationStatusRestricted:
-		// 受限协作：只有小组成员可以编辑
-		if story.GroupID != "" {
-			isGroupMember, err := s.repo.IsGroupMember(ctx, story.GroupID, userID)
-			if err != nil {
-				s.logger.Error("failed to check group membership",
-					zap.String("userID", userID),
-					zap.String("groupID", story.GroupID),
-					zap.Error(err))
-				return false, errors.New("failed to verify permission")
-			}
-			if isGroupMember {
-				s.logger.Debug("user is group member, can edit",
-					zap.String("userID", userID),
-					zap.String("groupID", story.GroupID))
-				return true, nil
-			}
-		}
-		s.logger.Warn("user is not group member, cannot edit restricted story",
+		// 受限协作：只有作者可以编辑（V1/V2 MVP 移除了小组功能）
+		s.logger.Warn("restricted collaboration - author only, denying edit",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID))
 		return false, nil
@@ -179,14 +146,8 @@ func (s *Service) CanCreateStoryboard(ctx context.Context, storyID, userID strin
 		return false, errors.New("failed to get story")
 	}
 
-	// Check if user is group member (for restricted collaboration)
-	isGroupMember := false
-	if story.GroupID != "" {
-		isGroupMember, _ = s.repo.IsGroupMember(ctx, story.GroupID, userID)
-	}
-
-	// Use domain layer logic
-	canCreate := story.CanCreateStoryboard(userID, isGroupMember)
+	// V1/V2 MVP: No group membership, always pass false as isGroupMember
+	canCreate := story.CanCreateStoryboard(userID, false)
 
 	if canCreate {
 		s.logger.Debug("user can create storyboard",

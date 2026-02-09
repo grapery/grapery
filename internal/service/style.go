@@ -120,10 +120,8 @@ func (s *Service) GetStyleConfigByStyle(ctx context.Context, styleName string) (
 }
 
 // ListStyleConfigs retrieves all style configurations with pagination（带缓存）
-// If groupID is provided, group-specific styles are prioritized
-func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
+func (s *Service) ListStyleConfigs(ctx context.Context, limit, offset int) ([]*domain.StyleConfig, int64, error) {
 	s.logger.Debug("listing style configs",
-		zap.String("groupID", groupID),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
@@ -141,7 +139,7 @@ func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, o
 	// 尝试从缓存获取
 	c := s.getCache()
 	if c != nil {
-		cacheKey := cache.StyleConfigsListKey(groupID, limit, offset)
+		cacheKey := cache.StyleConfigsListKey(limit, offset)
 		var cachedConfigs []*domain.StyleConfig
 		var cachedTotal int64
 		if err := c.Get(ctx, cacheKey, &cachedConfigs); err == nil {
@@ -149,38 +147,33 @@ func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, o
 			totalKey := cacheKey + ":total"
 			_ = c.Get(ctx, totalKey, &cachedTotal)
 			s.logger.Debug("style configs list cache hit",
-				zap.String("groupID", groupID),
 				zap.Int("count", len(cachedConfigs)))
 			return cachedConfigs, cachedTotal, nil
 		} else {
 			s.logger.Debug("style configs list cache miss",
-				zap.String("groupID", groupID),
 				zap.Error(err))
 		}
 	}
 
 	// 从数据库获取
-	configs, total, err := s.repo.ListStyleConfigs(ctx, groupID, limit, offset)
+	configs, total, err := s.repo.ListStyleConfigs(ctx, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list style configs",
-			zap.String("groupID", groupID),
 			zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 写入缓存
 	if c != nil && len(configs) > 0 {
-		cacheKey := cache.StyleConfigsListKey(groupID, limit, offset)
+		cacheKey := cache.StyleConfigsListKey(limit, offset)
 		if err := c.Set(ctx, cacheKey, configs, styleConfigCacheTTL); err != nil {
 			s.logger.Warn("failed to cache style configs list",
-				zap.String("groupID", groupID),
 				zap.Error(err))
 		} else {
 			// 缓存总数
 			totalKey := cacheKey + ":total"
 			_ = c.Set(ctx, totalKey, total, styleConfigCacheTTL)
 			s.logger.Debug("style configs list cached",
-				zap.String("groupID", groupID),
 				zap.Int("count", len(configs)))
 		}
 	}
@@ -189,8 +182,7 @@ func (s *Service) ListStyleConfigs(ctx context.Context, groupID string, limit, o
 }
 
 // SearchStyleConfigs searches style configurations by keyword with pagination
-// If groupID is provided, group-specific styles are prioritized in results
-func (s *Service) SearchStyleConfigs(ctx context.Context, keyword, groupID string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
+func (s *Service) SearchStyleConfigs(ctx context.Context, keyword string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
 	if keyword == "" {
 		return nil, 0, fmt.Errorf("search keyword cannot be empty")
 	}
@@ -206,7 +198,7 @@ func (s *Service) SearchStyleConfigs(ctx context.Context, keyword, groupID strin
 		offset = 0
 	}
 
-	return s.repo.SearchStyleConfigs(ctx, keyword, groupID, limit, offset)
+	return s.repo.SearchStyleConfigs(ctx, keyword, limit, offset)
 }
 
 // CreateStyleConfig creates a new style configuration
@@ -247,8 +239,7 @@ func (s *Service) CreateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 		// 清除列表缓存
 		for limit := 50; limit <= 200; limit += 50 {
 			for offset := 0; offset < 500; offset += limit {
-				_ = c.Delete(ctx, cache.StyleConfigsListKey(styleConfig.GroupID, limit, offset))
-				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset)) // 清除全局列表
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(limit, offset))
 			}
 		}
 		s.logger.Debug("style config cache invalidated after create",
@@ -319,8 +310,7 @@ func (s *Service) UpdateStyleConfig(ctx context.Context, styleConfig *domain.Sty
 		// 清除列表缓存
 		for limit := 50; limit <= 200; limit += 50 {
 			for offset := 0; offset < 500; offset += limit {
-				_ = c.Delete(ctx, cache.StyleConfigsListKey(styleConfig.GroupID, limit, offset))
-				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset))
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(limit, offset))
 			}
 		}
 		s.logger.Debug("style config cache invalidated after update",
@@ -357,8 +347,7 @@ func (s *Service) DeleteStyleConfig(ctx context.Context, id string) error {
 		// 清除列表缓存
 		for limit := 50; limit <= 200; limit += 50 {
 			for offset := 0; offset < 500; offset += limit {
-				_ = c.Delete(ctx, cache.StyleConfigsListKey(config.GroupID, limit, offset))
-				_ = c.Delete(ctx, cache.StyleConfigsListKey("", limit, offset))
+				_ = c.Delete(ctx, cache.StyleConfigsListKey(limit, offset))
 			}
 		}
 		s.logger.Debug("style config cache invalidated after delete",
@@ -394,9 +383,9 @@ func (s *Service) BatchCreateStyleConfigs(ctx context.Context, styleConfigs []*d
 }
 
 // GetStyleOptions retrieves a simplified list of style options (ID and Style name)
-// Returns public styles only (no group filtering)
+// Returns public styles only (V1/V2 MVP - no group filtering)
 func (s *Service) GetStyleOptions(ctx context.Context) ([]*domain.StyleConfig, error) {
-	styleConfigs, _, err := s.repo.ListStyleConfigs(ctx, "", 200, 0) // Get all public up to 200
+	styleConfigs, _, err := s.repo.ListStyleConfigs(ctx, 200, 0) // Get all up to 200
 	if err != nil {
 		return nil, fmt.Errorf("failed to get style options: %w", err)
 	}
@@ -409,7 +398,6 @@ func (s *Service) GetStyleOptions(ctx context.Context) ([]*domain.StyleConfig, e
 			Style:          styleConfig.Style,
 			Description:    styleConfig.Description,
 			SampleImageURL: styleConfig.SampleImageURL,
-			GroupID:        styleConfig.GroupID,
 		}
 	}
 
@@ -419,7 +407,7 @@ func (s *Service) GetStyleOptions(ctx context.Context) ([]*domain.StyleConfig, e
 // InitializeDefaultStyles initializes the database with default style configurations
 func (s *Service) InitializeDefaultStyles(ctx context.Context) error {
 	// Check if styles already exist
-	existingStyles, _, err := s.repo.ListStyleConfigs(ctx, "", 1, 0)
+	existingStyles, _, err := s.repo.ListStyleConfigs(ctx, 1, 0)
 	if err != nil {
 		return fmt.Errorf("failed to check existing styles: %w", err)
 	}
