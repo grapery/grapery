@@ -31,7 +31,6 @@ type CreateStoryRequest struct {
 	CoverImage        string   `json:"coverImage" binding:"omitempty,url"`
 	Genre             string   `json:"genre" binding:"required"`
 	Status            string   `json:"status" binding:"omitempty,oneof=draft published"`
-	GroupID           string   `json:"groupId" binding:"omitempty"`
 	DefaultSceneCount int      `json:"defaultSceneCount"`                                // Default number of scenes for storyboards (2-8, default 3)
 	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
@@ -86,7 +85,6 @@ type StoryListRequest struct {
 	Status   string `form:"status" binding:"omitempty,oneof=draft published rendering"`
 	Genre    string `form:"genre"`
 	AuthorID string `form:"authorId"`
-	GroupID  string `form:"groupId"`
 	Search   string `form:"search"`
 	Limit    int    `form:"limit" binding:"omitempty,min=1,max=100"`
 	Offset   int    `form:"offset" binding:"omitempty,min=0"`
@@ -160,7 +158,6 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Author:              author,
 		Genre:               req.Genre,
 		Status:              status,
-		GroupID:             req.GroupID,
 		DefaultSceneCount:   defaultSceneCount,
 		Likes:               0,
 		Followers:           0,
@@ -366,25 +363,6 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.String("storyID", story.ID))
 	}
 
-	// 如果故事属于群组，记录群组活动
-	if req.GroupID != "" {
-		s.logger.Debug("recording group activity for story creation",
-			zap.String("storyID", story.ID),
-			zap.String("groupId", req.GroupID))
-		go s.RecordGroupStoryCreated(context.Background(), req.GroupID, userID, story.ID, story.Title)
-
-		// 增加群组的故事计数
-		if err := s.repo.IncrementGroupStoryCount(ctx, req.GroupID); err != nil {
-			s.logger.Warn("failed to increment group story count",
-				zap.String("groupId", req.GroupID),
-				zap.String("storyId", story.ID),
-				zap.Error(err))
-		}
-	} else {
-		s.logger.Debug("story not in group, skipping group activity",
-			zap.String("storyID", story.ID))
-	}
-
 	// 添加标签（如果有）
 	if len(req.Tags) > 0 {
 		s.logger.Debug("adding tags to story",
@@ -525,7 +503,6 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 		zap.String("status", req.Status),
 		zap.String("genre", req.Genre),
 		zap.String("authorID", req.AuthorID),
-		zap.String("groupId", req.GroupID),
 		zap.String("search", req.Search),
 		zap.Int("limit", req.Limit),
 		zap.Int("offset", req.Offset))
@@ -541,7 +518,6 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 		Status:   req.Status,
 		Genre:    req.Genre,
 		AuthorID: req.AuthorID,
-		GroupID:  req.GroupID,
 		Search:   req.Search,
 		Limit:    req.Limit,
 		Offset:   req.Offset,
@@ -744,16 +720,6 @@ func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error
 	s.logger.Info("story deleted successfully",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID))
-
-	// 如果故事属于群组，减少群组的故事计数
-	if story.GroupID != "" {
-		if err := s.repo.DecrementGroupStoryCount(ctx, story.GroupID); err != nil {
-			s.logger.Warn("failed to decrement group story count",
-				zap.String("groupId", story.GroupID),
-				zap.String("storyId", storyID),
-				zap.Error(err))
-		}
-	}
 
 	return nil
 }

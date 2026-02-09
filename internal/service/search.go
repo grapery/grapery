@@ -522,168 +522,6 @@ func (s *Service) fuzzySearchUsers(ctx context.Context, query string, limit, off
 	return s.repo.SearchUsers(ctx, query, limit, offset)
 }
 
-// SearchGroups 搜索群组（支持模糊搜索和精确搜索，带缓存）
-func (s *Service) SearchGroups(ctx context.Context, query string, searchType SearchType, limit, offset int) ([]*domain.Group, error) {
-	s.logger.Info("searching groups",
-		zap.String("query", query),
-		zap.String("searchType", string(searchType)),
-		zap.Int("limit", limit),
-		zap.Int("offset", offset))
-
-	// 参数验证和默认值设置
-	if limit <= 0 {
-		limit = 20
-		s.logger.Debug("using default limit", zap.Int("limit", limit))
-	}
-	if limit > 100 {
-		limit = 100
-		s.logger.Debug("limit capped to maximum", zap.Int("limit", limit))
-	}
-	if searchType == "" {
-		searchType = SearchTypeDefault
-		s.logger.Debug("using default search type", zap.String("searchType", string(searchType)))
-	}
-
-	// 规范化查询字符串
-	query = strings.TrimSpace(query)
-	if query == "" {
-		s.logger.Warn("empty query string")
-		return []*domain.Group{}, nil
-	}
-
-	// 尝试从缓存获取
-	c := s.getCache()
-	if c != nil {
-		cacheKey := cache.SearchGroupsKey(query, string(searchType), limit, offset)
-		s.logger.Debug("checking cache for groups search",
-			zap.String("cacheKey", cacheKey),
-			zap.String("query", query))
-
-		var cachedResults []*domain.Group
-		if err := c.Get(ctx, cacheKey, &cachedResults); err == nil {
-			s.logger.Info("groups search cache hit",
-				zap.String("query", query),
-				zap.Int("resultCount", len(cachedResults)))
-			return cachedResults, nil
-		} else {
-			s.logger.Debug("groups search cache miss",
-				zap.String("query", query),
-				zap.Error(err))
-		}
-	}
-
-	// 执行搜索
-	var results []*domain.Group
-	var err error
-
-	if searchType == SearchTypeFuzzy {
-		// 模糊搜索：可以使用 Redis 辅助
-		s.logger.Debug("performing fuzzy search for groups",
-			zap.String("query", query))
-		results, err = s.fuzzySearchGroups(ctx, query, limit, offset, c)
-	} else {
-		// 精确搜索：直接查询数据库
-		s.logger.Debug("performing exact search for groups",
-			zap.String("query", query))
-		results, err = s.repo.SearchGroups(ctx, query, limit, offset)
-	}
-
-	if err != nil {
-		s.logger.Error("failed to search groups",
-			zap.String("query", query),
-			zap.String("searchType", string(searchType)),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to search groups: %w", err)
-	}
-
-	// 缓存结果
-	if c != nil && len(results) > 0 {
-		cacheKey := cache.SearchGroupsKey(query, string(searchType), limit, offset)
-		if err := c.Set(ctx, cacheKey, results, searchCacheTTL); err != nil {
-			s.logger.Warn("failed to cache search results",
-				zap.String("query", query),
-				zap.String("cacheKey", cacheKey),
-				zap.Error(err))
-		} else {
-			s.logger.Debug("groups search results cached",
-				zap.String("query", query),
-				zap.Int("resultCount", len(results)))
-		}
-	}
-
-	s.logger.Info("groups search completed",
-		zap.String("query", query),
-		zap.String("searchType", string(searchType)),
-		zap.Int("resultCount", len(results)),
-		zap.Int("limit", limit),
-		zap.Int("offset", offset))
-
-	return results, nil
-}
-
-// fuzzySearchGroups 模糊搜索群组（使用 Redis 辅助）
-func (s *Service) fuzzySearchGroups(ctx context.Context, query string, limit, offset int, c cache.Cache) ([]*domain.Group, error) {
-	// 如果 Redis 可用，尝试使用 Redis 的集合进行模糊匹配
-	if c != nil {
-		// 将查询字符串拆分为关键词
-		keywords := s.extractKeywords(query)
-		s.logger.Debug("extracted keywords for fuzzy search",
-			zap.String("query", query),
-			zap.Strings("keywords", keywords))
-
-		// 尝试从 Redis 搜索索引中查找匹配的群组ID
-		var matchedGroupIDs []string
-		for _, keyword := range keywords {
-			indexKey := cache.SearchIndexGroupsKey(keyword)
-			members, err := c.SMembers(ctx, indexKey)
-			if err == nil && len(members) > 0 {
-				matchedGroupIDs = append(matchedGroupIDs, members...)
-				s.logger.Debug("found group IDs from search index",
-					zap.String("keyword", keyword),
-					zap.Int("matchCount", len(members)))
-			}
-		}
-
-		// 如果从索引中找到结果，直接返回
-		if len(matchedGroupIDs) > 0 {
-			// 去重
-			uniqueIDs := s.deduplicateStrings(matchedGroupIDs)
-			// 限制数量
-			if offset < len(uniqueIDs) {
-				end := offset + limit
-				if end > len(uniqueIDs) {
-					end = len(uniqueIDs)
-				}
-				uniqueIDs = uniqueIDs[offset:end]
-			} else {
-				uniqueIDs = []string{}
-			}
-
-			// 从数据库获取完整群组信息
-			if len(uniqueIDs) > 0 {
-				var groups []*domain.Group
-				for _, id := range uniqueIDs {
-					group, err := s.repo.GroupByID(ctx, id)
-					if err == nil && group != nil {
-						groups = append(groups, group)
-					}
-				}
-				if len(groups) > 0 {
-					s.logger.Info("fuzzy search completed using Redis index",
-						zap.String("query", query),
-						zap.Int("resultCount", len(groups)))
-					return groups, nil
-				}
-			}
-		}
-	}
-
-	// 降级到数据库搜索
-	s.logger.Debug("falling back to database search",
-		zap.String("query", query))
-	return s.repo.SearchGroups(ctx, query, limit, offset)
-}
-
 // SearchAll 搜索所有类型（支持模糊搜索和精确搜索，带缓存）
 func (s *Service) SearchAll(ctx context.Context, query string, searchType SearchType, limit int) (map[string]interface{}, error) {
 	s.logger.Info("searching all types",
@@ -709,7 +547,6 @@ func (s *Service) SearchAll(ctx context.Context, query string, searchType Search
 			"stories":    []*domain.Story{},
 			"characters": []*domain.Character{},
 			"users":      []*domain.User{},
-			"groups":     []*domain.Group{},
 		}, nil
 	}
 
@@ -737,19 +574,16 @@ func (s *Service) SearchAll(ctx context.Context, query string, searchType Search
 	var stories []*domain.Story
 	var characters []*domain.Character
 	var users []*domain.User
-	var groups []*domain.Group
 
 	// 使用 goroutine 并行搜索（简化实现，实际应该使用 errgroup）
 	stories, _ = s.SearchStories(ctx, query, searchType, limit, 0)
 	characters, _ = s.SearchCharacters(ctx, query, searchType, limit, 0)
 	users, _ = s.SearchUsers(ctx, query, searchType, limit, 0)
-	groups, _ = s.SearchGroups(ctx, query, searchType, limit, 0)
 
 	result := map[string]interface{}{
 		"stories":    stories,
 		"characters": characters,
 		"users":      users,
-		"groups":     groups,
 	}
 
 	// 缓存结果
@@ -771,8 +605,7 @@ func (s *Service) SearchAll(ctx context.Context, query string, searchType Search
 		zap.String("searchType", string(searchType)),
 		zap.Int("storiesCount", len(stories)),
 		zap.Int("charactersCount", len(characters)),
-		zap.Int("usersCount", len(users)),
-		zap.Int("groupsCount", len(groups)))
+		zap.Int("usersCount", len(users)))
 
 	return result, nil
 }
@@ -855,8 +688,6 @@ func (s *Service) BuildSearchIndex(ctx context.Context, entityType string, entit
 		indexKeyFunc = cache.SearchIndexCharactersKey
 	case "user":
 		indexKeyFunc = cache.SearchIndexUsersKey
-	case "group":
-		indexKeyFunc = cache.SearchIndexGroupsKey
 	default:
 		s.logger.Warn("unknown entity type for search index",
 			zap.String("entityType", entityType))
@@ -917,8 +748,6 @@ func (s *Service) RemoveFromSearchIndex(ctx context.Context, entityType string, 
 		indexKeyFunc = cache.SearchIndexCharactersKey
 	case "user":
 		indexKeyFunc = cache.SearchIndexUsersKey
-	case "group":
-		indexKeyFunc = cache.SearchIndexGroupsKey
 	default:
 		return nil
 	}
@@ -963,8 +792,6 @@ func (s *Service) InvalidateSearchCache(ctx context.Context, query string) error
 		cache.SearchCharactersKey(query, string(SearchTypeExact), 20, 0),
 		cache.SearchUsersKey(query, string(SearchTypeFuzzy), 20, 0),
 		cache.SearchUsersKey(query, string(SearchTypeExact), 20, 0),
-		cache.SearchGroupsKey(query, string(SearchTypeFuzzy), 20, 0),
-		cache.SearchGroupsKey(query, string(SearchTypeExact), 20, 0),
 		cache.SearchAllKey(query, 10),
 	}
 
@@ -974,7 +801,6 @@ func (s *Service) InvalidateSearchCache(ctx context.Context, query string) error
 			cache.SearchStoriesKey(keyword, string(SearchTypeFuzzy), 20, 0),
 			cache.SearchCharactersKey(keyword, string(SearchTypeFuzzy), 20, 0),
 			cache.SearchUsersKey(keyword, string(SearchTypeFuzzy), 20, 0),
-			cache.SearchGroupsKey(keyword, string(SearchTypeFuzzy), 20, 0),
 		)
 	}
 
