@@ -27,9 +27,9 @@ func NewRedisDistributedLock(client *redis.Client, logger *zap.Logger) *RedisDis
 
 // lockValue 锁的值（用于标识锁的持有者）
 type lockValue struct {
-	HolderID    string    `json:"holder_id"`
-	LockedAt    int64     `json:"locked_at"`
-	ExpiresAt   int64     `json:"expires_at"`
+	HolderID  string `json:"holder_id"`
+	LockedAt  int64  `json:"locked_at"`
+	ExpiresAt int64  `json:"expires_at"`
 }
 
 // AcquireLock 获取分布式锁
@@ -158,7 +158,7 @@ func (dl *RedisDistributedLock) IsLocked(ctx context.Context, key string) bool {
 	}
 
 	// 即使 key 存在，也需要检查是否已过期
-	if exists {
+	if exists > 0 {
 		// 获取锁值并检查过期时间
 		val, err := dl.client.Get(ctx, key).Result()
 		if err == nil && val != "" {

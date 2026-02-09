@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // UserQuotaService 用户配额服务
@@ -55,8 +56,8 @@ func (s *UserQuotaService) GetUserQuotaInfo(ctx context.Context, userID string) 
 		}
 
 		// 设置重置日期为订阅结束日期
-		if activeSubscription.EndDate != nil {
-			t := time.Unix(*activeSubscription.EndDate, 0)
+		if activeSubscription.EndDate > 0 {
+			t := time.Unix(activeSubscription.EndDate, 0)
 			resetDate = &t
 		}
 	}
@@ -82,15 +83,15 @@ func (s *UserQuotaService) GetUserQuotaInfo(ctx context.Context, userID string) 
 	}
 
 	return &domain.UserQuotaInfo{
-		UserID:          userID,
-		TokenBalance:    tokenBalance,
-		TokenQuota:      tokenQuota,
-		TokenUsed:       tokenUsed,
-		TokenRemaining:  tokenRemaining,
-		StorageUsed:     0,  // TODO: 从存储服务获取
-		StorageQuota:    100 * 1024 * 1024 * 1024, // 100GB
+		UserID:           userID,
+		TokenBalance:     tokenBalance,
+		TokenQuota:       tokenQuota,
+		TokenUsed:        tokenUsed,
+		TokenRemaining:   tokenRemaining,
+		StorageUsed:      0,                        // TODO: 从存储服务获取
+		StorageQuota:     100 * 1024 * 1024 * 1024, // 100GB
 		StorageRemaining: 100 * 1024 * 1024 * 1024, // 100GB
-		ResetDate:       resetDate,
+		ResetDate:        resetDate,
 	}, nil
 }
 
@@ -129,8 +130,8 @@ func (s *UserQuotaService) GetUserMembershipInfo(ctx context.Context, userID str
 	// 计算剩余天数
 	daysRemaining := 0
 	canRenew := false
-	if activeSubscription.EndDate != nil {
-		endDate := time.Unix(*activeSubscription.EndDate, 0)
+	if activeSubscription.EndDate > 0 {
+		endDate := time.Unix(activeSubscription.EndDate, 0)
 		daysRemaining = int(endDate.Sub(time.Now()).Hours() / 24)
 		if daysRemaining <= 7 {
 			canRenew = true
@@ -138,17 +139,17 @@ func (s *UserQuotaService) GetUserMembershipInfo(ctx context.Context, userID str
 	}
 
 	// 获取会员权益
-	benefits := s.getMembershipBenefits(plan.Tier)
+	benefits := s.getMembershipBenefits(plan.Name)
 
 	return &domain.UserMembershipInfo{
 		UserID:        userID,
-		Tier:          plan.Tier,
-		TierName:      s.getTierName(plan.Tier),
+		Tier:          plan.Name,
+		TierName:      s.getTierName(plan.Name),
 		Status:        activeSubscription.Status,
 		StatusName:    s.getStatusName(activeSubscription.Status),
 		StartDate:     activeSubscription.StartDate,
-		EndDate:       activeSubscription.EndDate,
-		AutoRenew:     activeSubscription.AutoRenew,
+		EndDate:       &activeSubscription.EndDate,
+		AutoRenew:     false, // SubscriptionOrder doesn't have AutoRenew field
 		DaysRemaining: daysRemaining,
 		CanRenew:      canRenew,
 		QuotaInfo:     quotaInfo,
@@ -191,7 +192,7 @@ func (s *UserQuotaService) getFreeUserInfo(ctx context.Context, userID string) (
 // GetUserRechargeInfo 获取用户充值信息
 func (s *UserQuotaService) GetUserRechargeInfo(ctx context.Context, userID string) (*domain.UserRechargeInfo, error) {
 	// 获取订单列表
-	orders, total, err := s.repo.ListSubscriptionOrders(ctx, userID, 10, 0)
+	orders, _, err := s.repo.ListSubscriptionOrders(ctx, userID, 10, 0)
 	if err != nil {
 		s.logger.Error("failed to list subscription orders",
 			zap.String("userID", userID),
@@ -223,13 +224,13 @@ func (s *UserQuotaService) GetUserRechargeInfo(ctx context.Context, userID strin
 	}
 
 	return &domain.UserRechargeInfo{
-		UserID:             userID,
-		TotalRecharged:     totalRecharged,
-		TotalRechargedCNY:  float64(totalRecharged) / 100,
-		RechargeCount:      rechargeCount,
-		LastRechargeAt:     lastRechargeAt,
-		RecentOrders:       orders,
-		PaymentMethods:     paymentMethods,
+		UserID:            userID,
+		TotalRecharged:    totalRecharged,
+		TotalRechargedCNY: float64(totalRecharged) / 100,
+		RechargeCount:     rechargeCount,
+		LastRechargeAt:    lastRechargeAt,
+		RecentOrders:      orders,
+		PaymentMethods:    paymentMethods,
 	}, nil
 }
 
@@ -348,7 +349,7 @@ func (s *UserQuotaService) GetTokenUsageHistory(ctx context.Context, userID stri
 // GetUserDashboardInfo 获取用户主页综合信息
 func (s *UserQuotaService) GetUserDashboardInfo(ctx context.Context, userID string) (*domain.UserDashboardInfo, error) {
 	// 获取用户信息
-	user, err := s.repo.GetUserByID(ctx, userID)
+	user, err := s.repo.UserByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
@@ -401,22 +402,22 @@ func (s *UserQuotaService) GetMembershipTiers(ctx context.Context) ([]*domain.Me
 	tiers := make([]*domain.MembershipTier, len(plans))
 	for i, plan := range plans {
 		tiers[i] = &domain.MembershipTier{
-			Tier:           plan.Tier,
-			TierName:       plan.Name,
-			DisplayName:    plan.Name,
-			Description:    fmt.Sprintf("%s 会员计划", plan.Name),
-			Price:          plan.Price,
-			Currency:       plan.Currency,
-			TokenQuota:     plan.TokenQuota,
-			StorageQuota:   plan.StorageQuota,
-			MaxStories:     plan.MaxStories,
-			MaxCharacters:  plan.MaxCharacters,
-			Benefits:       s.getMembershipBenefits(plan.Tier),
-			Features:       []string{}, // TODO: 从 plan.Features 解析
-			SortOrder:      plan.SortOrder,
-			IsActive:       plan.IsActive,
-			TrialDays:      0, // TODO: 从配置获取
-			UpgradeFrom:    []string{}, // TODO: 根据等级关系设置
+			Tier:          plan.Name,
+			TierName:      plan.Name,
+			DisplayName:   plan.Name,
+			Description:   fmt.Sprintf("%s 会员计划", plan.Name),
+			Price:         plan.Price,
+			Currency:      plan.Currency,
+			TokenQuota:    plan.TokenQuota,
+			StorageQuota:  plan.StorageQuota,
+			MaxStories:    plan.MaxStories,
+			MaxCharacters: plan.MaxCharacters,
+			Benefits:      s.getMembershipBenefits(plan.Name),
+			Features:      []string{}, // TODO: 从 plan.Features 解析
+			SortOrder:     plan.SortOrder,
+			IsActive:      plan.IsActive,
+			TrialDays:     0,          // TODO: 从配置获取
+			UpgradeFrom:   []string{}, // TODO: 根据等级关系设置
 		}
 	}
 
@@ -428,9 +429,9 @@ func (s *UserQuotaService) GetMembershipTiers(ctx context.Context) ([]*domain.Me
 // getTierName 获取等级中文名称
 func (s *UserQuotaService) getTierName(tier string) string {
 	names := map[string]string{
-		"free":      "免费用户",
-		"basic":     "基础会员",
-		"pro":       "专业会员",
+		"free":       "免费用户",
+		"basic":      "基础会员",
+		"pro":        "专业会员",
 		"enterprise": "企业会员",
 	}
 	if name, ok := names[tier]; ok {
@@ -442,10 +443,10 @@ func (s *UserQuotaService) getTierName(tier string) string {
 // getStatusName 获取状态中文名称
 func (s *UserQuotaService) getStatusName(status string) string {
 	names := map[string]string{
-		"active":   "正常",
-		"expired":  "已过期",
+		"active":    "正常",
+		"expired":   "已过期",
 		"cancelled": "已取消",
-		"pending":  "待支付",
+		"pending":   "待支付",
 	}
 	if name, ok := names[status]; ok {
 		return name

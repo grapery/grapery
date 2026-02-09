@@ -9,6 +9,8 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // QuotaReservation 配额预留记录

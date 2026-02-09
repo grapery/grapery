@@ -5,14 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 // WebhookHandler 处理来自 AI 提供商的 Webhook 回调
@@ -145,8 +145,8 @@ func (h *WebhookHandler) HealthCheck(c *gin.Context) {
 	pollingTasks := h.asyncVideoCompletion.GetPollingTasks()
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":          "healthy",
-		"timestamp":       time.Now().Unix(),
+		"status":           "healthy",
+		"timestamp":        time.Now().Unix(),
 		"pollingTaskCount": len(pollingTasks),
 	})
 }
@@ -264,10 +264,10 @@ func (h *WebhookHandler) TestWebhook(c *gin.Context) {
 	pollingTasks := h.asyncVideoCompletion.GetPollingTasks()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "test webhook received",
-		"received":        req,
+		"message":          "test webhook received",
+		"received":         req,
 		"pollingTaskCount": len(pollingTasks),
-		"timestamp":       time.Now().Unix(),
+		"timestamp":        time.Now().Unix(),
 	})
 }
 

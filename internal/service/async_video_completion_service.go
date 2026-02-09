@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
-	"go.uber.org/zap"
 )
 
 // AsyncVideoCompletionService 异步视频完成处理服务
@@ -29,14 +30,14 @@ type AsyncVideoCompletionService struct {
 
 // PollingTask 轮询任务
 type PollingTask struct {
-	TaskID        string
-	RecordID      string
-	UserID        string
-	Provider      string
-	ReservationID string
+	TaskID          string
+	RecordID        string
+	UserID          string
+	Provider        string
+	ReservationID   string
 	EstimatedTokens int
-	StartTime     time.Time
-	Status        string
+	StartTime       time.Time
+	Status          string
 }
 
 // NewAsyncVideoCompletionService 创建异步视频完成处理服务
@@ -46,9 +47,9 @@ func NewAsyncVideoCompletionService(aiService *AIGenerationService, repo domain.
 		repo:               repo,
 		logger:             logger,
 		pollInterval:       30 * time.Second, // 每 30 秒轮询一次
-		maxPollAttempts:    120,               // 最多轮询 120 次（60 分钟）
+		maxPollAttempts:    120,              // 最多轮询 120 次（60 分钟）
 		pollingTaskIDs:     make(map[string]*PollingTask),
-		pollingTaskTimeout: 90 * time.Minute,  // 轮询任务超时时间
+		pollingTaskTimeout: 90 * time.Minute, // 轮询任务超时时间
 	}
 }
 
@@ -173,7 +174,7 @@ func (s *AsyncVideoCompletionService) pollTaskStatus(ctx context.Context, task *
 }
 
 // handleTaskCompletion 处理任务完成
-func (s *AsyncVideoCompletionService) handleTaskCompletion(ctx context.Context, task *PollingTask, resp *genapi.GenerateVideoResponse) {
+func (s *AsyncVideoCompletionService) handleTaskCompletion(ctx context.Context, task *PollingTask, resp *genapi.GenerateResponse) {
 	s.logger.Info("async video task completed",
 		zap.String("taskID", task.TaskID),
 		zap.String("recordID", task.RecordID),
