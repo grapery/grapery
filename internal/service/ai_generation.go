@@ -21,26 +21,39 @@ import (
 // AIGenerationService 统一的AI生成任务管理服务
 // 负责记录AI能力使用数据，用于任务管理和Token计费
 type AIGenerationService struct {
-	repo         domain.Repository
-	geminiClient *gemini.Client
-	genAPI       *genapi.GenAPI
-	logger       *zap.Logger
-	metrics      *telemetry.Metrics // Prometheus metrics (optional)
+	repo                domain.Repository
+	geminiClient        *gemini.Client
+	genAPI              *genapi.GenAPI
+	logger              *zap.Logger
+	metrics             *telemetry.Metrics // Prometheus metrics (optional)
+	quotaReservation    *QuotaReservationService
+	distributedLock     *DistributedLock
+	enableQuotaReservation bool // 是否启用配额预留（默认关闭，逐步迁移）
 }
 
 // NewAIGenerationService 创建AI生成服务
 func NewAIGenerationService(repo domain.Repository, geminiClient *gemini.Client, genAPI *genapi.GenAPI, logger *zap.Logger) *AIGenerationService {
 	return &AIGenerationService{
-		repo:         repo,
-		geminiClient: geminiClient,
-		genAPI:       genAPI,
-		logger:       logger,
+		repo:                repo,
+		geminiClient:        geminiClient,
+		genAPI:              genAPI,
+		logger:              logger,
+		quotaReservation:    NewQuotaReservationService(logger, repo),
+		distributedLock:     NewDistributedLock(logger),
+		enableQuotaReservation: false, // 默认关闭，可通过配置启用
 	}
 }
 
 // SetMetrics 设置 Prometheus metrics
 func (s *AIGenerationService) SetMetrics(metrics *telemetry.Metrics) {
 	s.metrics = metrics
+}
+
+// SetQuotaReservationEnabled 设置是否启用配额预留机制
+func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
+	s.enableQuotaReservation = enabled
+	s.logger.Info("quota reservation mechanism updated",
+		zap.Bool("enabled", enabled))
 }
 
 // GenerateTextRequest 文本生成请求
@@ -173,6 +186,25 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	// 更新记录
 	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
+	}
+
+	// 扣减用户配额（如果使用了 token）
+	if record.TotalTokens > 0 {
+		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -record.TotalTokens, "ai_text_generation", fmt.Sprintf("AI text generation consumed %d tokens", record.TotalTokens))
+		if err != nil {
+			s.logger.Error("failed to deduct token balance for text generation",
+				zap.String("userID", req.UserID),
+				zap.String("recordId", record.ID),
+				zap.Int("tokensUsed", record.TotalTokens),
+				zap.Error(err))
+			// 配额扣减失败是严重错误，但记录已成功生成，记录警告并继续
+			// 考虑是否需要重试或补偿机制
+		} else {
+			s.logger.Info("token balance deducted successfully",
+				zap.String("userID", req.UserID),
+				zap.String("recordId", record.ID),
+				zap.Int("tokensUsed", record.TotalTokens))
+		}
 	}
 
 	// Record metrics
@@ -379,6 +411,33 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
 	}
 
+	// 扣减用户配额（如果使用了 token 或生成了图片）
+	// 图片生成通常按次数计费，这里我们根据返回的使用量来扣减
+	if record.TotalTokens > 0 || record.ImageCount > 0 {
+		// 对于图片生成，我们计算等效 token 数
+		// 如果返回了 token 数量就使用，否则按图片数量计算（假设每张图片 = 1000 tokens）
+		tokensToDeduct := record.TotalTokens
+		if tokensToDeduct == 0 && record.ImageCount > 0 {
+			tokensToDeduct = record.ImageCount * 1000 // 每张图片 1000 tokens
+		}
+
+		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -tokensToDeduct, "ai_image_generation", fmt.Sprintf("AI image generation consumed %d tokens (%d images)", tokensToDeduct, record.ImageCount))
+		if err != nil {
+			s.logger.Error("failed to deduct token balance for image generation",
+				zap.String("userID", req.UserID),
+				zap.String("recordId", record.ID),
+				zap.Int("imageCount", record.ImageCount),
+				zap.Int("tokensUsed", tokensToDeduct),
+				zap.Error(err))
+		} else {
+			s.logger.Info("token balance deducted successfully for image generation",
+				zap.String("userID", req.UserID),
+				zap.String("recordId", record.ID),
+				zap.Int("imageCount", record.ImageCount),
+				zap.Int("tokensUsed", tokensToDeduct))
+		}
+	}
+
 	s.logger.Info("AI image generation completed",
 		zap.String("recordId", record.ID),
 		zap.Int("imageCount", record.ImageCount),
@@ -572,6 +631,39 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 
 	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
+	}
+
+	// 扣减用户配额
+	// 对于同步完成的视频，立即扣减配额
+	// 对于异步任务，配额将在任务完成时扣减
+	if resp.Status == "completed" {
+		tokensToDeduct := record.TotalTokens
+		if tokensToDeduct == 0 && record.VideoCount > 0 {
+			// 视频生成默认配额：每个视频 = 5000 tokens
+			tokensToDeduct = record.VideoCount * 5000
+		}
+
+		if tokensToDeduct > 0 {
+			_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -tokensToDeduct, "ai_video_generation", fmt.Sprintf("AI video generation consumed %d tokens", tokensToDeduct))
+			if err != nil {
+				s.logger.Error("failed to deduct token balance for video generation",
+					zap.String("userID", req.UserID),
+					zap.String("recordId", record.ID),
+					zap.Int("tokensUsed", tokensToDeduct),
+					zap.Error(err))
+			} else {
+				s.logger.Info("token balance deducted successfully for video generation",
+					zap.String("userID", req.UserID),
+					zap.String("recordId", record.ID),
+					zap.Int("tokensUsed", tokensToDeduct))
+			}
+		}
+	} else {
+		// 异步任务 - 记录需要稍后扣减配额
+		s.logger.Info("video generation is async, token deduction will be processed on completion",
+			zap.String("recordId", record.ID),
+			zap.String("taskId", resp.TaskID),
+			zap.String("status", resp.Status))
 	}
 
 	s.logger.Info("AI video generation initiated",
