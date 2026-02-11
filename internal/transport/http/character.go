@@ -338,10 +338,6 @@ func (h *Handler) CreateCharacterPoster(c *gin.Context) {
 			NotFound(c, "character not found")
 			return
 		}
-		if err.Error() == "unauthorized: not a group member" {
-			Forbidden(c, err.Error())
-			return
-		}
 		Error(c, CodeError, err.Error())
 		return
 	}

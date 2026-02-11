@@ -16,7 +16,6 @@ import (
 // 这个文件包含所有其他repository方法的实现
 // 这些方法补充了其他impl文件中未实现的方法
 
-var ErrNotImplemented = errors.New("not implemented yet")
 
 // ========== Story operations ==========
 
@@ -226,261 +225,6 @@ func (r *Repository) PopularCharacters(ctx context.Context, limit int) ([]*domai
 	return result, nil
 }
 
-// ========== Group operations ==========
-
-func (r *Repository) GroupsByUser(ctx context.Context, userID string) ([]*domain.Group, error) {
-	var groupMembers []GroupMember
-	err := r.db.WithContext(ctx).
-		Preload("Group").
-		Preload("Group.Creator").
-		Where("user_id = ?", userID).
-		Find(&groupMembers).Error
-	if err != nil {
-		return nil, err
-	}
-
-	groups := make([]*domain.Group, len(groupMembers))
-	for i, gm := range groupMembers {
-		groups[i] = ModelToGroup(&gm.Group)
-	}
-	return groups, nil
-}
-
-// ========== Comment operations ==========
-
-func (r *Repository) CommentsByParent(ctx context.Context, parentID string) ([]*domain.Comment, error) {
-	var comments []Comment
-	err := r.db.WithContext(ctx).
-		Preload("Author").
-		Where("parent_id = ?", parentID).
-		Order("created_at ASC").
-		Find(&comments).Error
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*domain.Comment, len(comments))
-	for i := range comments {
-		result[i] = ModelToComment(&comments[i])
-	}
-	return result, nil
-}
-
-// ========== Storyboard operations ==========
-
-func (r *Repository) StoryCompositionByID(ctx context.Context, id string) (*domain.StoryComposition, error) {
-	var composition StoryComposition
-	err := r.db.WithContext(ctx).First(&composition, "id = ?", id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, domain.ErrNotFound
-		}
-		return nil, err
-	}
-	return ModelToStoryComposition(&composition), nil
-}
-
-func (r *Repository) ListStoryCompositions(ctx context.Context, limit, offset int) ([]*domain.StoryComposition, error) {
-	var compositions []StoryComposition
-	err := r.db.WithContext(ctx).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&compositions).Error
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*domain.StoryComposition, len(compositions))
-	for i := range compositions {
-		result[i] = ModelToStoryComposition(&compositions[i])
-	}
-	return result, nil
-}
-
-func (r *Repository) CreateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
-	dbComp := StoryCompositionToModel(composition)
-	if dbComp.ID == "" {
-		dbComp.ID = uuid.New().String()
-	}
-	dbComp.CreatedAt = time.Now()
-	dbComp.UpdatedAt = time.Now()
-
-	if err := r.db.WithContext(ctx).Create(dbComp).Error; err != nil {
-		return err
-	}
-
-	composition.ID = dbComp.ID
-	composition.CreatedAt = timeToUnix(dbComp.CreatedAt)
-	composition.UpdatedAt = timeToUnix(dbComp.UpdatedAt)
-	return nil
-}
-
-func (r *Repository) UpdateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
-	dbComp := StoryCompositionToModel(composition)
-	dbComp.UpdatedAt = time.Now()
-
-	result := r.db.WithContext(ctx).
-		Model(&StoryComposition{}).
-		Where("id = ?", composition.ID).
-		Updates(dbComp)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-
-	composition.UpdatedAt = timeToUnix(dbComp.UpdatedAt)
-	return nil
-}
-
-// ========== Relationship operations ==========
-
-func (r *Repository) IsStoryLiked(ctx context.Context, userID, storyID string) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&StoryLike{}).
-		Where("user_id = ? AND story_id = ?", userID, storyID).
-		Count(&count).Error
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-func (r *Repository) LikeStoryboard(ctx context.Context, userID, storyboardID string) error {
-	// 检查是否已经点赞
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
-		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
-		Count(&count).Error; err != nil {
-		return err
-	}
-
-	if count > 0 {
-		return domain.ErrAlreadyLiked
-	}
-
-	// 创建点赞记录
-	like := &StoryboardLike{
-		ID:           uuid.New().String(),
-		UserID:       userID,
-		StoryboardID: storyboardID,
-		CreatedAt:    time.Now(),
-	}
-
-	if err := r.db.WithContext(ctx).Create(like).Error; err != nil {
-		// Handle MySQL duplicate entry error (Error 1062) due to race condition
-		if strings.Contains(err.Error(), "Error 1062") ||
-			strings.Contains(err.Error(), "Duplicate entry") ||
-			strings.Contains(err.Error(), "23000") {
-			return domain.ErrAlreadyLiked
-		}
-		return err
-	}
-
-	// 更新故事板的点赞数
-	if err := r.db.WithContext(ctx).Model(&Storyboard{}).
-		Where("id = ?", storyboardID).
-		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error {
-	// 删除点赞记录
-	result := r.db.WithContext(ctx).
-		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
-		Delete(&StoryboardLike{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-
-	// 更新故事板的点赞数
-	if err := r.db.WithContext(ctx).Model(&Storyboard{}).
-		Where("id = ?", storyboardID).
-		UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) JoinGroup(ctx context.Context, groupID, userID, role string) error {
-	member := &GroupMember{
-		ID:       uuid.New().String(),
-		GroupID:  groupID,
-		UserID:   userID,
-		Role:     role,
-		JoinedAt: time.Now(),
-	}
-
-	if err := r.db.WithContext(ctx).Create(member).Error; err != nil {
-		// Handle MySQL duplicate entry error (Error 1062) due to race condition
-		if strings.Contains(err.Error(), "Error 1062") ||
-			strings.Contains(err.Error(), "Duplicate entry") ||
-			strings.Contains(err.Error(), "23000") {
-			return domain.ErrAlreadyExists
-		}
-		return err
-	}
-
-	// 更新群组成员数
-	if err := r.db.WithContext(ctx).Model(&Group{}).
-		Where("id = ?", groupID).
-		UpdateColumn("members", gorm.Expr("members + ?", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) LeaveGroup(ctx context.Context, groupID, userID string) error {
-	result := r.db.WithContext(ctx).
-		Where("group_id = ? AND user_id = ?", groupID, userID).
-		Delete(&GroupMember{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("member not found")
-	}
-
-	// 更新群组成员数
-	if err := r.db.WithContext(ctx).Model(&Group{}).
-		Where("id = ?", groupID).
-		UpdateColumn("members", gorm.Expr("GREATEST(members - ?, 0)", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) GroupMembers(ctx context.Context, groupID string) ([]*domain.User, error) {
-	var members []GroupMember
-	err := r.db.WithContext(ctx).
-		Preload("User").
-		Where("group_id = ?", groupID).
-		Find(&members).Error
-	if err != nil {
-		return nil, err
-	}
-
-	users := make([]*domain.User, len(members))
-	for i := range members {
-		users[i] = ModelToUser(&members[i].User)
-	}
-	return users, nil
-}
 
 // ========== AI Generation operations ==========
 
@@ -1763,4 +1507,171 @@ func formatError(operation string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("%s failed: %w", operation, err)
+}
+
+// ========== Story Composition operations ==========
+
+// StoryCompositionByID retrieves a story composition by ID
+func (r *Repository) StoryCompositionByID(ctx context.Context, id string) (*domain.StoryComposition, error) {
+	var composition domain.StoryComposition
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&composition).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &composition, nil
+}
+
+// ListStoryCompositions retrieves all story compositions
+func (r *Repository) ListStoryCompositions(ctx context.Context, limit, offset int) ([]*domain.StoryComposition, error) {
+	var compositions []*domain.StoryComposition
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&compositions).Error; err != nil {
+		return nil, err
+	}
+	return compositions, nil
+}
+
+// CreateStoryComposition creates a new story composition
+func (r *Repository) CreateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
+	if composition.ID == "" {
+		composition.ID = uuid.New().String()
+	}
+	return r.db.WithContext(ctx).Create(composition).Error
+}
+
+// UpdateStoryComposition updates an existing story composition
+func (r *Repository) UpdateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
+	return r.db.WithContext(ctx).Save(composition).Error
+}
+
+// IsStoryLiked checks if a user has liked a story
+func (r *Repository) IsStoryLiked(ctx context.Context, userID, storyID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryLike{}).
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// LikeStoryboard likes a storyboard
+func (r *Repository) LikeStoryboard(ctx context.Context, userID, storyboardID string) error {
+	// Check if already liked
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return domain.ErrAlreadyLiked
+	}
+
+	// Create like record
+	like := StoryboardLike{
+		ID:           uuid.New().String(),
+		UserID:       userID,
+		StoryboardID: storyboardID,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
+		return err
+	}
+
+	// Update storyboard likes count
+	return r.db.WithContext(ctx).Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error
+}
+
+// UnlikeStoryboard removes a like from a storyboard
+func (r *Repository) UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error {
+	result := r.db.WithContext(ctx).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Delete(&StoryboardLike{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+
+	// Update storyboard likes count
+	return r.db.WithContext(ctx).Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1)).Error
+}
+
+// ListStories retrieves stories with filtering
+func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter) ([]*domain.Story, int64, error) {
+	var stories []Story
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&Story{})
+
+	// Apply filters
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	}
+	if filter.AuthorID != "" {
+		query = query.Where("author_id = ?", filter.AuthorID)
+	}
+	if filter.Search != "" {
+		query = query.Where("title LIKE ? OR description LIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+	if filter.Genre != "" {
+		query = query.Where("genre = ?", filter.Genre)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination and fetch data
+	query = query.Preload("Author").Order("created_at DESC")
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit).Offset(filter.Offset)
+	}
+
+	if err := query.Find(&stories).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]*domain.Story, len(stories))
+	for i := range stories {
+		result[i] = ModelToStory(&stories[i])
+	}
+
+	return result, total, nil
+}
+
+// PanelsByStory retrieves all panels for a story
+func (r *Repository) PanelsByStory(ctx context.Context, storyID string) ([]*domain.Panel, error) {
+	var panels []Panel
+	if err := r.db.WithContext(ctx).
+		Where("story_id = ?", storyID).
+		Order("sequence ASC").
+		Find(&panels).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Panel, len(panels))
+	for i := range panels {
+		result[i] = ModelToPanel(&panels[i])
+	}
+
+	return result, nil
 }

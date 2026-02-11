@@ -59,7 +59,6 @@ type Metrics struct {
 	StoryboardCount         prometheus.Gauge
 	StoryCount              prometheus.Gauge
 	UserCount               prometheus.Gauge
-	GroupMemberCount        *prometheus.HistogramVec
 	StoryParticipantCount   *prometheus.HistogramVec
 	CharacterMessageCount   *prometheus.CounterVec
 	CharacterTokenConsumed  *prometheus.HistogramVec
@@ -353,14 +352,6 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 				Help: "User growth rate (YoY or MoM)",
 			},
 			[]string{"type"}, // "yoy" or "mom"
-		),
-		GroupMemberCount: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "group_member_count",
-				Help:    "Number of members in each group",
-				Buckets: []float64{1, 5, 10, 20, 50, 100, 200, 500, 1000},
-			},
-			[]string{"group_id"},
 		),
 		StoryParticipantCount: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -898,7 +889,6 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.WeeklyActiveUsers,
 		m.MonthlyActiveUsers,
 		m.UserGrowthRate,
-		m.GroupMemberCount,
 		m.StoryParticipantCount,
 		m.CharacterMessageCount,
 		m.CharacterTokenConsumed,
@@ -1166,11 +1156,6 @@ func (m *Metrics) RecordStoryboardCount(count float64) {
 // RecordStoryCount records the total number of stories
 func (m *Metrics) RecordStoryCount(count float64) {
 	m.StoryCount.Set(count)
-}
-
-// RecordGroupMemberCount records the number of members in a group
-func (m *Metrics) RecordGroupMemberCount(groupID string, count float64) {
-	m.GroupMemberCount.WithLabelValues(groupID).Observe(count)
 }
 
 // RecordStoryParticipantCount records the number of participants in a story

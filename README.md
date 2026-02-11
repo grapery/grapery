@@ -78,9 +78,6 @@ go run ./cmd/server
 | `POST` | `/stories` | 创建新故事 |
 | `GET` | `/characters` | 获取角色列表 |
 | `GET` | `/characters/:id` | 获取角色详情 |
-| `GET` | `/groups` | 获取群组列表 |
-| `GET` | `/groups/:id` | 获取群组详情 |
-| `GET` | `/groups/:id/activities` | 获取群组活动流 |
 | `GET` | `/storyboards/compositions` | 获取故事组合列表 |
 | `GET` | `/storyboards/:id` | 获取 Storyboard 详情 |
 | `GET` | `/chat/threads` | 获取聊天线程列表 |
@@ -103,13 +100,11 @@ GET /api/v1/stories?status=published&authorId=1&search=fantasy
 - **Story** - 故事项目
 - **Panel** - 故事面板
 - **Character** - 角色
-- **Group** - 协作群组
 - **Comment** - 评论（支持嵌套回复）
 - **ChatThread** - 聊天线程
 - **ChatMessage** - 聊天消息
 - **StoryComposition** - 故事组合
 - **Storyboard** - 故事板节点（树状结构）
-- **GroupActivity** - 群组活动
 
 ### 数据库表关系
 
@@ -117,7 +112,6 @@ GET /api/v1/stories?status=published&authorId=1&search=fantasy
 users
   ├── stories (author_id)
   ├── characters (author_id)
-  ├── groups (creator_id)
   ├── comments (author_id)
   └── chat_threads (user_id)
 

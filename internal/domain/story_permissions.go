@@ -5,18 +5,15 @@ type CollaborationStatus string
 
 const (
 	CollaborationStatusOpen       CollaborationStatus = "open"       // 开放协作：任何人可以参与
-	CollaborationStatusRestricted CollaborationStatus = "restricted" // 受限协作：仅小组成员可以参与
+	CollaborationStatusRestricted CollaborationStatus = "restricted" // 受限协作：仅创作者可以参与 (V1/V2 MVP - 等同于 Closed)
 	CollaborationStatusClosed     CollaborationStatus = "closed"     // 封闭创作：仅创作者可以参与
 )
 
 // GetCollaborationStatus 从 Story 导出协作状态
+// V1/V2 MVP: 移除了 Group 功能，只有 open 和 closed 两种状态
 func (s *Story) GetCollaborationStatus() CollaborationStatus {
 	if s.IsCollaborationOpen {
 		return CollaborationStatusOpen
-	}
-	// 如果 GroupID 不为空，认为是受限协作
-	if s.GroupID != "" {
-		return CollaborationStatusRestricted
 	}
 	return CollaborationStatusClosed
 }
@@ -77,7 +74,7 @@ func (s *Story) CanCreateCharacter(userID string) bool {
 }
 
 // CanCreateCharacterPoster 检查用户是否可以为角色创建海报
-// 根据故事协作状态不同而不同
+// V1/V2 MVP: 简化为 open 或 author-only 两种状态
 func (s *Story) CanCreateCharacterPoster(userID string, isGroupMember bool) bool {
 	status := s.GetCollaborationStatus()
 
@@ -86,12 +83,8 @@ func (s *Story) CanCreateCharacterPoster(userID string, isGroupMember bool) bool
 		// 开放协作：任何人
 		return true
 
-	case CollaborationStatusRestricted:
-		// 受限协作：仅小组成员或创作者
-		return isGroupMember || s.AuthorID == userID
-
-	case CollaborationStatusClosed:
-		// 封闭创作：仅创作者
+	case CollaborationStatusRestricted, CollaborationStatusClosed:
+		// 受限/封闭协作：仅创作者 (V1/V2 MVP - 移除了小组成员检查)
 		return s.AuthorID == userID
 	}
 
@@ -111,6 +104,7 @@ func (s *Story) CanCreateSceneVariant(userID string, isGroupMember bool) bool {
 }
 
 // CanCreateStoryboard 检查用户是否可以创建故事板
+// V1/V2 MVP: 简化为 open 或 author-only 两种状态
 func (s *Story) CanCreateStoryboard(userID string, isGroupMember bool) bool {
 	status := s.GetCollaborationStatus()
 
@@ -119,12 +113,8 @@ func (s *Story) CanCreateStoryboard(userID string, isGroupMember bool) bool {
 		// 开放协作：任何人
 		return true
 
-	case CollaborationStatusRestricted:
-		// 受限协作：小组成员或创作者
-		return isGroupMember || s.AuthorID == userID
-
-	case CollaborationStatusClosed:
-		// 封闭创作：仅创作者
+	case CollaborationStatusRestricted, CollaborationStatusClosed:
+		// 受限/封闭协作：仅创作者 (V1/V2 MVP - 移除了小组成员检查)
 		return s.AuthorID == userID
 	}
 

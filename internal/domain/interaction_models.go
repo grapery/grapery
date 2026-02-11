@@ -4,7 +4,7 @@ package domain
 type Follow struct {
 	ID                   string         `json:"id"`
 	FollowerID           string         `json:"followerId"`
-	FollowableType       FollowableType `json:"followableType"` // story, user, group, character
+	FollowableType       FollowableType `json:"followableType"` // story, user, character
 	FollowableID         string         `json:"followableId"`
 	NotificationsEnabled bool           `json:"notificationsEnabled"`
 	CreatedAt            int64          `json:"createdAt"`
@@ -16,7 +16,6 @@ type FollowableType string
 const (
 	FollowableTypeStory     FollowableType = "story"
 	FollowableTypeUser      FollowableType = "user"
-	FollowableTypeGroup     FollowableType = "group"
 	FollowableTypeCharacter FollowableType = "character"
 )
 

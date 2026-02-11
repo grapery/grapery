@@ -125,50 +125,38 @@ func main() {
    - storyboard_video_generations
    - ai_generation_records
 
-6. **群组相关**
-   - groups
-   - group_members
-   - group_roles
-   - group_invitations
-   - group_follows
-   - group_blacklists
-   - group_activities
-
-7. **评论和聊天**
+6. **评论和聊天**
    - comments
    - chat_threads
    - chat_messages
-   - writers_rooms
-   - writers_room_participants
-   - writers_room_messages
 
-8. **标签和搜索**
+7. **标签和搜索**
    - tags
    - story_tags
    - character_tags
    - search_histories
    - view_histories
 
-9. **Agent 系统**
+8. **Agent 系统**
    - agents
    - agent_skills
    - agent_skill_usages
    - agent_interactions
    - agent_memories
 
-10. **任务系统**
+9. **任务系统**
     - ai_tasks
     - render_tasks
     - story_publications
 
-11. **通知和活动**
+10. **通知和活动**
     - notifications
     - user_activities
 
-12. **第三方登录**
+11. **第三方登录**
     - third_party_logins
 
-13. **其他**
+12. **其他**
     - assets
     - reports
     - story_compositions
@@ -177,7 +165,6 @@ func main() {
     - invitation_codes
     - storyboard_chat_sessions
     - storyboard_chat_messages
-    - message_read_receipts
 
 ### 支付相关表 (pay 包)
 

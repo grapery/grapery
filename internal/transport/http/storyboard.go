@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +21,20 @@ type sceneRefPayload struct {
 	StorySceneID   string `json:"storySceneId" binding:"required"`
 	Sequence       *int   `json:"sequence"`
 	IsPrimaryScene bool   `json:"isPrimaryScene"`
+}
+
+type continueStoryboardPayload struct {
+	RawInput   string   `json:"rawInput" binding:"required"`
+	SceneCount int      `json:"sceneCount"`
+	Characters []string `json:"characters,omitempty"` // Optional: specific character IDs to include
+}
+
+// truncateForLog truncates a string for logging purposes
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // CreateStoryboard 创建 storyboard
@@ -459,6 +474,49 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 	}
 
 	Success(c, newStoryboard)
+}
+
+// ContinueStoryboard 继续故事板（平行宇宙续写）
+// Simplified interface: automatically handles path tracing, state synthesis, and AI generation
+func (h *Handler) ContinueStoryboard(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	parentID := c.Param("id")
+
+	var req continueStoryboardPayload
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	h.logger.Info("ContinueStoryboard called",
+		zap.String("parentId", parentID),
+		zap.String("userId", userID.(string)),
+		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
+		zap.Int("sceneCount", req.SceneCount))
+
+	// Default scene count to 3 if not specified or out of range
+	sceneCount := req.SceneCount
+	if sceneCount < 1 || sceneCount > 10 {
+		sceneCount = 3
+	}
+
+	// Use the narrator pipeline for parallel universe continuation
+	result, err := h.svc.ContinueStoryboard(c.Request.Context(), userID.(string), &service.ContinueRequest{
+		ParentStoryboardID: parentID,
+		UserPrompt:         req.RawInput,
+		SceneCount:         sceneCount,
+		Characters:         req.Characters,
+	})
+	if err != nil {
+		h.logger.Error("ContinueStoryboard failed",
+			zap.String("parentId", parentID),
+			zap.Error(err))
+		InternalError(c, err.Error())
+		return
+	}
+
+	Success(c, result)
 }
 
 // LikeStoryboard 点赞 storyboard

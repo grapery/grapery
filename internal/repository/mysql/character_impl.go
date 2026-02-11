@@ -24,6 +24,28 @@ func (r *Repository) CharacterByID(ctx context.Context, id string) (*domain.Char
 	return &domainChar, nil
 }
 
+// ListCharacters retrieves all characters with pagination
+func (r *Repository) ListCharacters(ctx context.Context, limit, offset int) ([]*domain.Character, error) {
+	var characters []Character
+	query := r.db.WithContext(ctx).Preload("Author").Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&characters).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Character, len(characters))
+	for i, c := range characters {
+		domainChar := r.characterToDomain(c)
+		result[i] = &domainChar
+	}
+
+	return result, nil
+}
+
 // CreateCharacter creates a new character
 func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Character) error {
 	authorID := character.AuthorID

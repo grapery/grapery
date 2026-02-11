@@ -32,7 +32,6 @@ type Character struct {
 	SourceImage              string  `json:"sourceImage,omitempty"`
 	CreatedBy                string  `json:"createdBy,omitempty"`
 	LastEditedBy             string  `json:"lastEditedBy,omitempty"`
-	GroupID                  *string `json:"groupId,omitempty"`
 	Likes                    int     `json:"likes"`
 	Followers                int     `json:"followers"`
 	Stories                  int     `json:"stories"`
@@ -40,14 +39,13 @@ type Character struct {
 	UpdatedAt                int64   `json:"updatedAt"`
 
 	// 海报创建权限
-	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, group_members, anyone
+	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, anyone (V1/V2 MVP - group_members removed)
 
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
 	Author      *User    `json:"author,omitempty"`
 	Agent       *Agent   `json:"agent,omitempty"`
-	Group       *Group   `json:"group,omitempty"`
 	IsFollowing *bool    `json:"isFollowing,omitempty"` // 当前用户是否关注此角色
 }
 
@@ -151,7 +149,6 @@ type CharacterAnalytics struct {
 type PosterCreationPermissionType string
 
 const (
-	PosterCreationPermissionCreatorOnly   PosterCreationPermissionType = "creator_only"
-	PosterCreationPermissionGroupMembers  PosterCreationPermissionType = "group_members"
-	PosterCreationPermissionAnyone        PosterCreationPermissionType = "anyone"
+	PosterCreationPermissionCreatorOnly PosterCreationPermissionType = "creator_only"
+	PosterCreationPermissionAnyone       PosterCreationPermissionType = "anyone"
 )

@@ -11,6 +11,30 @@ import (
 	"gorm.io/gorm"
 )
 
+// CreateStory creates a new story
+func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error {
+	dbStory := &Story{
+		ID:                  story.ID,
+		Title:               story.Title,
+		Description:         story.Description,
+		CoverImage:          story.CoverImage,
+		AuthorID:            story.Author.ID,
+		Likes:               story.Likes,
+		Followers:           story.Followers,
+		Panels:              story.Panels,
+		StoryboardCount:     story.StoryboardCount,
+		DefaultSceneCount:   story.DefaultSceneCount,
+		Genre:               story.Genre,
+		Style:               styleConfigToJSON(story.Style),
+		Status:              story.Status,
+		IsCollaborationOpen: story.IsCollaborationOpen,
+		UseAI:               story.UseAI,
+		AIAssistanceOptions: aiAssistanceOptionsToJSON(story.AIAssistanceOptions),
+	}
+
+	return r.db.WithContext(ctx).Create(dbStory).Error
+}
+
 // StoryByID retrieves a story by ID
 func (r *Repository) StoryByID(ctx context.Context, id string) (*domain.Story, error) {
 	var story Story
@@ -32,7 +56,6 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		Description:         story.Description,
 		CoverImage:          story.CoverImage,
 		AuthorID:            story.Author.ID,
-		GroupID:             &story.GroupID,
 		Genre:               story.Genre,
 		Status:              story.Status,
 		Likes:               story.Likes,
@@ -42,10 +65,6 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		DefaultSceneCount:   story.DefaultSceneCount,
 		IsCollaborationOpen: story.IsCollaborationOpen,
 		UpdatedAt:           time.Now(),
-	}
-
-	if story.GroupID == "" {
-		dbStory.GroupID = nil
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Story{}).Where("id = ?", story.ID).Updates(&dbStory).Error; err != nil {

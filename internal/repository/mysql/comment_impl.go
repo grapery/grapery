@@ -190,6 +190,46 @@ func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit,
 	return result, nil
 }
 
+// CommentsByParent retrieves comments by parent ID (alias for CommentReplies)
+func (r *Repository) CommentsByParent(ctx context.Context, parentID string) ([]*domain.Comment, error) {
+	var comments []Comment
+	if err := r.db.WithContext(ctx).
+		Preload("Author").
+		Where("parent_id = ?", parentID).
+		Order("created_at ASC").
+		Find(&comments).Error; err != nil {
+		return nil, fmt.Errorf("failed to get comments by parent: %w", err)
+	}
+
+	result := make([]*domain.Comment, len(comments))
+	for i, c := range comments {
+		domainComment := r.commentToDomain(c)
+		result[i] = &domainComment
+	}
+
+	return result, nil
+}
+
+// CommentsByStory retrieves all comments for a story
+func (r *Repository) CommentsByStory(ctx context.Context, storyID string) ([]*domain.Comment, error) {
+	var comments []Comment
+	if err := r.db.WithContext(ctx).
+		Preload("Author").
+		Where("target_type = ? AND target_id = ?", "story", storyID).
+		Order("created_at ASC").
+		Find(&comments).Error; err != nil {
+		return nil, fmt.Errorf("failed to get comments by story: %w", err)
+	}
+
+	result := make([]*domain.Comment, len(comments))
+	for i, c := range comments {
+		domainComment := r.commentToDomain(c)
+		result[i] = &domainComment
+	}
+
+	return result, nil
+}
+
 // CommentTree retrieves the entire comment tree
 func (r *Repository) CommentTree(ctx context.Context, rootID string) ([]*domain.Comment, error) {
 	var comments []Comment

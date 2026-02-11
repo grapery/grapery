@@ -35,7 +35,7 @@ type CreateStoryRequest struct {
 	Tags              []string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 
 	// Collaboration settings
-	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
 
 	// AI 策略设置（新增）
 	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作，默认 true
@@ -77,7 +77,7 @@ type UpdateStoryRequest struct {
 	Status      *string `json:"status" binding:"omitempty,oneof=draft published rendering"`
 
 	// Collaboration settings
-	IsCollaborationOpen *bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen *bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
 }
 
 // StoryListRequest 故事列表请求

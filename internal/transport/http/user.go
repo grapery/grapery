@@ -427,36 +427,3 @@ func (h *Handler) GetUserActivityList(c *gin.Context) {
 		"count":      count,
 	})
 }
-
-// GetUserActivityHeatmap 获取用户活动热力图
-// GET /api/users/:id/activities/heatmap
-// Query params:
-//   - time_range: string (today, week, month) - default: week
-func (h *Handler) GetUserActivityHeatmapByID(c *gin.Context) {
-	userID, ok := RequireParam(c, "id")
-	if !ok {
-		return
-	}
-	timeRangeStr := c.DefaultQuery("time_range", "week")
-
-	// Convert time range string to enum
-	var timeRange domain.ActivityTimeRange
-	switch timeRangeStr {
-	case "today":
-		timeRange = domain.TimeRangeToday
-	case "week":
-		timeRange = domain.TimeRangeWeek
-	case "month":
-		timeRange = domain.TimeRangeMonth
-	default:
-		timeRange = domain.TimeRangeWeek
-	}
-
-	heatmapResponse, err := h.svc.GetUserActivityHeatmap(c.Request.Context(), userID, timeRange)
-	if err != nil {
-		HandleError(c, err)
-		return
-	}
-
-	Success(c, heatmapResponse)
-}

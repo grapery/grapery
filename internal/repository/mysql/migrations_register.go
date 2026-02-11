@@ -280,70 +280,6 @@ func init() {
 
 	// ========== 群组相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_groups",
-		Description: "Create and migrate groups table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Group{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_members",
-		Description: "Create and migrate group_members table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupMember{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_roles",
-		Description: "Create and migrate group_roles table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupRole{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_invitations",
-		Description: "Create and migrate group_invitations table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupInvitation{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_follows",
-		Description: "Create and migrate group_follows table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupFollow{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_blacklists",
-		Description: "Create and migrate group_blacklists table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupBlacklist{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_activities",
-		Description: "Create and migrate group_activities table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupActivity{})
-		},
-		Required: true,
-	})
-
-	// ========== 评论表 ==========
-	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_comments",
 		Description: "Create and migrate comments table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -357,52 +293,6 @@ func init() {
 		Description: "Create and migrate comment_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return db.AutoMigrate(&CommentLike{})
-		},
-		Required: true,
-	})
-
-	// ========== Writers Room 表 ==========
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_writers_rooms",
-		Description: "Create and migrate writers_rooms table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&WritersRoomDB{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_writers_room_participants",
-		Description: "Create and migrate writers_room_participants table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&WritersRoomParticipantDB{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_writers_room_messages",
-		Description: "Create and migrate writers_room_messages table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&WritersRoomMessageDB{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_writers_room_message_reactions",
-		Description: "Create and migrate writers_room_message_reactions table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&WritersRoomMessageReactionDB{})
-		},
-		Required: true,
-	})
-
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_message_read_receipts",
-		Description: "Create and migrate message_read_receipts table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&MessageReadReceiptDB{})
 		},
 		Required: true,
 	})
@@ -691,16 +581,6 @@ func init() {
 		Required: true,
 	})
 
-	// ========== Group Showcase 表 ==========
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_group_showcases",
-		Description: "Create and migrate group_showcases table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&GroupShowcase{})
-		},
-		Required: true,
-	})
-
 	// 注册 Schema 修复步骤
 	registerSchemaFixSteps(registry)
 
@@ -750,25 +630,6 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Required: false,
 	})
 
-	registry.RegisterSchemaFixStep(migrations.MigrationStep{
-		Name:        "ensure_group_members_schema",
-		Description: "Ensure group_members has role_id column",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			repo := &Repository{db: db, log: log}
-			return repo.ensureGroupMembersSchema()
-		},
-		Required: false,
-	})
-
-	registry.RegisterSchemaFixStep(migrations.MigrationStep{
-		Name:        "ensure_group_follows_schema",
-		Description: "Ensure group_follows table exists",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			repo := &Repository{db: db, log: log}
-			return repo.ensureGroupFollowsSchema()
-		},
-		Required: false,
-	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_user_devices_schema",
@@ -817,26 +678,6 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.EnsureIsCollaborationOpenColumn(log)
-		},
-		Required: false,
-	})
-
-	registry.RegisterSchemaFixStep(migrations.MigrationStep{
-		Name:        "ensure_user_group_count_columns",
-		Description: "Ensure users has groups_count and groups_created columns",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			repo := &Repository{db: db, log: log}
-			return repo.EnsureUserGroupCountColumns(log)
-		},
-		Required: false,
-	})
-
-	registry.RegisterSchemaFixStep(migrations.MigrationStep{
-		Name:        "ensure_groups_blocked_count_column",
-		Description: "Ensure groups has blocked_count column",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			repo := &Repository{db: db, log: log}
-			return repo.ensureGroupsBlockedCountColumn()
 		},
 		Required: false,
 	})

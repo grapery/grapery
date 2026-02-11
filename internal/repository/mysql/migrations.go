@@ -222,7 +222,7 @@ func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
 
 	if !migrator.HasColumn(&Story{}, "is_collaboration_open") {
 		logger.Info("Adding is_collaboration_open column to stories table")
-		if err := r.db.Exec("ALTER TABLE stories ADD COLUMN is_collaboration_open BOOLEAN DEFAULT FALSE NOT NULL COMMENT 'Whether collaboration is open: true=anyone can edit, false=only author and group members can edit'").Error; err != nil {
+		if err := r.db.Exec("ALTER TABLE stories ADD COLUMN is_collaboration_open BOOLEAN DEFAULT FALSE NOT NULL COMMENT 'Whether collaboration is open: true=anyone can edit, false=only author can edit'").Error; err != nil {
 			logger.Error("failed to add is_collaboration_open column", zap.Error(err))
 			return err
 		}
@@ -241,54 +241,7 @@ func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
 	return nil
 }
 
-// EnsureUserGroupCountColumns ensures groups_count and groups_created columns exist in users table
-func (r *Repository) EnsureUserGroupCountColumns(logger *zap.Logger) error {
-	migrator := r.db.Migrator()
-	type User struct{}
 
-	if !migrator.HasColumn(&User{}, "groups_count") {
-		logger.Info("Adding groups_count column to users table")
-		if err := r.db.Exec("ALTER TABLE users ADD COLUMN groups_count INT DEFAULT 0 NOT NULL COMMENT 'Number of groups the user has joined'").Error; err != nil {
-			logger.Error("failed to add groups_count column", zap.Error(err))
-			return err
-		}
-		logger.Info("Successfully added groups_count column to users table")
-	} else {
-		logger.Debug("groups_count column already exists in users table")
-	}
-
-	if !migrator.HasColumn(&User{}, "groups_created") {
-		logger.Info("Adding groups_created column to users table")
-		if err := r.db.Exec("ALTER TABLE users ADD COLUMN groups_created INT DEFAULT 0 NOT NULL COMMENT 'Number of groups created by this user'").Error; err != nil {
-			logger.Error("failed to add groups_created column", zap.Error(err))
-			return err
-		}
-		logger.Info("Successfully added groups_created column to users table")
-	} else {
-		logger.Debug("groups_created column already exists in users table")
-	}
-
-	return nil
-}
-
-// ensureGroupsBlockedCountColumn ensures the groups table has the blocked_count column
-func (r *Repository) ensureGroupsBlockedCountColumn() error {
-	migrator := r.db.Migrator()
-	type Group struct{}
-
-	if !migrator.HasColumn(&Group{}, "blocked_count") {
-		r.log.Info("Adding blocked_count column to groups table")
-		if err := r.db.Exec("ALTER TABLE groups ADD COLUMN blocked_count INT DEFAULT 0 NOT NULL COMMENT 'Number of blocked users in this group'").Error; err != nil {
-			r.log.Error("failed to add blocked_count column", zap.Error(err))
-			return err
-		}
-		r.log.Info("Successfully added blocked_count column to groups table")
-	} else {
-		r.log.Debug("blocked_count column already exists in groups table")
-	}
-
-	return nil
-}
 
 // ensureUserFragmentsCountColumn ensures the users table has the fragments_count column
 func (r *Repository) ensureUserFragmentsCountColumn() error {
@@ -335,13 +288,182 @@ func (r *Repository) ensureCharactersPosterCreationPermissionColumn() error {
 
 	if !migrator.HasColumn(&Character{}, "poster_creation_permission") {
 		r.log.Info("Adding poster_creation_permission column to characters table")
-		if err := r.db.Exec("ALTER TABLE characters ADD COLUMN poster_creation_permission VARCHAR(50) DEFAULT 'creator_only' NOT NULL COMMENT '海报创建权限: creator_only, group_members, anyone'").Error; err != nil {
+		if err := r.db.Exec("ALTER TABLE characters ADD COLUMN poster_creation_permission VARCHAR(50) DEFAULT 'creator_only' NOT NULL COMMENT '海报创建权限: creator_only, anyone'").Error; err != nil {
 			r.log.Error("failed to add poster_creation_permission column", zap.Error(err))
 			return err
 		}
 		r.log.Info("Successfully added poster_creation_permission column to characters table")
 	} else {
 		r.log.Debug("poster_creation_permission column already exists in characters table")
+	}
+
+	return nil
+}
+
+// ensureStoryboardVideoGenerationSchema ensures storyboard_video_generations has subdivision fields
+func (r *Repository) ensureStoryboardVideoGenerationSchema() error {
+	migrator := r.db.Migrator()
+	type StoryboardVideoGeneration struct{}
+
+	columns := []struct {
+		name     string
+		def      string
+		comment  string
+	}{
+		{"target_audience", "VARCHAR(100) DEFAULT ''", "目标受众"},
+		{"narrative_style", "VARCHAR(100) DEFAULT ''", "叙事风格"},
+		{"visual_references", "TEXT", "视觉参考"},
+	}
+
+	for _, col := range columns {
+		if !migrator.HasColumn(&StoryboardVideoGeneration{}, col.name) {
+			r.log.Info("Adding column to storyboard_video_generations", zap.String("column", col.name))
+			if err := r.db.Exec(fmt.Sprintf("ALTER TABLE storyboard_video_generations ADD COLUMN %s %s COMMENT '%s'", col.name, col.def, col.comment)).Error; err != nil {
+				r.log.Error("failed to add column", zap.String("column", col.name), zap.Error(err))
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// ensureStoryboardScenesSchema ensures storyboard_scenes has subdivision fields
+func (r *Repository) ensureStoryboardScenesSchema() error {
+	migrator := r.db.Migrator()
+	type StoryboardScene struct{}
+
+	columns := []struct {
+		name     string
+		def      string
+		comment  string
+	}{
+		{"camera_angle", "VARCHAR(100) DEFAULT ''", "镜头角度"},
+		{"lighting", "VARCHAR(100) DEFAULT ''", "光照"},
+		{"color_palette", "VARCHAR(100) DEFAULT ''", "色彩方案"},
+	}
+
+	for _, col := range columns {
+		if !migrator.HasColumn(&StoryboardScene{}, col.name) {
+			r.log.Info("Adding column to storyboard_scenes", zap.String("column", col.name))
+			if err := r.db.Exec(fmt.Sprintf("ALTER TABLE storyboard_scenes ADD COLUMN %s %s COMMENT '%s'", col.name, col.def, col.comment)).Error; err != nil {
+				r.log.Error("failed to add column", zap.String("column", col.name), zap.Error(err))
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// ensureStoriesStyleSchema ensures stories.style can store JSON (TEXT) without index
+func (r *Repository) ensureStoriesStyleSchema() error {
+	migrator := r.db.Migrator()
+	type Story struct{}
+
+	// Check if style column exists and is VARCHAR - convert to TEXT
+	if migrator.HasColumn(&Story{}, "style") {
+		// Check column type - if it's VARCHAR, alter to TEXT
+		var columnType string
+		row := r.db.Raw("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stories' AND COLUMN_NAME = 'style'").Row()
+		if err := row.Scan(&columnType); err == nil && columnType == "varchar" {
+			r.log.Info("Converting stories.style from VARCHAR to TEXT")
+			if err := r.db.Exec("ALTER TABLE stories MODIFY COLUMN style TEXT COMMENT '故事风格 (JSON)'").Error; err != nil {
+				r.log.Error("failed to convert style column to TEXT", zap.Error(err))
+				return err
+			}
+		}
+	} else {
+		r.log.Info("Adding style column to stories table")
+		if err := r.db.Exec("ALTER TABLE stories ADD COLUMN style TEXT COMMENT '故事风格 (JSON)'").Error; err != nil {
+			r.log.Error("failed to add style column", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ensureAIGenerationRecordsSchema ensures ai_generation_records prompt fields support Unicode (utf8mb4)
+func (r *Repository) ensureAIGenerationRecordsSchema() error {
+	// MySQL utf8mb4 support for emoji and extended Unicode
+	columns := []struct {
+		table    string
+		column   string
+		def      string
+	}{
+		{"ai_generation_records", "prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"ai_generation_records", "negative_prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+	}
+
+	for _, col := range columns {
+		r.log.Info("Ensuring utf8mb4 for column", zap.String("table", col.table), zap.String("column", col.column))
+		if err := r.db.Exec(fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s", col.table, col.column, col.def)).Error; err != nil {
+			r.log.Warn("failed to modify column to utf8mb4", zap.String("column", col.column), zap.Error(err))
+			// Don't return error - this may already be correct
+		}
+	}
+
+	return nil
+}
+
+// ensureStoryboardImageGenerationSchema ensures storyboard_image_generations has prompt_details_json column
+func (r *Repository) ensureStoryboardImageGenerationSchema() error {
+	migrator := r.db.Migrator()
+	type StoryboardImageGeneration struct{}
+
+	if !migrator.HasColumn(&StoryboardImageGeneration{}, "prompt_details_json") {
+		r.log.Info("Adding prompt_details_json column to storyboard_image_generations")
+		if err := r.db.Exec("ALTER TABLE storyboard_image_generations ADD COLUMN prompt_details_json TEXT COMMENT 'Prompt details JSON'").Error; err != nil {
+			r.log.Error("failed to add prompt_details_json column", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ensureStoryboardVideoGenerationPromptDetailsSchema ensures storyboard_video_generations has prompt_details_json column
+func (r *Repository) ensureStoryboardVideoGenerationPromptDetailsSchema() error {
+	migrator := r.db.Migrator()
+	type StoryboardVideoGeneration struct{}
+
+	if !migrator.HasColumn(&StoryboardVideoGeneration{}, "prompt_details_json") {
+		r.log.Info("Adding prompt_details_json column to storyboard_video_generations")
+		if err := r.db.Exec("ALTER TABLE storyboard_video_generations ADD COLUMN prompt_details_json TEXT COMMENT 'Prompt details JSON'").Error; err != nil {
+			r.log.Error("failed to add prompt_details_json column", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ensureCharacterPortraitSchema ensures characters has portrait-related columns
+func (r *Repository) ensureCharacterPortraitSchema() error {
+	migrator := r.db.Migrator()
+	type Character struct{}
+
+	columns := []struct {
+		name     string
+		def      string
+		comment  string
+	}{
+		{"portrait_style", "VARCHAR(100) DEFAULT ''", "Portrait style"},
+		{"portrait_background", "VARCHAR(100) DEFAULT ''", "Portrait background"},
+		{"portrait_lighting", "VARCHAR(100) DEFAULT ''", "Portrait lighting"},
+		{"portrait_angle", "VARCHAR(100) DEFAULT ''", "Portrait camera angle"},
+		{"portrait_expression", "VARCHAR(100) DEFAULT ''", "Portrait expression"},
+	}
+
+	for _, col := range columns {
+		if !migrator.HasColumn(&Character{}, col.name) {
+			r.log.Info("Adding column to characters", zap.String("column", col.name))
+			if err := r.db.Exec(fmt.Sprintf("ALTER TABLE characters ADD COLUMN %s %s COMMENT '%s'", col.name, col.def, col.comment)).Error; err != nil {
+				r.log.Error("failed to add column", zap.String("column", col.name), zap.Error(err))
+				return err
+			}
+		}
 	}
 
 	return nil

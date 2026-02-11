@@ -194,10 +194,11 @@ func main() {
 	}
 
 	// Initialize MySQL repository
-	repo, err := mysql.NewRepository(cfg.Database.DSN(), logger)
+	db, err := mysql.InitDB(cfg.Database.DSN(), logger)
 	if err != nil {
-		logger.Fatal("failed to initialize repository", zap.Error(err))
+		logger.Fatal("failed to initialize database connection", zap.Error(err))
 	}
+	repo := mysql.NewRepository(db, logger)
 
 	// Run database migrations
 	logger.Info("running database migrations")
@@ -221,10 +222,6 @@ func main() {
 
 	// Initialize AI clients
 	initAIClients(cfg, svc, logger)
-
-	// Initialize Writers Room Service
-	writersRoomService := service.NewWritersRoomService(repo, logger)
-	logger.Info("writers room service initialized")
 
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
@@ -264,19 +261,13 @@ func main() {
 	storyboardPathService := service.NewStoryboardPathService(repo, likeRepo, logger)
 	logger.Info("storyboard path service initialized")
 
-	// Initialize Group Showcase Service
-	groupShowcaseService := service.NewGroupShowcaseService(repo, logger)
-	logger.Info("group showcase service initialized")
-
-	// Initialize HTTP handler with dependencies
+	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
 		AIService:             nil,
-		WritersRoomService:    writersRoomService,
 		StoryboardPathService: storyboardPathService,
 		InteractionService:    interactionService,
 		UserSettingsService:   userSettingsService,
-		GroupShowcaseService:  groupShowcaseService,
 		Logger:                logger,
 	}
 	router := transport.SetupRouter(deps)
@@ -330,10 +321,6 @@ func main() {
 		logger.Info("Metrics endpoint registered", zap.String("path", cfg.Telemetry.Prometheus.Path))
 	}
 
-	// Setup Writers Room Handler and register routes
-	writersRoomHandler := transport.NewHandler(nil, nil, writersRoomService, logger)
-	writersRoomHandler.RegisterWritersRoomRoutes(apiGroup.Group("/stories"), apiGroup.Group("/writers-rooms"))
-	logger.Info("writers room routes registered")
 	// Setup graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -355,10 +342,6 @@ func main() {
 		go startUserStatisticsTask(shutdownCtx, svc.UserStatsService(), logger)
 		logger.Info("User statistics task started")
 	}
-
-	// Start invitation expiry check task (runs hourly)
-	go startInvitationExpiryTask(shutdownCtx, svc, logger)
-	logger.Info("Invitation expiry check task started")
 
 	// Start server in goroutine
 	go func() {
@@ -415,28 +398,6 @@ func startUserStatisticsTask(ctx context.Context, statsService *service.UserStat
 				logger.Warn("failed to persist user statistics", zap.Error(err))
 			} else {
 				logger.Info("user statistics persisted successfully")
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// startInvitationExpiryTask 启动邀请过期检查任务（每小时执行）
-func startInvitationExpiryTask(ctx context.Context, svc *service.Service, logger *zap.Logger) {
-	// 立即执行一次（用于初始化）
-	if err := svc.CheckAndExpireInvitations(ctx); err != nil {
-		logger.Warn("failed to check expired invitations", zap.Error(err))
-	}
-	// 每小时执行一次
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if err := svc.CheckAndExpireInvitations(ctx); err != nil {
-				logger.Warn("failed to check expired invitations", zap.Error(err))
 			}
 		case <-ctx.Done():
 			return

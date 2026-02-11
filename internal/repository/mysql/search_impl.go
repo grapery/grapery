@@ -64,26 +64,6 @@ func (r *Repository) SearchUsers(ctx context.Context, query string, limit, offse
 	return result, nil
 }
 
-func (r *Repository) SearchGroups(ctx context.Context, query string, limit, offset int) ([]*domain.Group, error) {
-	var groups []Group
-	q := r.db.WithContext(ctx).
-		Where("name LIKE ? OR description LIKE ?", "%"+query+"%", "%"+query+"%").
-		Where("public = ?", true). // Only search public groups
-		Order("members DESC, created_at DESC")
-	if limit > 0 {
-		q = q.Limit(limit).Offset(offset)
-	}
-	if err := q.Find(&groups).Error; err != nil {
-		return nil, fmt.Errorf("failed to search groups: %w", err)
-	}
-	result := make([]*domain.Group, len(groups))
-	for i, g := range groups {
-		dg := r.groupToDomain(g)
-		result[i] = &dg
-	}
-	return result, nil
-}
-
 func (r *Repository) CreateSearchHistory(ctx context.Context, history *domain.SearchHistory) error {
 	dbHistory := &SearchHistory{
 		ID:          history.ID,

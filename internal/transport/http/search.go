@@ -64,17 +64,6 @@ func (h *Handler) Search(c *gin.Context) {
 			"total":      len(users),
 			"searchMode": mode,
 		})
-	case "group", "groups":
-		groups, err := h.svc.SearchGroups(c.Request.Context(), query, searchMode, limit, offset)
-		if err != nil {
-			InternalError(c, err.Error())
-			return
-		}
-		Success(c, gin.H{
-			"groups":     groups,
-			"total":      len(groups),
-			"searchMode": mode,
-		})
 	case "all":
 		results, err := h.svc.SearchAll(c.Request.Context(), query, searchMode, limit)
 		if err != nil {

@@ -18,8 +18,6 @@ type User struct {
 	Following           int    `json:"following"`
 	StoryboardCount     int    `json:"storyboardCount"` // Number of storyboards created by this user
 	FragmentsCount      int    `json:"fragmentsCount"`  // Number of fragments created by this user
-	GroupsCount         int    `json:"groupsCount"`     // Number of groups the user has joined
-	GroupsCreated       int    `json:"groupsCreated"`   // Number of groups created by this user
 	Status              string `json:"status"`          // active, suspended, deleted
 	EmailVerified       bool   `json:"emailVerified"`
 	LastLoginAt         *int64 `json:"lastLoginAt,omitempty"`
@@ -96,6 +94,12 @@ type UserActivity struct {
 
 	// Relations
 	User *User `json:"user,omitempty"`
+}
+
+// ActivityHeatmapData 活动热力图数据
+type ActivityHeatmapData struct {
+	Date  string `json:"date"`  // 日期 (YYYY-MM-DD)
+	Count int    `json:"count"` // 该日期的活动数量
 }
 
 // DevicePlatform 设备平台类型
@@ -319,4 +323,24 @@ type InAppNotificationSettings struct {
 	ShowPreview        bool `json:"showPreview"`
 	SoundEnabled       bool `json:"soundEnabled"`
 	VibrationEnabled   bool `json:"vibrationEnabled"`
+}
+
+// ActivityTimeRange 活动时间范围
+type ActivityTimeRange string
+
+const (
+	TimeRangeToday ActivityTimeRange = "today" // 今天
+	TimeRangeWeek  ActivityTimeRange = "week"  // 本周
+	TimeRangeMonth ActivityTimeRange = "month" // 本月
+	TimeRangeYear  ActivityTimeRange = "year"  // 本年
+	TimeRangeAll   ActivityTimeRange = "all"   // 全部
+)
+
+// ActivityHeatmapResponse 活动热力图响应
+type ActivityHeatmapResponse struct {
+	TimeRange   ActivityTimeRange     `json:"timeRange"`   // 时间范围
+	StartDate   string                `json:"startDate"`   // 开始日期 (YYYY-MM-DD)
+	EndDate     string                `json:"endDate"`     // 结束日期 (YYYY-MM-DD)
+	HeatmapData []ActivityHeatmapData `json:"heatmapData"` // 热力图数据
+	TotalCount  int                   `json:"totalCount"`  // 总活动数量
 }

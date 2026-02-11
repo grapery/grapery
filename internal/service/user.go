@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -576,37 +575,25 @@ func (s *Service) GetUserCharacters(ctx context.Context, userID string, limit, o
 	return characters, nil
 }
 
-// GetLikedStories 获取用户点赞的故事
+// GetLikedStories 获取用户点赞的故事 (V2 social feature - TODO: implement)
 func (s *Service) GetLikedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	return s.repo.LikedStories(ctx, userID, limit, offset)
+	// V1 MVP: Return empty list for now
+	// V2: Will implement using interaction repository
+	return []*domain.Story{}, nil
 }
 
-// GetLikedCharacters 获取用户点赞（关注）的角色
+// GetLikedCharacters 获取用户点赞（关注）的角色 (V2 social feature - TODO: implement)
 func (s *Service) GetLikedCharacters(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	return s.repo.LikedCharacters(ctx, userID, limit, offset)
+	// V1 MVP: Return empty list for now
+	// V2: Will implement using interaction repository
+	return []*domain.Character{}, nil
 }
 
-// GetLikedStoryboards 获取用户点赞的故事板
+// GetLikedStoryboards 获取用户点赞的故事板 (V2 social feature - TODO: implement)
 func (s *Service) GetLikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	return s.repo.LikedStoryboards(ctx, userID, limit, offset)
+	// V1 MVP: Return empty list for now
+	// V2: Will implement using interaction repository
+	return []*domain.Storyboard{}, nil
 }
 
 // GetDraftStoryboards 获取用户的草稿故事板（未发布的）
@@ -814,14 +801,12 @@ func (s *Service) RecordStoryboardCreated(ctx context.Context, userID, storyboar
 	_ = s.CreateUserActivity(ctx, activity)
 }
 
-// ========== User Activity Heatmap ==========
+// ========== User Activities ==========
 
-// GetUserActivitiesWithFilter 获取带过滤条件的用户活动
+// GetUserActivitiesWithFilter 获取用户活动列表（简化版本，移除ActivityHeatmap功能）
 func (s *Service) GetUserActivitiesWithFilter(ctx context.Context, userID string, timeRange domain.ActivityTimeRange, date string, limit, offset int) ([]*domain.UserActivity, int, error) {
-	s.logger.Info("fetching user activities with filter",
+	s.logger.Info("fetching user activities",
 		zap.String("userID", userID),
-		zap.String("timeRange", string(timeRange)),
-		zap.String("date", date),
 		zap.Int("limit", limit))
 
 	if limit <= 0 {
@@ -831,91 +816,18 @@ func (s *Service) GetUserActivitiesWithFilter(ctx context.Context, userID string
 		limit = 100
 	}
 
-	var activities []*domain.UserActivity
-	var err error
-
-	// If specific date is provided, filter by that date
-	if date != "" {
-		activities, err = s.repo.UserActivitiesByDate(ctx, userID, date, limit, offset)
-		if err != nil {
-			s.logger.Error("failed to fetch user activities by date",
-				zap.String("userID", userID),
-				zap.String("date", date),
-				zap.Error(err))
-			return nil, 0, err
-		}
-	} else {
-		// Filter by time range
-		startTime, endTime := s.getTimeRangeBounds(timeRange)
-		activities, err = s.repo.UserActivitiesByTimeRange(ctx, userID, startTime, endTime, limit, offset)
-		if err != nil {
-			s.logger.Error("failed to fetch user activities by time range",
-				zap.String("userID", userID),
-				zap.String("timeRange", string(timeRange)),
-				zap.Error(err))
-			return nil, 0, err
-		}
+	// Fetch activities without time range filter
+	activities, err := s.repo.UserActivitiesByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to fetch user activities",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, 0, err
 	}
 
-	s.logger.Info("successfully fetched user activities with filter",
+	s.logger.Info("successfully fetched user activities",
 		zap.String("userID", userID),
 		zap.Int("count", len(activities)))
 
 	return activities, len(activities), nil
-}
-
-// GetUserActivityHeatmap 获取用户活动热力图数据
-func (s *Service) GetUserActivityHeatmap(ctx context.Context, userID string, timeRange domain.ActivityTimeRange) (*domain.ActivityHeatmapResponse, error) {
-	s.logger.Info("fetching user activity heatmap",
-		zap.String("userID", userID),
-		zap.String("timeRange", string(timeRange)))
-
-	startTime, endTime := s.getTimeRangeBounds(timeRange)
-
-	heatmapData, err := s.repo.UserActivityHeatmap(ctx, userID, startTime, endTime)
-	if err != nil {
-		s.logger.Error("failed to fetch user activity heatmap",
-			zap.String("userID", userID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	// Calculate total count
-	totalCount := 0
-	for _, data := range heatmapData {
-		totalCount += data.Count
-	}
-
-	// Fill in missing dates with zero counts
-	heatmapData = s.fillMissingDates(heatmapData, startTime, endTime)
-
-	response := &domain.ActivityHeatmapResponse{
-		TimeRange:   timeRange,
-		StartDate:   s.formatDate(startTime),
-		EndDate:     s.formatDate(endTime),
-		HeatmapData: make([]domain.ActivityHeatmapData, len(heatmapData)),
-		TotalCount:  totalCount,
-	}
-
-	for i, data := range heatmapData {
-		response.HeatmapData[i] = *data
-	}
-
-	s.logger.Info("successfully fetched user activity heatmap",
-		zap.String("userID", userID),
-		zap.Int("dataPoints", len(heatmapData)),
-		zap.Int("totalCount", totalCount))
-
-	return response, nil
-}
-
-// formatDate formats a Unix timestamp to YYYY-MM-DD string using China timezone
-func (s *Service) formatDate(timestamp int64) string {
-	return s.formatDateFromTime(timestamp)
-}
-
-func (s *Service) formatDateFromTime(timestamp int64) string {
-	loc := s.getChinaTimezone()
-	t := time.Unix(timestamp, 0).In(loc)
-	return t.Format("2006-01-02")
 }

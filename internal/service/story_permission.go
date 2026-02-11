@@ -65,8 +65,7 @@ func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (boo
 // 编辑权限规则：
 // 1. 作者永远可以编辑
 // 2. 开放协作(IsCollaborationOpen=true)：任何人可以编辑
-// 3. 受限协作(IsCollaborationOpen=false + GroupID!="")：只有小组成员可以编辑
-// 4. 封闭协作(IsCollaborationOpen=false + GroupID=="")：只有作者可以编辑
+// 3. 封闭协作(IsCollaborationOpen=false)：只有作者可以编辑
 func (s *Service) CanEditStory(ctx context.Context, userID, storyID string) (bool, error) {
 	s.logger.Info("checking story edit permission",
 		zap.String("userID", userID),
@@ -146,7 +145,7 @@ func (s *Service) CanCreateStoryboard(ctx context.Context, storyID, userID strin
 		return false, errors.New("failed to get story")
 	}
 
-	// V1/V2 MVP: No group membership, always pass false as isGroupMember
+	// Check if user can create storyboard based on collaboration status
 	canCreate := story.CanCreateStoryboard(userID, false)
 
 	if canCreate {

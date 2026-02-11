@@ -42,36 +42,21 @@ func (r *Repository) GetStyleConfigByID(ctx context.Context, id string) (*domain
 }
 
 // ListStyleConfigs retrieves all style configurations with optional pagination
-// If groupID is provided, returns group-specific styles first, then public styles
-func (r *Repository) ListStyleConfigs(ctx context.Context, groupID string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
+// V1/V2 MVP: Returns all public styles (Group functionality removed)
+func (r *Repository) ListStyleConfigs(ctx context.Context, limit, offset int) ([]*domain.StyleConfig, int64, error) {
 	var dbStyleConfigs []StyleConfig
 	var total int64
 
-	// Build base query - include public styles (no group/user) and group-specific styles
+	// Build base query - all public styles
 	baseQuery := r.db.WithContext(ctx).Model(&StyleConfig{})
-	if groupID != "" {
-		// Include public styles (group_id is empty) OR group-specific styles
-		baseQuery = baseQuery.Where("(group_id = '' OR group_id IS NULL) OR group_id = ?", groupID)
-	} else {
-		// Only public styles when no groupID specified
-		baseQuery = baseQuery.Where("group_id = '' OR group_id IS NULL")
-	}
 
 	// Get total count
 	if err := baseQuery.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count style configs: %w", err)
 	}
 
-	// Get paginated results with group styles first
-	query := r.db.WithContext(ctx)
-	if groupID != "" {
-		query = query.Where("(group_id = '' OR group_id IS NULL) OR group_id = ?", groupID)
-		// Order: group-specific styles first, then by created_at
-		query = query.Order(gorm.Expr("CASE WHEN group_id = ? THEN 0 ELSE 1 END, created_at ASC", groupID))
-	} else {
-		query = query.Where("group_id = '' OR group_id IS NULL")
-		query = query.Order("created_at ASC")
-	}
+	// Get paginated results ordered by created_at
+	query := r.db.WithContext(ctx).Order("created_at ASC")
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -93,42 +78,26 @@ func (r *Repository) ListStyleConfigs(ctx context.Context, groupID string, limit
 }
 
 // SearchStyleConfigs searches style configurations by style name or description
-// If groupID is provided, group-specific styles are prioritized in the results
-func (r *Repository) SearchStyleConfigs(ctx context.Context, keyword, groupID string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
+// V1/V2 MVP: Searches all public styles (Group functionality removed)
+func (r *Repository) SearchStyleConfigs(ctx context.Context, keyword string, limit, offset int) ([]*domain.StyleConfig, int64, error) {
 	var dbStyleConfigs []StyleConfig
 	var total int64
 
 	searchPattern := "%" + keyword + "%"
 
-	// Build base query with search and group filtering
+	// Build base query with search
 	baseQuery := r.db.WithContext(ctx).Model(&StyleConfig{}).
 		Where("style LIKE ? OR description LIKE ?", searchPattern, searchPattern)
-
-	if groupID != "" {
-		// Include public styles OR group-specific styles
-		baseQuery = baseQuery.Where("(group_id = '' OR group_id IS NULL) OR group_id = ?", groupID)
-	} else {
-		// Only public styles
-		baseQuery = baseQuery.Where("group_id = '' OR group_id IS NULL")
-	}
 
 	// Get total count for filtered results
 	if err := baseQuery.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count filtered style configs: %w", err)
 	}
 
-	// Get paginated filtered results with group styles first
+	// Get paginated filtered results ordered by created_at
 	query := r.db.WithContext(ctx).
-		Where("style LIKE ? OR description LIKE ?", searchPattern, searchPattern)
-
-	if groupID != "" {
-		query = query.Where("(group_id = '' OR group_id IS NULL) OR group_id = ?", groupID)
-		// Order: group-specific styles first, then by created_at
-		query = query.Order(gorm.Expr("CASE WHEN group_id = ? THEN 0 ELSE 1 END, created_at ASC", groupID))
-	} else {
-		query = query.Where("group_id = '' OR group_id IS NULL")
-		query = query.Order("created_at ASC")
-	}
+		Where("style LIKE ? OR description LIKE ?", searchPattern, searchPattern).
+		Order("created_at ASC")
 
 	if limit > 0 {
 		query = query.Limit(limit)

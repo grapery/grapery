@@ -26,8 +26,6 @@ type User struct {
 	Following           int            `gorm:"default:0"`
 	StoryboardCount     int            `gorm:"default:0;index"`                // Number of storyboards created by this user
 	FragmentsCount      int            `gorm:"default:0;index"`                // Number of fragments created by this user
-	GroupsCount         int            `gorm:"default:0"`                      // Number of groups the user has joined
-	GroupsCreated       int            `gorm:"default:0"`                      // Number of groups created by this user
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
@@ -60,8 +58,6 @@ type Story struct {
 	CoverImage          string         `gorm:"size:500"`
 	AuthorID            string         `gorm:"size:36;not null;index"`
 	Author              User           `gorm:"foreignKey:AuthorID"`
-	GroupID             *string        `gorm:"size:36;index"` // Group ID if the story belongs to a group
-	Group               *Group         `gorm:"foreignKey:GroupID"`
 	SourceFragmentID    *string        `gorm:"size:36;index"` // 来源碎片ID（当故事从碎片转换而来时）
 	Likes               int            `gorm:"default:0;index"`
 	Followers           int            `gorm:"default:0"`
@@ -71,7 +67,7 @@ type Story struct {
 	Genre               string         `gorm:"size:50;index"`
 	Style               string         `gorm:"type:text"`                     // Story style JSON (完整的StyleConfig信息，可为空)
 	Status              string         `gorm:"size:20;default:'draft';index"` // draft, published, rendering
-	IsCollaborationOpen bool           `gorm:"default:false;index"`           // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen bool           `gorm:"default:false;index"`           // Whether collaboration is open: true=anyone can edit, false=only author can edit
 	UseAI               bool           `gorm:"default:true"`                  // AI开关（创建时确定）
 	AIAssistanceOptions string         `gorm:"type:text"`                     // AI辅助选项 JSON
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
@@ -131,6 +127,11 @@ type Storyboard struct {
 	ForkCount        int            `gorm:"default:0;index"`
 	Views            int            `gorm:"default:0;index"`
 	TokenConsumption int            `gorm:"default:0"` // Aggregated from all generation records
+
+	// 平行宇宙系统字段
+	FateSnapshot      string  `gorm:"type:json"`              // 分叉时刻所有角色的状态快照 (JSON)
+	FateSnapshotHash  *string `gorm:"size:64;index"`          // 命运快照哈希值，用于检测状态变化
+
 	CreatedAt        time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt        time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
@@ -268,12 +269,35 @@ type Character struct {
 	Traits                   string         `gorm:"type:text"` // JSON array
 	Skills                   string         `gorm:"type:text"` // JSON array
 	IsPublic                 bool           `gorm:"default:true;index"`
-	PosterCreationPermission string         `gorm:"size:50;default:'creator_only'"` // 海报创建权限: creator_only, group_members, anyone
-	GroupID                  *string        `gorm:"size:36;index"`
-	Group                    *Group         `gorm:"foreignKey:GroupID"`
+	PosterCreationPermission string         `gorm:"size:50;default:'creator_only'"` // 海报创建权限: creator_only, anyone
+
+	// 客串角色系统字段
+	OriginStoryID *string `gorm:"size:36;index"` // 原始故事ID，用于客串角色
+	IsCameo       bool    `gorm:"default:false;index"` // 是否为客串角色
+
 	CreatedAt                time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt                time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt                gorm.DeletedAt `gorm:"index"`
+}
+
+// CharacterCameo database model (角色客串关系表)
+// 用于管理角色跨故事客串关系
+type CharacterCameo struct {
+	ID               string         `gorm:"primaryKey;size:36"`
+	CharacterID      string         `gorm:"size:36;not null;index:idx_cameo_character_target,unique"`
+	Character        Character      `gorm:"foreignKey:CharacterID;constraint:OnDelete:CASCADE"`
+	TargetStoryID    string         `gorm:"size:36;not null;index:idx_cameo_target_story;index:idx_cameo_character_target,unique"`
+	TargetStory      Story          `gorm:"foreignKey:TargetStoryID;constraint:OnDelete:CASCADE"`
+	CameoRole        string         `gorm:"size:100"` // 客串角色定位（如：主角、配角、NPC等）
+	AdaptationNotes  string         `gorm:"type:text"` // 角色适配说明，记录如何在目标故事中调整角色
+	CreatedAt        int64          `gorm:"type:bigint;autoCreateTime;index"`
+	UpdatedAt        *int64         `gorm:"type:bigint"`
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
+}
+
+// TableName specifies the table name for CharacterCameo
+func (CharacterCameo) TableName() string {
+	return "character_cameos"
 }
 
 // StoryScene database model (story-scoped scene assets - static locations)
@@ -321,6 +345,10 @@ type StoryboardScene struct {
 	IsSubdivided      bool           `gorm:"default:false"` // Whether keyframe subdivision was applied
 	VideoSegmentsJSON string         `gorm:"type:text"`     // JSON storage for video segments
 	MiddleFrameURLs   string         `gorm:"type:text"`     // JSON storage for middle frame URLs
+
+	// 平行宇宙系统字段
+	ContextSnapshot string `gorm:"type:json"` // 该场景结束后的角色状态增量 (JSON)
+
 	CreatedAt         time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt         time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt         gorm.DeletedAt `gorm:"index"`
@@ -353,25 +381,6 @@ type StoryboardSceneLink struct {
 	CreatedAt      time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt      time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
-}
-
-// Group database model
-type Group struct {
-	ID           string         `gorm:"primaryKey;size:36"`
-	Name         string         `gorm:"size:100;not null;index"`
-	Description  string         `gorm:"type:text"`
-	Avatar       string         `gorm:"size:500"`
-	CoverImage   string         `gorm:"size:500"`
-	Members      int            `gorm:"default:0"`
-	Stories      int            `gorm:"default:0"`
-	Followers    int            `gorm:"default:0"`
-	BlockedCount int            `gorm:"default:0"` // Number of blocked users
-	CreatorID    string         `gorm:"size:36;not null;index"`
-	Creator      User           `gorm:"foreignKey:CreatorID"`
-	Public       bool           `gorm:"default:true;index"`
-	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 // Comment database model (支持嵌套回复和多目标类型)
@@ -424,21 +433,6 @@ type StoryParticipant struct {
 
 // (Storyboard 已在上面定义)
 
-// GroupActivity database model
-type GroupActivity struct {
-	ID        string         `gorm:"primaryKey;size:36"`
-	GroupID   string         `gorm:"size:36;not null;index"`
-	Group     Group          `gorm:"foreignKey:GroupID"`
-	Type      string         `gorm:"size:50;not null"`
-	UserID    string         `gorm:"size:36;not null;index"`
-	User      User           `gorm:"foreignKey:UserID"`
-	StoryID   *string        `gorm:"size:36;index"`
-	Story     *Story         `gorm:"foreignKey:StoryID"`
-	Message   string         `gorm:"size:500"`
-	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
 // ========== 关系表 ==========
 
 // UserFollow 用户关注关系
@@ -483,73 +477,6 @@ type CharacterFollow struct {
 	Character   Character      `gorm:"foreignKey:CharacterID"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime"`
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
-}
-
-// GroupRole 群组角色定义表
-type GroupRole struct {
-	ID          string    `gorm:"primaryKey;size:36"`
-	RoleCode    string    `gorm:"size:50;not null;uniqueIndex"` // creator, admin, member, outsider
-	Name        string    `gorm:"size:100;not null"`            // 小组创建者、小组管理员、小组成员、小组外部人员
-	Description string    `gorm:"type:text"`
-	IsSystem    bool      `gorm:"default:true;index"` // 是否为系统内置角色
-	CreatedAt   time.Time `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
-}
-
-// GroupMember 群组成员
-type GroupMember struct {
-	ID        string         `gorm:"primaryKey;size:36"`
-	GroupID   string         `gorm:"size:36;not null;index:idx_group_user,unique"`
-	Group     Group          `gorm:"foreignKey:GroupID"`
-	UserID    string         `gorm:"size:36;not null;index:idx_group_user,unique;index"`
-	User      User           `gorm:"foreignKey:UserID"`
-	Role      string         `gorm:"size:20;not null"` // owner, admin, moderator, member (保留用于向后兼容)
-	RoleID    *string        `gorm:"size:36;index"`    // 关联到GroupRole表 (可为空)
-	RoleRef   *GroupRole     `gorm:"foreignKey:RoleID"`
-	InvitedBy string         `gorm:"size:36"`
-	JoinedAt  time.Time      `gorm:"autoCreateTime"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
-// GroupInvitation 群组邀请
-type GroupInvitation struct {
-	ID        string         `gorm:"primaryKey;size:36"`
-	GroupID   string         `gorm:"size:36;not null;index"`
-	Group     Group          `gorm:"foreignKey:GroupID"`
-	InviterID string         `gorm:"size:36;not null;index"`
-	Inviter   User           `gorm:"foreignKey:InviterID"`
-	InviteeID string         `gorm:"size:36;not null;index"`
-	Invitee   User           `gorm:"foreignKey:InviteeID"`
-	Status    string         `gorm:"size:20;not null;default:'pending';index"`
-	Message   string         `gorm:"type:text"`
-	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
-	ExpiresAt time.Time      `gorm:"index"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
-// GroupFollow 群组关注
-type GroupFollow struct {
-	ID        string         `gorm:"primaryKey;size:36"`
-	GroupID   string         `gorm:"size:36;not null;index:idx_user_group,unique"`
-	Group     Group          `gorm:"foreignKey:GroupID"`
-	UserID    string         `gorm:"size:36;not null;index:idx_user_group,unique;index"`
-	User      User           `gorm:"foreignKey:UserID"`
-	CreatedAt time.Time      `gorm:"autoCreateTime"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
-// GroupBlacklist 小组黑名单
-type GroupBlacklist struct {
-	ID        string         `gorm:"primaryKey;size:36"`
-	GroupID   string         `gorm:"size:36;not null;index:idx_group_blacklist,unique"`
-	Group     Group          `gorm:"foreignKey:GroupID"`
-	UserID    string         `gorm:"size:36;not null;index:idx_group_blacklist,unique;index"`
-	User      User           `gorm:"foreignKey:UserID"`
-	BlockedBy string         `gorm:"size:36;not null;index"`
-	Admin     User           `gorm:"foreignKey:BlockedBy"`
-	Reason    string         `gorm:"type:text"`
-	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 // CommentLike 评论点赞
@@ -766,7 +693,6 @@ type StyleConfig struct {
 	Style          string `gorm:"size:100;not null;index"`
 	Description    string `gorm:"type:text"`
 	SampleImageURL string `gorm:"column:sample_image_url;size:512"` // 示例图片URL
-	GroupID        string `gorm:"column:group_id;size:36;index"`    // 所属小组ID（私有风格）
 	UserID         string `gorm:"column:user_id;size:36;index"`     // 所属用户ID（私有风格）
 	CreatedAt      int64  `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt      int64  `gorm:"type:bigint;autoUpdateTime"`
@@ -1167,105 +1093,6 @@ func migrate(db *gorm.DB) error {
 	// 此函数已废弃，迁移现在由统一的 migrations 系统处理
 	// 如果需要手动执行迁移，请使用 migrations.GetRegistry().ExecuteAll()
 	return nil
-	// 以下是旧的迁移代码，已废弃：
-	/*return db.AutoMigrate(
-		// 核心实体
-		&User{},
-		&Story{},
-		&Panel{},
-		&Storyboard{},
-		&Character{},
-		&StoryScene{},      // Static story-level locations
-		&StoryboardScene{}, // AI-generated plot scenes within storyboards
-		&StoryboardCharacterLink{},
-		&StoryboardSceneLink{},
-		&Group{},
-
-		// Storyboard AI 生成记录
-		&StoryboardContentGeneration{},
-		&StoryboardSceneGeneration{},
-		&StoryboardImageGeneration{},
-		&StoryboardVideoGeneration{},
-
-		// 关系表
-		&UserFollow{},
-		&StoryLike{},
-		&StoryFollow{},
-		&StoryContributor{},
-		&CharacterFollow{},
-		&GroupMember{},
-		&GroupRole{},
-		&GroupInvitation{},
-		&CommentLike{},
-		&StoryboardLike{},
-
-		// 业务功能
-		&Comment{},
-		&ChatThread{},
-		&ChatMessage{},
-		&GroupActivity{},
-		&Asset{},
-		&Notification{},
-		&UserSettings{},
-		&UserActivity{},
-		&CharacterPoster{},
-		&CharacterAnalytics{},
-
-		// 标签系统
-		&Tag{},
-		&StoryTag{},
-		&CharacterTag{},
-
-		// 搜索和浏览
-		&SearchHistory{},
-		&ViewHistory{},
-		&Report{},
-
-		// Agent 系统
-		&Agent{},
-		&AgentSkill{},
-		&AgentSkillUsage{},
-		&AgentInteraction{},
-		&AgentMemory{},
-
-		// AI 和渲染任务
-		&AITask{},
-		&RenderTask{},
-		&StoryPublication{},
-		&AIGenerationRecord{},
-
-		// 支付订阅
-		&Membership{},
-		&SubscriptionPlan{},
-		&SubscriptionOrder{},
-		&TokenTransaction{},
-
-		// 邀请码系统
-		&InvitationCode{},
-
-		// 用户统计
-		&UserStatistics{},
-
-		// Storyboard Chat 会话
-		&StoryboardChatSession{},
-		&StoryboardChatMessage{},
-
-		// 用户登录记录
-		&UserLoginRecord{},
-
-		// 第三方登录
-		&ThirdPartyLogin{},
-
-		// 用户设备（推送通知）
-		&UserDevice{},
-
-		// Writers Room 聊天室
-		&WritersRoomDB{},
-		&WritersRoomParticipantDB{},
-		&WritersRoomMessageDB{},
-		&WritersRoomMessageReactionDB{},
-		&MessageReadReceiptDB{},
-	)*/
 }
 
 // ThirdPartyLogin 第三方登录表（支持 Google/Apple 跨设备登录）
@@ -1285,73 +1112,6 @@ type ThirdPartyLogin struct {
 	CreatedAt        int64          `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt        int64          `gorm:"type:bigint;autoUpdateTime"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
-}
-
-// ========== Writers Room Database Models ==========
-
-// WritersRoomDB writers room database model
-type WritersRoomDB struct {
-	ID               string `gorm:"primaryKey;size:36"`
-	StoryID          string `gorm:"size:36;not null;uniqueIndex:idx_story_id"`
-	Title            string `gorm:"size:255;not null"`
-	LastMessage      string `gorm:"type:text"`
-	LastMessageTime  int64  `gorm:"type:bigint"`
-	MessageCount     int    `gorm:"default:0"`
-	ParticipantCount int    `gorm:"default:0"`
-	CreatedAt        int64  `gorm:"type:bigint;not null"`
-	UpdatedAt        int64  `gorm:"type:bigint;not null;index"`
-}
-
-// WritersRoomParticipantDB writers room participant database model
-type WritersRoomParticipantDB struct {
-	ID         string `gorm:"primaryKey;size:36"`
-	RoomID     string `gorm:"size:36;not null;index:idx_room_user"`
-	UserID     string `gorm:"size:36;not null;index:idx_room_user"`
-	Role       string `gorm:"size:20;not null;default:'member'"` // owner, admin, member
-	JoinedAt   int64  `gorm:"type:bigint;not null"`
-	LastReadAt int64  `gorm:"type:bigint;default:0"`
-
-	User User `gorm:"foreignKey:UserID"`
-}
-
-// WritersRoomMessageDB writers room message database model
-type WritersRoomMessageDB struct {
-	ID               string  `gorm:"primaryKey;size:36"`
-	RoomID           string  `gorm:"size:36;not null;index:idx_room_id_created_at"`
-	SenderID         string  `gorm:"size:36;not null;index:idx_sender_id"`
-	Content          string  `gorm:"type:text;not null"`
-	MessageType      string  `gorm:"size:20;not null;default:'text'"` // text, image, mixed, system
-	AttachmentsJSON  string  `gorm:"type:json"`
-	MentionsJSON     string  `gorm:"type:json"`
-	ReplyToMessageID *string `gorm:"size:36;index:idx_reply_to_message_id"`
-	CreatedAt        int64   `gorm:"type:bigint;not null"`
-	UpdatedAt        int64   `gorm:"type:bigint;not null"`
-
-	Sender *WritersRoomParticipantDB `gorm:"foreignKey:SenderID"`
-}
-
-// WritersRoomMessageReactionDB writers room message reaction database model
-type WritersRoomMessageReactionDB struct {
-	ID           string `gorm:"primaryKey;size:36"`
-	MessageID    string `gorm:"size:36;not null;index:idx_message_id"`
-	UserID       string `gorm:"size:36;not null;index:idx_user_id"`
-	ReactionType string `gorm:"size:50;not null;index:idx_message_user_reaction"`
-	EmojiCode    string `gorm:"size:50"`
-	CreatedAt    int64  `gorm:"type:bigint;not null"`
-
-	User    User                  `gorm:"foreignKey:UserID"`
-	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
-}
-
-// MessageReadReceiptDB message read receipt database model
-type MessageReadReceiptDB struct {
-	ID        string `gorm:"primaryKey;size:36"`
-	MessageID string `gorm:"size:36;not null;index:idx_message_id"`
-	UserID    string `gorm:"size:36;not null;index:idx_user_id"`
-	ReadAt    int64  `gorm:"type:bigint;not null;index:idx_message_user"`
-
-	User    User                  `gorm:"foreignKey:UserID"`
-	Message *WritersRoomMessageDB `gorm:"foreignKey:MessageID"`
 }
 
 // ========== Fragment 相关表 ==========

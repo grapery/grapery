@@ -11,13 +11,13 @@
 ### 新表
 
 #### follows
-存储关注关系，支持多态关联（story, user, group, character）。
+存储关注关系，支持多态关联（story, user, character）。
 
 | Field | Type | Description |
 |-------|------|-------------|
 | id | VARCHAR(36) | 主键 |
 | follower_id | VARCHAR(36) | 关注者用户ID |
-| followable_type | VARCHAR(50) | 被关注对象类型: story, user, group, character |
+| followable_type | VARCHAR(50) | 被关注对象类型: story, user, character |
 | followable_id | VARCHAR(36) | 被关注对象ID |
 | notifications_enabled | BOOLEAN | 是否接收通知 |
 | created_at | BIGINT | 创建时间戳 |
@@ -75,7 +75,7 @@
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| poster_creation_permission | VARCHAR(50) | 'creator_only' | 海报创建权限: creator_only, group_members, anyone |
+| poster_creation_permission | VARCHAR(50) | 'creator_only' | 海报创建权限: creator_only, anyone |
 
 ### 相关文件
 
@@ -103,9 +103,7 @@
 
 - 核心实体表：users, stories, characters, storyboards, panels
 - 关系表：user_follows, story_likes, story_follows, character_follows
-- 群组系统：groups, group_members, group_roles, group_invitations
 - AI 生成记录：storyboard_content_generations, storyboard_image_generations, storyboard_video_generations
-- Writers Room 聊天系统：writers_rooms, writers_room_messages
 - Fragment 系统：fragments, fragment_likes, fragment_comments
 
 详细的 schema 定义请参考 `internal/repository/mysql/models.go`。

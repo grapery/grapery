@@ -36,7 +36,7 @@ type CreateCharacterRequest struct {
 	ReferenceImage  string   `json:"referenceImage" binding:"omitempty,url"`           // 参考图URL
 
 	// 新增：海报创建权限
-	PosterCreationPermission string `json:"posterCreationPermission" binding:"omitempty,oneof=creator_only group_members anyone"`
+	PosterCreationPermission string `json:"posterCreationPermission" binding:"omitempty,oneof=creator_only anyone"`
 }
 
 // UpdateCharacterRequest 更新角色请求

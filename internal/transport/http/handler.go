@@ -12,7 +12,6 @@ import (
 type Handler struct {
 	svc                 *service.Service
 	aiService           *service.AIService
-	writersRoomSvc      *service.WritersRoomService
 	storyboardPathSvc   *service.StoryboardPathService
 	logger              *zap.Logger
 }
@@ -21,21 +20,18 @@ type Handler struct {
 type HandlerDependencies struct {
 	Service               *service.Service
 	AIService             *service.AIService
-	WritersRoomService    *service.WritersRoomService
 	StoryboardPathService *service.StoryboardPathService
 	InteractionService    service.InteractionService
 	UserSettingsService   service.UserSettingsService
-	GroupShowcaseService  GroupShowcaseService
 	Logger                *zap.Logger
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
-func NewHandler(svc *service.Service, aiService *service.AIService, writersRoomSvc *service.WritersRoomService, logger *zap.Logger) *Handler {
+func NewHandler(svc *service.Service, aiService *service.AIService, logger *zap.Logger) *Handler {
 	return &Handler{
-		svc:            svc,
-		aiService:      aiService,
-		writersRoomSvc: writersRoomSvc,
-		logger:         logger,
+		svc:       svc,
+		aiService: aiService,
+		logger:    logger,
 	}
 }
 
@@ -44,7 +40,6 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 	return &Handler{
 		svc:                 deps.Service,
 		aiService:           deps.AIService,
-		writersRoomSvc:      deps.WritersRoomService,
 		storyboardPathSvc:   deps.StoryboardPathService,
 		logger:              deps.Logger,
 	}
@@ -95,7 +90,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/users/:id/liked-storyboards", h.GetLikedStoryboards)
 			authenticated.GET("/users/:id/draft-storyboards", h.GetDraftStoryboards)
 			authenticated.GET("/users/:id/activities", h.GetUserActivityList)
-			authenticated.GET("/users/:id/activities/heatmap", h.GetUserActivityHeatmapByID)
 			authenticated.GET("/users/:id/stats", h.GetUserStats)
 			authenticated.GET("/tags/popular", h.GetPopularTags)
 			authenticated.GET("/tags/:id/stories", h.GetStoriesByTag)
@@ -107,7 +101,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/storyboards/feed", h.GetStoryboardFeed) // Community storyboard feed
 			// Dashboard storyboard feeds (authenticated)
 			authenticated.GET("/dashboard/storyboards", h.GetDashboardStoryboards)
-			authenticated.GET("/dashboard/groups/storyboards", h.GetDashboardGroupStoryboards)
 			authenticated.GET("/dashboard/characters/storyboards", h.GetDashboardCharacterStoryboards)
 			authenticated.GET("/dashboard/trending/storyboards", h.GetTrendingStoryboards)
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
@@ -126,18 +119,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/characters/:id/analytics", h.GetCharacterAnalytics)
 			authenticated.GET("/characters/:id/posters", h.GetCharacterPosters)
 			authenticated.GET("/characters/:id/storyboards", h.GetCharacterStoryboards)
-
-			// 群组相关
-			authenticated.GET("/groups", h.ListGroups)
-			authenticated.GET("/groups/:id", h.GetGroup)
-			authenticated.GET("/groups/:id/members", h.GetGroupMembers)
-			authenticated.GET("/groups/:id/membership", h.CheckGroupMembership) // 检查成员资格
-			authenticated.GET("/groups/:id/activities", h.GetGroupActivities)
-			authenticated.GET("/groups/:id/activities/heatmap", h.GetGroupActivityHeatmap)
-			authenticated.GET("/groups/:id/stories", h.GetGroupStories) // 获取群组的故事列表
-			authenticated.GET("/groups/followed", h.ListFollowedGroups) // 获取用户关注的群组列表
-			// 获取全局活动
-			authenticated.GET("/activities/global", h.GetGlobalActivities)
 
 			// 用户相关
 			authenticated.GET("/auth/me", h.CurrentUser)
@@ -183,6 +164,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)
 			authenticated.POST("/storyboards/:id/fork", h.ForkStoryboard)
+			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
 			authenticated.POST("/storyboards/:id/like", h.LikeStoryboard)
 			authenticated.DELETE("/storyboards/:id/like", h.UnlikeStoryboard)
 
@@ -242,28 +224,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/posters/:id/share", h.ShareCharacterPoster)
 			authenticated.DELETE("/posters/:id", h.DeleteCharacterPoster)
 
-			// 群组相关
-			authenticated.POST("/groups", h.CreateGroup)
-			authenticated.PUT("/groups/:id", h.UpdateGroup)
-			authenticated.DELETE("/groups/:id", h.DeleteGroup)
-			authenticated.POST("/groups/:id/avatar", h.UpdateGroupAvatar)
-			authenticated.POST("/groups/:id/invite", h.InviteMember)
-			authenticated.DELETE("/groups/:id/members/:userId", h.RemoveMember)
-			authenticated.POST("/groups/:id/members/:userId/role", h.UpdateMemberRole)
-			authenticated.POST("/groups/:id/members/:userId/role-by-code", h.UpdateMemberRoleByCode) // 使用角色代码更新角色
-			authenticated.POST("/groups/:id/leave", h.LeaveGroup)
-			authenticated.POST("/groups/:id/follow", h.FollowGroup)                    // 关注群组
-			authenticated.DELETE("/groups/:id/follow", h.UnfollowGroup)                // 取消关注群组
-			authenticated.GET("/groups/roles", h.ListGroupRoles)                       // 获取所有角色列表
-			authenticated.GET("/groups/roles/:code", h.GetGroupRoleByCode)             // 根据代码获取角色
-			authenticated.GET("/groups/roles/:code/permissions", h.GetRolePermissions) // 获取角色权限
-			authenticated.POST("/groups/roles/initialize", h.InitializeGroupRoles)     // 初始化系统角色
-
-			// 邀请相关
-			authenticated.GET("/invitations/pending", h.GetPendingInvitations)
-			authenticated.POST("/invitations/:id/accept", h.AcceptInvitation)
-			authenticated.POST("/invitations/:id/reject", h.RejectInvitation)
-
 			// 文件上传相关
 			authenticated.POST("/upload/image", h.UploadImage)
 			authenticated.POST("/upload/avatar", h.UploadAvatar)
@@ -278,9 +238,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 统计相关
 			authenticated.GET("/dashboard/stats", h.GetDashboardStats)
-
-			// 活动流相关
-			authenticated.GET("/activities", h.GetUserActivities)
 
 			// 资产管理相关
 			authenticated.GET("/assets", h.ListAssets)
@@ -334,13 +291,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// 用户设置相关 (User Settings)
 			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
 			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
-
-			// 小组展示相关 (Group Showcases)
-			showcaseHandler := NewGroupShowcaseHandler(deps.GroupShowcaseService)
-			authenticated.GET("/groups/:id/showcases", showcaseHandler.GetGroupShowcases)
-			authenticated.POST("/groups/:id/showcases", showcaseHandler.AddShowcase)
-			authenticated.DELETE("/groups/:id/showcases/:showcaseId", showcaseHandler.RemoveShowcase)
-			authenticated.PUT("/groups/:id/showcases/:showcaseId/order", showcaseHandler.UpdateShowcaseOrder)
 
 			// 碎片相关 (Fragments)
 			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)

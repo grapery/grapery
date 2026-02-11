@@ -110,17 +110,13 @@ func (h *Handler) SSEActivityStream(c *gin.Context) {
 			c.Writer.Flush()
 
 		case <-ticker.C:
-			// 获取最新活动
-			activities, err := h.svc.GetUserActivities(c.Request.Context(), userID, 10)
-			if err != nil {
-				continue
-			}
-
-			if len(activities) > 0 {
-				activitiesData, _ := json.Marshal(activities)
-				fmt.Fprintf(c.Writer, "event: activities\ndata: %s\n\n", activitiesData)
-				c.Writer.Flush()
-			}
+			// V1/V2 MVP: 活动流已移除 Group 相关功能
+			// 未来 V2 可能会添加点赞、评论、关注等社交活动
+			// 目前发送空的活动列表保持连接
+			activities := []interface{}{}
+			activitiesData, _ := json.Marshal(activities)
+			fmt.Fprintf(c.Writer, "event: activities\ndata: %s\n\n", activitiesData)
+			c.Writer.Flush()
 		}
 	}
 }

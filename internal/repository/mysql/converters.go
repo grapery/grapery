@@ -147,8 +147,6 @@ func UserToModel(d *domain.User) *User {
 		Followers:           d.Followers,
 		Following:           d.Following,
 		StoryboardCount:     d.StoryboardCount,
-		GroupsCount:         d.GroupsCount,
-		GroupsCreated:       d.GroupsCreated,
 		Status:              d.Status,
 		EmailVerified:       d.EmailVerified,
 		LastLoginAt:         int64PtrToInt64(d.LastLoginAt),
@@ -178,8 +176,6 @@ func ModelToUser(m *User) *domain.User {
 		Followers:           m.Followers,
 		Following:           m.Following,
 		StoryboardCount:     m.StoryboardCount,
-		GroupsCount:         m.GroupsCount,
-		GroupsCreated:       m.GroupsCreated,
 		Status:              m.Status,
 		EmailVerified:       m.EmailVerified,
 		LastLoginAt:         int64ToInt64Ptr(m.LastLoginAt),
@@ -201,7 +197,6 @@ func StoryToModel(d *domain.Story) *Story {
 		Description:         d.Description,
 		CoverImage:          d.CoverImage,
 		AuthorID:            d.AuthorID,
-		GroupID:             stringToStringPtr(d.GroupID),
 		SourceFragmentID:    d.SourceFragmentID,
 		Likes:               d.Likes,
 		Followers:           d.Followers,
@@ -230,7 +225,6 @@ func ModelToStory(m *Story) *domain.Story {
 		Description:         m.Description,
 		CoverImage:          m.CoverImage,
 		AuthorID:            m.AuthorID,
-		GroupID:             stringPtrToString(m.GroupID),
 		SourceFragmentID:    m.SourceFragmentID,
 		Likes:               m.Likes,
 		Followers:           m.Followers,
@@ -463,7 +457,6 @@ func CharacterToModel(d *domain.Character) *Character {
 		Traits:       d.TraitsJSON,
 		Skills:       d.SkillsJSON,
 		IsPublic:     d.IsPublic,
-		GroupID:      d.GroupID,
 		CreatedAt:    unixToTime(d.CreatedAt),
 		UpdatedAt:    unixToTime(d.UpdatedAt),
 	}
@@ -492,7 +485,6 @@ func ModelToCharacter(m *Character) *domain.Character {
 		SourceImage:  m.SourceImage,
 		CreatedBy:    m.CreatedBy,
 		LastEditedBy: m.LastEditedBy,
-		GroupID:      m.GroupID,
 		Likes:        m.Likes,
 		Followers:    m.Followers,
 		Stories:      m.Stories,
@@ -503,56 +495,6 @@ func ModelToCharacter(m *Character) *domain.Character {
 		d.Author = ModelToUser(&m.Author)
 	}
 	// AfterFind hook will populate Traits and Skills
-	return d
-}
-
-// ========== Group 转换 ==========
-
-// GroupToModel 将 domain.Group 转换为 MySQL Group 模型
-func GroupToModel(d *domain.Group) *Group {
-	if d == nil {
-		return nil
-	}
-	return &Group{
-		ID:           d.ID,
-		Name:         d.Name,
-		Description:  d.Description,
-		Avatar:       d.Avatar,
-		CoverImage:   d.CoverImage,
-		Members:      d.Members,
-		Stories:      d.Stories,
-		Followers:    d.Followers,
-		BlockedCount: d.BlockedCount,
-		CreatorID:    d.CreatorID,
-		Public:       d.Public,
-		CreatedAt:    unixToTime(d.CreatedAt),
-		UpdatedAt:    unixToTime(d.UpdatedAt),
-	}
-}
-
-// ModelToGroup 将 MySQL Group 模型转换为 domain.Group
-func ModelToGroup(m *Group) *domain.Group {
-	if m == nil {
-		return nil
-	}
-	d := &domain.Group{
-		ID:           m.ID,
-		CreatorID:    m.CreatorID,
-		Name:         m.Name,
-		Description:  m.Description,
-		Avatar:       m.Avatar,
-		CoverImage:   m.CoverImage,
-		Members:      m.Members,
-		Stories:      m.Stories,
-		Followers:    m.Followers,
-		BlockedCount: m.BlockedCount,
-		Public:       m.Public,
-		CreatedAt:    timeToUnix(m.CreatedAt),
-		UpdatedAt:    timeToUnix(m.UpdatedAt),
-	}
-	if m.Creator.ID != "" {
-		d.Creator = ModelToUser(&m.Creator)
-	}
 	return d
 }
 
@@ -707,68 +649,6 @@ func ModelToCharacterFollow(m *CharacterFollow) *domain.CharacterFollow {
 		UserID:      m.UserID,
 		CharacterID: m.CharacterID,
 		CreatedAt:   timeToUnix(m.CreatedAt),
-	}
-}
-
-// GroupMemberToModel 将 domain.GroupMember 转换为 MySQL GroupMember 模型
-func GroupMemberToModel(d *domain.GroupMember) *GroupMember {
-	if d == nil {
-		return nil
-	}
-	return &GroupMember{
-		ID:       d.ID,
-		GroupID:  d.GroupID,
-		UserID:   d.UserID,
-		Role:     string(d.Role),
-		JoinedAt: unixToTime(d.JoinedAt),
-	}
-}
-
-// ModelToGroupMember 将 MySQL GroupMember 模型转换为 domain.GroupMember
-func ModelToGroupMember(m *GroupMember) *domain.GroupMember {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupMember{
-		ID:       m.ID,
-		GroupID:  m.GroupID,
-		UserID:   m.UserID,
-		Role:     domain.GroupMemberRole(m.Role),
-		JoinedAt: timeToUnix(m.JoinedAt),
-	}
-}
-
-// GroupInvitationToModel 将 domain.GroupInvitation 转换为 MySQL GroupInvitation 模型
-func GroupInvitationToModel(d *domain.GroupInvitation) *GroupInvitation {
-	if d == nil {
-		return nil
-	}
-	return &GroupInvitation{
-		ID:        d.ID,
-		GroupID:   d.GroupID,
-		InviterID: d.InviterID,
-		InviteeID: d.InviteeID,
-		Status:    d.Status,
-		Message:   d.Message,
-		CreatedAt: unixToTime(d.CreatedAt),
-		ExpiresAt: unixToTime(d.ExpiresAt),
-	}
-}
-
-// ModelToGroupInvitation 将 MySQL GroupInvitation 模型转换为 domain.GroupInvitation
-func ModelToGroupInvitation(m *GroupInvitation) *domain.GroupInvitation {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupInvitation{
-		ID:        m.ID,
-		GroupID:   m.GroupID,
-		InviterID: m.InviterID,
-		InviteeID: m.InviteeID,
-		Status:    m.Status,
-		Message:   m.Message,
-		CreatedAt: timeToUnix(m.CreatedAt),
-		ExpiresAt: timeToUnix(m.ExpiresAt),
 	}
 }
 
@@ -1714,7 +1594,6 @@ func StyleConfigToModel(d *domain.StyleConfig) *StyleConfig {
 		Style:          d.Style,
 		Description:    d.Description,
 		SampleImageURL: d.SampleImageURL,
-		GroupID:        d.GroupID,
 		UserID:         d.UserID,
 		CreatedAt:      d.CreatedAt,
 		UpdatedAt:      d.UpdatedAt,
@@ -1730,8 +1609,6 @@ func ModelToStyleConfig(m *StyleConfig) *domain.StyleConfig {
 		ID:             m.ID,
 		Style:          m.Style,
 		Description:    m.Description,
-		SampleImageURL: m.SampleImageURL,
-		GroupID:        m.GroupID,
 		UserID:         m.UserID,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
@@ -1995,43 +1872,6 @@ func ModelToCharacterAnalytics(m *CharacterAnalytics) *domain.CharacterAnalytics
 	}
 }
 
-// ========== GroupActivity 转换 ==========
-
-// GroupActivityToModel 将 domain.GroupActivity 转换为 MySQL GroupActivity 模型
-func GroupActivityToModel(d *domain.GroupActivity) *GroupActivity {
-	if d == nil {
-		return nil
-	}
-	return &GroupActivity{
-		ID:        d.ID,
-		GroupID:   d.GroupID,
-		Type:      d.Type,
-		UserID:    d.UserID,
-		StoryID:   stringToStringPtr(d.StoryID),
-		Message:   d.Message,
-		CreatedAt: unixToTime(d.Timestamp),
-	}
-}
-
-// ModelToGroupActivity 将 MySQL GroupActivity 模型转换为 domain.GroupActivity
-func ModelToGroupActivity(m *GroupActivity) *domain.GroupActivity {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupActivity{
-		ID:         m.ID,
-		GroupID:    m.GroupID,
-		Type:       m.Type,
-		UserID:     m.UserID,
-		UserName:   m.User.DisplayName,
-		UserAvatar: m.User.Avatar,
-		StoryID:    stringPtrToString(m.StoryID),
-		StoryTitle: getStoryTitle(m.Story),
-		Message:    m.Message,
-		Timestamp:  timeToUnix(m.CreatedAt),
-	}
-}
-
 // getStoryTitle 安全获取 Story 标题
 func getStoryTitle(story *Story) string {
 	if story != nil {
@@ -2067,15 +1907,6 @@ func ModelsToCharacters(models []Character) []*domain.Character {
 		characters[i] = ModelToCharacter(&models[i])
 	}
 	return characters
-}
-
-// ModelsToGroups 批量转换 Group
-func ModelsToGroups(models []Group) []*domain.Group {
-	groups := make([]*domain.Group, len(models))
-	for i := range models {
-		groups[i] = ModelToGroup(&models[i])
-	}
-	return groups
 }
 
 // ModelsToComments 批量转换 Comment
@@ -2128,15 +1959,6 @@ func ModelsToUserActivities(models []UserActivity) []*domain.UserActivity {
 	activities := make([]*domain.UserActivity, len(models))
 	for i := range models {
 		activities[i] = ModelToUserActivity(&models[i])
-	}
-	return activities
-}
-
-// ModelsToGroupActivities 批量转换 GroupActivity
-func ModelsToGroupActivities(models []GroupActivity) []*domain.GroupActivity {
-	activities := make([]*domain.GroupActivity, len(models))
-	for i := range models {
-		activities[i] = ModelToGroupActivity(&models[i])
 	}
 	return activities
 }
@@ -2863,218 +2685,6 @@ func jsonToPosterConceptDetails(jsonStr string) *domain.PosterConceptDetails {
 		return nil
 	}
 	return &details
-}
-
-// ========== Group Blacklist 转换 ==========
-
-// BlacklistToModel 将 domain.GroupBlacklist 转换为 MySQL GroupBlacklist 模型
-func BlacklistToModel(d *domain.GroupBlacklist) *GroupBlacklist {
-	if d == nil {
-		return nil
-	}
-	return &GroupBlacklist{
-		ID:        d.ID,
-		GroupID:   d.GroupID,
-		UserID:    d.UserID,
-		BlockedBy: d.BlockedBy,
-		Reason:    d.Reason,
-		CreatedAt: unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToGroupBlacklist 将 MySQL GroupBlacklist 模型转换为 domain.GroupBlacklist
-func ModelToGroupBlacklist(m *GroupBlacklist) *domain.GroupBlacklist {
-	if m == nil {
-		return nil
-	}
-	d := &domain.GroupBlacklist{
-		ID:        m.ID,
-		GroupID:   m.GroupID,
-		UserID:    m.UserID,
-		BlockedBy: m.BlockedBy,
-		Reason:    m.Reason,
-		CreatedAt: timeToUnix(m.CreatedAt),
-	}
-	if m.Group.ID != "" {
-		d.Group = ModelToGroup(&m.Group)
-	}
-	if m.User.ID != "" {
-		d.User = ModelToUser(&m.User)
-	}
-	if m.Admin.ID != "" {
-		d.Admin = ModelToUser(&m.Admin)
-	}
-	return d
-}
-
-// ModelToGroupBlacklistInfo 将 MySQL GroupBlacklist 模型转换为 domain.GroupBlacklistInfo（扩展信息）
-func ModelToGroupBlacklistInfo(m *GroupBlacklist) *domain.GroupBlacklistInfo {
-	if m == nil {
-		return nil
-	}
-	d := &domain.GroupBlacklistInfo{
-		ID:        m.ID,
-		GroupID:   m.GroupID,
-		UserID:    m.UserID,
-		BlockedBy: m.BlockedBy,
-		Reason:    m.Reason,
-		CreatedAt: timeToUnix(m.CreatedAt),
-	}
-	if m.User.ID != "" {
-		d.User = ModelToUser(&m.User)
-	}
-	if m.Admin.ID != "" {
-		d.Admin = ModelToUser(&m.Admin)
-	}
-	return d
-}
-
-// ========== Writers Room Converters ==========
-
-// ModelToWritersRoom 将 MySQL WritersRoomDB 模型转换为 domain.WritersRoom
-func ModelToWritersRoom(m *WritersRoomDB) *domain.WritersRoom {
-	if m == nil {
-		return nil
-	}
-	return &domain.WritersRoom{
-		ID:               m.ID,
-		StoryID:          m.StoryID,
-		Title:            m.Title,
-		LastMessage:      m.LastMessage,
-		LastMessageTime:  m.LastMessageTime,
-		MessageCount:     m.MessageCount,
-		ParticipantCount: m.ParticipantCount,
-		CreatedAt:        m.CreatedAt,
-		UpdatedAt:        m.UpdatedAt,
-	}
-}
-
-// WritersRoomDB.ToDomain 将 MySQL WritersRoomDB 模型转换为 domain.WritersRoom
-func (m *WritersRoomDB) ToDomain() *domain.WritersRoom {
-	return ModelToWritersRoom(m)
-}
-
-// ModelToWritersRoomParticipant 将 MySQL WritersRoomParticipantDB 模型转换为 domain.WritersRoomParticipant
-func ModelToWritersRoomParticipant(m *WritersRoomParticipantDB) *domain.WritersRoomParticipant {
-	if m == nil {
-		return nil
-	}
-	d := &domain.WritersRoomParticipant{
-		ID:         m.ID,
-		RoomID:     m.RoomID,
-		UserID:     m.UserID,
-		Role:       m.Role,
-		JoinedAt:   m.JoinedAt,
-		LastReadAt: m.LastReadAt,
-	}
-	if m.User.ID != "" {
-		d.User = ModelToUser(&m.User)
-	}
-	return d
-}
-
-// WritersRoomParticipantDB.ToDomain 将 MySQL WritersRoomParticipantDB 模型转换为 domain.WritersRoomParticipant
-func (m *WritersRoomParticipantDB) ToDomain() *domain.WritersRoomParticipant {
-	return ModelToWritersRoomParticipant(m)
-}
-
-// ModelToWritersRoomMessage 将 MySQL WritersRoomMessageDB 模型转换为 domain.WritersRoomMessage
-func ModelToWritersRoomMessage(m *WritersRoomMessageDB) *domain.WritersRoomMessage {
-	if m == nil {
-		return nil
-	}
-	d := &domain.WritersRoomMessage{
-		ID:          m.ID,
-		RoomID:      m.RoomID,
-		SenderID:    m.SenderID,
-		Content:     m.Content,
-		MessageType: m.MessageType,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-	}
-
-	// Parse attachments JSON
-	if m.AttachmentsJSON != "" {
-		var attachments []string
-		if err := json.Unmarshal([]byte(m.AttachmentsJSON), &attachments); err == nil {
-			d.Attachments = attachments
-		}
-	}
-
-	// Parse mentions JSON
-	if m.MentionsJSON != "" {
-		var mentions []string
-		if err := json.Unmarshal([]byte(m.MentionsJSON), &mentions); err == nil {
-			d.Mentions = mentions
-		}
-	}
-
-	// Handle reply to message
-	if m.ReplyToMessageID != nil && *m.ReplyToMessageID != "" {
-		d.ReplyToMessageID = m.ReplyToMessageID
-	}
-
-	// Load sender info
-	if m.Sender != nil {
-		d.SenderName = m.Sender.User.DisplayName
-		d.SenderAvatar = m.Sender.User.Avatar
-		d.Sender = ModelToWritersRoomParticipant(m.Sender)
-	}
-
-	return d
-}
-
-// WritersRoomMessageDB.ToDomain 将 MySQL WritersRoomMessageDB 模型转换为 domain.WritersRoomMessage
-func (m *WritersRoomMessageDB) ToDomain() *domain.WritersRoomMessage {
-	return ModelToWritersRoomMessage(m)
-}
-
-// ModelToWritersRoomMessageReaction 将 MySQL WritersRoomMessageReactionDB 模型转换为 domain.WritersRoomMessageReaction
-func ModelToWritersRoomMessageReaction(m *WritersRoomMessageReactionDB) *domain.WritersRoomMessageReaction {
-	if m == nil {
-		return nil
-	}
-	d := &domain.WritersRoomMessageReaction{
-		ID:           m.ID,
-		MessageID:    m.MessageID,
-		UserID:       m.UserID,
-		ReactionType: m.ReactionType,
-		EmojiCode:    m.EmojiCode,
-		CreatedAt:    m.CreatedAt,
-	}
-	if m.User.ID != "" {
-		d.UserName = m.User.DisplayName
-		d.User = ModelToUser(&m.User)
-	}
-	return d
-}
-
-// WritersRoomMessageReactionDB.ToDomain 将 MySQL WritersRoomMessageReactionDB 模型转换为 domain.WritersRoomMessageReaction
-func (m *WritersRoomMessageReactionDB) ToDomain() *domain.WritersRoomMessageReaction {
-	return ModelToWritersRoomMessageReaction(m)
-}
-
-// ModelToMessageReadReceipt 将 MySQL MessageReadReceiptDB 模型转换为 domain.MessageReadReceipt
-func ModelToMessageReadReceipt(m *MessageReadReceiptDB) *domain.MessageReadReceipt {
-	if m == nil {
-		return nil
-	}
-	d := &domain.MessageReadReceipt{
-		ID:        m.ID,
-		MessageID: m.MessageID,
-		UserID:    m.UserID,
-		ReadAt:    m.ReadAt,
-	}
-	if m.User.ID != "" {
-		d.UserName = m.User.DisplayName
-		d.User = ModelToUser(&m.User)
-	}
-	return d
-}
-
-// MessageReadReceiptDB.ToDomain 将 MySQL MessageReadReceiptDB 模型转换为 domain.MessageReadReceipt
-func (m *MessageReadReceiptDB) ToDomain() *domain.MessageReadReceipt {
-	return ModelToMessageReadReceipt(m)
 }
 
 // ========== Follow 转换 ==========

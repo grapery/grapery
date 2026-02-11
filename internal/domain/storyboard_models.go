@@ -29,6 +29,9 @@ type StoryboardScene struct {
 	IsSubdivided      bool               `json:"isSubdivided"`              // Whether keyframe subdivision was applied
 	VideoSegmentsJSON string             `json:"-"`                         // JSON storage for database
 
+	// 平行宇宙系统字段
+	ContextSnapshot string `json:"contextSnapshot,omitempty"` // 该场景结束后的角色状态增量 (JSON)
+
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`
 }
@@ -82,6 +85,10 @@ type Storyboard struct {
 	CharacterRefs []StoryboardCharacterRef `json:"characterRefs,omitempty"`
 	SceneRefs     []StoryboardSceneRef     `json:"sceneRefs,omitempty"` // Links to StoryScene (static locations)
 	ChildrenIds   []string                 `json:"childrenIds,omitempty"`
+
+	// 平行宇宙系统字段
+	FateSnapshot     *string `json:"fateSnapshot,omitempty"`      // 分叉时刻所有角色的状态 (JSON)
+	FateSnapshotHash *string `json:"fateSnapshotHash,omitempty"`  // 命运快照哈希值（用于快速比较）
 
 	// Relations
 	Story   *Story `json:"story,omitempty"`

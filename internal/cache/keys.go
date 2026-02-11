@@ -8,7 +8,6 @@ const (
 	PrefixStory       = "story:"
 	PrefixStoryboard  = "storyboard:"
 	PrefixCharacter   = "character:"
-	PrefixGroup       = "group:"
 	PrefixComment     = "comment:"
 	PrefixChatThread  = "chat_thread:"
 	PrefixChatMessage = "chat_message:"
@@ -16,10 +15,8 @@ const (
 	// 列表缓存
 	PrefixUserStories    = "user_stories:"
 	PrefixUserCharacters = "user_characters:"
-	PrefixUserGroups     = "user_groups:"
 	PrefixStoryPanels    = "story_panels:"
 	PrefixStoryComments  = "story_comments:"
-	PrefixGroupMembers   = "group_members:"
 
 	// 统计缓存
 	PrefixStoryLikes    = "story_likes:"
@@ -30,7 +27,6 @@ const (
 	// 热门排行
 	PrefixTrendingStories   = "trending:stories"
 	PrefixPopularCharacters = "popular:characters"
-	PrefixActiveGroups      = "active:groups"
 
 	// 会话缓存
 	PrefixSession              = "session:"
@@ -44,25 +40,20 @@ const (
 	PrefixSearchStories    = "search:stories:"
 	PrefixSearchCharacters = "search:characters:"
 	PrefixSearchUsers      = "search:users:"
-	PrefixSearchGroups     = "search:groups:"
 	PrefixSearchAll        = "search:all:"
 
 	// 搜索索引（用于模糊搜索）
 	PrefixSearchIndexStories    = "search_index:stories:"
 	PrefixSearchIndexCharacters = "search_index:characters:"
 	PrefixSearchIndexUsers      = "search_index:users:"
-	PrefixSearchIndexGroups     = "search_index:groups:"
 
 	// 列表缓存（带分页）
-	PrefixUserStoriesList    = "user_stories_list:"
+	PrefixUserStoriesList  = "user_stories_list:"
 	PrefixUserCharactersList = "user_characters_list:"
-	PrefixUserGroupsList     = "user_groups_list:"
-	PrefixStoryboardsList    = "storyboards_list:"
-	PrefixCommentsList       = "comments_list:"
-	PrefixGroupMembersList   = "group_members_list:"
-	PrefixGroupActivities    = "group_activities:"
-	PrefixUserActivities     = "user_activities:"
-	PrefixStyleConfigs       = "style_configs:"
+	PrefixStoryboardsList   = "storyboards_list:"
+	PrefixCommentsList      = "comments_list:"
+	PrefixUserActivities    = "user_activities:"
+	PrefixStyleConfigs      = "style_configs:"
 )
 
 // 缓存键生成函数
@@ -83,10 +74,6 @@ func CharacterKey(characterID string) string {
 	return fmt.Sprintf("%s%s", PrefixCharacter, characterID)
 }
 
-func GroupKey(groupID string) string {
-	return fmt.Sprintf("%s%s", PrefixGroup, groupID)
-}
-
 func CommentKey(commentID string) string {
 	return fmt.Sprintf("%s%s", PrefixComment, commentID)
 }
@@ -103,20 +90,12 @@ func UserCharactersKey(userID string) string {
 	return fmt.Sprintf("%s%s", PrefixUserCharacters, userID)
 }
 
-func UserGroupsKey(userID string) string {
-	return fmt.Sprintf("%s%s", PrefixUserGroups, userID)
-}
-
 func StoryPanelsKey(storyID string) string {
 	return fmt.Sprintf("%s%s", PrefixStoryPanels, storyID)
 }
 
 func StoryCommentsKey(storyID string) string {
 	return fmt.Sprintf("%s%s", PrefixStoryComments, storyID)
-}
-
-func GroupMembersKey(groupID string) string {
-	return fmt.Sprintf("%s%s", PrefixGroupMembers, groupID)
 }
 
 func StoryLikesKey(storyID string) string {
@@ -174,10 +153,6 @@ func SearchUsersKey(query string, searchType string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchUsers, query, searchType, limit, offset)
 }
 
-func SearchGroupsKey(query string, searchType string, limit, offset int) string {
-	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixSearchGroups, query, searchType, limit, offset)
-}
-
 func SearchAllKey(query string, limit int) string {
 	return fmt.Sprintf("%s%s:%d", PrefixSearchAll, query, limit)
 }
@@ -195,10 +170,6 @@ func SearchIndexUsersKey(keyword string) string {
 	return fmt.Sprintf("%s%s", PrefixSearchIndexUsers, keyword)
 }
 
-func SearchIndexGroupsKey(keyword string) string {
-	return fmt.Sprintf("%s%s", PrefixSearchIndexGroups, keyword)
-}
-
 // 列表缓存键生成函数（带分页参数）
 func UserStoriesListKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixUserStoriesList, userID, limit, offset)
@@ -212,24 +183,12 @@ func UserStoryboardsListKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", "user_storyboards_list:", userID, limit, offset)
 }
 
-func UserGroupsListKey(userID string, limit, offset int) string {
-	return fmt.Sprintf("%s%s:%d:%d", PrefixUserGroupsList, userID, limit, offset)
-}
-
 func StoryboardsListKey(storyID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixStoryboardsList, storyID, limit, offset)
 }
 
 func CommentsListKey(targetType, targetID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixCommentsList, targetType, targetID, limit, offset)
-}
-
-func GroupMembersListKey(groupID string, limit, offset int) string {
-	return fmt.Sprintf("%s%s:%d:%d", PrefixGroupMembersList, groupID, limit, offset)
-}
-
-func GroupActivitiesKey(groupID string, limit int) string {
-	return fmt.Sprintf("%s%s:%d", PrefixGroupActivities, groupID, limit)
 }
 
 func UserActivitiesKey(userID string, limit, offset int) string {

@@ -4,7 +4,6 @@ package domain
 type Story struct {
 	ID                  string       `json:"id"`
 	AuthorID            string       `json:"-"`
-	GroupID             string       `json:"groupId,omitempty"` // Group ID if the story belongs to a group
 	Title               string       `json:"title"`
 	Description         string       `json:"description"`
 	CoverImage          string       `json:"coverImage"`
@@ -17,7 +16,7 @@ type Story struct {
 	Genre               string       `json:"genre"`
 	Style               *StyleConfig `json:"style,omitempty"`     // AI生成风格配置（完整信息，可为空）
 	Status              string       `json:"status"`              // draft, published, rendering
-	IsCollaborationOpen bool         `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author and group members can edit
+	IsCollaborationOpen bool         `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
 	RootStoryboardID    string       `json:"rootStoryboardId,omitempty"` // 根故事板ID
 	CreatedAt           int64        `json:"createdAt"`
 	UpdatedAt           int64        `json:"updatedAt"`
