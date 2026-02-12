@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -71,11 +72,11 @@ func (r *FragmentGenerationRepository) UpdateStatus(ctx context.Context, id stri
 		"updated_at":   time.Now().Unix(),
 	}
 
-	if status == "processing" && currentStep != "" {
+	if status == string(common.TaskStatusProcessing) && currentStep != "" {
 		updates["started_at"] = time.Now().Unix()
 	}
 
-	if status == "completed" || status == "failed" {
+	if status == string(common.TaskStatusCompleted) || status == string(common.TaskStatusFailed) {
 		now := time.Now().Unix()
 		updates["completed_at"] = &now
 	}
@@ -123,7 +124,7 @@ func (r *FragmentGenerationRepository) Delete(ctx context.Context, id string) er
 func (r *FragmentGenerationRepository) GetPendingTasks(ctx context.Context, limit int) ([]*domain.FragmentGenerationTask, error) {
 	var tasks []*domain.FragmentGenerationTask
 	err := r.db.WithContext(ctx).
-		Where("status = ?", "pending").
+		Where("status = ?", string(common.TaskStatusPending)).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&tasks).Error

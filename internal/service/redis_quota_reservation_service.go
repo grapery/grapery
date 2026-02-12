@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -160,7 +161,7 @@ func (s *RedisQuotaReservationService) ConfirmQuota(ctx context.Context, reserva
 		return fmt.Errorf("failed to unmarshal reservation: %w", err)
 	}
 
-	if reservation.Status != "pending" {
+	if reservation.Status != string(common.StatusPending) {
 		return fmt.Errorf("reservation is not in pending status: %s", reservationID)
 	}
 
@@ -235,7 +236,7 @@ func (s *RedisQuotaReservationService) ReleaseQuota(ctx context.Context, reserva
 		return fmt.Errorf("failed to unmarshal reservation: %w", err)
 	}
 
-	if reservation.Status != "pending" {
+	if reservation.Status != string(common.StatusPending) {
 		return fmt.Errorf("reservation is not in pending status: %s", reservationID)
 	}
 
@@ -341,7 +342,7 @@ func (s *RedisQuotaReservationService) CleanupExpiredReservations(ctx context.Co
 			}
 
 			// 检查是否过期且仍处于 pending 状态
-			if now.After(reservation.ExpiresAt) && reservation.Status == "pending" {
+			if now.After(reservation.ExpiresAt) && reservation.Status == string(common.StatusPending) {
 				s.logger.Warn("found expired pending reservation",
 					zap.String("reservationID", reservation.ReservationID),
 					zap.String("userID", reservation.UserID),

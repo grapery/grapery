@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -154,7 +155,11 @@ func domainToUserDeviceModel(d *domain.UserDevice) *UserDevice {
 // userDeviceModelToDomain converts GORM model to domain model
 func userDeviceModelToDomain(m *UserDevice) *domain.UserDevice {
 	return &domain.UserDevice{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: m.CreatedAt,
+			UpdatedAt: m.UpdatedAt,
+		},
 		UserID:       m.UserID,
 		DeviceToken:  m.DeviceToken,
 		Platform:     domain.DevicePlatform(m.Platform),
@@ -167,8 +172,6 @@ func userDeviceModelToDomain(m *UserDevice) *domain.UserDevice {
 		Timezone:     m.Timezone,
 		IsActive:     m.IsActive,
 		LastActiveAt: m.LastActiveAt,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
 	}
 }
 

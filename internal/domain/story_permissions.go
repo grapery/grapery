@@ -70,7 +70,7 @@ func (s *Story) CanUseAIGenerateVideo() bool {
 // CanCreateCharacter 检查用户是否可以创建故事角色
 // 核心规则：只有故事创作者可以创建角色
 func (s *Story) CanCreateCharacter(userID string) bool {
-	return s.AuthorID == userID
+	return s.UserID == userID
 }
 
 // CanCreateCharacterPoster 检查用户是否可以为角色创建海报
@@ -85,7 +85,7 @@ func (s *Story) CanCreateCharacterPoster(userID string, isGroupMember bool) bool
 
 	case CollaborationStatusRestricted, CollaborationStatusClosed:
 		// 受限/封闭协作：仅创作者 (V1/V2 MVP - 移除了小组成员检查)
-		return s.AuthorID == userID
+		return s.UserID == userID
 	}
 
 	return false
@@ -94,7 +94,7 @@ func (s *Story) CanCreateCharacterPoster(userID string, isGroupMember bool) bool
 // CanCreateScene 检查用户是否可以创建故事场景
 // 核心规则：只有故事创作者可以创建场景
 func (s *Story) CanCreateScene(userID string) bool {
-	return s.AuthorID == userID
+	return s.UserID == userID
 }
 
 // CanCreateSceneVariant 检查用户是否可以创建场景变体
@@ -115,7 +115,7 @@ func (s *Story) CanCreateStoryboard(userID string, isGroupMember bool) bool {
 
 	case CollaborationStatusRestricted, CollaborationStatusClosed:
 		// 受限/封闭协作：仅创作者 (V1/V2 MVP - 移除了小组成员检查)
-		return s.AuthorID == userID
+		return s.UserID == userID
 	}
 
 	return false

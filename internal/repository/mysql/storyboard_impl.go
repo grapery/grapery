@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"github.com/grapestree/fgrapery/grapery/internal/common"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // StoryboardByID retrieves a storyboard by ID
@@ -46,7 +48,7 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		ID:               uuid.New().String(),
 		StoryID:          storyboard.StoryID,
 		ParentID:         parentID,
-		CreatorID:        storyboard.CreatorID,
+		UserID:        storyboard.UserID,
 		Title:            storyboard.Title,
 		Content:          storyboard.Content,
 		RawInput:         storyboard.RawInput,
@@ -229,7 +231,7 @@ func (r *Repository) StoryboardsByCreator(ctx context.Context, creatorID string,
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
-		Where("creator_id = ?", creatorID).
+		Where("user_id = ?", creatorID).
 		Order("created_at DESC")
 
 	if limit > 0 {
@@ -258,7 +260,7 @@ func (r *Repository) DraftStoryboardsByCreator(ctx context.Context, creatorID st
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Preload("Story").
-		Where("creator_id = ?", creatorID).
+		Where("user_id = ?", creatorID).
 		Where("workflow_status != ?", domain.WorkflowStatusPublished).
 		Order("updated_at DESC")
 
@@ -287,7 +289,7 @@ func (r *Repository) CountStoryboardsByCreator(ctx context.Context, creatorID st
 	var count int64
 	if err := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
-		Where("creator_id = ?", creatorID).
+		Where("user_id = ?", creatorID).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count storyboards by creator: %w", err)
 	}
@@ -407,7 +409,7 @@ func (r *Repository) StoryboardTree(ctx context.Context, rootID string) ([]*doma
 func (r *Repository) ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *domain.Storyboard) error {
 	// 设置父节点
 	storyboard.ParentID = parentID
-	storyboard.CreatorID = creatorID
+	storyboard.UserID = creatorID
 
 	// 创建新的 storyboard
 	return r.CreateStoryboard(ctx, storyboard)
@@ -491,10 +493,14 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 	}
 
 	return domain.Storyboard{
-		ID:               sb.ID,
+		BaseModel: common.BaseModel{
+			ID:        sb.ID,
+			CreatedAt: sb.CreatedAt.Unix(),
+			UpdatedAt: sb.UpdatedAt.Unix(),
+		},
 		StoryID:          sb.StoryID,
 		ParentID:         parentID,
-		CreatorID:        sb.CreatorID,
+		UserID:           sb.UserID,
 		CreatorName:      sb.Creator.DisplayName,
 		CreatorAvatar:    sb.Creator.Avatar,
 		Title:            sb.Title,
@@ -505,15 +511,15 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		SceneCount:       sb.SceneCount,
 		WorkflowStatus:   sb.WorkflowStatus,
 		CurrentStep:      sb.CurrentStep,
-		Likes:            sb.Likes,
-		Comments:         sb.Comments,
-		Shares:           sb.Shares,
+		EngagementStats: common.EngagementStats{
+			Likes:    sb.Likes,
+			Comments: sb.Comments,
+			Shares:   sb.Shares,
+			Views:    sb.Views,
+		},
 		ForkCount:        sb.ForkCount,
-		Views:            sb.Views,
 		TokenConsumption: sb.TokenConsumption,
 		ChildrenIds:      childrenIds,
-		CreatedAt:        sb.CreatedAt.Unix(),
-		UpdatedAt:        sb.UpdatedAt.Unix(),
 		StoryboardScenes: scenes,
 		CharacterRefs:    charRefs,
 		SceneRefs:        sceneRefs,
@@ -713,7 +719,11 @@ func (r *Repository) UpdateStoryboardSceneVideoWithSubdivision(ctx context.Conte
 // storyboardSceneToDomain converts database StoryboardScene to domain StoryboardScene
 func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.StoryboardScene {
 	scene := &domain.StoryboardScene{
-		ID:            dbScene.ID,
+		BaseModel: common.BaseModel{
+			ID:        dbScene.ID,
+			CreatedAt: dbScene.CreatedAt.Unix(),
+			UpdatedAt: dbScene.UpdatedAt.Unix(),
+		},
 		StoryboardID:  dbScene.StoryboardID,
 		Sequence:      dbScene.Sequence,
 		Title:         dbScene.Title,
@@ -725,8 +735,6 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		Mood:          dbScene.Mood,
 		IsAIGenerated: dbScene.IsAIGenerated,
 		IsSubdivided:  dbScene.IsSubdivided,
-		CreatedAt:     dbScene.CreatedAt.Unix(),
-		UpdatedAt:     dbScene.UpdatedAt.Unix(),
 	}
 
 	if dbScene.StorySceneID != nil {

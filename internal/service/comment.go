@@ -17,7 +17,7 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 	}
 
 	// 获取评论者信息
-	author, err := s.repo.UserByID(ctx, comment.AuthorID)
+	author, err := s.repo.UserByID(ctx, comment.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to get comment author: %w", err)
 	}
@@ -63,7 +63,7 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 
 	s.logger.Info("comment created",
 		zap.String("id", comment.ID),
-		zap.String("authorId", comment.AuthorID),
+		zap.String("authorId", comment.UserID),
 		zap.String("targetType", comment.TargetType),
 		zap.String("targetId", comment.TargetID))
 
@@ -76,21 +76,21 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 // sendCommentNotifications 发送评论相关通知
 func (s *Service) sendCommentNotifications(ctx context.Context, comment *domain.Comment, author *domain.User, parentComment *domain.Comment) {
 	// 1. 如果是回复，通知父评论作者
-	if parentComment != nil && parentComment.AuthorID != comment.AuthorID {
-		if err := s.NotifyCommentReply(ctx, parentComment.AuthorID, author.ID, author.DisplayName, author.Avatar, comment.TargetType, comment.TargetID, comment.ID); err != nil {
+	if parentComment != nil && parentComment.UserID != comment.UserID {
+		if err := s.NotifyCommentReply(ctx, parentComment.UserID, author.ID, author.DisplayName, author.Avatar, comment.TargetType, comment.TargetID, comment.ID); err != nil {
 			s.logger.Error("failed to send reply notification",
 				zap.Error(err),
 				zap.String("commentId", comment.ID),
-				zap.String("parentCommentAuthor", parentComment.AuthorID),
+				zap.String("parentCommentAuthor", parentComment.UserID),
 			)
 		}
 	}
 
 	// 2. 通知目标对象的作者
 	targetAuthorID, targetAuthorName := s.getTargetAuthorInfo(ctx, comment.TargetType, comment.TargetID)
-	if targetAuthorID != "" && targetAuthorID != comment.AuthorID {
+	if targetAuthorID != "" && targetAuthorID != comment.UserID {
 		// 如果是回复，且父评论作者就是目标作者，不重复通知
-		if parentComment != nil && parentComment.AuthorID == targetAuthorID {
+		if parentComment != nil && parentComment.UserID == targetAuthorID {
 			return
 		}
 
@@ -126,7 +126,7 @@ func (s *Service) getTargetAuthorInfo(ctx context.Context, targetType, targetID 
 	case "comment":
 		comment, err := s.repo.CommentByID(ctx, targetID)
 		if err == nil {
-			return comment.AuthorID, ""
+			return comment.UserID, ""
 		}
 	}
 	return "", ""
@@ -202,7 +202,7 @@ func (s *Service) UpdateComment(ctx context.Context, comment *domain.Comment, us
 		return err
 	}
 
-	if existing.AuthorID != userID {
+	if existing.UserID != userID {
 		return fmt.Errorf("permission denied: not the author")
 	}
 
@@ -252,7 +252,7 @@ func (s *Service) DeleteComment(ctx context.Context, id, userID string) error {
 		return err
 	}
 
-	if comment.AuthorID != userID {
+	if comment.UserID != userID {
 		return fmt.Errorf("permission denied: not the author")
 	}
 
@@ -463,7 +463,7 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 			zap.String("commentId", commentID))
 
 		// 异步发送通知（不通知自己点赞自己的评论）
-		if comment.AuthorID != userID {
+		if comment.UserID != userID {
 			go func() {
 				liker, err := s.repo.UserByID(context.Background(), userID)
 				if err != nil {
@@ -471,11 +471,11 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 					return
 				}
 
-				if err := s.NotifyCommentLike(context.Background(), comment.AuthorID, liker.ID, liker.DisplayName, liker.Avatar, comment.TargetType, comment.TargetID, commentID); err != nil {
+				if err := s.NotifyCommentLike(context.Background(), comment.UserID, liker.ID, liker.DisplayName, liker.Avatar, comment.TargetType, comment.TargetID, commentID); err != nil {
 					s.logger.Error("failed to send comment like notification",
 						zap.Error(err),
 						zap.String("commentId", commentID),
-						zap.String("commentAuthor", comment.AuthorID))
+						zap.String("commentAuthor", comment.UserID))
 				}
 			}()
 		}
@@ -543,7 +543,7 @@ func (s *Service) LikeComment(ctx context.Context, userID, commentID string) err
 		zap.String("commentId", commentID))
 
 	// 异步发送通知（不通知自己点赞自己的评论）
-	if comment.AuthorID != userID {
+	if comment.UserID != userID {
 		go func() {
 			// 获取点赞者信息
 			liker, err := s.repo.UserByID(context.Background(), userID)
@@ -552,11 +552,11 @@ func (s *Service) LikeComment(ctx context.Context, userID, commentID string) err
 				return
 			}
 
-			if err := s.NotifyCommentLike(context.Background(), comment.AuthorID, liker.ID, liker.DisplayName, liker.Avatar, comment.TargetType, comment.TargetID, commentID); err != nil {
+			if err := s.NotifyCommentLike(context.Background(), comment.UserID, liker.ID, liker.DisplayName, liker.Avatar, comment.TargetType, comment.TargetID, commentID); err != nil {
 				s.logger.Error("failed to send comment like notification",
 					zap.Error(err),
 					zap.String("commentId", commentID),
-					zap.String("commentAuthor", comment.AuthorID),
+					zap.String("commentAuthor", comment.UserID),
 				)
 			}
 		}()

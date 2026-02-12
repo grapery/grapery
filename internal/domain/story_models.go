@@ -1,25 +1,30 @@
 package domain
 
+import "github.com/grapestree/fgrapery/grapery/internal/common"
+
 // Story captures a creation project
 type Story struct {
-	ID                  string       `json:"id"`
-	AuthorID            string       `json:"-"`
-	Title               string       `json:"title"`
-	Description         string       `json:"description"`
-	CoverImage          string       `json:"coverImage"`
-	Likes               int          `json:"likes"`
+	// Base model fields
+	common.BaseModel
+
+	UserID      string `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CoverImage  string `json:"coverImage"`
+
+	// Engagement stats fields
+	common.EngagementStats
+
 	Followers           int          `json:"followers"`
 	Panels              int          `json:"panels"`
 	StoryboardCount     int          `json:"storyboardCount"`   // Number of storyboards in this story
 	CharacterCount      int          `json:"characterCount"`    // Number of characters in the story
 	DefaultSceneCount   int          `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
 	Genre               string       `json:"genre"`
-	Style               *StyleConfig `json:"style,omitempty"`     // AI生成风格配置（完整信息，可为空）
-	Status              string       `json:"status"`              // draft, published, rendering
-	IsCollaborationOpen bool         `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
+	Style               *StyleConfig `json:"style,omitempty"`            // AI生成风格配置（完整信息，可为空）
+	Status              string       `json:"status"`                     // draft, published, rendering
+	IsCollaborationOpen bool         `json:"isCollaborationOpen"`        // Whether collaboration is open: true=anyone can edit, false=only author can edit
 	RootStoryboardID    string       `json:"rootStoryboardId,omitempty"` // 根故事板ID
-	CreatedAt           int64        `json:"createdAt"`
-	UpdatedAt           int64        `json:"updatedAt"`
 
 	// AI 丰富相关字段
 	OriginalDescription string `json:"originalDescription,omitempty"` // 用户原始描述（AI丰富前）
@@ -31,7 +36,7 @@ type Story struct {
 	BackgroundImage     string `json:"backgroundImage,omitempty"`     // AI 生成的背景图片
 
 	// AI使用策略（故事级别开关，创建时确定，不可更改）
-	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作
+	UseAI               bool                 `json:"useAI"`                         // 是否使用AI辅助创作
 	AIAssistanceOptions *AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
 
 	// 已废弃：使用 UseAI 替代
@@ -64,10 +69,10 @@ type Story struct {
 
 // AIAssistanceOptions AI辅助选项
 type AIAssistanceOptions struct {
-	GenerateMetadata  bool `json:"generateMetadata"`  // 生成标题/描述
-	GenerateVisuals   bool `json:"generateVisuals"`   // 生成背景图/封面
-	AssistStoryboard  bool `json:"assistStoryboard"`  // 故事板 AI 辅助
-	GenerateVideo     bool `json:"generateVideo"`     // 生成视频（可选）
+	GenerateMetadata bool `json:"generateMetadata"` // 生成标题/描述
+	GenerateVisuals  bool `json:"generateVisuals"`  // 生成背景图/封面
+	AssistStoryboard bool `json:"assistStoryboard"` // 故事板 AI 辅助
+	GenerateVideo    bool `json:"generateVideo"`    // 生成视频（可选）
 }
 
 // DefaultAIAssistanceOptions 返回默认的AI辅助选项
@@ -92,15 +97,19 @@ func DisabledAIAssistanceOptions() *AIAssistanceOptions {
 
 // Panel describes a storyboard panel
 type Panel struct {
-	ID        string `json:"id"`
-	StoryID   string `json:"storyId"`
-	Sequence  int    `json:"sequence"`
-	Title     string `json:"title"`
-	Content   string `json:"content"`
-	Image     string `json:"image,omitempty"`
-	Likes     int    `json:"likes"`
-	Published bool   `json:"isPublished"`
-	CreatedAt int64  `json:"createdAt"`
+	// Base model fields
+	common.BaseModel
+
+	StoryID  string `json:"storyId"`
+	Sequence int    `json:"sequence"`
+	Title    string `json:"title"`
+	Content  string `json:"content"`
+	Image    string `json:"image,omitempty"`
+
+	// Use only Likes from EngagementStats
+	Likes int `json:"likes"`
+
+	Published bool `json:"isPublished"`
 
 	// Relations
 	Story      *Story      `json:"story,omitempty"`
@@ -109,10 +118,11 @@ type Panel struct {
 
 // StoryLike 故事点赞
 type StoryLike struct {
-	ID        string `json:"id"`
-	UserID    string `json:"userId"`
-	StoryID   string `json:"storyId"`
-	CreatedAt int64  `json:"createdAt"`
+	// Base model fields
+	common.BaseModel
+
+	UserID  string `json:"userId"`
+	StoryID string `json:"storyId"`
 
 	// Relations
 	User  *User  `json:"user,omitempty"`
@@ -121,10 +131,11 @@ type StoryLike struct {
 
 // StoryFollow 故事关注
 type StoryFollow struct {
-	ID        string `json:"id"`
-	UserID    string `json:"userId"`
-	StoryID   string `json:"storyId"`
-	CreatedAt int64  `json:"createdAt"`
+	// Base model fields
+	common.BaseModel
+
+	UserID  string `json:"userId"`
+	StoryID string `json:"storyId"`
 
 	// Relations
 	User  *User  `json:"user,omitempty"`
@@ -133,13 +144,14 @@ type StoryFollow struct {
 
 // StoryPublication 故事发布记录
 type StoryPublication struct {
-	ID            string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	StoryID       string `json:"storyId"`
 	Version       int    `json:"version"` // 发布版本号
 	Status        string `json:"status"`  // published, unpublished
 	RenderTaskID  string `json:"renderTaskId,omitempty"`
 	PublishedAt   int64  `json:"publishedAt"`
-	UpdatedAt     int64  `json:"updatedAt"`
 	UnpublishedAt *int64 `json:"unpublishedAt,omitempty"`
 
 	// Relations
@@ -157,7 +169,9 @@ const (
 
 // StoryContributor 故事贡献者（创建故事板或初始化故事的参与者）
 type StoryContributor struct {
-	ID        string               `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	StoryID   string               `json:"storyId"`
 	UserID    string               `json:"userId"`
 	Role      StoryContributorRole `json:"role"`
@@ -175,20 +189,20 @@ type StoryContributor struct {
 	Story   *Story `json:"story,omitempty"`
 }
 
-// StoryVisibility 故事可见性
+// StoryVisibility 故事可见性 - 注意：使用 VisibilityType from user_models.go
 type StoryVisibility string
 
 const (
-	StoryVisibilityPublic    StoryVisibility = "public"
-	StoryVisibilityUnlisted  StoryVisibility = "unlisted"
-	StoryVisibilityPrivate   StoryVisibility = "private"
+	StoryVisibilityPublic   StoryVisibility = "public"
+	StoryVisibilityUnlisted StoryVisibility = "unlisted"
+	StoryVisibilityPrivate  StoryVisibility = "private"
 )
 
-// StoryStatus 故事状态
-type StoryStatus string
+// StoryStatus 故事状态 - 使用 common.ContentStatus 作为类型别名以保持向后兼容
+type StoryStatus = common.ContentStatus
 
 const (
-	StoryStatusDraft      StoryStatus = "draft"
-	StoryStatusPublished  StoryStatus = "published"
-	StoryStatusRendering  StoryStatus = "rendering"
+	StoryStatusDraft     StoryStatus = common.ContentStatusDraft
+	StoryStatusPublished StoryStatus = common.ContentStatusPublished
+	StoryStatusRendering StoryStatus = common.ContentStatusRendering
 )

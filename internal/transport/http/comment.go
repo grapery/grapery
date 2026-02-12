@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -24,7 +25,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 	}
 
 	comment := &domain.Comment{
-		AuthorID:   userID.(string),
+		UserID:     userID.(string),
 		Content:    req.Content,
 		TargetType: req.TargetType,
 		TargetID:   req.TargetID,
@@ -74,7 +75,9 @@ func (h *Handler) UpdateComment(c *gin.Context) {
 	}
 
 	comment := &domain.Comment{
-		ID:      id,
+		BaseModel: common.BaseModel{
+			ID: id,
+		},
 		Content: req.Content,
 	}
 

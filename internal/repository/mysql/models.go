@@ -56,8 +56,8 @@ type Story struct {
 	Title               string         `gorm:"size:200;not null;index"`
 	Description         string         `gorm:"type:text"`
 	CoverImage          string         `gorm:"size:500"`
-	AuthorID            string         `gorm:"size:36;not null;index"`
-	Author              User           `gorm:"foreignKey:AuthorID"`
+	UserID              string         `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
+	Author              User           `gorm:"foreignKey:UserID"`
 	SourceFragmentID    *string        `gorm:"size:36;index"` // 来源碎片ID（当故事从碎片转换而来时）
 	Likes               int            `gorm:"default:0;index"`
 	Followers           int            `gorm:"default:0"`
@@ -111,8 +111,8 @@ type Storyboard struct {
 	Story            Story          `gorm:"foreignKey:StoryID"`
 	ParentID         *string        `gorm:"size:36;index;index:idx_storyboard_story_parent"` // NULL or "__root__" for root storyboard
 	Parent           *Storyboard    `gorm:"foreignKey:ParentID"`
-	CreatorID        string         `gorm:"size:36;not null;index"`
-	Creator          User           `gorm:"foreignKey:CreatorID"`
+	UserID           string         `gorm:"column:creator_id;size:36;not null;index"` // 保持数据库列名为 creator_id
+	Creator          User           `gorm:"foreignKey:UserID"`
 	Title            string         `gorm:"size:200;not null"`
 	Content          string         `gorm:"type:text;not null"`            // AI-polished narrative
 	RawInput         string         `gorm:"type:text;not null"`            // Original user input/prompt
@@ -247,8 +247,8 @@ type Character struct {
 	NeedsPortrait            bool           `gorm:"default:false"`                // 是否需要生成形象
 	ReferenceImage           string         `gorm:"size:500"`                     // 参考图URL
 	PortraitGenerationStatus string         `gorm:"size:20;default:'none';index"` // none/pending/generating/generated/failed
-	AuthorID                 string         `gorm:"size:36;not null;index"`
-	Author                   User           `gorm:"foreignKey:AuthorID"`
+	UserID                   string         `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
+	Author                   User           `gorm:"foreignKey:UserID"`
 	Personality              string         `gorm:"type:text"`
 	Background               string         `gorm:"type:text"`
 	ShortTermGoal            string         `gorm:"type:text"` // Immediate objectives in current story arc
@@ -264,6 +264,8 @@ type Character struct {
 	CreatedBy                string         `gorm:"size:36;not null;index"`
 	LastEditedBy             string         `gorm:"size:36;index"`
 	Likes                    int            `gorm:"default:0;index"`
+	Comments                 int            `gorm:"default:0"`
+	Shares                   int            `gorm:"default:0"`
 	Followers                int            `gorm:"default:0"`
 	Stories                  int            `gorm:"default:0"`
 	Traits                   string         `gorm:"type:text"` // JSON array
@@ -386,8 +388,8 @@ type StoryboardSceneLink struct {
 // Comment database model (支持嵌套回复和多目标类型)
 type Comment struct {
 	ID         string         `gorm:"primaryKey;size:36"`
-	AuthorID   string         `gorm:"size:36;not null;index"`
-	Author     User           `gorm:"foreignKey:AuthorID"`
+	UserID     string         `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
+	Author     User           `gorm:"foreignKey:UserID"`
 	Content    string         `gorm:"type:text;not null"`
 	TargetType string         `gorm:"size:20;not null;index"` // story, storyboard, character, comment
 	TargetID   string         `gorm:"size:36;not null;index:idx_target"`
@@ -791,8 +793,8 @@ type CharacterPoster struct {
 	ID          string    `gorm:"primaryKey;size:36"`
 	CharacterID string    `gorm:"size:36;not null;index"`
 	Character   Character `gorm:"foreignKey:CharacterID"`
-	AuthorID    string    `gorm:"size:36;not null;index"`
-	Author      User      `gorm:"foreignKey:AuthorID"`
+	UserID      string    `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
+	Author      User      `gorm:"foreignKey:UserID"`
 	Type        string    `gorm:"size:20;not null;default:'image';index"` // image, video
 	Title       string    `gorm:"size:200;not null"`
 	Image       string    `gorm:"size:1000"`                              // Poster image URL (for image type)
@@ -811,7 +813,9 @@ type CharacterPoster struct {
 	ImageGenerationID     string `gorm:"size:36;index"` // AI record for image generation (Step 2)
 
 	Likes     int            `gorm:"default:0;index"`
+	Comments  int            `gorm:"default:0"`
 	Shares    int            `gorm:"default:0"`
+	Views     int            `gorm:"default:0;index"`
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -1119,7 +1123,7 @@ type ThirdPartyLogin struct {
 // FragmentDB fragment database model
 type FragmentDB struct {
 	ID               string `gorm:"primaryKey;size:36"`
-	CreatorID        string `gorm:"size:36;not null;index:idx_fragment_creator"`
+	UserID           string `gorm:"column:creator_id;size:36;not null;index:idx_fragment_creator"` // 保持数据库列名为 creator_id
 	Content          string `gorm:"type:text"`
 	ImageUrls        string `gorm:"type:text"` // JSON array stored as text
 	Visibility       string `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
@@ -1127,14 +1131,14 @@ type FragmentDB struct {
 	SourceID         string `gorm:"size:36;index:idx_fragment_source_id"`                     // 来源ID
 	ConvertedToStoryID *string `gorm:"size:36;index"`                                           // 转换为的故事ID
 	IsConverted      bool   `gorm:"default:false;index"`                                        // 是否已转换
-	Likes            int    `gorm:"type:int;default:0"`
-	Comments         int    `gorm:"type:int;default:0"`
-	Shares           int    `gorm:"type:int;default:0"`
-	Views            int    `gorm:"type:int;default:0"`
+	Likes            int    `gorm:"type:int;default:0"`                                         // 点赞数
+	Comments         int    `gorm:"type:int;default:0"`                                         // 评论数
+	Shares           int    `gorm:"type:int;default:0"`                                         // 分享数
+	Views            int    `gorm:"type:int;default:0"`                                         // 浏览数
 	CreatedAt        int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_created"`
 	UpdatedAt        int64  `gorm:"type:bigint;autoUpdateTime"`
 
-	Creator User `gorm:"foreignKey:CreatorID"`
+	Creator User `gorm:"foreignKey:UserID"`
 }
 
 // TableName specifies the table name for FragmentDB

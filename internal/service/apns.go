@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
@@ -548,14 +549,17 @@ func (s *Service) RegisterDeviceToken(ctx context.Context, userID, deviceToken, 
 	}
 
 	device := &domain.UserDevice{
+		BaseModel: common.BaseModel{
+			ID:        generateDeviceID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		UserID:       userID,
 		DeviceToken:  deviceToken,
 		Platform:     domain.DevicePlatform(platform),
 		PushProvider: pushProvider,
 		IsActive:     true,
 		LastActiveAt: now,
-		CreatedAt:    now,
-		UpdatedAt:    now,
 	}
 
 	// 检查是否已存在
@@ -572,7 +576,6 @@ func (s *Service) RegisterDeviceToken(ctx context.Context, userID, deviceToken, 
 	}
 
 	// 创建新设备
-	device.ID = generateDeviceID()
 	return s.repo.CreateUserDevice(ctx, device)
 }
 

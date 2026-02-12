@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
@@ -231,7 +232,15 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 		}
 
 		newUser := &domain.User{
-			ID:            uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			SocialStats: common.SocialStats{
+				Followers: 0,
+				Following: 0,
+			},
 			Username:      username,
 			Email:         "", // 微信不一定提供邮箱
 			DisplayName:   displayName,
@@ -239,8 +248,6 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			Status:        "active",
 			EmailVerified: false,
 			LastLoginAt:   &now,
-			CreatedAt:     now,
-			UpdatedAt:     now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -273,7 +280,11 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 
 		// 创建默认用户设置
 		settings := &domain.UserSettings{
-			ID:                 uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
 			UserID:             newUser.ID,
 			Language:           "zh",
 			Theme:              "auto",
@@ -284,7 +295,6 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			AllowComments:      true,
 			AllowMessages:      true,
 			ShowOnlineStatus:   true,
-			UpdatedAt:          now,
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
@@ -318,15 +328,21 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 	logrus.Warn("OAuth handler has no repository, user data will not be persisted")
 
 	return &domain.User{
-		ID:            userInfo.OpenID,
+		BaseModel: common.BaseModel{
+			ID:        userInfo.OpenID,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SocialStats: common.SocialStats{
+			Followers: 0,
+			Following: 0,
+		},
 		Username:      username,
 		DisplayName:   displayName,
 		Avatar:        userInfo.HeadImgURL,
 		Status:        "active",
 		EmailVerified: false,
 		LastLoginAt:   &now,
-		CreatedAt:     now,
-		UpdatedAt:     now,
 	}, true, nil
 }
 

@@ -34,7 +34,7 @@ type SearchFilter struct {
 	Type       string   `json:"type"`                 // story, character, user, group, all
 	Categories []string `json:"categories,omitempty"` // 分类
 	Tags       []string `json:"tags,omitempty"`       // 标签
-	AuthorID   string   `json:"authorId,omitempty"`
+	UserID     string   `json:"authorId,omitempty"`   // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	MinViews   int      `json:"minViews,omitempty"`
 	MaxViews   int      `json:"maxViews,omitempty"`
 	MinLikes   int      `json:"minLikes,omitempty"`
@@ -55,7 +55,7 @@ type SearchResult struct {
 	Description string  `json:"description,omitempty"`
 	Cover       string  `json:"cover,omitempty"`
 	Author      string  `json:"author,omitempty"`
-	AuthorID    string  `json:"authorId,omitempty"`
+	UserID      string  `json:"authorId,omitempty"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	Views       int     `json:"views,omitempty"`
 	Likes       int     `json:"likes,omitempty"`
 	TagsJSON    string  `json:"-"`

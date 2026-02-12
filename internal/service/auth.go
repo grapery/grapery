@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/email"
 	"go.uber.org/zap"
@@ -402,19 +403,24 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	}
 
 	// 创建用户
+	now := time.Now().Unix()
 	user := &domain.User{
-		ID:            uuid.New().String(),
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		Username:      req.Username,
 		Email:         req.Email,
 		PasswordHash:  passwordHash,
 		DisplayName:   req.DisplayName,
 		DateOfBirth:   dob,
-		Status:        "active",
+		Status:        string(common.StatusActive),
 		EmailVerified: false,
-		Followers:     0,
-		Following:     0,
-		CreatedAt:     time.Now().Unix(),
-		UpdatedAt:     time.Now().Unix(),
+		SocialStats: common.SocialStats{
+			Followers: 0,
+			Following: 0,
+		},
 	}
 
 	if err := s.repo.CreateUser(ctx, user); err != nil {
@@ -432,7 +438,10 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 
 	// 创建默认用户设置
 	settings := &domain.UserSettings{
-		ID:                 uuid.New().String(),
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			UpdatedAt: now,
+		},
 		UserID:             user.ID,
 		Language:           "en",
 		Theme:              "auto",
@@ -443,7 +452,6 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		AllowComments:      true,
 		AllowMessages:      true,
 		ShowOnlineStatus:   true,
-		UpdatedAt:          time.Now().Unix(),
 	}
 
 	if err := s.repo.CreateUserSettings(ctx, settings); err != nil {
@@ -456,7 +464,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		ID:           uuid.New().String(),
 		UserID:       user.ID,
 		Tier:         "free",
-		Status:       "active",
+		Status:       string(common.MembershipStatusActive),
 		StartDate:    time.Now().Unix(),
 		AutoRenew:    false,
 		TokenQuota:   10000, // 免费配额
@@ -749,7 +757,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 	}
 
 	// 检查用户状态
-	if user.Status != "active" {
+	if user.Status != string(common.StatusActive) {
 		return nil, fmt.Errorf("account is %s", user.Status)
 	}
 

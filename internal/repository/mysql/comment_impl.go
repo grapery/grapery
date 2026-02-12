@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ func (r *Repository) CommentByID(ctx context.Context, id string) (*domain.Commen
 func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment) error {
 	dbComment := Comment{
 		ID:         uuid.New().String(),
-		AuthorID:   comment.AuthorID,
+		UserID:   comment.UserID,
 		Content:    comment.Content,
 		TargetType: comment.TargetType,
 		TargetID:   comment.TargetID,
@@ -387,8 +388,12 @@ func (r *Repository) commentToDomain(c Comment) domain.Comment {
 	}
 
 	return domain.Comment{
-		ID:         c.ID,
-		AuthorID:   c.AuthorID,
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt.Unix(),
+			UpdatedAt: c.UpdatedAt.Unix(),
+		},
+		UserID:     c.UserID,
 		Author:     &refAuthor,
 		Content:    c.Content,
 		TargetType: c.TargetType,
@@ -399,8 +404,6 @@ func (r *Repository) commentToDomain(c Comment) domain.Comment {
 		Dislikes:   c.Dislikes,
 		ReplyCount: c.ReplyCount,
 		Replies:    nil, // 不自动加载回复，需要单独查询
-		CreatedAt:  c.CreatedAt.Unix(),
-		UpdatedAt:  c.UpdatedAt.Unix(),
 	}
 }
 

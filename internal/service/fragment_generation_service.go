@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
-	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/common"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/repository"
 )
 
 type FragmentGenerationService struct {
@@ -105,10 +107,15 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	// 步骤4: 创建碎片
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "creating_fragment")
-	
+
+	now := time.Now().Unix()
 	fragment := &domain.Fragment{
-		ID:            uuid.New().String(),
-		CreatorID:     task.UserID,
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		UserID:        task.UserID,
 		Content:       result.Content,
 		ImageUrls:     stringifyArray(result.ImageUrls),
 		Style:         &task.Request.Style,
@@ -116,10 +123,12 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		Visibility:    task.Request.Visibility,
 		SourceType:    string(domain.FragmentSourceOriginal), // AI生成的碎片为原创内容
 		SourceID:      "",                                    // 原创碎片无来源ID
-		Likes:         0,
-		Comments:      0,
-		Shares:        0,
-		Views:         0,
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
 	}
 	
 	if err := s.fragmentRepo.Create(ctx, fragment); err != nil {

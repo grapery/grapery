@@ -7,18 +7,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
 
 // CreateStory creates a new story
 func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error {
+	// Get Author ID from the embedded Author field
+	var authorID string
+	if story.Author.ID != "" {
+		authorID = story.Author.ID
+	}
+
 	dbStory := &Story{
 		ID:                  story.ID,
 		Title:               story.Title,
 		Description:         story.Description,
 		CoverImage:          story.CoverImage,
-		AuthorID:            story.Author.ID,
+		UserID:              authorID,
 		Likes:               story.Likes,
 		Followers:           story.Followers,
 		Panels:              story.Panels,
@@ -50,12 +57,18 @@ func (r *Repository) StoryByID(ctx context.Context, id string) (*domain.Story, e
 
 // UpdateStory updates an existing story
 func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error {
+	// Get Author ID from the embedded Author field
+	var authorID string
+	if story.Author.ID != "" {
+		authorID = story.Author.ID
+	}
+
 	dbStory := Story{
 		ID:                  story.ID,
 		Title:               story.Title,
 		Description:         story.Description,
 		CoverImage:          story.CoverImage,
-		AuthorID:            story.Author.ID,
+		UserID:              authorID,
 		Genre:               story.Genre,
 		Status:              story.Status,
 		Likes:               story.Likes,
@@ -337,12 +350,16 @@ func (r *Repository) UpdateStoryContributorRole(ctx context.Context, storyID, us
 // storyContributorToDomain converts a database StoryContributor to domain model
 func (r *Repository) storyContributorToDomain(c StoryContributor) *domain.StoryContributor {
 	contributor := &domain.StoryContributor{
-		ID:        c.ID,
-		StoryID:   c.StoryID,
-		UserID:    c.UserID,
-		Role:      domain.StoryContributorRole(c.Role),
-		InvitedBy: c.InvitedBy,
-		JoinedAt:  c.JoinedAt.Unix(),
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.JoinedAt.Unix(),
+			UpdatedAt: c.JoinedAt.Unix(),
+		},
+		StoryID:    c.StoryID,
+		UserID:     c.UserID,
+		Role:       domain.StoryContributorRole(c.Role),
+		InvitedBy:  c.InvitedBy,
+		JoinedAt:   c.JoinedAt.Unix(),
 		BadgeStyle: domain.StoryContributorRole(c.Role), // 使用 role 作为 badge_style
 	}
 

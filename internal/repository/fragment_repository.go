@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -25,8 +26,13 @@ func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragme
 		}
 
 		// Increment user's fragments_count
+		// 使用 UserID，如果为空则使用 CreatorID（向后兼容）
+		userID := fragment.UserID
+		if userID == "" {
+			userID = fragment.CreatorID
+		}
 		if err := tx.Model(&domain.User{}).
-			Where("id = ?", fragment.CreatorID).
+			Where("id = ?", userID).
 			UpdateColumn("fragments_count", gorm.Expr("fragments_count + 1")).
 			Error; err != nil {
 			return err
@@ -106,7 +112,7 @@ func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, l
 	// Get list of followed user IDs
 	var followedUserIDs []string
 	err := r.db.WithContext(ctx).Model(&domain.UserFollow{}).
-		Where("follower_id = ? AND status = ?", userID, "active").
+		Where("follower_id = ? AND status = ?", userID, string(common.StatusActive)).
 		Pluck("following_id", &followedUserIDs).Error
 	if err != nil {
 		return nil, 0, err
@@ -161,8 +167,13 @@ func (r *FragmentRepository) Delete(ctx context.Context, id string) error {
 		}
 
 		// Decrement user's fragments_count
+		// 使用 UserID，如果为空则使用 CreatorID（向后兼容）
+		userID := fragment.UserID
+		if userID == "" {
+			userID = fragment.CreatorID
+		}
 		if err := tx.Model(&domain.User{}).
-			Where("id = ?", fragment.CreatorID).
+			Where("id = ?", userID).
 			UpdateColumn("fragments_count", gorm.Expr("fragments_count - 1")).
 			Error; err != nil {
 			return err

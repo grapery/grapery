@@ -46,13 +46,13 @@ func (s *Service) GetUserStats(ctx context.Context, userID string) (*UserStats, 
 	}
 
 	// 获取用户故事
-	stories, err := s.repo.StoriesByAuthor(ctx, userID, 0, 0)
+	stories, err := s.repo.StoriesByUser(ctx, userID, 0, 0)
 	if err != nil {
 		stories = []*domain.Story{}
 	}
 
 	// 获取用户角色
-	characters, err := s.repo.CharactersByAuthor(ctx, userID, 0, 0)
+	characters, err := s.repo.CharactersByUser(ctx, userID, 0, 0)
 	if err != nil {
 		characters = []*domain.Character{}
 	}
@@ -132,7 +132,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, userID string) (*Dashbo
 	}
 
 	// 获取用户故事
-	stories, err := s.repo.StoriesByAuthor(ctx, userID, 0, 0)
+	stories, err := s.repo.StoriesByUser(ctx, userID, 0, 0)
 	if err != nil {
 		stories = []*domain.Story{}
 	}

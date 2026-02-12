@@ -7,12 +7,12 @@ import (
 
 // StoryFilter holds story query filters
 type StoryFilter struct {
-	Status   string
-	AuthorID string
-	Search   string
-	Genre    string
-	Limit    int
-	Offset   int
+	Status string
+	UserID string
+	Search string
+	Genre  string
+	Limit  int
+	Offset int
 }
 
 // Repository defines the data access interface
@@ -50,7 +50,7 @@ type Repository interface {
 	CreateStory(ctx context.Context, story *Story) error
 	UpdateStory(ctx context.Context, story *Story) error
 	DeleteStory(ctx context.Context, id string) error
-	StoriesByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*Story, error)
+	StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*Story, error)
 	TrendingStories(ctx context.Context, limit int) ([]*Story, error)
 
 	// ========== Dashboard feeds ==========
@@ -87,7 +87,7 @@ type Repository interface {
 	// ========== Character operations ==========
 	CharacterByID(ctx context.Context, id string) (*Character, error)
 	ListCharacters(ctx context.Context, limit, offset int) ([]*Character, error)
-	CharactersByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*Character, error)
+	CharactersByUser(ctx context.Context, userID string, limit, offset int) ([]*Character, error)
 	CharactersByStory(ctx context.Context, storyID string) ([]*Character, error)
 	CreateCharacter(ctx context.Context, character *Character) error
 	UpdateCharacter(ctx context.Context, character *Character) error

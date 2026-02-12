@@ -156,7 +156,7 @@ func (s *Service) ensureStoryOwnership(ctx context.Context, storyID, userID stri
 	}
 
 	// Check if user is the story author
-	if story.AuthorID == userID {
+	if story.UserID == userID {
 		s.logger.Info("story ownership checked: author", zap.String("storyID", storyID), zap.String("userID", userID))
 		return nil
 	}
@@ -164,7 +164,7 @@ func (s *Service) ensureStoryOwnership(ctx context.Context, storyID, userID stri
 	s.logger.Warn("permission denied for story",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID),
-		zap.String("storyAuthorID", story.AuthorID))
+		zap.String("storyAuthorID", story.UserID))
 	return fmt.Errorf("permission denied: insufficient rights")
 }
 

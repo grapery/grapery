@@ -1,42 +1,50 @@
 package domain
 
+import "github.com/grapestree/fgrapery/grapery/internal/common"
+
 // Character represents a story character
 type Character struct {
-	ID      string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	StoryID string `json:"storyId"`
-	// AuthorID 角色创建者ID
-	// 核心规则：只有故事创作者可以创建角色，所以 AuthorID 应该等于 Story.AuthorID
-	AuthorID                 string  `json:"-"`
-	Name                     string  `json:"name"`
-	Description              string  `json:"description"`
-	Avatar                   string  `json:"avatar,omitempty"`
-	Poster                   string  `json:"poster,omitempty"`
-	Portrait                 string  `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
-	NeedsPortrait            bool    `json:"needsPortrait"`                      // 是否需要生成形象
-	ReferenceImage           string  `json:"referenceImage,omitempty"`           // 参考图URL
-	PortraitGenerationStatus string  `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
-	Personality              string  `json:"personality,omitempty"`
-	Background               string  `json:"background,omitempty"`
-	ShortTermGoal            string  `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
-	LongTermGoal             string  `json:"longTermGoal,omitempty"`    // Overarching ambitions
-	HandlingStyle            string  `json:"handlingStyle,omitempty"`   // Approach to handling situations
-	CognitionRange           string  `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
-	AbilityFeatures          string  `json:"abilityFeatures,omitempty"` // Special skills and capabilities
-	Appearance               string  `json:"appearance,omitempty"`      // Physical appearance and features
-	DressPreference          string  `json:"dressPreference,omitempty"` // Clothing preferences and style
-	TraitsJSON               string  `json:"-"`                         // Internal storage for DB conversion
-	SkillsJSON               string  `json:"-"`                         // Internal storage for DB conversion
-	IsPublic                 bool    `json:"isPublic"`
-	SourceType               string  `json:"sourceType,omitempty"`
-	SourcePrompt             string  `json:"sourcePrompt,omitempty"`
-	SourceImage              string  `json:"sourceImage,omitempty"`
-	CreatedBy                string  `json:"createdBy,omitempty"`
-	LastEditedBy             string  `json:"lastEditedBy,omitempty"`
-	Likes                    int     `json:"likes"`
-	Followers                int     `json:"followers"`
-	Stories                  int     `json:"stories"`
-	CreatedAt                int64   `json:"createdAt"`
-	UpdatedAt                int64   `json:"updatedAt"`
+	// UserID 角色创建者ID
+	// 核心规则：只有故事创作者可以创建角色，所以 UserID 应该等于 Story.UserID
+	UserID                   string `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
+	Name                     string `json:"name"`
+	Description              string `json:"description"`
+	Avatar                   string `json:"avatar,omitempty"`
+	Poster                   string `json:"poster,omitempty"`
+	Portrait                 string `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
+	NeedsPortrait            bool   `json:"needsPortrait"`                      // 是否需要生成形象
+	ReferenceImage           string `json:"referenceImage,omitempty"`           // 参考图URL
+	PortraitGenerationStatus string `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
+	Personality              string `json:"personality,omitempty"`
+	Background               string `json:"background,omitempty"`
+	ShortTermGoal            string `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
+	LongTermGoal             string `json:"longTermGoal,omitempty"`    // Overarching ambitions
+	HandlingStyle            string `json:"handlingStyle,omitempty"`   // Approach to handling situations
+	CognitionRange           string `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
+	AbilityFeatures          string `json:"abilityFeatures,omitempty"` // Special skills and capabilities
+	Appearance               string `json:"appearance,omitempty"`      // Physical appearance and features
+	DressPreference          string `json:"dressPreference,omitempty"` // Clothing preferences and style
+	TraitsJSON               string `json:"-"`                         // Internal storage for DB conversion
+	SkillsJSON               string `json:"-"`                         // Internal storage for DB conversion
+	IsPublic                 bool   `json:"isPublic"`
+	SourceType               string `json:"sourceType,omitempty"`
+	SourcePrompt             string `json:"sourcePrompt,omitempty"`
+	SourceImage              string `json:"sourceImage,omitempty"`
+	CreatedBy                string `json:"createdBy,omitempty"`
+	LastEditedBy             string `json:"lastEditedBy,omitempty"`
+
+	// Engagement stats fields (partial - using Likes, Followers, Stories)
+	// Note: We use individual fields instead of embedding EngagementStats
+	// because Character has a custom 'Stories' field instead of 'Views'
+	Likes     int `json:"likes"`
+	Comments  int `json:"comments"`
+	Shares    int `json:"shares"`
+	Followers int `json:"followers"`
+	Stories   int `json:"stories"` // Custom field: number of stories this character appears in
 
 	// 海报创建权限
 	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, anyone (V1/V2 MVP - group_members removed)
@@ -51,10 +59,11 @@ type Character struct {
 
 // CharacterFollow 角色关注
 type CharacterFollow struct {
-	ID          string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	UserID      string `json:"userId"`
 	CharacterID string `json:"characterId"`
-	CreatedAt   int64  `json:"createdAt"`
 
 	// Relations
 	User      *User      `json:"user,omitempty"`
@@ -98,9 +107,11 @@ type PosterConceptDetails struct {
 
 // CharacterPoster 角色海报
 type CharacterPoster struct {
-	ID          string       `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	CharacterID string       `json:"characterId"`
-	AuthorID    string       `json:"-"`
+	UserID      string       `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	Type        string       `json:"type"` // image, video
 	Title       string       `json:"title"`
 	Image       string       `json:"image"`               // Poster image URL (for image type)
@@ -121,25 +132,28 @@ type CharacterPoster struct {
 	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)
 	ImageGenerationID   string `json:"imageGenerationId,omitempty"`   // AI record for image generation (Step 2)
 
-	LikesCount int   `json:"likesCount"`
-	Likes      int   `json:"likes"`
-	Shares     int   `json:"shares"`
-	CreatedAt  int64 `json:"createdAt"`
-	UpdatedAt  int64 `json:"updatedAt,omitempty"`
+	// Engagement stats fields
+	common.EngagementStats
 
 	// Relations
 	Character *Character `json:"character,omitempty"`
 	Author    *User      `json:"author,omitempty"`
 }
 
+// GetLikesCount returns the like count (alias for API compatibility)
+func (cp *CharacterPoster) GetLikesCount() int {
+	return cp.Likes
+}
+
 // CharacterAnalytics 角色分析数据
 type CharacterAnalytics struct {
-	ID                   string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	CharacterID          string `json:"characterId"`
 	UsersWhoChattedCount int    `json:"usersWhoChattedCount"`
 	TotalMessagesSent    int    `json:"totalMessagesSent"`
 	TotalTokensConsumed  int64  `json:"totalTokensConsumed"`
-	UpdatedAt            int64  `json:"updatedAt"`
 
 	// Relations
 	Character *Character `json:"character,omitempty"`
@@ -150,5 +164,5 @@ type PosterCreationPermissionType string
 
 const (
 	PosterCreationPermissionCreatorOnly PosterCreationPermissionType = "creator_only"
-	PosterCreationPermissionAnyone       PosterCreationPermissionType = "anyone"
+	PosterCreationPermissionAnyone      PosterCreationPermissionType = "anyone"
 )

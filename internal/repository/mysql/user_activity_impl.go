@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -174,14 +175,16 @@ func (r *Repository) UserActivityHeatmap(ctx context.Context, userID string, sta
 // userActivityToDomain 转换用户活动到 domain
 func (r *Repository) userActivityToDomain(activity *UserActivity) *domain.UserActivity {
 	result := &domain.UserActivity{
-		ID:          activity.ID,
+		BaseModel: common.BaseModel{
+			ID:        activity.ID,
+			CreatedAt: activity.CreatedAt.Unix(),
+		},
 		UserID:      activity.UserID,
 		Type:        activity.Type,
 		TargetID:    activity.TargetID,
 		TargetType:  activity.TargetType,
 		TargetTitle: activity.TargetTitle,
 		Message:     activity.Message,
-		CreatedAt:   activity.CreatedAt.Unix(),
 	}
 
 	if activity.User.ID != "" {

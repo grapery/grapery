@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -11,7 +12,7 @@ import (
 // CountAllUsers 统计所有用户总数
 func (r *Repository) CountAllUsers(ctx context.Context) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&User{}).Where("status = ?", "active").Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&User{}).Where("status = ?", string(common.StatusActive)).Count(&count).Error
 	return int(count), err
 }
 

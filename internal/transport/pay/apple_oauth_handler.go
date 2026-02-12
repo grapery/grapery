@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
@@ -418,15 +419,21 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 		}
 
 		newUser := &domain.User{
-			ID:            uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			SocialStats: common.SocialStats{
+				Followers: 0,
+				Following: 0,
+			},
 			Username:      username,
 			Email:         email,
 			DisplayName:   displayName,
 			Status:        "active",
 			EmailVerified: true, // OAuth 登录邮箱已验证
 			LastLoginAt:   &now,
-			CreatedAt:     now,
-			UpdatedAt:     now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -452,7 +459,11 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 
 		// 创建默认用户设置
 		settings := &domain.UserSettings{
-			ID:                 uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
 			UserID:             newUser.ID,
 			Language:           "en",
 			Theme:              "auto",
@@ -463,7 +474,6 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			AllowComments:      true,
 			AllowMessages:      true,
 			ShowOnlineStatus:   true,
-			UpdatedAt:          now,
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
@@ -503,15 +513,21 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 	logrus.Warn("OAuth handler has no repository, user data will not be persisted")
 
 	return &domain.User{
-		ID:            providerUserID,
+		BaseModel: common.BaseModel{
+			ID:        providerUserID,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SocialStats: common.SocialStats{
+			Followers: 0,
+			Following: 0,
+		},
 		Username:      username,
 		Email:         email,
 		DisplayName:   displayName,
 		Status:        "active",
 		EmailVerified: true,
 		LastLoginAt:   &now,
-		CreatedAt:     now,
-		UpdatedAt:     now,
 	}, true, nil
 }
 

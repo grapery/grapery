@@ -1,8 +1,12 @@
 package domain
 
+import "github.com/grapestree/fgrapery/grapery/internal/common"
+
 // User represents a storyteller profile
 type User struct {
-	ID                  string `json:"id"`
+	// Base model fields (ID, CreatedAt, UpdatedAt)
+	common.BaseModel
+
 	Username            string `json:"username"`
 	Email               string `json:"email"`
 	PasswordHash        string `json:"-"`
@@ -14,15 +18,15 @@ type User struct {
 	Website             string `json:"website,omitempty"`
 	AIPromptPreferences string `json:"aiPromptPreferences,omitempty"`
 	DateOfBirth         *int64 `json:"dateOfBirth,omitempty"`
-	Followers           int    `json:"followers"`
-	Following           int    `json:"following"`
-	StoryboardCount     int    `json:"storyboardCount"` // Number of storyboards created by this user
-	FragmentsCount      int    `json:"fragmentsCount"`  // Number of fragments created by this user
-	Status              string `json:"status"`          // active, suspended, deleted
-	EmailVerified       bool   `json:"emailVerified"`
-	LastLoginAt         *int64 `json:"lastLoginAt,omitempty"`
-	CreatedAt           int64  `json:"createdAt"`
-	UpdatedAt           int64  `json:"updatedAt"`
+
+	// Social stats fields
+	common.SocialStats
+
+	StoryboardCount int    `json:"storyboardCount"` // Number of storyboards created by this user
+	FragmentsCount  int    `json:"fragmentsCount"`  // Number of fragments created by this user
+	Status          string `json:"status"`          // active, suspended, deleted
+	EmailVerified   bool   `json:"emailVerified"`
+	LastLoginAt     *int64 `json:"lastLoginAt,omitempty"`
 
 	// 非持久化字段，用于API响应
 	IsFollowing *bool `json:"isFollowing,omitempty"` // 当前用户是否关注此用户
@@ -30,10 +34,11 @@ type User struct {
 
 // UserFollow 用户关注关系
 type UserFollow struct {
-	ID         string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	FollowerID string `json:"followerId"` // 关注者
 	FolloweeID string `json:"followeeId"` // 被关注者
-	CreatedAt  int64  `json:"createdAt"`
 
 	// Relations
 	Follower *User `json:"follower,omitempty"`
@@ -42,13 +47,15 @@ type UserFollow struct {
 
 // UserSettings 用户设置
 type UserSettings struct {
-	ID                 string `json:"id"`
-	UserID             string `json:"userId"`
-	Language           string `json:"language"` // en, zh-CN, zh-TW, ja, ko
-	Region             string `json:"region"`   // CN, US, JP, KR, EU, OTHER
-	Theme              string `json:"theme"`    // light, dark, system
-	FontSize           string `json:"fontSize"` // small, medium, large
-	DataSaver          bool   `json:"dataSaver"`
+	// Base model fields
+	common.BaseModel
+
+	UserID    string `json:"userId"`
+	Language  string `json:"language"` // en, zh-CN, zh-TW, ja, ko
+	Region    string `json:"region"`   // CN, US, JP, KR, EU, OTHER
+	Theme     string `json:"theme"`    // light, dark, system
+	FontSize  string `json:"fontSize"` // small, medium, large
+	DataSaver bool   `json:"dataSaver"`
 
 	// 隐私设置
 	ProfileVisibility         string `json:"profileVisibility"`         // public, followers_only, private
@@ -67,30 +74,28 @@ type UserSettings struct {
 	// 通知设置 (JSON)
 	NotificationSettings string `json:"notificationSettings"` // JSON string
 
-	CreatedAt int64 `json:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt"`
-
 	// Relations
 	User *User `json:"user,omitempty"`
 
 	// 向后兼容字段（内部使用）
-	EmailNotifications bool   `json:"emailNotifications"` // 兼容旧代码
-	PushNotifications  bool   `json:"pushNotifications"`  // 兼容旧代码
-	ShowAdultContent   bool   `json:"showAdultContent"`   // 兼容旧代码
-	AllowComments      bool   `json:"allowComments"`      // 兼容旧代码
-	AllowMessages      bool   `json:"allowMessages"`      // 兼容旧代码
+	EmailNotifications bool `json:"emailNotifications"` // 兼容旧代码
+	PushNotifications  bool `json:"pushNotifications"`  // 兼容旧代码
+	ShowAdultContent   bool `json:"showAdultContent"`   // 兼容旧代码
+	AllowComments      bool `json:"allowComments"`      // 兼容旧代码
+	AllowMessages      bool `json:"allowMessages"`      // 兼容旧代码
 }
 
 // UserActivity 用户活动记录
 type UserActivity struct {
-	ID          string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	UserID      string `json:"userId"`
 	Type        string `json:"type"` // story_created, story_updated, story_published, story_liked, character_created, character_updated, user_followed, storyboard_created, panel_added
 	TargetID    string `json:"targetId,omitempty"`
 	TargetType  string `json:"targetType,omitempty"` // story, character, user, storyboard
 	TargetTitle string `json:"targetTitle,omitempty"`
 	Message     string `json:"message,omitempty"`
-	CreatedAt   int64  `json:"createdAt"`
 
 	// Relations
 	User *User `json:"user,omitempty"`
@@ -117,7 +122,9 @@ const (
 
 // UserDevice 用户设备信息（用于推送通知）
 type UserDevice struct {
-	ID           string         `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	UserID       string         `json:"userId"`
 	DeviceToken  string         `json:"deviceToken"`           // APNs token 或 FCM token
 	Platform     DevicePlatform `json:"platform"`              // ios, android, macos, etc.
@@ -130,8 +137,6 @@ type UserDevice struct {
 	Timezone     string         `json:"timezone,omitempty"`    // Asia/Shanghai
 	IsActive     bool           `json:"isActive"`              // 设备是否活跃
 	LastActiveAt int64          `json:"lastActiveAt"`          // 最后活跃时间
-	CreatedAt    int64          `json:"createdAt"`
-	UpdatedAt    int64          `json:"updatedAt"`
 
 	// Relations
 	User *User `json:"user,omitempty"`
@@ -205,19 +210,20 @@ const (
 	LanguageJapanese  LanguageType = "ja"
 )
 
-
 // MARK: - 登录历史管理
 
 // LoginHistory 用户登录历史
 type LoginHistory struct {
-	ID           string `json:"id"`
+	// Base model fields (ID, CreatedAt, UpdatedAt)
+	common.BaseModel
+
 	UserID       string `json:"userId"`
-	DeviceType   string `json:"deviceType"`   // iPhone, iPad, Web
-	DeviceName   string `json:"deviceName"`   // "iPhone 15 Pro"
-	DeviceID     string `json:"deviceId"`     // 设备唯一标识
+	DeviceType   string `json:"deviceType"` // iPhone, iPad, Web
+	DeviceName   string `json:"deviceName"` // "iPhone 15 Pro"
+	DeviceID     string `json:"deviceId"`   // 设备唯一标识
 	IPAddress    string `json:"ipAddress"`
 	Location     string `json:"location"`
-	LoginMethod  string `json:"loginMethod"`  // password, apple, google, wechat, sms
+	LoginMethod  string `json:"loginMethod"` // password, apple, google, wechat, sms
 	LoggedInAt   int64  `json:"loggedInAt"`
 	LastActiveAt int64  `json:"lastActiveAt"`
 	LoggedOutAt  int64  `json:"loggedOutAt,omitempty"`
@@ -228,7 +234,9 @@ type LoginHistory struct {
 
 // ConnectedAccount 用户已连接的第三方账号
 type ConnectedAccount struct {
-	ID             string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	UserID         string `json:"userId"`
 	Provider       string `json:"provider"`       // apple, google, wechat, weibo
 	ProviderUserID string `json:"providerUserId"` // 第三方账号ID
@@ -253,7 +261,9 @@ const (
 
 // AccountDeletionRequest 账号删除申请
 type AccountDeletionRequest struct {
-	ID                  string `json:"id"`
+	// Base model fields
+	common.BaseModel
+
 	UserID              string `json:"userId"`
 	Reason              string `json:"reason,omitempty"`
 	Feedback            string `json:"feedback,omitempty"`
@@ -266,14 +276,23 @@ type AccountDeletionRequest struct {
 	ProcessedBy         string `json:"processedBy,omitempty"`
 }
 
-// DeletionStatus 删除状态类型
-type DeletionStatus string
+// DeletionStatus 删除状态类型 - 使用 common.DeletionStatus 作为类型别名以保持向后兼容
+type DeletionStatus = common.DeletionStatus
 
 const (
-	DeletionStatusPending    DeletionStatus = "pending"
-	DeletionStatusProcessing DeletionStatus = "processing"
-	DeletionStatusCompleted  DeletionStatus = "completed"
-	DeletionStatusCancelled  DeletionStatus = "cancelled"
+	DeletionStatusPending    DeletionStatus = common.DeletionStatusPending
+	DeletionStatusProcessing DeletionStatus = common.DeletionStatusProcessing
+	DeletionStatusCompleted  DeletionStatus = common.DeletionStatusCompleted
+	DeletionStatusCancelled  DeletionStatus = common.DeletionStatusCancelled
+)
+
+// UserStatus 用户状态类型 - 使用 common.BaseStatus 作为类型别名以保持向后兼容
+type UserStatus = common.BaseStatus
+
+const (
+	UserStatusActive    UserStatus = common.StatusActive
+	UserStatusSuspended UserStatus = common.StatusSuspended
+	UserStatusDeleted   UserStatus = common.StatusDeleted
 )
 
 // DeletionReason 删除原因类型
@@ -291,9 +310,9 @@ const (
 
 // NotificationSettings 通知设置结构
 type NotificationSettings struct {
-	Push   PushNotificationSettings   `json:"push"`
-	Email  EmailNotificationSettings  `json:"email"`
-	InApp  InAppNotificationSettings  `json:"inApp"`
+	Push  PushNotificationSettings  `json:"push"`
+	Email EmailNotificationSettings `json:"email"`
+	InApp InAppNotificationSettings `json:"inApp"`
 }
 
 // PushNotificationSettings 推送通知设置
@@ -310,19 +329,19 @@ type PushNotificationSettings struct {
 
 // EmailNotificationSettings 邮件通知设置
 type EmailNotificationSettings struct {
-	Enabled       bool `json:"enabled"`
-	WeeklyDigest  bool `json:"weeklyDigest"`
-	SecurityAlert bool `json:"securityAlert"`
-	Marketing     bool `json:"marketing"`
+	Enabled        bool `json:"enabled"`
+	WeeklyDigest   bool `json:"weeklyDigest"`
+	SecurityAlert  bool `json:"securityAlert"`
+	Marketing      bool `json:"marketing"`
 	ProductUpdates bool `json:"productUpdates"`
 }
 
 // InAppNotificationSettings 站内通知设置
 type InAppNotificationSettings struct {
-	Enabled            bool `json:"enabled"`
-	ShowPreview        bool `json:"showPreview"`
-	SoundEnabled       bool `json:"soundEnabled"`
-	VibrationEnabled   bool `json:"vibrationEnabled"`
+	Enabled          bool `json:"enabled"`
+	ShowPreview      bool `json:"showPreview"`
+	SoundEnabled     bool `json:"soundEnabled"`
+	VibrationEnabled bool `json:"vibrationEnabled"`
 }
 
 // ActivityTimeRange 活动时间范围

@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
@@ -167,7 +168,7 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 	// 确保在失败时释放预留
 	defer func() {
-		if reservation != nil && reservation.Status == "pending" {
+		if reservation != nil && reservation.Status == string(common.StatusPending) {
 			if err := s.quotaReservation.ReleaseQuota(ctx, reservation.ReservationID); err != nil {
 				s.logger.Error("failed to release quota reservation",
 					zap.String("reservationID", reservation.ReservationID),
@@ -280,7 +281,7 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 	// ============== 确认配额预留 ==============
 	// 如果启用了配额预留，确认实际使用量
-	if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+	if s.enableQuotaReservation && reservation != nil && reservation.Status == string(common.StatusPending) {
 		actualTokens := record.TotalTokens
 		if actualTokens == 0 {
 			actualTokens = 1 // 至少扣减 1 个 token
@@ -420,7 +421,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 
 	// 确保在失败时释放预留
 	defer func() {
-		if reservation != nil && reservation.Status == "pending" {
+		if reservation != nil && reservation.Status == string(common.StatusPending) {
 			if err := s.quotaReservation.ReleaseQuota(ctx, reservation.ReservationID); err != nil {
 				s.logger.Error("failed to release quota reservation",
 					zap.String("reservationID", reservation.ReservationID),
@@ -594,7 +595,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	// 如果启用了配额预留，确认实际使用量
-	if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+	if s.enableQuotaReservation && reservation != nil && reservation.Status == string(common.StatusPending) {
 		if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
 			s.logger.Error("failed to confirm quota reservation for image generation",
 				zap.String("reservationID", reservation.ReservationID),
@@ -826,7 +827,7 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 
 	// 处理视频URL（同步完成时上传到OSS）
 	ossVideoURL := resp.VideoURL
-	if resp.Status == "completed" && resp.VideoURL != "" {
+	if resp.Status == string(common.TaskStatusCompleted) && resp.VideoURL != "" {
 		// 同步完成，上传视频到OSS
 		ossClient := aliyun.GetGlobalClient()
 		if ossClient != nil {
@@ -901,9 +902,9 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 		actualTokens = 5000 // 至少扣减 5000 tokens
 	}
 
-	if resp.Status == "completed" {
+	if resp.Status == string(common.TaskStatusCompleted) {
 		// 同步完成：确认配额预留
-		if s.enableQuotaReservation && reservation != nil && reservation.Status == "pending" {
+		if s.enableQuotaReservation && reservation != nil && reservation.Status == string(common.StatusPending) {
 			if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
 				s.logger.Error("failed to confirm quota reservation for video generation",
 					zap.String("reservationID", reservation.ReservationID),
@@ -1622,7 +1623,7 @@ func (s *AIGenerationService) pollForVideoCompletion(ctx context.Context, provid
 		}
 
 		// Check if failed
-		if resp.Status == "failed" || resp.Status == "error" {
+		if resp.Status == string(common.TaskStatusFailed) || resp.Status == "error" {
 			errMsg := resp.Error
 			if errMsg == "" {
 				errMsg = resp.Message

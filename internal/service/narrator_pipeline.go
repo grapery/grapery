@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/common"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // ContinueRequest represents a request to continue a storyboard (parallel universe creation)
@@ -127,10 +129,14 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 	fateSnapshotStrRef := fateSnapshotStr
 	fateSnapshotHashRef := fateSnapshotHash
 	newStoryboard := &domain.Storyboard{
-		ID:               newStoryboardID,
+		BaseModel: common.BaseModel{
+			ID:        newStoryboardID,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		StoryID:          parentStoryboard.StoryID,
 		ParentID:         req.ParentStoryboardID,
-		CreatorID:        userID,
+		UserID:           userID,
 		Title:            generateContinuationTitle(parentStoryboard),
 		Content:          "", // Will be filled by AI
 		RawInput:         req.UserPrompt,
@@ -139,10 +145,14 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		SceneCount:       req.SceneCount,
 		WorkflowStatus:   domain.WorkflowStatusDraft,
 		CurrentStep:      1,
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
 		FateSnapshot:     &fateSnapshotStrRef,
 		FateSnapshotHash: &fateSnapshotHashRef,
-		CreatedAt:        now,
-		UpdatedAt:        now,
 	}
 
 	// Step 6: Generate storyboard content and scenes using AI
@@ -196,7 +206,7 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 // canUserContinueStoryboard checks if user can continue the storyboard based on story permissions
 func (s *Service) canUserContinueStoryboard(ctx context.Context, userID string, story *domain.Story) bool {
 	// Story creator can always continue
-	if story.AuthorID == userID {
+	if story.UserID == userID {
 		return true
 	}
 
@@ -544,17 +554,19 @@ func (s *Service) generatePlaceholderScenes(storyboardID string, sceneCount int)
 	for i := 0; i < sceneCount; i++ {
 		sceneID := uuid.New().String()
 		scenes[i] = domain.StoryboardScene{
-			ID:           sceneID,
-			StoryboardID: storyboardID,
-			Sequence:     i + 1,
-			Title:        fmt.Sprintf("场景 %d", i+1),
-			Description:  fmt.Sprintf("这是基于 AI 生成内容创建的场景 %d。完整的场景描述将在后续步骤中生成。", i+1),
-			Location:     "待定",
-			TimeOfDay:    "待定",
-			Mood:         "待定",
+			BaseModel: common.BaseModel{
+				ID:        sceneID,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			StoryboardID:  storyboardID,
+			Sequence:      i + 1,
+			Title:         fmt.Sprintf("场景 %d", i+1),
+			Description:   fmt.Sprintf("这是基于 AI 生成内容创建的场景 %d。完整的场景描述将在后续步骤中生成。", i+1),
+			Location:      "待定",
+			TimeOfDay:     "待定",
+			Mood:          "待定",
 			IsAIGenerated: true,
-			CreatedAt:    now,
-			UpdatedAt:    now,
 		}
 	}
 
@@ -597,17 +609,19 @@ func (s *Service) parseGeneratedScenes(storyboardID, generatedText string, expec
 	for i, sceneData := range result.Scenes {
 		sceneID := uuid.New().String()
 		scenes[i] = domain.StoryboardScene{
-			ID:           sceneID,
-			StoryboardID: storyboardID,
-			Sequence:     sceneData.Sequence,
-			Title:        sceneData.Title,
-			Description:  sceneData.Description,
-			Location:     sceneData.Location,
-			TimeOfDay:    sceneData.TimeOfDay,
-			Mood:         sceneData.Mood,
+			BaseModel: common.BaseModel{
+				ID:        sceneID,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			StoryboardID:  storyboardID,
+			Sequence:      sceneData.Sequence,
+			Title:         sceneData.Title,
+			Description:   sceneData.Description,
+			Location:      sceneData.Location,
+			TimeOfDay:     sceneData.TimeOfDay,
+			Mood:          sceneData.Mood,
 			IsAIGenerated: true,
-			CreatedAt:    now,
-			UpdatedAt:    now,
 		}
 	}
 
@@ -615,14 +629,16 @@ func (s *Service) parseGeneratedScenes(storyboardID, generatedText string, expec
 	for i := len(scenes); i < expectedCount; i++ {
 		sceneID := uuid.New().String()
 		scenes = append(scenes, domain.StoryboardScene{
-			ID:           sceneID,
-			StoryboardID: storyboardID,
-			Sequence:     i + 1,
-			Title:        fmt.Sprintf("场景 %d", i+1),
-			Description:  "补充场景",
+			BaseModel: common.BaseModel{
+				ID:        sceneID,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			StoryboardID:  storyboardID,
+			Sequence:      i + 1,
+			Title:         fmt.Sprintf("场景 %d", i+1),
+			Description:   "补充场景",
 			IsAIGenerated: true,
-			CreatedAt:    now,
-			UpdatedAt:    now,
 		})
 	}
 

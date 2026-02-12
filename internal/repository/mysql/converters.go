@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -161,7 +162,11 @@ func ModelToUser(m *User) *domain.User {
 		return nil
 	}
 	return &domain.User{
-		ID:                  m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: m.CreatedAt,
+			UpdatedAt: m.UpdatedAt,
+		},
 		Username:            m.Username,
 		Email:               m.Email,
 		PasswordHash:        m.PasswordHash,
@@ -173,14 +178,14 @@ func ModelToUser(m *User) *domain.User {
 		Website:             m.Website,
 		AIPromptPreferences: m.AIPromptPreferences,
 		DateOfBirth:         int64ToInt64Ptr(m.DateOfBirth),
-		Followers:           m.Followers,
-		Following:           m.Following,
-		StoryboardCount:     m.StoryboardCount,
-		Status:              m.Status,
-		EmailVerified:       m.EmailVerified,
-		LastLoginAt:         int64ToInt64Ptr(m.LastLoginAt),
-		CreatedAt:           m.CreatedAt,
-		UpdatedAt:           m.UpdatedAt,
+		SocialStats: common.SocialStats{
+			Followers: m.Followers,
+			Following: m.Following,
+		},
+		StoryboardCount: m.StoryboardCount,
+		Status:          m.Status,
+		EmailVerified:   m.EmailVerified,
+		LastLoginAt:     int64ToInt64Ptr(m.LastLoginAt),
 	}
 }
 
@@ -196,7 +201,7 @@ func StoryToModel(d *domain.Story) *Story {
 		Title:               d.Title,
 		Description:         d.Description,
 		CoverImage:          d.CoverImage,
-		AuthorID:            d.AuthorID,
+		UserID:            d.UserID,
 		SourceFragmentID:    d.SourceFragmentID,
 		Likes:               d.Likes,
 		Followers:           d.Followers,
@@ -220,13 +225,18 @@ func ModelToStory(m *Story) *domain.Story {
 		return nil
 	}
 	d := &domain.Story{
-		ID:                  m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		Title:               m.Title,
 		Description:         m.Description,
 		CoverImage:          m.CoverImage,
-		AuthorID:            m.AuthorID,
-		SourceFragmentID:    m.SourceFragmentID,
-		Likes:               m.Likes,
+		UserID:              m.UserID,
+		EngagementStats: common.EngagementStats{
+			Likes: m.Likes,
+		},
 		Followers:           m.Followers,
 		Panels:              m.Panels,
 		StoryboardCount:     m.StoryboardCount,
@@ -237,8 +247,6 @@ func ModelToStory(m *Story) *domain.Story {
 		IsCollaborationOpen: m.IsCollaborationOpen,
 		UseAI:               m.UseAI,
 		AIAssistanceOptions: jsonToAIAssistanceOptions(m.AIAssistanceOptions),
-		CreatedAt:           timeToUnix(m.CreatedAt),
-		UpdatedAt:           timeToUnix(m.UpdatedAt),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
@@ -272,7 +280,11 @@ func ModelToPanel(m *Panel) *domain.Panel {
 		return nil
 	}
 	return &domain.Panel{
-		ID:        m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:   m.StoryID,
 		Sequence:  m.Sequence,
 		Title:     m.Title,
@@ -280,7 +292,6 @@ func ModelToPanel(m *Panel) *domain.Panel {
 		Image:     m.Image,
 		Likes:     m.Likes,
 		Published: m.Published,
-		CreatedAt: timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -295,7 +306,7 @@ func StoryboardToModel(d *domain.Storyboard) *Storyboard {
 		ID:               d.ID,
 		StoryID:          d.StoryID,
 		ParentID:         stringToStringPtr(d.ParentID),
-		CreatorID:        d.CreatorID,
+		UserID:           d.UserID,
 		Title:            d.Title,
 		Content:          d.Content,
 		RawInput:         d.RawInput,
@@ -321,10 +332,14 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 		return nil
 	}
 	d := &domain.Storyboard{
-		ID:               m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:          m.StoryID,
 		ParentID:         stringPtrToString(m.ParentID),
-		CreatorID:        m.CreatorID,
+		UserID:           m.UserID,
 		CreatorName:      m.Creator.DisplayName,
 		CreatorAvatar:    m.Creator.Avatar,
 		Title:            m.Title,
@@ -335,14 +350,14 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 		SceneCount:       m.SceneCount,
 		WorkflowStatus:   m.WorkflowStatus,
 		CurrentStep:      m.CurrentStep,
-		Likes:            m.Likes,
-		Comments:         m.Comments,
-		Shares:           m.Shares,
+		EngagementStats: common.EngagementStats{
+			Likes:    m.Likes,
+			Comments: m.Comments,
+			Shares:   m.Shares,
+			Views:    m.Views,
+		},
 		ForkCount:        m.ForkCount,
-		Views:            m.Views,
 		TokenConsumption: m.TokenConsumption,
-		CreatedAt:        timeToUnix(m.CreatedAt),
-		UpdatedAt:        timeToUnix(m.UpdatedAt),
 	}
 	// AfterFind hook will populate transient fields
 	return d
@@ -365,9 +380,9 @@ func modelToStoryScene(m *StoryScene) *domain.StoryScene {
 		SourceImage:  m.SourceImage,
 		CreatedBy:    m.CreatedBy,
 		LastEditedBy: m.LastEditedBy,
-		IsPublic:     m.IsPublic,
 		CreatedAt:    timeToUnix(m.CreatedAt),
 		UpdatedAt:    timeToUnix(m.UpdatedAt),
+		IsPublic:     m.IsPublic,
 	}
 }
 
@@ -400,15 +415,17 @@ func characterLinkToDomain(c *Character) domain.Character {
 		return domain.Character{}
 	}
 	return domain.Character{
-		ID:          c.ID,
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt.Unix(),
+			UpdatedAt: c.UpdatedAt.Unix(),
+		},
 		StoryID:     c.StoryID,
 		Name:        c.Name,
 		Description: c.Description,
 		Avatar:      c.Avatar,
 		Poster:      c.Poster,
 		IsPublic:    c.IsPublic,
-		CreatedAt:   c.CreatedAt.Unix(),
-		UpdatedAt:   c.UpdatedAt.Unix(),
 	}
 }
 
@@ -443,7 +460,7 @@ func CharacterToModel(d *domain.Character) *Character {
 		Description:  d.Description,
 		Avatar:       d.Avatar,
 		Poster:       d.Poster,
-		AuthorID:     d.AuthorID,
+		UserID:     d.UserID,
 		Personality:  d.Personality,
 		Background:   d.Background,
 		SourceType:   d.SourceType,
@@ -468,9 +485,13 @@ func ModelToCharacter(m *Character) *domain.Character {
 		return nil
 	}
 	d := &domain.Character{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:      m.StoryID,
-		AuthorID:     m.AuthorID,
+		UserID:       m.UserID,
 		Name:         m.Name,
 		Description:  m.Description,
 		Avatar:       m.Avatar,
@@ -488,8 +509,6 @@ func ModelToCharacter(m *Character) *domain.Character {
 		Likes:        m.Likes,
 		Followers:    m.Followers,
 		Stories:      m.Stories,
-		CreatedAt:    timeToUnix(m.CreatedAt),
-		UpdatedAt:    timeToUnix(m.UpdatedAt),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
@@ -507,7 +526,7 @@ func CommentToModel(d *domain.Comment) *Comment {
 	}
 	return &Comment{
 		ID:         d.ID,
-		AuthorID:   d.AuthorID,
+		UserID:   d.UserID,
 		Content:    d.Content,
 		TargetType: d.TargetType,
 		TargetID:   d.TargetID,
@@ -527,8 +546,12 @@ func ModelToComment(m *Comment) *domain.Comment {
 		return nil
 	}
 	d := &domain.Comment{
-		ID:         m.ID,
-		AuthorID:   m.AuthorID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
+		UserID:     m.UserID,
 		Content:    m.Content,
 		TargetType: m.TargetType,
 		TargetID:   m.TargetID,
@@ -537,8 +560,6 @@ func ModelToComment(m *Comment) *domain.Comment {
 		Likes:      m.Likes,
 		Dislikes:   m.Dislikes,
 		ReplyCount: m.ReplyCount,
-		CreatedAt:  timeToUnix(m.CreatedAt),
-		UpdatedAt:  timeToUnix(m.UpdatedAt),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
@@ -567,10 +588,12 @@ func ModelToUserFollow(m *UserFollow) *domain.UserFollow {
 		return nil
 	}
 	return &domain.UserFollow{
-		ID:         m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		FollowerID: m.FollowerID,
 		FolloweeID: m.FolloweeID,
-		CreatedAt:  timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -593,10 +616,12 @@ func ModelToStoryLike(m *StoryLike) *domain.StoryLike {
 		return nil
 	}
 	return &domain.StoryLike{
-		ID:        m.ID,
-		UserID:    m.UserID,
-		StoryID:   m.StoryID,
-		CreatedAt: timeToUnix(m.CreatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
+		UserID:  m.UserID,
+		StoryID: m.StoryID,
 	}
 }
 
@@ -619,10 +644,12 @@ func ModelToStoryFollow(m *StoryFollow) *domain.StoryFollow {
 		return nil
 	}
 	return &domain.StoryFollow{
-		ID:        m.ID,
-		UserID:    m.UserID,
-		StoryID:   m.StoryID,
-		CreatedAt: timeToUnix(m.CreatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
+		UserID:  m.UserID,
+		StoryID: m.StoryID,
 	}
 }
 
@@ -645,10 +672,12 @@ func ModelToCharacterFollow(m *CharacterFollow) *domain.CharacterFollow {
 		return nil
 	}
 	return &domain.CharacterFollow{
-		ID:          m.ID,
+		BaseModel: common.BaseModel{
+			ID:          m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:      m.UserID,
 		CharacterID: m.CharacterID,
-		CreatedAt:   timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -672,11 +701,13 @@ func ModelToCommentLike(m *CommentLike) *domain.CommentLike {
 		return nil
 	}
 	return &domain.CommentLike{
-		ID:        m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:    m.UserID,
 		CommentID: m.CommentID,
 		IsLike:    m.IsLike,
-		CreatedAt: timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -699,10 +730,12 @@ func ModelToStoryboardLike(m *StoryboardLike) *domain.StoryboardLike {
 		return nil
 	}
 	return &domain.StoryboardLike{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:       m.UserID,
 		StoryboardID: m.StoryboardID,
-		CreatedAt:    timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -1085,7 +1118,10 @@ func ModelToNotification(m *Notification) *domain.Notification {
 		return nil
 	}
 	return &domain.Notification{
-		ID:          m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:      m.UserID,
 		Type:        m.Type,
 		Title:       m.Title,
@@ -1095,7 +1131,6 @@ func ModelToNotification(m *Notification) *domain.Notification {
 		ActorID:     m.ActorID,
 		ActorName:   m.ActorName,
 		ActorAvatar: m.ActorAvatar,
-		CreatedAt:   timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -1134,7 +1169,10 @@ func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 		return nil
 	}
 	return &domain.UserSettings{
-		ID:                        m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: m.UpdatedAt,
+		},
 		UserID:                    m.UserID,
 		Language:                  m.Language,
 		Theme:                     m.Theme,
@@ -1151,7 +1189,6 @@ func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 		AIEnabled:                 m.AIEnabled,
 		AIDataSharing:             m.AIDataSharing,
 		NotificationSettings:      m.NotificationSettings,
-		UpdatedAt:                 m.UpdatedAt,
 	}
 }
 
@@ -1606,12 +1643,12 @@ func ModelToStyleConfig(m *StyleConfig) *domain.StyleConfig {
 		return nil
 	}
 	return &domain.StyleConfig{
-		ID:             m.ID,
-		Style:          m.Style,
-		Description:    m.Description,
-		UserID:         m.UserID,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
+		ID:          m.ID,
+		Style:       m.Style,
+		Description: m.Description,
+		UserID:      m.UserID,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
 	}
 }
 
@@ -1756,14 +1793,16 @@ func ModelToUserActivity(m *UserActivity) *domain.UserActivity {
 		return nil
 	}
 	return &domain.UserActivity{
-		ID:          m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:      m.UserID,
 		Type:        m.Type,
 		TargetID:    m.TargetID,
 		TargetType:  m.TargetType,
 		TargetTitle: m.TargetTitle,
 		Message:     m.Message,
-		CreatedAt:   timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -1783,7 +1822,7 @@ func CharacterPosterToModel(d *domain.CharacterPoster) *CharacterPoster {
 	return &CharacterPoster{
 		ID:                    d.ID,
 		CharacterID:           d.CharacterID,
-		AuthorID:              d.AuthorID,
+		UserID:                d.UserID,
 		Type:                  d.Type,
 		Title:                 d.Title,
 		Image:                 d.Image,
@@ -1816,9 +1855,12 @@ func ModelToCharacterPoster(m *CharacterPoster) *domain.CharacterPoster {
 	}
 
 	return &domain.CharacterPoster{
-		ID:                    m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		CharacterID:           m.CharacterID,
-		AuthorID:              m.AuthorID,
+		UserID:                m.UserID,
 		Type:                  m.Type,
 		Title:                 m.Title,
 		Image:                 m.Image,
@@ -1834,9 +1876,10 @@ func ModelToCharacterPoster(m *CharacterPoster) *domain.CharacterPoster {
 		ErrorMessage:          m.ErrorMessage,
 		ConceptGenerationID:   m.ConceptGenerationID,
 		ImageGenerationID:     m.ImageGenerationID,
-		Likes:                 m.Likes,
-		Shares:                m.Shares,
-		CreatedAt:             timeToUnix(m.CreatedAt),
+		EngagementStats: common.EngagementStats{
+			Likes:  m.Likes,
+			Shares: m.Shares,
+		},
 	}
 }
 
@@ -1863,12 +1906,14 @@ func ModelToCharacterAnalytics(m *CharacterAnalytics) *domain.CharacterAnalytics
 		return nil
 	}
 	return &domain.CharacterAnalytics{
-		ID:                   m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		CharacterID:          m.CharacterID,
 		UsersWhoChattedCount: m.UsersWhoChattedCount,
 		TotalMessagesSent:    m.TotalMessagesSent,
 		TotalTokensConsumed:  m.TotalTokensConsumed,
-		UpdatedAt:            timeToUnix(m.UpdatedAt),
 	}
 }
 
@@ -2354,13 +2399,15 @@ func ModelToStoryPublication(m *StoryPublication) *domain.StoryPublication {
 		return nil
 	}
 	pub := &domain.StoryPublication{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:      m.StoryID,
 		Version:      m.Version,
 		Status:       m.Status,
 		RenderTaskID: m.RenderTaskID,
 		PublishedAt:  timeToUnix(m.PublishedAt),
-		UpdatedAt:    timeToUnix(m.UpdatedAt),
 	}
 
 	if m.UnpublishedAt != nil && !m.UnpublishedAt.IsZero() {
@@ -2599,7 +2646,11 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 		return nil
 	}
 	return &domain.StoryComposition{
-		ID:                    m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		Title:                 m.Title,
 		CoverImage:            m.CoverImage,
 		BackgroundDescription: m.Background,
@@ -2608,8 +2659,6 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 		RootStoryboardID:      m.RootStoryboardID,
 		TotalStoryboards:      m.TotalStoryboards,
 		TotalForks:            m.TotalForks,
-		CreatedAt:             timeToUnix(m.CreatedAt),
-		UpdatedAt:             timeToUnix(m.UpdatedAt),
 	}
 }
 

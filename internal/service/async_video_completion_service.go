@@ -10,6 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 )
@@ -510,12 +511,12 @@ func (s *AsyncVideoCompletionService) pollTaskStatus(ctx context.Context, task *
 	}
 
 	// 检查任务状态
-	if resp.Status == "completed" && resp.VideoURL != "" {
+	if resp.Status == string(common.TaskStatusCompleted) && resp.VideoURL != "" {
 		// 视频生成完成
 		s.handleTaskCompletion(ctx, task, resp)
 		// 成功处理，重置失败计数
 		task.FailCount = 0
-	} else if resp.Status == "failed" || resp.Status == "error" {
+	} else if resp.Status == string(common.TaskStatusFailed) || resp.Status == "error" {
 		// 视频生成失败
 		s.handleTaskFailure(ctx, task, resp.Error)
 	} else {

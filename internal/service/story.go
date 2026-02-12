@@ -10,10 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
-	"go.uber.org/zap"
 )
 
 // GetTrendingStories24h returns up to `limit` trending published stories.
@@ -82,12 +85,12 @@ type UpdateStoryRequest struct {
 
 // StoryListRequest 故事列表请求
 type StoryListRequest struct {
-	Status   string `form:"status" binding:"omitempty,oneof=draft published rendering"`
-	Genre    string `form:"genre"`
-	AuthorID string `form:"authorId"`
-	Search   string `form:"search"`
-	Limit    int    `form:"limit" binding:"omitempty,min=1,max=100"`
-	Offset   int    `form:"offset" binding:"omitempty,min=0"`
+	Status string `form:"status" binding:"omitempty,oneof=draft published rendering"`
+	Genre  string `form:"genre"`
+	UserID string `form:"authorId"`
+	Search string `form:"search"`
+	Limit  int    `form:"limit" binding:"omitempty,min=1,max=100"`
+	Offset int    `form:"offset" binding:"omitempty,min=0"`
 }
 
 // CreateStory 创建故事
@@ -151,6 +154,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 
 	// 创建故事基本信息
 	story := &domain.Story{
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		UserID:              author.ID,
 		Title:               req.Title,
 		Description:         req.Description,
 		OriginalDescription: req.Description, // 保留原始描述
@@ -159,11 +168,14 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Genre:               req.Genre,
 		Status:              status,
 		DefaultSceneCount:   defaultSceneCount,
-		Likes:               0,
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
 		Followers:           0,
 		Panels:              0,
-		CreatedAt:           now,
-		UpdatedAt:           now,
 		Style:               req.AIStyle,
 		IsCollaborationOpen: req.IsCollaborationOpen, // New field: default false (restricted)
 		UseAI:               useAI,                   // AI策略（创建时确定）
@@ -502,7 +514,7 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 	s.logger.Info("listing stories",
 		zap.String("status", req.Status),
 		zap.String("genre", req.Genre),
-		zap.String("authorID", req.AuthorID),
+		zap.String("userID", req.UserID),
 		zap.String("search", req.Search),
 		zap.Int("limit", req.Limit),
 		zap.Int("offset", req.Offset))
@@ -515,12 +527,12 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 	}
 
 	filter := domain.StoryFilter{
-		Status:   req.Status,
-		Genre:    req.Genre,
-		AuthorID: req.AuthorID,
-		Search:   req.Search,
-		Limit:    req.Limit,
-		Offset:   req.Offset,
+		Status:  req.Status,
+		Genre:   req.Genre,
+		UserID:  req.UserID,
+		Search:  req.Search,
+		Limit:   req.Limit,
+		Offset:  req.Offset,
 	}
 
 	s.logger.Debug("querying stories with filter",
@@ -1762,7 +1774,7 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 	}
 
 	// 检查故事状态
-	if story.Status == "published" {
+	if story.Status == string(common.ContentStatusPublished) {
 		return nil, errors.New("story is already published")
 	}
 
@@ -1783,12 +1795,15 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 	// 创建发布记录
 	now := time.Now().Unix()
 	publication := &domain.StoryPublication{
-		ID:          utils.GenerateID(),
+		BaseModel: common.BaseModel{
+			ID:        utils.GenerateID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		StoryID:     storyID,
 		Version:     nextVersion,
 		Status:      "published",
 		PublishedAt: now,
-		UpdatedAt:   now,
 	}
 
 	// 保存发布记录
@@ -1916,7 +1931,7 @@ func (s *Service) UnpublishStory(ctx context.Context, userID, storyID string) er
 		return errors.New("unauthorized: not story owner")
 	}
 
-	if story.Status != "published" {
+	if story.Status != string(common.ContentStatusPublished) {
 		return errors.New("story is not published")
 	}
 
@@ -1929,9 +1944,9 @@ func (s *Service) UnpublishStory(ctx context.Context, userID, storyID string) er
 	}
 
 	// 更新发布记录状态
-	if publication != nil && publication.Status == "published" {
+	if publication != nil && publication.Status == string(common.PublicationStatusPublished) {
 		now := time.Now().Unix()
-		publication.Status = "unpublished"
+		publication.Status = string(common.PublicationStatusUnpublished)
 		publication.UnpublishedAt = &now
 		publication.UpdatedAt = now
 
@@ -2648,12 +2663,18 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 	}
 
 	// 创建贡献者
+	now := time.Now().Unix()
 	contributor := &domain.StoryContributor{
-		ID:        utils.GenerateID(),
+		BaseModel: common.BaseModel{
+			ID:        utils.GenerateID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		StoryID:   storyID,
 		UserID:    req.UserID,
 		Role:      domain.StoryContributorRole(req.Role),
 		InvitedBy: inviterID,
+		JoinedAt:  now,
 	}
 
 	if err := s.repo.AddStoryContributor(ctx, contributor); err != nil {
@@ -2778,12 +2799,17 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 	}
 
 	// 2. 检查权限（只能转换自己的碎片）
-	if fragment.AuthorID != userID && fragment.CreatorID != userID {
+	// 向后兼容：检查 UserID 或 CreatorID
+	fragmentOwnerID := fragment.UserID
+	if fragmentOwnerID == "" {
+		fragmentOwnerID = fragment.CreatorID
+	}
+	if fragmentOwnerID != userID {
 		s.logger.Warn("permission denied: not fragment owner",
 			zap.String("userID", userID),
 			zap.String("fragmentID", fragmentID),
-			zap.String("authorID", fragment.AuthorID),
-			zap.String("creatorID", fragment.CreatorID))
+			zap.String("fragmentUserID", fragment.UserID),
+			zap.String("fragmentCreatorID", fragment.CreatorID))
 		return nil, errors.New("permission denied: not fragment owner")
 	}
 
@@ -2804,20 +2830,30 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 
 	// 4. 创建故事
 	story := &domain.Story{
-		ID:                  utils.GenerateID(),
+		BaseModel: common.BaseModel{
+			ID:        utils.GenerateID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		Title:               req.Title,
 		Description:         req.Description,
 		CoverImage:          req.CoverImage,
 		Genre:               req.Genre,
-		AuthorID:            userID,
+		UserID:              userID,
 		Status:              "draft",
 		IsCollaborationOpen: isCollaborationOpen,
 		UseAI:               req.UseAI,
 		DefaultSceneCount:   sceneCount,
 		OriginalDescription: fragment.Content, // 保留原始内容
 		SourceFragmentID:    &fragmentID,       // 记录来源碎片ID
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
+		Followers: 0,
+		Panels:    0,
 	}
 
 	// 获取作者信息
@@ -2848,10 +2884,14 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 
 	// 5. 创建根故事板
 	storyboard := &domain.Storyboard{
-		ID:             utils.GenerateID(),
+		BaseModel: common.BaseModel{
+			ID:        utils.GenerateID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		StoryID:        story.ID,
 		ParentID:       domain.StoryboardRootMarker, // "__root__"
-		CreatorID:      userID,
+		UserID:         userID,
 		CreatorName:    author.DisplayName,
 		CreatorAvatar:  author.Avatar,
 		Title:          "Chapter 1",
@@ -2860,8 +2900,12 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		SceneCount:     sceneCount,
 		WorkflowStatus: "draft",
 		CurrentStep:    1,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
 	}
 
 	s.logger.Debug("creating root storyboard",
@@ -2891,14 +2935,16 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 				break // 不超过设定的场景数
 			}
 			scene := &domain.StoryboardScene{
-				ID:           utils.GenerateID(),
+				BaseModel: common.BaseModel{
+					ID:        utils.GenerateID(),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
 				StoryboardID: storyboard.ID,
 				Sequence:     i + 1,
 				Title:        fmt.Sprintf("Scene %d", i+1),
 				Image:        mediaURL,
 				Description:  "", // 可以从 fragment content 中解析或留空
-				CreatedAt:    now,
-				UpdatedAt:    now,
 			}
 			if err := s.repo.CreateStoryboardScenes(ctx, storyboard.ID, []*domain.StoryboardScene{scene}); err != nil {
 				s.logger.Warn("failed to create scene",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -146,7 +147,11 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 	}
 
 	return &domain.User{
-		ID:                  user.ID,
+		BaseModel: common.BaseModel{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		},
 		Username:            user.Username,
 		Email:               user.Email,
 		PasswordHash:        user.PasswordHash,
@@ -158,14 +163,14 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 		Website:             user.Website,
 		AIPromptPreferences: user.AIPromptPreferences,
 		DateOfBirth:         dateOfBirth,
-		Followers:           user.Followers,
-		Following:           user.Following,
-		StoryboardCount:     user.StoryboardCount,
-		Status:              user.Status,
-		EmailVerified:       user.EmailVerified,
-		LastLoginAt:         lastLoginAt,
-		CreatedAt:           user.CreatedAt,
-		UpdatedAt:           user.UpdatedAt,
+		SocialStats: common.SocialStats{
+			Followers: user.Followers,
+			Following: user.Following,
+		},
+		StoryboardCount: user.StoryboardCount,
+		Status:          user.Status,
+		EmailVerified:   user.EmailVerified,
+		LastLoginAt:     lastLoginAt,
 	}
 }
 
@@ -208,7 +213,11 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 // userSettingsToDomain 转换 UserSettings 到 domain
 func (r *Repository) userSettingsToDomain(settings *UserSettings) *domain.UserSettings {
 	return &domain.UserSettings{
-		ID:                        settings.ID,
+		BaseModel: common.BaseModel{
+			ID:        settings.ID,
+			CreatedAt: 0, // UserSettings doesn't have CreatedAt in MySQL model
+			UpdatedAt: settings.UpdatedAt,
+		},
 		UserID:                    settings.UserID,
 		Language:                  settings.Language,
 		Theme:                     settings.Theme,
@@ -225,7 +234,6 @@ func (r *Repository) userSettingsToDomain(settings *UserSettings) *domain.UserSe
 		AIEnabled:                 settings.AIEnabled,
 		AIDataSharing:             settings.AIDataSharing,
 		NotificationSettings:      settings.NotificationSettings,
-		UpdatedAt:                 settings.UpdatedAt,
 	}
 }
 

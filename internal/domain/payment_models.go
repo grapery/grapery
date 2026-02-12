@@ -1,5 +1,27 @@
 package domain
 
+import "github.com/grapestree/fgrapery/grapery/internal/common"
+
+// MembershipStatus 会员状态类型 - 使用 common.MembershipStatus 作为类型别名以保持向后兼容
+type MembershipStatus = common.MembershipStatus
+
+const (
+	MembershipStatusActive    MembershipStatus = common.MembershipStatusActive
+	MembershipStatusExpired   MembershipStatus = common.MembershipStatusExpired
+	MembershipStatusCancelled MembershipStatus = common.MembershipStatusCancelled
+)
+
+// OrderStatus 订单状态类型 - 使用 common.OrderStatus 作为类型别名以保持向后兼容
+type OrderStatus = common.OrderStatus
+
+const (
+	OrderStatusPending  OrderStatus = common.OrderStatusPending
+	OrderStatusPaid     OrderStatus = common.OrderStatusPaid
+	OrderStatusFailed   OrderStatus = common.OrderStatusFailed
+	OrderStatusRefunded OrderStatus = common.OrderStatusRefunded
+	OrderStatusCancelled OrderStatus = common.OrderStatusCancelled
+)
+
 // Membership 会员信息
 type Membership struct {
 	ID           string `json:"id"`

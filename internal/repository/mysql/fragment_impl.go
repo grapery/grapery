@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -96,29 +97,29 @@ func (r *Repository) fragmentToDomain(f FragmentDB) domain.Fragment {
 	}
 
 	fragment := domain.Fragment{
-		ID:                 f.ID,
-		AuthorID:           f.CreatorID,
+		BaseModel: common.BaseModel{
+			ID:        f.ID,
+			CreatedAt: f.CreatedAt,
+			UpdatedAt: f.UpdatedAt,
+		},
+		UserID:             f.UserID, // authorId in JSON
 		Content:            f.Content,
 		MediaURLs:          mediaURLs,
 		Visibility:         f.Visibility,
 		SourceType:         f.SourceType,
 		SourceID:           f.SourceID,
-		Status:             "active", // 默认状态
-		LikesCount:         f.Likes,
-		CommentsCount:      f.Comments,
-		SharesCount:        f.Shares,
-		ViewsCount:         f.Views,
-		CreatedAt:          f.CreatedAt,
-		UpdatedAt:          f.UpdatedAt,
+		Status:             string(common.StatusActive), // 默认状态
+		EngagementStats: common.EngagementStats{
+			Likes:    f.Likes,
+			Comments: f.Comments,
+			Shares:   f.Shares,
+			Views:    f.Views,
+		},
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
 		// 兼容字段
-		CreatorID: f.CreatorID,
+		CreatorID: f.UserID,
 		ImageUrls: f.ImageUrls,
-		Likes:     f.Likes,
-		Comments:  f.Comments,
-		Shares:    f.Shares,
-		Views:     f.Views,
 	}
 
 	// 如果有 Creator 信息，填充 Author
@@ -140,15 +141,16 @@ func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
 		}
 	}
 
-	// 使用兼容字段或主字段
-	creatorID := f.CreatorID
+	// 使用主字段
+	creatorID := f.UserID
 	if creatorID == "" {
-		creatorID = f.AuthorID
+		// 向后兼容：如果 UserID 为空，尝试使用 CreatorID
+		creatorID = f.CreatorID
 	}
 
 	return &FragmentDB{
 		ID:                 f.ID,
-		CreatorID:          creatorID,
+		UserID:          creatorID,
 		Content:            f.Content,
 		ImageUrls:          imageUrlsJSON,
 		Visibility:         f.Visibility,
@@ -156,10 +158,10 @@ func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
 		SourceID:           f.SourceID,
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
-		Likes:              f.LikesCount,
-		Comments:           f.CommentsCount,
-		Shares:             f.SharesCount,
-		Views:              f.ViewsCount,
+		Likes:              f.Likes,
+		Comments:           f.Comments,
+		Shares:             f.Shares,
+		Views:              f.Views,
 		CreatedAt:          f.CreatedAt,
 		UpdatedAt:          f.UpdatedAt,
 	}

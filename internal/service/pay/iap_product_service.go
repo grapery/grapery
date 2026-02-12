@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"github.com/sirupsen/logrus"
@@ -1561,7 +1562,7 @@ func (s *IAPProductServiceImpl) createGoogleProduct(ctx context.Context, googleP
 		TrialPeriod:     s.parseGoogleDuration(googleProduct.TrialPeriod),
 		GoogleSKU:       &googleProduct.ProductID,
 		GoogleProductID: &googleProduct.ProductID,
-		IsActive:        googleProduct.Status == "active",
+		IsActive:        googleProduct.Status == string(common.StatusActive),
 		DisplayOrder:    0,
 		Featured:        false,
 		MaxRoles:        10,    // 默认值
@@ -1611,7 +1612,7 @@ func (s *IAPProductServiceImpl) updateGoogleProduct(ctx context.Context, existin
 		needsUpdate = true
 	}
 
-	newIsActive := googleProduct.Status == "active"
+	newIsActive := googleProduct.Status == string(common.StatusActive)
 	if existingProduct.IsActive != newIsActive {
 		existingProduct.IsActive = newIsActive
 		needsUpdate = true

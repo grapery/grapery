@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
@@ -95,7 +96,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 	storyboard := &domain.Storyboard{
 		StoryID:      req.StoryID,
 		ParentID:     parentID,
-		CreatorID:    userID.(string),
+		UserID:       userID.(string),
 		Title:        req.Title,
 		RawInput:     req.RawInput,
 		Content:      req.Content,
@@ -213,7 +214,9 @@ func (h *Handler) UpdateStoryboard(c *gin.Context) {
 	}
 
 	storyboard := &domain.Storyboard{
-		ID:       id,
+		BaseModel: common.BaseModel{
+			ID: id,
+		},
 		Title:    req.Title,
 		Content:  req.Content,
 		RawInput: req.RawInput,

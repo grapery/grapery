@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
@@ -66,7 +67,11 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 		zap.String("userID", userID))
 
 	defaultSettings := &domain.UserSettings{
-		ID:                        utils.GenerateID(),
+		BaseModel: common.BaseModel{
+			ID:        utils.GenerateID(),
+			CreatedAt: time.Now().Unix(),
+			UpdatedAt: time.Now().Unix(),
+		},
 		UserID:                    userID,
 		Language:                  string(domain.LanguageChineseCN),
 		Theme:                     string(domain.ThemeSystem),
@@ -83,7 +88,6 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 		AIEnabled:                 true,
 		AIDataSharing:             true,
 		NotificationSettings:      s.getDefaultNotificationSettings(),
-		UpdatedAt:                 time.Now().Unix(),
 	}
 
 	if err := s.settingsRepo.CreateUserSettings(defaultSettings); err != nil {

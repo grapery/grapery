@@ -39,7 +39,7 @@ func (s *StoryboardPathService) SetDefaultPath(ctx context.Context, storyID stri
 	}
 
 	// 2. 检查权限（只有作者可以设置）
-	if story.AuthorID != userID {
+	if story.UserID != userID {
 		return fmt.Errorf("permission denied: only author can set default path")
 	}
 
@@ -79,7 +79,7 @@ func (s *StoryboardPathService) CalculateAutoPath(ctx context.Context, storyID s
 	}
 
 	// 2. 检查权限
-	if story.AuthorID != userID {
+	if story.UserID != userID {
 		return nil, fmt.Errorf("permission denied")
 	}
 

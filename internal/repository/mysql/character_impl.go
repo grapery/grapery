@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -48,7 +49,7 @@ func (r *Repository) ListCharacters(ctx context.Context, limit, offset int) ([]*
 
 // CreateCharacter creates a new character
 func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Character) error {
-	authorID := character.AuthorID
+	authorID := character.UserID
 	if authorID == "" && character.Author != nil {
 		authorID = character.Author.ID
 	}
@@ -64,7 +65,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 	portraitStatus := character.PortraitGenerationStatus
 	if portraitStatus == "" {
 		if character.NeedsPortrait {
-			portraitStatus = "pending"
+			portraitStatus = string(common.TaskStatusPending)
 		} else {
 			portraitStatus = "none"
 		}
@@ -81,7 +82,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		NeedsPortrait:            character.NeedsPortrait,
 		ReferenceImage:           character.ReferenceImage,
 		PortraitGenerationStatus: portraitStatus,
-		AuthorID:                 authorID,
+		UserID:                 authorID,
 		Personality:              character.Personality,
 		Background:               character.Background,
 		ShortTermGoal:            character.ShortTermGoal,
@@ -118,7 +119,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 
 // UpdateCharacter updates an existing character
 func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Character) error {
-	authorID := character.AuthorID
+	authorID := character.UserID
 	if authorID == "" && character.Author != nil {
 		authorID = character.Author.ID
 	}
@@ -132,7 +133,7 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"needs_portrait":             character.NeedsPortrait,
 		"reference_image":            character.ReferenceImage,
 		"portrait_generation_status": character.PortraitGenerationStatus,
-		"author_id":                  authorID,
+		"user_id":                  authorID,
 		"personality":                character.Personality,
 		"background":                 character.Background,
 		"short_term_goal":            character.ShortTermGoal,
@@ -201,10 +202,10 @@ func (r *Repository) CharactersByStory(ctx context.Context, storyID string) ([]*
 	return result, nil
 }
 
-// CharactersByAuthor retrieves characters by author
-func (r *Repository) CharactersByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*domain.Character, error) {
+// CharactersByUser retrieves characters by user
+func (r *Repository) CharactersByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
 	var characters []Character
-	query := r.db.WithContext(ctx).Preload("Author").Where("author_id = ?", authorID).Order("created_at DESC")
+	query := r.db.WithContext(ctx).Preload("Author").Where("user_id = ?", userID).Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)

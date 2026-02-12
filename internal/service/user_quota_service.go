@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -206,7 +207,7 @@ func (s *UserQuotaService) GetUserRechargeInfo(ctx context.Context, userID strin
 	var lastRechargeAt *int64
 
 	for _, order := range orders {
-		if order.Status == "paid" {
+		if order.Status == string(common.OrderStatusPaid) {
 			// 将金额转换为分（假设原金额是元）
 			totalRecharged += int64(order.Amount * 100)
 			rechargeCount++

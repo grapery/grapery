@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -77,7 +78,10 @@ func (r *Repository) DeleteNotification(ctx context.Context, id string) error {
 
 func (r *Repository) notificationToDomain(n Notification) domain.Notification {
 	return domain.Notification{
-		ID:          n.ID,
+		BaseModel: common.BaseModel{
+			ID:        n.ID,
+			CreatedAt: n.CreatedAt.Unix(),
+		},
 		UserID:      n.UserID,
 		Type:        n.Type,
 		Title:       n.Title,
@@ -87,6 +91,5 @@ func (r *Repository) notificationToDomain(n Notification) domain.Notification {
 		ActorID:     n.ActorID,
 		ActorName:   n.ActorName,
 		ActorAvatar: n.ActorAvatar,
-		CreatedAt:   n.CreatedAt.Unix(),
 	}
 }

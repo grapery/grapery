@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -20,7 +21,7 @@ func (r *Repository) CreateCharacterPoster(ctx context.Context, poster *domain.C
 	dbPoster := &CharacterPoster{
 		ID:                    uuid.New().String(),
 		CharacterID:           poster.CharacterID,
-		AuthorID:              poster.Author.ID,
+		UserID:              poster.Author.ID,
 		Type:                  poster.Type,
 		Title:                 poster.Title,
 		Image:                 poster.Image,
@@ -143,7 +144,11 @@ func (r *Repository) IncrementPosterShares(ctx context.Context, posterID string)
 // characterPosterToDomain 转换海报到 domain
 func (r *Repository) characterPosterToDomain(poster *CharacterPoster) *domain.CharacterPoster {
 	result := &domain.CharacterPoster{
-		ID:                    poster.ID,
+		BaseModel: common.BaseModel{
+			ID:        poster.ID,
+			CreatedAt: poster.CreatedAt.Unix(),
+			UpdatedAt: poster.UpdatedAt.Unix(),
+		},
 		CharacterID:           poster.CharacterID,
 		Type:                  poster.Type,
 		Title:                 poster.Title,
@@ -159,10 +164,12 @@ func (r *Repository) characterPosterToDomain(poster *CharacterPoster) *domain.Ch
 		ErrorMessage:          poster.ErrorMessage,
 		ConceptGenerationID:   poster.ConceptGenerationID,
 		ImageGenerationID:     poster.ImageGenerationID,
-		Likes:                 poster.Likes,
-		Shares:                poster.Shares,
-		CreatedAt:             poster.CreatedAt.Unix(),
-		UpdatedAt:             poster.UpdatedAt.Unix(),
+		EngagementStats: common.EngagementStats{
+			Likes:    poster.Likes,
+			Comments: poster.Comments,
+			Shares:   poster.Shares,
+			Views:    poster.Views,
+		},
 	}
 
 	if poster.Author.ID != "" {

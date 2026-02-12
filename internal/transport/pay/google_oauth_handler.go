@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
@@ -291,7 +292,15 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 		}
 
 		newUser := &domain.User{
-			ID:            uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			SocialStats: common.SocialStats{
+				Followers: 0,
+				Following: 0,
+			},
 			Username:      username,
 			Email:         email,
 			DisplayName:   displayName,
@@ -299,8 +308,6 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			Status:        "active",
 			EmailVerified: email != "" && emailVerified,
 			LastLoginAt:   &now,
-			CreatedAt:     now,
-			UpdatedAt:     now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -326,7 +333,11 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 
 		// 创建默认用户设置
 		settings := &domain.UserSettings{
-			ID:                 uuid.New().String(),
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
 			UserID:             newUser.ID,
 			Language:           "en",
 			Theme:              "auto",
@@ -337,7 +348,6 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			AllowComments:      true,
 			AllowMessages:      true,
 			ShowOnlineStatus:   true,
-			UpdatedAt:          now,
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
@@ -377,7 +387,15 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 	logrus.Warn("OAuth handler has no repository, user data will not be persisted")
 
 	return &domain.User{
-		ID:            providerUserID,
+		BaseModel: common.BaseModel{
+			ID:        providerUserID,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SocialStats: common.SocialStats{
+			Followers: 0,
+			Following: 0,
+		},
 		Username:      username,
 		Email:         email,
 		DisplayName:   displayName,
@@ -385,8 +403,6 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 		Status:        "active",
 		EmailVerified: email != "" && emailVerified,
 		LastLoginAt:   &now,
-		CreatedAt:     now,
-		UpdatedAt:     now,
 	}, true, nil
 }
 

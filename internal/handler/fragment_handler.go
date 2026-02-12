@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
 )
@@ -122,8 +124,19 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 	// For now, use the provided URLs directly
 
 	fragment := &domain.Fragment{
-		ID:            generateUUID(), // Implement this
-		CreatorID:     userID,
+		BaseModel: common.BaseModel{
+			ID:        generateUUID(),
+			CreatedAt: time.Now().UnixMilli(),
+			UpdatedAt: time.Now().UnixMilli(),
+		},
+		EngagementStats: common.EngagementStats{
+			Likes:    0,
+			Comments: 0,
+			Shares:   0,
+			Views:    0,
+		},
+		UserID:        userID,
+		CreatorID:     userID,         // 兼容旧代码
 		Content:       req.Content,
 		ImageUrls:     stringifyArray(req.ImageUrls),
 		Style:         req.Style,
@@ -131,10 +144,6 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		Visibility:    req.Visibility,
 		SourceType:    string(domain.FragmentSourceOriginal), // 用户手动创建的碎片为原创
 		SourceID:      "",                                    // 原创碎片无来源ID
-		Likes:         0,
-		Comments:      0,
-		Shares:        0,
-		Views:         0,
 	}
 
 	if err := h.fragmentRepo.Create(c.Request.Context(), fragment); err != nil {
@@ -287,7 +296,7 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 	}
 
 	// Check ownership
-	if fragment.CreatorID != userID {
+	if fragment.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -337,7 +346,7 @@ func (h *FragmentHandler) DeleteFragment(c *gin.Context) {
 	}
 
 	// Check ownership
-	if fragment.CreatorID != userID {
+	if fragment.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}

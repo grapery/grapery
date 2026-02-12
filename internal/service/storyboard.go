@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -16,7 +17,7 @@ import (
 func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
 	s.logger.Info("creating storyboard",
 		zap.String("storyId", storyboard.StoryID),
-		zap.String("creatorId", storyboard.CreatorID),
+		zap.String("creatorId", storyboard.UserID),
 		zap.String("title", storyboard.Title),
 		zap.String("parentId", storyboard.ParentID),
 		zap.Bool("isStandalone", storyboard.IsStandalone),
@@ -154,7 +155,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	s.logger.Info("storyboard created successfully",
 		zap.String("id", storyboard.ID),
 		zap.String("storyId", storyboard.StoryID),
-		zap.String("creatorId", storyboard.CreatorID),
+		zap.String("creatorId", storyboard.UserID),
 		zap.String("title", storyboard.Title),
 		zap.String("parentId", storyboard.ParentID),
 		zap.String("workflowStatus", storyboard.WorkflowStatus),
@@ -189,13 +190,13 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 
 	// 创建通知
 	// 通知故事作者（如果创建者不是故事作者本人）
-	if story.AuthorID != storyboard.CreatorID {
+	if story.UserID != storyboard.UserID {
 		// 获取创建者信息
-		creator, err := s.repo.UserByID(ctx, storyboard.CreatorID)
+		creator, err := s.repo.UserByID(ctx, storyboard.UserID)
 		if err == nil {
 			if err := s.NotifyStoryboardCreated(ctx,
-				story.AuthorID,
-				storyboard.CreatorID,
+				story.UserID,
+				storyboard.UserID,
 				creator.DisplayName,
 				creator.Avatar,
 				storyboard.StoryID,
@@ -205,7 +206,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 					zap.String("storyboardId", storyboard.ID))
 			} else {
 				s.logger.Info("storyboard created notification sent",
-					zap.String("recipientId", story.AuthorID),
+					zap.String("recipientId", story.UserID),
 					zap.String("storyboardId", storyboard.ID))
 			}
 		}
@@ -214,13 +215,13 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	// 如果是 fork（不是 root），通知父节点作者
 	if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
 		parent, err := s.repo.StoryboardByID(ctx, storyboard.ParentID)
-		if err == nil && parent.CreatorID != storyboard.CreatorID {
+		if err == nil && parent.UserID != storyboard.UserID {
 			// 获取创建者信息
-			creator, err := s.repo.UserByID(ctx, storyboard.CreatorID)
+			creator, err := s.repo.UserByID(ctx, storyboard.UserID)
 			if err == nil {
 				if err := s.NotifyStoryboardForked(ctx,
-					parent.CreatorID,
-					storyboard.CreatorID,
+					parent.UserID,
+					storyboard.UserID,
 					creator.DisplayName,
 					creator.Avatar,
 					storyboard.StoryID,
@@ -231,7 +232,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 						zap.String("storyboardId", storyboard.ID))
 				} else {
 					s.logger.Info("storyboard forked notification sent",
-						zap.String("recipientId", parent.CreatorID),
+						zap.String("recipientId", parent.UserID),
 						zap.String("storyboardId", storyboard.ID))
 				}
 			}
@@ -240,9 +241,9 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 
 	// 记录用户活动
 	s.logger.Debug("recording user activity for storyboard creation",
-		zap.String("userId", storyboard.CreatorID),
+		zap.String("userId", storyboard.UserID),
 		zap.String("storyboardId", storyboard.ID))
-	go s.RecordStoryboardCreated(context.Background(), storyboard.CreatorID, storyboard.ID, storyboard.Title)
+	go s.RecordStoryboardCreated(context.Background(), storyboard.UserID, storyboard.ID, storyboard.Title)
 
 	// 更新故事的故事板数量
 	if err := s.repo.IncrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
@@ -510,11 +511,11 @@ func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Story
 		return err
 	}
 
-	if existing.CreatorID != userID {
+	if existing.UserID != userID {
 		s.logger.Warn("permission denied: user is not the creator",
 			zap.String("storyboardId", storyboard.ID),
 			zap.String("userId", userID),
-			zap.String("creatorId", existing.CreatorID))
+			zap.String("creatorId", existing.UserID))
 		return fmt.Errorf("permission denied: not the creator")
 	}
 
@@ -768,11 +769,11 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 		return err
 	}
 
-	if storyboard.CreatorID != userID {
+	if storyboard.UserID != userID {
 		s.logger.Warn("permission denied: user is not the creator",
 			zap.String("storyboardId", id),
 			zap.String("userId", userID),
-			zap.String("creatorId", storyboard.CreatorID))
+			zap.String("creatorId", storyboard.UserID))
 		return fmt.Errorf("permission denied: not the creator")
 	}
 
@@ -783,7 +784,7 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 		zap.String("workflowStatus", storyboard.WorkflowStatus))
 
 	// 检查是否为已发布的故事板，已发布的故事板有有效的统计数据
-	isPublished := storyboard.WorkflowStatus == "published"
+	isPublished := storyboard.WorkflowStatus == string(common.ContentStatusPublished)
 
 	// 记录删除前的统计数据（用于日志和调试）
 	if isPublished {
@@ -1229,7 +1230,7 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 	// 设置基本信息
 	newStoryboard.StoryID = parent.StoryID
 	newStoryboard.ParentID = parentID
-	newStoryboard.CreatorID = userID
+	newStoryboard.UserID = userID
 
 	// 如果用户提供了新的 rawInput，调用 AI 生成新内容
 	if s.geminiClient != nil && newStoryboard.RawInput != "" {
@@ -1325,12 +1326,12 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 		zap.Int("sceneCount", len(newStoryboard.StoryboardScenes)))
 
 	// 创建通知给父节点作者
-	if parent.CreatorID != userID {
+	if parent.UserID != userID {
 		// 获取 fork 者信息
 		forker, err := s.repo.UserByID(ctx, userID)
 		if err == nil {
 			if err := s.NotifyStoryboardForked(ctx,
-				parent.CreatorID,
+				parent.UserID,
 				userID,
 				forker.DisplayName,
 				forker.Avatar,
@@ -1343,7 +1344,7 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 					zap.String("newId", newStoryboard.ID))
 			} else {
 				s.logger.Info("storyboard forked notification sent",
-					zap.String("recipientId", parent.CreatorID),
+					zap.String("recipientId", parent.UserID),
 					zap.String("parentId", parentID),
 					zap.String("newId", newStoryboard.ID))
 			}
@@ -1395,15 +1396,15 @@ func (s *Service) LikeStoryboard(ctx context.Context, userID, storyboardID strin
 	s.logger.Info("storyboard liked",
 		zap.String("userId", userID),
 		zap.String("storyboardId", storyboardID),
-		zap.String("creatorId", storyboard.CreatorID))
+		zap.String("creatorId", storyboard.UserID))
 
 	// 创建通知给 storyboard 创建者（如果点赞者不是创建者本人）
-	if storyboard.CreatorID != userID {
+	if storyboard.UserID != userID {
 		// 获取点赞者信息
 		liker, err := s.repo.UserByID(ctx, userID)
 		if err == nil {
 			if err := s.NotifyLike(ctx,
-				storyboard.CreatorID,
+				storyboard.UserID,
 				userID,
 				liker.DisplayName,
 				liker.Avatar,
@@ -1414,7 +1415,7 @@ func (s *Service) LikeStoryboard(ctx context.Context, userID, storyboardID strin
 					zap.String("storyboardId", storyboardID))
 			} else {
 				s.logger.Info("like notification sent",
-					zap.String("recipientId", storyboard.CreatorID),
+					zap.String("recipientId", storyboard.UserID),
 					zap.String("likerId", userID),
 					zap.String("storyboardId", storyboardID))
 			}
@@ -1467,7 +1468,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 	s.logger.Info("starting AI storyboard generation",
 		zap.String("storyboardId", storyboard.ID),
 		zap.String("storyId", storyboard.StoryID),
-		zap.String("creatorId", storyboard.CreatorID),
+		zap.String("creatorId", storyboard.UserID),
 		zap.String("rawInput", truncateForLog(storyboard.RawInput, 200)),
 		zap.Int("sceneCount", storyboard.SceneCount),
 		zap.Bool("isStandalone", storyboard.IsStandalone))
@@ -1514,7 +1515,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 	)
 
 	genReq := &GenerateTextRequest{
-		UserID:            storyboard.CreatorID,
+		UserID:            storyboard.UserID,
 		OriginalPrompt:    prompt,
 		SystemPrompt:      systemPrompt,
 		Model:             "gemini-2.5-flash",
@@ -2264,7 +2265,7 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 
 		// 使用AI生成服务生成图片（自动记录AI使用数据）
 		imageReq := &GenerateImageRequest{
-			UserID:            storyboard.CreatorID,
+			UserID:            storyboard.UserID,
 			Prompt:            prompt,
 			Provider:          "gemini",
 			Model:             "imagen-3.0-generate-001",

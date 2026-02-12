@@ -493,7 +493,7 @@ func (s *Service) GetUserStories(ctx context.Context, userID string, limit, offs
 	}
 
 	// 从数据库获取
-	stories, err := s.repo.StoriesByAuthor(ctx, userID, limit, offset)
+	stories, err := s.repo.StoriesByUser(ctx, userID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get user stories",
 			zap.String("userID", userID),
@@ -550,7 +550,7 @@ func (s *Service) GetUserCharacters(ctx context.Context, userID string, limit, o
 	}
 
 	// 从数据库获取
-	characters, err := s.repo.CharactersByAuthor(ctx, userID, limit, offset)
+	characters, err := s.repo.CharactersByUser(ctx, userID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get user characters",
 			zap.String("userID", userID),

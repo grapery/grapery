@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -19,11 +20,11 @@ import (
 
 // ========== Story operations ==========
 
-func (r *Repository) StoriesByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*domain.Story, error) {
+func (r *Repository) StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
 	var stories []Story
 	err := r.db.WithContext(ctx).
 		Preload("Author").
-		Where("author_id = ?", authorID).
+		Where("author_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -80,7 +81,7 @@ func (r *Repository) TrendingStories(ctx context.Context, limit int) ([]*domain.
 	// No time range limit - includes all published stories.
 	err := r.db.WithContext(ctx).
 		Preload("Author").
-		Where("status = ?", "published").
+		Where("status = ?", string(common.ContentStatusPublished)).
 		Order("followers DESC, likes DESC, updated_at DESC").
 		Limit(limit).
 		Find(&stories).Error
@@ -745,8 +746,8 @@ func (r *Repository) searchStories(ctx context.Context, filter *domain.SearchFil
 		query = query.Where("status = ?", filter.Status)
 	}
 
-	if filter.AuthorID != "" {
-		query = query.Where("author_id = ?", filter.AuthorID)
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
 	}
 
 	if filter.MinLikes > 0 {
@@ -784,7 +785,7 @@ func (r *Repository) searchStories(ctx context.Context, filter *domain.SearchFil
 			Title:       story.Title,
 			Description: story.Description,
 			Cover:       story.CoverImage,
-			AuthorID:    story.AuthorID,
+			UserID:      story.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 			Likes:       story.Likes,
 			CreatedAt:   timeToUnix(story.CreatedAt),
 			Relevance:   1.0,
@@ -805,8 +806,8 @@ func (r *Repository) searchCharacters(ctx context.Context, filter *domain.Search
 			"%"+filter.Query+"%", "%"+filter.Query+"%")
 	}
 
-	if filter.AuthorID != "" {
-		query = query.Where("author_id = ?", filter.AuthorID)
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
 	}
 
 	if filter.MinLikes > 0 {
@@ -837,7 +838,7 @@ func (r *Repository) searchCharacters(ctx context.Context, filter *domain.Search
 			Title:       char.Name,
 			Description: char.Description,
 			Cover:       char.Avatar,
-			AuthorID:    char.AuthorID,
+			UserID:      char.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 			Likes:       char.Likes,
 			CreatedAt:   timeToUnix(char.CreatedAt),
 			Relevance:   1.0,
@@ -928,7 +929,7 @@ func (r *Repository) SearchByTags(ctx context.Context, tags []string, searchType
 				Title:       story.Title,
 				Description: story.Description,
 				Cover:       story.CoverImage,
-				AuthorID:    story.AuthorID,
+				UserID:      story.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 				Likes:       story.Likes,
 				CreatedAt:   timeToUnix(story.CreatedAt),
 				Relevance:   1.0,
@@ -1108,7 +1109,7 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 					ID:         uuid.New().String(),
 					UserID:     userID,
 					Tier:       "free",
-					Status:     "active",
+					Status:     string(common.MembershipStatusActive),
 					StartDate:  time.Now(),
 					TokenQuota: 0,
 					TokenUsed:  0,
@@ -1332,7 +1333,7 @@ func (r *Repository) GetActiveSubscription(ctx context.Context, userID string) (
 	now := time.Now()
 	err := r.db.WithContext(ctx).
 		Preload("Plan").
-		Where("user_id = ? AND status = ? AND end_date > ?", userID, "paid", now).
+		Where("user_id = ? AND status = ? AND end_date > ?", userID, string(common.OrderStatusPaid), now).
 		Order("end_date DESC").
 		First(&order).Error
 	if err != nil {
@@ -1625,8 +1626,8 @@ func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter)
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}
-	if filter.AuthorID != "" {
-		query = query.Where("author_id = ?", filter.AuthorID)
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
 	}
 	if filter.Search != "" {
 		query = query.Where("title LIKE ? OR description LIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -333,21 +334,25 @@ func (r *OAuthRepository) userModelToDomain(model *OAuthUser) *domain.User {
 		lastLoginAt = &model.LastLoginAt
 	}
 	return &domain.User{
-		ID:              model.ID,
-		Username:        model.Username,
-		Email:           model.Email,
-		PasswordHash:    model.PasswordHash,
-		DisplayName:     model.DisplayName,
-		Avatar:          model.Avatar,
-		Bio:             model.Bio,
-		Status:          model.Status,
-		EmailVerified:   model.EmailVerified,
-		LastLoginAt:     lastLoginAt,
-		StoryboardCount: model.StoryboardCount,
-		Followers:       model.Followers,
-		Following:       model.Following,
-		CreatedAt:       model.CreatedAt,
-		UpdatedAt:       model.UpdatedAt,
+		BaseModel: common.BaseModel{
+			ID:        model.ID,
+			CreatedAt: model.CreatedAt,
+			UpdatedAt: model.UpdatedAt,
+		},
+		Username:            model.Username,
+		Email:               model.Email,
+		PasswordHash:        model.PasswordHash,
+		DisplayName:         model.DisplayName,
+		Avatar:              model.Avatar,
+		Bio:                 model.Bio,
+		Status:              model.Status,
+		EmailVerified:       model.EmailVerified,
+		LastLoginAt:         lastLoginAt,
+		StoryboardCount:     model.StoryboardCount,
+		SocialStats: common.SocialStats{
+			Followers: model.Followers,
+			Following: model.Following,
+		},
 	}
 }
 

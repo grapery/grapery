@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -105,11 +107,11 @@ type GeneratedCharacterAttributes struct {
 
 // CharacterListRequest 角色列表请求
 type CharacterListRequest struct {
-	AuthorID string `form:"authorId"`
-	StoryID  string `form:"storyId"`
-	Search   string `form:"search"`
-	Limit    int    `form:"limit" binding:"omitempty,min=1,max=100"`
-	Offset   int    `form:"offset" binding:"omitempty,min=0"`
+	UserID  string `form:"authorId"`
+	StoryID string `form:"storyId"`
+	Search  string `form:"search"`
+	Limit   int    `form:"limit" binding:"omitempty,min=1,max=100"`
+	Offset  int    `form:"offset" binding:"omitempty,min=0"`
 }
 
 // CreateCharacter 创建角色
@@ -174,9 +176,15 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 	}
 
 	// 创建角色
+	now := time.Now().Unix()
 	character := &domain.Character{
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		StoryID:                  req.StoryID,
-		AuthorID:                 author.ID,
+		UserID:                   author.ID,
 		Name:                     req.Name,
 		Description:              req.Description,
 		Avatar:                   req.Avatar,
@@ -201,10 +209,11 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		SourceImage:              req.SourceImage,
 		CreatedBy:                userID,
 		LastEditedBy:             userID,
+		Likes:                    0,
+		Comments:                 0,
+		Shares:                   0,
 		Followers:                0,
 		Stories:                  0,
-		CreatedAt:                time.Now().Unix(),
-		UpdatedAt:                time.Now().Unix(),
 		PosterCreationPermission: posterPerm,
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
@@ -362,7 +371,7 @@ func (s *Service) GetCharacterWithUserContext(ctx context.Context, characterID, 
 // ListCharacters 获取角色列表
 func (s *Service) ListCharacters(ctx context.Context, req CharacterListRequest) ([]*domain.Character, error) {
 	s.logger.Info("listing characters",
-		zap.String("authorId", req.AuthorID),
+		zap.String("userId", req.UserID),
 		zap.String("storyId", req.StoryID),
 		zap.Int("limit", req.Limit),
 	)
@@ -378,9 +387,9 @@ func (s *Service) ListCharacters(ctx context.Context, req CharacterListRequest) 
 	if req.StoryID != "" {
 		// 获取特定故事的角色
 		characters, err = s.repo.CharactersByStory(ctx, req.StoryID)
-	} else if req.AuthorID != "" {
-		// 获取特定作者的角色
-		characters, err = s.repo.CharactersByAuthor(ctx, req.AuthorID, req.Limit, req.Offset)
+	} else if req.UserID != "" {
+		// 获取特定用户的角色
+		characters, err = s.repo.CharactersByUser(ctx, req.UserID, req.Limit, req.Offset)
 	} else {
 		// 获取所有角色
 		characters, err = s.repo.ListCharacters(ctx, req.Limit, req.Offset)
@@ -505,7 +514,7 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 		// 清除相关列表缓存
 		for limit := 20; limit <= 100; limit += 20 {
 			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.UserCharactersListKey(character.AuthorID, limit, offset))
+				_ = c.Delete(ctx, cache.UserCharactersListKey(character.UserID, limit, offset))
 			}
 		}
 	}
@@ -555,7 +564,7 @@ func (s *Service) DeleteCharacter(ctx context.Context, userID, characterID strin
 		// 清除相关列表缓存
 		for limit := 20; limit <= 100; limit += 20 {
 			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.UserCharactersListKey(character.AuthorID, limit, offset))
+				_ = c.Delete(ctx, cache.UserCharactersListKey(character.UserID, limit, offset))
 			}
 		}
 	}
@@ -799,11 +808,11 @@ func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID
 	switch perm {
 	case "creator_only":
 		// 仅角色创建者可创建海报
-		if userID != character.AuthorID {
+		if userID != character.UserID {
 			s.logger.Warn("unauthorized poster creation attempt",
 				zap.String("userID", userID),
 				zap.String("characterID", characterID),
-				zap.String("authorID", character.AuthorID),
+				zap.String("characterUserID", character.UserID),
 				zap.String("permission", perm),
 			)
 			return nil, errors.New("unauthorized: only character creator can create posters")
@@ -822,7 +831,7 @@ func (s *Service) CreateCharacterPoster(ctx context.Context, userID, characterID
 			zap.String("characterID", characterID),
 			zap.String("permission", perm),
 		)
-		if userID != character.AuthorID {
+		if userID != character.UserID {
 			return nil, errors.New("unauthorized: only character creator can create posters")
 		}
 	}
