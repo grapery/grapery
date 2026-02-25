@@ -855,3 +855,261 @@ func parseInt(s string) (int, error) {
 	}
 	return result, nil
 }
+
+// ========== Story Panel Handlers ==========
+
+// ListStoryPanels 列出故事面板
+// GET /api/v1/stories/:id/panels
+func (h *Handler) ListStoryPanels(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	panels, total, err := h.svc.ListStoryPanels(c.Request.Context(), storyID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"panels": panels,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateStoryPanel 创建故事面板
+// POST /api/v1/stories/:id/panels
+func (h *Handler) CreateStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreatePanelRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.StoryID = storyID
+
+	panel, err := h.svc.CreateStoryPanel(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, panel)
+}
+
+// UpdateStoryPanel 更新故事面板
+// PUT /api/v1/stories/:id/panels/:panelId
+func (h *Handler) UpdateStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	panelID := c.Param("panelId")
+	if panelID == "" {
+		InvalidParams(c, "panel id is required")
+		return
+	}
+
+	var req service.UpdatePanelRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	panel, err := h.svc.UpdateStoryPanel(c.Request.Context(), userID, storyID, panelID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, panel)
+}
+
+// DeleteStoryPanel 删除故事面板
+// DELETE /api/v1/stories/:id/panels/:panelId
+func (h *Handler) DeleteStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	panelID := c.Param("panelId")
+	if panelID == "" {
+		InvalidParams(c, "panel id is required")
+		return
+	}
+
+	err := h.svc.DeleteStoryPanel(c.Request.Context(), userID, storyID, panelID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "panel deleted successfully"})
+}
+
+// ReorderStoryPanels 重排故事面板
+// POST /api/v1/stories/:id/panels/reorder
+func (h *Handler) ReorderStoryPanels(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.ReorderPanelsRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	err := h.svc.ReorderStoryPanels(c.Request.Context(), userID, storyID, req.PanelIDs)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "panels reordered successfully"})
+}
+
+// ========== Story Comment Handlers (Enhanced) ==========
+
+// ListStoryComments 列出故事评论及回复
+// GET /api/v1/stories/:id/comments
+func (h *Handler) ListStoryComments(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	userID := authPkg.GetUserID(c)
+
+	limit := 20
+	offset := 0
+	sortBy := c.DefaultQuery("sort", "newest") // newest, hottest
+
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	comments, total, err := h.svc.ListStoryComments(c.Request.Context(), storyID, userID, limit, offset, sortBy)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"comments": comments,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	})
+}
+
+// CreateStoryComment 创建故事评论
+// POST /api/v1/stories/:id/comments
+func (h *Handler) CreateStoryComment(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreateStoryCommentRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.StoryID = storyID
+
+	comment, err := h.svc.CreateStoryComment(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, comment)
+}
+
+// CreateCommentReply 创建评论回复
+// POST /api/v1/comments/:id/replies
+func (h *Handler) CreateCommentReply(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	commentID := c.Param("id")
+	if commentID == "" {
+		InvalidParams(c, "comment id is required")
+		return
+	}
+
+	var req service.CreateReplyRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.CommentID = commentID
+
+	reply, err := h.svc.CreateCommentReply(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, reply)
+}

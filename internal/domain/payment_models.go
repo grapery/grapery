@@ -15,11 +15,30 @@ const (
 type OrderStatus = common.OrderStatus
 
 const (
-	OrderStatusPending  OrderStatus = common.OrderStatusPending
-	OrderStatusPaid     OrderStatus = common.OrderStatusPaid
-	OrderStatusFailed   OrderStatus = common.OrderStatusFailed
-	OrderStatusRefunded OrderStatus = common.OrderStatusRefunded
+	OrderStatusPending   OrderStatus = common.OrderStatusPending
+	OrderStatusPaid      OrderStatus = common.OrderStatusPaid
+	OrderStatusFailed    OrderStatus = common.OrderStatusFailed
+	OrderStatusRefunded  OrderStatus = common.OrderStatusRefunded
 	OrderStatusCancelled OrderStatus = common.OrderStatusCancelled
+)
+
+// MembershipTierType 会员等级类型（字符串枚举）
+type MembershipTierType string
+
+const (
+	TierTypeFree  MembershipTierType = "free"
+	TierTypePro   MembershipTierType = "pro"
+	TierTypePrime MembershipTierType = "prime"
+	TierTypeUltra MembershipTierType = "ultra"
+)
+
+// MembershipPeriod 会员周期
+type MembershipPeriod string
+
+const (
+	PeriodMonthly   MembershipPeriod = "monthly"
+	PeriodQuarterly MembershipPeriod = "quarterly"
+	PeriodYearly    MembershipPeriod = "yearly"
 )
 
 // Membership 会员信息
@@ -37,6 +56,35 @@ type Membership struct {
 	StorageUsed  int64  `json:"storageUsed"`
 	CreatedAt    int64  `json:"createdAt"`
 	UpdatedAt    int64  `json:"updatedAt"`
+
+	// Relations
+	User *User `json:"user,omitempty"`
+}
+
+// MembershipPlan 会员方案（新版，用于前端展示）
+type MembershipPlan struct {
+	ID        string            `json:"id"`
+	Tier      MembershipTierType `json:"tier"`
+	Period    string            `json:"period"`    // monthly, quarterly, yearly
+	Price     float64           `json:"price"`
+	PerMonth  float64           `json:"perMonth"`  // 月均价格
+	AIQuota   int               `json:"aiQuota"`   // -1 为无限制
+	Features  []string          `json:"features"`
+	IsActive  bool              `json:"isActive"`
+	SortOrder int               `json:"sortOrder"`
+}
+
+// UserMembership 用户会员信息（新版，用于前端展示）
+type UserMembership struct {
+	common.BaseModel
+
+	UserID          string             `json:"userId"`
+	Tier            MembershipTierType `json:"tier"`
+	StartedAt       int64              `json:"startedAt"`
+	ExpiresAt       int64              `json:"expiresAt"`
+	AutoRenew       bool               `json:"autoRenew"`
+	AIUsedThisMonth int                `json:"aiUsedThisMonth"`
+	AILimit         int                `json:"aiLimit"` // -1 为无限制
 
 	// Relations
 	User *User `json:"user,omitempty"`
@@ -95,4 +143,17 @@ type TokenTransaction struct {
 
 	// Relations
 	User *User `json:"user,omitempty"`
+}
+
+// SubscribeRequest 订阅请求
+type SubscribeRequest struct {
+	Tier   MembershipTierType `json:"tier"`
+	Period MembershipPeriod   `json:"period"`
+}
+
+// SubscribeResponse 订阅响应
+type SubscribeResponse struct {
+	OrderID     string `json:"orderId"`
+	PaymentURL  string `json:"paymentUrl,omitempty"`
+	Status      string `json:"status"`
 }

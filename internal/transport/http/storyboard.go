@@ -547,3 +547,82 @@ func (h *Handler) UnlikeStoryboard(c *gin.Context) {
 
 	Success(c, gin.H{"message": "storyboard unliked successfully"})
 }
+
+// ListStoryboardPanels 列出分镜面板
+// GET /api/v1/storyboards/:id/panels
+func (h *Handler) ListStoryboardPanels(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		InvalidParams(c, "storyboard id is required")
+		return
+	}
+
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	panels, total, err := h.svc.ListStoryboardPanels(c.Request.Context(), storyboardID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"panels": panels,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateStoryboardPanel 创建分镜面板
+// POST /api/v1/storyboards/:id/panels
+func (h *Handler) CreateStoryboardPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyboardID := c.Param("id")
+
+	var req struct {
+		ImageURL  string `json:"img"`
+		Text      string `json:"text" binding:"required"`
+		TextPos   string `json:"textPos"`
+		TextRight string `json:"textRight"`
+		Sequence  *int   `json:"sequence"`
+	}
+
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	panel := &domain.StoryboardPanel{
+		StoryboardID: storyboardID,
+		ImageURL:     req.ImageURL,
+		Text:         req.Text,
+		TextPos:      req.TextPos,
+		TextRight:    req.TextRight,
+	}
+
+	if req.Sequence != nil {
+		panel.Sequence = *req.Sequence
+	}
+
+	createdPanel, err := h.svc.CreateStoryboardPanel(c.Request.Context(), userID, storyboardID, panel)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, createdPanel)
+}

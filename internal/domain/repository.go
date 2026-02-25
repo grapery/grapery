@@ -84,6 +84,10 @@ type Repository interface {
 	UpdatePanel(ctx context.Context, panel *Panel) error
 	DeletePanel(ctx context.Context, id string) error
 
+	// ========== Storyboard Panel operations ==========
+	PanelsByStoryboard(ctx context.Context, storyboardID string) ([]*StoryboardPanel, error)
+	CreateStoryboardPanel(ctx context.Context, panel *StoryboardPanel) error
+
 	// ========== Character operations ==========
 	CharacterByID(ctx context.Context, id string) (*Character, error)
 	ListCharacters(ctx context.Context, limit, offset int) ([]*Character, error)

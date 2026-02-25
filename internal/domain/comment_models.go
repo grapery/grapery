@@ -40,3 +40,40 @@ type CommentLike struct {
 	User    *User    `json:"user,omitempty"`
 	Comment *Comment `json:"comment,omitempty"`
 }
+
+// StoryComment 故事评论（增强版，包含用户信息）
+type StoryComment struct {
+	common.BaseModel
+
+	StoryID  string `json:"storyId"`
+	UserID   string `json:"authorId"`
+	Content  string `json:"content"`
+	ParentID string `json:"parentId,omitempty"`
+
+	// 用户信息（反规范化，便于展示）
+	UserName   string `json:"user"`
+	UserAvatar string `json:"avatar,omitempty"`
+	UserTag    string `json:"tag,omitempty"` // "作者"等标签
+
+	Likes      int  `json:"likes"`
+	ReplyCount int  `json:"replyCount"`
+	IsLiked    bool `json:"isLiked"`
+
+	Replies []StoryReply `json:"replies,omitempty"`
+}
+
+// StoryReply 故事评论回复
+type StoryReply struct {
+	common.BaseModel
+
+	CommentID string `json:"commentId"`
+	UserID    string `json:"authorId"`
+	Content   string `json:"content"`
+
+	UserName   string `json:"user"`
+	UserAvatar string `json:"avatar,omitempty"`
+	UserTag    string `json:"tag,omitempty"`
+
+	Likes   int  `json:"likes"`
+	IsLiked bool `json:"isLiked"`
+}

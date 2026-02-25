@@ -95,21 +95,41 @@ func DisabledAIAssistanceOptions() *AIAssistanceOptions {
 	}
 }
 
+// TextPosition 文本位置类型
+type TextPosition string
+
+const (
+	TextPosTop        TextPosition = "top"
+	TextPosBottom     TextPosition = "bottom"
+	TextPosLeft       TextPosition = "left"
+	TextPosBottomLeft TextPosition = "bottom-left"
+)
+
 // Panel describes a storyboard panel
 type Panel struct {
 	// Base model fields
 	common.BaseModel
 
-	StoryID  string `json:"storyId"`
-	Sequence int    `json:"sequence"`
-	Title    string `json:"title"`
-	Content  string `json:"content"`
-	Image    string `json:"image,omitempty"`
+	StoryID      string `json:"storyId"`
+	StoryboardID string `json:"storyboardId,omitempty"` // 关联故事板ID（可选）
+	Sequence     int    `json:"sequence"`
+
+	// 内容字段
+	Image     string `json:"img,omitempty"`  // API 字段名为 img
+	Text      string `json:"text"`
+	Title     string `json:"title,omitempty"`     // 保留兼容
+	Content   string `json:"content,omitempty"`   // 保留兼容
+	TextPos   string `json:"textPos,omitempty"`   // "top", "bottom", "left", "bottom-left"
+	TextRight string `json:"textRight,omitempty"` // 分屏布局右侧文本
 
 	// Use only Likes from EngagementStats
 	Likes int `json:"likes"`
 
 	Published bool `json:"isPublished"`
+
+	// AI 生成相关
+	IsAIGenerated bool   `json:"isAIGenerated,omitempty"`
+	Prompt       string `json:"prompt,omitempty"`
 
 	// Relations
 	Story      *Story      `json:"story,omitempty"`

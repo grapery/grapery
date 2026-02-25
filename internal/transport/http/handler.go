@@ -154,6 +154,18 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.PUT("/stories/:id/scenes/:sceneId", h.UpdateStoryScene)
 			authenticated.DELETE("/stories/:id/scenes/:sceneId", h.DeleteStoryScene)
 
+			// Story Panels 相关
+			authenticated.GET("/stories/:id/panels", h.ListStoryPanels)
+			authenticated.POST("/stories/:id/panels", h.CreateStoryPanel)
+			authenticated.PUT("/stories/:id/panels/:panelId", h.UpdateStoryPanel)
+			authenticated.DELETE("/stories/:id/panels/:panelId", h.DeleteStoryPanel)
+			authenticated.POST("/stories/:id/panels/reorder", h.ReorderStoryPanels)
+
+			// Story Comments 相关 (Enhanced)
+			authenticated.GET("/stories/:id/comments", h.ListStoryComments)
+			authenticated.POST("/stories/:id/comments", h.CreateStoryComment)
+			authenticated.POST("/comments/:id/replies", h.CreateCommentReply)
+
 			// 故事默认路径相关
 			authenticated.POST("/stories/:id/default-path", h.SetDefaultPath)
 			authenticated.POST("/stories/:id/default-path/auto", h.CalculateAutoPath)
@@ -167,6 +179,10 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
 			authenticated.POST("/storyboards/:id/like", h.LikeStoryboard)
 			authenticated.DELETE("/storyboards/:id/like", h.UnlikeStoryboard)
+
+			// Storyboard Panels 相关
+			authenticated.GET("/storyboards/:id/panels", h.ListStoryboardPanels)
+			authenticated.POST("/storyboards/:id/panels", h.CreateStoryboardPanel)
 
 			// Storyboard AI Generation 相关
 			authenticated.POST("/storyboards/:id/generate/content", h.GenerateContent)
@@ -283,6 +299,13 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/invitation-codes/:id", h.GetInvitationCode)
 			authenticated.PUT("/invitation-codes/:id", h.UpdateInvitationCode)
 			authenticated.DELETE("/invitation-codes/:id", h.DeleteInvitationCode)
+
+			// Membership 相关
+			authenticated.GET("/membership/plans", h.ListMembershipPlans)
+			authenticated.GET("/membership/current", h.GetCurrentMembership)
+			authenticated.POST("/membership/subscribe", h.SubscribeMembership)
+			authenticated.POST("/membership/cancel", h.CancelMembership)
+			authenticated.GET("/membership/usage", h.GetMembershipUsage)
 
 			// 互动相关 (Interaction)
 			interactionHandler := NewInteractionHandler(deps.InteractionService)

@@ -1676,3 +1676,76 @@ func (r *Repository) PanelsByStory(ctx context.Context, storyID string) ([]*doma
 
 	return result, nil
 }
+
+// ========== StoryboardPanel Model ==========
+
+// StoryboardPanel is the MySQL model for storybook panels
+type StoryboardPanel struct {
+	common.BaseModel
+
+	StoryboardID string `gorm:"column:storyboard_id;index"`
+	Sequence     int    `gorm:"column:sequence"`
+
+	ImageURL     string `gorm:"column:image_url"`
+	Text         string `gorm:"column:text"`
+	TextPos      string `gorm:"column:text_pos"`
+	TextRight    string `gorm:"column:text_right"`
+
+	IsAIGenerated bool   `gorm:"column:is_ai_generated"`
+	Prompt        string `gorm:"column:prompt"`
+}
+
+// TableName returns the table name for StoryboardPanel
+func (StoryboardPanel) TableName() string {
+	return "storyboard_panels"
+}
+
+// ModelToStoryboardPanel converts MySQL model to domain model
+func ModelToStoryboardPanel(p *StoryboardPanel) *domain.StoryboardPanel {
+	return &domain.StoryboardPanel{
+		BaseModel:     p.BaseModel,
+		StoryboardID:  p.StoryboardID,
+		Sequence:      p.Sequence,
+		ImageURL:      p.ImageURL,
+		Text:          p.Text,
+		TextPos:       p.TextPos,
+		TextRight:     p.TextRight,
+		IsAIGenerated: p.IsAIGenerated,
+		Prompt:        p.Prompt,
+	}
+}
+
+// PanelsByStoryboard retrieves all panels for a storyboard
+func (r *Repository) PanelsByStoryboard(ctx context.Context, storyboardID string) ([]*domain.StoryboardPanel, error) {
+	var panels []StoryboardPanel
+	if err := r.db.WithContext(ctx).
+		Where("storyboard_id = ?", storyboardID).
+		Order("sequence ASC").
+		Find(&panels).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.StoryboardPanel, len(panels))
+	for i := range panels {
+		result[i] = ModelToStoryboardPanel(&panels[i])
+	}
+
+	return result, nil
+}
+
+// CreateStoryboardPanel creates a new storyboard panel
+func (r *Repository) CreateStoryboardPanel(ctx context.Context, panel *domain.StoryboardPanel) error {
+	mysqlPanel := &StoryboardPanel{
+		BaseModel:     panel.BaseModel,
+		StoryboardID:  panel.StoryboardID,
+		Sequence:      panel.Sequence,
+		ImageURL:      panel.ImageURL,
+		Text:          panel.Text,
+		TextPos:       panel.TextPos,
+		TextRight:     panel.TextRight,
+		IsAIGenerated: panel.IsAIGenerated,
+		Prompt:        panel.Prompt,
+	}
+
+	return r.db.WithContext(ctx).Create(mysqlPanel).Error
+}

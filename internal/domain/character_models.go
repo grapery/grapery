@@ -166,3 +166,52 @@ const (
 	PosterCreationPermissionCreatorOnly PosterCreationPermissionType = "creator_only"
 	PosterCreationPermissionAnyone      PosterCreationPermissionType = "anyone"
 )
+
+// CharacterViewType 角色视图类型
+type CharacterViewType string
+
+const (
+	CharacterViewFront CharacterViewType = "front"
+	CharacterViewSide  CharacterViewType = "side"
+	CharacterViewBack  CharacterViewType = "back"
+)
+
+// CharacterViewStatus 角色视图生成状态
+type CharacterViewStatus string
+
+const (
+	CharacterViewStatusPending    CharacterViewStatus = "pending"
+	CharacterViewStatusGenerating CharacterViewStatus = "generating"
+	CharacterViewStatusCompleted  CharacterViewStatus = "completed"
+	CharacterViewStatusFailed     CharacterViewStatus = "failed"
+)
+
+// CharacterView 角色三视图
+type CharacterView struct {
+	common.BaseModel
+
+	CharacterID   string             `json:"characterId"`
+	ViewType      CharacterViewType  `json:"viewType"` // front, side, back
+	ImageURL      string             `json:"imageUrl"`
+
+	IsAIGenerated bool               `json:"isAIGenerated"`
+	Prompt        string             `json:"prompt,omitempty"`
+	Status        CharacterViewStatus `json:"status"` // pending, generating, completed, failed
+	ErrorMessage  string             `json:"errorMessage,omitempty"`
+
+	// Relations
+	Character *Character `json:"character,omitempty"`
+}
+
+// GenerateCharacterViewsRequest 生成角色三视图请求
+type GenerateCharacterViewsRequest struct {
+	ViewTypes    []CharacterViewType `json:"viewTypes,omitempty"`    // 要生成的视图类型，默认全部
+	CustomPrompt string              `json:"customPrompt,omitempty"` // 自定义提示词
+}
+
+// GenerateCharacterViewsResponse 生成角色三视图响应
+type GenerateCharacterViewsResponse struct {
+	Views      []CharacterView `json:"views"`
+	TaskID     string          `json:"taskId,omitempty"`
+	EstimatedTime int           `json:"estimatedTime,omitempty"` // 预估完成时间（秒）
+}

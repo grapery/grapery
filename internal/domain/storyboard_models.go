@@ -154,3 +154,36 @@ const (
 	StoryboardStatusDraft     StoryboardStatus = common.ContentStatusDraft
 	StoryboardStatusPublished StoryboardStatus = common.ContentStatusPublished
 )
+
+// StoryboardPanel 故事板面板（用于分支选择器展示）
+type StoryboardPanel struct {
+	common.BaseModel
+
+	StoryboardID string `json:"storyboardId"`
+	Sequence     int    `json:"sequence"`
+
+	ImageURL     string `json:"img"`
+	Text         string `json:"text"`
+	TextPos      string `json:"textPos,omitempty"`
+	TextRight    string `json:"textRight,omitempty"`
+
+	IsAIGenerated bool   `json:"isAIGenerated"`
+	Prompt        string `json:"prompt,omitempty"`
+
+	// Relations
+	Storyboard *Storyboard `json:"storyboard,omitempty"`
+}
+
+// ForkStoryboardRequest 创建分支请求
+type ForkStoryboardRequest struct {
+	Direction     string `json:"direction"`               // 分支方向描述
+	Style         string `json:"style,omitempty"`         // 风格选择
+	PanelCount    int    `json:"panelCount,omitempty"`    // 面板数量
+	ParentPanelID string `json:"parentPanelId,omitempty"` // 从哪个面板分叉
+}
+
+// StoryboardWithPanels 带面板的故事板（用于分支选择器）
+type StoryboardWithPanels struct {
+	Storyboard
+	Panels []StoryboardPanel `json:"panels,omitempty"`
+}
