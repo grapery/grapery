@@ -143,9 +143,6 @@ func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, auth
 		fragmentGenGroup.GET("", h.ListGenerationTasks)
 		fragmentGenGroup.DELETE(":taskId", h.CancelGeneration)
 	}
-
-	// Public route for getting available styles (no auth required)
-	router.GET("/styles", h.GetFragmentStyles)
 }
 
 // GetFragmentStyles handles GET /fragments/styles

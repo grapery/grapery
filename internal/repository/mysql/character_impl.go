@@ -205,7 +205,7 @@ func (r *Repository) CharactersByStory(ctx context.Context, storyID string) ([]*
 // CharactersByUser retrieves characters by user
 func (r *Repository) CharactersByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
 	var characters []Character
-	query := r.db.WithContext(ctx).Preload("Author").Where("user_id = ?", userID).Order("created_at DESC")
+	query := r.db.WithContext(ctx).Preload("Author").Where("author_id = ?", userID).Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)

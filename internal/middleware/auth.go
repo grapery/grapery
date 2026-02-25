@@ -156,7 +156,7 @@ func SetupRoutes(router *gin.Engine) {
     })
 
     // 需要鉴权的路由
-    authenticated := api.Group("")
+    authenticated := api.Group("/v1")
     authenticated.Use(middleware.AuthMiddleware())
 
     handler.SetupCurrentUserQuotaRoutes(authenticated.Group("/v1"), quotaHandler)

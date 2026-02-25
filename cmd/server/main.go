@@ -31,9 +31,15 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	transport "github.com/grapestree/fgrapery/grapery/internal/transport/http"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Error loading .env file: %v\n", err)
+	}
+
 	// Parse command line flags
 	configPath := flag.String("config", "", "Path to configuration file (YAML)")
 	version := flag.Bool("version", false, "Print version information")
@@ -277,22 +283,26 @@ func main() {
 
 	// Register Fragment Generation routes
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
-	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
+	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/v1/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment generation routes registered")
 
 	// Register Fragment Interaction routes (likes, comments, shares)
 	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, logger)
-	fragmentInteractionHandler.RegisterRoutes(apiGroup.Group("/fragments"), authPkg.AuthMiddleware())
+	fragmentInteractionHandler.RegisterRoutes(apiGroup.Group("/v1/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment interaction routes registered")
 
-	// Register Fragment CRUD routes (list, get, create)
-	apiGroup.GET("/fragments", fragmentHandler.ListFragments)
-	apiGroup.GET("/fragments/:id", fragmentHandler.GetFragment)
-	apiGroup.POST("/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
+	// Register Fragment CRUD routes (list, get, create, update, delete)
+	// Note: /styles must be registered BEFORE /:id to avoid route conflicts
+	apiGroup.GET("/v1/fragments", fragmentHandler.ListFragments)
+	apiGroup.GET("/v1/fragments/styles", fragmentHandler.GetFragmentStyles)
+	apiGroup.GET("/v1/fragments/:id", fragmentHandler.GetFragment)
+	apiGroup.POST("/v1/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
+	apiGroup.PUT("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.UpdateFragment)
+	apiGroup.DELETE("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.DeleteFragment)
 	logger.Info("fragment CRUD routes registered")
 
 	// Register User Fragments route
-	apiGroup.GET("/users/:id/fragments", fragmentHandler.GetUserFragments)
+	apiGroup.GET("/v1/users/:id/fragments", fragmentHandler.GetUserFragments)
 	logger.Info("user fragments route registered")
 
 	// Configure CORS

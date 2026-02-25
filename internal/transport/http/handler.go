@@ -72,8 +72,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			auth.POST("/refresh", h.RefreshToken)
 		}
 
-		// 需要认证的路由
-		authenticated := api.Group("")
+		// 需要认证的路由（使用 /api/v1 前缀）
+		authenticated := api.Group("/v1")
 		authenticated.Use(authPkg.AuthMiddleware())
 		{
 			// 公开路由迁移（现在需要认证）

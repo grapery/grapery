@@ -231,7 +231,7 @@ func (r *Repository) StoryboardsByCreator(ctx context.Context, creatorID string,
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
-		Where("user_id = ?", creatorID).
+		Where("creator_id = ?", creatorID).
 		Order("created_at DESC")
 
 	if limit > 0 {
@@ -260,7 +260,7 @@ func (r *Repository) DraftStoryboardsByCreator(ctx context.Context, creatorID st
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Preload("Story").
-		Where("user_id = ?", creatorID).
+		Where("creator_id = ?", creatorID).
 		Where("workflow_status != ?", domain.WorkflowStatusPublished).
 		Order("updated_at DESC")
 
@@ -289,7 +289,7 @@ func (r *Repository) CountStoryboardsByCreator(ctx context.Context, creatorID st
 	var count int64
 	if err := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
-		Where("user_id = ?", creatorID).
+		Where("creator_id = ?", creatorID).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count storyboards by creator: %w", err)
 	}
