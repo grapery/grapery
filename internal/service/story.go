@@ -43,6 +43,12 @@ type CreateStoryRequest struct {
 	// Visibility settings
 	Visibility string `json:"visibility" binding:"omitempty,oneof=public followers private"` // 可见性: public, followers, private
 
+	// Comment settings
+	AllowComments bool `json:"allowComments"` // 是否允许评论
+
+	// AI collaboration label settings
+	ShowAICollaborationLabel bool `json:"showAICollaborationLabel"` // 是否显示 AI 协作标签
+
 	// AI 策略设置（新增）
 	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作，默认 true
 	AIAssistanceOptions *domain.AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
@@ -87,6 +93,15 @@ type UpdateStoryRequest struct {
 
 	// Visibility settings
 	Visibility *string `json:"visibility" binding:"omitempty,oneof=public followers private"` // 可见性: public, followers, private
+
+	// Comment settings
+	AllowComments *bool `json:"allowComments"` // 是否允许评论
+
+	// AI collaboration label settings
+	ShowAICollaborationLabel *bool `json:"showAICollaborationLabel"` // 是否显示 AI 协作标签
+
+	// Tags
+	Tags *[]string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
 }
 
 // StoryListRequest 故事列表请求
@@ -171,16 +186,18 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		UserID:              author.ID,
-		Title:               req.Title,
-		Description:         req.Description,
-		OriginalDescription: req.Description, // 保留原始描述
-		CoverImage:          req.CoverImage,
-		Author:              author,
-		Genre:               req.Genre,
-		Status:              status,
-		DefaultSceneCount:   defaultSceneCount,
-		Visibility:          visibility, // 可见性设置
+		UserID:                   author.ID,
+		Title:                    req.Title,
+		Description:              req.Description,
+		OriginalDescription:      req.Description, // 保留原始描述
+		CoverImage:               req.CoverImage,
+		Author:                   author,
+		Genre:                    req.Genre,
+		Status:                   status,
+		DefaultSceneCount:        defaultSceneCount,
+		Visibility:               visibility, // 可见性设置
+		AllowComments:            req.AllowComments,
+		ShowAICollaborationLabel: req.ShowAICollaborationLabel,
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,
@@ -676,6 +693,24 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 			zap.String("storyID", storyID),
 			zap.String("oldValue", oldVisibility),
 			zap.String("newValue", *req.Visibility))
+	}
+	if req.AllowComments != nil {
+		oldAllowComments := story.AllowComments
+		story.AllowComments = *req.AllowComments
+		fieldsUpdated = append(fieldsUpdated, "allowComments")
+		s.logger.Debug("allowComments updated",
+			zap.String("storyID", storyID),
+			zap.Bool("oldValue", oldAllowComments),
+			zap.Bool("newValue", *req.AllowComments))
+	}
+	if req.ShowAICollaborationLabel != nil {
+		oldShowLabel := story.ShowAICollaborationLabel
+		story.ShowAICollaborationLabel = *req.ShowAICollaborationLabel
+		fieldsUpdated = append(fieldsUpdated, "showAICollaborationLabel")
+		s.logger.Debug("showAICollaborationLabel updated",
+			zap.String("storyID", storyID),
+			zap.Bool("oldValue", oldShowLabel),
+			zap.Bool("newValue", *req.ShowAICollaborationLabel))
 	}
 
 	if len(fieldsUpdated) == 0 {

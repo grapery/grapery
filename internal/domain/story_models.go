@@ -42,6 +42,12 @@ type Story struct {
 	// 可见性设置
 	Visibility string `json:"visibility"` // 可见性: public, followers, private
 
+	// 评论设置
+	AllowComments bool `json:"allowComments"` // 是否允许评论
+
+	// AI 协作标签显示
+	ShowAICollaborationLabel bool `json:"showAICollaborationLabel"` // 是否显示 AI 协作标签
+
 	// 已废弃：使用 UseAI 替代
 	AIEnabled bool `json:"aiEnabled"`
 
