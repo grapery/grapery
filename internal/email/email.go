@@ -45,27 +45,6 @@ func init() {
 	}
 }
 
-// EmailType 邮件业务类型
-type EmailType string
-
-const (
-	EmailTypePasswordReset         EmailType = "password_reset"
-	EmailTypeRegistration          EmailType = "registration"
-	EmailTypeSubscriptionActivated EmailType = "subscription_activated"
-	EmailTypeSubscriptionCancelled EmailType = "subscription_cancelled"
-	EmailTypeSubscriptionRenewed   EmailType = "subscription_renewed"
-	EmailTypeAccountDeleted        EmailType = "account_deleted"
-	EmailTypeUserFeedback          EmailType = "user_feedback"
-	EmailTypeSecurityAlert         EmailType = "security_alert"
-	EmailTypeVerificationCode      EmailType = "verification_code"
-	EmailTypeWelcomeBack           EmailType = "welcome_back"
-	EmailTypePaymentSuccess        EmailType = "payment_success"
-	EmailTypePaymentFailed         EmailType = "payment_failed"
-	EmailTypeStoryPublished        EmailType = "story_published"
-	EmailTypeNewFollower           EmailType = "new_follower"
-	EmailTypeNewComment            EmailType = "new_comment"
-)
-
 // baseEmailTemplate 基础邮件模板，统一样式
 func baseEmailTemplate(title, content, footer string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>

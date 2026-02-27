@@ -271,17 +271,6 @@ func getEnvFloat(key string, fallback float64) float64 {
 	return fallback
 }
 
-// getSLSSource returns the SLS source, using app parameter as default if not set via environment variable
-func getSLSSource(app string) string {
-	if source := getEnv("TELEMETRY_SLS_SOURCE", ""); source != "" {
-		return source
-	}
-	if app != "" {
-		return app
-	}
-	return "unknown"
-}
-
 // getSLSSourceWithDefault returns the SLS source, using provided default or app parameter
 func getSLSSourceWithDefault(defaultSource string, app string) string {
 	if source := getEnv("TELEMETRY_SLS_SOURCE", ""); source != "" {
