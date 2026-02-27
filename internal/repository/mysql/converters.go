@@ -212,6 +212,7 @@ func StoryToModel(d *domain.Story) *Story {
 		Style:               styleConfigToJSON(d.Style),
 		Status:              d.Status,
 		IsCollaborationOpen: d.IsCollaborationOpen,
+		Visibility:          d.Visibility,
 		UseAI:               d.UseAI,
 		AIAssistanceOptions: aiAssistanceOptionsToJSON(d.AIAssistanceOptions),
 		CreatedAt:           unixToTime(d.CreatedAt),
@@ -245,6 +246,7 @@ func ModelToStory(m *Story) *domain.Story {
 		Style:               jsonToStyleConfig(m.Style),
 		Status:              m.Status,
 		IsCollaborationOpen: m.IsCollaborationOpen,
+		Visibility:          m.Visibility,
 		UseAI:               m.UseAI,
 		AIAssistanceOptions: jsonToAIAssistanceOptions(m.AIAssistanceOptions),
 	}

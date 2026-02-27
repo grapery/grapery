@@ -40,6 +40,9 @@ type CreateStoryRequest struct {
 	// Collaboration settings
 	IsCollaborationOpen bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
 
+	// Visibility settings
+	Visibility string `json:"visibility" binding:"omitempty,oneof=public followers private"` // 可见性: public, followers, private
+
 	// AI 策略设置（新增）
 	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作，默认 true
 	AIAssistanceOptions *domain.AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
@@ -81,6 +84,9 @@ type UpdateStoryRequest struct {
 
 	// Collaboration settings
 	IsCollaborationOpen *bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
+
+	// Visibility settings
+	Visibility *string `json:"visibility" binding:"omitempty,oneof=public followers private"` // 可见性: public, followers, private
 }
 
 // StoryListRequest 故事列表请求
@@ -153,6 +159,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	}
 
 	// 创建故事基本信息
+	// 设置可见性默认值
+	visibility := req.Visibility
+	if visibility == "" {
+		visibility = string(domain.StoryVisibilityPublic) // 默认公开
+	}
+
 	story := &domain.Story{
 		BaseModel: common.BaseModel{
 			ID:        uuid.New().String(),
@@ -168,6 +180,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Genre:               req.Genre,
 		Status:              status,
 		DefaultSceneCount:   defaultSceneCount,
+		Visibility:          visibility, // 可见性设置
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,
@@ -654,6 +667,15 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 			zap.String("storyID", storyID),
 			zap.Bool("oldValue", oldIsOpen),
 			zap.Bool("newValue", *req.IsCollaborationOpen))
+	}
+	if req.Visibility != nil {
+		oldVisibility := story.Visibility
+		story.Visibility = *req.Visibility
+		fieldsUpdated = append(fieldsUpdated, "visibility")
+		s.logger.Debug("visibility updated",
+			zap.String("storyID", storyID),
+			zap.String("oldValue", oldVisibility),
+			zap.String("newValue", *req.Visibility))
 	}
 
 	if len(fieldsUpdated) == 0 {

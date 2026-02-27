@@ -39,6 +39,9 @@ type Story struct {
 	UseAI               bool                 `json:"useAI"`                         // 是否使用AI辅助创作
 	AIAssistanceOptions *AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
 
+	// 可见性设置
+	Visibility string `json:"visibility"` // 可见性: public, followers, private
+
 	// 已废弃：使用 UseAI 替代
 	AIEnabled bool `json:"aiEnabled"`
 
@@ -213,10 +216,22 @@ type StoryContributor struct {
 type StoryVisibility string
 
 const (
-	StoryVisibilityPublic   StoryVisibility = "public"
+	StoryVisibilityPublic    StoryVisibility = "public"    // 公开 - 所有人可见
+	StoryVisibilityFollowers StoryVisibility = "followers" // 仅关注者 - 只有关注你的人可见
+	StoryVisibilityPrivate   StoryVisibility = "private"   // 私密 - 仅自己可见
+	// Deprecated: Use StoryVisibilityFollowers instead
 	StoryVisibilityUnlisted StoryVisibility = "unlisted"
-	StoryVisibilityPrivate  StoryVisibility = "private"
 )
+
+// ValidStoryVisibility returns true if the visibility string is valid
+func ValidStoryVisibility(visibility string) bool {
+	switch visibility {
+	case string(StoryVisibilityPublic), string(StoryVisibilityFollowers), string(StoryVisibilityPrivate):
+		return true
+	default:
+		return false
+	}
+}
 
 // StoryStatus 故事状态 - 使用 common.ContentStatus 作为类型别名以保持向后兼容
 type StoryStatus = common.ContentStatus
