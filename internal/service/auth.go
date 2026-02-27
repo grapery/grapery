@@ -61,25 +61,28 @@ type emailVerifyCodeData struct {
 	Attempts  int    `json:"attempts"`
 }
 
-func (s *Service) emailVerifySecret() string {
+func (s *Service) emailVerifySecret() (string, error) {
 	if v := os.Getenv("EMAIL_VERIFICATION_SECRET"); v != "" {
-		return v
+		return v, nil
 	}
 	// Fallback: JWT secret if present.
 	if v := os.Getenv("JWT_SECRET"); v != "" {
-		return v
+		return v, nil
 	}
-	// Last resort (dev): constant, but should not be used in production.
-	return "email-verify-dev-secret"
+	// SECURITY: No secret configured - return error instead of hardcoded fallback
+	return "", errors.New("email verification secret not configured (set EMAIL_VERIFICATION_SECRET or JWT_SECRET)")
 }
 
-func (s *Service) hashEmailVerificationCode(emailAddr, code string) string {
-	secret := s.emailVerifySecret()
+func (s *Service) hashEmailVerificationCode(emailAddr, code string) (string, error) {
+	secret, err := s.emailVerifySecret()
+	if err != nil {
+		return "", err
+	}
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(strings.ToLower(emailAddr)))
 	_, _ = mac.Write([]byte(":"))
 	_, _ = mac.Write([]byte(code))
-	return hex.EncodeToString(mac.Sum(nil))
+	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
 func generate6DigitCode() (string, error) {
@@ -153,9 +156,15 @@ func (s *Service) SendEmailVerificationCode(ctx context.Context, req *EmailVerif
 		return errors.New("failed to generate verification code")
 	}
 
+	codeHash, err := s.hashEmailVerificationCode(req.Email, code)
+	if err != nil {
+		s.logger.Error("failed to hash verification code", zap.Error(err))
+		return errors.New("failed to generate verification code")
+	}
+
 	data := &emailVerifyCodeData{
 		Email:     strings.ToLower(req.Email),
-		CodeHash:  s.hashEmailVerificationCode(req.Email, code),
+		CodeHash:  codeHash,
 		CreatedAt: time.Now().Unix(),
 		Attempts:  0,
 	}
@@ -196,7 +205,10 @@ func (s *Service) VerifyEmailByCode(ctx context.Context, req *EmailVerificationC
 		return errors.New("too many attempts")
 	}
 
-	expected := s.hashEmailVerificationCode(req.Email, req.Code)
+	expected, err := s.hashEmailVerificationCode(req.Email, req.Code)
+	if err != nil {
+		return errors.New("verification service not configured")
+	}
 	if !hmac.Equal([]byte(expected), []byte(data.CodeHash)) {
 		data.Attempts++
 		_ = c.Set(ctx, key, &data, emailVerifyCodeTTL)
