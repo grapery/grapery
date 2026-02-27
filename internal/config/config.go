@@ -160,7 +160,7 @@ func Load(app string) Config {
 		Database: DatabaseConfig{
 			Database: getEnv("DB_DATABASE", "grapery"),
 			Username: getEnv("DB_USERNAME", "root"),
-			Password: getEnv("DB_PASSWORD", "12345678"),
+			Password: getEnv("DB_PASSWORD", ""), // SECURITY: No default - must be set via env
 			Address:  getEnv("DB_ADDRESS", "localhost"),
 			MaxIdle:  10,
 			MaxOpen:  100,
@@ -182,7 +182,7 @@ func Load(app string) Config {
 			VideoProvider:     getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "grapery-secret-key-change-in-production"),
+			Secret: getEnv("JWT_SECRET", ""), // SECURITY: No default - must be set via env
 			Expiry: time.Duration(jwtExpiry) * time.Hour,
 		},
 		Aliyun: AliyunConfig{
@@ -309,7 +309,7 @@ func getDefaultConfig() Config {
 		Database: DatabaseConfig{
 			Database: "grapery",
 			Username: "root",
-			Password: "12345678",
+			Password: "", // SECURITY: No default password - must be set via DB_PASSWORD env var
 			Address:  "localhost",
 			MaxIdle:  10,
 			MaxOpen:  100,
@@ -328,7 +328,7 @@ func getDefaultConfig() Config {
 			DefaultProvider: "huoshan",
 		},
 		JWT: JWTConfig{
-			Secret: "grapery-secret-key-change-in-production",
+			Secret: "", // SECURITY: No default secret - must be set via JWT_SECRET env var
 			Expiry: 24 * time.Hour,
 		},
 		Aliyun: AliyunConfig{

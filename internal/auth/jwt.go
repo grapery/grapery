@@ -9,11 +9,13 @@ import (
 )
 
 var (
-	// JWT 密钥，生产环境应从环境变量读取
-	jwtSecret = []byte("grapery-secret-key-change-in-production")
+	// JWT 密钥，必须通过 SetJWTSecret 设置
+	// SECURITY: 不提供默认值，必须在启动时通过配置设置
+	jwtSecret []byte
 
-	ErrInvalidToken = errors.New("invalid token")
-	ErrExpiredToken = errors.New("token expired")
+	ErrInvalidToken   = errors.New("invalid token")
+	ErrExpiredToken   = errors.New("token expired")
+	ErrSecretNotSet   = errors.New("JWT secret not configured")
 )
 
 var jwtLogger = logrus.WithField("module", "jwt")
@@ -28,6 +30,11 @@ type Claims struct {
 
 // GenerateToken 生成 JWT Token
 func GenerateToken(userID, username, email string) (string, error) {
+	// SECURITY: Check if secret is configured
+	if len(jwtSecret) == 0 {
+		return "", ErrSecretNotSet
+	}
+
 	now := time.Now()
 	expiresAt := now.Add(24 * time.Hour) // 24小时过期
 
@@ -87,6 +94,11 @@ func GenerateRefreshToken(userID string) (string, error) {
 
 // ParseToken 解析 Token
 func ParseToken(tokenString string) (*Claims, error) {
+	// SECURITY: Check if secret is configured
+	if len(jwtSecret) == 0 {
+		return nil, ErrSecretNotSet
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtSecret, nil
 	})
