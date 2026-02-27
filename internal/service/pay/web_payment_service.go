@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
@@ -320,10 +321,18 @@ func generatePaymentID() (string, error) {
 
 func getStripeAPIKey() string {
 	// Get from environment variable
-	return "sk_test_your_stripe_secret_key" // TODO: Load from config
+	if key := os.Getenv("STRIPE_SECRET_KEY"); key != "" {
+		return key
+	}
+	// Return empty string if not configured - this will cause Stripe calls to fail
+	// which is safer than using a placeholder key
+	return ""
 }
 
 func getStripePublishableKey() string {
 	// Get from environment variable
-	return "pk_test_your_stripe_publishable_key" // TODO: Load from config
+	if key := os.Getenv("STRIPE_PUBLISHABLE_KEY"); key != "" {
+		return key
+	}
+	return ""
 }

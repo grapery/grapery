@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
 )
 
 // AuthMiddleware JWT 鉴权中间件
@@ -45,30 +47,15 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 // validateToken 验证 JWT token 并返回 user_id
-// 这是一个示例实现，你需要根据你的 JWT 库进行调整
 func validateToken(token string) (string, error) {
-	// TODO: 实现实际的 JWT 验证逻辑
-	//
-	// 示例代码（使用 github.com/golang-jwt/jwt）:
-	//
-	// claims := &Claims{}
-	// tokenParser, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-	//     return []byte(yourSecretKey), nil
-	// })
-	// if err != nil || !tokenParser.Valid {
-	//     return "", fmt.Errorf("invalid token")
-	// }
-	// return claims.UserID, nil
-	//
-	// 或者使用其他 JWT 库...
-
-	// 临时实现：仅用于测试
-	// 在生产环境中，请删除这段代码并实现真正的 JWT 验证
-	if token == "test_token" {
-		return "test_user_id", nil
+	claims, err := auth.ParseToken(token)
+	if err != nil {
+		if errors.Is(err, auth.ErrExpiredToken) {
+			return "", errors.New("token expired")
+		}
+		return "", errors.New("invalid token")
 	}
-
-	return "", nil // 返回空会触发鉴权失败
+	return claims.UserID, nil
 }
 
 // OptionalAuthMiddleware 可选鉴权中间件
