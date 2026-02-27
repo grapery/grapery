@@ -521,10 +521,3 @@ func initAIClients(cfg config.Config, svc *service.Service, logger *zap.Logger) 
 
 	logger.Info("==============================================")
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

@@ -1043,10 +1043,3 @@ func getVipPayDomain() string {
 	}
 	return "https://www.grapery.xyz"
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
