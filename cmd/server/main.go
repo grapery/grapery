@@ -155,8 +155,9 @@ func main() {
 		logger.Info("JWT_SECRET environment variable not set")
 		jwtSecret = cfg.JWT.Secret
 		if jwtSecret == "" {
-			jwtSecret = "grapery-secret-key-change-in-production" // 默认值，仅用于开发
-			logger.Warn("JWT_SECRET not set, using default (NOT FOR PRODUCTION)")
+			logger.Error("JWT_SECRET not configured - authentication will fail")
+			logger.Error("Set JWT_SECRET environment variable or configure it in the config file")
+			// Continue without secret - token generation will fail with ErrSecretNotSet
 		} else {
 			logger.Info("JWT Secret loaded from config file")
 		}
