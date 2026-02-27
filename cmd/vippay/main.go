@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -277,17 +278,53 @@ func createGinEngine(cfg config.Config, logger *zap.Logger, telemetryManager *te
 
 	// Configure CORS
 	allowOrigins := cfg.AllowOrigins
+	isDevelopment := cfg.Env == "development" || os.Getenv("GIN_MODE") == "debug"
+
 	if len(allowOrigins) == 0 {
-		allowOrigins = []string{"*"}
+		if isDevelopment {
+			// Development: allow common local development origins
+			allowOrigins = []string{
+				"http://localhost:3000",
+				"http://localhost:5173",
+				"http://localhost:8080",
+				"http://127.0.0.1:3000",
+				"http://127.0.0.1:5173",
+				"http://127.0.0.1:8080",
+			}
+		} else {
+			// Production: no default - must be configured via CORS_ALLOW_ORIGINS or config
+			logger.Warn("No CORS origins configured for production - CORS will be restrictive")
+			allowOrigins = []string{} // Empty = no origins allowed
+		}
 	}
-	router.Use(cors.New(cors.Config{
+
+	corsConfig := cors.Config{
 		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", telemetry.CorrelationIDHeader},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-	}))
+	}
+
+	// In development, use AllowOriginFunc for flexibility
+	if isDevelopment && len(allowOrigins) > 0 {
+		corsConfig.AllowOriginFunc = func(origin string) bool {
+			// In development, allow any localhost/127.0.0.1 origin
+			if strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
+			for _, allowed := range allowOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	router.Use(cors.New(corsConfig))
 
 	// Add telemetry middleware
 	router.Use(telemetry.GinCorrelationMiddleware(logger))
