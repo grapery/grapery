@@ -205,7 +205,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			Views:    0,
 		},
 		Followers:           0,
-		Panels:              0,
+		PanelCount:          0,
 		Style:               req.AIStyle,
 		IsCollaborationOpen: req.IsCollaborationOpen, // New field: default false (restricted)
 		UseAI:               useAI,                   // AI策略（创建时确定）
@@ -2910,7 +2910,7 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 			Views:    0,
 		},
 		Followers: 0,
-		Panels:    0,
+		PanelCount: 0,
 	}
 
 	// 获取作者信息
