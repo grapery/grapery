@@ -353,3 +353,110 @@ func (r *Repository) StoryboardsByCharacter(ctx context.Context, characterID str
 
 	return result, total, nil
 }
+
+// ========== Character View operations (Three-view generation) ==========
+
+// CharacterView model for GORM
+type CharacterView struct {
+	common.BaseModel
+	CharacterID   string `gorm:"index"`
+	ViewType      string `gorm:"size:20"` // front, side, back
+	ImageURL      string `gorm:"size:500"`
+	IsAIGenerated bool
+	Prompt        string `gorm:"size:2000"`
+	Status        string `gorm:"size:20"`  // pending, generating, completed, failed
+	ErrorMessage  string `gorm:"size:500"`
+}
+
+// TableName specifies the table name for CharacterView
+func (CharacterView) TableName() string {
+	return "character_views"
+}
+
+// CreateCharacterView creates a new character view
+func (r *Repository) CreateCharacterView(ctx context.Context, view *domain.CharacterView) error {
+	cv := r.domainToCharacterView(*view)
+	return r.db.WithContext(ctx).Create(&cv).Error
+}
+
+// CharacterViewByID retrieves a character view by ID
+func (r *Repository) CharacterViewByID(ctx context.Context, id string) (*domain.CharacterView, error) {
+	var cv CharacterView
+	if err := r.db.WithContext(ctx).First(&cv, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	domainView := r.characterViewToDomain(cv)
+	return &domainView, nil
+}
+
+// GetCharacterViewsByCharacterID retrieves all views for a character
+func (r *Repository) GetCharacterViewsByCharacterID(ctx context.Context, characterID string) ([]domain.CharacterView, error) {
+	var views []CharacterView
+	if err := r.db.WithContext(ctx).
+		Where("character_id = ?", characterID).
+		Order("created_at DESC").
+		Find(&views).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.CharacterView, len(views))
+	for i, v := range views {
+		result[i] = r.characterViewToDomain(v)
+	}
+	return result, nil
+}
+
+// UpdateCharacterViewStatus updates the status and image URL of a character view
+func (r *Repository) UpdateCharacterViewStatus(ctx context.Context, viewID string, status domain.CharacterViewStatus, imageURL string) error {
+	updates := map[string]interface{}{
+		"status":     string(status),
+		"updated_at": time.Now().Unix(),
+	}
+	if imageURL != "" {
+		updates["image_url"] = imageURL
+	}
+	return r.db.WithContext(ctx).
+		Model(&CharacterView{}).
+		Where("id = ?", viewID).
+		Updates(updates).Error
+}
+
+// DeleteCharacterView deletes a character view
+func (r *Repository) DeleteCharacterView(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&CharacterView{}, "id = ?", id).Error
+}
+
+// domainToCharacterView converts domain.CharacterView to CharacterView model
+func (r *Repository) domainToCharacterView(v domain.CharacterView) CharacterView {
+	return CharacterView{
+		BaseModel: common.BaseModel{
+			ID:        v.ID,
+			CreatedAt: v.CreatedAt,
+			UpdatedAt: v.UpdatedAt,
+		},
+		CharacterID:   v.CharacterID,
+		ViewType:      string(v.ViewType),
+		ImageURL:      v.ImageURL,
+		IsAIGenerated: v.IsAIGenerated,
+		Prompt:        v.Prompt,
+		Status:        string(v.Status),
+		ErrorMessage:  v.ErrorMessage,
+	}
+}
+
+// characterViewToDomain converts CharacterView model to domain.CharacterView
+func (r *Repository) characterViewToDomain(cv CharacterView) domain.CharacterView {
+	return domain.CharacterView{
+		BaseModel:     cv.BaseModel,
+		CharacterID:   cv.CharacterID,
+		ViewType:      domain.CharacterViewType(cv.ViewType),
+		ImageURL:      cv.ImageURL,
+		IsAIGenerated: cv.IsAIGenerated,
+		Prompt:        cv.Prompt,
+		Status:        domain.CharacterViewStatus(cv.Status),
+		ErrorMessage:  cv.ErrorMessage,
+	}
+}

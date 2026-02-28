@@ -869,3 +869,63 @@ func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
 
 	Success(c, gin.H{"avatarUrl": avatarURL})
 }
+
+// GenerateCharacterViews 生成角色三视图
+// POST /api/characters/:id/generate-views
+func (h *Handler) GenerateCharacterViews(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req domain.GenerateCharacterViewsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 允许空请求体，默认生成全部视图
+		req = domain.GenerateCharacterViewsRequest{}
+	}
+
+	result, err := h.svc.GenerateCharacterViews(c.Request.Context(), userID, characterID, req)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized: only character creator can generate views" {
+			Forbidden(c, "you can only generate views for your own characters")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, result)
+}
+
+// GetCharacterViews 获取角色三视图
+// GET /api/characters/:id/views
+func (h *Handler) GetCharacterViews(c *gin.Context) {
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	views, err := h.svc.GetCharacterViews(c.Request.Context(), characterID)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, domain.CharacterViewListResponse{Views: views})
+}

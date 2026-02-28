@@ -2254,3 +2254,172 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 	s.logger.Info("avatar cropped from portrait successfully", zap.String("characterID", characterID))
 	return avatarURL, nil
 }
+
+// GenerateCharacterViews 生成角色三视图 (front/side/back)
+// StoryCreationAppUI Design: AI generates three-view images for character
+func (s *Service) GenerateCharacterViews(ctx context.Context, userID, characterID string, req domain.GenerateCharacterViewsRequest) (*domain.GenerateCharacterViewsResponse, error) {
+	s.logger.Info("generating character views",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID))
+
+	// 获取角色
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+
+	// 权限检查：只有角色创建者可以生成视图
+	if character.UserID != userID {
+		return nil, errors.New("unauthorized: only character creator can generate views")
+	}
+
+	// 确定要生成的视图类型
+	viewTypes := req.ViewTypes
+	if len(viewTypes) == 0 {
+		viewTypes = []domain.CharacterViewType{
+			domain.CharacterViewFront,
+			domain.CharacterViewSide,
+			domain.CharacterViewBack,
+		}
+	}
+
+	// 构建AI生成提示词
+	basePrompt := req.CustomPrompt
+	if basePrompt == "" {
+		// 从角色属性构建提示词
+		basePrompt = s.buildCharacterViewPrompt(character)
+	}
+
+	var generatedViews []domain.CharacterView
+
+	for _, viewType := range viewTypes {
+		// 创建视图记录
+		viewID := uuid.New().String()
+		view := domain.CharacterView{
+			CharacterID:   characterID,
+			ViewType:      viewType,
+			ImageURL:      "", // 将在AI生成后更新
+			IsAIGenerated: true,
+			Prompt:        s.buildViewSpecificPrompt(basePrompt, viewType),
+			Status:        domain.CharacterViewStatusGenerating,
+		}
+		view.ID = viewID
+
+		// 保存到数据库
+		if err := s.repo.CreateCharacterView(ctx, &view); err != nil {
+			s.logger.Error("failed to create character view",
+				zap.Error(err),
+				zap.String("viewType", string(viewType)))
+			continue
+		}
+
+		// 异步调用AI生成
+		go s.generateViewImage(characterID, viewID, view.Prompt, viewType)
+
+		generatedViews = append(generatedViews, view)
+	}
+
+	s.logger.Info("character view generation started",
+		zap.String("characterID", characterID),
+		zap.Int("viewCount", len(generatedViews)))
+
+	estimatedTime := 30 // 估计30秒
+	return &domain.GenerateCharacterViewsResponse{
+		Views:         generatedViews,
+		TaskID:        uuid.New().String(),
+		EstimatedTime: estimatedTime,
+	}, nil
+}
+
+// GetCharacterViews 获取角色三视图
+func (s *Service) GetCharacterViews(ctx context.Context, characterID string) ([]domain.CharacterView, error) {
+	views, err := s.repo.GetCharacterViewsByCharacterID(ctx, characterID)
+	if err != nil {
+		s.logger.Error("failed to get character views",
+			zap.Error(err),
+			zap.String("characterID", characterID))
+		return nil, errors.New("failed to get character views")
+	}
+	return views, nil
+}
+
+// buildCharacterViewPrompt 构建角色视图生成提示词
+func (s *Service) buildCharacterViewPrompt(character *domain.Character) string {
+	var promptParts []string
+
+	if character.Name != "" {
+		promptParts = append(promptParts, "character named "+character.Name)
+	}
+
+	if character.Appearance != "" {
+		promptParts = append(promptParts, character.Appearance)
+	}
+
+	if character.DressPreference != "" {
+		promptParts = append(promptParts, "wearing "+character.DressPreference)
+	}
+
+	if len(promptParts) == 0 {
+		return "character portrait, high quality, detailed"
+	}
+
+	return strings.Join(promptParts, ", ") + ", character design, high quality, detailed"
+}
+
+// buildViewSpecificPrompt 为特定视图构建提示词
+func (s *Service) buildViewSpecificPrompt(basePrompt string, viewType domain.CharacterViewType) string {
+	var viewAngle string
+	switch viewType {
+	case domain.CharacterViewFront:
+		viewAngle = "front view, facing camera"
+	case domain.CharacterViewSide:
+		viewAngle = "side view, profile"
+	case domain.CharacterViewBack:
+		viewAngle = "back view, from behind"
+	default:
+		viewAngle = "character view"
+	}
+
+	return basePrompt + ", " + viewAngle + ", full body, white background, character reference sheet style"
+}
+
+// generateViewImage 异步生成视图图片
+func (s *Service) generateViewImage(characterID, viewID, prompt string, viewType domain.CharacterViewType) {
+	ctx := context.Background()
+
+	// 调用AI服务生成图片
+	imageReq := &GenerateImageRequest{
+		Prompt:  prompt,
+		Size:    "1024x1024",
+	}
+	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
+	if err != nil {
+		s.logger.Error("failed to generate character view image",
+			zap.Error(err),
+			zap.String("viewID", viewID))
+		// 更新状态为失败
+		_ = s.repo.UpdateCharacterViewStatus(ctx, viewID, domain.CharacterViewStatusFailed, "")
+		return
+	}
+
+	// 获取生成的图片URL
+	var imageURL string
+	if len(result.ImageURLs) > 0 {
+		imageURL = result.ImageURLs[0]
+	}
+
+	// 更新视图记录
+	if err := s.repo.UpdateCharacterViewStatus(ctx, viewID, domain.CharacterViewStatusCompleted, imageURL); err != nil {
+		s.logger.Error("failed to update character view",
+			zap.Error(err),
+			zap.String("viewID", viewID))
+		return
+	}
+
+	s.logger.Info("character view generated successfully",
+		zap.String("viewID", viewID),
+		zap.String("viewType", string(viewType)))
+}

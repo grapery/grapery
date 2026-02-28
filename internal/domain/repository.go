@@ -123,6 +123,13 @@ type Repository interface {
 	IncrementPosterLikes(ctx context.Context, posterID string) error
 	IncrementPosterShares(ctx context.Context, posterID string) error
 
+	// ========== Character View operations (Three-view generation) ==========
+	CreateCharacterView(ctx context.Context, view *CharacterView) error
+	CharacterViewByID(ctx context.Context, id string) (*CharacterView, error)
+	GetCharacterViewsByCharacterID(ctx context.Context, characterID string) ([]CharacterView, error)
+	UpdateCharacterViewStatus(ctx context.Context, viewID string, status CharacterViewStatus, imageURL string) error
+	DeleteCharacterView(ctx context.Context, id string) error
+
 	// ========== Comment operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
 	CommentsByStory(ctx context.Context, storyID string) ([]*Comment, error)
