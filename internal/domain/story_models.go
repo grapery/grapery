@@ -74,6 +74,10 @@ type Story struct {
 
 	// 路径类型: manual(手动设置) | auto(自动计算)
 	DefaultPathType string `json:"defaultPathType,omitempty" gorm:"default:'manual'"`
+
+	// MARK: - StoryCreationAppUI Alignment Fields
+	Topic string `json:"topic,omitempty"` // 话题标签 (e.g., "灵感来了·非人类的地球生存报告")
+	Forks int    `json:"forks"`            // 分支数量
 }
 
 // AIAssistanceOptions AI辅助选项
