@@ -46,11 +46,11 @@ func (s BaseStatus) IsActive() bool {
 type TaskStatus string
 
 const (
-	TaskStatusPending   TaskStatus = "pending"   // Queued, not yet started
+	TaskStatusPending    TaskStatus = "pending"    // Queued, not yet started
 	TaskStatusProcessing TaskStatus = "processing" // Currently being processed
-	TaskStatusCompleted TaskStatus = "completed" // Successfully finished
-	TaskStatusFailed    TaskStatus = "failed"    // Failed with error
-	TaskStatusCancelled TaskStatus = "cancelled" // Cancelled by user
+	TaskStatusCompleted  TaskStatus = "completed"  // Successfully finished
+	TaskStatusFailed     TaskStatus = "failed"     // Failed with error
+	TaskStatusCancelled  TaskStatus = "cancelled"  // Cancelled by user
 )
 
 // IsValid returns true if the status is a valid TaskStatus
@@ -161,10 +161,10 @@ func (s MembershipStatus) IsActive() bool {
 type OrderStatus string
 
 const (
-	OrderStatusPending  OrderStatus = "pending"  // Order created, awaiting payment
-	OrderStatusPaid     OrderStatus = "paid"     // Payment successfully received
-	OrderStatusFailed   OrderStatus = "failed"   // Payment failed
-	OrderStatusRefunded OrderStatus = "refunded" // Payment refunded
+	OrderStatusPending   OrderStatus = "pending"   // Order created, awaiting payment
+	OrderStatusPaid      OrderStatus = "paid"      // Payment successfully received
+	OrderStatusFailed    OrderStatus = "failed"    // Payment failed
+	OrderStatusRefunded  OrderStatus = "refunded"  // Payment refunded
 	OrderStatusCancelled OrderStatus = "cancelled" // Order cancelled before payment
 )
 

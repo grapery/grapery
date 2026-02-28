@@ -16,8 +16,8 @@ type Story struct {
 	common.EngagementStats
 
 	Followers           int          `json:"followers"`
-	PanelCount          int          `json:"panelCount"`            // Number of panels (backward compatibility)
-	PanelsData          []*Panel     `json:"panels,omitempty"`      // Panel array (StoryCreationAppUI alignment, non-persisted)
+	PanelCount          int          `json:"panelCount"`        // Number of panels (backward compatibility)
+	PanelsData          []*Panel     `json:"panels,omitempty"`  // Panel array (StoryCreationAppUI alignment, non-persisted)
 	StoryboardCount     int          `json:"storyboardCount"`   // Number of storyboards in this story
 	CharacterCount      int          `json:"characterCount"`    // Number of characters in the story
 	DefaultSceneCount   int          `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)
@@ -78,7 +78,7 @@ type Story struct {
 
 	// MARK: - StoryCreationAppUI Alignment Fields
 	Topic string `json:"topic,omitempty"` // 话题标签 (e.g., "灵感来了·非人类的地球生存报告")
-	Forks int    `json:"forks"`            // 分支数量
+	Forks int    `json:"forks"`           // 分支数量
 }
 
 // AIAssistanceOptions AI辅助选项
@@ -129,7 +129,7 @@ type Panel struct {
 	Sequence     int    `json:"sequence"`
 
 	// 内容字段
-	Image     string `json:"img,omitempty"`  // API 字段名为 img
+	Image     string `json:"img,omitempty"` // API 字段名为 img
 	Text      string `json:"text"`
 	Title     string `json:"title,omitempty"`     // 保留兼容
 	Content   string `json:"content,omitempty"`   // 保留兼容
@@ -143,7 +143,7 @@ type Panel struct {
 
 	// AI 生成相关
 	IsAIGenerated bool   `json:"isAIGenerated,omitempty"`
-	Prompt       string `json:"prompt,omitempty"`
+	Prompt        string `json:"prompt,omitempty"`
 
 	// Relations
 	Story      *Story      `json:"story,omitempty"`
@@ -270,7 +270,7 @@ type StoryForkItem struct {
 	ID           string `json:"id"`
 	AuthorName   string `json:"authorName"`
 	AuthorAvatar string `json:"authorAvatar,omitempty"`
-	Direction    string `json:"direction"`             // 分支走向描述
+	Direction    string `json:"direction"` // 分支走向描述
 	CoverImg     string `json:"coverImg,omitempty"`
 	PanelCount   int    `json:"panelCount,omitempty"`
 	Likes        int    `json:"likes,omitempty"`

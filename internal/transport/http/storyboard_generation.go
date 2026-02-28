@@ -218,7 +218,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 				characterPortraitMap[charRef.Character.Name] = charRef.Character.Portrait
 			}
 		}
-		
+
 		// Match scene characters with portraits
 		var referenceImages []string
 		for _, charName := range scene.Characters {

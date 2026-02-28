@@ -630,7 +630,6 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Required: false,
 	})
 
-
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_user_devices_schema",
 		Description: "Ensure user_devices table exists",

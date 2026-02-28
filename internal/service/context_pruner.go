@@ -22,7 +22,7 @@ func NewContextPruner(logger *zap.Logger) *ContextPruner {
 type PrunedContext struct {
 	CoreLayer    []SceneWithContext `json:"coreLayer"`    // Character souls + final states
 	MemoryLayer  []SceneWithContext `json:"memoryLayer"`  // Recent N scenes
-	SummaryLayer []SceneSummary    `json:"summaryLayer"` // Ancient scenes as summaries
+	SummaryLayer []SceneSummary     `json:"summaryLayer"` // Ancient scenes as summaries
 
 	// Total character count for reference
 	Characters []domain.Character `json:"characters"`
@@ -34,16 +34,16 @@ type PrunedContext struct {
 // SceneWithContext represents a scene with full context
 type SceneWithContext struct {
 	Scene          domain.StoryboardScene `json:"scene"`
-	CharacterNames []string              `json:"characterNames"`
-	ContextSummary string                `json:"contextSummary,omitempty"`
+	CharacterNames []string               `json:"characterNames"`
+	ContextSummary string                 `json:"contextSummary,omitempty"`
 }
 
 // SceneSummary represents a summarized scene
 type SceneSummary struct {
-	SceneID       string `json:"sceneId"`
-	Title         string `json:"title"`
-	Summary       string `json:"summary"`
-	KeyEvents     []string `json:"keyEvents,omitempty"`
+	SceneID           string   `json:"sceneId"`
+	Title             string   `json:"title"`
+	Summary           string   `json:"summary"`
+	KeyEvents         []string `json:"keyEvents,omitempty"`
 	CharacterMentions []string `json:"characterMentions,omitempty"`
 }
 

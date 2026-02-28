@@ -55,7 +55,7 @@ type Fragment struct {
 	IsConverted        bool    `json:"isConverted" gorm:"column:is_converted;type:tinyint(1);default:0;index"`                  // 是否已转换为故事
 
 	// 向后兼容字段（内部使用）
-	CreatorID     string    `json:"-" gorm:"column:creator_id;type:varchar(36);not null;index"`      // 兼容旧代码 - 不在 JSON 中暴露
+	CreatorID     string    `json:"-" gorm:"column:creator_id;type:varchar(36);not null;index"`              // 兼容旧代码 - 不在 JSON 中暴露
 	ImageUrls     string    `json:"imageUrls" gorm:"column:image_urls;type:text"`                            // 兼容旧代码
 	Style         *string   `json:"style,omitempty" gorm:"column:style;type:varchar(50)"`                    // 兼容旧代码
 	FragmentCount *int      `json:"fragmentCount,omitempty" gorm:"column:fragment_count;type:int;default:1"` // 兼容旧代码

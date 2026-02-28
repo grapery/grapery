@@ -35,7 +35,7 @@ func (r *Repository) CommentByID(ctx context.Context, id string) (*domain.Commen
 func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment) error {
 	dbComment := Comment{
 		ID:         uuid.New().String(),
-		UserID:   comment.UserID,
+		UserID:     comment.UserID,
 		Content:    comment.Content,
 		TargetType: comment.TargetType,
 		TargetID:   comment.TargetID,

@@ -82,7 +82,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		NeedsPortrait:            character.NeedsPortrait,
 		ReferenceImage:           character.ReferenceImage,
 		PortraitGenerationStatus: portraitStatus,
-		UserID:                 authorID,
+		UserID:                   authorID,
 		Personality:              character.Personality,
 		Background:               character.Background,
 		ShortTermGoal:            character.ShortTermGoal,
@@ -133,7 +133,7 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"needs_portrait":             character.NeedsPortrait,
 		"reference_image":            character.ReferenceImage,
 		"portrait_generation_status": character.PortraitGenerationStatus,
-		"user_id":                  authorID,
+		"user_id":                    authorID,
 		"personality":                character.Personality,
 		"background":                 character.Background,
 		"short_term_goal":            character.ShortTermGoal,
@@ -364,7 +364,7 @@ type CharacterView struct {
 	ImageURL      string `gorm:"size:500"`
 	IsAIGenerated bool
 	Prompt        string `gorm:"size:2000"`
-	Status        string `gorm:"size:20"`  // pending, generating, completed, failed
+	Status        string `gorm:"size:20"` // pending, generating, completed, failed
 	ErrorMessage  string `gorm:"size:500"`
 }
 

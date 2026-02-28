@@ -30,27 +30,27 @@ type AIGenerationConfig struct {
 	AsyncVideoTaskTimeout     time.Duration // 任务超时时间（默认 90 分钟）
 
 	// Webhook 配置
-	EnableWebhook         bool
-	WebhookSecret         string // Webhook 签名密钥（可选）
-	WebhookPath           string // Webhook 路径（默认 /webhooks）
+	EnableWebhook bool
+	WebhookSecret string // Webhook 签名密钥（可选）
+	WebhookPath   string // Webhook 路径（默认 /webhooks）
 }
 
 // DefaultAIGenerationConfig 默认配置
 func DefaultAIGenerationConfig() *AIGenerationConfig {
 	return &AIGenerationConfig{
-		RedisAddr:                "localhost:6379",
-		RedisPassword:            "",
-		RedisDB:                  0,
-		EnableQuotaReservation:   true,  // 生产环境建议启用
-		QuotaReservationTimeout:  10 * time.Minute,
-		DistributedLockTTL:       30 * time.Second,
-		EnableAsyncVideoPolling:  true, // 生产环境建议启用
-		AsyncVideoPollInterval:   30 * time.Second,
+		RedisAddr:                 "localhost:6379",
+		RedisPassword:             "",
+		RedisDB:                   0,
+		EnableQuotaReservation:    true, // 生产环境建议启用
+		QuotaReservationTimeout:   10 * time.Minute,
+		DistributedLockTTL:        30 * time.Second,
+		EnableAsyncVideoPolling:   true, // 生产环境建议启用
+		AsyncVideoPollInterval:    30 * time.Second,
 		AsyncVideoMaxPollAttempts: 120,
-		AsyncVideoTaskTimeout:    90 * time.Minute,
-		EnableWebhook:            true,
-		WebhookSecret:            "", // 如果需要验证 webhook 签名，请设置密钥
-		WebhookPath:              "/webhooks",
+		AsyncVideoTaskTimeout:     90 * time.Minute,
+		EnableWebhook:             true,
+		WebhookSecret:             "", // 如果需要验证 webhook 签名，请设置密钥
+		WebhookPath:               "/webhooks",
 	}
 }
 

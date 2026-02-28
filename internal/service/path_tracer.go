@@ -68,7 +68,7 @@ func (pt *PathTracer) TracePath(ctx context.Context, storyboardID string) ([]*do
 
 		// Check if we've reached the root
 		if currentStoryboard.ParentID == "" ||
-		   currentStoryboard.ParentID == domain.StoryboardRootMarker {
+			currentStoryboard.ParentID == domain.StoryboardRootMarker {
 			pt.logger.Debug("reached root storyboard",
 				zap.String("rootStoryboardId", currentStoryboard.ID))
 			break
@@ -133,7 +133,7 @@ func (pt *PathTracer) TracePathWithMetadata(ctx context.Context, storyboardID st
 		node := StoryboardPathNode{
 			Storyboard: currentStoryboard,
 			Scenes:     scenes,
-			Depth:     len(pathNodes),
+			Depth:      len(pathNodes),
 		}
 
 		// Prepend so root is first
@@ -141,7 +141,7 @@ func (pt *PathTracer) TracePathWithMetadata(ctx context.Context, storyboardID st
 
 		// Check if we've reached the root
 		if currentStoryboard.ParentID == "" ||
-		   currentStoryboard.ParentID == domain.StoryboardRootMarker {
+			currentStoryboard.ParentID == domain.StoryboardRootMarker {
 			break
 		}
 
@@ -182,7 +182,7 @@ func (pt *PathTracer) GetPathDepth(ctx context.Context, storyboardID string) (in
 
 		// Check if we've reached the root
 		if currentStoryboard.ParentID == "" ||
-		   currentStoryboard.ParentID == domain.StoryboardRootMarker {
+			currentStoryboard.ParentID == domain.StoryboardRootMarker {
 			break
 		}
 
@@ -200,7 +200,7 @@ func (pt *PathTracer) GetPathDepth(ctx context.Context, storyboardID string) (in
 
 // StoryboardPathNode represents a storyboard in the path with its metadata
 type StoryboardPathNode struct {
-	Storyboard *domain.Storyboard       `json:"storyboard"`
+	Storyboard *domain.Storyboard        `json:"storyboard"`
 	Scenes     []*domain.StoryboardScene `json:"scenes"`
 	Depth      int                       `json:"depth"`
 }
@@ -227,7 +227,7 @@ func (pt *PathTracer) TraceAncestors(ctx context.Context, storyboardID string) (
 
 		// Check if we've reached the root
 		if currentStoryboard.ParentID == "" ||
-		   currentStoryboard.ParentID == domain.StoryboardRootMarker {
+			currentStoryboard.ParentID == domain.StoryboardRootMarker {
 			break
 		}
 

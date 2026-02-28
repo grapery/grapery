@@ -99,7 +99,6 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 // GET /api/v1/me/quota
 // GET /api/v1/me/membership
 // GET /api/v1/me/usage?period=month
-//
 func ExampleSetupMeRoutes(router *gin.Engine, quotaHandler *UserQuotaHandler) {
 	apiV1 := router.Group("/api/v1")
 	apiV1.Use(JWTAuthMiddleware()) // 你的 JWT 鉴权中间件
@@ -113,7 +112,6 @@ func ExampleSetupMeRoutes(router *gin.Engine, quotaHandler *UserQuotaHandler) {
 // 前端调用：
 // GET /api/v1/users/{user_id}/quota
 // GET /api/v1/users/{user_id}/membership
-//
 func ExampleSetupUserRoutes(router *gin.Engine, quotaHandler *UserQuotaHandler) {
 	apiV1 := router.Group("/api/v1")
 	apiV1.Use(JWTAuthMiddleware()) // 你的 JWT 鉴权中间件
@@ -241,4 +239,4 @@ func ExampleSetupAllRoutes(router *gin.Engine, quotaHandler *UserQuotaHandler) {
          return try JSONDecoder().decode(UserUsageStatistics.self, from: data)
      }
  }
- */
+*/

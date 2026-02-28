@@ -26,23 +26,23 @@ type ContinueRequest struct {
 
 // ContinueResult represents the result of continuing a storyboard
 type ContinueResult struct {
-	NewStoryboard   *domain.Storyboard     `json:"newStoryboard"`
-	GeneratedScenes []domain.StoryboardScene `json:"generatedScenes"`
+	NewStoryboard   *domain.Storyboard            `json:"newStoryboard"`
+	GeneratedScenes []domain.StoryboardScene      `json:"generatedScenes"`
 	FateSnapshot    map[string]CharacterFateState `json:"fateSnapshot"`
-	TokensUsed      int                    `json:"tokensUsed"`
+	TokensUsed      int                           `json:"tokensUsed"`
 }
 
 // CharacterFateState represents the state of a character at a specific point in time
 type CharacterFateState struct {
-	CharacterID    string                 `json:"characterId"`
-	Name           string                 `json:"name"`
-	Health         int                    `json:"health,omitempty"`
-	Mood           string                 `json:"mood,omitempty"`
-	Location       string                 `json:"location,omitempty"`
-	Relationships  map[string]string      `json:"relationships,omitempty"`
-	Knowledge      []string               `json:"knowledge,omitempty"`
-	Goals          []string               `json:"goals,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	CharacterID   string                 `json:"characterId"`
+	Name          string                 `json:"name"`
+	Health        int                    `json:"health,omitempty"`
+	Mood          string                 `json:"mood,omitempty"`
+	Location      string                 `json:"location,omitempty"`
+	Relationships map[string]string      `json:"relationships,omitempty"`
+	Knowledge     []string               `json:"knowledge,omitempty"`
+	Goals         []string               `json:"goals,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ContinueStoryboard continues a storyboard by creating a parallel universe
@@ -134,17 +134,17 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		StoryID:          parentStoryboard.StoryID,
-		ParentID:         req.ParentStoryboardID,
-		UserID:           userID,
-		Title:            generateContinuationTitle(parentStoryboard),
-		Content:          "", // Will be filled by AI
-		RawInput:         req.UserPrompt,
-		IsStandalone:     false,
-		IsAIGenerated:    true,
-		SceneCount:       req.SceneCount,
-		WorkflowStatus:   domain.WorkflowStatusDraft,
-		CurrentStep:      1,
+		StoryID:        parentStoryboard.StoryID,
+		ParentID:       req.ParentStoryboardID,
+		UserID:         userID,
+		Title:          generateContinuationTitle(parentStoryboard),
+		Content:        "", // Will be filled by AI
+		RawInput:       req.UserPrompt,
+		IsStandalone:   false,
+		IsAIGenerated:  true,
+		SceneCount:     req.SceneCount,
+		WorkflowStatus: domain.WorkflowStatusDraft,
+		CurrentStep:    1,
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,

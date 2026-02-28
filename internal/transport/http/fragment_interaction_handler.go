@@ -69,9 +69,9 @@ func (h *FragmentInteractionHandler) LikeFragment(c *gin.Context) {
 
 	// 创建点赞记录
 	like := &domain.FragmentLike{
-		ID:        uuid.New().String(),
+		ID:         uuid.New().String(),
 		FragmentID: fragmentID,
-		UserID:    userID,
+		UserID:     userID,
 	}
 
 	if err := h.interactionRepo.CreateLike(c.Request.Context(), like); err != nil {
@@ -192,11 +192,11 @@ func (h *FragmentInteractionHandler) CreateComment(c *gin.Context) {
 	}
 
 	comment := &domain.FragmentComment{
-		ID:        uuid.New().String(),
+		ID:         uuid.New().String(),
 		FragmentID: fragmentID,
-		UserID:    userID,
-		Content:   req.Content,
-		ParentID:  req.ParentID,
+		UserID:     userID,
+		Content:    req.Content,
+		ParentID:   req.ParentID,
 	}
 
 	if err := h.interactionRepo.CreateComment(c.Request.Context(), comment); err != nil {
@@ -403,10 +403,10 @@ func (h *FragmentInteractionHandler) ShareFragment(c *gin.Context) {
 
 	// 创建分享记录
 	share := &domain.FragmentShare{
-		ID:        uuid.New().String(),
+		ID:         uuid.New().String(),
 		FragmentID: fragmentID,
-		UserID:    userID,
-		Platform:  req.Platform,
+		UserID:     userID,
+		Platform:   req.Platform,
 	}
 
 	if err := h.interactionRepo.CreateShare(c.Request.Context(), share); err != nil {

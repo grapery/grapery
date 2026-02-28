@@ -81,7 +81,7 @@ func (r *FollowRepositoryImpl) CheckFollowStatus(ctx context.Context, followerID
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&Follow{}).
-		Where("follower_id = ? AND followable_type = ? AND followable_id = ?", 
+		Where("follower_id = ? AND followable_type = ? AND followable_id = ?",
 			followerID, string(followableType), followableID).
 		Count(&count).Error
 	if err != nil {

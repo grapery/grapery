@@ -81,7 +81,7 @@ func (r *LikeRepositoryImpl) CheckLikeStatus(ctx context.Context, userID string,
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&Like{}).
-		Where("user_id = ? AND likeable_type = ? AND likeable_id = ?", 
+		Where("user_id = ? AND likeable_type = ? AND likeable_id = ?",
 			userID, string(likeableType), likeableID).
 		Count(&count).Error
 	if err != nil {

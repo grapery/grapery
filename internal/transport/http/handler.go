@@ -10,10 +10,10 @@ import (
 
 // Handler handles HTTP requests
 type Handler struct {
-	svc                 *service.Service
-	aiService           *service.AIService
-	storyboardPathSvc   *service.StoryboardPathService
-	logger              *zap.Logger
+	svc               *service.Service
+	aiService         *service.AIService
+	storyboardPathSvc *service.StoryboardPathService
+	logger            *zap.Logger
 }
 
 // HandlerDependencies 包含所有 handler 依赖的服务
@@ -38,10 +38,10 @@ func NewHandler(svc *service.Service, aiService *service.AIService, logger *zap.
 // NewHandlerWithDeps creates a new HTTP handler with all dependencies
 func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 	return &Handler{
-		svc:                 deps.Service,
-		aiService:           deps.AIService,
-		storyboardPathSvc:   deps.StoryboardPathService,
-		logger:              deps.Logger,
+		svc:               deps.Service,
+		aiService:         deps.AIService,
+		storyboardPathSvc: deps.StoryboardPathService,
+		logger:            deps.Logger,
 	}
 }
 
@@ -233,8 +233,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)            // 获取形象生成推荐提示词
 			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait) // AI生成角色完整形象
 			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)          // 从形象图裁剪头像
-			authenticated.POST("/characters/:id/views/generate", h.GenerateCharacterViews)      // AI生成角色三视图 (StoryCreationAppUI)
-			authenticated.GET("/characters/:id/views", h.GetCharacterViews)                     // 获取角色三视图 (StoryCreationAppUI)
+			authenticated.POST("/characters/:id/views/generate", h.GenerateCharacterViews)       // AI生成角色三视图 (StoryCreationAppUI)
+			authenticated.GET("/characters/:id/views", h.GetCharacterViews)                      // 获取角色三视图 (StoryCreationAppUI)
 			authenticated.POST("/characters/:id/posters", h.CreateCharacterPoster)
 			authenticated.POST("/posters/:id/generate", h.GenerateCharacterPoster) // AI两步生成海报
 			authenticated.POST("/posters/:id/publish", h.PublishCharacterPoster)   // 发布海报

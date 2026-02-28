@@ -42,11 +42,11 @@ type InteractionService interface {
 
 // interactionService 互动服务实现
 type interactionService struct {
-	followRepo    domain.FollowRepository
-	likeRepo      domain.LikeRepository
-	bookmarkRepo  domain.BookmarkRepository
-	repo          domain.Repository
-	logger        *zap.Logger
+	followRepo   domain.FollowRepository
+	likeRepo     domain.LikeRepository
+	bookmarkRepo domain.BookmarkRepository
+	repo         domain.Repository
+	logger       *zap.Logger
 }
 
 // NewInteractionService 创建互动服务

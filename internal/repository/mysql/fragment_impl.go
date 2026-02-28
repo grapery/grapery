@@ -102,13 +102,13 @@ func (r *Repository) fragmentToDomain(f FragmentDB) domain.Fragment {
 			CreatedAt: f.CreatedAt,
 			UpdatedAt: f.UpdatedAt,
 		},
-		UserID:             f.UserID, // authorId in JSON
-		Content:            f.Content,
-		MediaURLs:          mediaURLs,
-		Visibility:         f.Visibility,
-		SourceType:         f.SourceType,
-		SourceID:           f.SourceID,
-		Status:             string(common.StatusActive), // 默认状态
+		UserID:     f.UserID, // authorId in JSON
+		Content:    f.Content,
+		MediaURLs:  mediaURLs,
+		Visibility: f.Visibility,
+		SourceType: f.SourceType,
+		SourceID:   f.SourceID,
+		Status:     string(common.StatusActive), // 默认状态
 		EngagementStats: common.EngagementStats{
 			Likes:    f.Likes,
 			Comments: f.Comments,
@@ -150,7 +150,7 @@ func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
 
 	return &FragmentDB{
 		ID:                 f.ID,
-		UserID:          creatorID,
+		UserID:             creatorID,
 		Content:            f.Content,
 		ImageUrls:          imageUrlsJSON,
 		Visibility:         f.Visibility,

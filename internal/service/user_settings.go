@@ -452,7 +452,6 @@ func (s *userSettingsService) isValidAllowFrom(allowFrom string) bool {
 	}
 }
 
-
 // UpdateFontSize 更新字体大小
 func (s *userSettingsService) UpdateFontSize(ctx context.Context, userID string, fontSize string) error {
 	s.logger.Info("updating font size",

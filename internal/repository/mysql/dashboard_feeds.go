@@ -173,19 +173,19 @@ func (r *Repository) TrendingStoryboards(ctx context.Context, userID string, lim
 		Joins("JOIN stories ON stories.id = storyboards.story_id").
 		Joins(`LEFT JOIN (
 			SELECT id FROM stories
-			WHERE status = '` + string(common.ContentStatusPublished) + `'
+			WHERE status = '`+string(common.ContentStatusPublished)+`'
 			ORDER BY likes DESC
 			LIMIT 100
 		) top_likes ON top_likes.id = stories.id`).
 		Joins(`LEFT JOIN (
 			SELECT id FROM stories
-			WHERE status = '` + string(common.ContentStatusPublished) + `'
+			WHERE status = '`+string(common.ContentStatusPublished)+`'
 			ORDER BY storyboard_count DESC
 			LIMIT 100
 		) top_storyboards ON top_storyboards.id = stories.id`).
 		Joins(`LEFT JOIN (
 			SELECT id FROM stories
-			WHERE status = '` + string(common.ContentStatusPublished) + `'
+			WHERE status = '`+string(common.ContentStatusPublished)+`'
 			ORDER BY followers DESC
 			LIMIT 100
 		) top_followers ON top_followers.id = stories.id`).

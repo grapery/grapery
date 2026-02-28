@@ -78,9 +78,9 @@ const (
 
 // BookmarkCount 收藏统计（冗余表）
 type BookmarkCount struct {
-	BookmarkType  BookmarkType `json:"bookmarkType"`
-	BookmarkID    string       `json:"bookmarkId"`
-	SavesCount    int          `json:"savesCount"`
-	BookmarksCount int         `json:"bookmarksCount"` // Alias for API compatibility
-	UpdatedAt     int64        `json:"updatedAt"`
+	BookmarkType   BookmarkType `json:"bookmarkType"`
+	BookmarkID     string       `json:"bookmarkId"`
+	SavesCount     int          `json:"savesCount"`
+	BookmarksCount int          `json:"bookmarksCount"` // Alias for API compatibility
+	UpdatedAt      int64        `json:"updatedAt"`
 }

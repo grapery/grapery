@@ -50,7 +50,7 @@ type CreateStoryRequest struct {
 	ShowAICollaborationLabel bool `json:"showAICollaborationLabel"` // 是否显示 AI 协作标签
 
 	// AI 策略设置（新增）
-	UseAI               bool                 `json:"useAI"`               // 是否使用AI辅助创作，默认 true
+	UseAI               bool                        `json:"useAI"`                         // 是否使用AI辅助创作，默认 true
 	AIAssistanceOptions *domain.AIAssistanceOptions `json:"aiAssistanceOptions,omitempty"` // AI辅助选项
 
 	// AI 丰富选项（可选）
@@ -557,12 +557,12 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 	}
 
 	filter := domain.StoryFilter{
-		Status:  req.Status,
-		Genre:   req.Genre,
-		UserID:  req.UserID,
-		Search:  req.Search,
-		Limit:   req.Limit,
-		Offset:  req.Offset,
+		Status: req.Status,
+		Genre:  req.Genre,
+		UserID: req.UserID,
+		Search: req.Search,
+		Limit:  req.Limit,
+		Offset: req.Offset,
 	}
 
 	s.logger.Debug("querying stories with filter",
@@ -2902,7 +2902,7 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		UseAI:               req.UseAI,
 		DefaultSceneCount:   sceneCount,
 		OriginalDescription: fragment.Content, // 保留原始内容
-		SourceFragmentID:    &fragmentID,       // 记录来源碎片ID
+		SourceFragmentID:    &fragmentID,      // 记录来源碎片ID
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,

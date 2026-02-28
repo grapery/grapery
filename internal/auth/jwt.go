@@ -13,9 +13,9 @@ var (
 	// SECURITY: 不提供默认值，必须在启动时通过配置设置
 	jwtSecret []byte
 
-	ErrInvalidToken   = errors.New("invalid token")
-	ErrExpiredToken   = errors.New("token expired")
-	ErrSecretNotSet   = errors.New("JWT secret not configured")
+	ErrInvalidToken = errors.New("invalid token")
+	ErrExpiredToken = errors.New("token expired")
+	ErrSecretNotSet = errors.New("JWT secret not configured")
 )
 
 var jwtLogger = logrus.WithField("module", "jwt")

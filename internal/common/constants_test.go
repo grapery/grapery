@@ -185,8 +185,8 @@ func TestTaskStatusIsInProgress(t *testing.T) {
 // TestTaskStatusCanTransitionTo verifies the CanTransitionTo method for TaskStatus
 func TestTaskStatusCanTransitionTo(t *testing.T) {
 	tests := []struct {
-		current      TaskStatus
-		new          TaskStatus
+		current       TaskStatus
+		new           TaskStatus
 		canTransition bool
 	}{
 		{TaskStatusPending, TaskStatusProcessing, true},

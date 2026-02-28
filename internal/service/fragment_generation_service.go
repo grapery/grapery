@@ -16,8 +16,8 @@ import (
 type FragmentGenerationService struct {
 	fragmentGenRepo *repository.FragmentGenerationRepository
 	fragmentRepo    *repository.FragmentRepository
-	aiService        *AIService
-	logger           *zap.Logger
+	aiService       *AIService
+	logger          *zap.Logger
 }
 
 func NewFragmentGenerationService(
@@ -29,8 +29,8 @@ func NewFragmentGenerationService(
 	return &FragmentGenerationService{
 		fragmentGenRepo: fragmentGenRepo,
 		fragmentRepo:    fragmentRepo,
-		aiService:        aiService,
-		logger:           logger,
+		aiService:       aiService,
+		logger:          logger,
 	}
 }
 
@@ -130,7 +130,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			Views:    0,
 		},
 	}
-	
+
 	if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
 		s.logger.Error("Failed to create fragment from generation task",
 			zap.String("task_id", taskID),

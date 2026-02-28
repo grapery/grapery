@@ -503,5 +503,3 @@ type UserSettingsRepository interface {
 	CreateUserSettings(settings *UserSettings) error
 	UpdateUserSettings(settings *UserSettings) error
 }
-
-

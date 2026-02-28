@@ -2392,8 +2392,8 @@ func (s *Service) generateViewImage(characterID, viewID, prompt string, viewType
 
 	// 调用AI服务生成图片
 	imageReq := &GenerateImageRequest{
-		Prompt:  prompt,
-		Size:    "1024x1024",
+		Prompt: prompt,
+		Size:   "1024x1024",
 	}
 	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
 	if err != nil {

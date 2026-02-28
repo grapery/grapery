@@ -12,9 +12,9 @@ import (
 
 // StoryboardPathService 故事板路径服务
 type StoryboardPathService struct {
-	storyRepo      domain.Repository
-	likeRepo       domain.LikeRepository
-	logger         *zap.Logger
+	storyRepo domain.Repository
+	likeRepo  domain.LikeRepository
+	logger    *zap.Logger
 }
 
 // NewStoryboardPathService 创建路径服务
@@ -24,9 +24,9 @@ func NewStoryboardPathService(
 	logger *zap.Logger,
 ) *StoryboardPathService {
 	return &StoryboardPathService{
-		storyRepo:      storyRepo,
-		likeRepo:       likeRepo,
-		logger:         logger,
+		storyRepo: storyRepo,
+		likeRepo:  likeRepo,
+		logger:    logger,
 	}
 }
 

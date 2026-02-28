@@ -12,14 +12,14 @@ import (
 
 type FragmentGenerationHandler struct {
 	fragmentGenService *service.FragmentGenerationService
-	fragmentHandler     *handler.FragmentHandler
+	fragmentHandler    *handler.FragmentHandler
 	logger             *zap.Logger
 }
 
 func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGenerationService, fragmentHandler *handler.FragmentHandler, logger *zap.Logger) *FragmentGenerationHandler {
 	return &FragmentGenerationHandler{
 		fragmentGenService: fragmentGenService,
-		fragmentHandler:     fragmentHandler,
+		fragmentHandler:    fragmentHandler,
 		logger:             logger,
 	}
 }

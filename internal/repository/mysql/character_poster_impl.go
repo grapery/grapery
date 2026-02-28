@@ -21,7 +21,7 @@ func (r *Repository) CreateCharacterPoster(ctx context.Context, poster *domain.C
 	dbPoster := &CharacterPoster{
 		ID:                    uuid.New().String(),
 		CharacterID:           poster.CharacterID,
-		UserID:              poster.Author.ID,
+		UserID:                poster.Author.ID,
 		Type:                  poster.Type,
 		Title:                 poster.Title,
 		Image:                 poster.Image,

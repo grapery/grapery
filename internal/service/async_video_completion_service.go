@@ -36,14 +36,14 @@ type AsyncVideoCompletionService struct {
 	pollingTaskTimeout time.Duration
 
 	// 重试配置
-	maxRetryCount     int // 最大重试次数
-	retryBackoffBase  time.Duration
+	maxRetryCount    int // 最大重试次数
+	retryBackoffBase time.Duration
 
 	// 服务状态
-	instanceID    string // 当前实例ID（用于分布式锁）
-	started       bool
-	stopChan      chan struct{}
-	shutdownWG    sync.WaitGroup
+	instanceID string // 当前实例ID（用于分布式锁）
+	started    bool
+	stopChan   chan struct{}
+	shutdownWG sync.WaitGroup
 }
 
 // PollingTask 轮询任务
@@ -58,10 +58,10 @@ type PollingTask struct {
 	Status          string
 
 	// 新增字段
-	FailCount       int    // 失败计数
-	LastFailAt      time.Time // 最后失败时间
-	LastFailReason  string // 最后失败原因
-	LockedBy        string // 锁定实例ID
+	FailCount      int       // 失败计数
+	LastFailAt     time.Time // 最后失败时间
+	LastFailReason string    // 最后失败原因
+	LockedBy       string    // 锁定实例ID
 }
 
 // NewAsyncVideoCompletionService 创建异步视频完成处理服务
@@ -703,12 +703,12 @@ func (s *AsyncVideoCompletionService) recordForReconciliation(ctx context.Contex
 
 	key := fmt.Sprintf("quota_reconciliation:%s:%s", task.TaskID, task.RecordID)
 	data := map[string]interface{}{
-		"task_id":        task.TaskID,
-		"record_id":      task.RecordID,
-		"user_id":        task.UserID,
-		"tokens":         tokens,
-		"reason":         reason,
-		"created_at":     time.Now(),
+		"task_id":         task.TaskID,
+		"record_id":       task.RecordID,
+		"user_id":         task.UserID,
+		"tokens":          tokens,
+		"reason":          reason,
+		"created_at":      time.Now(),
 		"requires_manual": true,
 	}
 

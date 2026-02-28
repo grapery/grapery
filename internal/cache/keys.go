@@ -48,12 +48,12 @@ const (
 	PrefixSearchIndexUsers      = "search_index:users:"
 
 	// 列表缓存（带分页）
-	PrefixUserStoriesList  = "user_stories_list:"
+	PrefixUserStoriesList    = "user_stories_list:"
 	PrefixUserCharactersList = "user_characters_list:"
-	PrefixStoryboardsList   = "storyboards_list:"
-	PrefixCommentsList      = "comments_list:"
-	PrefixUserActivities    = "user_activities:"
-	PrefixStyleConfigs      = "style_configs:"
+	PrefixStoryboardsList    = "storyboards_list:"
+	PrefixCommentsList       = "comments_list:"
+	PrefixUserActivities     = "user_activities:"
+	PrefixStyleConfigs       = "style_configs:"
 )
 
 // 缓存键生成函数

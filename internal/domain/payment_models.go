@@ -63,15 +63,15 @@ type Membership struct {
 
 // MembershipPlan 会员方案（新版，用于前端展示）
 type MembershipPlan struct {
-	ID        string            `json:"id"`
+	ID        string             `json:"id"`
 	Tier      MembershipTierType `json:"tier"`
-	Period    string            `json:"period"`    // monthly, quarterly, yearly
-	Price     float64           `json:"price"`
-	PerMonth  float64           `json:"perMonth"`  // 月均价格
-	AIQuota   int               `json:"aiQuota"`   // -1 为无限制
-	Features  []string          `json:"features"`
-	IsActive  bool              `json:"isActive"`
-	SortOrder int               `json:"sortOrder"`
+	Period    string             `json:"period"` // monthly, quarterly, yearly
+	Price     float64            `json:"price"`
+	PerMonth  float64            `json:"perMonth"` // 月均价格
+	AIQuota   int                `json:"aiQuota"`  // -1 为无限制
+	Features  []string           `json:"features"`
+	IsActive  bool               `json:"isActive"`
+	SortOrder int                `json:"sortOrder"`
 }
 
 // UserMembership 用户会员信息（新版，用于前端展示）
@@ -153,7 +153,7 @@ type SubscribeRequest struct {
 
 // SubscribeResponse 订阅响应
 type SubscribeResponse struct {
-	OrderID     string `json:"orderId"`
-	PaymentURL  string `json:"paymentUrl,omitempty"`
-	Status      string `json:"status"`
+	OrderID    string `json:"orderId"`
+	PaymentURL string `json:"paymentUrl,omitempty"`
+	Status     string `json:"status"`
 }

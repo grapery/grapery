@@ -234,17 +234,17 @@ func (s *Service) ListStoryComments(ctx context.Context, storyID, userID string,
 		}
 
 		result[i] = domain.StoryComment{
-			BaseModel:   c.BaseModel,
-			StoryID:     storyID,
-			UserID:      c.UserID,
-			Content:     c.Content,
-			ParentID:    c.ParentID,
-			UserName:    getAuthorName(c.Author),
-			UserAvatar:  getAuthorAvatar(c.Author),
-			UserTag:     userTag,
-			Likes:       c.Likes,
-			ReplyCount:  c.ReplyCount,
-			IsLiked:     c.IsLiked,
+			BaseModel:  c.BaseModel,
+			StoryID:    storyID,
+			UserID:     c.UserID,
+			Content:    c.Content,
+			ParentID:   c.ParentID,
+			UserName:   getAuthorName(c.Author),
+			UserAvatar: getAuthorAvatar(c.Author),
+			UserTag:    userTag,
+			Likes:      c.Likes,
+			ReplyCount: c.ReplyCount,
+			IsLiked:    c.IsLiked,
 		}
 	}
 
@@ -287,17 +287,17 @@ func (s *Service) CreateStoryComment(ctx context.Context, userID string, req Cre
 	}
 
 	return &domain.StoryComment{
-		BaseModel:   comment.BaseModel,
-		StoryID:     req.StoryID,
-		UserID:      userID,
-		Content:     req.Content,
-		ParentID:    req.ParentID,
-		UserName:    user.DisplayName,
-		UserAvatar:  user.Avatar,
-		UserTag:     userTag,
-		Likes:       0,
-		ReplyCount:  0,
-		IsLiked:     false,
+		BaseModel:  comment.BaseModel,
+		StoryID:    req.StoryID,
+		UserID:     userID,
+		Content:    req.Content,
+		ParentID:   req.ParentID,
+		UserName:   user.DisplayName,
+		UserAvatar: user.Avatar,
+		UserTag:    userTag,
+		Likes:      0,
+		ReplyCount: 0,
+		IsLiked:    false,
 	}, nil
 }
 
@@ -346,15 +346,15 @@ func (s *Service) CreateCommentReply(ctx context.Context, userID string, req Cre
 	}
 
 	return &domain.StoryReply{
-		BaseModel:   reply.BaseModel,
-		CommentID:   req.CommentID,
-		UserID:      userID,
-		Content:     req.Content,
-		UserName:    user.DisplayName,
-		UserAvatar:  user.Avatar,
-		UserTag:     userTag,
-		Likes:       0,
-		IsLiked:     false,
+		BaseModel:  reply.BaseModel,
+		CommentID:  req.CommentID,
+		UserID:     userID,
+		Content:    req.Content,
+		UserName:   user.DisplayName,
+		UserAvatar: user.Avatar,
+		UserTag:    userTag,
+		Likes:      0,
+		IsLiked:    false,
 	}, nil
 }
 

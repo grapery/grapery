@@ -17,7 +17,6 @@ import (
 // 这个文件包含所有其他repository方法的实现
 // 这些方法补充了其他impl文件中未实现的方法
 
-
 // ========== Story operations ==========
 
 func (r *Repository) StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
@@ -225,7 +224,6 @@ func (r *Repository) PopularCharacters(ctx context.Context, limit int) ([]*domai
 	}
 	return result, nil
 }
-
 
 // ========== AI Generation operations ==========
 
@@ -1686,10 +1684,10 @@ type StoryboardPanel struct {
 	StoryboardID string `gorm:"column:storyboard_id;index"`
 	Sequence     int    `gorm:"column:sequence"`
 
-	ImageURL     string `gorm:"column:image_url"`
-	Text         string `gorm:"column:text"`
-	TextPos      string `gorm:"column:text_pos"`
-	TextRight    string `gorm:"column:text_right"`
+	ImageURL  string `gorm:"column:image_url"`
+	Text      string `gorm:"column:text"`
+	TextPos   string `gorm:"column:text_pos"`
+	TextRight string `gorm:"column:text_right"`
 
 	IsAIGenerated bool   `gorm:"column:is_ai_generated"`
 	Prompt        string `gorm:"column:prompt"`

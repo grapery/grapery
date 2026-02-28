@@ -241,8 +241,6 @@ func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
 	return nil
 }
 
-
-
 // ensureUserFragmentsCountColumn ensures the users table has the fragments_count column
 func (r *Repository) ensureUserFragmentsCountColumn() error {
 	migrator := r.db.Migrator()
@@ -306,9 +304,9 @@ func (r *Repository) ensureStoryboardVideoGenerationSchema() error {
 	type StoryboardVideoGeneration struct{}
 
 	columns := []struct {
-		name     string
-		def      string
-		comment  string
+		name    string
+		def     string
+		comment string
 	}{
 		{"target_audience", "VARCHAR(100) DEFAULT ''", "目标受众"},
 		{"narrative_style", "VARCHAR(100) DEFAULT ''", "叙事风格"},
@@ -334,9 +332,9 @@ func (r *Repository) ensureStoryboardScenesSchema() error {
 	type StoryboardScene struct{}
 
 	columns := []struct {
-		name     string
-		def      string
-		comment  string
+		name    string
+		def     string
+		comment string
 	}{
 		{"camera_angle", "VARCHAR(100) DEFAULT ''", "镜头角度"},
 		{"lighting", "VARCHAR(100) DEFAULT ''", "光照"},
@@ -388,9 +386,9 @@ func (r *Repository) ensureStoriesStyleSchema() error {
 func (r *Repository) ensureAIGenerationRecordsSchema() error {
 	// MySQL utf8mb4 support for emoji and extended Unicode
 	columns := []struct {
-		table    string
-		column   string
-		def      string
+		table  string
+		column string
+		def    string
 	}{
 		{"ai_generation_records", "prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
 		{"ai_generation_records", "negative_prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
@@ -445,9 +443,9 @@ func (r *Repository) ensureCharacterPortraitSchema() error {
 	type Character struct{}
 
 	columns := []struct {
-		name     string
-		def      string
-		comment  string
+		name    string
+		def     string
+		comment string
 	}{
 		{"portrait_style", "VARCHAR(100) DEFAULT ''", "Portrait style"},
 		{"portrait_background", "VARCHAR(100) DEFAULT ''", "Portrait background"},
@@ -468,4 +466,3 @@ func (r *Repository) ensureCharacterPortraitSchema() error {
 
 	return nil
 }
-

@@ -61,7 +61,7 @@ type Storyboard struct {
 	common.BaseModel
 
 	StoryID        string `json:"storyId"`
-	ParentID       string `json:"parentId"` // StoryboardRootMarker ("__root__") for root storyboard
+	ParentID       string `json:"parentId"`  // StoryboardRootMarker ("__root__") for root storyboard
 	UserID         string `json:"creatorId"` // 保持 JSON 标签为 creatorId 以保持 API 兼容性
 	CreatorName    string `json:"creatorName"`
 	CreatorAvatar  string `json:"creatorAvatar"`
@@ -162,10 +162,10 @@ type StoryboardPanel struct {
 	StoryboardID string `json:"storyboardId"`
 	Sequence     int    `json:"sequence"`
 
-	ImageURL     string `json:"img"`
-	Text         string `json:"text"`
-	TextPos      string `json:"textPos,omitempty"`
-	TextRight    string `json:"textRight,omitempty"`
+	ImageURL  string `json:"img"`
+	Text      string `json:"text"`
+	TextPos   string `json:"textPos,omitempty"`
+	TextRight string `json:"textRight,omitempty"`
 
 	IsAIGenerated bool   `json:"isAIGenerated"`
 	Prompt        string `json:"prompt,omitempty"`

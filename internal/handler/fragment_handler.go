@@ -80,18 +80,18 @@ func stringPtr(s string) *string {
 
 // CreateFragmentRequest represents the request to create a fragment
 type CreateFragmentRequest struct {
-	Content      string   `json:"content" binding:"required,max=500"`
-	ImageUrls    []string `json:"imageUrls" binding:"required,min=1,max=10"`
-	Style        *string  `json:"style" binding:"omitempty"`
-	FragmentCount *int    `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
-	Visibility   string   `json:"visibility" binding:"required,oneof=public followers private"`
+	Content       string   `json:"content" binding:"required,max=500"`
+	ImageUrls     []string `json:"imageUrls" binding:"required,min=1,max=10"`
+	Style         *string  `json:"style" binding:"omitempty"`
+	FragmentCount *int     `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
+	Visibility    string   `json:"visibility" binding:"required,oneof=public followers private"`
 }
 
 // UpdateFragmentRequest represents the request to update a fragment
 type UpdateFragmentRequest struct {
-	Content   *string   `json:"content" binding:"omitempty,max=500"`
-	ImageUrls *[]string `json:"imageUrls" binding:"omitempty,min=1,max=10"`
-	Visibility *string  `json:"visibility" binding:"omitempty,oneof=public followers private"`
+	Content    *string   `json:"content" binding:"omitempty,max=500"`
+	ImageUrls  *[]string `json:"imageUrls" binding:"omitempty,min=1,max=10"`
+	Visibility *string   `json:"visibility" binding:"omitempty,oneof=public followers private"`
 }
 
 // CreateFragment handles POST /fragments
@@ -136,7 +136,7 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 			Views:    0,
 		},
 		UserID:        userID,
-		CreatorID:     userID,         // 兼容旧代码
+		CreatorID:     userID, // 兼容旧代码
 		Content:       req.Content,
 		ImageUrls:     stringifyArray(req.ImageUrls),
 		Style:         req.Style,

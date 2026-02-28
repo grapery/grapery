@@ -96,9 +96,9 @@ func (r *FragmentGenerationRepository) UpdateResult(ctx context.Context, id stri
 	return r.db.WithContext(ctx).Model(&domain.FragmentGenerationTask{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"result":     string(resultJSON),
+			"result":      string(resultJSON),
 			"tokens_used": gorm.Expr("tokens_used + ?", result.TokensUsed),
-			"updated_at": time.Now().Unix(),
+			"updated_at":  time.Now().Unix(),
 		}).Error
 }
 
@@ -108,10 +108,10 @@ func (r *FragmentGenerationRepository) UpdateError(ctx context.Context, id strin
 	return r.db.WithContext(ctx).Model(&domain.FragmentGenerationTask{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":         status,
-			"error_message":  errorMsg,
-			"completed_at":   &now,
-			"updated_at":     time.Now().Unix(),
+			"status":        status,
+			"error_message": errorMsg,
+			"completed_at":  &now,
+			"updated_at":    time.Now().Unix(),
 		}).Error
 }
 

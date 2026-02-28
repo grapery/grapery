@@ -50,11 +50,11 @@ type Character struct {
 	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, anyone (V1/V2 MVP - group_members removed)
 
 	// StoryCreationAppUI alignment fields
-	Role         string `json:"role,omitempty"`         // 角色定位 (主角/配角/反派/导师/神秘人)
-	AIStyle      string `json:"aiStyle,omitempty"`      // AI 生成风格
-	AIPrompt     string `json:"aiPrompt,omitempty"`     // AI 生成提示词
-	AIGenerated  bool   `json:"aiGenerated"`            // 是否由 AI 生成
-	Backstory    string `json:"backstory,omitempty"`    // 角色背景故事 (alias for Background)
+	Role        string `json:"role,omitempty"`      // 角色定位 (主角/配角/反派/导师/神秘人)
+	AIStyle     string `json:"aiStyle,omitempty"`   // AI 生成风格
+	AIPrompt    string `json:"aiPrompt,omitempty"`  // AI 生成提示词
+	AIGenerated bool   `json:"aiGenerated"`         // 是否由 AI 生成
+	Backstory   string `json:"backstory,omitempty"` // 角色背景故事 (alias for Background)
 
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
@@ -119,7 +119,7 @@ type CharacterPoster struct {
 
 	CharacterID string       `json:"characterId"`
 	UserID      string       `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
-	Type        string       `json:"type"` // image, video
+	Type        string       `json:"type"`     // image, video
 	Title       string       `json:"title"`
 	Image       string       `json:"image"`               // Poster image URL (for image type)
 	Video       string       `json:"video,omitempty"`     // Video URL (for video type)
@@ -197,14 +197,14 @@ const (
 type CharacterView struct {
 	common.BaseModel
 
-	CharacterID   string             `json:"characterId"`
-	ViewType      CharacterViewType  `json:"viewType"` // front, side, back
-	ImageURL      string             `json:"imageUrl"`
+	CharacterID string            `json:"characterId"`
+	ViewType    CharacterViewType `json:"viewType"` // front, side, back
+	ImageURL    string            `json:"imageUrl"`
 
-	IsAIGenerated bool               `json:"isAIGenerated"`
-	Prompt        string             `json:"prompt,omitempty"`
+	IsAIGenerated bool                `json:"isAIGenerated"`
+	Prompt        string              `json:"prompt,omitempty"`
 	Status        CharacterViewStatus `json:"status"` // pending, generating, completed, failed
-	ErrorMessage  string             `json:"errorMessage,omitempty"`
+	ErrorMessage  string              `json:"errorMessage,omitempty"`
 
 	// Relations
 	Character *Character `json:"character,omitempty"`
@@ -218,7 +218,7 @@ type GenerateCharacterViewsRequest struct {
 
 // GenerateCharacterViewsResponse 生成角色三视图响应
 type GenerateCharacterViewsResponse struct {
-	Views      []CharacterView `json:"views"`
-	TaskID     string          `json:"taskId,omitempty"`
-	EstimatedTime int           `json:"estimatedTime,omitempty"` // 预估完成时间（秒）
+	Views         []CharacterView `json:"views"`
+	TaskID        string          `json:"taskId,omitempty"`
+	EstimatedTime int             `json:"estimatedTime,omitempty"` // 预估完成时间（秒）
 }

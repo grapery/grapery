@@ -23,15 +23,15 @@ import (
 // AIGenerationService 统一的AI生成任务管理服务
 // 负责记录AI能力使用数据，用于任务管理和Token计费
 type AIGenerationService struct {
-	repo                       domain.Repository
-	geminiClient               *gemini.Client
-	genAPI                     *genapi.GenAPI
-	logger                     *zap.Logger
-	metrics                    *telemetry.Metrics // Prometheus metrics (optional)
-	quotaReservation           *RedisQuotaReservationService
-	redisDistributedLock       *RedisDistributedLock
-	asyncVideoCompletion       *AsyncVideoCompletionService // 异步视频完成处理服务
-	enableQuotaReservation      bool // 是否启用配额预留（默认关闭，逐步迁移）
+	repo                   domain.Repository
+	geminiClient           *gemini.Client
+	genAPI                 *genapi.GenAPI
+	logger                 *zap.Logger
+	metrics                *telemetry.Metrics // Prometheus metrics (optional)
+	quotaReservation       *RedisQuotaReservationService
+	redisDistributedLock   *RedisDistributedLock
+	asyncVideoCompletion   *AsyncVideoCompletionService // 异步视频完成处理服务
+	enableQuotaReservation bool                         // 是否启用配额预留（默认关闭，逐步迁移）
 }
 
 // NewAIGenerationService 创建AI生成服务
@@ -41,8 +41,8 @@ func NewAIGenerationService(repo domain.Repository, geminiClient *gemini.Client,
 		geminiClient:           geminiClient,
 		genAPI:                 genAPI,
 		logger:                 logger,
-		quotaReservation:       nil, // 在 SetRedisClient 中设置
-		redisDistributedLock:   nil, // 在 SetRedisClient 中设置
+		quotaReservation:       nil,   // 在 SetRedisClient 中设置
+		redisDistributedLock:   nil,   // 在 SetRedisClient 中设置
 		enableQuotaReservation: false, // 默认关闭，可通过配置启用
 	}
 
@@ -147,9 +147,9 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	if s.enableQuotaReservation && s.quotaReservation != nil {
 		var err error
 		metadata := map[string]interface{}{
-			"model":    req.Model,
-			"prompt":   truncateString(req.OriginalPrompt, 100),
-			"type":     "text",
+			"model":     req.Model,
+			"prompt":    truncateString(req.OriginalPrompt, 100),
+			"type":      "text",
 			"requestID": requestID,
 		}
 		reservation, err = s.quotaReservation.ReserveQuota(ctx, req.UserID, estimatedTokens, "ai_text_generation", metadata)
@@ -397,12 +397,12 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	// 2. 预留配额
 	if s.enableQuotaReservation && s.quotaReservation != nil {
 		metadata := map[string]interface{}{
-			"provider":   req.Provider,
-			"model":      req.Model,
-			"prompt":     truncateString(req.Prompt, 100),
-			"type":       "image",
+			"provider":    req.Provider,
+			"model":       req.Model,
+			"prompt":      truncateString(req.Prompt, 100),
+			"type":        "image",
 			"outputCount": req.OutputCount,
-			"requestID":  requestID,
+			"requestID":   requestID,
 		}
 		var err error
 		reservation, err = s.quotaReservation.ReserveQuota(ctx, req.UserID, estimatedTokens, "ai_image_generation", metadata)
