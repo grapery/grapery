@@ -49,6 +49,13 @@ type Character struct {
 	// 海报创建权限
 	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, anyone (V1/V2 MVP - group_members removed)
 
+	// StoryCreationAppUI alignment fields
+	Role         string `json:"role,omitempty"`         // 角色定位 (主角/配角/反派/导师/神秘人)
+	AIStyle      string `json:"aiStyle,omitempty"`      // AI 生成风格
+	AIPrompt     string `json:"aiPrompt,omitempty"`     // AI 生成提示词
+	AIGenerated  bool   `json:"aiGenerated"`            // 是否由 AI 生成
+	Backstory    string `json:"backstory,omitempty"`    // 角色背景故事 (alias for Background)
+
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
