@@ -31,12 +31,20 @@ type InteractionService interface {
 	// 批量检查
 	BatchCheckFollowStatus(ctx context.Context, userID string, followableType domain.FollowableType, followableIDs []string) (map[string]bool, error)
 	BatchCheckLikeStatus(ctx context.Context, userID string, likeableType domain.LikeableType, likeableIDs []string) (map[string]bool, error)
+
+	// 收藏相关 (Bookmark - StoryCreationAppUI)
+	CreateBookmark(ctx context.Context, userID string, bookmarkType domain.BookmarkType, bookmarkID string, collectionName string) (*domain.Bookmark, error)
+	DeleteBookmark(ctx context.Context, userID string, bookmarkID string) error
+	CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType domain.BookmarkType, bookmarkID string) (bool, error)
+	GetBookmarksByUser(ctx context.Context, userID string, bookmarkType domain.BookmarkType) ([]*domain.Bookmark, error)
+	GetBookmarksCount(ctx context.Context, bookmarkType domain.BookmarkType, bookmarkID string) (int, error)
 }
 
 // interactionService 互动服务实现
 type interactionService struct {
 	followRepo    domain.FollowRepository
 	likeRepo      domain.LikeRepository
+	bookmarkRepo  domain.BookmarkRepository
 	repo          domain.Repository
 	logger        *zap.Logger
 }
@@ -45,14 +53,16 @@ type interactionService struct {
 func NewInteractionService(
 	followRepo domain.FollowRepository,
 	likeRepo domain.LikeRepository,
+	bookmarkRepo domain.BookmarkRepository,
 	repo domain.Repository,
 	logger *zap.Logger,
 ) InteractionService {
 	return &interactionService{
-		followRepo: followRepo,
-		likeRepo:   likeRepo,
-		repo:       repo,
-		logger:     logger,
+		followRepo:   followRepo,
+		likeRepo:     likeRepo,
+		bookmarkRepo: bookmarkRepo,
+		repo:         repo,
+		logger:       logger,
 	}
 }
 
@@ -510,4 +520,79 @@ func (s *interactionService) InvalidateLikeCache(ctx context.Context, c cache.Ca
 			_ = c.Delete(ctx, fmt.Sprintf("likes:%s:%s:%d:%d", likeableType, likeableID, limit, offset))
 		}
 	}
+}
+
+// ========== Bookmark Methods (StoryCreationAppUI) ==========
+
+// CreateBookmark 创建收藏
+func (s *interactionService) CreateBookmark(ctx context.Context, userID string, bookmarkType domain.BookmarkType, bookmarkID string, collectionName string) (*domain.Bookmark, error) {
+	// 检查是否已收藏
+	isBookmarked, err := s.bookmarkRepo.CheckBookmarkStatus(ctx, userID, bookmarkType, bookmarkID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check bookmark status: %w", err)
+	}
+	if isBookmarked {
+		return nil, domain.ErrAlreadyExists
+	}
+
+	// 创建收藏
+	bookmark := &domain.Bookmark{
+		UserID:         userID,
+		BookmarkType:   bookmarkType,
+		BookmarkID:     bookmarkID,
+		CollectionName: collectionName,
+		CreatedAt:      time.Now().Unix(),
+	}
+
+	if err := s.bookmarkRepo.CreateBookmark(ctx, bookmark); err != nil {
+		return nil, fmt.Errorf("failed to create bookmark: %w", err)
+	}
+
+	// 更新收藏计数
+	if err := s.bookmarkRepo.UpdateBookmarksCount(ctx, bookmarkType, bookmarkID, 1); err != nil {
+		s.logger.Warn("failed to update bookmarks count", zap.Error(err))
+	}
+
+	return bookmark, nil
+}
+
+// DeleteBookmark 删除收藏
+func (s *interactionService) DeleteBookmark(ctx context.Context, userID string, bookmarkID string) error {
+	// 获取收藏信息
+	bookmark, err := s.bookmarkRepo.GetBookmarkByID(ctx, bookmarkID)
+	if err != nil {
+		return fmt.Errorf("failed to get bookmark: %w", err)
+	}
+
+	// 验证所有权
+	if bookmark.UserID != userID {
+		return domain.ErrUnauthorized
+	}
+
+	// 删除收藏
+	if err := s.bookmarkRepo.DeleteBookmark(ctx, bookmarkID); err != nil {
+		return fmt.Errorf("failed to delete bookmark: %w", err)
+	}
+
+	// 更新收藏计数
+	if err := s.bookmarkRepo.UpdateBookmarksCount(ctx, bookmark.BookmarkType, bookmark.BookmarkID, -1); err != nil {
+		s.logger.Warn("failed to update bookmarks count", zap.Error(err))
+	}
+
+	return nil
+}
+
+// CheckBookmarkStatus 检查收藏状态
+func (s *interactionService) CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType domain.BookmarkType, bookmarkID string) (bool, error) {
+	return s.bookmarkRepo.CheckBookmarkStatus(ctx, userID, bookmarkType, bookmarkID)
+}
+
+// GetBookmarksByUser 获取用户收藏列表
+func (s *interactionService) GetBookmarksByUser(ctx context.Context, userID string, bookmarkType domain.BookmarkType) ([]*domain.Bookmark, error) {
+	return s.bookmarkRepo.GetBookmarksByUser(ctx, userID, bookmarkType)
+}
+
+// GetBookmarksCount 获取收藏数量
+func (s *interactionService) GetBookmarksCount(ctx context.Context, bookmarkType domain.BookmarkType, bookmarkID string) (int, error) {
+	return s.bookmarkRepo.GetBookmarksCount(ctx, bookmarkType, bookmarkID)
 }

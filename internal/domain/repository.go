@@ -485,6 +485,18 @@ type LikeRepository interface {
 	GetLikesCount(ctx context.Context, likeableType LikeableType, likeableID string) (int, error)
 }
 
+// BookmarkRepository 收藏/保存相关操作（多态关联）- StoryCreationAppUI Alignment
+type BookmarkRepository interface {
+	CreateBookmark(ctx context.Context, bookmark *Bookmark) error
+	DeleteBookmark(ctx context.Context, id string) error
+	GetBookmarkByID(ctx context.Context, id string) (*Bookmark, error)
+	GetBookmarksByUser(ctx context.Context, userID string, bookmarkType BookmarkType) ([]*Bookmark, error)
+	GetBookmarksByItem(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) ([]*Bookmark, error)
+	CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType BookmarkType, bookmarkID string) (bool, error)
+	GetBookmarksCount(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) (int, error)
+	UpdateBookmarksCount(ctx context.Context, bookmarkType BookmarkType, bookmarkID string, delta int) error
+}
+
 // UserSettingsRepository 用户设置操作
 type UserSettingsRepository interface {
 	GetUserSettings(userID string) (*UserSettings, error)

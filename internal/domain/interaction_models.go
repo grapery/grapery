@@ -54,3 +54,33 @@ type LikeCount struct {
 	LikesCount   int          `json:"likesCount"`
 	UpdatedAt    int64        `json:"updatedAt"`
 }
+
+// MARK: - Bookmark (Save) Models - StoryCreationAppUI Alignment
+
+// Bookmark 收藏/保存关系（多态关联）
+type Bookmark struct {
+	ID             string       `json:"id"`
+	UserID         string       `json:"userId"`
+	BookmarkType   BookmarkType `json:"bookmarkType"`   // story, fragment, storyboard
+	BookmarkID     string       `json:"bookmarkId"`     // The ID of the bookmarked item
+	CollectionName string       `json:"collectionName"` // Optional collection/folder name
+	CreatedAt      int64        `json:"createdAt"`
+}
+
+// BookmarkType 可收藏对象类型
+type BookmarkType string
+
+const (
+	BookmarkTypeStory      BookmarkType = "story"
+	BookmarkTypeFragment   BookmarkType = "fragment"
+	BookmarkTypeStoryboard BookmarkType = "storyboard"
+)
+
+// BookmarkCount 收藏统计（冗余表）
+type BookmarkCount struct {
+	BookmarkType  BookmarkType `json:"bookmarkType"`
+	BookmarkID    string       `json:"bookmarkId"`
+	SavesCount    int          `json:"savesCount"`
+	BookmarksCount int         `json:"bookmarksCount"` // Alias for API compatibility
+	UpdatedAt     int64        `json:"updatedAt"`
+}

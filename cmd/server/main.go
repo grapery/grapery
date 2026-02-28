@@ -252,12 +252,16 @@ func main() {
 	likeRepo := mysql.NewLikeRepository(repo.DB())
 	logger.Info("like repository initialized")
 
+	// Initialize Bookmark Repository (StoryCreationAppUI)
+	bookmarkRepo := mysql.NewBookmarkRepository(repo.DB())
+	logger.Info("bookmark repository initialized")
+
 	// Initialize User Settings Repository
 	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
 	logger.Info("user settings repository initialized")
 
 	// Initialize Interaction Service
-	interactionService := service.NewInteractionService(followRepo, likeRepo, repo, logger)
+	interactionService := service.NewInteractionService(followRepo, likeRepo, bookmarkRepo, repo, logger)
 	logger.Info("interaction service initialized")
 
 	// Initialize User Settings Service

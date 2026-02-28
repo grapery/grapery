@@ -118,7 +118,7 @@ func (s *Service) GetStoryStats(ctx context.Context, storyID string) (*StoryStat
 		Likes:     story.Likes,
 		Followers: story.Followers,
 		Comments:  len(comments),
-		Panels:    story.Panels,
+		Panels:    story.PanelCount,
 	}
 
 	return stats, nil

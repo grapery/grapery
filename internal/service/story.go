@@ -1188,7 +1188,7 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 	s.logger.Debug("story retrieved for media rendering",
 		zap.String("storyID", storyID),
 		zap.String("title", story.Title),
-		zap.Int("panels", story.Panels))
+		zap.Int("panels", story.PanelCount))
 
 	if story.Author.ID != userID {
 		s.logger.Warn("unauthorized media render attempt",
@@ -1203,7 +1203,7 @@ func (s *Service) RenderStoryMedia(ctx context.Context, userID, storyID string, 
 		zap.String("userID", userID))
 
 	// 检查故事是否有内容可以渲染
-	if story.Panels == 0 {
+	if story.PanelCount == 0 {
 		s.logger.Warn("story has no panels to render",
 			zap.String("storyID", storyID),
 			zap.String("userID", userID))
@@ -1836,7 +1836,7 @@ func (s *Service) PublishStory(ctx context.Context, userID, storyID string) (*do
 	}
 
 	// 检查故事是否有内容
-	if story.Panels == 0 {
+	if story.PanelCount == 0 {
 		return nil, errors.New("cannot publish empty story")
 	}
 

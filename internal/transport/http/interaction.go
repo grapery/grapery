@@ -42,6 +42,16 @@ func (h *InteractionHandler) RegisterInteractionRoutes(r *gin.RouterGroup) {
 		likes.GET("/count/:type/:id", h.GetLikesCount)
 		likes.POST("/batch-check", h.BatchCheckLikeStatus)
 	}
+
+	// 收藏/保存相关 (Bookmark - StoryCreationAppUI)
+	bookmarks := r.Group("/bookmarks")
+	{
+		bookmarks.POST("", h.CreateBookmark)
+		bookmarks.DELETE("/:id", h.DeleteBookmark)
+		bookmarks.GET("/check", h.CheckBookmarkStatus)
+		bookmarks.GET("/my", h.GetMyBookmarks)
+		bookmarks.GET("/count/:type/:id", h.GetBookmarksCount)
+	}
 }
 
 // FollowRequest 关注请求
@@ -347,4 +357,111 @@ func (h *InteractionHandler) BatchCheckLikeStatus(c *gin.Context) {
 	}
 
 	Success(c, result)
+}
+
+// ========== Bookmark Handlers (StoryCreationAppUI) ==========
+
+// BookmarkRequest 收藏请求
+type BookmarkRequest struct {
+	BookmarkType   string `json:"bookmarkType" binding:"required"` // story, fragment, storyboard
+	BookmarkID     string `json:"bookmarkId" binding:"required"`
+	CollectionName string `json:"collectionName,omitempty"`
+}
+
+// CreateBookmark 创建收藏
+func (h *InteractionHandler) CreateBookmark(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	var req BookmarkRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	bookmarkType := domain.BookmarkType(req.BookmarkType)
+	bookmark, err := h.interactionService.CreateBookmark(c.Request.Context(), userID, bookmarkType, req.BookmarkID, req.CollectionName)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, bookmark)
+}
+
+// DeleteBookmark 删除收藏
+func (h *InteractionHandler) DeleteBookmark(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	bookmarkID := c.Param("id")
+	if err := h.interactionService.DeleteBookmark(c.Request.Context(), userID, bookmarkID); err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "bookmark removed successfully"})
+}
+
+// CheckBookmarkStatusRequest 检查收藏状态请求
+type CheckBookmarkStatusRequest struct {
+	BookmarkType string `json:"bookmarkType" binding:"required"`
+	BookmarkID   string `json:"bookmarkId" binding:"required"`
+}
+
+// CheckBookmarkStatus 检查收藏状态
+func (h *InteractionHandler) CheckBookmarkStatus(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	var req CheckBookmarkStatusRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	bookmarkType := domain.BookmarkType(req.BookmarkType)
+	isBookmarked, err := h.interactionService.CheckBookmarkStatus(c.Request.Context(), userID, bookmarkType, req.BookmarkID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"isBookmarked": isBookmarked})
+}
+
+// GetMyBookmarks 获取当前用户的收藏列表
+func (h *InteractionHandler) GetMyBookmarks(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	bookmarkType := domain.BookmarkType(c.Query("type")) // Optional filter
+
+	bookmarks, err := h.interactionService.GetBookmarksByUser(c.Request.Context(), userID, bookmarkType)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"bookmarks": bookmarks})
+}
+
+// GetBookmarksCount 获取收藏数量
+func (h *InteractionHandler) GetBookmarksCount(c *gin.Context) {
+	bookmarkType := domain.BookmarkType(c.Param("type"))
+	bookmarkID := c.Param("id")
+
+	count, err := h.interactionService.GetBookmarksCount(c.Request.Context(), bookmarkType, bookmarkID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"count": count, "saves": count}) // Both for API compatibility
 }

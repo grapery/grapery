@@ -16,7 +16,8 @@ type Story struct {
 	common.EngagementStats
 
 	Followers           int          `json:"followers"`
-	Panels              int          `json:"panels"`
+	PanelCount          int          `json:"panelCount"`            // Number of panels (backward compatibility)
+	PanelsData          []*Panel     `json:"panels,omitempty"`      // Panel array (StoryCreationAppUI alignment, non-persisted)
 	StoryboardCount     int          `json:"storyboardCount"`   // Number of storyboards in this story
 	CharacterCount      int          `json:"characterCount"`    // Number of characters in the story
 	DefaultSceneCount   int          `json:"defaultSceneCount"` // Default number of scenes for storyboards (2-8, default 3)

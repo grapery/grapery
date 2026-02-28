@@ -61,6 +61,7 @@ type Story struct {
 	SourceFragmentID    *string        `gorm:"size:36;index"` // 来源碎片ID（当故事从碎片转换而来时）
 	Likes               int            `gorm:"default:0;index"`
 	Followers           int            `gorm:"default:0"`
+	Saves               int            `gorm:"default:0;index"` // Bookmark/Save count (StoryCreationAppUI)
 	Panels              int            `gorm:"default:0"`
 	StoryboardCount     int            `gorm:"default:0;index"` // Number of storyboards in this story
 	DefaultSceneCount   int            `gorm:"default:3"`       // Default number of scenes for storyboards (2-8)
@@ -404,6 +405,31 @@ type Comment struct {
 	CreatedAt  time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt  time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
+}
+
+// Fragment database model (碎片故事 - StoryCreationAppUI)
+type Fragment struct {
+	ID               string         `gorm:"primaryKey;size:36"`
+	UserID           string         `gorm:"column:author_id;size:36;not null;index"`
+	Author           User           `gorm:"foreignKey:UserID"`
+	Content          string         `gorm:"type:text;not null"`
+	ImageUrls        string         `gorm:"type:text"`                               // JSON array of image URLs
+	SourceType       string         `gorm:"size:20;default:'original';index"`        // original, story_excerpt, storyboard_node
+	SourceID         string         `gorm:"size:36;index"`
+	Visibility       string         `gorm:"size:20;default:'public';index"`          // public, followers_only, private
+	Status           string         `gorm:"size:20;default:'active';index"`          // active, deleted
+	Likes            int            `gorm:"default:0;index"`
+	Comments         int            `gorm:"default:0"`
+	Shares           int            `gorm:"default:0"`
+	Views            int            `gorm:"default:0"`
+	Saves            int            `gorm:"default:0;index"`                         // Bookmark/Save count (StoryCreationAppUI)
+	Topic            string         `gorm:"size:200"`                                // Topic tag (StoryCreationAppUI)
+	Caption          string         `gorm:"type:text"`                               // Caption text (StoryCreationAppUI)
+	ConvertedToStoryID *string      `gorm:"size:36;index"`                           // Story ID if converted
+	IsConverted      bool           `gorm:"default:false;index"`
+	CreatedAt        time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt        time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
 }
 
 // StoryComposition database model
