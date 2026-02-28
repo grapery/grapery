@@ -251,3 +251,27 @@ const (
 	StoryStatusPublished StoryStatus = common.ContentStatusPublished
 	StoryStatusRendering StoryStatus = common.ContentStatusRendering
 )
+
+// MARK: - StoryCreationAppUI Alignment Types
+
+// StoryCharacter 故事角色简要信息 (用于故事卡片显示)
+// Aligns with StoryCreationAppUI StoryCharacter interface
+type StoryCharacter struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
+	Role   string `json:"role,omitempty"`
+}
+
+// StoryForkItem 故事分支项 (用于分支列表显示)
+// Aligns with StoryCreationAppUI StoryForkItem interface
+type StoryForkItem struct {
+	ID           string `json:"id"`
+	AuthorName   string `json:"authorName"`
+	AuthorAvatar string `json:"authorAvatar,omitempty"`
+	Direction    string `json:"direction"`             // 分支走向描述
+	CoverImg     string `json:"coverImg,omitempty"`
+	PanelCount   int    `json:"panelCount,omitempty"`
+	Likes        int    `json:"likes,omitempty"`
+	CreatedAt    int64  `json:"createdAt,omitempty"`
+}
