@@ -871,7 +871,7 @@ func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
 }
 
 // GenerateCharacterViews 生成角色三视图
-// POST /api/characters/:id/generate-views
+// POST /api/v1/characters/:id/views/generate
 func (h *Handler) GenerateCharacterViews(c *gin.Context) {
 	userID := authPkg.GetUserID(c)
 	if userID == "" {
