@@ -1,6 +1,8 @@
 package mysql
 
 import (
+	"context"
+
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -29,6 +31,45 @@ func (r *Repository) DB() *gorm.DB {
 // Log returns the logger
 func (r *Repository) Log() *zap.Logger {
 	return r.log
+}
+
+// WithTransaction executes a function within a database transaction
+// If the function returns an error, the transaction is rolled back
+// If the function returns nil, the transaction is committed
+func (r *Repository) WithTransaction(ctx context.Context, fn func(tx domain.Repository) error) error {
+	tx := r.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	// Create a transaction-scoped repository
+	txRepo := &transactionRepository{
+		Repository: &Repository{
+			db:  tx,
+			log: r.log,
+		},
+		tx: tx,
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // re-throw panic after rollback
+		}
+	}()
+
+	if err := fn(txRepo); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
+}
+
+// transactionRepository wraps a Repository with transaction support
+type transactionRepository struct {
+	*Repository
+	tx *gorm.DB
 }
 
 // ========== Helper methods for domain conversion ==========

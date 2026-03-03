@@ -187,3 +187,205 @@ func (s *Service) DeleteInvitationCode(ctx context.Context, userID, codeID strin
 func (s *Service) ValidateInvitationCode(ctx context.Context, code string) error {
 	return s.repo.ValidateInvitationCode(ctx, code)
 }
+
+// MARK: - Referral System (StoryCreationAppUI Design)
+
+const (
+	// ReferralPointsReward 邀请奖励积分
+	ReferralPointsReward = 100
+)
+
+// GetOrCreateReferralCode 获取或创建用户专属邀请码
+func (s *Service) GetOrCreateReferralCode(ctx context.Context, userID string) (string, error) {
+	s.logger.Info("getting or creating referral code", zap.String("userID", userID))
+
+	// 先尝试获取用户信息
+	user, err := s.repo.UserByID(ctx, userID)
+	if err != nil {
+		return "", errors.New("user not found")
+	}
+
+	// 如果用户已有邀请码，直接返回
+	if user.ReferralCode != "" {
+		return user.ReferralCode, nil
+	}
+
+	// 生成新的专属邀请码（基于用户ID生成短码）
+	referralCode := generateUserReferralCode(userID)
+
+	// 更新用户的邀请码
+	user.ReferralCode = referralCode
+	if err := s.repo.UpdateUser(ctx, user); err != nil {
+		s.logger.Error("failed to update user referral code", zap.Error(err))
+		return "", errors.New("failed to create referral code")
+	}
+
+	s.logger.Info("referral code created", zap.String("userID", userID), zap.String("code", referralCode))
+	return referralCode, nil
+}
+
+// generateUserReferralCode 基于用户ID生成专属邀请码
+func generateUserReferralCode(userID string) string {
+	// 取用户ID的前8位作为基础
+	if len(userID) >= 8 {
+		return "WZ" + userID[:8]
+	}
+	// 如果ID太短，用随机码补充
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	return "WZ" + base64.URLEncoding.EncodeToString(bytes)[:6]
+}
+
+// UseReferralCode 使用邀请码（新用户注册时调用）
+func (s *Service) UseReferralCode(ctx context.Context, refereeID, referralCode string) (*domain.ReferralResponse, error) {
+	s.logger.Info("using referral code",
+		zap.String("refereeID", refereeID),
+		zap.String("referralCode", referralCode))
+
+	// 查找邀请码对应的用户
+	referrer, err := s.repo.GetUserByReferralCode(ctx, referralCode)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return &domain.ReferralResponse{
+				Success: false,
+				Message: "invalid referral code",
+			}, nil
+		}
+		return nil, errors.New("failed to validate referral code")
+	}
+
+	// 不能使用自己的邀请码
+	if referrer.ID == refereeID {
+		return &domain.ReferralResponse{
+			Success: false,
+			Message: "cannot use your own referral code",
+		}, nil
+	}
+
+	// 检查是否已经被邀请过
+	existing, _ := s.repo.GetUserReferralByReferee(ctx, refereeID)
+	if existing != nil {
+		return &domain.ReferralResponse{
+			Success: false,
+			Message: "already referred",
+		}, nil
+	}
+
+	// 创建邀请记录
+	now := time.Now().Unix()
+	referral := &domain.UserReferral{
+		ID:           uuid.New().String(),
+		ReferrerID:   referrer.ID,
+		RefereeID:    refereeID,
+		ReferralCode: referralCode,
+		PointsEarned: ReferralPointsReward,
+		Status:       string(domain.ReferralStatusRewarded),
+		CreatedAt:    now,
+		RewardedAt:   now,
+	}
+
+	if err := s.repo.CreateUserReferral(ctx, referral); err != nil {
+		s.logger.Error("failed to create referral record", zap.Error(err))
+		return nil, errors.New("failed to process referral")
+	}
+
+	// 给邀请人增加积分
+	if err := s.repo.AddUserPoints(ctx, referrer.ID, ReferralPointsReward); err != nil {
+		s.logger.Error("failed to add points to referrer", zap.Error(err))
+		// 不返回错误，记录已经创建
+	}
+
+	s.logger.Info("referral processed successfully",
+		zap.String("referrerID", referrer.ID),
+		zap.String("refereeID", refereeID),
+		zap.Int("points", ReferralPointsReward))
+
+	return &domain.ReferralResponse{
+		Success:      true,
+		Message:      "referral successful",
+		PointsEarned: ReferralPointsReward,
+	}, nil
+}
+
+// GetReferralStats 获取用户邀请统计
+func (s *Service) GetReferralStats(ctx context.Context, userID string) (*domain.ReferralStats, error) {
+	stats, err := s.repo.GetReferralStats(ctx, userID)
+	if err != nil {
+		s.logger.Error("failed to get referral stats", zap.Error(err))
+		return nil, errors.New("failed to get referral stats")
+	}
+	return stats, nil
+}
+
+// GetReferrals 获取用户邀请列表
+func (s *Service) GetReferrals(ctx context.Context, userID string, limit, offset int) ([]*domain.UserReferral, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	referrals, err := s.repo.GetReferralsByUser(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get referrals", zap.Error(err))
+		return nil, errors.New("failed to get referrals")
+	}
+	return referrals, nil
+}
+
+// GetInviteShareContent 获取邀请分享内容
+func (s *Service) GetInviteShareContent(ctx context.Context, userID string) (*domain.InviteShareContent, error) {
+	// 获取或创建邀请码
+	referralCode, err := s.GetOrCreateReferralCode(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取用户信息
+	user, err := s.repo.UserByID(ctx, userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	displayName := user.DisplayName
+	if displayName == "" {
+		displayName = user.Username
+	}
+
+	return &domain.InviteShareContent{
+		Title:        displayName + " 邀请你一起玩未择",
+		Description:  "来未择，用 AI 创作你的故事世界！注册即送新人礼包。",
+		Link:         "https://weize.app/invite/" + referralCode,
+		ReferralCode: referralCode,
+	}, nil
+}
+
+// AddPoints 增加用户积分
+func (s *Service) AddPoints(ctx context.Context, userID string, points int) error {
+	if points <= 0 {
+		return errors.New("points must be positive")
+	}
+
+	if err := s.repo.AddUserPoints(ctx, userID, points); err != nil {
+		s.logger.Error("failed to add points",
+			zap.String("userID", userID),
+			zap.Int("points", points),
+			zap.Error(err))
+		return errors.New("failed to add points")
+	}
+
+	s.logger.Info("points added successfully",
+		zap.String("userID", userID),
+		zap.Int("points", points))
+	return nil
+}
+
+// GetUserPoints 获取用户积分
+func (s *Service) GetUserPoints(ctx context.Context, userID string) (int, error) {
+	user, err := s.repo.UserByID(ctx, userID)
+	if err != nil {
+		return 0, errors.New("user not found")
+	}
+	return user.Points, nil
+}

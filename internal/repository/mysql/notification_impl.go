@@ -46,6 +46,15 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 		ActorID:     notification.ActorID,
 		ActorName:   notification.ActorName,
 		ActorAvatar: notification.ActorAvatar,
+		// Story context
+		StoryTitle:  notification.StoryTitle,
+		StoryCover:  notification.StoryCover,
+		StoryID:     notification.StoryID,
+		CommentText: notification.CommentText,
+		// System notification
+		SysTitle: notification.SysTitle,
+		SysBody:  notification.SysBody,
+		SysIcon:  notification.SysIcon,
 	}
 	if err := r.db.WithContext(ctx).Create(&dbNotif).Error; err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
@@ -91,5 +100,14 @@ func (r *Repository) notificationToDomain(n Notification) domain.Notification {
 		ActorID:     n.ActorID,
 		ActorName:   n.ActorName,
 		ActorAvatar: n.ActorAvatar,
+		// Story context
+		StoryTitle:  n.StoryTitle,
+		StoryCover:  n.StoryCover,
+		StoryID:     n.StoryID,
+		CommentText: n.CommentText,
+		// System notification
+		SysTitle: n.SysTitle,
+		SysBody:  n.SysBody,
+		SysIcon:  n.SysIcon,
 	}
 }

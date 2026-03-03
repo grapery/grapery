@@ -74,52 +74,7 @@ func (h *Handler) SSENotificationStream(c *gin.Context) {
 	}
 }
 
-// SSEActivityStream 活动流（SSE）
-// GET /api/sse/activities
-func (h *Handler) SSEActivityStream(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
-		return
-	}
-
-	// 设置 SSE 响应头
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-
-	fmt.Fprintf(c.Writer, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
-	c.Writer.Flush()
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	heartbeat := time.NewTicker(30 * time.Second)
-	defer heartbeat.Stop()
-
-	ctx := c.Request.Context()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-heartbeat.C:
-			fmt.Fprintf(c.Writer, ": heartbeat\n\n")
-			c.Writer.Flush()
-
-		case <-ticker.C:
-			// V1/V2 MVP: 活动流已移除 Group 相关功能
-			// 未来 V2 可能会添加点赞、评论、关注等社交活动
-			// 目前发送空的活动列表保持连接
-			activities := []interface{}{}
-			activitiesData, _ := json.Marshal(activities)
-			fmt.Fprintf(c.Writer, "event: activities\ndata: %s\n\n", activitiesData)
-			c.Writer.Flush()
-		}
-	}
-}
+// REMOVED: SSEActivityStream - not in StoryCreationAppUI design
 
 // ========== SSE Helper Functions ==========
 

@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
@@ -120,8 +123,26 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		fragmentCount = *req.FragmentCount
 	}
 
-	// TODO: Upload images and get URLs
-	// For now, use the provided URLs directly
+	// Process image URLs - validate and normalize
+	// Images should already be uploaded via a separate upload endpoint
+	// Here we just validate that they are valid URLs
+	processedImageUrls := make([]string, 0, len(req.ImageUrls))
+	for _, url := range req.ImageUrls {
+		url = strings.TrimSpace(url)
+		if url == "" {
+			continue
+		}
+		// Basic URL validation - must start with http:// or https://
+		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+			processedImageUrls = append(processedImageUrls, url)
+		}
+		// Note: Base64 images should be uploaded via a separate endpoint first
+	}
+
+	if len(processedImageUrls) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one valid image URL is required"})
+		return
+	}
 
 	fragment := &domain.Fragment{
 		BaseModel: common.BaseModel{
@@ -138,7 +159,7 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		UserID:        userID,
 		CreatorID:     userID, // 兼容旧代码
 		Content:       req.Content,
-		ImageUrls:     stringifyArray(req.ImageUrls),
+		ImageUrls:     stringifyArray(processedImageUrls),
 		Style:         req.Style,
 		FragmentCount: &fragmentCount,
 		Visibility:    req.Visibility,
@@ -176,7 +197,7 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 	}
 
 	// Increment view count
-	go h.fragmentRepo.IncrementLikes(c.Request.Context(), id) // Reuse for views, or create separate
+	go h.fragmentRepo.IncrementViews(c.Request.Context(), id)
 
 	c.JSON(http.StatusOK, fragment)
 }
@@ -408,20 +429,28 @@ func (h *FragmentHandler) ToggleLike(c *gin.Context) {
 
 // Helper functions
 func generateUUID() string {
-	// Implement UUID generation
-	return "fragment-" + strconv.FormatInt(int64(float64(999999)), 10) // Placeholder
+	return uuid.New().String()
 }
 
 func stringifyArray(arr []string) string {
 	// Convert array to JSON string for storage
-	// In production, use json.Marshal
-	result := "["
-	for i, s := range arr {
-		if i > 0 {
-			result += ","
-		}
-		result += `"` + s + `"`
+	if len(arr) == 0 {
+		return "[]"
 	}
-	result += "]"
-	return result
+	bytes, err := json.Marshal(arr)
+	if err != nil {
+		return "[]"
+	}
+	return string(bytes)
+}
+
+// RegisterRoutes registers the fragment CRUD routes
+func (h *FragmentHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
+	// Fragment CRUD routes
+	router.GET("", h.ListFragments)                       // GET /fragments
+	router.GET("/:id", h.GetFragment)                     // GET /fragments/:id
+	router.POST("", authMiddleware, h.CreateFragment)     // POST /fragments
+	router.PUT("/:id", authMiddleware, h.UpdateFragment)  // PUT /fragments/:id
+	router.DELETE("/:id", authMiddleware, h.DeleteFragment) // DELETE /fragments/:id
+	router.GET("/styles", h.GetFragmentStyles)            // GET /fragments/styles
 }

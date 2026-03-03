@@ -84,12 +84,12 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/users/:id/stories", h.GetUserStories)
 			authenticated.GET("/users/:id/characters", h.GetUserCharacters)
 			authenticated.GET("/users/:id/storyboards", h.GetUserStoryboards)
-			authenticated.GET("/users/:id/drafts", h.GetUserDrafts)
+			// REMOVED: /users/:id/drafts - not in StoryCreationAppUI design
 			authenticated.GET("/users/:id/liked-stories", h.GetLikedStories)
 			authenticated.GET("/users/:id/liked-characters", h.GetLikedCharacters)
 			authenticated.GET("/users/:id/liked-storyboards", h.GetLikedStoryboards)
-			authenticated.GET("/users/:id/draft-storyboards", h.GetDraftStoryboards)
-			authenticated.GET("/users/:id/activities", h.GetUserActivityList)
+			// REMOVED: /users/:id/draft-storyboards - not in StoryCreationAppUI design
+			// REMOVED: /users/:id/activities - not in StoryCreationAppUI design
 			authenticated.GET("/users/:id/stats", h.GetUserStats)
 			authenticated.GET("/tags/popular", h.GetPopularTags)
 			authenticated.GET("/tags/:id/stories", h.GetStoriesByTag)
@@ -99,10 +99,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/stories/:id/stats", h.GetStoryStats)
 			authenticated.GET("/storyboards", h.ListStoryboards)
 			authenticated.GET("/storyboards/feed", h.GetStoryboardFeed) // Community storyboard feed
-			// Dashboard storyboard feeds (authenticated)
-			authenticated.GET("/dashboard/storyboards", h.GetDashboardStoryboards)
-			authenticated.GET("/dashboard/characters/storyboards", h.GetDashboardCharacterStoryboards)
-			authenticated.GET("/dashboard/trending/storyboards", h.GetTrendingStoryboards)
+			// REMOVED: Dashboard storyboard feeds - not in StoryCreationAppUI design
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
@@ -215,8 +212,23 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/users/:id/follow", h.FollowUser)
 			authenticated.DELETE("/users/:id/follow", h.UnfollowUser)
 
+			// 用户积分相关 (StoryCreationAppUI Design)
+			authenticated.GET("/users/:id/points", h.GetUserPoints)
+
+			// 用户屏蔽/举报相关
+			authenticated.POST("/users/:id/block", h.BlockUser)
+			authenticated.DELETE("/users/:id/block", h.UnblockUser)
+			authenticated.POST("/users/:id/report", h.ReportUser)
+
 			// 标签相关
 			authenticated.POST("/stories/:id/tags", h.AddStoryTags)
+
+			// 邀请/推荐系统 (StoryCreationAppUI Design)
+			authenticated.GET("/referrals/code", h.GetReferralCode)
+			authenticated.GET("/referrals/share", h.GetInviteShareContent)
+			authenticated.GET("/referrals/stats", h.GetReferralStats)
+			authenticated.GET("/referrals", h.GetReferrals)
+			authenticated.POST("/referrals/use", h.UseReferralCode)
 
 			// 角色相关
 			authenticated.POST("/characters", h.CreateCharacter)
@@ -247,10 +259,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/upload/sts-token", h.GetSTSToken)
 			authenticated.GET("/upload/image-levels", h.GetImageLevels)
 
-			// 统计相关
-			authenticated.GET("/dashboard/stats", h.GetDashboardStats)
+			// REMOVED: Dashboard stats - not in StoryCreationAppUI design
 
-			// 资产管理相关
+            // 资产管理相关
 			authenticated.GET("/assets", h.ListAssets)
 			authenticated.GET("/assets/:id", h.GetAsset)
 			authenticated.POST("/assets", h.CreateAsset)
@@ -259,7 +270,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// SSE 实时推送（HTTP Server-Sent Events）
 			authenticated.GET("/sse/notifications", h.SSENotificationStream)
-			authenticated.GET("/sse/activities", h.SSEActivityStream)
+			// REMOVED: /sse/activities - not in StoryCreationAppUI design
 
 			// 设备管理（APNs推送）
 			authenticated.POST("/devices/register", h.RegisterDevice)

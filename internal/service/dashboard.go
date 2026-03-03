@@ -6,20 +6,9 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
-// DashboardStoryboards returns storyboards from stories the user created OR follows.
-func (s *Service) DashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	return s.repo.DashboardStoryboards(ctx, userID, limit, offset)
-}
-
-// DashboardCharacterStoryboards returns storyboards that followed characters participate in.
-func (s *Service) DashboardCharacterStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	return s.repo.DashboardCharacterStoryboards(ctx, userID, limit, offset)
-}
-
-// TrendingStoryboards returns published storyboards from trending stories.
-func (s *Service) TrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	return s.repo.TrendingStoryboards(ctx, userID, limit, offset)
-}
+// REMOVED: DashboardStoryboards - not in StoryCreationAppUI design
+// REMOVED: DashboardCharacterStoryboards - not in StoryCreationAppUI design
+// REMOVED: TrendingStoryboards (authenticated) - not in StoryCreationAppUI design
 
 // PublicTrendingStoryboards returns published trending storyboards accessible to all users.
 // If userID is empty (guest), returns globally trending storyboards.

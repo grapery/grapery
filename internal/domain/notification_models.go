@@ -8,7 +8,7 @@ type Notification struct {
 	common.BaseModel
 
 	UserID      string `json:"userId"`
-	Type        string `json:"type"` // like, comment, follow, mention, system
+	Type        string `json:"type"` // like, comment, follow, story_update, system
 	Title       string `json:"title"`
 	Content     string `json:"content"`
 	Link        string `json:"link,omitempty"`
@@ -16,6 +16,17 @@ type Notification struct {
 	ActorID     string `json:"actorId,omitempty"` // 触发通知的用户ID
 	ActorName   string `json:"actorName,omitempty"`
 	ActorAvatar string `json:"actorAvatar,omitempty"`
+
+	// Story context (for like, comment, story_update types)
+	StoryTitle   string `json:"storyTitle,omitempty"`
+	StoryCover   string `json:"storyCover,omitempty"`
+	StoryID      string `json:"storyId,omitempty"`
+	CommentText  string `json:"commentText,omitempty"` // 评论内容摘要
+
+	// System notification fields (for system type)
+	SysTitle string `json:"sysTitle,omitempty"`
+	SysBody  string `json:"sysBody,omitempty"`
+	SysIcon  string `json:"sysIcon,omitempty"` // icon name: gift, star, trending, etc.
 
 	// Relations
 	User  *User `json:"user,omitempty"`

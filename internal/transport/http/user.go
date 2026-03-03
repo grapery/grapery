@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
@@ -276,27 +275,9 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 	})
 }
 
-// GetUserDrafts 获取用户的草稿列表
-// GET /api/users/:id/drafts
-func (h *Handler) GetUserDrafts(c *gin.Context) {
-	userID, ok := RequireParam(c, "id")
-	if !ok {
-		return
-	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-
-	drafts, err := h.svc.GetUserDrafts(c.Request.Context(), userID, limit, offset)
-	if err != nil {
-		HandleError(c, err)
-		return
-	}
-
-	Success(c, gin.H{
-		"drafts": drafts,
-		"count":  len(drafts),
-	})
-}
+// REMOVED: GetUserDrafts - not in StoryCreationAppUI design
+// REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
+// REMOVED: GetUserActivityList - not in StoryCreationAppUI design
 
 // GetLikedStories 获取用户点赞的故事
 // GET /api/users/:id/liked-stories
@@ -364,66 +345,78 @@ func (h *Handler) GetLikedStoryboards(c *gin.Context) {
 	})
 }
 
-// GetDraftStoryboards 获取用户的草稿故事板
-// GET /api/users/:id/draft-storyboards
-func (h *Handler) GetDraftStoryboards(c *gin.Context) {
-	userID, ok := RequireParam(c, "id")
+// REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
+// REMOVED: GetUserActivityList - not in StoryCreationAppUI design
+
+// BlockUser 屏蔽用户
+// POST /api/v1/users/:id/block
+func (h *Handler) BlockUser(c *gin.Context) {
+	userID, ok := RequireUserID(c)
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	storyboards, err := h.svc.GetDraftStoryboards(c.Request.Context(), userID, limit, offset)
-	if err != nil {
+	blockedID, ok := RequireParam(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := h.svc.BlockUser(c.Request.Context(), userID, blockedID); err != nil {
 		HandleError(c, err)
 		return
 	}
 
-	Success(c, gin.H{
-		"storyboards": storyboards,
-		"count":       len(storyboards),
-	})
+	Success(c, gin.H{"message": "user blocked successfully"})
 }
 
-// GetUserActivityList 获取用户活动列表
-// GET /api/users/:id/activities
-// Query params:
-//   - limit: int (default 50, max 100)
-//   - offset: int (default 0)
-//   - time_range: string (today, week, month) - default: week
-//   - date: string (YYYY-MM-DD) - filter by specific date
-func (h *Handler) GetUserActivityList(c *gin.Context) {
-	userID, ok := RequireParam(c, "id")
+// UnblockUser 取消屏蔽用户
+// DELETE /api/v1/users/:id/block
+func (h *Handler) UnblockUser(c *gin.Context) {
+	userID, ok := RequireUserID(c)
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	timeRangeStr := c.DefaultQuery("time_range", "week")
-	date := c.Query("date")
 
-	// Convert time range string to enum
-	var timeRange domain.ActivityTimeRange
-	switch timeRangeStr {
-	case "today":
-		timeRange = domain.TimeRangeToday
-	case "week":
-		timeRange = domain.TimeRangeWeek
-	case "month":
-		timeRange = domain.TimeRangeMonth
-	default:
-		timeRange = domain.TimeRangeWeek
+	blockedID, ok := RequireParam(c, "id")
+	if !ok {
+		return
 	}
 
-	activities, count, err := h.svc.GetUserActivitiesWithFilter(c.Request.Context(), userID, timeRange, date, limit, offset)
-	if err != nil {
+	if err := h.svc.UnblockUser(c.Request.Context(), userID, blockedID); err != nil {
 		HandleError(c, err)
 		return
 	}
 
-	Success(c, gin.H{
-		"activities": activities,
-		"count":      count,
-	})
+	Success(c, gin.H{"message": "user unblocked successfully"})
+}
+
+// ReportUserRequest 举报用户请求
+type ReportUserRequest struct {
+	Reason string `json:"reason" binding:"required,min=1,max=500"`
+}
+
+// ReportUser 举报用户
+// POST /api/v1/users/:id/report
+func (h *Handler) ReportUser(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	reportedID, ok := RequireParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req ReportUserRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	if err := h.svc.ReportUser(c.Request.Context(), userID, reportedID, req.Reason); err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "user reported successfully"})
 }

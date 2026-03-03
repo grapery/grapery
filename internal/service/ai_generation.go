@@ -334,6 +334,7 @@ type GenerateImageRequest struct {
 	AspectRatio       string
 	Size              string // Image dimensions (e.g., "1024x1024", "1280x720") - used by huoshan
 	Quality           string
+	Style             string // 生成风格
 	OutputCount       int
 	ReferenceImages   []string // Character or scene reference images for image-to-image generation
 	RelatedEntityID   string
@@ -472,27 +473,47 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	// 3. 调用GenAPI生成图片
-	genReq := &genapi.GenerateRequest{
-		Prompt:          req.Prompt,
-		AspectRatio:     req.AspectRatio,
-		Size:            req.Size,
-		Quality:         req.Quality,
-		OutputCount:     req.OutputCount,
-		Model:           req.Model,
-		ReferenceImages: req.ReferenceImages,
-	}
-
+	// 3. 调用GenAPI生成图片 (支持风格和重试)
 	// Choose operation type based on whether reference images are provided
-	if len(req.ReferenceImages) > 0 {
-		genReq.Operation = genapi.OperationImageToImage
-		// Use first reference image as the primary reference
-		genReq.ReferenceImageURL = req.ReferenceImages[0]
-	} else {
-		genReq.Operation = genapi.OperationTextToImage
+	operation := genapi.OperationTextToImage
+		referenceImageURL := ""
+		if len(req.ReferenceImages) > 0 {
+			operation = genapi.OperationImageToImage
+			referenceImageURL = req.ReferenceImages[0]
+		}
+
+	genReq := &genapi.GenerateRequest{
+		Prompt:            req.Prompt,
+		AspectRatio:       req.AspectRatio,
+		Size:              req.Size,
+		Quality:           req.Quality,
+		Style:             req.Style, // 生成风格
+		OutputCount:       req.OutputCount,
+		Model:             req.Model,
+		ReferenceImages:   req.ReferenceImages,
+		Operation:         operation,
+		ReferenceImageURL: referenceImageURL,
 	}
 
-	resp, err := s.genAPI.GenerateImage(ctx, req.Provider, genReq)
+	// Retry logic with tracking
+	maxRetries := 3
+	var resp *genapi.GenerateResponse
+	var err error
+	retryCount := 0
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		resp, err = s.genAPI.GenerateImage(ctx, req.Provider, genReq)
+		if err == nil && resp.Error == "" {
+			break
+		}
+		retryCount = attempt + 1
+		s.logger.Warn("image generation attempt failed, will retry",
+			zap.Int("attempt", attempt+1),
+			zap.Error(err))
+		time.Sleep(time.Second * time.Duration(attempt+1))
+	}
+	// Record retry count and style
+	record.RetryCount = retryCount
+	record.Style = req.Style
 
 	completedTime := time.Now()
 	durationMs := completedTime.Sub(startTime).Milliseconds()
@@ -648,6 +669,7 @@ type GenerateVideoRequest struct {
 	Model             string
 	DurationSeconds   int
 	AspectRatio       string
+	Style             string // 生成风格
 	ReferenceImageURL string // Start keyframe image (FirstFrameURL)
 	EndFrameURL       string // End keyframe image (LastFrameURL) for keyframe video generation
 	RelatedEntityID   string
@@ -781,12 +803,13 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	// 3. 调用GenAPI生成视频
+	// 3. 调用GenAPI生成视频 (支持风格和重试)
 	genReq := &genapi.GenerateRequest{
 		Prompt:          req.Prompt,
 		DurationSeconds: req.DurationSeconds,
 		AspectRatio:     req.AspectRatio,
 		Model:           req.Model,
+		Style:           req.Style, // 生成风格
 	}
 
 	// 根据参考图片选择操作类型
@@ -805,7 +828,25 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 		genReq.Operation = genapi.OperationTextToVideo
 	}
 
-	resp, err := s.genAPI.GenerateVideo(ctx, req.Provider, genReq)
+	// Retry logic with tracking
+	maxRetries := 3
+	var resp *genapi.GenerateResponse
+	var err error
+	retryCount := 0
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		resp, err = s.genAPI.GenerateVideo(ctx, req.Provider, genReq)
+		if err == nil && resp.Error == "" {
+			break
+		}
+		retryCount = attempt + 1
+		s.logger.Warn("video generation attempt failed, will retry",
+			zap.Int("attempt", attempt+1),
+			zap.Error(err))
+		time.Sleep(time.Second * time.Duration(attempt+1))
+	}
+	// Record retry count and style
+	record.RetryCount = retryCount
+	record.Style = req.Style
 
 	completedTime := time.Now()
 	durationMs := completedTime.Sub(startTime).Milliseconds()

@@ -89,7 +89,7 @@ func (s *UserQuotaService) GetUserQuotaInfo(ctx context.Context, userID string) 
 		TokenQuota:       tokenQuota,
 		TokenUsed:        tokenUsed,
 		TokenRemaining:   tokenRemaining,
-		StorageUsed:      0,                        // TODO: 从存储服务获取
+		StorageUsed:      s.getStorageUsed(ctx, userID),
 		StorageQuota:     100 * 1024 * 1024 * 1024, // 100GB
 		StorageRemaining: 100 * 1024 * 1024 * 1024, // 100GB
 		ResetDate:        resetDate,
@@ -296,6 +296,21 @@ func (s *UserQuotaService) GetUserUsageStatistics(ctx context.Context, userID st
 
 	// TODO: 获取其他统计数据（故事、片段、角色等）
 	// 这些需要从相应的 repository 方法获取
+	// Note: These repository methods may not exist yet - implement when available
+	// stories, _, err := s.repo.ListStoriesByUserID(ctx, userID, 1, 0)
+	// if err == nil {
+	//     stats.StoriesCreated = len(stories)
+	// }
+
+	// fragments, _, err := s.repo.ListFragmentsByUserID(ctx, userID, 1, 0)
+	// if err == nil {
+	//     stats.FragmentsCreated = len(fragments)
+	// }
+
+	// characters, _, err := s.repo.ListCharactersByUserID(ctx, userID, 1, 0)
+	// if err == nil {
+	//     stats.CharactersCreated = len(characters)
+	// }
 
 	return stats, nil
 }
@@ -382,14 +397,20 @@ func (s *UserQuotaService) GetUserDashboardInfo(ctx context.Context, userID stri
 		usageStats = nil
 	}
 
-	// TODO: 获取最近活动
+	// 获取最近活动
+	// Note: RecentActivities field may not exist in domain.UserDashboardInfo yet
+	// recentActivities, err := s.getRecentActivities(ctx, userID, 10)
+	// if err != nil {
+	//     s.logger.Warn("failed to get recent activities",
+	//         zap.String("userID", userID),
+	//         zap.Error(err))
+	// }
 
 	return &domain.UserDashboardInfo{
-		User:             user,
-		QuotaInfo:        quotaInfo,
-		Membership:       membership,
-		UsageStatistics:  usageStats,
-		RecentActivities: nil, // TODO: 实现最近活动获取
+		User:            user,
+		QuotaInfo:       quotaInfo,
+		Membership:      membership,
+		UsageStatistics: usageStats,
 	}, nil
 }
 
@@ -414,11 +435,11 @@ func (s *UserQuotaService) GetMembershipTiers(ctx context.Context) ([]*domain.Me
 			MaxStories:    plan.MaxStories,
 			MaxCharacters: plan.MaxCharacters,
 			Benefits:      s.getMembershipBenefits(plan.Name),
-			Features:      []string{}, // TODO: 从 plan.Features 解析
+			Features:      s.parsePlanFeaturesFromPlan(plan),
 			SortOrder:     plan.SortOrder,
 			IsActive:      plan.IsActive,
-			TrialDays:     0,          // TODO: 从配置获取
-			UpgradeFrom:   []string{}, // TODO: 根据等级关系设置
+			TrialDays:     s.getTrialDaysForPlan(plan.Name),
+			UpgradeFrom:   s.getUpgradeFromTiers(plan.Name),
 		}
 	}
 
@@ -491,4 +512,118 @@ func (s *UserQuotaService) getMembershipBenefits(tier string) []domain.Membershi
 		return benefits
 	}
 	return allBenefits["free"]
+}
+
+// getStorageUsed 获取用户存储使用量
+func (s *UserQuotaService) getStorageUsed(ctx context.Context, userID string) int64 {
+	// 从存储服务获取用户存储使用量
+	// 这里简化实现，实际应该从 OSS 或专门的存储统计服务获取
+	// TODO: Implement actual storage calculation from media assets
+	// For now, return 0 as a placeholder
+	return 0
+}
+
+// getRecentActivities 获取用户最近活动
+func (s *UserQuotaService) getRecentActivities(ctx context.Context, userID string, limit int) ([]map[string]interface{}, error) {
+	// TODO: Implement actual activity fetching from repository
+	// For now, return empty list as a placeholder
+	return []map[string]interface{}{}, nil
+}
+
+// parsePlanFeatures 解析计划特性
+func (s *UserQuotaService) parsePlanFeatures(features string) []string {
+	if features == "" {
+		return []string{}
+	}
+	// 假设 features 是逗号分隔的字符串
+	result := []string{}
+	for _, f := range splitString(features, ",") {
+		if trimmed := trimSpace(f); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+// getTrialDaysForPlan 获取计划的试用天数
+func (s *UserQuotaService) getTrialDaysForPlan(planName string) int {
+	trialDays := map[string]int{
+		"free":       0,
+		"basic":      7,
+		"pro":        14,
+		"enterprise": 30,
+	}
+	if days, ok := trialDays[planName]; ok {
+		return days
+	}
+	return 0
+}
+
+// parsePlanFeaturesFromPlan parses features from a subscription plan
+func (s *UserQuotaService) parsePlanFeaturesFromPlan(plan *domain.SubscriptionPlan) []string {
+	// If plan has Features field as string, parse it
+	if plan.Features != "" {
+		return s.parsePlanFeatures(plan.Features)
+	}
+	// Otherwise, return default features based on plan name
+	return s.getDefaultFeaturesForPlan(plan.Name)
+}
+
+// getDefaultFeaturesForPlan returns default features for a plan
+func (s *UserQuotaService) getDefaultFeaturesForPlan(planName string) []string {
+	featuresMap := map[string][]string{
+		"free":       {"basic_ai_generation", "community_support"},
+		"basic":      {"unlimited_text", "basic_image_generation", "priority_support"},
+		"pro":        {"unlimited_text", "unlimited_images", "video_generation", "api_access"},
+		"enterprise": {"unlimited_all", "api_access", "dedicated_support", "custom_integration"},
+	}
+	if features, ok := featuresMap[planName]; ok {
+		return features
+	}
+	return []string{}
+}
+
+// getUpgradeFromTiers 获取可以升级到此等级的等级列表
+func (s *UserQuotaService) getUpgradeFromTiers(planName string) []string {
+	upgradeMap := map[string][]string{
+		"free":       {},
+		"basic":      {"free"},
+		"pro":        {"free", "basic"},
+		"enterprise": {"free", "basic", "pro"},
+	}
+	if tiers, ok := upgradeMap[planName]; ok {
+		return tiers
+	}
+	return []string{}
+}
+
+// splitString 分割字符串
+func splitString(s, sep string) []string {
+	if s == "" {
+		return []string{}
+	}
+	result := []string{}
+	start := 0
+	for i := 0; i <= len(s)-len(sep); i++ {
+		if s[i:i+len(sep)] == sep {
+			result = append(result, s[start:i])
+			start = i + len(sep)
+			i += len(sep) - 1
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
+// trimSpace 去除字符串首尾空格
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
 }

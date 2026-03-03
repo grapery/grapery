@@ -177,3 +177,138 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 	}
 	return result, nil
 }
+
+// ========== User Block Operations ==========
+
+func (r *Repository) BlockUser(ctx context.Context, blockerID, blockedID string) error {
+	if blockerID == blockedID {
+		return fmt.Errorf("cannot block yourself")
+	}
+
+	var existing UserBlock
+	err := r.db.WithContext(ctx).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).First(&existing).Error
+	if err == nil {
+		return nil // Already blocked
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing block: %w", err)
+	}
+
+	block := UserBlock{
+		ID:        uuid.New().String(),
+		BlockerID: blockerID,
+		BlockedID: blockedID,
+	}
+
+	if err := r.db.WithContext(ctx).Create(&block).Error; err != nil {
+		return fmt.Errorf("failed to create block: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) UnblockUser(ctx context.Context, blockerID, blockedID string) error {
+	result := r.db.WithContext(ctx).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).Delete(&UserBlock{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to unblock: %w", result.Error)
+	}
+	return nil
+}
+
+func (r *Repository) IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&UserBlock{}).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("failed to check block status: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ========== User Report Operations ==========
+
+func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error {
+	if reporterID == reportedID {
+		return fmt.Errorf("cannot report yourself")
+	}
+
+	report := UserReport{
+		ID:         uuid.New().String(),
+		ReporterID: reporterID,
+		ReportedID: reportedID,
+		Reason:     reason,
+		Status:     "pending",
+	}
+
+	if err := r.db.WithContext(ctx).Create(&report).Error; err != nil {
+		return fmt.Errorf("failed to create report: %w", err)
+	}
+
+	return nil
+}
+
+// ========== Get Liked Content IDs ==========
+
+func (r *Repository) GetLikedStoryIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var likes []StoryLike
+	query := r.db.WithContext(ctx).
+		Select("story_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&likes).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked story IDs: %w", err)
+	}
+
+	ids := make([]string, len(likes))
+	for i, like := range likes {
+		ids[i] = like.StoryID
+	}
+	return ids, nil
+}
+
+func (r *Repository) GetLikedCharacterIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var follows []CharacterFollow
+	query := r.db.WithContext(ctx).
+		Select("character_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&follows).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked character IDs: %w", err)
+	}
+
+	ids := make([]string, len(follows))
+	for i, follow := range follows {
+		ids[i] = follow.CharacterID
+	}
+	return ids, nil
+}
+
+func (r *Repository) GetLikedStoryboardIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var likes []StoryboardLike
+	query := r.db.WithContext(ctx).
+		Select("storyboard_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&likes).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked storyboard IDs: %w", err)
+	}
+
+	ids := make([]string, len(likes))
+	for i, like := range likes {
+		ids[i] = like.StoryboardID
+	}
+	return ids, nil
+}

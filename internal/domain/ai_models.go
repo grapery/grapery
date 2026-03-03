@@ -147,6 +147,12 @@ type AIGenerationRecord struct {
 	ImageCount   int `json:"imageCount"`   // 生成图片数量
 	VideoCount   int `json:"videoCount"`   // 生成视频数量
 
+	// 重试统计
+	RetryCount int `json:"retryCount"` // 重试次数
+
+	// 风格设置
+	Style string `json:"style,omitempty"` // 生成风格
+
 	// 任务状态
 	Status       AITaskStatus `json:"status"`                 // pending, processing, completed, failed
 	Progress     int          `json:"progress"`               // 0-100

@@ -17,18 +17,41 @@ import (
 	"gorm.io/gorm"
 )
 
+// WebPaymentConfig holds configuration for web payments
+type WebPaymentConfig struct {
+	StripeSecretKey      string
+	StripeWebhookSecret  string
+	StripePublishableKey string
+	AlipayAppID          string
+	AlipayPrivateKey     string
+	AlipayPublicKey      string
+}
+
 // WebPaymentService provides web payment operations
 type WebPaymentService struct {
 	repo   *paymodels.WebPaymentRepository
 	logger *logrus.Logger
+	config *WebPaymentConfig
 }
 
 // NewWebPaymentService creates a new web payment service
-func NewWebPaymentService(logger *logrus.Logger) *WebPaymentService {
+func NewWebPaymentService(logger *logrus.Logger, config *WebPaymentConfig) *WebPaymentService {
+	if config == nil {
+		config = &WebPaymentConfig{}
+	}
 	return &WebPaymentService{
 		repo:   paymodels.NewWebPaymentRepository(),
 		logger: logger,
+		config: config,
 	}
+}
+
+// GetStripeWebhookSecret returns the Stripe webhook secret from config
+func (s *WebPaymentService) GetStripeWebhookSecret() string {
+	if s.config == nil {
+		return ""
+	}
+	return s.config.StripeWebhookSecret
 }
 
 // CreatePaymentRequest represents a request to create a payment

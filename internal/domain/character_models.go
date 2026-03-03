@@ -46,9 +46,6 @@ type Character struct {
 	Followers int `json:"followers"`
 	Stories   int `json:"stories"` // Custom field: number of stories this character appears in
 
-	// 海报创建权限
-	PosterCreationPermission string `json:"posterCreationPermission"` // creator_only, anyone (V1/V2 MVP - group_members removed)
-
 	// StoryCreationAppUI alignment fields
 	Role        string `json:"role,omitempty"`      // 角色定位 (主角/配角/反派/导师/神秘人)
 	AIStyle     string `json:"aiStyle,omitempty"`   // AI 生成风格
@@ -77,80 +74,7 @@ type CharacterFollow struct {
 	Character *Character `json:"character,omitempty"`
 }
 
-// PosterStatus 海报状态
-type PosterStatus string
-
-const (
-	PosterStatusDraft      PosterStatus = "draft"      // 草稿，用户创建但未生成
-	PosterStatusGenerating PosterStatus = "generating" // 正在生成
-	PosterStatusGenerated  PosterStatus = "generated"  // 生成完成
-	PosterStatusPublished  PosterStatus = "published"  // 已发布
-	PosterStatusFailed     PosterStatus = "failed"     // 生成失败
-)
-
-// PosterVisualConcept 海报视觉概念
-type PosterVisualConcept struct {
-	VisualSubject      string `json:"visualSubject"`      // 视觉主体描述（角色+动作）
-	SceneEnvironment   string `json:"sceneEnvironment"`   // 场景环境（背景+天气+道具）
-	CompositionCamera  string `json:"compositionCamera"`  // 构图与摄像角度
-	LightingAtmosphere string `json:"lightingAtmosphere"` // 光照与氛围
-	ArtStyle           string `json:"artStyle"`           // 艺术风格
-}
-
-// PosterTypography 海报排版指令
-type PosterTypography struct {
-	TitleContent    string `json:"titleContent"`    // 标题文字内容（大写）
-	TitleStyle      string `json:"titleStyle"`      // 标题样式（字体+材质+颜色）
-	TitlePosition   string `json:"titlePosition"`   // 标题位置
-	SubtitleContent string `json:"subtitleContent"` // 副标题内容
-	SubtitleStyle   string `json:"subtitleStyle"`   // 副标题样式
-}
-
-// PosterConceptDetails 结构化的海报概念详情
-type PosterConceptDetails struct {
-	VisualConcept *PosterVisualConcept `json:"posterConcept"`         // 视觉概念
-	Typography    *PosterTypography    `json:"typographyInstruction"` // 排版指令
-}
-
-// CharacterPoster 角色海报
-type CharacterPoster struct {
-	// Base model fields
-	common.BaseModel
-
-	CharacterID string       `json:"characterId"`
-	UserID      string       `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
-	Type        string       `json:"type"`     // image, video
-	Title       string       `json:"title"`
-	Image       string       `json:"image"`               // Poster image URL (for image type)
-	Video       string       `json:"video,omitempty"`     // Video URL (for video type)
-	Thumbnail   string       `json:"thumbnail,omitempty"` // Video thumbnail URL
-	Duration    int          `json:"duration,omitempty"`  // Video duration in seconds
-	Prompt      string       `json:"prompt,omitempty"`    // User's original prompt/description
-	Status      PosterStatus `json:"status"`              // draft, generating, generated, published, failed
-
-	// AI Generation fields
-	ReferenceStoryEnabled bool                  `json:"referenceStoryEnabled,omitempty"` // Whether to reference recent story plots
-	PosterConceptJSON     string                `json:"-"`                               // LLM generated poster concept JSON (internal storage)
-	PosterConcept         *PosterConceptDetails `json:"posterConcept,omitempty"`         // Structured poster concept for client editing
-	FinalImagePrompt      string                `json:"finalImagePrompt,omitempty"`      // Final assembled prompt for image generation
-	ErrorMessage          string                `json:"errorMessage,omitempty"`          // Error message if generation failed
-
-	// AI Generation Record IDs (for tracking both AI steps)
-	ConceptGenerationID string `json:"conceptGenerationId,omitempty"` // AI record for concept generation (Step 1)
-	ImageGenerationID   string `json:"imageGenerationId,omitempty"`   // AI record for image generation (Step 2)
-
-	// Engagement stats fields
-	common.EngagementStats
-
-	// Relations
-	Character *Character `json:"character,omitempty"`
-	Author    *User      `json:"author,omitempty"`
-}
-
-// GetLikesCount returns the like count (alias for API compatibility)
-func (cp *CharacterPoster) GetLikesCount() int {
-	return cp.Likes
-}
+// REMOVED: CharacterPoster, PosterStatus, PosterVisualConcept, PosterTypography, PosterConceptDetails, PosterCreationPermissionType - not in StoryCreationAppUI design
 
 // CharacterAnalytics 角色分析数据
 type CharacterAnalytics struct {
@@ -166,13 +90,7 @@ type CharacterAnalytics struct {
 	Character *Character `json:"character,omitempty"`
 }
 
-// PosterCreationPermissionType 海报创建权限类型
-type PosterCreationPermissionType string
-
-const (
-	PosterCreationPermissionCreatorOnly PosterCreationPermissionType = "creator_only"
-	PosterCreationPermissionAnyone      PosterCreationPermissionType = "anyone"
-)
+// REMOVED: PosterCreationPermissionType - not in StoryCreationAppUI design
 
 // CharacterViewType 角色视图类型
 type CharacterViewType string

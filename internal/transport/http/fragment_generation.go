@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -9,6 +10,11 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
 )
+
+// parseIntParam safely parses a string to int
+func parseIntParam(s string) (int, error) {
+	return strconv.Atoi(s)
+}
 
 type FragmentGenerationHandler struct {
 	fragmentGenService *service.FragmentGenerationService
@@ -89,13 +95,33 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 		return
 	}
 
-	// 从 service 获取任务状态（需要添加到 service）
-	// task, err := h.fragmentGenService.GetTask(c.Request.Context(), taskID)
+	task, err := h.fragmentGenService.GetTask(c.Request.Context(), taskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Get generation status - TODO: implement service method",
-		"taskId":  taskID,
-	})
+	response := gin.H{
+		"taskId":      task.ID,
+		"status":      task.Status,
+		"progress":    task.Progress,
+		"currentStep": task.CurrentStep,
+		"createdAt":   task.CreatedAt,
+	}
+
+	if task.Result != nil {
+		response["result"] = gin.H{
+			"content":    task.Result.Content,
+			"imageUrls":  task.Result.ImageUrls,
+			"tokensUsed": task.Result.TokensUsed,
+		}
+	}
+
+	if task.ErrorMessage != "" {
+		response["error"] = task.ErrorMessage
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ListGenerationTasks handles GET /fragments/generate
@@ -106,30 +132,82 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 		return
 	}
 
-	page := c.DefaultQuery("page", "1")
-	limit := c.DefaultQuery("limit", "20")
+	page := 1
+	limit := 20
+	if p := c.Query("page"); p != "" {
+		if parsed, err := parseIntParam(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseIntParam(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
 
-	// TODO: 调用 service 获取任务列表
+	tasks, total, err := h.fragmentGenService.ListTasks(c.Request.Context(), userID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tasks"})
+		return
+	}
+
+	// Convert tasks to response format
+	taskResponses := make([]gin.H, len(tasks))
+	for i, task := range tasks {
+		taskResponses[i] = gin.H{
+			"taskId":      task.ID,
+			"status":      task.Status,
+			"progress":    task.Progress,
+			"currentStep": task.CurrentStep,
+			"createdAt":   task.CreatedAt,
+		}
+		if task.Result != nil {
+			taskResponses[i]["result"] = gin.H{
+				"content":    task.Result.Content,
+				"imageUrls":  task.Result.ImageUrls,
+				"tokensUsed": task.Result.TokensUsed,
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "List generation tasks - TODO: implement",
-		"userId":  userID,
-		"page":    page,
-		"limit":   limit,
+		"tasks":  taskResponses,
+		"total":  total,
+		"page":   page,
+		"limit":  limit,
 	})
 }
 
 // CancelGeneration handles DELETE /fragments/generate/:taskId
 func (h *FragmentGenerationHandler) CancelGeneration(c *gin.Context) {
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	taskID := c.Param("taskId")
 	if taskID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "task id is required"})
 		return
 	}
 
-	// TODO: 调用 service 取消任务
+	if err := h.fragmentGenService.CancelTask(c.Request.Context(), taskID, userID); err != nil {
+		if err.Error() == "unauthorized: task does not belong to user" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized"})
+			return
+		}
+		if err.Error() == "task not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Cancel generation - TODO: implement",
-		"taskId":  taskID,
+		"taskId": taskID,
+		"status": "cancelled",
 	})
 }
 

@@ -575,37 +575,149 @@ func (s *Service) GetUserCharacters(ctx context.Context, userID string, limit, o
 	return characters, nil
 }
 
-// GetLikedStories 获取用户点赞的故事 (V2 social feature - TODO: implement)
+// GetLikedStories 获取用户点赞的故事 (V2 social feature)
 func (s *Service) GetLikedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
-	// V1 MVP: Return empty list for now
-	// V2: Will implement using interaction repository
-	return []*domain.Story{}, nil
-}
+	s.logger.Debug("getting liked stories",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
 
-// GetLikedCharacters 获取用户点赞（关注）的角色 (V2 social feature - TODO: implement)
-func (s *Service) GetLikedCharacters(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
-	// V1 MVP: Return empty list for now
-	// V2: Will implement using interaction repository
-	return []*domain.Character{}, nil
-}
-
-// GetLikedStoryboards 获取用户点赞的故事板 (V2 social feature - TODO: implement)
-func (s *Service) GetLikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
-	// V1 MVP: Return empty list for now
-	// V2: Will implement using interaction repository
-	return []*domain.Storyboard{}, nil
-}
-
-// GetDraftStoryboards 获取用户的草稿故事板（未发布的）
-func (s *Service) GetDraftStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.DraftStoryboardsByCreator(ctx, userID, limit, offset)
+
+	// Get story IDs that the user has liked from interaction repository
+	storyIDs, err := s.repo.GetLikedStoryIDs(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get liked story IDs",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	if len(storyIDs) == 0 {
+		return []*domain.Story{}, nil
+	}
+
+	// Fetch the actual stories
+	stories := make([]*domain.Story, 0, len(storyIDs))
+	for _, storyID := range storyIDs {
+		story, err := s.repo.StoryByID(ctx, storyID)
+		if err != nil {
+			s.logger.Warn("failed to get liked story",
+				zap.String("storyID", storyID),
+				zap.Error(err))
+			continue
+		}
+		stories = append(stories, story)
+	}
+
+	s.logger.Debug("got liked stories",
+		zap.String("userID", userID),
+		zap.Int("count", len(stories)))
+
+	return stories, nil
 }
+
+// GetLikedCharacters 获取用户点赞（关注）的角色 (V2 social feature)
+func (s *Service) GetLikedCharacters(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
+	s.logger.Debug("getting liked characters",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Get character IDs that the user has liked from interaction repository
+	characterIDs, err := s.repo.GetLikedCharacterIDs(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get liked character IDs",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	if len(characterIDs) == 0 {
+		return []*domain.Character{}, nil
+	}
+
+	// Fetch the actual characters
+	characters := make([]*domain.Character, 0, len(characterIDs))
+	for _, characterID := range characterIDs {
+		character, err := s.repo.CharacterByID(ctx, characterID)
+		if err != nil {
+			s.logger.Warn("failed to get liked character",
+				zap.String("characterID", characterID),
+				zap.Error(err))
+			continue
+		}
+		characters = append(characters, character)
+	}
+
+	s.logger.Debug("got liked characters",
+		zap.String("userID", userID),
+		zap.Int("count", len(characters)))
+
+	return characters, nil
+}
+
+// GetLikedStoryboards 获取用户点赞的故事板 (V2 social feature)
+func (s *Service) GetLikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
+	s.logger.Debug("getting liked storyboards",
+		zap.String("userID", userID),
+		zap.Int("limit", limit),
+		zap.Int("offset", offset))
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Get storyboard IDs that the user has liked from interaction repository
+	storyboardIDs, err := s.repo.GetLikedStoryboardIDs(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get liked storyboard IDs",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	if len(storyboardIDs) == 0 {
+		return []*domain.Storyboard{}, nil
+	}
+
+	// Fetch the actual storyboards
+	storyboards := make([]*domain.Storyboard, 0, len(storyboardIDs))
+	for _, storyboardID := range storyboardIDs {
+		storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+		if err != nil {
+			s.logger.Warn("failed to get liked storyboard",
+				zap.String("storyboardID", storyboardID),
+				zap.Error(err))
+			continue
+		}
+		storyboards = append(storyboards, storyboard)
+	}
+
+	s.logger.Debug("got liked storyboards",
+		zap.String("userID", userID),
+		zap.Int("count", len(storyboards)))
+
+	return storyboards, nil
+}
+
+// REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
+// REMOVED: GetUserDrafts - not in StoryCreationAppUI design
 
 // GetUserStoryboards 获取用户的故事板列表（已发布的）
 func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
@@ -664,30 +776,88 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, 
 	return storyboards, nil
 }
 
-// GetUserDrafts 获取用户的草稿列表（包括草稿故事板）
-func (s *Service) GetUserDrafts(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
-	s.logger.Debug("getting user drafts",
-		zap.String("userID", userID),
-		zap.Int("limit", limit),
-		zap.Int("offset", offset))
+// REMOVED: GetUserDrafts - not in StoryCreationAppUI design
+// REMOVED: GetUserActivityList - not in StoryCreationAppUI design
+// REMOVED: GetUserActivitiesWithFilter - not in StoryCreationAppUI design
+// REMOVED: CreateUserActivity - not in StoryCreationAppUI design
+// REMOVED: RecordStoryCreated, RecordStoryPublished, RecordCharacterCreated, RecordUserFollowed, RecordStoryboardCreated - not in StoryCreationAppUI design
 
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
+// BlockUser blocks a user
+func (s *Service) BlockUser(ctx context.Context, blockerID, blockedID string) error {
+	s.logger.Info("blocking user",
+		zap.String("blockerID", blockerID),
+		zap.String("blockedID", blockedID))
+
+	if blockerID == blockedID {
+		return fmt.Errorf("cannot block yourself")
 	}
 
-	// 直接返回草稿故事板
-	drafts, err := s.repo.DraftStoryboardsByCreator(ctx, userID, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get user drafts",
-			zap.String("userID", userID),
+	if err := s.repo.BlockUser(ctx, blockerID, blockedID); err != nil {
+		s.logger.Error("failed to block user",
+			zap.String("blockerID", blockerID),
+			zap.String("blockedID", blockedID),
 			zap.Error(err))
-		return nil, err
+		return fmt.Errorf("failed to block user: %w", err)
 	}
 
-	return drafts, nil
+	// Also unfollow if following
+	_ = s.repo.UnfollowUser(ctx, blockerID, blockedID)
+	_ = s.repo.UnfollowUser(ctx, blockedID, blockerID)
+
+	s.logger.Info("user blocked successfully",
+		zap.String("blockerID", blockerID),
+		zap.String("blockedID", blockedID))
+	return nil
+}
+
+// UnblockUser unblocks a user
+func (s *Service) UnblockUser(ctx context.Context, blockerID, blockedID string) error {
+	s.logger.Info("unblocking user",
+		zap.String("blockerID", blockerID),
+		zap.String("blockedID", blockedID))
+
+	if err := s.repo.UnblockUser(ctx, blockerID, blockedID); err != nil {
+		s.logger.Error("failed to unblock user",
+			zap.String("blockerID", blockerID),
+			zap.String("blockedID", blockedID),
+			zap.Error(err))
+		return fmt.Errorf("failed to unblock user: %w", err)
+	}
+
+	s.logger.Info("user unblocked successfully",
+		zap.String("blockerID", blockerID),
+		zap.String("blockedID", blockedID))
+	return nil
+}
+
+// IsBlocked checks if a user is blocked
+func (s *Service) IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error) {
+	return s.repo.IsBlocked(ctx, blockerID, blockedID)
+}
+
+// ReportUser reports a user for inappropriate behavior
+func (s *Service) ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error {
+	s.logger.Info("reporting user",
+		zap.String("reporterID", reporterID),
+		zap.String("reportedID", reportedID),
+		zap.String("reason", reason))
+
+	if reporterID == reportedID {
+		return fmt.Errorf("cannot report yourself")
+	}
+
+	if err := s.repo.ReportUser(ctx, reporterID, reportedID, reason); err != nil {
+		s.logger.Error("failed to report user",
+			zap.String("reporterID", reporterID),
+			zap.String("reportedID", reportedID),
+			zap.Error(err))
+		return fmt.Errorf("failed to report user: %w", err)
+	}
+
+	s.logger.Info("user reported successfully",
+		zap.String("reporterID", reporterID),
+		zap.String("reportedID", reportedID))
+	return nil
 }
 
 // UpdateProfileRequest 更新资料请求
@@ -699,135 +869,4 @@ type UpdateProfileRequest struct {
 	Location            *string `json:"location"`
 	Website             *string `json:"website"`
 	AIPromptPreferences *string `json:"aiPromptPreferences"`
-}
-
-// GetUserActivityList 获取用户活动列表
-func (s *Service) GetUserActivityList(ctx context.Context, userID string, limit, offset int) ([]*domain.UserActivity, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	return s.repo.UserActivitiesByUserID(ctx, userID, limit, offset)
-}
-
-// CreateUserActivity 创建用户活动记录（带缓存失效）
-func (s *Service) CreateUserActivity(ctx context.Context, activity *domain.UserActivity) error {
-	if err := s.repo.CreateUserActivity(ctx, activity); err != nil {
-		s.logger.Error("failed to create user activity",
-			zap.String("userID", activity.UserID),
-			zap.Error(err))
-		return fmt.Errorf("failed to create user activity: %w", err)
-	}
-
-	// 使用户活动列表缓存失效
-	c := s.getCache()
-	if c != nil {
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.UserActivitiesKey(activity.UserID, limit, offset))
-			}
-		}
-		s.logger.Debug("user activities cache invalidated",
-			zap.String("userID", activity.UserID))
-	}
-
-	return nil
-}
-
-// RecordStoryCreated 记录故事创建活动
-func (s *Service) RecordStoryCreated(ctx context.Context, userID, storyID, storyTitle string) {
-	activity := &domain.UserActivity{
-		UserID:      userID,
-		Type:        "story_created",
-		TargetID:    storyID,
-		TargetType:  "story",
-		TargetTitle: storyTitle,
-		Message:     "created story",
-	}
-	_ = s.CreateUserActivity(ctx, activity)
-}
-
-// RecordStoryPublished 记录故事发布活动
-func (s *Service) RecordStoryPublished(ctx context.Context, userID, storyID, storyTitle string) {
-	activity := &domain.UserActivity{
-		UserID:      userID,
-		Type:        "story_published",
-		TargetID:    storyID,
-		TargetType:  "story",
-		TargetTitle: storyTitle,
-		Message:     "published",
-	}
-	_ = s.CreateUserActivity(ctx, activity)
-}
-
-// RecordCharacterCreated 记录角色创建活动
-func (s *Service) RecordCharacterCreated(ctx context.Context, userID, characterID, characterName string) {
-	activity := &domain.UserActivity{
-		UserID:      userID,
-		Type:        "character_created",
-		TargetID:    characterID,
-		TargetType:  "character",
-		TargetTitle: characterName,
-		Message:     "created character",
-	}
-	_ = s.CreateUserActivity(ctx, activity)
-}
-
-// RecordUserFollowed 记录用户关注活动
-func (s *Service) RecordUserFollowed(ctx context.Context, followerID, followeeID, followeeName string) {
-	activity := &domain.UserActivity{
-		UserID:      followerID,
-		Type:        "user_followed",
-		TargetID:    followeeID,
-		TargetType:  "user",
-		TargetTitle: followeeName,
-		Message:     "followed",
-	}
-	_ = s.CreateUserActivity(ctx, activity)
-}
-
-// RecordStoryboardCreated 记录故事板创建活动
-func (s *Service) RecordStoryboardCreated(ctx context.Context, userID, storyboardID, storyboardTitle string) {
-	activity := &domain.UserActivity{
-		UserID:      userID,
-		Type:        "storyboard_created",
-		TargetID:    storyboardID,
-		TargetType:  "storyboard",
-		TargetTitle: storyboardTitle,
-		Message:     "created storyboard",
-	}
-	_ = s.CreateUserActivity(ctx, activity)
-}
-
-// ========== User Activities ==========
-
-// GetUserActivitiesWithFilter 获取用户活动列表（简化版本，移除ActivityHeatmap功能）
-func (s *Service) GetUserActivitiesWithFilter(ctx context.Context, userID string, timeRange domain.ActivityTimeRange, date string, limit, offset int) ([]*domain.UserActivity, int, error) {
-	s.logger.Info("fetching user activities",
-		zap.String("userID", userID),
-		zap.Int("limit", limit))
-
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	// Fetch activities without time range filter
-	activities, err := s.repo.UserActivitiesByUserID(ctx, userID, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to fetch user activities",
-			zap.String("userID", userID),
-			zap.Error(err))
-		return nil, 0, err
-	}
-
-	s.logger.Info("successfully fetched user activities",
-		zap.String("userID", userID),
-		zap.Int("count", len(activities)))
-
-	return activities, len(activities), nil
 }

@@ -207,6 +207,14 @@ func (r *FragmentRepository) IncrementComments(ctx context.Context, id string) e
 		Error
 }
 
+// IncrementViews increments the view count for a fragment
+func (r *FragmentRepository) IncrementViews(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Model(&domain.Fragment{}).
+		Where("id = ?", id).
+		UpdateColumn("views", gorm.Expr("views + 1")).
+		Error
+}
+
 // CreateLike creates a like record
 func (r *FragmentRepository) CreateLike(ctx context.Context, like *domain.FragmentLike) error {
 	return r.db.WithContext(ctx).Create(like).Error

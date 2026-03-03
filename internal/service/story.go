@@ -16,6 +16,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 )
 
@@ -435,11 +436,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		}
 	}
 
-	// 记录用户活动
-	s.logger.Debug("recording user activity for story creation",
-		zap.String("userID", userID),
-		zap.String("storyID", story.ID))
-	go s.RecordStoryCreated(context.Background(), userID, story.ID, story.Title)
+	// REMOVED: RecordStoryCreated - not in StoryCreationAppUI design
 
 	return story, nil
 }
@@ -1374,6 +1371,25 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 		zap.String("taskID", task.ID),
 		zap.Int("count", len(storyboards)))
 
+	// 获取故事以获取其风格设置
+	story, err := s.repo.StoryByID(ctx, task.StoryID)
+	if err != nil {
+		s.logger.Warn("failed to get story for style, using default style",
+			zap.String("taskID", task.ID),
+			zap.String("storyID", task.StoryID),
+			zap.Error(err))
+		// Continue without story style
+	}
+
+	// 提取故事风格
+	var storyStyle string
+	if story != nil && story.Style != nil {
+		storyStyle = story.Style.Style
+		s.logger.Debug("using story style for generation",
+			zap.String("taskID", task.ID),
+			zap.String("style", storyStyle))
+	}
+
 	// 解析渲染配置
 	var config domain.RenderConfig
 	if task.Config != "" {
@@ -1396,21 +1412,22 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 	s.logger.Info("starting render process",
 		zap.String("taskID", task.ID),
 		zap.String("type", string(task.Type)),
-		zap.Int("storyboardCount", len(storyboards)))
+		zap.Int("storyboardCount", len(storyboards)),
+		zap.String("style", storyStyle))
 	var renderErr error
 	switch task.Type {
 	case domain.RenderTaskTypeVideo:
 		s.logger.Debug("rendering video content",
 			zap.String("taskID", task.ID))
-		renderErr = s.renderVideoContent(ctx, task, storyboards, &config)
+		renderErr = s.renderVideoContent(ctx, task, storyboards, &config, storyStyle)
 	case domain.RenderTaskTypeImageSet:
 		s.logger.Debug("rendering image set content",
 			zap.String("taskID", task.ID))
-		renderErr = s.renderImageSetContent(ctx, task, storyboards, &config)
+		renderErr = s.renderImageSetContent(ctx, task, storyboards, &config, storyStyle)
 	case domain.RenderTaskTypeAnimation:
 		s.logger.Debug("rendering animation content",
 			zap.String("taskID", task.ID))
-		renderErr = s.renderAnimationContent(ctx, task, storyboards, &config)
+		renderErr = s.renderAnimationContent(ctx, task, storyboards, &config, storyStyle)
 	default:
 		s.logger.Error("unknown render type",
 			zap.String("taskID", task.ID),
@@ -1488,12 +1505,13 @@ func (s *Service) processMediaRenderTask(ctx context.Context, task *domain.Rende
 }
 
 // renderVideoContent 渲染视频内容
-func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig, style string) error {
 	s.logger.Info("rendering video content",
 		zap.String("taskID", task.ID),
 		zap.Int("storyboardCount", len(storyboards)),
 		zap.String("resolution", config.Resolution),
-		zap.String("quality", config.Quality))
+		zap.String("quality", config.Quality),
+		zap.String("style", style))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1528,8 +1546,35 @@ func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTas
 				zap.Int("totalSteps", totalSteps))
 		}
 
-		// TODO: 实际的视频生成逻辑
-		time.Sleep(500 * time.Millisecond)
+		// Generate video for this storyboard using AI service
+		storyboard := storyboards[i]
+		// Process each scene in the storyboard
+		for sceneIdx := range storyboard.StoryboardScenes {
+			scene := &storyboard.StoryboardScenes[sceneIdx]
+			if scene.Image != "" {
+				// Use the scene image as a reference for video generation
+				videoURL, err := s.generateVideoFromImage(ctx, task.UserID, scene.Image, config, style)
+				if err != nil {
+					s.logger.Warn("failed to generate video for storyboard scene",
+						zap.String("taskID", task.ID),
+						zap.String("storyboardID", storyboard.ID),
+						zap.Int("sceneIndex", sceneIdx),
+						zap.Error(err))
+					// Continue with other scenes even if one fails
+					continue
+				}
+				// Update scene with video URL
+				if videoURL != "" {
+					scene.VideoUrl = videoURL
+				}
+			}
+		}
+		// Save the updated storyboard
+		if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+			s.logger.Warn("failed to update storyboard with video URLs",
+				zap.String("storyboardID", storyboard.ID),
+				zap.Error(err))
+		}
 	}
 
 	s.logger.Debug("finalizing video render",
@@ -1546,11 +1591,12 @@ func (s *Service) renderVideoContent(ctx context.Context, task *domain.RenderTas
 }
 
 // renderImageSetContent 渲染图片集内容
-func (s *Service) renderImageSetContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+func (s *Service) renderImageSetContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig, style string) error {
 	s.logger.Info("rendering image set content",
 		zap.String("taskID", task.ID),
 		zap.Int("storyboardCount", len(storyboards)),
-		zap.String("quality", config.Quality))
+		zap.String("quality", config.Quality),
+		zap.String("style", style))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1585,8 +1631,35 @@ func (s *Service) renderImageSetContent(ctx context.Context, task *domain.Render
 				zap.Int("totalSteps", totalSteps))
 		}
 
-		// TODO: 实际的图片集生成逻辑
-		time.Sleep(300 * time.Millisecond)
+		// Generate enhanced image for this storyboard using AI service
+		storyboard := storyboards[i]
+		// Process each scene in the storyboard
+		for sceneIdx := range storyboard.StoryboardScenes {
+			scene := &storyboard.StoryboardScenes[sceneIdx]
+			if scene.Description != "" {
+				// Generate high-quality image based on scene description
+				imageURL, err := s.generateEnhancedImage(ctx, task.UserID, scene.Description, config, style)
+				if err != nil {
+					s.logger.Warn("failed to generate enhanced image for storyboard scene",
+						zap.String("taskID", task.ID),
+						zap.String("storyboardID", storyboard.ID),
+						zap.Int("sceneIndex", sceneIdx),
+						zap.Error(err))
+					// Continue with other scenes even if one fails
+					continue
+				}
+				// Update scene with enhanced image URL
+				if imageURL != "" {
+					scene.Image = imageURL
+				}
+			}
+		}
+		// Save the updated storyboard
+		if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+			s.logger.Warn("failed to update storyboard with enhanced images",
+				zap.String("storyboardID", storyboard.ID),
+				zap.Error(err))
+		}
 	}
 
 	s.logger.Debug("finalizing image set render",
@@ -1603,11 +1676,12 @@ func (s *Service) renderImageSetContent(ctx context.Context, task *domain.Render
 }
 
 // renderAnimationContent 渲染动画内容
-func (s *Service) renderAnimationContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig) error {
+func (s *Service) renderAnimationContent(ctx context.Context, task *domain.RenderTask, storyboards []*domain.Storyboard, config *domain.RenderConfig, style string) error {
 	s.logger.Info("rendering animation content",
 		zap.String("taskID", task.ID),
 		zap.Int("storyboardCount", len(storyboards)),
-		zap.String("quality", config.Quality))
+		zap.String("quality", config.Quality),
+		zap.String("style", style))
 	totalSteps := len(storyboards)
 	baseProgress := 20
 
@@ -1642,8 +1716,35 @@ func (s *Service) renderAnimationContent(ctx context.Context, task *domain.Rende
 				zap.Int("totalSteps", totalSteps))
 		}
 
-		// TODO: 实际的动画生成逻辑
-		time.Sleep(400 * time.Millisecond)
+		// Generate animation for this storyboard using AI service
+		storyboard := storyboards[i]
+		// Process each scene in the storyboard
+		for sceneIdx := range storyboard.StoryboardScenes {
+			scene := &storyboard.StoryboardScenes[sceneIdx]
+			if scene.Image != "" {
+				// Generate animation from the scene image
+				animationURL, err := s.generateAnimationFromImage(ctx, task.UserID, scene.Image, config, style)
+				if err != nil {
+					s.logger.Warn("failed to generate animation for storyboard scene",
+						zap.String("taskID", task.ID),
+						zap.String("storyboardID", storyboard.ID),
+						zap.Int("sceneIndex", sceneIdx),
+						zap.Error(err))
+					// Continue with other scenes even if one fails
+					continue
+				}
+				// Update scene with animation URL (stored in VideoUrl field for animations)
+				if animationURL != "" {
+					scene.VideoUrl = animationURL
+				}
+			}
+		}
+		// Save the updated storyboard
+		if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+			s.logger.Warn("failed to update storyboard with animation URLs",
+				zap.String("storyboardID", storyboard.ID),
+				zap.Error(err))
+		}
 	}
 
 	s.logger.Debug("finalizing animation render",
@@ -3046,8 +3147,7 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 			zap.String("storyID", story.ID))
 	}
 
-	// 9. 记录用户活动
-	go s.RecordStoryCreated(context.Background(), userID, story.ID, story.Title)
+	// REMOVED: RecordStoryCreated - not in StoryCreationAppUI design
 
 	s.logger.Info("fragment converted to story successfully",
 		zap.String("fragmentID", fragmentID),
@@ -3070,4 +3170,170 @@ func (s *Service) getFragmentByID(ctx context.Context, fragmentID string) (*doma
 // updateFragmentConvertedStatus 更新碎片的转换状态
 func (s *Service) updateFragmentConvertedStatus(ctx context.Context, fragment *domain.Fragment) error {
 	return s.repo.UpdateFragment(ctx, fragment)
+}
+
+// generateVideoFromImage generates a video from an image using AI service
+// This uses the GenAPI to call video generation providers (Hailuo, Huoshan)
+// style parameter: if empty, uses default style
+func (s *Service) generateVideoFromImage(ctx context.Context, userID string, imageURL string, config *domain.RenderConfig, style string) (string, error) {
+	s.logger.Debug("generating video from image",
+		zap.String("userID", userID),
+		zap.String("imageURL", imageURL),
+		zap.String("style", style))
+
+	// Check if GenAPI is available
+	if s.genAPI == nil {
+		s.logger.Warn("GenAPI not available for video generation")
+		return "", nil
+	}
+
+	// Build video generation request for image-to-video
+	genReq := &genapi.GenerateRequest{
+		Operation:         genapi.OperationImageToVideo,
+		ReferenceImageURL: imageURL,
+		DurationSeconds:   6, // Default 6 seconds
+		Style:             style,
+	}
+
+	// Use configured video provider or default
+	providerName := s.videoProvider
+	if providerName == "" {
+		providerName = "hailuo" // Default to Hailuo for video
+	}
+
+	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
+	if err != nil {
+		s.logger.Error("video generation failed",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return "", fmt.Errorf("video generation failed: %w", err)
+	}
+
+	if resp.Error != "" {
+		s.logger.Error("video generation returned error",
+			zap.String("userID", userID),
+			zap.String("error", resp.Error))
+		return "", fmt.Errorf("provider error: %s", resp.Error)
+	}
+
+	s.logger.Info("video generated successfully",
+		zap.String("userID", userID),
+		zap.String("videoURL", resp.VideoURL))
+
+	return resp.VideoURL, nil
+}
+
+// generateEnhancedImage generates an enhanced/high-quality image using AI service
+// This uses the GenAPI to call image generation providers (Gemini, Hailuo, Huoshan)
+// style parameter: if empty, uses default style
+func (s *Service) generateEnhancedImage(ctx context.Context, userID string, description string, config *domain.RenderConfig, style string) (string, error) {
+	s.logger.Debug("generating enhanced image",
+		zap.String("userID", userID),
+		zap.String("description", description),
+		zap.String("style", style))
+
+	// Check if GenAPI is available
+	if s.genAPI == nil {
+		s.logger.Warn("GenAPI not available for image generation")
+		return "", nil
+	}
+
+	// Build image generation request
+	genReq := &genapi.GenerateRequest{
+		Operation:   genapi.OperationTextToImage,
+		Prompt:      description,
+		Size:        "1024x1024",
+		Quality:     "high",
+		OutputCount: 1,
+		Style:       style,
+	}
+
+	// Use configured image provider or default
+	providerName := s.imageProvider
+	if providerName == "" {
+		providerName = "huoshan" // Default to Huoshan for image
+	}
+
+	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
+	if err != nil {
+		s.logger.Error("image generation failed",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return "", fmt.Errorf("image generation failed: %w", err)
+	}
+
+	if resp.Error != "" {
+		s.logger.Error("image generation returned error",
+			zap.String("userID", userID),
+			zap.String("error", resp.Error))
+		return "", fmt.Errorf("provider error: %s", resp.Error)
+	}
+
+	if len(resp.ImageURLs) == 0 {
+		return "", fmt.Errorf("no images generated")
+	}
+
+	s.logger.Info("enhanced image generated successfully",
+		zap.String("userID", userID),
+		zap.String("imageURL", resp.ImageURLs[0]))
+
+	return resp.ImageURLs[0], nil
+}
+
+// generateAnimationFromImage generates an animation from an image using AI service
+// This uses video generation providers with animation-specific settings
+// style parameter: if empty, uses "animation" as default style
+func (s *Service) generateAnimationFromImage(ctx context.Context, userID string, imageURL string, config *domain.RenderConfig, style string) (string, error) {
+	s.logger.Debug("generating animation from image",
+		zap.String("userID", userID),
+		zap.String("imageURL", imageURL),
+		zap.String("style", style))
+
+	// Animation generation is essentially image-to-video with animation style
+	// We reuse the video generation with animation-specific parameters
+	if s.genAPI == nil {
+		s.logger.Warn("GenAPI not available for animation generation")
+		return "", nil
+	}
+
+	// Use provided style or default to "animation"
+	animationStyle := style
+	if animationStyle == "" {
+		animationStyle = "animation"
+	}
+
+	// Build animation generation request
+	genReq := &genapi.GenerateRequest{
+		Operation:         genapi.OperationImageToVideo,
+		ReferenceImageURL: imageURL,
+		DurationSeconds:   4,              // Shorter duration for animations
+		Style:             animationStyle, // Animation style
+	}
+
+	// Use configured video provider or default to Hailuo (best for creative video)
+	providerName := s.videoProvider
+	if providerName == "" {
+		providerName = "hailuo"
+	}
+
+	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
+	if err != nil {
+		s.logger.Error("animation generation failed",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return "", fmt.Errorf("animation generation failed: %w", err)
+	}
+
+	if resp.Error != "" {
+		s.logger.Error("animation generation returned error",
+			zap.String("userID", userID),
+			zap.String("error", resp.Error))
+		return "", fmt.Errorf("provider error: %s", resp.Error)
+	}
+
+	s.logger.Info("animation generated successfully",
+		zap.String("userID", userID),
+		zap.String("videoURL", resp.VideoURL))
+
+	return resp.VideoURL, nil
 }

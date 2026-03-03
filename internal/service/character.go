@@ -164,17 +164,6 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		portraitStatus = "pending"
 	}
 
-	// 确定海报创建权限
-	posterPerm := req.PosterCreationPermission
-	if posterPerm == "" {
-		// 默认值：如果是公开角色则为 anyone，否则为 creator_only
-		if req.IsPublic {
-			posterPerm = "anyone"
-		} else {
-			posterPerm = "creator_only"
-		}
-	}
-
 	// 创建角色
 	now := time.Now().Unix()
 	character := &domain.Character{
@@ -212,9 +201,8 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		Likes:                    0,
 		Comments:                 0,
 		Shares:                   0,
-		Followers:                0,
-		Stories:                  0,
-		PosterCreationPermission: posterPerm,
+		Followers: 0,
+		Stories:   0,
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
@@ -275,8 +263,7 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		}
 	}
 
-	// 记录用户活动
-	go s.RecordCharacterCreated(context.Background(), userID, character.ID, character.Name)
+	// REMOVED: RecordCharacterCreated - not in StoryCreationAppUI design
 
 	return character, nil
 }

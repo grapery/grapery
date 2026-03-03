@@ -1770,120 +1770,7 @@ func ModelToReport(m *Report) *domain.Report {
 	}
 }
 
-// ========== UserActivity 转换 ==========
-
-// UserActivityToModel 将 domain.UserActivity 转换为 MySQL UserActivity 模型
-func UserActivityToModel(d *domain.UserActivity) *UserActivity {
-	if d == nil {
-		return nil
-	}
-	return &UserActivity{
-		ID:          d.ID,
-		UserID:      d.UserID,
-		Type:        d.Type,
-		TargetID:    d.TargetID,
-		TargetType:  d.TargetType,
-		TargetTitle: d.TargetTitle,
-		Message:     d.Message,
-		CreatedAt:   unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToUserActivity 将 MySQL UserActivity 模型转换为 domain.UserActivity
-func ModelToUserActivity(m *UserActivity) *domain.UserActivity {
-	if m == nil {
-		return nil
-	}
-	return &domain.UserActivity{
-		BaseModel: common.BaseModel{
-			ID:        m.ID,
-			CreatedAt: timeToUnix(m.CreatedAt),
-		},
-		UserID:      m.UserID,
-		Type:        m.Type,
-		TargetID:    m.TargetID,
-		TargetType:  m.TargetType,
-		TargetTitle: m.TargetTitle,
-		Message:     m.Message,
-	}
-}
-
-// ========== CharacterPoster 转换 ==========
-
-// CharacterPosterToModel 将 domain.CharacterPoster 转换为 MySQL CharacterPoster 模型
-func CharacterPosterToModel(d *domain.CharacterPoster) *CharacterPoster {
-	if d == nil {
-		return nil
-	}
-	// Serialize PosterConcept to JSON if present
-	posterConceptJSON := d.PosterConceptJSON
-	if posterConceptJSON == "" && d.PosterConcept != nil {
-		posterConceptJSON = posterConceptDetailsToJSON(d.PosterConcept)
-	}
-
-	return &CharacterPoster{
-		ID:                    d.ID,
-		CharacterID:           d.CharacterID,
-		UserID:                d.UserID,
-		Type:                  d.Type,
-		Title:                 d.Title,
-		Image:                 d.Image,
-		Video:                 d.Video,
-		Thumbnail:             d.Thumbnail,
-		Duration:              d.Duration,
-		Prompt:                d.Prompt,
-		Status:                string(d.Status),
-		ReferenceStoryEnabled: d.ReferenceStoryEnabled,
-		PosterConceptJSON:     posterConceptJSON,
-		FinalImagePrompt:      d.FinalImagePrompt,
-		ErrorMessage:          d.ErrorMessage,
-		ConceptGenerationID:   d.ConceptGenerationID,
-		ImageGenerationID:     d.ImageGenerationID,
-		Likes:                 d.Likes,
-		Shares:                d.Shares,
-		CreatedAt:             unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToCharacterPoster 将 MySQL CharacterPoster 模型转换为 domain.CharacterPoster
-func ModelToCharacterPoster(m *CharacterPoster) *domain.CharacterPoster {
-	if m == nil {
-		return nil
-	}
-	// Parse PosterConcept from JSON if present
-	var posterConcept *domain.PosterConceptDetails
-	if m.PosterConceptJSON != "" {
-		posterConcept = jsonToPosterConceptDetails(m.PosterConceptJSON)
-	}
-
-	return &domain.CharacterPoster{
-		BaseModel: common.BaseModel{
-			ID:        m.ID,
-			CreatedAt: timeToUnix(m.CreatedAt),
-		},
-		CharacterID:           m.CharacterID,
-		UserID:                m.UserID,
-		Type:                  m.Type,
-		Title:                 m.Title,
-		Image:                 m.Image,
-		Video:                 m.Video,
-		Thumbnail:             m.Thumbnail,
-		Duration:              m.Duration,
-		Prompt:                m.Prompt,
-		Status:                domain.PosterStatus(m.Status),
-		ReferenceStoryEnabled: m.ReferenceStoryEnabled,
-		PosterConceptJSON:     m.PosterConceptJSON,
-		PosterConcept:         posterConcept,
-		FinalImagePrompt:      m.FinalImagePrompt,
-		ErrorMessage:          m.ErrorMessage,
-		ConceptGenerationID:   m.ConceptGenerationID,
-		ImageGenerationID:     m.ImageGenerationID,
-		EngagementStats: common.EngagementStats{
-			Likes:  m.Likes,
-			Shares: m.Shares,
-		},
-	}
-}
+// REMOVED: CharacterPoster conversion functions - not in StoryCreationAppUI design
 
 // ========== CharacterAnalytics 转换 ==========
 
@@ -2001,14 +1888,7 @@ func ModelsToTags(models []Tag) []*domain.Tag {
 	return tags
 }
 
-// ModelsToUserActivities 批量转换 UserActivity
-func ModelsToUserActivities(models []UserActivity) []*domain.UserActivity {
-	activities := make([]*domain.UserActivity, len(models))
-	for i := range models {
-		activities[i] = ModelToUserActivity(&models[i])
-	}
-	return activities
-}
+// REMOVED: ModelsToUserActivities - not in StoryCreationAppUI design
 
 // ========== Agent 转换 ==========
 
@@ -2714,29 +2594,7 @@ func jsonToVideoPromptDetails(jsonStr string) *domain.VideoPromptDetails {
 	return &details
 }
 
-// posterConceptDetailsToJSON 将 PosterConceptDetails 转换为 JSON 字符串
-func posterConceptDetailsToJSON(details *domain.PosterConceptDetails) string {
-	if details == nil {
-		return ""
-	}
-	data, err := json.Marshal(details)
-	if err != nil {
-		return ""
-	}
-	return string(data)
-}
-
-// jsonToPosterConceptDetails 将 JSON 字符串转换为 PosterConceptDetails
-func jsonToPosterConceptDetails(jsonStr string) *domain.PosterConceptDetails {
-	if jsonStr == "" {
-		return nil
-	}
-	var details domain.PosterConceptDetails
-	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
-		return nil
-	}
-	return &details
-}
+// REMOVED: posterConceptDetailsToJSON, jsonToPosterConceptDetails - not in StoryCreationAppUI design
 
 // ========== Follow 转换 ==========
 

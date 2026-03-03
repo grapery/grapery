@@ -47,9 +47,11 @@ type Fragment struct {
 	common.EngagementStats
 
 	// MARK: - StoryCreationAppUI Alignment Fields
-	Saves   int    `json:"saves"`             // 收藏/保存数
-	Topic   string `json:"topic,omitempty"`   // 话题标签
-	Caption string `json:"caption,omitempty"` // 标题/简介文字
+	Saves      int    `json:"saves"`                // 收藏/保存数
+	Topic      string `json:"topic,omitempty"`      // 话题标签
+	Caption    string `json:"caption,omitempty"`    // 标题/简介文字
+	IsDraft    bool   `json:"isDraft" gorm:"column:is_draft;type:tinyint(1);default:0;index"`       // 是否为草稿 (StoryCreationAppUI alignment)
+	DraftCount int    `json:"draftCount" gorm:"column:draft_count;type:int;default:0"`             // 草稿数量 (StoryCreationAppUI alignment)
 
 	ConvertedToStoryID *string `json:"convertedToStoryId,omitempty" gorm:"column:converted_to_story_id;type:varchar(36);index"` // 转换为的故事ID
 	IsConverted        bool    `json:"isConverted" gorm:"column:is_converted;type:tinyint(1);default:0;index"`                  // 是否已转换为故事

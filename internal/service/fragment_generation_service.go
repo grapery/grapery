@@ -378,3 +378,55 @@ func stringifyArray(arr []string) string {
 func intPtr(i int) *int {
 	return &i
 }
+
+// GetTask retrieves a generation task by ID
+func (s *FragmentGenerationService) GetTask(ctx context.Context, taskID string) (*domain.FragmentGenerationTask, error) {
+	task, err := s.fragmentGenRepo.GetByID(ctx, taskID)
+	if err != nil {
+		s.logger.Error("Failed to get task", zap.Error(err), zap.String("task_id", taskID))
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+	return task, nil
+}
+
+// ListTasks retrieves a list of generation tasks for a user
+func (s *FragmentGenerationService) ListTasks(ctx context.Context, userID string, page, limit int) ([]*domain.FragmentGenerationTask, int64, error) {
+	offset := (page - 1) * limit
+	tasks, total, err := s.fragmentGenRepo.GetByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		s.logger.Error("Failed to list tasks",
+			zap.Error(err),
+			zap.String("user_id", userID),
+			zap.Int("page", page),
+			zap.Int("limit", limit))
+		return nil, 0, fmt.Errorf("failed to list tasks: %w", err)
+	}
+	return tasks, total, nil
+}
+
+// CancelTask cancels a pending or processing generation task
+func (s *FragmentGenerationService) CancelTask(ctx context.Context, taskID, userID string) error {
+	task, err := s.fragmentGenRepo.GetByID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to get task: %w", err)
+	}
+
+	// Verify ownership
+	if task.UserID != userID {
+		return fmt.Errorf("unauthorized: task does not belong to user")
+	}
+
+	// Only pending or processing tasks can be cancelled
+	if task.Status != "pending" && task.Status != "processing" {
+		return fmt.Errorf("task cannot be cancelled: current status is %s", task.Status)
+	}
+
+	// Update status to cancelled
+	if err := s.fragmentGenRepo.UpdateStatus(ctx, taskID, "cancelled", task.Progress, "cancelled by user"); err != nil {
+		s.logger.Error("Failed to cancel task", zap.Error(err), zap.String("task_id", taskID))
+		return fmt.Errorf("failed to cancel task: %w", err)
+	}
+
+	s.logger.Info("Task cancelled", zap.String("task_id", taskID), zap.String("user_id", userID))
+	return nil
+}

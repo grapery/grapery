@@ -29,9 +29,26 @@ type User struct {
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
+	Points              int            `gorm:"default:0;index"`      // StoryCreationAppUI - 未择积分
+	ReferralCode        string         `gorm:"uniqueIndex;size:20"`  // StoryCreationAppUI - 用户专属邀请码
 	CreatedAt           int64          `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt           int64          `gorm:"type:bigint;autoUpdateTime"`
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
+}
+
+// UserReferral 用户邀请记录 (StoryCreationAppUI Design)
+type UserReferral struct {
+	ID           string         `gorm:"primaryKey;size:36"`
+	ReferrerID   string         `gorm:"size:36;not null;index"`          // 邀请人用户ID
+	Referrer     User           `gorm:"foreignKey:ReferrerID"`
+	RefereeID    string         `gorm:"size:36;not null;uniqueIndex"`    // 被邀请人用户ID（唯一）
+	Referee      User           `gorm:"foreignKey:RefereeID"`
+	ReferralCode string         `gorm:"size:20;not null;index"`          // 使用的邀请码
+	PointsEarned int            `gorm:"default:0"`                       // 获得的积分
+	Status       string         `gorm:"size:20;default:'pending';index"` // pending, completed, rewarded
+	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
+	RewardedAt   *time.Time     `gorm:"index"`                           // 奖励发放时间
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 // UserLoginRecord 用户登录记录表
@@ -508,6 +525,31 @@ type CharacterFollow struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
+// UserBlock 用户屏蔽关系
+type UserBlock struct {
+	ID         string         `gorm:"primaryKey;size:36"`
+	BlockerID  string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique"`
+	Blocker    User           `gorm:"foreignKey:BlockerID"`
+	BlockedID  string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique;index"`
+	Blocked    User           `gorm:"foreignKey:BlockedID"`
+	CreatedAt  time.Time      `gorm:"autoCreateTime"`
+	DeletedAt  gorm.DeletedAt `gorm:"index"`
+}
+
+// UserReport 用户举报记录
+type UserReport struct {
+	ID         string         `gorm:"primaryKey;size:36"`
+	ReporterID string         `gorm:"size:36;not null;index:idx_reporter_reported"`
+	Reporter   User           `gorm:"foreignKey:ReporterID"`
+	ReportedID string         `gorm:"size:36;not null;index:idx_reporter_reported;index"`
+	Reported   User           `gorm:"foreignKey:ReportedID"`
+	Reason     string         `gorm:"size:500"`
+	Status     string         `gorm:"size:20;default:'pending'"` // pending, reviewed, resolved, dismissed
+	CreatedAt  time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt  time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt  gorm.DeletedAt `gorm:"index"`
+}
+
 // CommentLike 评论点赞
 type CommentLike struct {
 	ID        string         `gorm:"primaryKey;size:36"`
@@ -560,7 +602,7 @@ type Notification struct {
 	ID          string         `gorm:"primaryKey;size:36"`
 	UserID      string         `gorm:"size:36;not null;index"`
 	User        User           `gorm:"foreignKey:UserID"`
-	Type        string         `gorm:"size:50;not null;index"` // like, comment, follow, mention, system
+	Type        string         `gorm:"size:50;not null;index"` // like, comment, follow, story_update, system
 	Title       string         `gorm:"size:200;not null"`
 	Content     string         `gorm:"type:text"`
 	Link        string         `gorm:"size:500"`
@@ -568,6 +610,15 @@ type Notification struct {
 	ActorID     string         `gorm:"size:36;index"`
 	ActorName   string         `gorm:"size:100"`
 	ActorAvatar string         `gorm:"size:500"`
+	// Story context (for like, comment, story_update types)
+	StoryTitle  string `gorm:"size:200"`
+	StoryCover  string `gorm:"size:500"`
+	StoryID     string `gorm:"size:36;index"`
+	CommentText string `gorm:"type:text"` // 评论内容摘要
+	// System notification fields (for system type)
+	SysTitle string         `gorm:"size:200"`
+	SysBody  string         `gorm:"type:text"`
+	SysIcon  string         `gorm:"size:50"` // icon name: gift, star, trending, etc.
 	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
@@ -797,56 +848,11 @@ type Report struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
-// ========== 用户活动 ==========
-
-// UserActivity 用户活动记录
-type UserActivity struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	UserID      string         `gorm:"size:36;not null;index"`
-	User        User           `gorm:"foreignKey:UserID"`
-	Type        string         `gorm:"size:50;not null;index"` // story_created, story_updated, story_published, story_liked, character_created, character_updated, user_followed, storyboard_created, panel_added
-	TargetID    string         `gorm:"size:36;index"`
-	TargetType  string         `gorm:"size:20"` // story, character, user, storyboard
-	TargetTitle string         `gorm:"size:255"`
-	Message     string         `gorm:"size:500"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
-}
+// REMOVED: UserActivity - not in StoryCreationAppUI design
 
 // ========== 角色海报 ==========
 
-// CharacterPoster 角色海报
-type CharacterPoster struct {
-	ID          string    `gorm:"primaryKey;size:36"`
-	CharacterID string    `gorm:"size:36;not null;index"`
-	Character   Character `gorm:"foreignKey:CharacterID"`
-	UserID      string    `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
-	Author      User      `gorm:"foreignKey:UserID"`
-	Type        string    `gorm:"size:20;not null;default:'image';index"` // image, video
-	Title       string    `gorm:"size:200;not null"`
-	Image       string    `gorm:"size:1000"`                              // Poster image URL (for image type)
-	Video       string    `gorm:"size:1000"`                              // Video URL (for video type)
-	Thumbnail   string    `gorm:"size:1000"`                              // Video thumbnail URL
-	Duration    int       `gorm:"default:0"`                              // Video duration in seconds
-	Prompt      string    `gorm:"type:text"`                              // User's original prompt/description
-	Status      string    `gorm:"size:20;not null;default:'draft';index"` // draft, generating, generated, published, failed
-
-	// AI Generation fields
-	ReferenceStoryEnabled bool   `gorm:"default:false"` // Whether to reference recent story plots
-	PosterConceptJSON     string `gorm:"type:text"`     // LLM generated poster concept JSON
-	FinalImagePrompt      string `gorm:"type:text"`     // Final assembled prompt for image generation
-	ErrorMessage          string `gorm:"type:text"`     // Error message if generation failed
-	ConceptGenerationID   string `gorm:"size:36;index"` // AI record for concept generation (Step 1)
-	ImageGenerationID     string `gorm:"size:36;index"` // AI record for image generation (Step 2)
-
-	Likes     int            `gorm:"default:0;index"`
-	Comments  int            `gorm:"default:0"`
-	Shares    int            `gorm:"default:0"`
-	Views     int            `gorm:"default:0;index"`
-	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
-	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
+// REMOVED: CharacterPoster - not in StoryCreationAppUI design
 
 // ========== 角色分析 ==========
 

@@ -17,6 +17,12 @@ type StoryFilter struct {
 
 // Repository defines the data access interface
 type Repository interface {
+	// ========== Transaction support ==========
+	// WithTransaction executes a function within a database transaction
+	// If the function returns an error, the transaction is rolled back
+	// If the function returns nil, the transaction is committed
+	WithTransaction(ctx context.Context, fn func(tx Repository) error) error
+
 	// ========== User operations ==========
 	UserByID(ctx context.Context, id string) (*User, error)
 	UserByUsername(ctx context.Context, username string) (*User, error)
@@ -26,13 +32,7 @@ type Repository interface {
 	DeleteUser(ctx context.Context, id string) error
 	ListUsers(ctx context.Context, limit, offset int) ([]*User, error)
 
-	// ========== User Activity operations ==========
-	CreateUserActivity(ctx context.Context, activity *UserActivity) error
-	UserActivitiesByUserID(ctx context.Context, userID string, limit, offset int) ([]*UserActivity, error)
-	UserActivitiesByTimeRange(ctx context.Context, userID string, startTime, endTime int64, limit, offset int) ([]*UserActivity, error)
-	UserActivitiesByDate(ctx context.Context, userID string, date string, limit, offset int) ([]*UserActivity, error)
-	UserActivityHeatmap(ctx context.Context, userID string, startTime, endTime int64) ([]*ActivityHeatmapData, error)
-	DeleteUserActivity(ctx context.Context, id string) error
+	// REMOVED: User Activity operations - not in StoryCreationAppUI design
 
 	// ========== User Settings ==========
 	UserSettings(ctx context.Context, userID string) (*UserSettings, error)
@@ -53,17 +53,10 @@ type Repository interface {
 	StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*Story, error)
 	TrendingStories(ctx context.Context, limit int) ([]*Story, error)
 
-	// ========== Dashboard feeds ==========
-	// DashboardStoryboards returns storyboards from stories the user created OR follows.
-	DashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
-	// DashboardCharacterStoryboards returns storyboards that followed characters participate in.
-	DashboardCharacterStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
-	// TrendingStoryboards returns published storyboards from trending stories:
-	// - Stories the user contributed to
-	// - Stories with high likes
-	// - Stories with high storyboard count
-	// - Stories with high followers
-	TrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// ========== Public Trending ==========
+	// REMOVED: DashboardStoryboards - not in StoryCreationAppUI design
+	// REMOVED: DashboardCharacterStoryboards - not in StoryCreationAppUI design
+	// REMOVED: TrendingStoryboards (authenticated) - not in StoryCreationAppUI design
 	// GetPublicTrendingStoryboards returns published trending storyboards accessible to all users.
 	// If userID is empty (guest), returns globally trending storyboards.
 	// If userID is provided (authenticated), returns personalized trending storyboards.
@@ -137,6 +130,19 @@ type Repository interface {
 	IsFollowing(ctx context.Context, followerID, followeeID string) (bool, error)
 	Followers(ctx context.Context, userID string, limit, offset int) ([]*User, error)
 	Following(ctx context.Context, userID string, limit, offset int) ([]*User, error)
+
+	// Block/Unblock
+	BlockUser(ctx context.Context, blockerID, blockedID string) error
+	UnblockUser(ctx context.Context, blockerID, blockedID string) error
+	IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error)
+
+	// Report
+	ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error
+
+	// Get Liked Content IDs
+	GetLikedStoryIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
+	GetLikedCharacterIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
+	GetLikedStoryboardIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
 
 	// Like
 	LikeStory(ctx context.Context, userID, storyID string) error
@@ -410,6 +416,14 @@ type Repository interface {
 	DeleteInvitationCode(ctx context.Context, id string) error
 	UseInvitationCode(ctx context.Context, code string, userID string) error
 	ValidateInvitationCode(ctx context.Context, code string) error
+
+	// ========== Referral System operations (StoryCreationAppUI Design) ==========
+	GetUserByReferralCode(ctx context.Context, referralCode string) (*User, error)
+	CreateUserReferral(ctx context.Context, referral *UserReferral) error
+	GetUserReferralByReferee(ctx context.Context, refereeID string) (*UserReferral, error)
+	GetReferralsByUser(ctx context.Context, referrerID string, limit, offset int) ([]*UserReferral, error)
+	GetReferralStats(ctx context.Context, userID string) (*ReferralStats, error)
+	AddUserPoints(ctx context.Context, userID string, points int) error
 
 	// ========== Third Party Login operations ==========
 	// 第三方登录账户关联（支持 Google/Apple 跨设备登录）

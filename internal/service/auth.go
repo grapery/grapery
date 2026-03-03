@@ -432,61 +432,74 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		},
 	}
 
-	if err := s.repo.CreateUser(ctx, user); err != nil {
-		s.logger.Error("failed to create user", zap.Error(err))
-		return nil, errors.New("failed to create user account")
-	}
+	// 使用事务确保原子性：用户创建、邀请码使用、设置创建、会员创建
+	var settings *domain.UserSettings
+	var membership *domain.Membership
 
-	// 标记邀请码已使用（如果提供了邀请码）
-	if req.InvitationCode != "" {
-		if err := s.repo.UseInvitationCode(ctx, req.InvitationCode, user.ID); err != nil {
-			s.logger.Warn("failed to mark invitation code as used", zap.String("code", req.InvitationCode), zap.Error(err))
-			// 不阻塞注册流程，但记录警告
+	err = s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
+		// 创建用户
+		if err := tx.CreateUser(ctx, user); err != nil {
+			s.logger.Error("failed to create user", zap.Error(err))
+			return errors.New("failed to create user account")
 		}
-	}
 
-	// 创建默认用户设置
-	settings := &domain.UserSettings{
-		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
-			UpdatedAt: now,
-		},
-		UserID:             user.ID,
-		Language:           "en",
-		Theme:              "auto",
-		EmailNotifications: true,
-		PushNotifications:  true,
-		ShowAdultContent:   false,
-		ProfileVisibility:  "public",
-		AllowComments:      true,
-		AllowMessages:      true,
-		ShowOnlineStatus:   true,
-	}
+		// 标记邀请码已使用（如果提供了邀请码）
+		if req.InvitationCode != "" {
+			if err := tx.UseInvitationCode(ctx, req.InvitationCode, user.ID); err != nil {
+				s.logger.Warn("failed to mark invitation code as used", zap.String("code", req.InvitationCode), zap.Error(err))
+				// 不阻塞注册流程，但记录警告
+			}
+		}
 
-	if err := s.repo.CreateUserSettings(ctx, settings); err != nil {
-		s.logger.Warn("failed to create user settings", zap.Error(err))
-		// 不阻塞注册流程
-	}
+		// 创建默认用户设置
+		settings = &domain.UserSettings{
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				UpdatedAt: now,
+			},
+			UserID:             user.ID,
+			Language:           "en",
+			Theme:              "auto",
+			EmailNotifications: true,
+			PushNotifications:  true,
+			ShowAdultContent:   false,
+			ProfileVisibility:  "public",
+			AllowComments:      true,
+			AllowMessages:      true,
+			ShowOnlineStatus:   true,
+		}
 
-	// 创建默认会员信息（免费会员）
-	membership := &domain.Membership{
-		ID:           uuid.New().String(),
-		UserID:       user.ID,
-		Tier:         "free",
-		Status:       string(common.MembershipStatusActive),
-		StartDate:    time.Now().Unix(),
-		AutoRenew:    false,
-		TokenQuota:   10000, // 免费配额
-		TokenUsed:    0,
-		StorageQuota: 1024 * 1024 * 100, // 100MB
-		StorageUsed:  0,
-		CreatedAt:    time.Now().Unix(),
-		UpdatedAt:    time.Now().Unix(),
-	}
+		if err := tx.CreateUserSettings(ctx, settings); err != nil {
+			s.logger.Warn("failed to create user settings", zap.Error(err))
+			// 不阻塞注册流程
+		}
 
-	if err := s.repo.CreateMembership(ctx, membership); err != nil {
-		s.logger.Warn("failed to create membership", zap.Error(err))
-		// 不阻塞注册流程
+		// 创建默认会员信息（免费会员）
+		membership = &domain.Membership{
+			ID:           uuid.New().String(),
+			UserID:       user.ID,
+			Tier:         "free",
+			Status:       string(common.MembershipStatusActive),
+			StartDate:    time.Now().Unix(),
+			AutoRenew:    false,
+			TokenQuota:   10000, // 免费配额
+			TokenUsed:    0,
+			StorageQuota: 1024 * 1024 * 100, // 100MB
+			StorageUsed:  0,
+			CreatedAt:    time.Now().Unix(),
+			UpdatedAt:    time.Now().Unix(),
+		}
+
+		if err := tx.CreateMembership(ctx, membership); err != nil {
+			s.logger.Warn("failed to create membership", zap.Error(err))
+			// 不阻塞注册流程
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	// 生成 Token

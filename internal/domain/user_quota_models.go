@@ -91,7 +91,7 @@ type UserDashboardInfo struct {
 	QuotaInfo        *UserQuotaInfo       `json:"quotaInfo"`
 	Membership       *UserMembershipInfo  `json:"membership,omitempty"`
 	UsageStatistics  *UserUsageStatistics `json:"usageStatistics,omitempty"`
-	RecentActivities []*UserActivity      `json:"recentActivities,omitempty"`
+	// REMOVED: RecentActivities - not in StoryCreationAppUI design
 }
 
 // TokenUsageDetail Token 使用明细

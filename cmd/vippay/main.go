@@ -935,8 +935,18 @@ func registerRoutes(router *gin.Engine) {
 				Level:     logrus.InfoLevel,
 			}
 
+			// 创建 Web 支付配置
+			webPaymentConfig := &paypkg.WebPaymentConfig{
+				StripeSecretKey:      os.Getenv("STRIPE_SECRET_KEY"),
+				StripeWebhookSecret:  os.Getenv("STRIPE_WEBHOOK_SECRET"),
+				StripePublishableKey: os.Getenv("STRIPE_PUBLISHABLE_KEY"),
+				AlipayAppID:          os.Getenv("ALIPAY_APP_ID"),
+				AlipayPrivateKey:     os.Getenv("ALIPAY_PRIVATE_KEY"),
+				AlipayPublicKey:      os.Getenv("ALIPAY_PUBLIC_KEY"),
+			}
+
 			// 创建 Web 支付服务
-			webPaymentService := paypkg.NewWebPaymentService(webLogger)
+			webPaymentService := paypkg.NewWebPaymentService(webLogger, webPaymentConfig)
 
 			// 创建 Web 支付处理器
 			webPaymentHandler := pay.NewWebPaymentHandler(webPaymentService, webLogger)

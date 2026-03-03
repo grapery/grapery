@@ -55,6 +55,11 @@ func createFragmentIndexes(db *gorm.DB) error {
 		fmt.Printf("Warning: failed to create idx_fragments_visibility_created: %v\n", err)
 	}
 
+	// Index on is_draft for filtering drafts (StoryCreationAppUI alignment)
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_fragments_is_draft ON fragments(is_draft)").Error; err != nil {
+		fmt.Printf("Warning: failed to create idx_fragments_is_draft: %v\n", err)
+	}
+
 	// Indexes for fragment_likes table
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_fragment_likes_fragment_id ON fragment_likes(fragment_id)").Error; err != nil {
 		fmt.Printf("Warning: failed to create idx_fragment_likes_fragment_id: %v\n", err)

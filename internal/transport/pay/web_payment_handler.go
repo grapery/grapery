@@ -11,6 +11,7 @@ import (
 	paypkg "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	"github.com/sirupsen/logrus"
 	"github.com/stripe/stripe-go/v74"
+	"github.com/stripe/stripe-go/v74/webhook"
 )
 
 // WebPaymentHandler handles web payment HTTP requests
@@ -196,8 +197,50 @@ func (h *WebPaymentHandler) HandleStripeWebhook(c *gin.Context) {
 		return
 	}
 
-	// TODO: Verify webhook signature
-	// For now, parse without verification
+	// Get Stripe webhook secret from the service config
+	webhookSecret := h.service.GetStripeWebhookSecret()
+	if webhookSecret == "" {
+		h.logger.Warn("Stripe webhook secret not configured, skipping signature verification")
+	} else {
+		// Verify webhook signature
+		sigHeader := c.GetHeader("Stripe-Signature")
+		if sigHeader == "" {
+			h.logger.Error("Missing Stripe-Signature header")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "Missing signature header",
+			})
+			return
+		}
+
+		event, err := webhook.ConstructEvent(payload, sigHeader, webhookSecret)
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to verify Stripe webhook signature")
+				c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "Invalid signature",
+			})
+			return
+		}
+
+		// Handle the verified event
+		if err := h.service.HandleStripeWebhook(c.Request.Context(), event); err != nil {
+			h.logger.WithError(err).WithField("event_type", event.Type).Error("Failed to handle webhook")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "Failed to handle webhook",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"msg":  "Webhook processed successfully",
+		})
+		return
+	}
+
+	// Fallback: parse without verification when webhook secret is not configured
 	var event stripe.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
 		h.logger.WithError(err).Error("Failed to unmarshal Stripe event")

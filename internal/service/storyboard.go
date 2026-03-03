@@ -106,19 +106,53 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		return err
 	}
 
-	// 创建 storyboard
+	// 创建 storyboard（使用事务确保原子性）
 	s.logger.Debug("saving storyboard to database",
 		zap.String("storyboardId", storyboard.ID),
 		zap.String("storyId", storyboard.StoryID))
-	if err := s.repo.CreateStoryboard(ctx, storyboard); err != nil {
-		s.logger.Error("failed to create storyboard in database",
-			zap.String("storyboardId", storyboard.ID),
-			zap.String("storyId", storyboard.StoryID),
-			zap.Error(err))
-		return fmt.Errorf("failed to create storyboard: %w", err)
+
+	err = s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
+		// 创建 storyboard
+		if err := tx.CreateStoryboard(ctx, storyboard); err != nil {
+			s.logger.Error("failed to create storyboard in database",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("storyId", storyboard.StoryID),
+				zap.Error(err))
+			return fmt.Errorf("failed to create storyboard: %w", err)
+		}
+
+		// Persist AI-generated storyboard scenes (if any)
+		if len(storyboard.StoryboardScenes) > 0 {
+			s.logger.Debug("persisting AI-generated storyboard scenes",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
+
+			// Convert to pointer slice for repository
+			scenes := make([]*domain.StoryboardScene, len(storyboard.StoryboardScenes))
+			for i := range storyboard.StoryboardScenes {
+				scenes[i] = &storyboard.StoryboardScenes[i]
+			}
+
+			if err := tx.CreateStoryboardScenes(ctx, storyboard.ID, scenes); err != nil {
+				s.logger.Error("failed to persist storyboard scenes to database",
+					zap.String("storyboardId", storyboard.ID),
+					zap.Int("sceneCount", len(scenes)),
+					zap.Error(err))
+				return fmt.Errorf("failed to persist storyboard scenes: %w", err)
+			}
+			s.logger.Info("storyboard scenes persisted successfully",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Int("sceneCount", len(scenes)))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
-	// 缓存新创建的 storyboard
+	// 缓存新创建的 storyboard（在事务外执行）
 	c := s.getCache()
 	if c != nil {
 		key := cache.StoryboardKey(storyboard.ID)
@@ -136,19 +170,6 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 			for offset := 0; offset < 200; offset += limit {
 				_ = c.Delete(ctx, cache.StoryboardsListKey(storyboard.StoryID, limit, offset))
 			}
-		}
-	}
-
-	// Persist AI-generated storyboard scenes (if any)
-	if len(storyboard.StoryboardScenes) > 0 {
-		s.logger.Debug("persisting AI-generated storyboard scenes",
-			zap.String("storyboardId", storyboard.ID),
-			zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
-		if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
-			s.logger.Warn("failed to persist storyboard scenes",
-				zap.String("storyboardId", storyboard.ID),
-				zap.Error(err))
-			// Don't fail the entire creation for this
 		}
 	}
 
@@ -239,11 +260,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		}
 	}
 
-	// 记录用户活动
-	s.logger.Debug("recording user activity for storyboard creation",
-		zap.String("userId", storyboard.UserID),
-		zap.String("storyboardId", storyboard.ID))
-	go s.RecordStoryboardCreated(context.Background(), storyboard.UserID, storyboard.ID, storyboard.Title)
+	// REMOVED: RecordStoryboardCreated - not in StoryCreationAppUI design
 
 	// 更新故事的故事板数量
 	if err := s.repo.IncrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
@@ -802,23 +819,31 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 			zap.String("workflowStatus", storyboard.WorkflowStatus))
 	}
 
-	// 删除
-	if err := s.repo.DeleteStoryboard(ctx, id); err != nil {
-		s.logger.Error("failed to delete storyboard from database",
-			zap.String("storyboardId", id),
-			zap.Error(err))
-		return fmt.Errorf("failed to delete storyboard: %w", err)
-	}
+	// 使用事务确保删除和计数更新的原子性
+	err = s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
+		// 删除
+		if err := tx.DeleteStoryboard(ctx, id); err != nil {
+			s.logger.Error("failed to delete storyboard from database",
+				zap.String("storyboardId", id),
+				zap.Error(err))
+			return fmt.Errorf("failed to delete storyboard: %w", err)
+		}
 
-	// 更新故事的故事板数量（所有故事板都需要更新）
-	if err := s.repo.DecrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
-		s.logger.Warn("failed to decrement story storyboard count",
-			zap.String("storyId", storyboard.StoryID),
-			zap.Error(err))
-		// 不返回错误，因为故事板已经删除成功
-	} else {
+		// 更新故事的故事板数量（所有故事板都需要更新）
+		if err := tx.DecrementStoryStoryboardCount(ctx, storyboard.StoryID); err != nil {
+			s.logger.Warn("failed to decrement story storyboard count",
+				zap.String("storyId", storyboard.StoryID),
+				zap.Error(err))
+			return fmt.Errorf("failed to decrement story storyboard count: %w", err)
+		}
 		s.logger.Debug("story storyboard count decremented",
 			zap.String("storyId", storyboard.StoryID))
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
 	// 更新 metrics（只有已发布的故事板才需要更新统计指标）

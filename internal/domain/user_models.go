@@ -28,6 +28,10 @@ type User struct {
 	EmailVerified   bool   `json:"emailVerified"`
 	LastLoginAt     *int64 `json:"lastLoginAt,omitempty"`
 
+	// StoryCreationAppUI Design - Points system
+	Points       int    `json:"points"`       // 未择积分
+	ReferralCode string `json:"referralCode"` // 用户专属邀请码
+
 	// 非持久化字段，用于API响应
 	IsFollowing *bool `json:"isFollowing,omitempty"` // 当前用户是否关注此用户
 }
@@ -85,27 +89,7 @@ type UserSettings struct {
 	AllowMessages      bool `json:"allowMessages"`      // 兼容旧代码
 }
 
-// UserActivity 用户活动记录
-type UserActivity struct {
-	// Base model fields
-	common.BaseModel
-
-	UserID      string `json:"userId"`
-	Type        string `json:"type"` // story_created, story_updated, story_published, story_liked, character_created, character_updated, user_followed, storyboard_created, panel_added
-	TargetID    string `json:"targetId,omitempty"`
-	TargetType  string `json:"targetType,omitempty"` // story, character, user, storyboard
-	TargetTitle string `json:"targetTitle,omitempty"`
-	Message     string `json:"message,omitempty"`
-
-	// Relations
-	User *User `json:"user,omitempty"`
-}
-
-// ActivityHeatmapData 活动热力图数据
-type ActivityHeatmapData struct {
-	Date  string `json:"date"`  // 日期 (YYYY-MM-DD)
-	Count int    `json:"count"` // 该日期的活动数量
-}
+// REMOVED: UserActivity, ActivityHeatmapData - not in StoryCreationAppUI design
 
 // DevicePlatform 设备平台类型
 type DevicePlatform string
@@ -344,22 +328,4 @@ type InAppNotificationSettings struct {
 	VibrationEnabled bool `json:"vibrationEnabled"`
 }
 
-// ActivityTimeRange 活动时间范围
-type ActivityTimeRange string
-
-const (
-	TimeRangeToday ActivityTimeRange = "today" // 今天
-	TimeRangeWeek  ActivityTimeRange = "week"  // 本周
-	TimeRangeMonth ActivityTimeRange = "month" // 本月
-	TimeRangeYear  ActivityTimeRange = "year"  // 本年
-	TimeRangeAll   ActivityTimeRange = "all"   // 全部
-)
-
-// ActivityHeatmapResponse 活动热力图响应
-type ActivityHeatmapResponse struct {
-	TimeRange   ActivityTimeRange     `json:"timeRange"`   // 时间范围
-	StartDate   string                `json:"startDate"`   // 开始日期 (YYYY-MM-DD)
-	EndDate     string                `json:"endDate"`     // 结束日期 (YYYY-MM-DD)
-	HeatmapData []ActivityHeatmapData `json:"heatmapData"` // 热力图数据
-	TotalCount  int                   `json:"totalCount"`  // 总活动数量
-}
+// REMOVED: ActivityTimeRange, ActivityHeatmapResponse - not in StoryCreationAppUI design

@@ -58,14 +58,7 @@ func init() {
 		Required: true,
 	})
 
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_user_activities",
-		Description: "Create and migrate user_activities table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserActivity{})
-		},
-		Required: true,
-	})
+	// REMOVED: migrate_user_activities - not in StoryCreationAppUI design
 
 	// ========== 故事相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
@@ -205,14 +198,7 @@ func init() {
 		Required: true,
 	})
 
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_character_posters",
-		Description: "Create and migrate character_posters table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&CharacterPoster{})
-		},
-		Required: true,
-	})
+	// REMOVED: migrate_character_posters - not in StoryCreationAppUI design
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_character_analytics",
@@ -495,6 +481,16 @@ func init() {
 		Required: true,
 	})
 
+	// ========== 邀请推荐系统表 (StoryCreationAppUI Design) ==========
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_user_referrals",
+		Description: "Create and migrate user_referrals table for referral system",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&UserReferral{})
+		},
+		Required: true,
+	})
+
 	// ========== 第三方登录表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_third_party_logins",
@@ -702,15 +698,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Required: false,
 	})
 
-	registry.RegisterSchemaFixStep(migrations.MigrationStep{
-		Name:        "ensure_characters_poster_creation_permission_column",
-		Description: "Ensure characters has poster_creation_permission column",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			repo := &Repository{db: db, log: log}
-			return repo.ensureCharactersPosterCreationPermissionColumn()
-		},
-		Required: false,
-	})
+	// REMOVED: ensure_characters_poster_creation_permission_column - not in StoryCreationAppUI design
 
 	// ========== Migration 008: Add fragment and story source tracking columns ==========
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
@@ -736,6 +724,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Description: "Ensure fragments has converted_to_story_id and is_converted columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return db.AutoMigrate(&FragmentDB{})
+		},
+		Required: false,
+	})
+
+	// ========== Migration 009: Add user points and referral system (StoryCreationAppUI) ==========
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_user_points_referral_columns",
+		Description: "Ensure users has points and referral_code columns",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&User{})
 		},
 		Required: false,
 	})
