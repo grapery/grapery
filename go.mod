@@ -144,3 +144,4 @@ require (
 replace github.com/chenzhuoyu/iasm => github.com/chenzhuoyu/iasm v0.0.0-20241031125313-4cba78b3538b
 
 replace github.com/lyft/protoc-gen-validate => github.com/envoyproxy/protoc-gen-validate v0.10.1
+
