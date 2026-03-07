@@ -40,7 +40,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 将 user_id 设置到 context，供后续 handler 使用
-		c.Set("user_id", userID)
+		c.Set("userID", userID)
 
 		c.Next()
 	}
@@ -80,7 +80,7 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 		userID, err := validateToken(token)
 		if err == nil {
 			// token 有效，设置 user_id
-			c.Set("user_id", userID)
+			c.Set("userID", userID)
 		}
 
 		c.Next()
@@ -96,7 +96,7 @@ func RequireAuth() gin.HandlerFunc {
 // GetUserID 从 context 获取当前用户 ID
 // 这是一个辅助函数，可以在 handler 中使用
 func GetUserID(c *gin.Context) (string, bool) {
-	userID, exists := c.Get("user_id")
+	userID, exists := c.Get("userID")
 	if !exists {
 		return "", false
 	}

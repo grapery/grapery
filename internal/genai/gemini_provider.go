@@ -60,6 +60,8 @@ func (p *geminiProvider) Generate(ctx context.Context, req *GenerateRequest) (*G
 		return p.textToVideo(ctx, req)
 	case OperationImageToVideo:
 		return p.imageToVideo(ctx, req)
+	case OperationKeyframeToVideo:
+		return p.keyframeToVideo(ctx, req)
 	default:
 		return nil, fmt.Errorf("gemini provider does not support operation %s", req.Operation)
 	}
@@ -201,10 +203,35 @@ func (p *geminiProvider) imageToImage(ctx context.Context, req *GenerateRequest)
 		return nil, fmt.Errorf("prompt is required for gemini image to image")
 	}
 
-	// Get image data - prefer inline bytes, then try to use URL
+	model := strings.TrimSpace(req.Model)
+	opts := p.buildConversationalImageOptions(req)
+
+	// Multi-image reference: use ComposeImages when ReferenceImagesData has one or more images
+	if len(req.ReferenceImagesData) >= 1 {
+		assets := make([]geminiprovider.ImageAsset, 0, len(req.ReferenceImagesData))
+		for _, a := range req.ReferenceImagesData {
+			if len(a.Data) == 0 {
+				continue
+			}
+			mime := strings.TrimSpace(a.MIMEType)
+			if mime == "" {
+				mime = "image/png"
+			}
+			assets = append(assets, geminiprovider.ImageAsset{Data: a.Data, MimeType: mime})
+		}
+		if len(assets) == 0 {
+			return nil, fmt.Errorf("reference images data is required for multi-image compose")
+		}
+		images, resp, err := p.client.ComposeImages(ctx, model, assets, prompt, opts)
+		if err != nil {
+			return nil, err
+		}
+		return buildGeminiConversationalImageResponse(p.name, req, images, resp), nil
+	}
+
+	// Single image edit (text + image -> image)
 	var imageData []byte
 	var mimeType string
-
 	if len(req.ImageData) > 0 {
 		imageData = req.ImageData
 		mimeType = strings.TrimSpace(req.ImageMIMEType)
@@ -212,8 +239,6 @@ func (p *geminiProvider) imageToImage(ctx context.Context, req *GenerateRequest)
 			mimeType = "image/png"
 		}
 	} else {
-		// For URL-based images, we need to inform caller to provide bytes
-		// Gemini's EditImageWithPrompt requires actual image bytes
 		imageURL := firstNonEmpty(req.ReferenceImageURL)
 		if imageURL == "" && len(req.ReferenceImages) > 0 {
 			imageURL = strings.TrimSpace(req.ReferenceImages[0])
@@ -223,9 +248,6 @@ func (p *geminiProvider) imageToImage(ctx context.Context, req *GenerateRequest)
 		}
 		return nil, fmt.Errorf("image data is required for gemini image to image")
 	}
-
-	model := strings.TrimSpace(req.Model)
-	opts := p.buildConversationalImageOptions(req)
 
 	images, resp, err := p.client.EditImageWithPrompt(ctx, model, imageData, mimeType, prompt, opts)
 	if err != nil {
@@ -241,6 +263,9 @@ func (p *geminiProvider) buildConversationalImageOptions(req *GenerateRequest) *
 	if trimmed := strings.TrimSpace(req.AspectRatio); trimmed != "" {
 		opts.AspectRatio = trimmed
 	}
+	if trimmed := strings.TrimSpace(req.Size); trimmed != "" {
+		opts.ImageSize = trimmed // e.g. "512px", "1K", "2K", "4K"
+	}
 
 	return opts
 }
@@ -251,11 +276,9 @@ func (p *geminiProvider) textToVideo(ctx context.Context, req *GenerateRequest) 
 		return nil, fmt.Errorf("prompt is required for gemini text to video")
 	}
 
-	source := &genai.GenerateVideosSource{
-		Prompt: prompt,
-	}
-
 	config := p.buildVideoConfig(req)
+	// When using reference images, API does not allow image or last_frame in source
+	source := &genai.GenerateVideosSource{Prompt: prompt}
 	model := strings.TrimSpace(req.Model)
 
 	resp, err := p.client.GenerateVideo(ctx, model, source, config)
@@ -294,6 +317,48 @@ func (p *geminiProvider) imageToVideo(ctx context.Context, req *GenerateRequest)
 	}
 
 	config := p.buildVideoConfig(req)
+	model := strings.TrimSpace(req.Model)
+
+	resp, err := p.client.GenerateVideo(ctx, model, source, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildGeminiVideoResponse(p.name, req, resp), nil
+}
+
+func (p *geminiProvider) keyframeToVideo(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return nil, fmt.Errorf("prompt is required for gemini keyframe to video")
+	}
+
+	var firstFrame *genai.Image
+	if len(req.FirstFrameData) > 0 {
+		mime := strings.TrimSpace(req.FirstFrameMIMEType)
+		if mime == "" {
+			mime = "image/png"
+		}
+		firstFrame = &genai.Image{
+			ImageBytes: append([]byte(nil), req.FirstFrameData...),
+			MIMEType:   mime,
+		}
+	} else if u := firstNonEmpty(req.FirstFrameURL); u != "" {
+		firstFrame = createGeminiImageFromURL(u)
+	}
+	if firstFrame == nil {
+		return nil, fmt.Errorf("first frame (FirstFrameData or FirstFrameURL) is required for keyframe to video")
+	}
+
+	config := p.buildVideoConfig(req)
+	// LastFrame is set in buildVideoConfig when LastFrameData is present
+	// When using keyframe, do not set ReferenceImages (API forbids combining)
+	config.ReferenceImages = nil
+
+	source := &genai.GenerateVideosSource{
+		Prompt: prompt,
+		Image:  firstFrame,
+	}
 	model := strings.TrimSpace(req.Model)
 
 	resp, err := p.client.GenerateVideo(ctx, model, source, config)
@@ -344,7 +409,45 @@ func (p *geminiProvider) buildVideoConfig(req *GenerateRequest) *genai.GenerateV
 	config := &genai.GenerateVideosConfig{}
 
 	if trimmed := strings.TrimSpace(req.AspectRatio); trimmed != "" {
-		config.AspectRatio = trimmed
+		config.AspectRatio = trimmed // "16:9" or "9:16"
+	}
+	if trimmed := strings.TrimSpace(req.Resolution); trimmed != "" {
+		config.Resolution = trimmed // "720p", "1080p", "4k"
+	}
+	hasRefImages := len(req.ReferenceImagesData) > 0
+	// LastFrame for keyframe-to-video (first frame is in source.Image).
+	// API: when ReferenceImages is set, image/last_frame are not allowed.
+	if !hasRefImages && len(req.LastFrameData) > 0 {
+		mime := strings.TrimSpace(req.LastFrameMIMEType)
+		if mime == "" {
+			mime = "image/png"
+		}
+		config.LastFrame = &genai.Image{
+			ImageBytes: append([]byte(nil), req.LastFrameData...),
+			MIMEType:   mime,
+		}
+	}
+	// Reference images (up to 3 for Veo 3.1) - mutually exclusive with image/last_frame
+	if hasRefImages {
+		n := len(req.ReferenceImagesData)
+		if n > 3 {
+			n = 3
+		}
+		config.ReferenceImages = make([]*genai.VideoGenerationReferenceImage, 0, n)
+		for i := 0; i < n; i++ {
+			a := req.ReferenceImagesData[i]
+			mime := strings.TrimSpace(a.MIMEType)
+			if mime == "" {
+				mime = "image/png"
+			}
+			config.ReferenceImages = append(config.ReferenceImages, &genai.VideoGenerationReferenceImage{
+				Image: &genai.Image{
+					ImageBytes: append([]byte(nil), a.Data...),
+					MIMEType:   mime,
+				},
+				ReferenceType: genai.VideoGenerationReferenceTypeAsset,
+			})
+		}
 	}
 
 	return config

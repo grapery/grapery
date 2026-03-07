@@ -190,6 +190,22 @@ func collectImages(primary string, extras []string, limit int) []string {
 	return result
 }
 
+func intFromOptions(options map[string]interface{}, keys ...string) int {
+	if len(options) == 0 || len(keys) == 0 {
+		return 0
+	}
+	for _, key := range keys {
+		val, ok := options[key]
+		if !ok {
+			continue
+		}
+		if parsed, ok := intFromAny(val); ok {
+			return parsed
+		}
+	}
+	return 0
+}
+
 func stringFromOptions(options map[string]interface{}, keys ...string) string {
 	if len(options) == 0 {
 		return ""

@@ -35,7 +35,7 @@ func NewFragmentInteractionHandler(
 // LikeFragment 点赞碎片
 // POST /api/fragments/:id/like
 func (h *FragmentInteractionHandler) LikeFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -92,7 +92,7 @@ func (h *FragmentInteractionHandler) LikeFragment(c *gin.Context) {
 // UnlikeFragment 取消点赞
 // DELETE /api/fragments/:id/like
 func (h *FragmentInteractionHandler) UnlikeFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -159,7 +159,7 @@ type CreateCommentRequest struct {
 // CreateComment 创建评论
 // POST /api/fragments/:id/comments
 func (h *FragmentInteractionHandler) CreateComment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -221,7 +221,7 @@ func (h *FragmentInteractionHandler) CreateComment(c *gin.Context) {
 // GetFragmentComments 获取碎片的评论列表
 // GET /api/fragments/:id/comments?page=1&limit=20
 func (h *FragmentInteractionHandler) GetFragmentComments(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	fragmentID := c.Param("id")
 	if fragmentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "fragment id is required"})
@@ -283,7 +283,7 @@ type UpdateCommentRequest struct {
 // UpdateComment 更新评论
 // PUT /api/fragments/comments/:id
 func (h *FragmentInteractionHandler) UpdateComment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -330,7 +330,7 @@ func (h *FragmentInteractionHandler) UpdateComment(c *gin.Context) {
 // DeleteComment 删除评论
 // DELETE /api/fragments/comments/:id
 func (h *FragmentInteractionHandler) DeleteComment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -376,7 +376,7 @@ type ShareFragmentRequest struct {
 // ShareFragment 记录分享行为
 // POST /api/fragments/:id/share
 func (h *FragmentInteractionHandler) ShareFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -429,7 +429,7 @@ func (h *FragmentInteractionHandler) ShareFragment(c *gin.Context) {
 // GetFragmentStats 获取碎片统计信息
 // GET /api/fragments/:id/stats
 func (h *FragmentInteractionHandler) GetFragmentStats(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	fragmentID := c.Param("id")
 	if fragmentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "fragment id is required"})

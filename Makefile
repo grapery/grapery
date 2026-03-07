@@ -1,4 +1,4 @@
-.PHONY: run run-with-config test lint build docker migrate \
+.PHONY: run run-with-config test lint build docker migrate mock-load \
         run-server run-vippay \
         build-server build-vippay build-all \
         clean help
@@ -128,6 +128,12 @@ docker-vippay:
 migrate:
 	@echo "Database migrations run automatically on startup"
 
+mock-load:
+	@echo "Loading mock data (base + King) into $(DB_DATABASE)..."
+	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/mock_data.sql
+	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/king_mock_data.sql
+	@echo "Mock data loaded successfully!"
+
 # ========== Help ==========
 
 help:
@@ -165,6 +171,9 @@ help:
 	@echo "  DB_PASSWORD=$(DB_PASSWORD)"
 	@echo "  DB_ADDRESS=$(DB_ADDRESS)"
 	@echo "  DB_DATABASE=$(DB_DATABASE)"
+	@echo ""
+	@echo "Mock Data:"
+	@echo "  make mock-load             - Load mock data (base + King, uses DB_* config)"
 	@echo ""
 	@echo "Example with custom settings:"
 	@echo "  make run-vippay DB_PASSWORD=mypassword"

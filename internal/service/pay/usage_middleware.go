@@ -27,7 +27,7 @@ func NewUsageMiddleware(tokenUsageService TokenUsageService, logger *logrus.Logg
 func (m *UsageMiddleware) CheckUsageLimit(usageType paymodels.TokenUsageType) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 从上下文获取用户ID
-		userIDInterface, exists := c.Get("user_id")
+		userIDInterface, exists := c.Get("userID")
 		if !exists {
 			m.logger.Error("User ID not found in context")
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -94,7 +94,7 @@ func (m *UsageMiddleware) RecordUsage(usageType paymodels.TokenUsageType) gin.Ha
 		c.Next()
 
 		// 从上下文获取用户ID
-		userIDInterface, exists := c.Get("user_id")
+		userIDInterface, exists := c.Get("userID")
 		if !exists {
 			return
 		}
@@ -178,7 +178,7 @@ func NewUsageLimitHandler(tokenUsageService TokenUsageService, logger *logrus.Lo
 
 // GetUsageStats 获取用户用量统计
 func (h *UsageLimitHandler) GetUsageStats(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
+	userIDInterface, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code": 401,
@@ -235,7 +235,7 @@ func (h *UsageLimitHandler) GetUsageStats(c *gin.Context) {
 
 // GetUsageByType 获取用户各类型用量
 func (h *UsageLimitHandler) GetUsageByType(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
+	userIDInterface, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code": 401,
@@ -298,7 +298,7 @@ func (h *UsageLimitHandler) GetUsageByType(c *gin.Context) {
 
 // CheckUsageLimit 检查特定类型的用量限制
 func (h *UsageLimitHandler) CheckUsageLimit(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
+	userIDInterface, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code": 401,

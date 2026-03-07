@@ -88,8 +88,21 @@ func (r *Repository) DeleteFragment(ctx context.Context, id string) error {
 
 // ========== 转换函数 ==========
 
+// FragmentDBToDomain converts FragmentDB to domain.Fragment (exported for use by repository package)
+func FragmentDBToDomain(f *FragmentDB) *domain.Fragment {
+	if f == nil {
+		return nil
+	}
+	d := fragmentDBToDomainInternal(*f)
+	return &d
+}
+
 // fragmentToDomain 将数据库 FragmentDB 转换为 domain.Fragment
 func (r *Repository) fragmentToDomain(f FragmentDB) domain.Fragment {
+	return fragmentDBToDomainInternal(f)
+}
+
+func fragmentDBToDomainInternal(f FragmentDB) domain.Fragment {
 	// 解析 ImageUrls JSON
 	var mediaURLs []string
 	if f.ImageUrls != "" {
@@ -124,18 +137,33 @@ func (r *Repository) fragmentToDomain(f FragmentDB) domain.Fragment {
 
 	// 如果有 Creator 信息，填充 Author
 	if f.Creator.ID != "" {
-		author := r.userToDomain(f.Creator)
-		fragment.Author = &author
+		if author := ModelToUser(&f.Creator); author != nil {
+			fragment.Author = author
+		}
 	}
 
 	return fragment
 }
 
+// DomainToFragmentDB converts domain.Fragment to FragmentDB (exported for use by repository package)
+func DomainToFragmentDB(f *domain.Fragment) *FragmentDB {
+	if f == nil {
+		return nil
+	}
+	return domainToFragmentDBInternal(f)
+}
+
 // fragmentToModel 将 domain.Fragment 转换为数据库 FragmentDB
 func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
-	// 将 MediaURLs 转换为 JSON 字符串
+	return domainToFragmentDBInternal(f)
+}
+
+func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
+	// 将 MediaURLs 转换为 JSON 字符串，或使用 ImageUrls（向后兼容）
 	imageUrlsJSON := "[]"
-	if len(f.MediaURLs) > 0 {
+	if f.ImageUrls != "" {
+		imageUrlsJSON = f.ImageUrls
+	} else if len(f.MediaURLs) > 0 {
 		if data, err := json.Marshal(f.MediaURLs); err == nil {
 			imageUrlsJSON = string(data)
 		}

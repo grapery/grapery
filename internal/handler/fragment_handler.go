@@ -99,7 +99,7 @@ type UpdateFragmentRequest struct {
 
 // CreateFragment handles POST /fragments
 func (h *FragmentHandler) CreateFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -190,7 +190,7 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 	}
 
 	// Check if current user has liked this fragment
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID != "" {
 		isLiked, _ := h.fragmentRepo.IsLiked(c.Request.Context(), id, userID)
 		fragment.IsLiked = &isLiked
@@ -204,7 +204,7 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 
 // ListFragments handles GET /fragments
 func (h *FragmentHandler) ListFragments(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 
 	// Parse query parameters
 	tab := c.DefaultQuery("tab", "for_you") // for_you, following
@@ -256,7 +256,7 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 // GetUserFragments handles GET /users/:id/fragments
 func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 	userID := c.Param("id")
-	currentUserID := c.GetString("user_id")
+	currentUserID := c.GetString("userID")
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -297,12 +297,13 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 		"total":     total,
 		"page":      page,
 		"limit":     limit,
+		"hasMore":   int64(offset+len(filteredFragments)) < total,
 	})
 }
 
 // UpdateFragment handles PUT /fragments/:id
 func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	id := c.Param("id")
 
 	if userID == "" {
@@ -352,7 +353,7 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 
 // DeleteFragment handles DELETE /fragments/:id
 func (h *FragmentHandler) DeleteFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	id := c.Param("id")
 
 	if userID == "" {
@@ -382,7 +383,7 @@ func (h *FragmentHandler) DeleteFragment(c *gin.Context) {
 
 // ToggleLike handles POST /fragments/:id/like
 func (h *FragmentHandler) ToggleLike(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	id := c.Param("id")
 
 	if userID == "" {

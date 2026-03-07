@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -68,6 +69,26 @@ type Fragment struct {
 	// 非持久化字段
 	IsLikedNew *bool `json:"isLikedNew,omitempty" gorm:"-"` // 当前用户是否点赞
 	Author     *User `json:"author,omitempty"`              // 作者信息
+}
+
+// MarshalJSON customizes JSON output for iOS/Voyager compatibility:
+// - Adds creatorId (alias of authorId)
+// - Ensures imageUrls is []string, not a JSON string
+func (f *Fragment) MarshalJSON() ([]byte, error) {
+	type fragmentAlias Fragment
+	imageUrls := f.MediaURLs
+	if len(imageUrls) == 0 && f.ImageUrls != "" {
+		_ = json.Unmarshal([]byte(f.ImageUrls), &imageUrls)
+	}
+	return json.Marshal(struct {
+		*fragmentAlias
+		CreatorID string   `json:"creatorId"`
+		ImageUrls []string `json:"imageUrls"`
+	}{
+		fragmentAlias: (*fragmentAlias)(f),
+		CreatorID:     f.UserID,
+		ImageUrls:     imageUrls,
+	})
 }
 
 // GetLikesCount returns the like count (alias for API compatibility)

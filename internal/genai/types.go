@@ -66,6 +66,12 @@ func (op OperationType) MediaType() MediaType {
 	}
 }
 
+// ReferenceImageAsset holds image bytes and MIME type for provider use (e.g. video reference images).
+type ReferenceImageAsset struct {
+	Data     []byte
+	MIMEType string
+}
+
 // GenerateRequest captures the unified request parameters accepted by the proxy layer.
 type GenerateRequest struct {
 	Operation         OperationType
@@ -82,8 +88,15 @@ type GenerateRequest struct {
 	Options           map[string]interface{}
 	ReferenceImageURL string
 	ReferenceImages   []string
-	FirstFrameURL     string
-	LastFrameURL      string
+	// ReferenceImagesData holds inline image bytes for video reference images (up to 3 for Veo 3.1).
+	ReferenceImagesData []ReferenceImageAsset
+	FirstFrameURL       string
+	LastFrameURL        string
+	// FirstFrameData, LastFrameData for keyframe-to-video. When set, used instead of FirstFrameURL/LastFrameURL.
+	FirstFrameData     []byte
+	LastFrameData      []byte
+	FirstFrameMIMEType string
+	LastFrameMIMEType  string
 	Size              string
 	Width             int
 	Height            int
@@ -127,6 +140,21 @@ func (r *GenerateRequest) Clone() *GenerateRequest {
 	}
 	if len(r.VideoData) > 0 {
 		cp.VideoData = append([]byte(nil), r.VideoData...)
+	}
+	if len(r.ReferenceImagesData) > 0 {
+		cp.ReferenceImagesData = make([]ReferenceImageAsset, len(r.ReferenceImagesData))
+		for i, a := range r.ReferenceImagesData {
+			cp.ReferenceImagesData[i] = ReferenceImageAsset{
+				Data:     append([]byte(nil), a.Data...),
+				MIMEType: a.MIMEType,
+			}
+		}
+	}
+	if len(r.FirstFrameData) > 0 {
+		cp.FirstFrameData = append([]byte(nil), r.FirstFrameData...)
+	}
+	if len(r.LastFrameData) > 0 {
+		cp.LastFrameData = append([]byte(nil), r.LastFrameData...)
 	}
 	return &cp
 }

@@ -22,6 +22,8 @@ type Config struct {
 	Timeout      time.Duration
 	Model        string
 	ImageModel   string
+	VideoModel   string
+	TextModel    string
 	Workflow     string
 	Additional   map[string]interface{}
 }

@@ -260,6 +260,7 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
@@ -283,6 +284,8 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 			s.logger.Warn("no usage metadata in AI response",
 				zap.String("generationId", gen.ID))
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("content generated successfully",
 			zap.String("generationId", gen.ID),
@@ -487,6 +490,7 @@ Provide a rich, detailed description that includes:
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
@@ -509,6 +513,8 @@ Provide a rich, detailed description that includes:
 			s.logger.Warn("no usage metadata in AI response",
 				zap.String("generationId", gen.ID))
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("scene details generated successfully",
 			zap.String("generationId", gen.ID),
@@ -797,6 +803,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
@@ -852,6 +859,8 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				zap.String("generationId", gen.ID))
 		}
 
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+
 		s.logger.Info("image prompt generated successfully",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
@@ -865,7 +874,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 	}
 
 	// Generate actual image using genAPI directly
-	// 直接调用 genAPI，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
+	// TokenUsageRecorder 会自动将 token 消耗和成功/失败记录到 AIGenerationRecord
 	if s.genAPI != nil && gen.GeneratedPrompt != "" {
 		genReq := &genapi.GenerateRequest{
 			Prompt:          gen.GeneratedPrompt,
@@ -873,6 +882,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			Quality:         "high",
 			OutputCount:     1,
 			ReferenceImages: gen.ReferenceImages, // Use character reference images
+			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
 
 		// Choose operation type based on whether reference images are provided
@@ -1224,6 +1234,7 @@ Important: Return ONLY the JSON object, no explanations or markdown formatting.`
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = err.Error()
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
@@ -1258,6 +1269,8 @@ Important: Return ONLY the JSON object, no explanations or markdown formatting.`
 				s.metrics.RecordVideoGenerationTokenConsumed("prompt", float64(gen.TotalTokens))
 			}
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("video prompt generated successfully",
 			zap.String("sceneId", gen.SceneID),
@@ -1301,6 +1314,7 @@ Important: Return ONLY the JSON object, no explanations or markdown formatting.`
 			Prompt:          gen.GeneratedPrompt,
 			DurationSeconds: 5, // 5 second video clips
 			AspectRatio:     "16:9",
+			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
 
 		// Use configured video provider (default: hailuo)
@@ -2105,6 +2119,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 	pollCtx, cancel := context.WithTimeout(ctx, maxPollAttempts*pollInterval)
 	defer cancel()
 
+	// Attach usage record metadata for TokenUsageRecorder (GetVideoStatus has no request)
+	pollCtx = s.ctxWithUsageRecordForStoryboard(pollCtx, gen.StoryboardID)
+
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
@@ -2412,6 +2429,72 @@ func (s *Service) RecoverPendingVideoGenerations(ctx context.Context) {
 // ============== Keyframe Subdivision Helper Functions ==============
 
 // serializeVideoSegments converts video segments to JSON string for storage.
+// recordStoryboardTextGeneration records text generation (content/scene/image_prompt/video_prompt) to AIGenerationRecord.
+func (s *Service) recordStoryboardTextGeneration(ctx context.Context, storyboardID, subtype, prompt string, inputTokens, outputTokens int, status domain.AITaskStatus, errorMsg string) {
+	if s.aiGenService == nil {
+		return
+	}
+	meta := s.usageRecordMetadataForStoryboard(ctx, storyboardID)
+	if meta == nil {
+		return
+	}
+	userID, _ := meta["user_id"].(string)
+	relID, _ := meta["related_entity_id"].(string)
+	if relID == "" {
+		relID = storyboardID
+	}
+	s.aiGenService.RecordTextGenerationUsage(ctx, &RecordTextGenerationRequest{
+		UserID:            userID,
+		RelatedEntityID:   relID,
+		RelatedEntityType: "storyboard",
+		Provider:          "gemini",
+		Model:             "",
+		OriginalPrompt:    truncateForLog(prompt, 2000),
+		InputTokens:       inputTokens,
+		OutputTokens:      outputTokens,
+		Status:            status,
+		ErrorMessage:      errorMsg,
+	})
+}
+
+// ctxWithUsageRecordForStoryboard attaches usage record metadata to ctx for GetVideoStatus/GetImageStatus.
+func (s *Service) ctxWithUsageRecordForStoryboard(ctx context.Context, storyboardID string) context.Context {
+	meta := s.usageRecordMetadataForStoryboard(ctx, storyboardID)
+	if meta == nil {
+		return ctx
+	}
+	userID, _ := meta["user_id"].(string)
+	relID, _ := meta["related_entity_id"].(string)
+	relType, _ := meta["related_entity_type"].(string)
+	if relID == "" {
+		relID = storyboardID
+	}
+	if relType == "" {
+		relType = "storyboard"
+	}
+	return genapi.ContextWithUsageRecord(ctx, userID, relID, relType)
+}
+
+// usageRecordMetadataForStoryboard returns metadata for AIGenerationRecord attribution (user, storyboard).
+func (s *Service) usageRecordMetadataForStoryboard(ctx context.Context, storyboardID string) map[string]interface{} {
+	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil || storyboard == nil {
+		return nil
+	}
+	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+	if err != nil || story == nil {
+		return map[string]interface{}{
+			"related_entity_id":   storyboardID,
+			"related_entity_type": "storyboard",
+		}
+	}
+	return map[string]interface{}{
+		"user_id":              story.UserID,
+		"related_entity_id":    storyboardID,
+		"related_entity_type":  "storyboard",
+	}
+}
+
 func (s *Service) serializeVideoSegments(segments []genapi.VideoSegment) string {
 	if len(segments) == 0 {
 		return ""

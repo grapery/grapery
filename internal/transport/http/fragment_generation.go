@@ -44,7 +44,7 @@ type GenerateFragmentRequest struct {
 
 // GenerateFragment handles POST /fragments/generate
 func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -126,7 +126,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 
 // ListGenerationTasks handles GET /fragments/generate
 func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -180,7 +180,7 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 
 // CancelGeneration handles DELETE /fragments/generate/:taskId
 func (h *FragmentGenerationHandler) CancelGeneration(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return

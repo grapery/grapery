@@ -18,6 +18,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
 	"github.com/grapestree/fgrapery/grapery/internal/handler"
@@ -228,7 +229,7 @@ func main() {
 	}
 
 	// Initialize AI clients
-	initAIClients(cfg, svc, logger)
+	initAIClients(cfg, svc, repo, logger)
 
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
@@ -298,16 +299,17 @@ func main() {
 
 	// Register Fragment CRUD routes (list, get, create, update, delete)
 	// Note: /styles must be registered BEFORE /:id to avoid route conflicts
-	apiGroup.GET("/v1/fragments", fragmentHandler.ListFragments)
+	// Use OptionalAuthMiddleware for GET endpoints to support both authenticated and unauthenticated access
+	apiGroup.GET("/v1/fragments", authPkg.OptionalAuthMiddleware(), fragmentHandler.ListFragments)
 	apiGroup.GET("/v1/fragments/styles", fragmentHandler.GetFragmentStyles)
-	apiGroup.GET("/v1/fragments/:id", fragmentHandler.GetFragment)
+	apiGroup.GET("/v1/fragments/:id", authPkg.OptionalAuthMiddleware(), fragmentHandler.GetFragment)
 	apiGroup.POST("/v1/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
 	apiGroup.PUT("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.UpdateFragment)
 	apiGroup.DELETE("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.DeleteFragment)
 	logger.Info("fragment CRUD routes registered")
 
-	// Register User Fragments route
-	apiGroup.GET("/v1/users/:id/fragments", fragmentHandler.GetUserFragments)
+	// Register User Fragments route (optional auth for checking likes)
+	apiGroup.GET("/v1/users/:id/fragments", authPkg.OptionalAuthMiddleware(), fragmentHandler.GetUserFragments)
 	logger.Info("user fragments route registered")
 
 	// Configure CORS
@@ -421,8 +423,13 @@ func startUserStatisticsTask(ctx context.Context, statsService *service.UserStat
 }
 
 // initAIClients initializes AI generation clients based on configuration
-func initAIClients(cfg config.Config, svc *service.Service, logger *zap.Logger) {
+func initAIClients(cfg config.Config, svc *service.Service, repo domain.Repository, logger *zap.Logger) {
 	logger.Info("========== AI Configuration Check ==========")
+
+	// Set TokenUsageRecorder before creating GenAPI so all image/video generations are persisted
+	genapi.SetTokenUsageRecorder(service.NewGenAPIUsageRecorder(repo, func(msg string, err error) {
+		logger.Warn(msg, zap.Error(err))
+	}))
 
 	genAPI := genapi.NewGenAPI()
 	var geminiClient *gemini.Client

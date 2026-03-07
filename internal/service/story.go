@@ -3246,6 +3246,7 @@ func (s *Service) generateEnhancedImage(ctx context.Context, userID string, desc
 		Quality:     "high",
 		OutputCount: 1,
 		Style:       style,
+		Metadata:    map[string]interface{}{"user_id": userID},
 	}
 
 	// Use configured image provider or default
@@ -3308,6 +3309,7 @@ func (s *Service) generateAnimationFromImage(ctx context.Context, userID string,
 		ReferenceImageURL: imageURL,
 		DurationSeconds:   4,              // Shorter duration for animations
 		Style:             animationStyle, // Animation style
+		Metadata:          map[string]interface{}{"user_id": userID},
 	}
 
 	// Use configured video provider or default to Hailuo (best for creative video)

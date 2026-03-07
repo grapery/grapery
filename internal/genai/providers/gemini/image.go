@@ -8,13 +8,12 @@ import (
 	"google.golang.org/genai"
 )
 
-// defaultImageModel is the fallback model when none is provided.
-const defaultImageModel = "gemini-2.5-flash-image"
-
 // ImageGenerationOptions configures conversational image generation requests.
+// See: https://ai.google.dev/gemini-api/docs/image-generation
 type ImageGenerationOptions struct {
 	Config      *genai.GenerateContentConfig
-	AspectRatio string
+	AspectRatio string // e.g. "1:1", "16:9", "9:16", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "1:4", "4:1", "1:8", "8:1", "21:9"
+	ImageSize   string // e.g. "512px", "1K", "2K", "4K" (gemini-3.1-flash-image-preview supports 512px)
 }
 
 // ImageAsset represents an inline image payload used as multimodal context.
@@ -29,7 +28,7 @@ func (c *Client) GenerateImages(ctx context.Context, model, prompt string, cfg *
 	if prompt == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
-	resolvedModel := choose(model, c.config.DefaultModel, defaultImageModel)
+	resolvedModel := choose(model, c.config.DefaultModel, DefaultImageModel)
 	resp, err := c.sdk.Models.GenerateImages(ctx, resolvedModel, prompt, cfg)
 	if err != nil {
 		return nil, err
@@ -168,7 +167,7 @@ func (c *Client) generateImageWithContents(ctx context.Context, model string, co
 		return nil, nil, fmt.Errorf("contents cannot be empty")
 	}
 	cfg := buildImageGenerationConfig(opts)
-	resolvedModel := choose(model, c.config.DefaultModel, defaultImageModel)
+	resolvedModel := choose(model, c.config.DefaultModel, DefaultImageModel)
 	resp, err := c.sdk.Models.GenerateContent(ctx, resolvedModel, contents, cfg)
 	if err != nil {
 		return nil, nil, err
@@ -194,15 +193,17 @@ func buildImageGenerationConfig(opts *ImageGenerationOptions) *genai.GenerateCon
 	} else {
 		cfg.ResponseModalities = ensureModality(cfg.ResponseModalities, "IMAGE")
 	}
-	if opts != nil && strings.TrimSpace(opts.AspectRatio) != "" {
-		if cfg.HTTPOptions == nil {
-			cfg.HTTPOptions = &genai.HTTPOptions{}
-		}
-		if cfg.HTTPOptions.ExtraBody == nil {
-			cfg.HTTPOptions.ExtraBody = make(map[string]any)
-		}
-		cfg.HTTPOptions.ExtraBody["imageConfig"] = map[string]any{
-			"aspectRatio": strings.TrimSpace(opts.AspectRatio),
+	if opts != nil {
+		ar := strings.TrimSpace(opts.AspectRatio)
+		sz := strings.TrimSpace(opts.ImageSize)
+		if ar != "" || sz != "" {
+			cfg.ImageConfig = &genai.ImageConfig{}
+			if ar != "" {
+				cfg.ImageConfig.AspectRatio = ar
+			}
+			if sz != "" {
+				cfg.ImageConfig.ImageSize = sz
+			}
 		}
 	}
 	return cfg

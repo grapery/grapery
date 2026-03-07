@@ -1014,6 +1014,51 @@ func (s *AIGenerationService) GenerateVideo(ctx context.Context, req *GenerateVi
 	}, nil
 }
 
+// RecordTextGenerationUsage creates an AIGenerationRecord for text generation (e.g. storyboard content/scene/prompt).
+func (s *AIGenerationService) RecordTextGenerationUsage(ctx context.Context, req *RecordTextGenerationRequest) {
+	if req == nil || (req.UserID == "" && req.RelatedEntityID == "") {
+		return
+	}
+	record := &domain.AIGenerationRecord{
+		UserID:            req.UserID,
+		Type:              "text",
+		Provider:          req.Provider,
+		Model:             req.Model,
+		OriginalPrompt:    req.OriginalPrompt,
+		InputTokens:       req.InputTokens,
+		OutputTokens:      req.OutputTokens,
+		TotalTokens:       req.InputTokens + req.OutputTokens,
+		Status:            req.Status,
+		ErrorMessage:     req.ErrorMessage,
+		RelatedEntityID:   req.RelatedEntityID,
+		RelatedEntityType: req.RelatedEntityType,
+		CreatedAt:         time.Now().Unix(),
+		OutputResult:      "{}",
+	}
+	if record.TotalTokens == 0 {
+		record.TotalTokens = req.InputTokens + req.OutputTokens
+	}
+	if err := s.repo.CreateAIGenerationRecord(ctx, record); err != nil {
+		s.logger.Warn("failed to create AI text generation record",
+			zap.String("relatedEntityId", req.RelatedEntityID),
+			zap.Error(err))
+	}
+}
+
+// RecordTextGenerationRequest params for recording text generation usage.
+type RecordTextGenerationRequest struct {
+	UserID            string
+	RelatedEntityID   string
+	RelatedEntityType string
+	Provider          string
+	Model             string
+	OriginalPrompt    string
+	InputTokens       int
+	OutputTokens      int
+	Status            domain.AITaskStatus
+	ErrorMessage      string
+}
+
 // GetAIGenerationRecord 获取AI生成记录
 func (s *AIGenerationService) GetAIGenerationRecord(ctx context.Context, recordID string) (*domain.AIGenerationRecord, error) {
 	return s.repo.GetAIGenerationRecord(ctx, recordID)

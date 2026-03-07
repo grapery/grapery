@@ -9,8 +9,11 @@ import (
 )
 
 const (
-	defaultVideoModel = "doubao-seedance-1-0-pro-250528"
-	defaultImageModel = "doubao-seedream-4-5-251128"
+	defaultVideoModel = "doubao-seedance-1-5-pro-251215"
+	defaultImageModel = "doubao-seedream-5-0-lite-251128"
+	// defaultTextModel: 火山方舟 Chat API 使用 Endpoint ID（如 ep-20241104104259-xxxx），
+	// 非模型名。需在控制台创建推理接入点后配置 TextModel/Endpoint ID。
+	defaultTextModel  = "doubao-pro-32k"
 	defaultArkBaseURL = "https://ark.cn-beijing.volces.com"
 	defaultArkAPIPath = "/api/v3"
 )
@@ -23,6 +26,8 @@ type Config struct {
 	Timeout      time.Duration
 	Workflow     string
 	ImageModel   string
+	VideoModel   string
+	TextModel    string
 }
 
 // Client wraps ArkRuntime operations for image and video generation.
@@ -43,7 +48,8 @@ func New(config Config) *Client {
 	if config.Timeout > 0 {
 		options = append(options, arkruntime.WithTimeout(config.Timeout))
 	}
-	arkBaseURL := resolveArkBaseURL(config.ImageBaseURL)
+	// ImageBaseURL 优先；为空时回退到 BaseURL，便于统一配置
+	arkBaseURL := resolveArkBaseURL(choose(config.ImageBaseURL, config.BaseURL))
 	options = append(options, arkruntime.WithBaseUrl(arkBaseURL))
 
 	client := arkruntime.NewClientWithApiKey(config.APIKey, options...)

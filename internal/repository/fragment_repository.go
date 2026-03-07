@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 
-	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
 	"gorm.io/gorm"
 )
 
@@ -18,19 +18,29 @@ func NewFragmentRepository(db *gorm.DB) *FragmentRepository {
 
 // Create creates a new fragment and increments user's fragments count
 func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragment) error {
+	dbFragment := mysql.DomainToFragmentDB(fragment)
+	if dbFragment == nil {
+		return domain.ErrInvalidInput
+	}
+
+	userID := fragment.UserID
+	if userID == "" {
+		userID = fragment.CreatorID
+	}
+
 	// Start a transaction
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Create the fragment
-		if err := tx.Create(fragment).Error; err != nil {
+		if err := tx.Create(dbFragment).Error; err != nil {
 			return err
 		}
 
+		// Copy ID back to domain fragment
+		fragment.ID = dbFragment.ID
+		fragment.CreatedAt = dbFragment.CreatedAt
+		fragment.UpdatedAt = dbFragment.UpdatedAt
+
 		// Increment user's fragments_count
-		// 使用 UserID，如果为空则使用 CreatorID（向后兼容）
-		userID := fragment.UserID
-		if userID == "" {
-			userID = fragment.CreatorID
-		}
 		if err := tx.Model(&domain.User{}).
 			Where("id = ?", userID).
 			UpdateColumn("fragments_count", gorm.Expr("fragments_count + 1")).
@@ -44,20 +54,20 @@ func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragme
 
 // GetByID retrieves a fragment by ID
 func (r *FragmentRepository) GetByID(ctx context.Context, id string) (*domain.Fragment, error) {
-	var fragment domain.Fragment
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&fragment).Error
+	var fragment mysql.FragmentDB
+	err := r.db.WithContext(ctx).Preload("Creator").Where("id = ?", id).First(&fragment).Error
 	if err != nil {
 		return nil, err
 	}
-	return &fragment, nil
+	return mysql.FragmentDBToDomain(&fragment), nil
 }
 
 // List retrieves fragments with pagination
 func (r *FragmentRepository) List(ctx context.Context, limit, offset int, visibility string) ([]*domain.Fragment, int64, error) {
-	var fragments []*domain.Fragment
+	var dbFragments []*mysql.FragmentDB
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&domain.Fragment{})
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentDB{})
 
 	if visibility != "" {
 		query = query.Where("visibility = ?", visibility)
@@ -68,52 +78,65 @@ func (r *FragmentRepository) List(ctx context.Context, limit, offset int, visibi
 		return nil, 0, err
 	}
 
-	err = query.Order("created_at DESC").
+	err = query.Preload("Creator").
+		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
-		Find(&fragments).Error
+		Find(&dbFragments).Error
 
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return fragments, total, nil
+	return fragmentDBListToDomain(dbFragments), total, nil
+}
+
+func fragmentDBListToDomain(list []*mysql.FragmentDB) []*domain.Fragment {
+	if list == nil {
+		return nil
+	}
+	result := make([]*domain.Fragment, len(list))
+	for i, f := range list {
+		result[i] = mysql.FragmentDBToDomain(f)
+	}
+	return result
 }
 
 // ListByCreatorID retrieves fragments by creator ID
 func (r *FragmentRepository) ListByCreatorID(ctx context.Context, creatorID string, limit, offset int) ([]*domain.Fragment, int64, error) {
-	var fragments []*domain.Fragment
+	var dbFragments []*mysql.FragmentDB
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&domain.Fragment{}).Where("creator_id = ?", creatorID)
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).Where("creator_id = ?", creatorID)
 
 	err := query.Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	err = query.Order("created_at DESC").
+	err = query.Preload("Creator").
+		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
-		Find(&fragments).Error
+		Find(&dbFragments).Error
 
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return fragments, total, nil
+	return fragmentDBListToDomain(dbFragments), total, nil
 }
 
 // ListFollowing retrieves fragments from followed users
 func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, limit, offset int) ([]*domain.Fragment, int64, error) {
-	var fragments []*domain.Fragment
+	var dbFragments []*mysql.FragmentDB
 	var total int64
 
-	// Get list of followed user IDs
+	// Get list of followed user IDs (user_follows has no status column; uses soft delete via deleted_at)
 	var followedUserIDs []string
-	err := r.db.WithContext(ctx).Model(&domain.UserFollow{}).
-		Where("follower_id = ? AND status = ?", userID, string(common.StatusActive)).
-		Pluck("following_id", &followedUserIDs).Error
+	err := r.db.WithContext(ctx).Table("user_follows").
+		Where("follower_id = ? AND deleted_at IS NULL", userID).
+		Pluck("followee_id", &followedUserIDs).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -122,7 +145,7 @@ func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, l
 		return []*domain.Fragment{}, 0, nil
 	}
 
-	query := r.db.WithContext(ctx).Model(&domain.Fragment{}).
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("creator_id IN ? AND (visibility = ? OR visibility = ?)",
 			followedUserIDs,
 			domain.FragmentVisibilityPublic,
@@ -133,45 +156,47 @@ func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, l
 		return nil, 0, err
 	}
 
-	err = query.Order("created_at DESC").
+	err = query.Preload("Creator").
+		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
-		Find(&fragments).Error
+		Find(&dbFragments).Error
 
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return fragments, total, nil
+	return fragmentDBListToDomain(dbFragments), total, nil
 }
 
 // Update updates a fragment
 func (r *FragmentRepository) Update(ctx context.Context, fragment *domain.Fragment) error {
-	return r.db.WithContext(ctx).Save(fragment).Error
+	dbFragment := mysql.DomainToFragmentDB(fragment)
+	if dbFragment == nil {
+		return domain.ErrInvalidInput
+	}
+	return r.db.WithContext(ctx).Save(dbFragment).Error
 }
 
 // Delete deletes a fragment and decrements user's fragments count
 func (r *FragmentRepository) Delete(ctx context.Context, id string) error {
 	// First get the fragment to know the creator ID
-	var fragment domain.Fragment
+	var fragment mysql.FragmentDB
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&fragment).Error
 	if err != nil {
 		return err
 	}
 
+	userID := fragment.UserID
+
 	// Start a transaction
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete the fragment
-		if err := tx.Where("id = ?", id).Delete(&domain.Fragment{}).Error; err != nil {
+		if err := tx.Where("id = ?", id).Delete(&mysql.FragmentDB{}).Error; err != nil {
 			return err
 		}
 
 		// Decrement user's fragments_count
-		// 使用 UserID，如果为空则使用 CreatorID（向后兼容）
-		userID := fragment.UserID
-		if userID == "" {
-			userID = fragment.CreatorID
-		}
 		if err := tx.Model(&domain.User{}).
 			Where("id = ?", userID).
 			UpdateColumn("fragments_count", gorm.Expr("fragments_count - 1")).
@@ -185,7 +210,7 @@ func (r *FragmentRepository) Delete(ctx context.Context, id string) error {
 
 // IncrementLikes increments the likes count
 func (r *FragmentRepository) IncrementLikes(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&domain.Fragment{}).
+	return r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("id = ?", id).
 		UpdateColumn("likes", gorm.Expr("likes + 1")).
 		Error
@@ -193,7 +218,7 @@ func (r *FragmentRepository) IncrementLikes(ctx context.Context, id string) erro
 
 // DecrementLikes decrements the likes count
 func (r *FragmentRepository) DecrementLikes(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&domain.Fragment{}).
+	return r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("id = ?", id).
 		UpdateColumn("likes", gorm.Expr("likes - 1")).
 		Error
@@ -201,7 +226,7 @@ func (r *FragmentRepository) DecrementLikes(ctx context.Context, id string) erro
 
 // IncrementComments increments the comments count
 func (r *FragmentRepository) IncrementComments(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&domain.Fragment{}).
+	return r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("id = ?", id).
 		UpdateColumn("comments", gorm.Expr("comments + 1")).
 		Error
@@ -209,7 +234,7 @@ func (r *FragmentRepository) IncrementComments(ctx context.Context, id string) e
 
 // IncrementViews increments the view count for a fragment
 func (r *FragmentRepository) IncrementViews(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&domain.Fragment{}).
+	return r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("id = ?", id).
 		UpdateColumn("views", gorm.Expr("views + 1")).
 		Error

@@ -26,7 +26,7 @@ func NewUserQuotaHandler(quotaService *service.UserQuotaService, logger *zap.Log
 // requireAuth 鉴权中间件
 func (h *UserQuotaHandler) requireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetString("user_id")
+		userID := c.GetString("userID")
 		if userID == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			c.Abort()
@@ -40,7 +40,7 @@ func (h *UserQuotaHandler) requireAuth() gin.HandlerFunc {
 // 用于 /users/:userId/* 端点，确保当前用户只能访问自己的信息
 func (h *UserQuotaHandler) requireOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		currentUserID := c.GetString("user_id")
+		currentUserID := c.GetString("userID")
 		if currentUserID == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			c.Abort()
@@ -257,7 +257,7 @@ func SetupCurrentUserQuotaRoutes(router *gin.RouterGroup, handler *UserQuotaHand
 // GetCurrentUserQuotaInfo 获取当前用户配额信息
 // GET /me/quota
 func (h *UserQuotaHandler) GetCurrentUserQuotaInfo(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 
 	quotaInfo, err := h.quotaService.GetUserQuotaInfo(c.Request.Context(), userID)
 	if err != nil {
@@ -274,7 +274,7 @@ func (h *UserQuotaHandler) GetCurrentUserQuotaInfo(c *gin.Context) {
 // GetCurrentUserDashboardInfo 获取当前用户主页信息
 // GET /me/dashboard
 func (h *UserQuotaHandler) GetCurrentUserDashboardInfo(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 
 	dashboardInfo, err := h.quotaService.GetUserDashboardInfo(c.Request.Context(), userID)
 	if err != nil {
@@ -291,7 +291,7 @@ func (h *UserQuotaHandler) GetCurrentUserDashboardInfo(c *gin.Context) {
 // GetCurrentUserMembershipInfo 获取当前用户会员信息
 // GET /me/membership
 func (h *UserQuotaHandler) GetCurrentUserMembershipInfo(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 
 	membershipInfo, err := h.quotaService.GetUserMembershipInfo(c.Request.Context(), userID)
 	if err != nil {
@@ -308,7 +308,7 @@ func (h *UserQuotaHandler) GetCurrentUserMembershipInfo(c *gin.Context) {
 // GetCurrentUserRechargeInfo 获取当前用户充值信息
 // GET /me/recharge
 func (h *UserQuotaHandler) GetCurrentUserRechargeInfo(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 
 	rechargeInfo, err := h.quotaService.GetUserRechargeInfo(c.Request.Context(), userID)
 	if err != nil {
@@ -325,7 +325,7 @@ func (h *UserQuotaHandler) GetCurrentUserRechargeInfo(c *gin.Context) {
 // GetCurrentUserUsageStatistics 获取当前用户使用统计
 // GET /me/usage?period=today|week|month|year|all
 func (h *UserQuotaHandler) GetCurrentUserUsageStatistics(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 	period := c.DefaultQuery("period", "month")
 
 	usageStats, err := h.quotaService.GetUserUsageStatistics(c.Request.Context(), userID, period)
@@ -344,7 +344,7 @@ func (h *UserQuotaHandler) GetCurrentUserUsageStatistics(c *gin.Context) {
 // GetCurrentUserTokenHistory 获取当前用户 Token 历史记录
 // GET /me/token-history?page=1&pageSize=20
 func (h *UserQuotaHandler) GetCurrentUserTokenHistory(c *gin.Context) {
-	userID := c.GetString("user_id") // 从鉴权中间件获取
+	userID := c.GetString("userID") // 从鉴权中间件获取
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
