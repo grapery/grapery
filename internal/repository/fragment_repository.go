@@ -127,6 +127,41 @@ func (r *FragmentRepository) ListByCreatorID(ctx context.Context, creatorID stri
 	return fragmentDBListToDomain(dbFragments), total, nil
 }
 
+// ListByTopic retrieves fragments by topic with optional converted filter
+// convertedOnly: nil = all, true = only converted, false = only not converted
+func (r *FragmentRepository) ListByTopic(ctx context.Context, topic string, limit, offset int, convertedOnly *bool) ([]*domain.Fragment, int64, error) {
+	var dbFragments []*mysql.FragmentDB
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
+		Where("topic = ? AND visibility = ?", topic, domain.FragmentVisibilityPublic)
+
+	if convertedOnly != nil {
+		if *convertedOnly {
+			query = query.Where("is_converted = ?", true)
+		} else {
+			query = query.Where("is_converted = ?", false)
+		}
+	}
+
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	err = query.Preload("Creator").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&dbFragments).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return fragmentDBListToDomain(dbFragments), total, nil
+}
+
 // ListFollowing retrieves fragments from followed users
 func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, limit, offset int) ([]*domain.Fragment, int64, error) {
 	var dbFragments []*mysql.FragmentDB

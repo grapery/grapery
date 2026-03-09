@@ -1162,6 +1162,8 @@ type FragmentDB struct {
 	Visibility         string  `gorm:"size:20;not null;default:'public';index:idx_fragment_visibility"`
 	SourceType         string  `gorm:"size:30;default:'original';index:idx_fragment_source_type"` // original, story_excerpt, storyboard_node
 	SourceID           string  `gorm:"size:36;index:idx_fragment_source_id"`                      // 来源ID
+	Topic              string  `gorm:"size:200;index:idx_fragment_topic"`                         // 话题标签 (StoryCreationAppUI)
+	Caption            string  `gorm:"type:text"`                                                 // 标题/简介文字 (StoryCreationAppUI)
 	ConvertedToStoryID *string `gorm:"size:36;index"`                                             // 转换为的故事ID
 	IsConverted        bool    `gorm:"default:false;index"`                                       // 是否已转换
 	Likes              int     `gorm:"type:int;default:0"`                                        // 点赞数

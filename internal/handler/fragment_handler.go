@@ -81,6 +81,14 @@ func stringPtr(s string) *string {
 	return &s
 }
 
+// stringPtrValue returns empty string if nil
+func stringPtrValue(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 // CreateFragmentRequest represents the request to create a fragment
 type CreateFragmentRequest struct {
 	Content       string   `json:"content" binding:"required,max=500"`
@@ -88,6 +96,8 @@ type CreateFragmentRequest struct {
 	Style         *string  `json:"style" binding:"omitempty"`
 	FragmentCount *int     `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
 	Visibility    string   `json:"visibility" binding:"required,oneof=public followers private"`
+	Topic         *string  `json:"topic" binding:"omitempty,max=200"`
+	Caption       *string  `json:"caption" binding:"omitempty,max=500"`
 }
 
 // UpdateFragmentRequest represents the request to update a fragment
@@ -163,6 +173,8 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		Style:         req.Style,
 		FragmentCount: &fragmentCount,
 		Visibility:    req.Visibility,
+		Topic:         stringPtrValue(req.Topic),
+		Caption:       stringPtrValue(req.Caption),
 		SourceType:    string(domain.FragmentSourceOriginal), // 用户手动创建的碎片为原创
 		SourceID:      "",                                    // 原创碎片无来源ID
 	}
@@ -208,6 +220,8 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 
 	// Parse query parameters
 	tab := c.DefaultQuery("tab", "for_you") // for_you, following
+	topic := c.Query("topic")               // optional: filter by topic
+	converted := c.Query("converted")       // optional: all, true, false
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset := (page - 1) * limit
@@ -220,15 +234,29 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	var total int64
 	var err error
 
-	switch tab {
-	case "following":
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
+	// topic takes precedence: when topic is set, list by topic
+	if topic != "" {
+		var convertedOnly *bool
+		switch converted {
+		case "true":
+			b := true
+			convertedOnly = &b
+		case "false":
+			b := false
+			convertedOnly = &b
 		}
-		fragments, total, err = h.fragmentRepo.ListFollowing(c.Request.Context(), userID, limit, offset)
-	default: // for_you
-		fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+		fragments, total, err = h.fragmentRepo.ListByTopic(c.Request.Context(), topic, limit, offset, convertedOnly)
+	} else {
+		switch tab {
+		case "following":
+			if userID == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+				return
+			}
+			fragments, total, err = h.fragmentRepo.ListFollowing(c.Request.Context(), userID, limit, offset)
+		default: // for_you
+			fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+		}
 	}
 
 	if err != nil {

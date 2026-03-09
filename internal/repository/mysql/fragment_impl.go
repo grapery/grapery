@@ -121,6 +121,8 @@ func fragmentDBToDomainInternal(f FragmentDB) domain.Fragment {
 		Visibility: f.Visibility,
 		SourceType: f.SourceType,
 		SourceID:   f.SourceID,
+		Topic:      f.Topic,
+		Caption:    f.Caption,
 		Status:     string(common.StatusActive), // 默认状态
 		EngagementStats: common.EngagementStats{
 			Likes:    f.Likes,
@@ -184,6 +186,8 @@ func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
 		Visibility:         f.Visibility,
 		SourceType:         f.SourceType,
 		SourceID:           f.SourceID,
+		Topic:              f.Topic,
+		Caption:            f.Caption,
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
 		Likes:              f.Likes,
