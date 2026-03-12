@@ -73,6 +73,7 @@ type Fragment struct {
 
 // MarshalJSON customizes JSON output for iOS/Voyager compatibility:
 // - Adds creatorId (alias of authorId)
+// - Adds creatorName and creatorAvatar from Author
 // - Ensures imageUrls is []string, not a JSON string
 func (f *Fragment) MarshalJSON() ([]byte, error) {
 	type fragmentAlias Fragment
@@ -80,14 +81,26 @@ func (f *Fragment) MarshalJSON() ([]byte, error) {
 	if len(imageUrls) == 0 && f.ImageUrls != "" {
 		_ = json.Unmarshal([]byte(f.ImageUrls), &imageUrls)
 	}
+
+	// 提取创建者信息
+	var creatorName, creatorAvatar string
+	if f.Author != nil {
+		creatorName = f.Author.DisplayName
+		creatorAvatar = f.Author.Avatar
+	}
+
 	return json.Marshal(struct {
 		*fragmentAlias
-		CreatorID string   `json:"creatorId"`
-		ImageUrls []string `json:"imageUrls"`
+		CreatorID     string   `json:"creatorId"`
+		CreatorName   string   `json:"creatorName,omitempty"`
+		CreatorAvatar string   `json:"creatorAvatar,omitempty"`
+		ImageUrls     []string `json:"imageUrls"`
 	}{
-		fragmentAlias: (*fragmentAlias)(f),
-		CreatorID:     f.UserID,
-		ImageUrls:     imageUrls,
+		fragmentAlias:  (*fragmentAlias)(f),
+		CreatorID:      f.UserID,
+		CreatorName:    creatorName,
+		CreatorAvatar:  creatorAvatar,
+		ImageUrls:      imageUrls,
 	})
 }
 
