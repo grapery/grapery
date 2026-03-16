@@ -364,7 +364,7 @@ func (r *FragmentRepository) BatchGetEngagementStats(ctx context.Context, fragme
 
 	var fragmentCommentCounts []groupedCount
 	if err := r.db.WithContext(ctx).
-		Model(&domain.FragmentComment{}).
+		Table("fragment_comments").
 		Select("fragment_id as fragment_id, count(*) as count").
 		Where("fragment_id IN ?", fragmentIDs).
 		Group("fragment_id").
