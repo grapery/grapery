@@ -92,19 +92,23 @@ func stringPtrValue(p *string) string {
 // CreateFragmentRequest represents the request to create a fragment
 type CreateFragmentRequest struct {
 	Content       string   `json:"content" binding:"required,max=500"`
-	ImageUrls     []string `json:"imageUrls" binding:"required,min=1,max=10"`
+	ImageUrls     []string `json:"imageUrls" binding:"omitempty,max=10"`
 	Style         *string  `json:"style" binding:"omitempty"`
 	FragmentCount *int     `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
-	Visibility    string   `json:"visibility" binding:"required,oneof=public followers private"`
+	Visibility    string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	Topic         *string  `json:"topic" binding:"omitempty,max=200"`
 	Caption       *string  `json:"caption" binding:"omitempty,max=500"`
 }
 
 // UpdateFragmentRequest represents the request to update a fragment
 type UpdateFragmentRequest struct {
-	Content    *string   `json:"content" binding:"omitempty,max=500"`
-	ImageUrls  *[]string `json:"imageUrls" binding:"omitempty,min=1,max=10"`
-	Visibility *string   `json:"visibility" binding:"omitempty,oneof=public followers private"`
+	Content       *string   `json:"content" binding:"omitempty,max=500"`
+	ImageUrls     *[]string `json:"imageUrls" binding:"omitempty,max=10"`
+	Style         *string   `json:"style" binding:"omitempty"`
+	FragmentCount *int      `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
+	Topic         *string   `json:"topic" binding:"omitempty,max=200"`
+	Caption       *string   `json:"caption" binding:"omitempty,max=500"`
+	Visibility    *string   `json:"visibility" binding:"omitempty,oneof=public followers followers_only private"`
 }
 
 // CreateFragment handles POST /fragments
@@ -126,6 +130,7 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid visibility"})
 		return
 	}
+	normalizedVisibility := domain.NormalizeFragmentVisibility(req.Visibility)
 
 	// Set default fragment count to 1 if not provided
 	fragmentCount := 1
@@ -149,11 +154,6 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		// Note: Base64 images should be uploaded via a separate endpoint first
 	}
 
-	if len(processedImageUrls) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one valid image URL is required"})
-		return
-	}
-
 	fragment := &domain.Fragment{
 		BaseModel: common.BaseModel{
 			ID:        generateUUID(),
@@ -172,9 +172,9 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		ImageUrls:     stringifyArray(processedImageUrls),
 		Style:         req.Style,
 		FragmentCount: &fragmentCount,
-		Visibility:    req.Visibility,
-		Topic:         stringPtrValue(req.Topic),
-		Caption:       stringPtrValue(req.Caption),
+		Visibility:    normalizedVisibility,
+		Topic:         strings.TrimSpace(stringPtrValue(req.Topic)),
+		Caption:       strings.TrimSpace(stringPtrValue(req.Caption)),
 		SourceType:    string(domain.FragmentSourceOriginal), // 用户手动创建的碎片为原创
 		SourceID:      "",                                    // 原创碎片无来源ID
 	}
@@ -201,11 +201,12 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 		return
 	}
 
-	// Check if current user has liked this fragment
 	userID := c.GetString("userID")
-	if userID != "" {
-		isLiked, _ := h.fragmentRepo.IsLiked(c.Request.Context(), id, userID)
-		fragment.IsLiked = &isLiked
+	if stats, statsErr := h.fragmentRepo.GetEngagementStats(c.Request.Context(), id, userID); statsErr == nil {
+		fragment.Likes = stats.Likes
+		fragment.Comments = stats.Comments
+		liked := stats.IsLiked
+		fragment.IsLiked = &liked
 	}
 
 	// Increment view count
@@ -224,7 +225,21 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	converted := c.Query("converted")       // optional: all, true, false
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset := (page - 1) * limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := 0
+	if rawOffset := c.Query("offset"); rawOffset != "" {
+		if parsedOffset, err := strconv.Atoi(rawOffset); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+			page = (offset / limit) + 1
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset"})
+			return
+		}
+	} else {
+		offset = (page - 1) * limit
+	}
 
 	if limit > 100 {
 		limit = 100
@@ -264,11 +279,20 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 		return
 	}
 
-	// Check likes for authenticated user
-	if userID != "" {
+	if len(fragments) > 0 {
+		fragmentIDs := make([]string, 0, len(fragments))
 		for _, fragment := range fragments {
-			isLiked, _ := h.fragmentRepo.IsLiked(c.Request.Context(), fragment.ID, userID)
-			fragment.IsLiked = &isLiked
+			fragmentIDs = append(fragmentIDs, fragment.ID)
+		}
+
+		if statsMap, statsErr := h.fragmentRepo.BatchGetEngagementStats(c.Request.Context(), fragmentIDs, userID); statsErr == nil {
+			for _, fragment := range fragments {
+				stats := statsMap[fragment.ID]
+				fragment.Likes = stats.Likes
+				fragment.Comments = stats.Comments
+				liked := stats.IsLiked
+				fragment.IsLiked = &liked
+			}
 		}
 	}
 
@@ -277,6 +301,7 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 		"total":     total,
 		"page":      page,
 		"limit":     limit,
+		"offset":    offset,
 		"hasMore":   int64(offset+len(fragments)) < total,
 	})
 }
@@ -288,7 +313,21 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset := (page - 1) * limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := 0
+	if rawOffset := c.Query("offset"); rawOffset != "" {
+		if parsedOffset, err := strconv.Atoi(rawOffset); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+			page = (offset / limit) + 1
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset"})
+			return
+		}
+	} else {
+		offset = (page - 1) * limit
+	}
 
 	if limit > 100 {
 		limit = 100
@@ -307,16 +346,26 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 		// Show if: public, or (followers and current user is following), or own fragments
 		if fragment.Visibility == domain.FragmentVisibilityPublic ||
 			(currentUserID == userID) ||
-			(fragment.Visibility == domain.FragmentVisibilityFollowers && currentUserID != "") {
+			((fragment.Visibility == domain.FragmentVisibilityFollowers ||
+				fragment.Visibility == domain.FragmentVisibilityFollowersLegacy) && currentUserID != "") {
 			filteredFragments = append(filteredFragments, fragment)
 		}
 	}
 
-	// Check likes
-	if currentUserID != "" {
+	if len(filteredFragments) > 0 {
+		fragmentIDs := make([]string, 0, len(filteredFragments))
 		for _, fragment := range filteredFragments {
-			isLiked, _ := h.fragmentRepo.IsLiked(c.Request.Context(), fragment.ID, currentUserID)
-			fragment.IsLiked = &isLiked
+			fragmentIDs = append(fragmentIDs, fragment.ID)
+		}
+
+		if statsMap, statsErr := h.fragmentRepo.BatchGetEngagementStats(c.Request.Context(), fragmentIDs, currentUserID); statsErr == nil {
+			for _, fragment := range filteredFragments {
+				stats := statsMap[fragment.ID]
+				fragment.Likes = stats.Likes
+				fragment.Comments = stats.Comments
+				liked := stats.IsLiked
+				fragment.IsLiked = &liked
+			}
 		}
 	}
 
@@ -325,6 +374,7 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 		"total":     total,
 		"page":      page,
 		"limit":     limit,
+		"offset":    offset,
 		"hasMore":   int64(offset+len(filteredFragments)) < total,
 	})
 }
@@ -363,12 +413,24 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 	if req.ImageUrls != nil {
 		fragment.ImageUrls = stringifyArray(*req.ImageUrls)
 	}
+	if req.Style != nil {
+		fragment.Style = req.Style
+	}
+	if req.FragmentCount != nil {
+		fragment.FragmentCount = req.FragmentCount
+	}
+	if req.Topic != nil {
+		fragment.Topic = strings.TrimSpace(*req.Topic)
+	}
+	if req.Caption != nil {
+		fragment.Caption = strings.TrimSpace(*req.Caption)
+	}
 	if req.Visibility != nil {
 		if !domain.ValidFragmentVisibility(*req.Visibility) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid visibility"})
 			return
 		}
-		fragment.Visibility = *req.Visibility
+		fragment.Visibility = domain.NormalizeFragmentVisibility(*req.Visibility)
 	}
 
 	if err := h.fragmentRepo.Update(c.Request.Context(), fragment); err != nil {

@@ -63,7 +63,12 @@ func (h *FragmentInteractionHandler) LikeFragment(c *gin.Context) {
 	}
 
 	if isLiked {
-		c.JSON(http.StatusConflict, gin.H{"error": "already liked"})
+		// 幂等：已点赞时直接返回当前状态，避免前端因状态轻微不同步产生 409
+		stats, _ := h.interactionRepo.GetFragmentStats(c.Request.Context(), fragmentID, userID)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "already liked",
+			"stats":   stats,
+		})
 		return
 	}
 

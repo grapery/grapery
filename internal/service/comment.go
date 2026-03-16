@@ -113,6 +113,11 @@ func (s *Service) getTargetAuthorInfo(ctx context.Context, targetType, targetID 
 		if err == nil && story.Author != nil {
 			return story.Author.ID, story.Author.DisplayName
 		}
+	case "fragment":
+		fragment, err := s.repo.FragmentByID(ctx, targetID)
+		if err == nil && fragment.Author != nil {
+			return fragment.Author.ID, fragment.Author.DisplayName
+		}
 	case "storyboard":
 		storyboard, err := s.repo.StoryboardByID(ctx, targetID)
 		if err == nil && storyboard.Creator != nil {
@@ -137,6 +142,8 @@ func (s *Service) getTargetTypeName(targetType string) string {
 	switch targetType {
 	case "story":
 		return "故事"
+	case "fragment":
+		return "故事碎片"
 	case "storyboard":
 		return "分镜"
 	case "character":
@@ -666,6 +673,11 @@ func (s *Service) validateCommentTarget(ctx context.Context, targetType, targetI
 		_, err := s.repo.StoryByID(ctx, targetID)
 		if err != nil {
 			return fmt.Errorf("story not found: %w", err)
+		}
+	case "fragment":
+		_, err := s.repo.FragmentByID(ctx, targetID)
+		if err != nil {
+			return fmt.Errorf("fragment not found: %w", err)
 		}
 	case "storyboard":
 		_, err := s.repo.StoryboardByID(ctx, targetID)

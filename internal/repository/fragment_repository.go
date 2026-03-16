@@ -12,6 +12,12 @@ type FragmentRepository struct {
 	db *gorm.DB
 }
 
+type FragmentEngagement struct {
+	Likes    int
+	Comments int
+	IsLiked  bool
+}
+
 func NewFragmentRepository(db *gorm.DB) *FragmentRepository {
 	return &FragmentRepository{db: db}
 }
@@ -181,10 +187,11 @@ func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, l
 	}
 
 	query := r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
-		Where("creator_id IN ? AND (visibility = ? OR visibility = ?)",
+		Where("creator_id IN ? AND (visibility = ? OR visibility = ? OR visibility = ?)",
 			followedUserIDs,
 			domain.FragmentVisibilityPublic,
-			domain.FragmentVisibilityFollowers)
+			domain.FragmentVisibilityFollowers,
+			domain.FragmentVisibilityFollowersLegacy)
 
 	err = query.Count(&total).Error
 	if err != nil {
@@ -294,4 +301,99 @@ func (r *FragmentRepository) IsLiked(ctx context.Context, fragmentID, userID str
 		Where("fragment_id = ? AND user_id = ?", fragmentID, userID).
 		Count(&count).Error
 	return count > 0, err
+}
+
+// GetEngagementStats retrieves likes/comments counts and current user's like status.
+// Comments are aggregated from both legacy comments table and fragment_comments table.
+func (r *FragmentRepository) GetEngagementStats(ctx context.Context, fragmentID, userID string) (FragmentEngagement, error) {
+	statsMap, err := r.BatchGetEngagementStats(ctx, []string{fragmentID}, userID)
+	if err != nil {
+		return FragmentEngagement{}, err
+	}
+	if stats, ok := statsMap[fragmentID]; ok {
+		return stats, nil
+	}
+	return FragmentEngagement{}, nil
+}
+
+// BatchGetEngagementStats retrieves likes/comments counts and current user's like status for multiple fragments.
+func (r *FragmentRepository) BatchGetEngagementStats(ctx context.Context, fragmentIDs []string, userID string) (map[string]FragmentEngagement, error) {
+	result := make(map[string]FragmentEngagement, len(fragmentIDs))
+	if len(fragmentIDs) == 0 {
+		return result, nil
+	}
+
+	for _, id := range fragmentIDs {
+		result[id] = FragmentEngagement{}
+	}
+
+	type groupedCount struct {
+		FragmentID string
+		Count      int64
+	}
+
+	var likeCounts []groupedCount
+	if err := r.db.WithContext(ctx).
+		Model(&domain.FragmentLike{}).
+		Select("fragment_id as fragment_id, count(*) as count").
+		Where("fragment_id IN ?", fragmentIDs).
+		Group("fragment_id").
+		Find(&likeCounts).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range likeCounts {
+		stats := result[row.FragmentID]
+		stats.Likes = int(row.Count)
+		result[row.FragmentID] = stats
+	}
+
+	var commentCounts []groupedCount
+	if err := r.db.WithContext(ctx).
+		Table("comments").
+		Select("target_id as fragment_id, count(*) as count").
+		Where("target_type = ? AND target_id IN ?", "fragment", fragmentIDs).
+		Group("target_id").
+		Find(&commentCounts).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range commentCounts {
+		stats := result[row.FragmentID]
+		stats.Comments += int(row.Count)
+		result[row.FragmentID] = stats
+	}
+
+	var fragmentCommentCounts []groupedCount
+	if err := r.db.WithContext(ctx).
+		Model(&domain.FragmentComment{}).
+		Select("fragment_id as fragment_id, count(*) as count").
+		Where("fragment_id IN ?", fragmentIDs).
+		Group("fragment_id").
+		Find(&fragmentCommentCounts).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range fragmentCommentCounts {
+		stats := result[row.FragmentID]
+		stats.Comments += int(row.Count)
+		result[row.FragmentID] = stats
+	}
+
+	if userID != "" {
+		var likedRows []struct {
+			FragmentID string
+		}
+		if err := r.db.WithContext(ctx).
+			Model(&domain.FragmentLike{}).
+			Select("fragment_id").
+			Where("user_id = ? AND fragment_id IN ?", userID, fragmentIDs).
+			Find(&likedRows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range likedRows {
+			stats := result[row.FragmentID]
+			stats.IsLiked = true
+			result[row.FragmentID] = stats
+		}
+	}
+
+	return result, nil
 }

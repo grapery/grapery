@@ -9,7 +9,7 @@ type Comment struct {
 
 	UserID     string `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	Content    string `json:"content"`
-	TargetType string `json:"targetType"` // story, storyboard, character, comment
+	TargetType string `json:"targetType"` // story, fragment, storyboard, character, comment
 	TargetID   string `json:"targetId"`
 	ParentID   string `json:"parentId"` // empty for top-level comments
 	RootID     string `json:"rootId"`   // root comment ID for nested replies

@@ -13,7 +13,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	var req struct {
-		TargetType string  `json:"targetType" binding:"required"` // story, storyboard, character
+		TargetType string  `json:"targetType" binding:"required"` // story, fragment, storyboard, character
 		TargetID   string  `json:"targetId" binding:"required"`
 		Content    string  `json:"content" binding:"required"`
 		ParentID   *string `json:"parentId"` // 回复评论时提供

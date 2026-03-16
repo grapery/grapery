@@ -27,7 +27,9 @@ const (
 // FragmentVisibility 片段可见性（使用无类型字符串常量以保持兼容性）
 const (
 	FragmentVisibilityPublic    = "public"
-	FragmentVisibilityFollowers = "followers_only"
+	FragmentVisibilityFollowers = "followers"
+	// FragmentVisibilityFollowersLegacy 保留兼容旧数据/旧客户端
+	FragmentVisibilityFollowersLegacy = "followers_only"
 	FragmentVisibilityPrivate   = "private"
 )
 
@@ -132,10 +134,23 @@ func (Fragment) TableName() string {
 // ValidFragmentVisibility returns true if the visibility string is valid
 func ValidFragmentVisibility(visibility string) bool {
 	switch visibility {
-	case string(FragmentVisibilityPublic), string(FragmentVisibilityFollowers), string(FragmentVisibilityPrivate):
+	case string(FragmentVisibilityPublic),
+		string(FragmentVisibilityFollowers),
+		string(FragmentVisibilityFollowersLegacy),
+		string(FragmentVisibilityPrivate):
 		return true
 	default:
 		return false
+	}
+}
+
+// NormalizeFragmentVisibility normalizes legacy visibility values.
+func NormalizeFragmentVisibility(visibility string) string {
+	switch visibility {
+	case FragmentVisibilityFollowersLegacy:
+		return FragmentVisibilityFollowers
+	default:
+		return visibility
 	}
 }
 

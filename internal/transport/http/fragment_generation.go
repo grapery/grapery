@@ -39,7 +39,7 @@ type GenerateFragmentRequest struct {
 	Mood       string   `json:"mood" binding:"omitempty,oneof=happy sad mysterious romantic"`
 	Length     string   `json:"length" binding:"omitempty,oneof=short medium long"`
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
-	Visibility string   `json:"visibility" binding:"required,oneof=public followers private"`
+	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 }
 
 // GenerateFragment handles POST /fragments/generate
@@ -65,7 +65,7 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		Mood:       req.Mood,
 		Length:     req.Length,
 		Language:   req.Language,
-		Visibility: req.Visibility,
+		Visibility: domain.NormalizeFragmentVisibility(req.Visibility),
 	}
 
 	// 如果用户没有指定图片数量，默认生成1张
@@ -217,9 +217,9 @@ func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, auth
 	fragmentGenGroup.Use(authMiddleware)
 	{
 		fragmentGenGroup.POST("", h.GenerateFragment)
-		fragmentGenGroup.GET(":taskId", h.GetGenerationStatus)
+		fragmentGenGroup.GET("/:taskId", h.GetGenerationStatus)
 		fragmentGenGroup.GET("", h.ListGenerationTasks)
-		fragmentGenGroup.DELETE(":taskId", h.CancelGeneration)
+		fragmentGenGroup.DELETE("/:taskId", h.CancelGeneration)
 	}
 }
 
