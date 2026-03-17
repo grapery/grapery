@@ -4,7 +4,7 @@
 # Dockerfile for Grapery Server Service
 # ========================================
 
-FROM golang:1.25AS builder
+FROM golang:1.25 AS builder
 WORKDIR /src
 
 # Copy go.mod and go.sum first for better caching
