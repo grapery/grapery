@@ -195,15 +195,14 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 	return result, nil
 }
 
-// StoryboardsByParent retrieves storyboards by parent ID
-// Only returns published storyboards for public viewing
+// StoryboardsByParent retrieves storyboards by parent ID.
+// For branch continuation flow, return all children regardless of workflow status.
 func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("story_id = ?", storyID).
 		Where("parent_id = ?", parentID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished). // Only return published storyboards
 		Order("created_at ASC")
 
 	if limit > 0 {

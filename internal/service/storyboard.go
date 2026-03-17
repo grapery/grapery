@@ -7,14 +7,75 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
 
+func generateStoryboardFallbackTitle(rawInput string) string {
+	cleaned := strings.Join(strings.Fields(strings.TrimSpace(rawInput)), " ")
+	if cleaned == "" {
+		return "新的故事板"
+	}
+
+	const maxTitleRunes = 24
+	runes := []rune(cleaned)
+	if len(runes) <= maxTitleRunes {
+		return cleaned
+	}
+
+	return string(runes[:maxTitleRunes]) + "..."
+}
+
+func storyboardCreateIdempotencyCacheKey(userID, key string) string {
+	return fmt.Sprintf("storyboard:create:idempotency:%s:%s", userID, key)
+}
+
+func (s *Service) CreateStoryboardWithIdempotency(ctx context.Context, storyboard *domain.Storyboard, idempotencyKey string) error {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return s.CreateStoryboard(ctx, storyboard)
+	}
+
+	c := s.getCache()
+	if c == nil {
+		return s.CreateStoryboard(ctx, storyboard)
+	}
+
+	cacheKey := storyboardCreateIdempotencyCacheKey(storyboard.UserID, strings.TrimSpace(idempotencyKey))
+	var existingStoryboardID string
+	if err := c.Get(ctx, cacheKey, &existingStoryboardID); err == nil && existingStoryboardID != "" {
+		existing, getErr := s.repo.StoryboardByID(ctx, existingStoryboardID)
+		if getErr == nil {
+			*storyboard = *existing
+			s.logger.Info("idempotent create hit, returning existing storyboard",
+				zap.String("storyboardId", existingStoryboardID),
+				zap.String("userId", storyboard.UserID))
+			return nil
+		}
+	}
+
+	if err := s.CreateStoryboard(ctx, storyboard); err != nil {
+		return err
+	}
+
+	if err := c.Set(ctx, cacheKey, storyboard.ID, 24*time.Hour); err != nil {
+		s.logger.Warn("failed to cache storyboard create idempotency key",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
+	}
+
+	return nil
+}
+
 // CreateStoryboard 创建新的 storyboard
 func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
+	storyboard.Title = strings.TrimSpace(storyboard.Title)
+	if storyboard.Title == "" {
+		storyboard.Title = generateStoryboardFallbackTitle(storyboard.RawInput)
+	}
+
 	s.logger.Info("creating storyboard",
 		zap.String("storyId", storyboard.StoryID),
 		zap.String("creatorId", storyboard.UserID),
@@ -75,23 +136,6 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		s.logger.Debug("parent storyboard validated",
 			zap.String("parentId", storyboard.ParentID),
 			zap.String("parentTitle", parent.Title))
-	}
-
-	// 使用 AI 生成内容（如果提供了 geminiClient）
-	if s.geminiClient != nil && storyboard.RawInput != "" {
-		s.logger.Info("starting AI generation for storyboard",
-			zap.String("storyboardId", storyboard.ID),
-			zap.String("rawInput", truncateForLog(storyboard.RawInput, 200)))
-		if err := s.GenerateStoryboardWithAI(ctx, storyboard); err != nil {
-			s.logger.Warn("AI generation failed, creating storyboard without AI content",
-				zap.String("storyboardId", storyboard.ID),
-				zap.Error(err))
-			// AI 生成失败不影响创建流程，继续使用原始输入
-		} else {
-			s.logger.Info("AI generation completed for storyboard",
-				zap.String("storyboardId", storyboard.ID),
-				zap.Int("scenesGenerated", len(storyboard.StoryboardScenes)))
-		}
 	}
 
 	// Validate linked assets
@@ -278,7 +322,92 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		s.metrics.StoryboardCount.Inc()
 	}
 
+	// 创建阶段改为快速返回：AI 内容/场景生成在后台异步执行，避免请求长时间阻塞。
+	if s.geminiClient != nil && strings.TrimSpace(storyboard.RawInput) != "" {
+		contentGen := &domain.StoryboardContentGeneration{
+			ID:           uuid.New().String(),
+			StoryboardID: storyboard.ID,
+			RawInput:     storyboard.RawInput,
+			Style:        "storyboard_create",
+			Status:       domain.GenerationStatusPending,
+			CreatedAt:    time.Now().Unix(),
+		}
+
+		if err := s.repo.CreateContentGeneration(ctx, contentGen); err != nil {
+			s.logger.Warn("failed to create initial content generation record",
+				zap.String("storyboardId", storyboard.ID),
+				zap.Error(err))
+		} else {
+			go s.processStoryboardInitialGeneration(context.Background(), storyboard.ID, contentGen.ID)
+		}
+	}
+
 	return nil
+}
+
+func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyboardID, contentGenID string) {
+	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		s.logger.Warn("initial generation skipped: storyboard not found",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		return
+	}
+
+	contentGen, err := s.repo.GetContentGeneration(ctx, contentGenID)
+	if err != nil {
+		s.logger.Warn("initial generation skipped: content generation record not found",
+			zap.String("storyboardId", storyboardID),
+			zap.String("contentGenerationId", contentGenID),
+			zap.Error(err))
+		return
+	}
+
+	contentGen.Status = domain.GenerationStatusProcessing
+	_ = s.repo.UpdateContentGeneration(ctx, contentGen)
+	_ = s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusDraft, 2)
+
+	if err := s.GenerateStoryboardWithAI(ctx, storyboard); err != nil {
+		contentGen.Status = domain.GenerationStatusFailed
+		contentGen.ErrorMessage = err.Error()
+		_ = s.repo.UpdateContentGeneration(ctx, contentGen)
+		s.logger.Warn("initial storyboard generation failed",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		return
+	}
+
+	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+		contentGen.Status = domain.GenerationStatusFailed
+		contentGen.ErrorMessage = err.Error()
+		_ = s.repo.UpdateContentGeneration(ctx, contentGen)
+		s.logger.Warn("failed to update storyboard after initial generation",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		return
+	}
+
+	if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
+		contentGen.Status = domain.GenerationStatusFailed
+		contentGen.ErrorMessage = err.Error()
+		_ = s.repo.UpdateContentGeneration(ctx, contentGen)
+		s.logger.Warn("failed to persist scenes after initial generation",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		return
+	}
+
+	contentGen.GeneratedContent = storyboard.Content
+	contentGen.Status = domain.GenerationStatusCompleted
+	now := time.Now().Unix()
+	contentGen.CompletedAt = &now
+	contentGen.ErrorMessage = ""
+	_ = s.repo.UpdateContentGeneration(ctx, contentGen)
+	_ = s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusContentReady, 2)
+
+	s.logger.Info("initial storyboard generation completed",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 }
 
 // GetStoryboard 获取 storyboard 详情（带缓存）
@@ -1820,8 +1949,8 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 
 	// Determine scene count (default to 3 if not set or out of range)
 	sceneCount := storyboard.SceneCount
-	if sceneCount < 2 || sceneCount > 5 {
-		sceneCount = 3
+	if sceneCount < MinStoryboardSceneCount || sceneCount > MaxStoryboardSceneCount {
+		sceneCount = DefaultStoryboardSceneCount
 		s.logger.Debug("scene count adjusted to default",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("requested", storyboard.SceneCount),

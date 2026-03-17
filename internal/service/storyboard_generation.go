@@ -77,6 +77,47 @@ type VideoGenerationInfo struct {
 	VideoSegments     []VideoSegmentInfo `json:"videoSegments,omitempty"`
 }
 
+type GenerationErrorCode string
+
+const (
+	GenerationErrorTimeout       GenerationErrorCode = "provider_timeout"
+	GenerationErrorQuota         GenerationErrorCode = "provider_quota"
+	GenerationErrorInvalidPrompt GenerationErrorCode = "invalid_prompt"
+	GenerationErrorNetwork       GenerationErrorCode = "network_error"
+	GenerationErrorProvider      GenerationErrorCode = "provider_error"
+	GenerationErrorUnknown       GenerationErrorCode = "unknown_error"
+	GenerationErrorCancelled     GenerationErrorCode = "cancelled"
+)
+
+func classifyGenerationError(err error, fallback GenerationErrorCode) GenerationErrorCode {
+	if err == nil {
+		return fallback
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "timeout"), strings.Contains(msg, "deadline exceeded"):
+		return GenerationErrorTimeout
+	case strings.Contains(msg, "quota"), strings.Contains(msg, "rate limit"), strings.Contains(msg, "429"):
+		return GenerationErrorQuota
+	case strings.Contains(msg, "prompt"), strings.Contains(msg, "invalid argument"), strings.Contains(msg, "malformed"):
+		return GenerationErrorInvalidPrompt
+	case strings.Contains(msg, "network"), strings.Contains(msg, "connection refused"), strings.Contains(msg, "connection reset"), strings.Contains(msg, "temporary failure"):
+		return GenerationErrorNetwork
+	case strings.Contains(msg, "provider"), strings.Contains(msg, "upstream"), strings.Contains(msg, "api error"):
+		return GenerationErrorProvider
+	default:
+		return fallback
+	}
+}
+
+func formatGenerationError(code GenerationErrorCode, message string) string {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "generation failed"
+	}
+	return fmt.Sprintf("[%s] %s", code, msg)
+}
+
 // StartContentGeneration starts the AI content generation process (Step 1)
 func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenerationRequest) (*domain.StoryboardContentGeneration, error) {
 	s.logger.Info("starting content generation",
@@ -254,7 +295,7 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 				zap.String("storyboardId", gen.StoryboardID),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorUnknown), err.Error())
 			if updateErr := s.repo.UpdateContentGeneration(ctx, gen); updateErr != nil {
 				s.logger.Error("failed to update content generation status to failed",
 					zap.String("generationId", gen.ID),
@@ -484,7 +525,7 @@ Provide a rich, detailed description that includes:
 				zap.String("sceneId", gen.SceneID),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorUnknown), err.Error())
 			if updateErr := s.repo.UpdateSceneGeneration(ctx, gen); updateErr != nil {
 				s.logger.Error("failed to update scene generation status to failed",
 					zap.String("generationId", gen.ID),
@@ -797,7 +838,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				zap.String("sceneId", gen.SceneID),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			if updateErr := s.repo.UpdateImageGeneration(ctx, gen); updateErr != nil {
 				s.logger.Error("failed to update image generation status to failed",
 					zap.String("generationId", gen.ID),
@@ -930,7 +971,6 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			if s.metrics != nil {
 				s.metrics.RecordImageGenerationError("image_api_error")
 			}
-			// Don't fail completely, just mark as completed without image
 		} else if resp != nil && len(resp.ImageURLs) > 0 {
 			s.logger.Info("image generation API call succeeded",
 				zap.String("generationId", gen.ID),
@@ -1024,16 +1064,25 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		}
 	}
 
-	gen.Status = domain.GenerationStatusCompleted
+	if gen.GeneratedImageURL == "" {
+		gen.Status = domain.GenerationStatusFailed
+		if gen.ErrorMessage == "" {
+			gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "image generation failed: empty generated image url")
+		}
+	} else {
+		gen.Status = domain.GenerationStatusCompleted
+		gen.ErrorMessage = ""
+	}
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
 	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
-		s.logger.Error("failed to update image generation status to completed",
+		s.logger.Error("failed to update image generation final status",
 			zap.String("generationId", gen.ID),
 			zap.Error(err))
 	} else {
-		s.logger.Debug("image generation status updated to completed",
-			zap.String("generationId", gen.ID))
+		s.logger.Debug("image generation final status updated",
+			zap.String("generationId", gen.ID),
+			zap.String("status", gen.Status))
 	}
 
 	s.logger.Debug("updating storyboard token consumption",
@@ -1065,28 +1114,27 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("imageURL", gen.GeneratedImageURL))
 	}
 
-	// Update workflow status
-	if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3); err != nil {
-		s.logger.Warn("failed to update storyboard workflow to images ready",
-			zap.String("storyboardId", gen.StoryboardID),
-			zap.Error(err))
-	} else {
-		s.logger.Debug("storyboard workflow updated to images ready",
-			zap.String("storyboardId", gen.StoryboardID))
-		// Record metrics: workflow milestone
-		if s.metrics != nil {
-			// Duration is tracked separately via workflow duration metric
-			s.metrics.RecordStoryboardWorkflowCompleted("images_ready", 0)
+	// Update workflow status only when image is truly generated.
+	if gen.Status == domain.GenerationStatusCompleted {
+		if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3); err != nil {
+			s.logger.Warn("failed to update storyboard workflow to images ready",
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboard workflow updated to images ready",
+				zap.String("storyboardId", gen.StoryboardID))
+			// Record metrics: workflow milestone
+			if s.metrics != nil {
+				// Duration is tracked separately via workflow duration metric
+				s.metrics.RecordStoryboardWorkflowCompleted("images_ready", 0)
+			}
 		}
 	}
 
 	// Record metrics: completed
 	if s.metrics != nil {
 		duration := time.Since(startTime)
-		status := "completed"
-		if gen.GeneratedImageURL == "" {
-			status = "failed" // Completed but no image
-		}
+		status := gen.Status
 		s.metrics.RecordStoryboardImageGeneration(status, sceneType, duration)
 		if characterCount > 0 {
 			s.metrics.RecordImageGenerationWithCharacters(status, characterCount)
@@ -1100,10 +1148,12 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		}
 	}
 
-	s.logger.Info("image generation completed successfully",
+	s.logger.Info("image generation finished",
 		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
 		zap.String("sceneId", gen.SceneID),
+		zap.String("status", gen.Status),
+		zap.String("errorMessage", gen.ErrorMessage),
 		zap.String("imageURL", gen.GeneratedImageURL),
 		zap.Int("totalTokens", gen.TotalTokens))
 }
@@ -1232,7 +1282,7 @@ Important: Return ONLY the JSON object, no explanations or markdown formatting.`
 				zap.String("sceneId", gen.SceneID),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
@@ -1612,7 +1662,7 @@ updateGeneration:
 			zap.String("sceneId", gen.SceneID),
 			zap.String("providerTaskID", gen.ProviderTaskID))
 		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = "video generation failed: no video URL or task ID returned"
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "video generation failed: no video URL or task ID returned")
 		if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
 			s.logger.Error("failed to update video generation status to failed",
 				zap.String("generationId", gen.ID),
@@ -1657,7 +1707,7 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	}
 
 	// Track generation status
-	var isGenerating, hasPending bool
+	var isGenerating, hasPending, hasFailed bool
 	var statusMessages []string
 
 	// Get content generation
@@ -1672,6 +1722,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		} else if contentGen.Status == domain.GenerationStatusPending {
 			hasPending = true
 			statusMessages = append(statusMessages, "内容生成待处理")
+		} else if contentGen.Status == domain.GenerationStatusFailed {
+			hasFailed = true
 		}
 	} else {
 		s.logger.Debug("no content generation found",
@@ -1692,6 +1744,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 				break
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				hasFailed = true
 			}
 		}
 	} else {
@@ -1707,16 +1761,26 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			zap.Int("count", len(imageGens)))
 		progress.ImageGenerations = imageGens
 		processingCount := 0
+		failedCount := 0
 		for _, gen := range imageGens {
 			if gen.Status == domain.GenerationStatusProcessing {
 				processingCount++
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				failedCount++
+			} else if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedImageURL == "" {
+				// Strict completion: completed status without image URL is treated as failed.
+				failedCount++
 			}
 		}
 		if processingCount > 0 {
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成图片 (%d)", processingCount))
+		}
+		if failedCount > 0 {
+			hasFailed = true
+			statusMessages = append(statusMessages, fmt.Sprintf("图片生成失败 (%d)", failedCount))
 		}
 	} else {
 		s.logger.Debug("failed to list image generations",
@@ -1731,16 +1795,26 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			zap.Int("count", len(videoGens)))
 		progress.VideoGenerations = videoGens
 		processingCount := 0
+		failedCount := 0
 		for _, gen := range videoGens {
 			if gen.Status == domain.GenerationStatusProcessing {
 				processingCount++
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				failedCount++
+			} else if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL == "" {
+				// Strict completion: completed status without video URL is treated as failed.
+				failedCount++
 			}
 		}
 		if processingCount > 0 {
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成视频 (%d)", processingCount))
+		}
+		if failedCount > 0 {
+			hasFailed = true
+			statusMessages = append(statusMessages, fmt.Sprintf("视频生成失败 (%d)", failedCount))
 		}
 	} else {
 		s.logger.Debug("failed to list video generations",
@@ -1756,6 +1830,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.GenerationMessage = strings.Join(statusMessages, ", ")
 	} else if hasPending {
 		progress.GenerationMessage = "有待处理的生成任务"
+	} else if hasFailed {
+		progress.GenerationMessage = "存在失败的生成任务"
 	} else if progress.ContentGeneration == nil && len(progress.SceneGenerations) == 0 &&
 		len(progress.ImageGenerations) == 0 && len(progress.VideoGenerations) == 0 {
 		progress.GenerationMessage = "无生成任务"
@@ -1776,6 +1852,131 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	}
 
 	return progress, nil
+}
+
+// RetryFailedStoryboardImages retries failed image generations for a storyboard.
+// It starts new generation jobs only for failed scenes and returns retry summary.
+func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string) (retried int, remainingFailed int, err error) {
+	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	latestFailedByScene := make(map[string]*domain.StoryboardImageGeneration)
+	for _, gen := range imageGens {
+		if gen.Status != domain.GenerationStatusFailed {
+			continue
+		}
+		existing, ok := latestFailedByScene[gen.SceneID]
+		if !ok || gen.CreatedAt > existing.CreatedAt {
+			latestFailedByScene[gen.SceneID] = gen
+		}
+	}
+
+	for _, gen := range latestFailedByScene {
+		_, retryErr := s.GenerateSceneImage(ctx, &ImageGenerationRequest{
+			StoryboardID:             storyboardID,
+			SceneID:                  gen.SceneID,
+			SceneTitle:               gen.SceneTitle,
+			SceneDescription:         gen.SceneDescription,
+			ReferenceImages:          gen.ReferenceImages,
+			SceneCharacters:          gen.SceneCharacters,
+			CharacterReferenceImages: gen.CharacterReferenceImages,
+			StoryStyle:               gen.StoryStyle,
+		})
+		if retryErr != nil {
+			s.logger.Warn("failed to retry image generation",
+				zap.String("storyboardId", storyboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(retryErr))
+			continue
+		}
+		retried++
+	}
+
+	latestImageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID)
+	if listErr != nil {
+		return retried, 0, nil
+	}
+	for _, gen := range latestImageGens {
+		if gen.Status == domain.GenerationStatusFailed {
+			remainingFailed++
+		}
+	}
+
+	return retried, remainingFailed, nil
+}
+
+// CancelStoryboardGeneration cancels all in-flight generation tasks for a storyboard.
+func (s *Service) CancelStoryboardGeneration(ctx context.Context, storyboardID, userID string) (cancelledCount int, err error) {
+	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return 0, err
+	}
+	if storyboard.UserID != userID {
+		return 0, fmt.Errorf("permission denied: not the creator")
+	}
+
+	cancelMessage := formatGenerationError(GenerationErrorCancelled, "generation cancelled by user")
+
+	if contentGen, getErr := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID); getErr == nil && contentGen != nil {
+		if contentGen.Status == domain.GenerationStatusPending || contentGen.Status == domain.GenerationStatusProcessing {
+			contentGen.Status = domain.GenerationStatusFailed
+			contentGen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			contentGen.CompletedAt = &now
+			if updateErr := s.repo.UpdateContentGeneration(ctx, contentGen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if sceneGens, listErr := s.repo.ListSceneGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range sceneGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateSceneGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if imageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range imageGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateImageGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if videoGens, listErr := s.repo.ListVideoGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range videoGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateVideoGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	return cancelledCount, nil
 }
 
 // PublishStoryboard publishes a storyboard (Step 5)
@@ -2067,7 +2268,7 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 				zap.Any("panic", r))
 			// Update status to failed
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = fmt.Sprintf("panic: %v", r)
+			gen.ErrorMessage = formatGenerationError(GenerationErrorUnknown, fmt.Sprintf("panic: %v", r))
 			_ = s.repo.UpdateVideoGeneration(context.Background(), gen)
 		}
 	}()
@@ -2090,7 +2291,7 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 			zap.String("sceneId", gen.SceneID),
 			zap.String("storyboardId", gen.StoryboardID))
 		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = "genAPI is not available"
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "genAPI is not available")
 		_ = s.repo.UpdateVideoGeneration(ctx, gen)
 		return
 	}
@@ -2169,7 +2370,7 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 				zap.Int("attempts", attempt),
 				zap.Error(pollCtx.Err()))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = fmt.Sprintf("polling cancelled: %v", pollCtx.Err())
+			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled, fmt.Sprintf("polling cancelled: %v", pollCtx.Err()))
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
 			return
 
@@ -2217,7 +2418,7 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 		zap.String("taskId", taskID),
 		zap.Int("attempts", attempt))
 	gen.Status = domain.GenerationStatusFailed
-	gen.ErrorMessage = fmt.Sprintf("polling timeout after %d attempts", attempt)
+	gen.ErrorMessage = formatGenerationError(GenerationErrorTimeout, fmt.Sprintf("polling timeout after %d attempts", attempt))
 	_ = s.repo.UpdateVideoGeneration(ctx, gen)
 	return
 
@@ -2249,7 +2450,7 @@ processResult:
 			}()))
 
 		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = errMsg
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, errMsg)
 		_ = s.repo.UpdateVideoGeneration(ctx, gen)
 		return
 	}
@@ -2489,9 +2690,9 @@ func (s *Service) usageRecordMetadataForStoryboard(ctx context.Context, storyboa
 		}
 	}
 	return map[string]interface{}{
-		"user_id":              story.UserID,
-		"related_entity_id":    storyboardID,
-		"related_entity_type":  "storyboard",
+		"user_id":             story.UserID,
+		"related_entity_id":   storyboardID,
+		"related_entity_type": "storyboard",
 	}
 }
 

@@ -201,12 +201,30 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 	}
 
 	// Generate images for all scenes
-	var generations []*domain.StoryboardImageGeneration
+	type sceneBatchResult struct {
+		SceneID          string                            `json:"sceneId"`
+		SceneTitle       string                            `json:"sceneTitle"`
+		Status           string                            `json:"status"`
+		ErrorMessage     string                            `json:"errorMessage,omitempty"`
+		Generation       *domain.StoryboardImageGeneration `json:"generation,omitempty"`
+		ExistingImageURL string                            `json:"existingImageUrl,omitempty"`
+	}
+
+	results := make([]sceneBatchResult, 0, len(storyboard.StoryboardScenes))
+	successCount := 0
+	failedCount := 0
 	for _, scene := range storyboard.StoryboardScenes {
 		// Skip if already has image and not regenerating
 		if !req.RegenerateAll && scene.Image != "" {
 			h.logger.Debug("skipping scene with existing image",
 				zap.String("sceneId", scene.ID))
+			results = append(results, sceneBatchResult{
+				SceneID:          scene.ID,
+				SceneTitle:       scene.Title,
+				Status:           "success",
+				ExistingImageURL: scene.Image,
+			})
+			successCount++
 			continue
 		}
 
@@ -243,17 +261,37 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 			h.logger.Warn("failed to generate image for scene",
 				zap.String("sceneId", scene.ID),
 				zap.Error(genErr))
+			results = append(results, sceneBatchResult{
+				SceneID:      scene.ID,
+				SceneTitle:   scene.Title,
+				Status:       "failed",
+				ErrorMessage: genErr.Error(),
+			})
+			failedCount++
 			continue
 		}
 
-		generations = append(generations, gen)
+		results = append(results, sceneBatchResult{
+			SceneID:    scene.ID,
+			SceneTitle: scene.Title,
+			Status:     "success",
+			Generation: gen,
+		})
+		successCount++
 	}
 
 	h.logger.Info("GenerateAllStoryboardImages completed",
 		zap.String("storyboardId", storyboardID),
-		zap.Int("scenesProcessed", len(generations)))
+		zap.Int("scenesProcessed", len(results)),
+		zap.Int("successCount", successCount),
+		zap.Int("failedCount", failedCount))
 
-	Success(c, generations)
+	Success(c, gin.H{
+		"results":      results,
+		"total":        len(results),
+		"successCount": successCount,
+		"failedCount":  failedCount,
+	})
 }
 
 // GenerateStoryboardVideo generates a video for a scene (Step 4)
@@ -312,6 +350,60 @@ func (h *Handler) GetGenerationProgress(c *gin.Context) {
 	}
 
 	Success(c, progress)
+}
+
+// RetryFailedStoryboardImages retries failed image generations for a storyboard.
+// POST /api/storyboards/:id/retry-failed-images
+func (h *Handler) RetryFailedStoryboardImages(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	retried, remainingFailed, err := h.svc.RetryFailedStoryboardImages(c.Request.Context(), storyboardID)
+	if err != nil {
+		Error(c, CodeInternalError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"storyboardId":    storyboardID,
+		"retriedCount":    retried,
+		"remainingFailed": remainingFailed,
+	})
+}
+
+// CancelStoryboardGeneration cancels all pending/processing generation tasks for a storyboard.
+// POST /api/storyboards/:id/cancel-generation
+func (h *Handler) CancelStoryboardGeneration(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	userIDValue, ok := c.Get("userID")
+	if !ok {
+		Error(c, CodeUnauthorized, "unauthorized")
+		return
+	}
+	userID := userIDValue.(string)
+
+	cancelledCount, err := h.svc.CancelStoryboardGeneration(c.Request.Context(), storyboardID, userID)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "permission denied") {
+			Error(c, CodeForbidden, err.Error())
+			return
+		}
+		Error(c, CodeInternalError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"storyboardId":   storyboardID,
+		"cancelledCount": cancelledCount,
+	})
 }
 
 // PublishStoryboard publishes a storyboard (Step 5)

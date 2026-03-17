@@ -48,6 +48,12 @@ type CharacterFateState struct {
 // ContinueStoryboard continues a storyboard by creating a parallel universe
 // This is the main entry point for the "AI 辅助平行宇宙续写" feature
 func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *ContinueRequest) (*ContinueResult, error) {
+	sceneCount, err := NormalizeStoryboardSceneCount(req.SceneCount)
+	if err != nil {
+		return nil, err
+	}
+	req.SceneCount = sceneCount
+
 	s.logger.Info("starting storyboard continuation (parallel universe creation)",
 		zap.String("userId", userID),
 		zap.String("parentStoryboardId", req.ParentStoryboardID),

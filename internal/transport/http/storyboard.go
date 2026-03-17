@@ -46,11 +46,11 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 	var req struct {
 		StoryID       string                `json:"storyId" binding:"required"`
 		ParentID      *string               `json:"parentId"`
-		Title         string                `json:"title" binding:"required"`
+		Title         string                `json:"title"`
 		RawInput      string                `json:"rawInput" binding:"required"`
 		Content       string                `json:"content"`
 		IsStandalone  bool                  `json:"isStandalone"` // Independent plot, AI won't reference parent context
-		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-5, default 3)
+		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-8, default 3)
 		SceneRefs     []sceneRefPayload     `json:"sceneRefs"`    // References to story-level scenes (static locations)
 		CharacterRefs []characterRefPayload `json:"characterRefs"`
 		Tags          []string              `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
@@ -81,10 +81,12 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		zap.String("title", req.Title),
 		zap.String("userId", uid))
 
-	// Default scene count to 3 if not specified or out of range
-	sceneCount := req.SceneCount
-	if sceneCount < 2 || sceneCount > 16 {
-		sceneCount = 6
+	idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+
+	sceneCount, err := service.NormalizeStoryboardSceneCount(req.SceneCount)
+	if err != nil {
+		InvalidParams(c, err.Error())
+		return
 	}
 
 	// Set parentID from request
@@ -136,8 +138,8 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		}
 	}
 
-	// AI generation is handled by CreateStoryboard service when content is empty and rawInput is provided
-	if err := h.svc.CreateStoryboard(c.Request.Context(), storyboard); err != nil {
+	// Create is idempotent when Idempotency-Key is provided.
+	if err := h.svc.CreateStoryboardWithIdempotency(c.Request.Context(), storyboard, idempotencyKey); err != nil {
 		h.logger.Error("CreateStoryboard failed",
 			zap.String("storyId", req.StoryID),
 			zap.Error(err))
@@ -259,7 +261,13 @@ func (h *Handler) UpdateStoryboard(c *gin.Context) {
 		return
 	}
 
-	Success(c, gin.H{"message": "storyboard updated successfully"})
+	updatedStoryboard, err := h.svc.GetStoryboard(c.Request.Context(), id)
+	if err != nil {
+		InternalError(c, err.Error())
+		return
+	}
+
+	Success(c, updatedStoryboard)
 }
 
 // DeleteStoryboard 删除 storyboard
@@ -330,6 +338,7 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		zap.Int("offset", offset))
 
 	var storyboards []*domain.Storyboard
+	var parentStoryboard *domain.Storyboard
 	var err error
 
 	// 根据 parentId 参数决定获取哪些故事板
@@ -338,6 +347,19 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		// 获取根故事板（ParentID 为空或 "__root__"）
 		storyboards, err = h.svc.ListRootStoryboards(c.Request.Context(), storyID, limit, offset)
 	default:
+		parentStoryboard, err = h.svc.GetStoryboard(c.Request.Context(), parentID)
+		if err != nil {
+			if err == domain.ErrNotFound {
+				NotFound(c, "parent storyboard not found")
+				return
+			}
+			h.logger.Error("failed to get parent storyboard",
+				zap.String("storyId", storyID),
+				zap.String("parentId", parentID),
+				zap.Error(err))
+			InternalError(c, err.Error())
+			return
+		}
 		// 获取指定父级的子故事板
 		storyboards, err = h.svc.ListStoryboardsByParent(c.Request.Context(), storyID, parentID, limit, offset)
 	}
@@ -365,10 +387,11 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		zap.Int("count", len(storyboards)))
 
 	Success(c, gin.H{
-		"storyboards": storyboards,
-		"total":       len(storyboards),
-		"limit":       limit,
-		"offset":      offset,
+		"storyboards":      storyboards,
+		"parentStoryboard": parentStoryboard,
+		"total":            len(storyboards),
+		"limit":            limit,
+		"offset":           offset,
 	})
 }
 
@@ -414,7 +437,7 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		RawInput      string                `json:"rawInput" binding:"required"`
 		Content       string                `json:"content"`
 		IsStandalone  bool                  `json:"isStandalone"` // Independent plot, AI won't reference parent context
-		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-5, default 3)
+		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-8, default 3)
 		SceneRefs     []sceneRefPayload     `json:"sceneRefs"`    // References to story-level scenes
 		CharacterRefs []characterRefPayload `json:"characterRefs"`
 	}
@@ -424,10 +447,10 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		return
 	}
 
-	// Default scene count to 3 if not specified or out of range
-	sceneCount := req.SceneCount
-	if sceneCount < 2 || sceneCount > 5 {
-		sceneCount = 3
+	sceneCount, err := service.NormalizeStoryboardSceneCount(req.SceneCount)
+	if err != nil {
+		InvalidParams(c, err.Error())
+		return
 	}
 
 	newStoryboard := &domain.Storyboard{
@@ -498,10 +521,10 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
 		zap.Int("sceneCount", req.SceneCount))
 
-	// Default scene count to 3 if not specified or out of range
-	sceneCount := req.SceneCount
-	if sceneCount < 1 || sceneCount > 10 {
-		sceneCount = 3
+	sceneCount, err := service.NormalizeStoryboardSceneCount(req.SceneCount)
+	if err != nil {
+		InvalidParams(c, err.Error())
+		return
 	}
 
 	// Use the narrator pipeline for parallel universe continuation

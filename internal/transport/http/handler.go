@@ -188,6 +188,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)
 			authenticated.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
 			authenticated.GET("/storyboards/:id/generation-progress", h.GetGenerationProgress)
+			authenticated.POST("/storyboards/:id/cancel-generation", h.CancelStoryboardGeneration)
+			authenticated.POST("/storyboards/:id/retry-failed-images", h.RetryFailedStoryboardImages)
 			authenticated.POST("/storyboards/:id/publish", h.PublishStoryboard)
 			authenticated.GET("/storyboards/:id/playlist.m3u8", h.GetStoryboardVideoPlaylist)
 			authenticated.GET("/storyboards/:id/scenes/:sceneId/playlist.m3u8", h.GetSceneVideoPlaylist)
@@ -238,12 +240,12 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/characters/:id/follow", h.FollowCharacter)
 			authenticated.DELETE("/characters/:id/follow", h.UnfollowCharacter)
 			// REMOVED: skills routes - not in StoryCreationAppUI design
-			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)   // AI生成角色头像
-			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)               // 更新角色头像
-			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar) // 使用portrait作为头像
-			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)          // 获取形象生成推荐提示词
+			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)     // AI生成角色头像
+			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)                 // 更新角色头像
+			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar)   // 使用portrait作为头像
+			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)            // 获取形象生成推荐提示词
 			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait) // AI生成角色完整形象
-			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)        // 从形象图裁剪头像
+			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)          // 从形象图裁剪头像
 			// REMOVED: views/generate, views routes - not in StoryCreationAppUI design (use frontViewURL, sideViewURL, backViewURL fields instead)
 			// REMOVED: posters routes - not in StoryCreationAppUI design
 
@@ -261,7 +263,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// REMOVED: Dashboard stats - not in StoryCreationAppUI design
 
-            // 资产管理相关
+			// 资产管理相关
 			authenticated.GET("/assets", h.ListAssets)
 			authenticated.GET("/assets/:id", h.GetAsset)
 			authenticated.POST("/assets", h.CreateAsset)
