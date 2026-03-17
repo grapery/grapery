@@ -5,7 +5,7 @@
 # Builds: server, vippay
 # ========================================
 
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /src
 COPY grapery/go.mod grapery/go.sum ./
 RUN go mod download
