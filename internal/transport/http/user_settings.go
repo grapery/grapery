@@ -60,6 +60,9 @@ type UpdateSettingsRequest struct {
 	AllowMessagesFrom         string                 `json:"allowMessagesFrom,omitempty"`
 	ShowOnlineStatus          *bool                  `json:"showOnlineStatus,omitempty"`
 	ShowReadReceipts          *bool                  `json:"showReadReceipts,omitempty"`
+	ShowPublicStories         *bool                  `json:"showPublicStories,omitempty"`
+	ShowPublicFragments       *bool                  `json:"showPublicFragments,omitempty"`
+	ShowPublicBookmarks       *bool                  `json:"showPublicBookmarks,omitempty"`
 	AIEnabled                 *bool                  `json:"aiEnabled,omitempty"`
 	AIDataSharing             *bool                  `json:"aiDataSharing,omitempty"`
 	NotificationSettings      map[string]interface{} `json:"notificationSettings,omitempty"`
@@ -113,6 +116,15 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	}
 	if req.ShowReadReceipts != nil {
 		updates["showReadReceipts"] = *req.ShowReadReceipts
+	}
+	if req.ShowPublicStories != nil {
+		updates["showPublicStories"] = *req.ShowPublicStories
+	}
+	if req.ShowPublicFragments != nil {
+		updates["showPublicFragments"] = *req.ShowPublicFragments
+	}
+	if req.ShowPublicBookmarks != nil {
+		updates["showPublicBookmarks"] = *req.ShowPublicBookmarks
 	}
 	if req.AIEnabled != nil {
 		updates["aiEnabled"] = *req.AIEnabled
@@ -216,6 +228,9 @@ type UpdatePrivacyRequest struct {
 	AllowFollowFrom           string `json:"allowFollowFrom,omitempty"`
 	AllowCommentsFrom         string `json:"allowCommentsFrom,omitempty"`
 	AllowMessagesFrom         string `json:"allowMessagesFrom,omitempty"`
+	ShowPublicStories         *bool  `json:"showPublicStories,omitempty"`
+	ShowPublicFragments       *bool  `json:"showPublicFragments,omitempty"`
+	ShowPublicBookmarks       *bool  `json:"showPublicBookmarks,omitempty"`
 }
 
 // UpdatePrivacy 更新隐私设置
@@ -230,7 +245,7 @@ func (h *UserSettingsHandler) UpdatePrivacy(c *gin.Context) {
 		return
 	}
 
-	privacy := make(map[string]string)
+	privacy := make(map[string]interface{})
 	if req.ProfileVisibility != "" {
 		privacy["profileVisibility"] = req.ProfileVisibility
 	}
@@ -248,6 +263,15 @@ func (h *UserSettingsHandler) UpdatePrivacy(c *gin.Context) {
 	}
 	if req.AllowMessagesFrom != "" {
 		privacy["allowMessagesFrom"] = req.AllowMessagesFrom
+	}
+	if req.ShowPublicStories != nil {
+		privacy["showPublicStories"] = *req.ShowPublicStories
+	}
+	if req.ShowPublicFragments != nil {
+		privacy["showPublicFragments"] = *req.ShowPublicFragments
+	}
+	if req.ShowPublicBookmarks != nil {
+		privacy["showPublicBookmarks"] = *req.ShowPublicBookmarks
 	}
 
 	if err := h.settingsService.UpdatePrivacy(c.Request.Context(), userID, privacy); err != nil {

@@ -34,6 +34,10 @@ type User struct {
 
 	// 非持久化字段，用于API响应
 	IsFollowing *bool `json:"isFollowing,omitempty"` // 当前用户是否关注此用户
+	// 主页公开配置（来自 user_settings，非持久化字段）
+	ShowPublicStories   *bool `json:"showPublicStories,omitempty"`
+	ShowPublicFragments *bool `json:"showPublicFragments,omitempty"`
+	ShowPublicBookmarks *bool `json:"showPublicBookmarks,omitempty"`
 }
 
 // UserFollow 用户关注关系
@@ -70,6 +74,9 @@ type UserSettings struct {
 	AllowMessagesFrom         string `json:"allowMessagesFrom"`         // everyone, followers_only, no_one
 	ShowOnlineStatus          bool   `json:"showOnlineStatus"`
 	ShowReadReceipts          bool   `json:"showReadReceipts"`
+	ShowPublicStories         bool   `json:"showPublicStories"`
+	ShowPublicFragments       bool   `json:"showPublicFragments"`
+	ShowPublicBookmarks       bool   `json:"showPublicBookmarks"`
 
 	// AI设置
 	AIEnabled     bool `json:"aiEnabled"`

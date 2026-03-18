@@ -29,8 +29,8 @@ type User struct {
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
-	Points              int            `gorm:"default:0;index"`      // StoryCreationAppUI - 未择积分
-	ReferralCode        string         `gorm:"uniqueIndex;size:20"`  // StoryCreationAppUI - 用户专属邀请码
+	Points              int            `gorm:"default:0;index"`     // StoryCreationAppUI - 未择积分
+	ReferralCode        string         `gorm:"uniqueIndex;size:20"` // StoryCreationAppUI - 用户专属邀请码
 	CreatedAt           int64          `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt           int64          `gorm:"type:bigint;autoUpdateTime"`
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
@@ -39,15 +39,15 @@ type User struct {
 // UserReferral 用户邀请记录 (StoryCreationAppUI Design)
 type UserReferral struct {
 	ID           string         `gorm:"primaryKey;size:36"`
-	ReferrerID   string         `gorm:"size:36;not null;index"`          // 邀请人用户ID
+	ReferrerID   string         `gorm:"size:36;not null;index"` // 邀请人用户ID
 	Referrer     User           `gorm:"foreignKey:ReferrerID"`
-	RefereeID    string         `gorm:"size:36;not null;uniqueIndex"`    // 被邀请人用户ID（唯一）
+	RefereeID    string         `gorm:"size:36;not null;uniqueIndex"` // 被邀请人用户ID（唯一）
 	Referee      User           `gorm:"foreignKey:RefereeID"`
 	ReferralCode string         `gorm:"size:20;not null;index"`          // 使用的邀请码
 	PointsEarned int            `gorm:"default:0"`                       // 获得的积分
 	Status       string         `gorm:"size:20;default:'pending';index"` // pending, completed, rewarded
 	CreatedAt    time.Time      `gorm:"autoCreateTime;index"`
-	RewardedAt   *time.Time     `gorm:"index"`                           // 奖励发放时间
+	RewardedAt   *time.Time     `gorm:"index"` // 奖励发放时间
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
@@ -527,13 +527,13 @@ type CharacterFollow struct {
 
 // UserBlock 用户屏蔽关系
 type UserBlock struct {
-	ID         string         `gorm:"primaryKey;size:36"`
-	BlockerID  string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique"`
-	Blocker    User           `gorm:"foreignKey:BlockerID"`
-	BlockedID  string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique;index"`
-	Blocked    User           `gorm:"foreignKey:BlockedID"`
-	CreatedAt  time.Time      `gorm:"autoCreateTime"`
-	DeletedAt  gorm.DeletedAt `gorm:"index"`
+	ID        string         `gorm:"primaryKey;size:36"`
+	BlockerID string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique"`
+	Blocker   User           `gorm:"foreignKey:BlockerID"`
+	BlockedID string         `gorm:"size:36;not null;index:idx_blocker_blocked,unique;index"`
+	Blocked   User           `gorm:"foreignKey:BlockedID"`
+	CreatedAt time.Time      `gorm:"autoCreateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 // UserReport 用户举报记录
@@ -599,28 +599,28 @@ type Asset struct {
 
 // Notification 通知
 type Notification struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	UserID      string         `gorm:"size:36;not null;index"`
-	User        User           `gorm:"foreignKey:UserID"`
-	Type        string         `gorm:"size:50;not null;index"` // like, comment, follow, story_update, system
-	Title       string         `gorm:"size:200;not null"`
-	Content     string         `gorm:"type:text"`
-	Link        string         `gorm:"size:500"`
-	Read        bool           `gorm:"default:false;index"`
-	ActorID     string         `gorm:"size:36;index"`
-	ActorName   string         `gorm:"size:100"`
-	ActorAvatar string         `gorm:"size:500"`
+	ID          string `gorm:"primaryKey;size:36"`
+	UserID      string `gorm:"size:36;not null;index"`
+	User        User   `gorm:"foreignKey:UserID"`
+	Type        string `gorm:"size:50;not null;index"` // like, comment, follow, story_update, system
+	Title       string `gorm:"size:200;not null"`
+	Content     string `gorm:"type:text"`
+	Link        string `gorm:"size:500"`
+	Read        bool   `gorm:"default:false;index"`
+	ActorID     string `gorm:"size:36;index"`
+	ActorName   string `gorm:"size:100"`
+	ActorAvatar string `gorm:"size:500"`
 	// Story context (for like, comment, story_update types)
 	StoryTitle  string `gorm:"size:200"`
 	StoryCover  string `gorm:"size:500"`
 	StoryID     string `gorm:"size:36;index"`
 	CommentText string `gorm:"type:text"` // 评论内容摘要
 	// System notification fields (for system type)
-	SysTitle string         `gorm:"size:200"`
-	SysBody  string         `gorm:"type:text"`
-	SysIcon  string         `gorm:"size:50"` // icon name: gift, star, trending, etc.
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	SysTitle  string         `gorm:"size:200"`
+	SysBody   string         `gorm:"type:text"`
+	SysIcon   string         `gorm:"size:50"` // icon name: gift, star, trending, etc.
+	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 // ========== 用户设置 ==========
@@ -642,6 +642,9 @@ type UserSettings struct {
 	AllowMessagesFrom         string         `gorm:"size:50;default:'followers_only'"`
 	ShowOnlineStatus          bool           `gorm:"default:true"`
 	ShowReadReceipts          bool           `gorm:"default:true"`
+	ShowPublicStories         bool           `gorm:"default:true"`
+	ShowPublicFragments       bool           `gorm:"default:true"`
+	ShowPublicBookmarks       bool           `gorm:"default:true"`
 	AIEnabled                 bool           `gorm:"default:true"`
 	AIDataSharing             bool           `gorm:"default:true"`
 	NotificationSettings      string         `gorm:"type:json"`

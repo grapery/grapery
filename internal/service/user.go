@@ -385,9 +385,11 @@ func (s *Service) UpdateUserBackground(ctx context.Context, userID, backgroundUR
 }
 
 // UserProfile 获取用户资料（对外API，带缓存）
-func (s *Service) UserProfile(ctx context.Context, userID string) (*domain.User, error) {
+func (s *Service) UserProfile(ctx context.Context, userID, viewerID string) (*domain.User, error) {
 	s.logger.Debug("getting user profile",
 		zap.String("userID", userID))
+
+	var user *domain.User
 
 	// 尝试从缓存获取
 	c := s.getCache()
@@ -401,7 +403,7 @@ func (s *Service) UserProfile(ctx context.Context, userID string) (*domain.User,
 			if s.metrics != nil {
 				s.metrics.RecordCacheHit("user")
 			}
-			return &cachedUser, nil
+			user = &cachedUser
 		} else {
 			s.logger.Debug("user profile cache miss",
 				zap.String("userID", userID),
@@ -413,17 +415,34 @@ func (s *Service) UserProfile(ctx context.Context, userID string) (*domain.User,
 		}
 	}
 
-	// 从数据库获取
-	user, err := s.repo.UserByID(ctx, userID)
-	if err != nil {
-		s.logger.Error("failed to get user profile",
-			zap.String("userID", userID),
-			zap.Error(err))
-		return nil, fmt.Errorf("user not found: %w", err)
+	if user == nil {
+		// 从数据库获取
+		var err error
+		user, err = s.repo.UserByID(ctx, userID)
+		if err != nil {
+			s.logger.Error("failed to get user profile",
+				zap.String("userID", userID),
+				zap.Error(err))
+			return nil, fmt.Errorf("user not found: %w", err)
+		}
+
+		// 写入缓存
+		s.cacheUser(ctx, user)
 	}
 
-	// 写入缓存
-	s.cacheUser(ctx, user)
+	// Attach profile visibility toggles for client-side tab rendering.
+	if settings, err := s.repo.UserSettings(ctx, userID); err == nil && settings != nil {
+		user.ShowPublicStories = &settings.ShowPublicStories
+		user.ShowPublicFragments = &settings.ShowPublicFragments
+		user.ShowPublicBookmarks = &settings.ShowPublicBookmarks
+	}
+
+	// Keep follow state on profile response for convenient UI updates.
+	if viewerID != "" && viewerID != userID {
+		if isFollowing, err := s.repo.IsFollowing(ctx, viewerID, userID); err == nil {
+			user.IsFollowing = &isFollowing
+		}
+	}
 
 	return user, nil
 }
@@ -462,7 +481,7 @@ func (s *Service) GetUser(ctx context.Context, userID string) (*domain.User, err
 }
 
 // GetUserStories 获取用户的故事列表（带缓存）
-func (s *Service) GetUserStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
+func (s *Service) GetUserStories(ctx context.Context, userID, viewerID string, limit, offset int) ([]*domain.Story, error) {
 	s.logger.Debug("getting user stories",
 		zap.String("userID", userID),
 		zap.Int("limit", limit),
@@ -484,7 +503,7 @@ func (s *Service) GetUserStories(ctx context.Context, userID string, limit, offs
 			s.logger.Debug("user stories cache hit",
 				zap.String("userID", userID),
 				zap.Int("count", len(cachedStories)))
-			return cachedStories, nil
+			return s.filterStoriesForViewer(ctx, cachedStories, userID, viewerID)
 		} else {
 			s.logger.Debug("user stories cache miss",
 				zap.String("userID", userID),
@@ -515,7 +534,7 @@ func (s *Service) GetUserStories(ctx context.Context, userID string, limit, offs
 		}
 	}
 
-	return stories, nil
+	return s.filterStoriesForViewer(ctx, stories, userID, viewerID)
 }
 
 // GetUserCharacters 获取用户的角色列表（带缓存）
@@ -576,7 +595,7 @@ func (s *Service) GetUserCharacters(ctx context.Context, userID string, limit, o
 }
 
 // GetLikedStories 获取用户点赞的故事 (V2 social feature)
-func (s *Service) GetLikedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
+func (s *Service) GetLikedStories(ctx context.Context, userID, viewerID string, limit, offset int) ([]*domain.Story, error) {
 	s.logger.Debug("getting liked stories",
 		zap.String("userID", userID),
 		zap.Int("limit", limit),
@@ -619,7 +638,7 @@ func (s *Service) GetLikedStories(ctx context.Context, userID string, limit, off
 		zap.String("userID", userID),
 		zap.Int("count", len(stories)))
 
-	return stories, nil
+	return s.filterStoriesForViewer(ctx, stories, userID, viewerID)
 }
 
 // GetLikedCharacters 获取用户点赞（关注）的角色 (V2 social feature)
@@ -670,7 +689,7 @@ func (s *Service) GetLikedCharacters(ctx context.Context, userID string, limit, 
 }
 
 // GetLikedStoryboards 获取用户点赞的故事板 (V2 social feature)
-func (s *Service) GetLikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
+func (s *Service) GetLikedStoryboards(ctx context.Context, userID, viewerID string, limit, offset int) ([]*domain.Storyboard, error) {
 	s.logger.Debug("getting liked storyboards",
 		zap.String("userID", userID),
 		zap.Int("limit", limit),
@@ -713,14 +732,14 @@ func (s *Service) GetLikedStoryboards(ctx context.Context, userID string, limit,
 		zap.String("userID", userID),
 		zap.Int("count", len(storyboards)))
 
-	return storyboards, nil
+	return s.filterStoryboardsForViewer(ctx, storyboards, userID, viewerID)
 }
 
 // REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
 // REMOVED: GetUserDrafts - not in StoryCreationAppUI design
 
 // GetUserStoryboards 获取用户的故事板列表（已发布的）
-func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, error) {
+func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID string, limit, offset int) ([]*domain.Storyboard, error) {
 	s.logger.Debug("getting user storyboards",
 		zap.String("userID", userID),
 		zap.Int("limit", limit),
@@ -742,7 +761,7 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, 
 			s.logger.Debug("user storyboards cache hit",
 				zap.String("userID", userID),
 				zap.Int("count", len(cachedStoryboards)))
-			return cachedStoryboards, nil
+			return s.filterStoryboardsForViewer(ctx, cachedStoryboards, userID, viewerID)
 		} else {
 			s.logger.Debug("user storyboards cache miss",
 				zap.String("userID", userID),
@@ -773,7 +792,87 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID string, limit, 
 		}
 	}
 
-	return storyboards, nil
+	return s.filterStoryboardsForViewer(ctx, storyboards, userID, viewerID)
+}
+
+func (s *Service) isUserContentPublicEnabled(ctx context.Context, ownerID string) (stories bool, fragments bool, bookmarks bool) {
+	stories, fragments, bookmarks = true, true, true
+	settings, err := s.repo.UserSettings(ctx, ownerID)
+	if err != nil || settings == nil {
+		return
+	}
+	return settings.ShowPublicStories, settings.ShowPublicFragments, settings.ShowPublicBookmarks
+}
+
+func (s *Service) isFollowerOf(ctx context.Context, viewerID, ownerID string) bool {
+	if viewerID == "" || viewerID == ownerID {
+		return false
+	}
+	isFollowing, err := s.repo.IsFollowing(ctx, viewerID, ownerID)
+	return err == nil && isFollowing
+}
+
+func (s *Service) canViewerSeeStory(ctx context.Context, story *domain.Story, ownerID, viewerID string, storiesPublic bool, isFollower bool) bool {
+	if story == nil {
+		return false
+	}
+	if viewerID == ownerID {
+		return true
+	}
+	if !storiesPublic {
+		return false
+	}
+	switch story.Visibility {
+	case string(domain.StoryVisibilityPrivate):
+		return false
+	case string(domain.StoryVisibilityFollowers):
+		return isFollower
+	default:
+		return true
+	}
+}
+
+func (s *Service) filterStoriesForViewer(ctx context.Context, stories []*domain.Story, ownerID, viewerID string) ([]*domain.Story, error) {
+	if viewerID == ownerID {
+		return stories, nil
+	}
+	storiesPublic, _, _ := s.isUserContentPublicEnabled(ctx, ownerID)
+	if !storiesPublic {
+		return []*domain.Story{}, nil
+	}
+	isFollower := s.isFollowerOf(ctx, viewerID, ownerID)
+	filtered := make([]*domain.Story, 0, len(stories))
+	for _, st := range stories {
+		if s.canViewerSeeStory(ctx, st, ownerID, viewerID, storiesPublic, isFollower) {
+			filtered = append(filtered, st)
+		}
+	}
+	return filtered, nil
+}
+
+func (s *Service) filterStoryboardsForViewer(ctx context.Context, storyboards []*domain.Storyboard, ownerID, viewerID string) ([]*domain.Storyboard, error) {
+	if viewerID == ownerID {
+		return storyboards, nil
+	}
+	storiesPublic, _, _ := s.isUserContentPublicEnabled(ctx, ownerID)
+	if !storiesPublic {
+		return []*domain.Storyboard{}, nil
+	}
+	isFollower := s.isFollowerOf(ctx, viewerID, ownerID)
+	filtered := make([]*domain.Storyboard, 0, len(storyboards))
+	for _, sb := range storyboards {
+		if sb == nil || sb.StoryID == "" {
+			continue
+		}
+		story, err := s.repo.StoryByID(ctx, sb.StoryID)
+		if err != nil {
+			continue
+		}
+		if s.canViewerSeeStory(ctx, story, ownerID, viewerID, storiesPublic, isFollower) {
+			filtered = append(filtered, sb)
+		}
+	}
+	return filtered, nil
 }
 
 // REMOVED: GetUserDrafts - not in StoryCreationAppUI design

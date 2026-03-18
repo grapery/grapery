@@ -37,6 +37,9 @@ type InteractionService interface {
 	DeleteBookmark(ctx context.Context, userID string, bookmarkID string) error
 	CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType domain.BookmarkType, bookmarkID string) (bool, error)
 	GetBookmarksByUser(ctx context.Context, userID string, bookmarkType domain.BookmarkType) ([]*domain.Bookmark, error)
+	GetUserBookmarks(ctx context.Context, ownerID, viewerID string, bookmarkType domain.BookmarkType) ([]*domain.Bookmark, error)
+	GetBookmarksByUserPaged(ctx context.Context, userID string, bookmarkType domain.BookmarkType, page, limit int) ([]*domain.Bookmark, int64, bool, error)
+	GetUserBookmarksPaged(ctx context.Context, ownerID, viewerID string, bookmarkType domain.BookmarkType, page, limit int) ([]*domain.Bookmark, int64, bool, error)
 	GetBookmarksCount(ctx context.Context, bookmarkType domain.BookmarkType, bookmarkID string) (int, error)
 }
 
@@ -592,7 +595,175 @@ func (s *interactionService) GetBookmarksByUser(ctx context.Context, userID stri
 	return s.bookmarkRepo.GetBookmarksByUser(ctx, userID, bookmarkType)
 }
 
+// GetBookmarksByUserPaged 获取当前用户收藏列表（分页）
+func (s *interactionService) GetBookmarksByUserPaged(ctx context.Context, userID string, bookmarkType domain.BookmarkType, page, limit int) ([]*domain.Bookmark, int64, bool, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	bookmarks, total, err := s.bookmarkRepo.GetBookmarksByUserPaginated(ctx, userID, bookmarkType, limit, offset)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	hasMore := int64(offset+len(bookmarks)) < total
+	return bookmarks, total, hasMore, nil
+}
+
+// GetUserBookmarks 获取用户主页可见的收藏列表（遵守被访问用户的公开设置）
+func (s *interactionService) GetUserBookmarks(ctx context.Context, ownerID, viewerID string, bookmarkType domain.BookmarkType) ([]*domain.Bookmark, error) {
+	bookmarks, err := s.bookmarkRepo.GetBookmarksByUser(ctx, ownerID, bookmarkType)
+	if err != nil {
+		return nil, err
+	}
+
+	if viewerID == ownerID {
+		return bookmarks, nil
+	}
+
+	settings, err := s.repo.UserSettings(ctx, ownerID)
+	if err == nil && settings != nil && !settings.ShowPublicBookmarks {
+		return []*domain.Bookmark{}, nil
+	}
+
+	isFollower := false
+	if viewerID != "" {
+		if following, followErr := s.repo.IsFollowing(ctx, viewerID, ownerID); followErr == nil {
+			isFollower = following
+		}
+	}
+
+	filtered := make([]*domain.Bookmark, 0, len(bookmarks))
+	for _, bm := range bookmarks {
+		if bm == nil {
+			continue
+		}
+		visible, visErr := s.isBookmarkVisibleToViewer(ctx, bm, ownerID, viewerID, isFollower)
+		if visErr != nil {
+			continue
+		}
+		if visible {
+			filtered = append(filtered, bm)
+		}
+	}
+	return filtered, nil
+}
+
+// GetUserBookmarksPaged 获取用户主页可见收藏列表（分页）
+func (s *interactionService) GetUserBookmarksPaged(ctx context.Context, ownerID, viewerID string, bookmarkType domain.BookmarkType, page, limit int) ([]*domain.Bookmark, int64, bool, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	bookmarks, total, err := s.bookmarkRepo.GetBookmarksByUserPaginated(ctx, ownerID, bookmarkType, limit, offset)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	if viewerID == ownerID {
+		hasMore := int64(offset+len(bookmarks)) < total
+		return bookmarks, total, hasMore, nil
+	}
+
+	settings, err := s.repo.UserSettings(ctx, ownerID)
+	if err == nil && settings != nil && !settings.ShowPublicBookmarks {
+		return []*domain.Bookmark{}, 0, false, nil
+	}
+
+	isFollower := false
+	if viewerID != "" {
+		if following, followErr := s.repo.IsFollowing(ctx, viewerID, ownerID); followErr == nil {
+			isFollower = following
+		}
+	}
+
+	filtered := make([]*domain.Bookmark, 0, len(bookmarks))
+	for _, bm := range bookmarks {
+		if bm == nil {
+			continue
+		}
+		visible, visErr := s.isBookmarkVisibleToViewer(ctx, bm, ownerID, viewerID, isFollower)
+		if visErr != nil {
+			continue
+		}
+		if visible {
+			filtered = append(filtered, bm)
+		}
+	}
+	hasMore := int64(offset+len(bookmarks)) < total
+	return filtered, total, hasMore, nil
+}
+
 // GetBookmarksCount 获取收藏数量
 func (s *interactionService) GetBookmarksCount(ctx context.Context, bookmarkType domain.BookmarkType, bookmarkID string) (int, error) {
 	return s.bookmarkRepo.GetBookmarksCount(ctx, bookmarkType, bookmarkID)
+}
+
+func (s *interactionService) isBookmarkVisibleToViewer(ctx context.Context, bm *domain.Bookmark, ownerID, viewerID string, isFollower bool) (bool, error) {
+	switch bm.BookmarkType {
+	case domain.BookmarkTypeStory:
+		story, err := s.repo.StoryByID(ctx, bm.BookmarkID)
+		if err != nil || story == nil {
+			return false, err
+		}
+		return isStoryVisibleToViewer(story.Visibility, ownerID, viewerID, isFollower), nil
+	case domain.BookmarkTypeStoryboard:
+		sb, err := s.repo.StoryboardByID(ctx, bm.BookmarkID)
+		if err != nil || sb == nil {
+			return false, err
+		}
+		story, err := s.repo.StoryByID(ctx, sb.StoryID)
+		if err != nil || story == nil {
+			return false, err
+		}
+		return isStoryVisibleToViewer(story.Visibility, ownerID, viewerID, isFollower), nil
+	case domain.BookmarkTypeFragment:
+		fragment, err := s.repo.FragmentByID(ctx, bm.BookmarkID)
+		if err != nil || fragment == nil {
+			return false, err
+		}
+		return isFragmentVisibleToViewer(fragment.Visibility, ownerID, viewerID, isFollower), nil
+	default:
+		return false, nil
+	}
+}
+
+func isStoryVisibleToViewer(visibility, ownerID, viewerID string, isFollower bool) bool {
+	if viewerID == ownerID {
+		return true
+	}
+	switch visibility {
+	case string(domain.StoryVisibilityPrivate):
+		return false
+	case string(domain.StoryVisibilityFollowers):
+		return isFollower
+	default:
+		return true
+	}
+}
+
+func isFragmentVisibleToViewer(visibility, ownerID, viewerID string, isFollower bool) bool {
+	if viewerID == ownerID {
+		return true
+	}
+	switch visibility {
+	case string(domain.FragmentVisibilityPrivate):
+		return false
+	case string(domain.FragmentVisibilityFollowers), string(domain.FragmentVisibilityFollowersLegacy):
+		return isFollower
+	default:
+		return true
+	}
 }

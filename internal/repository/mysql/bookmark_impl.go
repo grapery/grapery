@@ -95,6 +95,25 @@ func (r *BookmarkRepositoryImpl) GetBookmarksByUser(ctx context.Context, userID 
 	return modelsToDomainBookmarks(models), nil
 }
 
+// GetBookmarksByUserPaginated gets bookmarks by user with pagination.
+func (r *BookmarkRepositoryImpl) GetBookmarksByUserPaginated(ctx context.Context, userID string, bookmarkType domain.BookmarkType, limit, offset int) ([]*domain.Bookmark, int64, error) {
+	var models []Bookmark
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&Bookmark{}).Where("user_id = ?", userID)
+	if bookmarkType != "" {
+		query = query.Where("bookmark_type = ?", string(bookmarkType))
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count bookmarks by user: %w", err)
+	}
+
+	if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&models).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to get paginated bookmarks by user: %w", err)
+	}
+	return modelsToDomainBookmarks(models), total, nil
+}
+
 // GetBookmarksByItem gets all bookmarks for a specific item
 func (r *BookmarkRepositoryImpl) GetBookmarksByItem(ctx context.Context, bookmarkType domain.BookmarkType, bookmarkID string) ([]*domain.Bookmark, error) {
 	var models []Bookmark

@@ -492,6 +492,7 @@ type BookmarkRepository interface {
 	DeleteBookmark(ctx context.Context, id string) error
 	GetBookmarkByID(ctx context.Context, id string) (*Bookmark, error)
 	GetBookmarksByUser(ctx context.Context, userID string, bookmarkType BookmarkType) ([]*Bookmark, error)
+	GetBookmarksByUserPaginated(ctx context.Context, userID string, bookmarkType BookmarkType, limit, offset int) ([]*Bookmark, int64, error)
 	GetBookmarksByItem(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) ([]*Bookmark, error)
 	CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType BookmarkType, bookmarkID string) (bool, error)
 	GetBookmarksCount(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) (int, error)

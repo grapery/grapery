@@ -86,7 +86,8 @@ func (h *Handler) GetUserProfile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	user, err := h.svc.UserProfile(c.Request.Context(), userID)
+	viewerID := GetUserID(c)
+	user, err := h.svc.UserProfile(c.Request.Context(), userID, viewerID)
 	if err != nil {
 		HandleError(c, err)
 		return
@@ -216,10 +217,11 @@ func (h *Handler) GetUserStories(c *gin.Context) {
 	if !ok {
 		return
 	}
+	viewerID := GetUserID(c)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	stories, err := h.svc.GetUserStories(c.Request.Context(), userID, limit, offset)
+	stories, err := h.svc.GetUserStories(c.Request.Context(), userID, viewerID, limit, offset)
 	if err != nil {
 		HandleError(c, err)
 		return
@@ -260,10 +262,11 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 	if !ok {
 		return
 	}
+	viewerID := GetUserID(c)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	storyboards, err := h.svc.GetUserStoryboards(c.Request.Context(), userID, limit, offset)
+	storyboards, err := h.svc.GetUserStoryboards(c.Request.Context(), userID, viewerID, limit, offset)
 	if err != nil {
 		HandleError(c, err)
 		return
@@ -286,10 +289,11 @@ func (h *Handler) GetLikedStories(c *gin.Context) {
 	if !ok {
 		return
 	}
+	viewerID := GetUserID(c)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	stories, err := h.svc.GetLikedStories(c.Request.Context(), userID, limit, offset)
+	stories, err := h.svc.GetLikedStories(c.Request.Context(), userID, viewerID, limit, offset)
 	if err != nil {
 		HandleError(c, err)
 		return
@@ -330,10 +334,11 @@ func (h *Handler) GetLikedStoryboards(c *gin.Context) {
 	if !ok {
 		return
 	}
+	viewerID := GetUserID(c)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	storyboards, err := h.svc.GetLikedStoryboards(c.Request.Context(), userID, limit, offset)
+	storyboards, err := h.svc.GetLikedStoryboards(c.Request.Context(), userID, viewerID, limit, offset)
 	if err != nil {
 		HandleError(c, err)
 		return

@@ -50,6 +50,7 @@ func (h *InteractionHandler) RegisterInteractionRoutes(r *gin.RouterGroup) {
 		bookmarks.DELETE("/:id", h.DeleteBookmark)
 		bookmarks.GET("/check", h.CheckBookmarkStatus)
 		bookmarks.GET("/my", h.GetMyBookmarks)
+		bookmarks.GET("/users/:userId", h.GetUserBookmarks)
 		bookmarks.GET("/count/:type/:id", h.GetBookmarksCount)
 	}
 }
@@ -442,14 +443,48 @@ func (h *InteractionHandler) GetMyBookmarks(c *gin.Context) {
 	}
 
 	bookmarkType := domain.BookmarkType(c.Query("type")) // Optional filter
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	bookmarks, err := h.interactionService.GetBookmarksByUser(c.Request.Context(), userID, bookmarkType)
+	bookmarks, total, hasMore, err := h.interactionService.GetBookmarksByUserPaged(c.Request.Context(), userID, bookmarkType, page, limit)
 	if err != nil {
 		HandleError(c, err)
 		return
 	}
 
-	Success(c, gin.H{"bookmarks": bookmarks})
+	Success(c, gin.H{
+		"bookmarks": bookmarks,
+		"total":     total,
+		"page":      page,
+		"limit":     limit,
+		"hasMore":   hasMore,
+	})
+}
+
+// GetUserBookmarks 获取指定用户主页可见的收藏列表
+func (h *InteractionHandler) GetUserBookmarks(c *gin.Context) {
+	viewerID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	ownerID := c.Param("userId")
+	bookmarkType := domain.BookmarkType(c.Query("type")) // Optional filter
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	bookmarks, total, hasMore, err := h.interactionService.GetUserBookmarksPaged(c.Request.Context(), ownerID, viewerID, bookmarkType, page, limit)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"bookmarks": bookmarks,
+		"total":     total,
+		"page":      page,
+		"limit":     limit,
+		"hasMore":   hasMore,
+	})
 }
 
 // GetBookmarksCount 获取收藏数量

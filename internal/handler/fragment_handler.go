@@ -15,12 +15,16 @@ import (
 )
 
 type FragmentHandler struct {
-	fragmentRepo *repository.FragmentRepository
+	fragmentRepo     *repository.FragmentRepository
+	userSettingsRepo domain.UserSettingsRepository
+	repo             domain.Repository
 }
 
-func NewFragmentHandler(fragmentRepo *repository.FragmentRepository) *FragmentHandler {
+func NewFragmentHandler(fragmentRepo *repository.FragmentRepository, userSettingsRepo domain.UserSettingsRepository, repo domain.Repository) *FragmentHandler {
 	return &FragmentHandler{
-		fragmentRepo: fragmentRepo,
+		fragmentRepo:     fragmentRepo,
+		userSettingsRepo: userSettingsRepo,
+		repo:             repo,
 	}
 }
 
@@ -333,6 +337,21 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 		limit = 100
 	}
 
+	// Respect owner's profile visibility configuration.
+	if currentUserID != userID && h.userSettingsRepo != nil {
+		if settings, err := h.userSettingsRepo.GetUserSettings(userID); err == nil && settings != nil && !settings.ShowPublicFragments {
+			c.JSON(http.StatusOK, gin.H{
+				"fragments": []*domain.Fragment{},
+				"total":     0,
+				"page":      page,
+				"limit":     limit,
+				"offset":    offset,
+				"hasMore":   false,
+			})
+			return
+		}
+	}
+
 	// Check permission - only show own private fragments or public/followers-only
 	fragments, total, err := h.fragmentRepo.ListByCreatorID(c.Request.Context(), userID, limit, offset)
 	if err != nil {
@@ -340,14 +359,22 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 		return
 	}
 
-	// Filter fragments based on visibility and user relationship
+	// Filter fragments based on visibility and user relationship.
+	isFollower := false
+	if currentUserID != "" && currentUserID != userID && h.repo != nil {
+		if following, followErr := h.repo.IsFollowing(c.Request.Context(), currentUserID, userID); followErr == nil {
+			isFollower = following
+		}
+	}
 	filteredFragments := make([]*domain.Fragment, 0)
 	for _, fragment := range fragments {
-		// Show if: public, or (followers and current user is following), or own fragments
-		if fragment.Visibility == domain.FragmentVisibilityPublic ||
-			(currentUserID == userID) ||
-			((fragment.Visibility == domain.FragmentVisibilityFollowers ||
-				fragment.Visibility == domain.FragmentVisibilityFollowersLegacy) && currentUserID != "") {
+		// Show if: own fragment, public fragment, or followers-only fragment for followers.
+		if currentUserID == userID || fragment.Visibility == domain.FragmentVisibilityPublic {
+			filteredFragments = append(filteredFragments, fragment)
+			continue
+		}
+		if (fragment.Visibility == domain.FragmentVisibilityFollowers ||
+			fragment.Visibility == domain.FragmentVisibilityFollowersLegacy) && isFollower {
 			filteredFragments = append(filteredFragments, fragment)
 		}
 	}
@@ -538,10 +565,10 @@ func stringifyArray(arr []string) string {
 // RegisterRoutes registers the fragment CRUD routes
 func (h *FragmentHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	// Fragment CRUD routes
-	router.GET("", h.ListFragments)                       // GET /fragments
-	router.GET("/:id", h.GetFragment)                     // GET /fragments/:id
-	router.POST("", authMiddleware, h.CreateFragment)     // POST /fragments
-	router.PUT("/:id", authMiddleware, h.UpdateFragment)  // PUT /fragments/:id
+	router.GET("", h.ListFragments)                         // GET /fragments
+	router.GET("/:id", h.GetFragment)                       // GET /fragments/:id
+	router.POST("", authMiddleware, h.CreateFragment)       // POST /fragments
+	router.PUT("/:id", authMiddleware, h.UpdateFragment)    // PUT /fragments/:id
 	router.DELETE("/:id", authMiddleware, h.DeleteFragment) // DELETE /fragments/:id
-	router.GET("/styles", h.GetFragmentStyles)            // GET /fragments/styles
+	router.GET("/styles", h.GetFragmentStyles)              // GET /fragments/styles
 }

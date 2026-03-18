@@ -20,7 +20,7 @@ type UserSettingsService interface {
 	UpdateLanguage(ctx context.Context, userID string, language string) error
 	UpdateTheme(ctx context.Context, userID string, theme string) error
 	UpdateFontSize(ctx context.Context, userID string, fontSize string) error
-	UpdatePrivacy(ctx context.Context, userID string, privacy map[string]string) error
+	UpdatePrivacy(ctx context.Context, userID string, privacy map[string]interface{}) error
 	UpdateAISettings(ctx context.Context, userID string, aiEnabled, aiDataSharing bool) error
 	UpdateNotificationSettings(ctx context.Context, userID string, settings map[string]interface{}) error
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
@@ -85,6 +85,9 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 		AllowMessagesFrom:         string(domain.AllowFromFollowersOnly),
 		ShowOnlineStatus:          true,
 		ShowReadReceipts:          true,
+		ShowPublicStories:         true,
+		ShowPublicFragments:       true,
+		ShowPublicBookmarks:       true,
 		AIEnabled:                 true,
 		AIDataSharing:             true,
 		NotificationSettings:      s.getDefaultNotificationSettings(),
@@ -171,6 +174,15 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 	if showReadReceipts, ok := updates["showReadReceipts"].(bool); ok {
 		settings.ShowReadReceipts = showReadReceipts
 	}
+	if showPublicStories, ok := updates["showPublicStories"].(bool); ok {
+		settings.ShowPublicStories = showPublicStories
+	}
+	if showPublicFragments, ok := updates["showPublicFragments"].(bool); ok {
+		settings.ShowPublicFragments = showPublicFragments
+	}
+	if showPublicBookmarks, ok := updates["showPublicBookmarks"].(bool); ok {
+		settings.ShowPublicBookmarks = showPublicBookmarks
+	}
 	if aiEnabled, ok := updates["aiEnabled"].(bool); ok {
 		settings.AIEnabled = aiEnabled
 	}
@@ -249,7 +261,7 @@ func (s *userSettingsService) UpdateTheme(ctx context.Context, userID string, th
 }
 
 // UpdatePrivacy 更新隐私设置
-func (s *userSettingsService) UpdatePrivacy(ctx context.Context, userID string, privacy map[string]string) error {
+func (s *userSettingsService) UpdatePrivacy(ctx context.Context, userID string, privacy map[string]interface{}) error {
 	s.logger.Info("updating privacy settings",
 		zap.String("userID", userID))
 
@@ -259,35 +271,44 @@ func (s *userSettingsService) UpdatePrivacy(ctx context.Context, userID string, 
 	}
 
 	// 更新隐私设置
-	if profileVisibility, ok := privacy["profileVisibility"]; ok && profileVisibility != "" {
+	if profileVisibility, ok := privacy["profileVisibility"].(string); ok && profileVisibility != "" {
 		if s.isValidVisibility(profileVisibility) {
 			settings.ProfileVisibility = profileVisibility
 		}
 	}
-	if defaultStoryVisibility, ok := privacy["defaultStoryVisibility"]; ok && defaultStoryVisibility != "" {
+	if defaultStoryVisibility, ok := privacy["defaultStoryVisibility"].(string); ok && defaultStoryVisibility != "" {
 		if s.isValidVisibility(defaultStoryVisibility) {
 			settings.DefaultStoryVisibility = defaultStoryVisibility
 		}
 	}
-	if defaultFragmentVisibility, ok := privacy["defaultFragmentVisibility"]; ok && defaultFragmentVisibility != "" {
+	if defaultFragmentVisibility, ok := privacy["defaultFragmentVisibility"].(string); ok && defaultFragmentVisibility != "" {
 		if s.isValidVisibility(defaultFragmentVisibility) {
 			settings.DefaultFragmentVisibility = defaultFragmentVisibility
 		}
 	}
-	if allowFollowFrom, ok := privacy["allowFollowFrom"]; ok && allowFollowFrom != "" {
+	if allowFollowFrom, ok := privacy["allowFollowFrom"].(string); ok && allowFollowFrom != "" {
 		if s.isValidAllowFrom(allowFollowFrom) {
 			settings.AllowFollowFrom = allowFollowFrom
 		}
 	}
-	if allowCommentsFrom, ok := privacy["allowCommentsFrom"]; ok && allowCommentsFrom != "" {
+	if allowCommentsFrom, ok := privacy["allowCommentsFrom"].(string); ok && allowCommentsFrom != "" {
 		if s.isValidAllowFrom(allowCommentsFrom) {
 			settings.AllowCommentsFrom = allowCommentsFrom
 		}
 	}
-	if allowMessagesFrom, ok := privacy["allowMessagesFrom"]; ok && allowMessagesFrom != "" {
+	if allowMessagesFrom, ok := privacy["allowMessagesFrom"].(string); ok && allowMessagesFrom != "" {
 		if s.isValidAllowFrom(allowMessagesFrom) {
 			settings.AllowMessagesFrom = allowMessagesFrom
 		}
+	}
+	if showPublicStories, ok := privacy["showPublicStories"].(bool); ok {
+		settings.ShowPublicStories = showPublicStories
+	}
+	if showPublicFragments, ok := privacy["showPublicFragments"].(bool); ok {
+		settings.ShowPublicFragments = showPublicFragments
+	}
+	if showPublicBookmarks, ok := privacy["showPublicBookmarks"].(bool); ok {
+		settings.ShowPublicBookmarks = showPublicBookmarks
 	}
 
 	settings.UpdatedAt = time.Now().Unix()

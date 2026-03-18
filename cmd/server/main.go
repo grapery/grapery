@@ -241,8 +241,12 @@ func main() {
 	fragmentInteractionRepo := repository.NewFragmentInteractionRepository(repo.DB())
 	logger.Info("fragment interaction repository initialized")
 
+	// Initialize User Settings Repository
+	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
+	logger.Info("user settings repository initialized")
+
 	// Initialize Fragment Handler
-	fragmentHandler := handler.NewFragmentHandler(fragmentRepo)
+	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo)
 	logger.Info("fragment handler initialized")
 
 	// Initialize Follow Repository
@@ -256,10 +260,6 @@ func main() {
 	// Initialize Bookmark Repository (StoryCreationAppUI)
 	bookmarkRepo := mysql.NewBookmarkRepository(repo.DB())
 	logger.Info("bookmark repository initialized")
-
-	// Initialize User Settings Repository
-	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
-	logger.Info("user settings repository initialized")
 
 	// Initialize Interaction Service
 	interactionService := service.NewInteractionService(followRepo, likeRepo, bookmarkRepo, repo, logger)
