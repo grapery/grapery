@@ -3040,99 +3040,9 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		zap.String("storyID", story.ID),
 		zap.String("title", story.Title))
 
-	// 5. 创建根故事板
-	storyboard := &domain.Storyboard{
-		BaseModel: common.BaseModel{
-			ID:        utils.GenerateID(),
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
-		StoryID:        story.ID,
-		ParentID:       domain.StoryboardRootMarker, // "__root__"
-		UserID:         userID,
-		CreatorName:    author.DisplayName,
-		CreatorAvatar:  author.Avatar,
-		Title:          "Chapter 1",
-		Content:        fragment.Content, // 碎片内容作为初始内容
-		RawInput:       fragment.Content,
-		SceneCount:     sceneCount,
-		WorkflowStatus: "draft",
-		CurrentStep:    1,
-		EngagementStats: common.EngagementStats{
-			Likes:    0,
-			Comments: 0,
-			Shares:   0,
-			Views:    0,
-		},
-	}
+	// 不在此处创建故事板：用户进入故事后再自行创建故事板（DefaultSceneCount 已写入 Story 供向导使用）。
 
-	s.logger.Debug("creating root storyboard",
-		zap.String("storyboardID", storyboard.ID),
-		zap.String("storyID", story.ID))
-
-	if err := s.repo.CreateStoryboard(ctx, storyboard); err != nil {
-		s.logger.Error("failed to create storyboard",
-			zap.String("storyboardID", storyboard.ID),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to create storyboard: %w", err)
-	}
-
-	s.logger.Info("root storyboard created",
-		zap.String("storyboardID", storyboard.ID),
-		zap.String("storyID", story.ID))
-
-	// 6. 迁移碎片媒体资源到故事板场景
-	scenesCreated := 0
-	if len(fragment.MediaURLs) > 0 {
-		s.logger.Debug("migrating fragment media to storyboard scenes",
-			zap.Int("mediaCount", len(fragment.MediaURLs)),
-			zap.Int("sceneCount", sceneCount))
-
-		for i, mediaURL := range fragment.MediaURLs {
-			if i >= sceneCount {
-				break // 不超过设定的场景数
-			}
-			scene := &domain.StoryboardScene{
-				BaseModel: common.BaseModel{
-					ID:        utils.GenerateID(),
-					CreatedAt: now,
-					UpdatedAt: now,
-				},
-				StoryboardID: storyboard.ID,
-				Sequence:     i + 1,
-				Title:        fmt.Sprintf("Scene %d", i+1),
-				Image:        mediaURL,
-				Description:  "", // 可以从 fragment content 中解析或留空
-			}
-			if err := s.repo.CreateStoryboardScenes(ctx, storyboard.ID, []*domain.StoryboardScene{scene}); err != nil {
-				s.logger.Warn("failed to create scene",
-					zap.String("storyboardID", storyboard.ID),
-					zap.Int("sequence", i+1),
-					zap.Error(err))
-			} else {
-				scenesCreated++
-			}
-		}
-	}
-
-	s.logger.Info("storyboard scenes created",
-		zap.Int("scenesCreated", scenesCreated))
-
-	// 7. 更新故事根故事板ID
-	story.RootStoryboardID = storyboard.ID
-	if err := s.repo.UpdateStory(ctx, story); err != nil {
-		s.logger.Warn("failed to update story root storyboard",
-			zap.String("storyID", story.ID),
-			zap.String("storyboardID", storyboard.ID),
-			zap.Error(err))
-		// 非致命错误，继续返回成功
-	} else {
-		s.logger.Debug("story root storyboard updated",
-			zap.String("storyID", story.ID),
-			zap.String("rootStoryboardID", storyboard.ID))
-	}
-
-	// 8. 更新碎片的转换状态（保留原始碎片，标记为已转换）
+	// 5. 更新碎片的转换状态（保留原始碎片，标记为已转换）
 	fragment.ConvertedToStoryID = &story.ID
 	fragment.IsConverted = true
 	if err := s.updateFragmentConvertedStatus(ctx, fragment); err != nil {
@@ -3151,13 +3061,11 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 
 	s.logger.Info("fragment converted to story successfully",
 		zap.String("fragmentID", fragmentID),
-		zap.String("storyID", story.ID),
-		zap.String("storyboardID", storyboard.ID),
-		zap.Int("scenesCreated", scenesCreated))
+		zap.String("storyID", story.ID))
 
 	return &domain.ConvertFragmentResponse{
 		Story:      story,
-		Storyboard: storyboard,
+		Storyboard: nil,
 		FragmentID: fragmentID,
 	}, nil
 }

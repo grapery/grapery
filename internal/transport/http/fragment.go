@@ -6,22 +6,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// ConvertFragmentToStoryRequest 碎片转故事请求（HTTP 层）
-// 注意：实际使用 domain.ConvertFragmentRequest，这里仅用于文档说明
+// ConvertFragmentToStoryRequest 碎片转故事请求（HTTP 层文档；Bind 使用 domain.ConvertFragmentRequest）
 type ConvertFragmentToStoryRequest struct {
 	Title             string `json:"title" binding:"required"`
 	Description       string `json:"description,omitempty"`
 	Genre             string `json:"genre,omitempty"`
 	CoverImage        string `json:"coverImage,omitempty"`
-	SceneCount        int    `json:"sceneCount,omitempty"`
-	UseAI             bool   `json:"useAI,omitempty"`
+	SceneCount        int    `json:"sceneCount,omitempty"` // 2–8，缺省由 Handler 纠为 3
+	UseAI             bool   `json:"useAI,omitempty"`      // 客户端「AI 一键续写」传 true
 	CollaborationType string `json:"collaborationType,omitempty"`
 }
 
 // ConvertFragmentToStoryResponse 碎片转故事响应（HTTP 层）
+// 仅创建 Story；storyboard 字段省略（旧版曾自动创建根故事板）。
 type ConvertFragmentToStoryResponse struct {
 	Story      *domain.Story      `json:"story"`
-	Storyboard *domain.Storyboard `json:"storyboard"`
+	Storyboard *domain.Storyboard `json:"storyboard,omitempty"`
 	FragmentID string             `json:"fragmentId"`
 }
 

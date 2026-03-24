@@ -220,13 +220,22 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 }
 
 // ListFragments handles GET /fragments
+//
+// Query (topic mode — when topic is non-empty, tab is ignored):
+//   - topic: exact topic label to list (same as stored on fragments, no leading #)
+//   - converted / convertedOnly: optional filter — "true" (hatched to story only),
+//     "false" (not hatched only), empty or other (all). Aliases are equivalent.
+//   - page, limit, offset: pagination (offset overrides page-derived offset when valid)
 func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	// Parse query parameters
 	tab := c.DefaultQuery("tab", "for_you") // for_you, following
 	topic := c.Query("topic")               // optional: filter by topic
-	converted := c.Query("converted")       // optional: all, true, false
+	converted := c.Query("converted")
+	if converted == "" {
+		converted = c.Query("convertedOnly") // Voyager / OpenAPI-friendly alias
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if limit <= 0 {

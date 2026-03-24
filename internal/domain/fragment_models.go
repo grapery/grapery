@@ -154,20 +154,21 @@ func NormalizeFragmentVisibility(visibility string) string {
 	}
 }
 
-// ConvertFragmentRequest 碎片转故事请求
+// ConvertFragmentRequest 碎片转故事请求（与 iOS FragmentConvertToStorySheet / creation 客户端 JSON 对齐）
 type ConvertFragmentRequest struct {
 	Title             string `json:"title" binding:"required"`    // 故事标题
-	Description       string `json:"description,omitempty"`       // 故事描述
-	Genre             string `json:"genre,omitempty"`             // 故事类型
-	CoverImage        string `json:"coverImage,omitempty"`        // 封面图片
+	Description       string `json:"description,omitempty"`       // 故事描述（可为 caption + 正文合并）
+	Genre             string `json:"genre,omitempty"`             // 故事类型（客户端可用碎片 topic）
+	CoverImage        string `json:"coverImage,omitempty"`        // 封面图片 URL
 	SceneCount        int    `json:"sceneCount,omitempty"`        // 场景数量 (2-8, 默认3)
-	UseAI             bool   `json:"useAI,omitempty"`             // 是否使用AI辅助创作
+	UseAI             bool   `json:"useAI,omitempty"`             // AI 一键续写入口应传 true，写入 Story.UseAI
 	CollaborationType string `json:"collaborationType,omitempty"` // 协作类型: open, restricted, closed
 }
 
 // ConvertFragmentResponse 碎片转故事响应
+// 故事板由用户在故事内自行创建；转换接口仅创建 Story，不再自动创建根故事板。
 type ConvertFragmentResponse struct {
-	Story      *Story      `json:"story"`      // 创建的故事
-	Storyboard *Storyboard `json:"storyboard"` // 创建的故事板
-	FragmentID string      `json:"fragmentId"` // 原碎片ID
+	Story      *Story      `json:"story"`                 // 创建的故事
+	Storyboard *Storyboard `json:"storyboard,omitempty"` // 已废弃：始终为空，保留字段仅兼容旧客户端
+	FragmentID string      `json:"fragmentId"`           // 原碎片ID
 }
