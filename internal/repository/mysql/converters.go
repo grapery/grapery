@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -231,10 +232,11 @@ func ModelToStory(m *Story) *domain.Story {
 			CreatedAt: timeToUnix(m.CreatedAt),
 			UpdatedAt: timeToUnix(m.UpdatedAt),
 		},
-		Title:       m.Title,
-		Description: m.Description,
-		CoverImage:  m.CoverImage,
-		UserID:      m.UserID,
+		Title:            m.Title,
+		Description:      m.Description,
+		CoverImage:       m.CoverImage,
+		UserID:           m.UserID,
+		SourceFragmentID: m.SourceFragmentID,
 		EngagementStats: common.EngagementStats{
 			Likes: m.Likes,
 		},
@@ -422,12 +424,14 @@ func characterLinkToDomain(c *Character) domain.Character {
 			CreatedAt: c.CreatedAt.Unix(),
 			UpdatedAt: c.UpdatedAt.Unix(),
 		},
-		StoryID:     c.StoryID,
-		Name:        c.Name,
-		Description: c.Description,
-		Avatar:      c.Avatar,
-		Poster:      c.Poster,
-		IsPublic:    c.IsPublic,
+		StoryID:                  c.StoryID,
+		Name:                     c.Name,
+		Description:              c.Description,
+		Avatar:                   c.Avatar,
+		Poster:                   c.Poster,
+		Portrait:                 c.Portrait,
+		PortraitGenerationStatus: c.PortraitGenerationStatus,
+		IsPublic:                 c.IsPublic,
 	}
 }
 
@@ -455,30 +459,49 @@ func CharacterToModel(d *domain.Character) *Character {
 	if d == nil {
 		return nil
 	}
-	return &Character{
-		ID:           d.ID,
-		StoryID:      d.StoryID,
-		Name:         d.Name,
-		Description:  d.Description,
-		Avatar:       d.Avatar,
-		Poster:       d.Poster,
-		UserID:       d.UserID,
-		Personality:  d.Personality,
-		Background:   d.Background,
-		SourceType:   d.SourceType,
-		SourcePrompt: d.SourcePrompt,
-		SourceImage:  d.SourceImage,
-		CreatedBy:    d.CreatedBy,
-		LastEditedBy: d.LastEditedBy,
-		Likes:        d.Likes,
-		Followers:    d.Followers,
-		Stories:      d.Stories,
-		Traits:       d.TraitsJSON,
-		Skills:       d.SkillsJSON,
-		IsPublic:     d.IsPublic,
-		CreatedAt:    unixToTime(d.CreatedAt),
-		UpdatedAt:    unixToTime(d.UpdatedAt),
+	ch := &Character{
+		ID:                       d.ID,
+		StoryID:                  d.StoryID,
+		Name:                     d.Name,
+		Description:              d.Description,
+		Avatar:                   d.Avatar,
+		Poster:                   d.Poster,
+		Portrait:                 d.Portrait,
+		NeedsPortrait:            d.NeedsPortrait,
+		ReferenceImage:           d.ReferenceImage,
+		PortraitGenerationStatus: d.PortraitGenerationStatus,
+		UserID:                   d.UserID,
+		Personality:              d.Personality,
+		Background:               d.Background,
+		ShortTermGoal:            d.ShortTermGoal,
+		LongTermGoal:             d.LongTermGoal,
+		HandlingStyle:            d.HandlingStyle,
+		CognitionRange:           d.CognitionRange,
+		AbilityFeatures:          d.AbilityFeatures,
+		Appearance:               d.Appearance,
+		DressPreference:          d.DressPreference,
+		SourceType:               d.SourceType,
+		SourcePrompt:             d.SourcePrompt,
+		SourceImage:              d.SourceImage,
+		CreatedBy:                d.CreatedBy,
+		LastEditedBy:             d.LastEditedBy,
+		Likes:                    d.Likes,
+		Comments:                 d.Comments,
+		Shares:                   d.Shares,
+		Followers:                d.Followers,
+		Stories:                  d.Stories,
+		Traits:                   d.TraitsJSON,
+		Skills:                   d.SkillsJSON,
+		IsPublic:                 d.IsPublic,
+		CreatedAt:                unixToTime(d.CreatedAt),
+		UpdatedAt:                unixToTime(d.UpdatedAt),
 	}
+	if d.Views != nil {
+		if b, err := json.Marshal(d.Views); err == nil {
+			ch.ViewsJSON = string(b)
+		}
+	}
+	return ch
 }
 
 // ModelToCharacter 将 MySQL Character 模型转换为 domain.Character
@@ -492,28 +515,47 @@ func ModelToCharacter(m *Character) *domain.Character {
 			CreatedAt: timeToUnix(m.CreatedAt),
 			UpdatedAt: timeToUnix(m.UpdatedAt),
 		},
-		StoryID:      m.StoryID,
-		UserID:       m.UserID,
-		Name:         m.Name,
-		Description:  m.Description,
-		Avatar:       m.Avatar,
-		Poster:       m.Poster,
-		Personality:  m.Personality,
-		Background:   m.Background,
-		TraitsJSON:   m.Traits,
-		SkillsJSON:   m.Skills,
-		IsPublic:     m.IsPublic,
-		SourceType:   m.SourceType,
-		SourcePrompt: m.SourcePrompt,
-		SourceImage:  m.SourceImage,
-		CreatedBy:    m.CreatedBy,
-		LastEditedBy: m.LastEditedBy,
-		Likes:        m.Likes,
-		Followers:    m.Followers,
-		Stories:      m.Stories,
+		StoryID:                  m.StoryID,
+		UserID:                   m.UserID,
+		Name:                     m.Name,
+		Description:              m.Description,
+		Avatar:                   m.Avatar,
+		Poster:                   m.Poster,
+		Portrait:                 m.Portrait,
+		NeedsPortrait:            m.NeedsPortrait,
+		ReferenceImage:           m.ReferenceImage,
+		PortraitGenerationStatus: m.PortraitGenerationStatus,
+		Personality:              m.Personality,
+		Background:               m.Background,
+		ShortTermGoal:            m.ShortTermGoal,
+		LongTermGoal:             m.LongTermGoal,
+		HandlingStyle:            m.HandlingStyle,
+		CognitionRange:           m.CognitionRange,
+		AbilityFeatures:          m.AbilityFeatures,
+		Appearance:               m.Appearance,
+		DressPreference:          m.DressPreference,
+		TraitsJSON:               m.Traits,
+		SkillsJSON:               m.Skills,
+		IsPublic:                 m.IsPublic,
+		SourceType:               m.SourceType,
+		SourcePrompt:             m.SourcePrompt,
+		SourceImage:              m.SourceImage,
+		CreatedBy:                m.CreatedBy,
+		LastEditedBy:             m.LastEditedBy,
+		Likes:                    m.Likes,
+		Comments:                 m.Comments,
+		Shares:                   m.Shares,
+		Followers:                m.Followers,
+		Stories:                  m.Stories,
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
+	}
+	if strings.TrimSpace(m.ViewsJSON) != "" {
+		var tv domain.CharacterThreeViews
+		if err := json.Unmarshal([]byte(m.ViewsJSON), &tv); err == nil && (tv.Sheet != "" || tv.Front != "" || tv.Side != "" || tv.Back != "") {
+			d.Views = &tv
+		}
 	}
 	// AfterFind hook will populate Traits and Skills
 	return d

@@ -360,10 +360,11 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	startTime := time.Now()
 
 	// ============== 配额预留和分布式锁 ==============
-	// 估算 token 数量（图片生成通常按次数计费，每张图片约 1000 tokens）
-	estimatedTokens := req.OutputCount * 1000
+	// 估算 token：供应商常返回数千 TotalTokens/张；与扣费下限对齐，避免预留/预检过小导致扣费失败
+	perImageEstimate := common.AIImageBillingUnitTokens
+	estimatedTokens := req.OutputCount * perImageEstimate
 	if estimatedTokens == 0 {
-		estimatedTokens = 1000 // 默认预留 1000 tokens（1张图片）
+		estimatedTokens = perImageEstimate
 	}
 
 	// 生成请求 ID 用于分布式锁
@@ -431,6 +432,16 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		}
 	}()
 	// ============== 配额预留和分布式锁结束 ==============
+
+	if !s.enableQuotaReservation {
+		balance, err := s.repo.GetTokenBalance(ctx, req.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get token balance: %w", err)
+		}
+		if balance < estimatedTokens {
+			return nil, fmt.Errorf("insufficient token balance")
+		}
+	}
 
 	// 1. 创建AI生成记录
 	record := &domain.AIGenerationRecord{
@@ -609,10 +620,10 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	// 计算实际使用的 token 数量
 	actualTokens := record.TotalTokens
 	if actualTokens == 0 && record.ImageCount > 0 {
-		actualTokens = record.ImageCount * 1000 // 每张图片 1000 tokens
+		actualTokens = record.ImageCount * common.AIImageBillingUnitTokens
 	}
 	if actualTokens == 0 {
-		actualTokens = 1000 // 至少扣减 1000 tokens
+		actualTokens = common.AIImageBillingUnitTokens
 	}
 
 	// 如果启用了配额预留，确认实际使用量

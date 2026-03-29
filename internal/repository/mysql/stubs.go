@@ -1082,6 +1082,29 @@ func (r *Repository) ListTokenTransactions(ctx context.Context, userID string, l
 	return result, total, nil
 }
 
+// applyLegacyFreeTierQuotaFix 将偏低的免费会员 token_quota 提升到当前默认（含历史 0 与旧默认 10000）。
+func applyLegacyFreeTierQuotaFix(db *gorm.DB, m *Membership) error {
+	if m.Tier != "free" || m.TokenQuota >= common.DefaultFreeTierTokenQuota {
+		return nil
+	}
+	updates := map[string]interface{}{
+		"token_quota": common.DefaultFreeTierTokenQuota,
+		"updated_at":  time.Now(),
+	}
+	minStorage := int64(common.DefaultFreeTierStorageBytes)
+	if m.StorageQuota < minStorage {
+		updates["storage_quota"] = minStorage
+	}
+	if err := db.Model(&Membership{}).Where("id = ?", m.ID).Updates(updates).Error; err != nil {
+		return err
+	}
+	m.TokenQuota = common.DefaultFreeTierTokenQuota
+	if m.StorageQuota < minStorage {
+		m.StorageQuota = minStorage
+	}
+	return nil
+}
+
 func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, error) {
 	var membership Membership
 	err := r.db.WithContext(ctx).First(&membership, "user_id = ?", userID).Error
@@ -1089,6 +1112,9 @@ func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, e
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil // 未找到会员信息，返回0
 		}
+		return 0, err
+	}
+	if err := applyLegacyFreeTierQuotaFix(r.db.WithContext(ctx), &membership); err != nil {
 		return 0, err
 	}
 	return membership.TokenQuota - membership.TokenUsed, nil
@@ -1104,15 +1130,17 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				// 创建新的会员记录
 				membership = Membership{
-					ID:         uuid.New().String(),
-					UserID:     userID,
-					Tier:       "free",
-					Status:     string(common.MembershipStatusActive),
-					StartDate:  time.Now(),
-					TokenQuota: 0,
-					TokenUsed:  0,
-					CreatedAt:  time.Now(),
-					UpdatedAt:  time.Now(),
+					ID:           uuid.New().String(),
+					UserID:       userID,
+					Tier:         "free",
+					Status:       string(common.MembershipStatusActive),
+					StartDate:    time.Now(),
+					TokenQuota:   common.DefaultFreeTierTokenQuota,
+					TokenUsed:    0,
+					StorageQuota: common.DefaultFreeTierStorageBytes,
+					StorageUsed:  0,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
 				}
 				if err := tx.Create(&membership).Error; err != nil {
 					return err
@@ -1120,6 +1148,8 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			} else {
 				return err
 			}
+		} else if err := applyLegacyFreeTierQuotaFix(tx, &membership); err != nil {
+			return err
 		}
 
 		// 计算新余额

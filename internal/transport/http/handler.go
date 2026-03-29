@@ -244,9 +244,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)                 // 更新角色头像
 			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar)   // 使用portrait作为头像
 			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)            // 获取形象生成推荐提示词
-			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait) // AI生成角色完整形象
-			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)          // 从形象图裁剪头像
-			// REMOVED: views/generate, views routes - not in StoryCreationAppUI design (use frontViewURL, sideViewURL, backViewURL fields instead)
+			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait)       // AI生成角色完整形象
+			authenticated.POST("/characters/:id/generate-three-views", h.GenerateCharacterThreeViews) // AI 生成/更新三视图
+			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)              // 从形象图裁剪头像
 			// REMOVED: posters routes - not in StoryCreationAppUI design
 
 			// 文件上传相关

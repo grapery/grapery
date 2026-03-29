@@ -485,9 +485,9 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 			Status:       string(common.MembershipStatusActive),
 			StartDate:    time.Now().Unix(),
 			AutoRenew:    false,
-			TokenQuota:   10000, // 免费配额
+			TokenQuota:   common.DefaultFreeTierTokenQuota,
 			TokenUsed:    0,
-			StorageQuota: 1024 * 1024 * 100, // 100MB
+			StorageQuota: common.DefaultFreeTierStorageBytes,
 			StorageUsed:  0,
 			CreatedAt:    time.Now().Unix(),
 			UpdatedAt:    time.Now().Unix(),

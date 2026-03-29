@@ -533,6 +533,43 @@ func (h *Handler) GenerateCharacterPortrait(c *gin.Context) {
 	Success(c, result)
 }
 
+// GenerateCharacterThreeViews 生成/更新角色三视图
+// POST /api/characters/:id/generate-three-views
+func (h *Handler) GenerateCharacterThreeViews(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	characterID := c.Param("id")
+	if characterID == "" {
+		InvalidParams(c, "character id is required")
+		return
+	}
+
+	var req service.GenerateCharacterThreeViewsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req = service.GenerateCharacterThreeViewsRequest{}
+	}
+
+	result, err := h.svc.GenerateCharacterThreeViews(c.Request.Context(), userID, characterID, req)
+	if err != nil {
+		if err.Error() == "character not found" {
+			NotFound(c, "character not found")
+			return
+		}
+		if err.Error() == "unauthorized: only character creator can generate three-views" {
+			Forbidden(c, "you can only generate three-views for your own characters")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, result)
+}
+
 // CropAvatarFromPortrait 从形象图裁剪生成头像
 // POST /api/characters/:id/crop-avatar
 func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
@@ -564,6 +601,3 @@ func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
 
 	Success(c, gin.H{"avatarUrl": avatarURL})
 }
-
-// REMOVED: Character Views (三视图) - not in StoryCreationAppUI design
-// Use frontViewURL, sideViewURL, backViewURL fields on Character instead

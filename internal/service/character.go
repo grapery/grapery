@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -89,6 +90,16 @@ type GenerateCharacterPortraitRequest struct {
 type GenerateCharacterPortraitResult struct {
 	PortraitURL string `json:"portraitUrl"`
 	RecordID    string `json:"recordId"`
+}
+
+// GenerateCharacterThreeViewsRequest 生成单张三视图合一参考图（正·侧·背横向排列）
+type GenerateCharacterThreeViewsRequest struct {
+	RegenerateAll bool `json:"regenerateAll"` // true：清空并重绘 sheet；false：若已有 sheet（或旧版三张分图齐全）则跳过
+}
+
+// GenerateCharacterThreeViewsResult 三视图结果（views.sheet 为单图 URL）
+type GenerateCharacterThreeViewsResult struct {
+	Views domain.CharacterThreeViews `json:"views"`
 }
 
 // GeneratedCharacterAttributes AI生成的角色属性
@@ -201,8 +212,8 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		Likes:                    0,
 		Comments:                 0,
 		Shares:                   0,
-		Followers: 0,
-		Stories:   0,
+		Followers:                0,
+		Stories:                  0,
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
@@ -672,7 +683,6 @@ func (s *Service) IncrementCharacterChatters(ctx context.Context, characterID st
 	return s.repo.IncrementCharacterChatters(ctx, characterID)
 }
 
-
 // GetCharacterStoryboards 获取角色参与的故事板列表
 func (s *Service) GetCharacterStoryboards(ctx context.Context, characterID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	s.logger.Info("getting character storyboards",
@@ -718,29 +728,28 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 		return nil, errors.New("AI generation service not configured")
 	}
 
-	// 构建生成提示词
-	systemPrompt := `你是一个专业的故事角色设计师，擅长根据用户的描述创建丰富多彩的角色。
-请根据用户的描述，生成角色的各项属性。
+	// 构建生成提示词（必须输出全部键，避免客户端/数据库字段缺失）
+	systemPrompt := `你是一个专业的故事角色设计师。请根据用户描述生成角色属性。
 
-要求：
-1. 直接返回纯JSON，不要使用markdown代码块
-2. 角色描述(description)字段总长度不超过420字，确保输出完整的JSON数据结构
-3. 每个属性都应该是简洁有力的描述，100-200字左右
-4. 角色属性应该相互协调，形成一个完整的角色形象
-5. 确保JSON格式完整闭合
+硬性要求：
+1. 只输出一个 JSON 对象，不要 markdown 代码块，不要多余说明文字。
+2. 必须包含以下全部 10 个键，键名与示例完全一致（camelCase），不要省略任何键：description, personality, background, shortTermGoal, longTermGoal, handlingStyle, cognitionRange, abilityFeatures, appearance, dressPreference。
+3. 每个键的值必须是字符串；若无内容可写简短占位如「未特别设定」，禁止省略键或设为 null。
+4. description 总长不超过 400 字；其余字段各约 80–200 字中文，简洁连贯。
+5. 确保 JSON 语法完整（引号、逗号、大括号闭合）。
 
-返回格式：
+示例结构：
 {
-  "description": "角色整体描述和基本特征（不超过420字）",
-  "personality": "性格特点、气质和行为模式",
-  "background": "角色的历史、起源故事和成长经历",
-  "shortTermGoal": "当前故事中的即时目标",
-  "longTermGoal": "长远抱负和人生追求",
-  "handlingStyle": "处理问题和应对情况的风格",
-  "cognitionRange": "认知范围、知识水平和世界观",
-  "abilityFeatures": "特殊技能、才能和独特能力",
-  "appearance": "外貌特征、体型和显著特点",
-  "dressPreference": "服装偏好和穿衣风格"
+  "description": "...",
+  "personality": "...",
+  "background": "...",
+  "shortTermGoal": "...",
+  "longTermGoal": "...",
+  "handlingStyle": "...",
+  "cognitionRange": "...",
+  "abilityFeatures": "...",
+  "appearance": "...",
+  "dressPreference": "..."
 }`
 
 	prompt := "请为以下角色生成详细属性：\n\n"
@@ -756,7 +765,7 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 		SystemPrompt:      systemPrompt,
 		Model:             "gemini-2.5-flash",
 		Temperature:       0.8,
-		MaxTokens:         3000,
+		MaxTokens:         8192,
 		RelatedEntityType: "character",
 		Metadata: map[string]interface{}{
 			"operation": "generate_character_attributes",
@@ -1300,6 +1309,13 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 	character.PortraitGenerationStatus = "generated"
 	character.LastEditedBy = userID
 	character.UpdatedAt = time.Now().Unix()
+	// 尚未设置头像或海报时，用立绘填充，便于列表与详情展示
+	if strings.TrimSpace(character.Avatar) == "" {
+		character.Avatar = character.Portrait
+	}
+	if strings.TrimSpace(character.Poster) == "" {
+		character.Poster = character.Portrait
+	}
 
 	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
 		s.logger.Error("failed to update character portrait", zap.Error(err))
@@ -1321,6 +1337,137 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		PortraitURL: result.ImageURLs[0],
 		RecordID:    result.RecordID,
 	}, nil
+}
+
+// GenerateCharacterThreeViews 使用 AI 生成一张横向「正·侧·背」合一参考图，写入 views_json.sheet（单次出图、单次计费）。
+func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, characterID string, req GenerateCharacterThreeViewsRequest) (*GenerateCharacterThreeViewsResult, error) {
+	s.logger.Info("generating character three-views",
+		zap.String("userID", userID),
+		zap.String("characterID", characterID),
+		zap.Bool("regenerateAll", req.RegenerateAll))
+
+	character, err := s.repo.CharacterByID(ctx, characterID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, errors.New("character not found")
+		}
+		return nil, errors.New("failed to get character")
+	}
+	if character.Author == nil || character.Author.ID != userID {
+		return nil, errors.New("unauthorized: only character creator can generate three-views")
+	}
+	if s.aiGenService == nil {
+		return nil, errors.New("AI generation service not configured")
+	}
+
+	var v domain.CharacterThreeViews
+	if character.Views != nil {
+		v = *character.Views
+	}
+
+	if req.RegenerateAll {
+		v = domain.CharacterThreeViews{}
+	} else {
+		if strings.TrimSpace(v.Sheet) != "" {
+			return &GenerateCharacterThreeViewsResult{Views: v}, nil
+		}
+		if strings.TrimSpace(v.Front) != "" && strings.TrimSpace(v.Side) != "" && strings.TrimSpace(v.Back) != "" {
+			return &GenerateCharacterThreeViewsResult{Views: v}, nil
+		}
+	}
+
+	bal, balErr := s.repo.GetTokenBalance(ctx, userID)
+	if balErr != nil {
+		return nil, errors.New("failed to get token balance")
+	}
+	if bal < common.AIImageBillingUnitTokens {
+		return nil, fmt.Errorf("insufficient token balance: need at least %d tokens for three-view sheet", common.AIImageBillingUnitTokens)
+	}
+
+	provider := "huoshan"
+	if s.imageProvider != "" {
+		provider = s.imageProvider
+	}
+	aspectRatio := "16:9"
+
+	baseDesc := strings.TrimSpace(character.Name)
+	if d := strings.TrimSpace(character.Appearance); d != "" {
+		baseDesc = baseDesc + ". " + d
+	}
+	if d := strings.TrimSpace(character.Description); d != "" {
+		baseDesc = baseDesc + ". " + d
+	}
+	if baseDesc == "" {
+		baseDesc = "original character design"
+	}
+
+	prompt := fmt.Sprintf(
+		"Single image only, one artwork, not three separate images. "+
+			"Professional character turnaround on plain white background: exactly three full-body figures of the SAME character in ONE horizontal row — "+
+			"left figure: front orthographic view facing camera; center figure: right-side profile; right figure: back view. "+
+			"Each figure must show only that one viewing angle (no sprite grids, no 2x2 or 3x3 panels, no multiple mini poses per cell). "+
+			"Consistent outfit, proportions, colors, and hairstyle across all three. Anime-influenced clean line art or illustration, high detail. %s",
+		baseDesc,
+	)
+
+	var refImages []string
+	if strings.TrimSpace(character.Portrait) != "" {
+		refImages = []string{character.Portrait}
+	}
+
+	imageReq := &GenerateImageRequest{
+		UserID:            userID,
+		Prompt:            prompt,
+		ReferenceImages:   refImages,
+		Provider:          provider,
+		Quality:           "high",
+		OutputCount:       1,
+		RelatedEntityID:   characterID,
+		RelatedEntityType: "character",
+		Metadata: map[string]interface{}{
+			"operation":   "character_three_view_sheet",
+			"characterId": characterID,
+		},
+	}
+	switch provider {
+	case "huoshan":
+		imageReq.Size = aspectRatioToSize(aspectRatio)
+	case "gemini":
+		imageReq.Model = "imagen-3.0-generate-001"
+		imageReq.AspectRatio = aspectRatio
+	default:
+		imageReq.AspectRatio = aspectRatio
+	}
+
+	result, genErr := s.aiGenService.GenerateImage(ctx, imageReq)
+	if genErr != nil {
+		s.logger.Error("three-view sheet failed", zap.Error(genErr))
+		return nil, fmt.Errorf("failed to generate three-view sheet: %w", genErr)
+	}
+	if len(result.ImageURLs) == 0 {
+		return nil, errors.New("no image generated for three-view sheet")
+	}
+	imgURL := result.ImageURLs[0]
+	v = domain.CharacterThreeViews{
+		Sheet: imgURL,
+		Front: "",
+		Side:  "",
+		Back:  "",
+	}
+	character.Views = &v
+	character.LastEditedBy = userID
+	character.UpdatedAt = time.Now().Unix()
+	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+		s.logger.Error("failed to persist three-view sheet", zap.Error(err))
+		return nil, errors.New("failed to save three-view sheet: " + err.Error())
+	}
+
+	if c := s.getCache(); c != nil {
+		_ = c.Delete(ctx, cache.CharacterKey(characterID))
+	}
+
+	s.logger.Info("character three-view sheet generated", zap.String("characterID", characterID))
+	return &GenerateCharacterThreeViewsResult{Views: v}, nil
 }
 
 // CropAvatarFromPortrait 从Portrait裁剪生成Avatar（可选功能）
@@ -1370,7 +1517,6 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 	s.logger.Info("avatar cropped from portrait successfully", zap.String("characterID", characterID))
 	return avatarURL, nil
 }
-
 
 // aspectRatioToSize converts aspect ratio string to image size
 func aspectRatioToSize(aspectRatio string) string {

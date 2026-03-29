@@ -26,6 +26,7 @@ func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error
 		Description:         story.Description,
 		CoverImage:          story.CoverImage,
 		UserID:              authorID,
+		SourceFragmentID:    story.SourceFragmentID,
 		Likes:               story.Likes,
 		Followers:           story.Followers,
 		Panels:              story.PanelCount,

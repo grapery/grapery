@@ -75,7 +75,7 @@ type Story struct {
 	CoverImage          string         `gorm:"size:500"`
 	UserID              string         `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
 	Author              User           `gorm:"foreignKey:UserID"`
-	SourceFragmentID    *string        `gorm:"size:36;index"` // 来源碎片ID（当故事从碎片转换而来时）
+	SourceFragmentID    *string        `gorm:"size:36;uniqueIndex"` // 每个碎片最多对应一条来源故事（NULL 可多条）
 	Likes               int            `gorm:"default:0;index"`
 	Followers           int            `gorm:"default:0"`
 	Saves               int            `gorm:"default:0;index"` // Bookmark/Save count (StoryCreationAppUI)
@@ -266,6 +266,7 @@ type Character struct {
 	NeedsPortrait            bool   `gorm:"default:false"`                           // 是否需要生成形象
 	ReferenceImage           string `gorm:"size:500"`                                // 参考图URL
 	PortraitGenerationStatus string `gorm:"size:20;default:'none';index"`            // none/pending/generating/generated/failed
+	ViewsJSON                string `gorm:"column:views_json;type:json"`             // {"sheet"} 或 {"front","side","back"} 三视图 URL
 	UserID                   string `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
 	Author                   User   `gorm:"foreignKey:UserID"`
 	Personality              string `gorm:"type:text"`

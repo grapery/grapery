@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -273,7 +274,11 @@ func (s *interactionService) Like(ctx context.Context, userID string, likeableTy
 		return fmt.Errorf("failed to check like status: %w", err)
 	}
 	if exists {
-		return fmt.Errorf("already liked")
+		s.logger.Info("already liked (idempotent)",
+			zap.String("userID", userID),
+			zap.String("likeableType", string(likeableType)),
+			zap.String("likeableID", likeableID))
+		return nil
 	}
 
 	// 2. 检查被点赞对象是否存在
@@ -291,6 +296,14 @@ func (s *interactionService) Like(ctx context.Context, userID string, likeableTy
 	}
 
 	if err := s.likeRepo.CreateLike(ctx, like); err != nil {
+		errL := strings.ToLower(err.Error())
+		if strings.Contains(errL, "duplicate") || strings.Contains(errL, "unique") {
+			s.logger.Info("like create duplicate (race), idempotent ok",
+				zap.String("userID", userID),
+				zap.String("likeableType", string(likeableType)),
+				zap.String("likeableID", likeableID))
+			return nil
+		}
 		s.logger.Error("failed to create like",
 			zap.Error(err),
 			zap.String("userID", userID),
@@ -337,7 +350,11 @@ func (s *interactionService) Unlike(ctx context.Context, userID string, likeable
 		}
 	}
 
-	return fmt.Errorf("not liked")
+	s.logger.Info("not liked (idempotent unlike)",
+		zap.String("userID", userID),
+		zap.String("likeableType", string(likeableType)),
+		zap.String("likeableID", likeableID))
+	return nil
 }
 
 // CheckLikeStatus 检查点赞状态

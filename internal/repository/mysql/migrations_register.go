@@ -2,11 +2,50 @@ package mysql
 
 import (
 	"context"
+	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+// storiesSourceFragmentUniqueIndex is the GORM default name for Story.SourceFragmentID uniqueIndex.
+const storiesSourceFragmentUniqueIndex = "idx_stories_source_fragment_id"
+
+func isDuplicateMySQLIndex(err error, indexName string) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	if !strings.Contains(s, indexName) {
+		return false
+	}
+	return strings.Contains(s, "Duplicate key name") || strings.Contains(s, "1061")
+}
+
+// autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex wraps db.AutoMigrate. GORM may re-migrate
+// Story when migrating models that declare a Story relation (FK), repeating CREATE UNIQUE INDEX on
+// source_fragment_id; MySQL ER_DUP_KEYNAME (1061) is then treated as success for idempotent startup.
+func autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db *gorm.DB, log *zap.Logger, dst ...interface{}) error {
+	err := db.AutoMigrate(dst...)
+	if err == nil {
+		return nil
+	}
+	if isDuplicateMySQLIndex(err, storiesSourceFragmentUniqueIndex) {
+		if log != nil {
+			log.Warn("AutoMigrate: stories source_fragment unique index already exists, skipping duplicate create",
+				zap.String("index", storiesSourceFragmentUniqueIndex),
+				zap.Error(err))
+		}
+		return nil
+	}
+	return err
+}
+
+func autoMigrateStories(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+	_ = ctx
+	return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Story{})
+}
 
 // init 自动注册 mysql 包的迁移步骤
 func init() {
@@ -17,7 +56,7 @@ func init() {
 		Name:        "migrate_users",
 		Description: "Create and migrate users table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&User{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &User{})
 		},
 		Required: true,
 	})
@@ -26,7 +65,7 @@ func init() {
 		Name:        "migrate_user_login_records",
 		Description: "Create and migrate user_login_records table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserLoginRecord{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserLoginRecord{})
 		},
 		Required: true,
 	})
@@ -35,7 +74,7 @@ func init() {
 		Name:        "migrate_user_settings",
 		Description: "Create and migrate user_settings table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserSettings{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserSettings{})
 		},
 		Required: true,
 	})
@@ -44,7 +83,7 @@ func init() {
 		Name:        "migrate_user_devices",
 		Description: "Create and migrate user_devices table for push notifications",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserDevice{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserDevice{})
 		},
 		Required: true,
 	})
@@ -53,7 +92,7 @@ func init() {
 		Name:        "migrate_user_statistics",
 		Description: "Create and migrate user_statistics table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserStatistics{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserStatistics{})
 		},
 		Required: true,
 	})
@@ -65,7 +104,7 @@ func init() {
 		Name:        "migrate_stories",
 		Description: "Create and migrate stories table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Story{})
+			return autoMigrateStories(ctx, db, log)
 		},
 		Required: true,
 	})
@@ -74,7 +113,7 @@ func init() {
 		Name:        "migrate_panels",
 		Description: "Create and migrate panels table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Panel{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Panel{})
 		},
 		Required: true,
 	})
@@ -83,7 +122,7 @@ func init() {
 		Name:        "migrate_story_contributors",
 		Description: "Create and migrate story_contributors table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryContributor{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryContributor{})
 		},
 		Required: true,
 	})
@@ -92,7 +131,7 @@ func init() {
 		Name:        "migrate_story_compositions",
 		Description: "Create and migrate story_compositions table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryComposition{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryComposition{})
 		},
 		Required: true,
 	})
@@ -101,7 +140,7 @@ func init() {
 		Name:        "migrate_story_participants",
 		Description: "Create and migrate story_participants table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryParticipant{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryParticipant{})
 		},
 		Required: true,
 	})
@@ -110,7 +149,7 @@ func init() {
 		Name:        "migrate_story_tags",
 		Description: "Create and migrate story_tags table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryTag{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryTag{})
 		},
 		Required: true,
 	})
@@ -119,7 +158,7 @@ func init() {
 		Name:        "migrate_story_likes",
 		Description: "Create and migrate story_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryLike{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryLike{})
 		},
 		Required: true,
 	})
@@ -128,7 +167,7 @@ func init() {
 		Name:        "migrate_story_follows",
 		Description: "Create and migrate story_follows table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryFollow{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryFollow{})
 		},
 		Required: true,
 	})
@@ -138,7 +177,7 @@ func init() {
 		Name:        "migrate_storyboards",
 		Description: "Create and migrate storyboards table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Storyboard{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Storyboard{})
 		},
 		Required: true,
 	})
@@ -147,7 +186,7 @@ func init() {
 		Name:        "migrate_storyboard_content_generations",
 		Description: "Create and migrate storyboard_content_generations table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardContentGeneration{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardContentGeneration{})
 		},
 		Required: true,
 	})
@@ -156,7 +195,7 @@ func init() {
 		Name:        "migrate_storyboard_scene_generations",
 		Description: "Create and migrate storyboard_scene_generations table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardSceneGeneration{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardSceneGeneration{})
 		},
 		Required: true,
 	})
@@ -165,7 +204,7 @@ func init() {
 		Name:        "migrate_storyboard_image_generations",
 		Description: "Create and migrate storyboard_image_generations table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardImageGeneration{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardImageGeneration{})
 		},
 		Required: true,
 	})
@@ -174,7 +213,7 @@ func init() {
 		Name:        "migrate_storyboard_video_generations",
 		Description: "Create and migrate storyboard_video_generations table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardVideoGeneration{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardVideoGeneration{})
 		},
 		Required: true,
 	})
@@ -183,7 +222,7 @@ func init() {
 		Name:        "migrate_storyboard_likes",
 		Description: "Create and migrate storyboard_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardLike{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardLike{})
 		},
 		Required: true,
 	})
@@ -193,7 +232,7 @@ func init() {
 		Name:        "migrate_characters",
 		Description: "Create and migrate characters table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Character{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Character{})
 		},
 		Required: true,
 	})
@@ -204,7 +243,7 @@ func init() {
 		Name:        "migrate_character_analytics",
 		Description: "Create and migrate character_analytics table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&CharacterAnalytics{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CharacterAnalytics{})
 		},
 		Required: true,
 	})
@@ -213,7 +252,7 @@ func init() {
 		Name:        "migrate_character_tags",
 		Description: "Create and migrate character_tags table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&CharacterTag{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CharacterTag{})
 		},
 		Required: true,
 	})
@@ -222,7 +261,7 @@ func init() {
 		Name:        "migrate_character_follows",
 		Description: "Create and migrate character_follows table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&CharacterFollow{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CharacterFollow{})
 		},
 		Required: true,
 	})
@@ -232,7 +271,7 @@ func init() {
 		Name:        "migrate_story_scenes",
 		Description: "Create and migrate story_scenes table (story-scoped locations)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryScene{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryScene{})
 		},
 		Required: true,
 	})
@@ -241,7 +280,7 @@ func init() {
 		Name:        "migrate_storyboard_scenes",
 		Description: "Create and migrate storyboard_scenes table (AI-generated plot scenes)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardScene{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardScene{})
 		},
 		Required: true,
 	})
@@ -250,7 +289,7 @@ func init() {
 		Name:        "migrate_storyboard_character_links",
 		Description: "Create and migrate storyboard_character_links table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardCharacterLink{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardCharacterLink{})
 		},
 		Required: true,
 	})
@@ -259,7 +298,7 @@ func init() {
 		Name:        "migrate_storyboard_scene_links",
 		Description: "Create and migrate storyboard_scene_links table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryboardSceneLink{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardSceneLink{})
 		},
 		Required: true,
 	})
@@ -269,7 +308,7 @@ func init() {
 		Name:        "migrate_comments",
 		Description: "Create and migrate comments table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Comment{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Comment{})
 		},
 		Required: true,
 	})
@@ -278,7 +317,7 @@ func init() {
 		Name:        "migrate_comment_likes",
 		Description: "Create and migrate comment_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&CommentLike{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CommentLike{})
 		},
 		Required: true,
 	})
@@ -288,7 +327,7 @@ func init() {
 		Name:        "migrate_tags",
 		Description: "Create and migrate tags table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Tag{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Tag{})
 		},
 		Required: true,
 	})
@@ -297,7 +336,7 @@ func init() {
 		Name:        "migrate_style_configs",
 		Description: "Create and migrate style_configs table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StyleConfig{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StyleConfig{})
 		},
 		Required: true,
 	})
@@ -307,7 +346,7 @@ func init() {
 		Name:        "migrate_search_histories",
 		Description: "Create and migrate search_histories table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&SearchHistory{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &SearchHistory{})
 		},
 		Required: true,
 	})
@@ -316,7 +355,7 @@ func init() {
 		Name:        "migrate_view_histories",
 		Description: "Create and migrate view_histories table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ViewHistory{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &ViewHistory{})
 		},
 		Required: true,
 	})
@@ -326,7 +365,7 @@ func init() {
 		Name:        "migrate_reports",
 		Description: "Create and migrate reports table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Report{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Report{})
 		},
 		Required: true,
 	})
@@ -336,7 +375,7 @@ func init() {
 		Name:        "migrate_agents",
 		Description: "Create and migrate agents table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Agent{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Agent{})
 		},
 		Required: true,
 	})
@@ -345,7 +384,7 @@ func init() {
 		Name:        "migrate_agent_skills",
 		Description: "Create and migrate agent_skills table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AgentSkill{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AgentSkill{})
 		},
 		Required: true,
 	})
@@ -354,7 +393,7 @@ func init() {
 		Name:        "migrate_agent_skill_usages",
 		Description: "Create and migrate agent_skill_usages table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AgentSkillUsage{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AgentSkillUsage{})
 		},
 		Required: true,
 	})
@@ -363,7 +402,7 @@ func init() {
 		Name:        "migrate_agent_interactions",
 		Description: "Create and migrate agent_interactions table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AgentInteraction{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AgentInteraction{})
 		},
 		Required: true,
 	})
@@ -372,7 +411,7 @@ func init() {
 		Name:        "migrate_agent_memories",
 		Description: "Create and migrate agent_memories table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AgentMemory{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AgentMemory{})
 		},
 		Required: true,
 	})
@@ -382,7 +421,7 @@ func init() {
 		Name:        "migrate_ai_tasks",
 		Description: "Create and migrate ai_tasks table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AITask{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AITask{})
 		},
 		Required: true,
 	})
@@ -391,7 +430,7 @@ func init() {
 		Name:        "migrate_render_tasks",
 		Description: "Create and migrate render_tasks table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&RenderTask{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &RenderTask{})
 		},
 		Required: true,
 	})
@@ -400,7 +439,7 @@ func init() {
 		Name:        "migrate_story_publications",
 		Description: "Create and migrate story_publications table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&StoryPublication{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryPublication{})
 		},
 		Required: true,
 	})
@@ -409,7 +448,7 @@ func init() {
 		Name:        "migrate_ai_generation_records",
 		Description: "Create and migrate ai_generation_records table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&AIGenerationRecord{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AIGenerationRecord{})
 		},
 		Required: true,
 	})
@@ -419,7 +458,7 @@ func init() {
 		Name:        "migrate_notifications",
 		Description: "Create and migrate notifications table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Notification{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Notification{})
 		},
 		Required: true,
 	})
@@ -429,7 +468,7 @@ func init() {
 		Name:        "migrate_assets",
 		Description: "Create and migrate assets table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Asset{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Asset{})
 		},
 		Required: true,
 	})
@@ -439,7 +478,7 @@ func init() {
 		Name:        "migrate_memberships",
 		Description: "Create and migrate memberships table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Membership{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Membership{})
 		},
 		Required: true,
 	})
@@ -448,7 +487,7 @@ func init() {
 		Name:        "migrate_subscription_plans",
 		Description: "Create and migrate subscription_plans table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&SubscriptionPlan{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &SubscriptionPlan{})
 		},
 		Required: true,
 	})
@@ -457,7 +496,7 @@ func init() {
 		Name:        "migrate_subscription_orders",
 		Description: "Create and migrate subscription_orders table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&SubscriptionOrder{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &SubscriptionOrder{})
 		},
 		Required: true,
 	})
@@ -466,7 +505,7 @@ func init() {
 		Name:        "migrate_token_transactions",
 		Description: "Create and migrate token_transactions table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&TokenTransaction{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &TokenTransaction{})
 		},
 		Required: true,
 	})
@@ -476,7 +515,7 @@ func init() {
 		Name:        "migrate_invitation_codes",
 		Description: "Create and migrate invitation_codes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&InvitationCode{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &InvitationCode{})
 		},
 		Required: true,
 	})
@@ -486,7 +525,7 @@ func init() {
 		Name:        "migrate_user_referrals",
 		Description: "Create and migrate user_referrals table for referral system",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserReferral{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserReferral{})
 		},
 		Required: true,
 	})
@@ -496,7 +535,7 @@ func init() {
 		Name:        "migrate_third_party_logins",
 		Description: "Create and migrate third_party_logins table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&ThirdPartyLogin{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &ThirdPartyLogin{})
 		},
 		Required: true,
 	})
@@ -506,7 +545,7 @@ func init() {
 		Name:        "migrate_user_follows",
 		Description: "Create and migrate user_follows table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&UserFollow{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserFollow{})
 		},
 		Required: true,
 	})
@@ -516,7 +555,7 @@ func init() {
 		Name:        "migrate_fragments",
 		Description: "Create and migrate fragments table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{})
 		},
 		Required: true,
 	})
@@ -525,7 +564,7 @@ func init() {
 		Name:        "migrate_fragment_generation_tasks",
 		Description: "Create and migrate fragment_generation_tasks table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentGenerationTaskDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentGenerationTaskDB{})
 		},
 		Required: true,
 	})
@@ -535,7 +574,7 @@ func init() {
 		Name:        "migrate_fragment_likes",
 		Description: "Create and migrate fragment_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentLikeDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentLikeDB{})
 		},
 		Required: true,
 	})
@@ -544,7 +583,7 @@ func init() {
 		Name:        "migrate_fragment_comments",
 		Description: "Create and migrate fragment_comments table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentCommentDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentCommentDB{})
 		},
 		Required: true,
 	})
@@ -553,7 +592,7 @@ func init() {
 		Name:        "migrate_fragment_shares",
 		Description: "Create and migrate fragment_shares table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentShareDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentShareDB{})
 		},
 		Required: true,
 	})
@@ -563,7 +602,7 @@ func init() {
 		Name:        "migrate_follows",
 		Description: "Create and migrate follows table (polymorphic follow)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Follow{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Follow{})
 		},
 		Required: true,
 	})
@@ -572,7 +611,7 @@ func init() {
 		Name:        "migrate_likes",
 		Description: "Create and migrate likes table (polymorphic like)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Like{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Like{})
 		},
 		Required: true,
 	})
@@ -705,7 +744,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Name:        "ensure_stories_source_fragment_id_column",
 		Description: "Ensure stories has source_fragment_id column",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Story{})
+			return autoMigrateStories(ctx, db, log)
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_stories_source_fragment_id_unique",
+		Description: "Unique index: one story per source fragment (MySQL allows multiple NULLs)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateStories(ctx, db, log)
 		},
 		Required: false,
 	})
@@ -714,7 +762,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Name:        "ensure_stories_use_ai_columns",
 		Description: "Ensure stories has use_ai and ai_assistance_options columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&Story{})
+			return autoMigrateStories(ctx, db, log)
 		},
 		Required: false,
 	})
@@ -723,7 +771,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Name:        "ensure_fragments_converted_columns",
 		Description: "Ensure fragments has converted_to_story_id and is_converted columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&FragmentDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{})
 		},
 		Required: false,
 	})
@@ -733,7 +781,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Name:        "ensure_user_points_referral_columns",
 		Description: "Ensure users has points and referral_code columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return db.AutoMigrate(&User{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &User{})
 		},
 		Required: false,
 	})

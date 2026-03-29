@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -105,6 +106,11 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		CreatedAt:                now,
 		UpdatedAt:                now,
 	}
+	if character.Views != nil {
+		if b, err := json.Marshal(character.Views); err == nil {
+			dbCharacter.ViewsJSON = string(b)
+		}
+	}
 
 	if err := r.db.WithContext(ctx).Create(&dbCharacter).Error; err != nil {
 		return err
@@ -133,7 +139,7 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"needs_portrait":             character.NeedsPortrait,
 		"reference_image":            character.ReferenceImage,
 		"portrait_generation_status": character.PortraitGenerationStatus,
-		"user_id":                    authorID,
+		"author_id":                  authorID, // DB column is author_id (see models.Character.UserID)
 		"personality":                character.Personality,
 		"background":                 character.Background,
 		"short_term_goal":            character.ShortTermGoal,
@@ -153,6 +159,11 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"followers":                  character.Followers,
 		"stories":                    character.Stories,
 		"updated_at":                 time.Now(),
+	}
+	if character.Views != nil {
+		if b, err := json.Marshal(character.Views); err == nil {
+			updates["views_json"] = string(b)
+		}
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Character{}).

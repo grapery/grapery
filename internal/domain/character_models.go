@@ -47,11 +47,12 @@ type Character struct {
 	Stories   int `json:"stories"` // Custom field: number of stories this character appears in
 
 	// StoryCreationAppUI alignment fields
-	Role        string `json:"role,omitempty"`      // 角色定位 (主角/配角/反派/导师/神秘人)
-	AIStyle     string `json:"aiStyle,omitempty"`   // AI 生成风格
-	AIPrompt    string `json:"aiPrompt,omitempty"`  // AI 生成提示词
-	AIGenerated bool   `json:"aiGenerated"`         // 是否由 AI 生成
-	Backstory   string `json:"backstory,omitempty"` // 角色背景故事 (alias for Background)
+	Role        string               `json:"role,omitempty"`      // 角色定位 (主角/配角/反派/导师/神秘人)
+	AIStyle     string               `json:"aiStyle,omitempty"`   // AI 生成风格
+	AIPrompt    string               `json:"aiPrompt,omitempty"`  // AI 生成提示词
+	AIGenerated bool                 `json:"aiGenerated"`         // 是否由 AI 生成
+	Backstory   string               `json:"backstory,omitempty"` // 角色背景故事 (alias for Background)
+	Views       *CharacterThreeViews `json:"views,omitempty"`     // 三视图：sheet=单张合成图，或 front/side/back 分图（旧）
 
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
@@ -91,6 +92,14 @@ type CharacterAnalytics struct {
 }
 
 // REMOVED: PosterCreationPermissionType - not in StoryCreationAppUI design
+
+// CharacterThreeViews 角色三视图 URL（与客户端 CharacterThreeViews 对齐）
+type CharacterThreeViews struct {
+	Sheet string `json:"sheet,omitempty"` // 单张横向正/侧/背合一参考图（优先）
+	Front string `json:"front,omitempty"`
+	Side  string `json:"side,omitempty"`
+	Back  string `json:"back,omitempty"`
+}
 
 // CharacterViewType 角色视图类型
 type CharacterViewType string

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,12 +37,33 @@ func (r *Repository) StoryboardByID(ctx context.Context, id string) (*domain.Sto
 	return &domainSb, nil
 }
 
+// fateSnapshotForMySQLColumn returns JSON acceptable for MySQL JSON columns.
+// An empty Go string maps to invalid SQL JSON ("document is empty"); use "{}" when unset.
+func fateSnapshotForMySQLColumn(p *string) (string, error) {
+	if p == nil {
+		return "{}", nil
+	}
+	t := strings.TrimSpace(*p)
+	if t == "" {
+		return "{}", nil
+	}
+	if !json.Valid([]byte(t)) {
+		return "", fmt.Errorf("fate_snapshot is not valid JSON")
+	}
+	return t, nil
+}
+
 // CreateStoryboard creates a new storyboard
 func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
 	// Set parentID to NULL for root storyboards (empty or "__root__" marker)
 	var parentID *string
 	if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
 		parentID = &storyboard.ParentID
+	}
+
+	fateSnap, err := fateSnapshotForMySQLColumn(storyboard.FateSnapshot)
+	if err != nil {
+		return fmt.Errorf("invalid fate_snapshot: %w", err)
 	}
 
 	dbStoryboard := Storyboard{
@@ -58,6 +80,8 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		ForkCount:        0,
 		Views:            0,
 		TokenConsumption: storyboard.TokenConsumption,
+		FateSnapshot:     fateSnap,
+		FateSnapshotHash: storyboard.FateSnapshotHash,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbStoryboard).Error; err != nil {

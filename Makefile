@@ -131,7 +131,7 @@ migrate:
 mock-load:
 	@echo "Loading mock data (base + King) into $(DB_DATABASE)..."
 	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/mock_data.sql
-	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/king_mock_data.sql
+	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < migrations/king_mock_data.sql
 	@echo "Mock data loaded successfully!"
 
 # ========== Help ==========

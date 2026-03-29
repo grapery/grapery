@@ -1,6 +1,6 @@
 -- ============================================================
 -- King 用户 Mock 数据
--- 运行于 mock_data.sql 之后: mysql -u root -p12345678 -h 127.0.0.1 grapery < scripts/king_mock_data.sql
+-- 运行于 mock_data.sql 之后: mysql -u root -p12345678 -h 127.0.0.1 grapery < migrations/king_mock_data.sql
 -- ============================================================
 
 -- 统一 collation，避免 utf8mb4_unicode_ci 与 utf8mb4_0900_ai_ci 混用报错
@@ -19,6 +19,34 @@ ON DUPLICATE KEY UPDATE updated_at = FROM_UNIXTIME(@ts);
 INSERT IGNORE INTO user_settings (id, user_id, language, theme, font_size, data_saver, profile_visibility, default_story_visibility, default_fragment_visibility, allow_follow_from, allow_comments_from, allow_messages_from, show_online_status, show_read_receipts, ai_enabled, a_idata_sharing, notification_settings, updated_at)
 SELECT UUID(), @king_id, 'zh-CN', 'dark', 'medium', 0, 'public', 'public', 'public', 'everyone', 'everyone', 'followers_only', 1, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP()
 WHERE NOT EXISTS (SELECT 1 FROM user_settings WHERE user_id COLLATE utf8mb4_0900_ai_ci = @king_id COLLATE utf8mb4_0900_ai_ci LIMIT 1);
+
+-- 2b. King 会员（free，与代码 common.DefaultFreeTierTokenQuota / DefaultFreeTierStorageBytes 一致）
+INSERT INTO memberships (
+  id, user_id, tier, status, start_date, end_date, auto_renew,
+  token_quota, token_used, storage_quota, storage_used,
+  created_at, updated_at, deleted_at
+) VALUES (
+  UUID(),
+  @king_id,
+  'free',
+  'active',
+  FROM_UNIXTIME(UNIX_TIMESTAMP()),
+  NULL,
+  0,
+  25000,
+  0,
+  104857600,
+  0,
+  FROM_UNIXTIME(UNIX_TIMESTAMP()),
+  FROM_UNIXTIME(UNIX_TIMESTAMP()),
+  NULL
+)
+ON DUPLICATE KEY UPDATE
+  deleted_at = NULL,
+  status = 'active',
+  token_quota = GREATEST(memberships.token_quota, 25000),
+  storage_quota = GREATEST(memberships.storage_quota, 104857600),
+  updated_at = FROM_UNIXTIME(UNIX_TIMESTAMP());
 
 -- 3. King 的 3 个故事
 INSERT INTO stories (id, title, description, cover_image, author_id, likes, followers, saves, panels, storyboard_count, default_scene_count, genre, style, status, is_collaboration_open, visibility, use_ai, ai_enabled, created_at, updated_at) VALUES

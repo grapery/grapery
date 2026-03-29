@@ -362,7 +362,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			Status:       "active",
 			StartDate:    now,
 			AutoRenew:    false,
-			TokenQuota:   10000,
+			TokenQuota:   common.DefaultFreeTierTokenQuota,
 			TokenUsed:    0,
 			StorageQuota: 1024 * 1024 * 100,
 			StorageUsed:  0,

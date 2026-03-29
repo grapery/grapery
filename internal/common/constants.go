@@ -156,6 +156,16 @@ func (s MembershipStatus) IsActive() bool {
 	return s == MembershipStatusActive
 }
 
+// Default free-tier limits (keep in sync with registration in auth service).
+const (
+	// 需覆盖「角色三视图」等连续多张图（预检/扣费约 AIImageBillingUnitTokens/张）。
+	DefaultFreeTierTokenQuota   = 25000
+	DefaultFreeTierStorageBytes = 100 * 1024 * 1024 // 100 MiB
+
+	// AIImageBillingUnitTokens 图片生成预检与 usage 缺失时的单张参考（与常见 TotalTokens 量级一致）。
+	AIImageBillingUnitTokens = 4096
+)
+
 // OrderStatus defines statuses for payment and order entities
 // Use this for: SubscriptionOrder, PaymentTransaction
 type OrderStatus string

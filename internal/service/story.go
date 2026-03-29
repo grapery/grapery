@@ -62,6 +62,9 @@ type CreateStoryRequest struct {
 	Style              string              `json:"style,omitempty"`            // AI 生成风格名称（字符串，用于AI辅助创建）
 	AIStyle            *domain.StyleConfig `json:"aiStyle,omitempty"`          // AI 生成风格配置（完整信息，可为空）
 	CoverAspectRatio   string              `json:"coverAspectRatio,omitempty"` // 封面图比例：1:1, 16:9, 9:16, etc.
+
+	// 来源碎片（客户端从碎片预填创建故事时传入；与 POST /fragments/:id/convert-to-story 行为对齐）
+	SourceFragmentID *string `json:"sourceFragmentId,omitempty" binding:"omitempty,max=64"`
 }
 
 // StoryAIEnrichResponse AI丰富故事的响应
@@ -140,6 +143,34 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		zap.String("userID", userID),
 		zap.String("authorName", author.DisplayName))
 
+	var fragmentToMark *domain.Fragment
+	if req.SourceFragmentID != nil {
+		fid := strings.TrimSpace(*req.SourceFragmentID)
+		if fid != "" {
+			fragment, err := s.getFragmentByID(ctx, fid)
+			if err != nil {
+				s.logger.Warn("source fragment not found",
+					zap.String("fragmentID", fid),
+					zap.Error(err))
+				return nil, errors.New("source fragment not found")
+			}
+			ownerID := fragment.UserID
+			if ownerID == "" {
+				ownerID = fragment.CreatorID
+			}
+			if ownerID != userID {
+				s.logger.Warn("create story from fragment: permission denied",
+					zap.String("userID", userID),
+					zap.String("fragmentID", fid))
+				return nil, errors.New("permission denied: not fragment owner")
+			}
+			if fragment.IsConverted || (fragment.ConvertedToStoryID != nil && strings.TrimSpace(*fragment.ConvertedToStoryID) != "") {
+				return nil, errors.New("fragment already converted to story")
+			}
+			fragmentToMark = fragment
+		}
+	}
+
 	// 设置默认状态
 	status := req.Status
 	if status == "" {
@@ -181,6 +212,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		visibility = string(domain.StoryVisibilityPublic) // 默认公开
 	}
 
+	var sourceFragmentPtr *string
+	if fragmentToMark != nil {
+		id := fragmentToMark.ID
+		sourceFragmentPtr = &id
+	}
+
 	story := &domain.Story{
 		BaseModel: common.BaseModel{
 			ID:        uuid.New().String(),
@@ -199,6 +236,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Visibility:               visibility, // 可见性设置
 		AllowComments:            req.AllowComments,
 		ShowAICollaborationLabel: req.ShowAICollaborationLabel,
+		SourceFragmentID:         sourceFragmentPtr,
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,
@@ -224,7 +262,24 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 			zap.String("storyID", story.ID),
 			zap.String("title", story.Title),
 			zap.Error(err))
+		if fragmentToMark != nil {
+			em := strings.ToLower(err.Error())
+			if strings.Contains(em, "duplicate") || strings.Contains(em, "1062") || strings.Contains(em, "unique") {
+				return nil, errors.New("fragment already converted to story")
+			}
+		}
 		return nil, errors.New("failed to create story")
+	}
+
+	if fragmentToMark != nil {
+		fragmentToMark.ConvertedToStoryID = &story.ID
+		fragmentToMark.IsConverted = true
+		if err := s.updateFragmentConvertedStatus(ctx, fragmentToMark); err != nil {
+			s.logger.Warn("failed to update fragment converted status after story create",
+				zap.String("fragmentID", fragmentToMark.ID),
+				zap.String("storyID", story.ID),
+				zap.Error(err))
+		}
 	}
 
 	s.logger.Info("story created successfully",
@@ -2971,6 +3026,12 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		return nil, errors.New("permission denied: not fragment owner")
 	}
 
+	if fragment.IsConverted || (fragment.ConvertedToStoryID != nil && strings.TrimSpace(*fragment.ConvertedToStoryID) != "") {
+		s.logger.Warn("fragment already converted to story",
+			zap.String("fragmentID", fragmentID))
+		return nil, errors.New("fragment already converted to story")
+	}
+
 	s.logger.Debug("fragment retrieved",
 		zap.String("fragmentID", fragmentID),
 		zap.String("content", fragment.Content),
@@ -3033,6 +3094,10 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		s.logger.Error("failed to create story",
 			zap.String("storyID", story.ID),
 			zap.Error(err))
+		em := strings.ToLower(err.Error())
+		if strings.Contains(em, "duplicate") || strings.Contains(em, "1062") || strings.Contains(em, "unique") {
+			return nil, errors.New("fragment already converted to story")
+		}
 		return nil, fmt.Errorf("failed to create story: %w", err)
 	}
 
