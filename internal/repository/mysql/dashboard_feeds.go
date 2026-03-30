@@ -91,19 +91,27 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 		return []*domain.Storyboard{}, total, nil
 	}
 
-	// Load storyboards with relations
+	// Load storyboards with relations (do not re-order by updated_at — preserve ranking from id query above)
 	var rows []Storyboard
 	if err := r.db.WithContext(ctx).
 		Preload("Creator").
 		Preload("Story").
+		Preload("Story.Author").
 		Where("id IN ?", ids).
-		Order("updated_at DESC").
 		Find(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("public trending storyboards load: %w", err)
 	}
 
-	result := make([]*domain.Storyboard, 0, len(rows))
+	byID := make(map[string]Storyboard, len(rows))
 	for _, sb := range rows {
+		byID[sb.ID] = sb
+	}
+	result := make([]*domain.Storyboard, 0, len(idRows))
+	for _, id := range ids {
+		sb, ok := byID[id]
+		if !ok {
+			continue
+		}
 		domainSb, err := r.storyboardToDomain(ctx, sb)
 		if err != nil {
 			return nil, 0, err
@@ -111,4 +119,11 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 		result = append(result, &domainSb)
 	}
 	return result, total, nil
+}
+
+// StoryboardFeedRecommended ranks published storyboards for the “for you” tab.
+// Currently delegates to engagement-based trending (with contributor boost when userID is set).
+// Text/vector similarity can replace or augment this ranking later without changing the HTTP contract.
+func (r *Repository) StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	return r.GetPublicTrendingStoryboards(ctx, userID, limit, offset)
 }

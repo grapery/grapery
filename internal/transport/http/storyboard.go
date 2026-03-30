@@ -283,19 +283,25 @@ func (h *Handler) DeleteStoryboard(c *gin.Context) {
 	Success(c, gin.H{"message": "storyboard deleted successfully"})
 }
 
-// GetStoryboardFeed 获取社区故事板 feed 流
+// GetStoryboardFeed 获取故事板 feed 流
 // Query params:
+//   - tab: for_you（默认，推荐/热度）；following（关注的故事下已发布故事板，按更新时间）；community（全站时间线）
 //   - limit: 分页限制（默认20）
 //   - offset: 分页偏移（默认0）
 func (h *Handler) GetStoryboardFeed(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	tab := c.DefaultQuery("tab", "for_you")
+
+	userID, _ := c.Get("userID")
+	uid, _ := userID.(string)
 
 	h.logger.Info("GetStoryboardFeed called",
+		zap.String("tab", tab),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
-	storyboards, total, err := h.svc.GetStoryboardFeed(c.Request.Context(), limit, offset)
+	storyboards, total, err := h.svc.GetStoryboardFeed(c.Request.Context(), uid, tab, limit, offset)
 	if err != nil {
 		h.logger.Error("GetStoryboardFeed failed", zap.Error(err))
 		InternalError(c, err.Error())

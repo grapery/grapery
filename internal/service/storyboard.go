@@ -1299,9 +1299,16 @@ func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*doma
 	return tree, nil
 }
 
-// GetStoryboardFeed 获取社区故事板 feed 流（按时间倒序，带缓存）
-func (s *Service) GetStoryboardFeed(ctx context.Context, limit, offset int) ([]*domain.Storyboard, int64, error) {
+// GetStoryboardFeed 获取故事板 feed。
+// tab: for_you（默认，推荐/热度排序，后续可接文本向量）；following（关注的故事下已发布故事板，按更新时间）；community（社区时间线，带缓存）。
+func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	tab = strings.TrimSpace(strings.ToLower(tab))
+	if tab == "" || tab == "recommended" {
+		tab = "for_you"
+	}
+
 	s.logger.Debug("getting storyboard feed",
+		zap.String("tab", tab),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
@@ -1312,52 +1319,65 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, limit, offset int) ([]*
 		limit = 100
 	}
 
-	// 尝试从缓存获取（feed 流缓存时间较短，因为内容变化频繁）
-	c := s.getCache()
-	if c != nil {
-		cacheKey := "storyboard_feed:" + fmt.Sprintf("%d:%d", limit, offset)
-		var cachedFeed []*domain.Storyboard
-		var cachedTotal int64
-		if err := c.Get(ctx, cacheKey, &cachedFeed); err == nil {
-			totalKey := cacheKey + ":total"
-			_ = c.Get(ctx, totalKey, &cachedTotal)
-			s.logger.Debug("storyboard feed cache hit",
-				zap.Int("count", len(cachedFeed)))
-			return cachedFeed, cachedTotal, nil
-		} else {
-			s.logger.Debug("storyboard feed cache miss",
-				zap.Error(err))
+	switch tab {
+	case "following":
+		if userID == "" {
+			return []*domain.Storyboard{}, 0, nil
 		}
-	}
-
-	storyboards, total, err := s.repo.StoryboardFeed(ctx, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get storyboard feed",
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
-	}
-
-	// 写入缓存（较短的过期时间，因为 feed 流变化频繁）
-	if c != nil && len(storyboards) > 0 {
-		cacheKey := "storyboard_feed:" + fmt.Sprintf("%d:%d", limit, offset)
-		if err := c.Set(ctx, cacheKey, storyboards, 5*time.Minute); err != nil {
-			s.logger.Warn("failed to cache storyboard feed",
-				zap.Error(err))
-		} else {
-			totalKey := cacheKey + ":total"
-			_ = c.Set(ctx, totalKey, total, 5*time.Minute)
-			s.logger.Debug("storyboard feed cached",
-				zap.Int("count", len(storyboards)))
+		storyboards, total, err := s.repo.StoryboardFeedFromFollowedStories(ctx, userID, limit, offset)
+		if err != nil {
+			s.logger.Error("failed to get following storyboard feed", zap.Error(err))
+			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
 		}
+		s.logger.Info("following storyboard feed fetched",
+			zap.Int("count", len(storyboards)),
+			zap.Int64("total", total))
+		return storyboards, total, nil
+
+	case "community":
+		// 仅社区时间线使用短缓存（与旧行为一致）
+		c := s.getCache()
+		if c != nil {
+			cacheKey := "storyboard_feed:community:" + fmt.Sprintf("%d:%d", limit, offset)
+			var cachedFeed []*domain.Storyboard
+			var cachedTotal int64
+			if err := c.Get(ctx, cacheKey, &cachedFeed); err == nil {
+				totalKey := cacheKey + ":total"
+				_ = c.Get(ctx, totalKey, &cachedTotal)
+				s.logger.Debug("storyboard community feed cache hit", zap.Int("count", len(cachedFeed)))
+				return cachedFeed, cachedTotal, nil
+			}
+		}
+
+		storyboards, total, err := s.repo.StoryboardFeed(ctx, limit, offset)
+		if err != nil {
+			s.logger.Error("failed to get community storyboard feed", zap.Error(err))
+			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
+		}
+
+		if c := s.getCache(); c != nil && len(storyboards) > 0 {
+			cacheKey := "storyboard_feed:community:" + fmt.Sprintf("%d:%d", limit, offset)
+			if err := c.Set(ctx, cacheKey, storyboards, 5*time.Minute); err != nil {
+				s.logger.Warn("failed to cache storyboard feed", zap.Error(err))
+			} else {
+				totalKey := cacheKey + ":total"
+				_ = c.Set(ctx, totalKey, total, 5*time.Minute)
+			}
+		}
+		s.logger.Info("community storyboard feed fetched", zap.Int("count", len(storyboards)), zap.Int64("total", total))
+		return storyboards, total, nil
+
+	default: // for_you, recommended
+		storyboards, total, err := s.repo.StoryboardFeedRecommended(ctx, userID, limit, offset)
+		if err != nil {
+			s.logger.Error("failed to get recommended storyboard feed", zap.Error(err))
+			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
+		}
+		s.logger.Info("recommended storyboard feed fetched",
+			zap.Int("count", len(storyboards)),
+			zap.Int64("total", total))
+		return storyboards, total, nil
 	}
-
-	s.logger.Info("storyboard feed fetched",
-		zap.Int("count", len(storyboards)),
-		zap.Int64("total", total),
-		zap.Int("limit", limit),
-		zap.Int("offset", offset))
-
-	return storyboards, total, nil
 }
 
 // ForkStoryboard Fork 一个 storyboard

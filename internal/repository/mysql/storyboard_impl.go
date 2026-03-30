@@ -515,6 +515,12 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		parentID = *sb.ParentID
 	}
 
+	var storyRel *domain.Story
+	if sb.Story.ID != "" {
+		s := r.storyToDomain(sb.Story)
+		storyRel = &s
+	}
+
 	return domain.Storyboard{
 		BaseModel: common.BaseModel{
 			ID:        sb.ID,
@@ -546,6 +552,7 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		StoryboardScenes: scenes,
 		CharacterRefs:    charRefs,
 		SceneRefs:        sceneRefs,
+		Story:            storyRel,
 	}, nil
 }
 
@@ -848,4 +855,58 @@ func (r *Repository) StoryboardFeed(ctx context.Context, limit, offset int) ([]*
 	}
 
 	return result, total, nil
+}
+
+// StoryboardFeedFromFollowedStories returns published storyboards for stories the user follows,
+// ordered by storyboard activity (updated_at) descending.
+func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	if userID == "" {
+		return []*domain.Storyboard{}, 0, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	base := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Joins("JOIN story_follows sf ON sf.story_id = storyboards.story_id AND sf.user_id = ?", userID).
+		Joins("JOIN stories ON stories.id = storyboards.story_id").
+		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished)
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard feed following count: %w", err)
+	}
+
+	var rows []Storyboard
+	if err := r.db.WithContext(ctx).
+		Preload("Creator").
+		Preload("Story").
+		Preload("Story.Author").
+		Model(&Storyboard{}).
+		Joins("JOIN story_follows sf ON sf.story_id = storyboards.story_id AND sf.user_id = ?", userID).
+		Joins("JOIN stories ON stories.id = storyboards.story_id").
+		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
+		Order("storyboards.updated_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard feed following: %w", err)
+	}
+
+	out := make([]*domain.Storyboard, 0, len(rows))
+	for _, sb := range rows {
+		domainSb, err := r.storyboardToDomain(ctx, sb)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, &domainSb)
+	}
+	return out, total, nil
 }
