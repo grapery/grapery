@@ -1,83 +1,154 @@
 package http
 
 import (
-	"encoding/json"
-	 "fmt"
-  " "net/http"
-  "github.com/gin-gonic/gin"
-  "github.com/grapery/fgrapery/internal/common"
-  "github.com/grapery/fgrapery/internal/domain"
-  "github.com/grapery/fgrapery/internal/service"
-  "github.com/grapery/fgrapery/pkg/utils"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 )
 
-  "image/asset" // 图片资源
+// ListAssets 获取资源列表
+// GET /api/assets
+func (h *Handler) ListAssets(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
 
-  "upload" "application/json
-  c.BindJSON(&struct {
-		UserID string `json:"userId"`
-		Type   string `json:"type"`   // image, audio, video
-	 File  *multipart.File `json:"files"` // 多文件上传
+	// 获取分页参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	_ = c.Query("type") // assetType: image, audio, video - TODO: use for filtering
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	// TODO: 实现从数据库获取资源列表
+	// assets, total, err := h.svc.ListAssets(c.Request.Context(), userID, assetType, page, pageSize)
+
+	Success(c, gin.H{
+		"assets": []interface{}{},
+		"page":   page,
+		"pageSize": pageSize,
+		"total":  0,
+	})
 }
 
-  "multipart/form" form:"multipart_file" binding:"multipart_file upload时创建}
-  "multipart/form" action := {
-        // 从 multipart表单数据中获取文件
-        var file FileHeader
-        var file File = file.FileHeader
-        // 从 multipart表单数据中获取第一个文件
-        file.Filename = fileHeader.Filename
-        file.Size = fileHeader.Size
-        file.Seek = file.Seek(0, 0)
-        file.Type = fileHeader.Type
-        file.MimeType = fileHeader.MimeType
+// GetAsset 获取单个资源详情
+// GET /api/assets/:id
+func (h *Handler) GetAsset(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
 
-        // 检查是否为图片文件
-        if !isImageFile(file) {
-            c.JSON(400, gin.H{"error": "文件必须为图片文件"})
-            return
-        }
+	assetID := c.Param("id")
+	if assetID == "" {
+		InvalidParams(c, "asset id is required")
+		return
+	}
 
-        // 风格： 根据请求的文件名生成缩略图
-        if len(file.Filename) == 0 {
-            c.JSON(400, gin.H{"error": "文件名不能为空"})
-            return
-        }
+	// TODO: 实现从数据库获取资源详情
+	// asset, err := h.svc.GetAsset(c.Request.Context(), assetID, userID)
 
-        // 创建临时文件
-        tempFile, filepath.Join(fileDir, tempFilePath)
-        if err != nil {
-            c.JSON(500, gin.H{"error": fmt.Sprintf("failed to generate thumbnail: %v", err))
-        }
-
-        // 创建目标文件
-        targetPath := filepath.Join(fileDir, tempPath)
-        if err != nil {
-            c.JSON(500, gin.H{"error": "failed to create target directory", err)
-            return
-        }
-        // 生成缩略图
-        thumb, := generateThumbnail(file, targetPath, width, height, size, quality)
- outputFormat)
- if err != nil {
-            c.JSON(500, gin.H{"error": "failed to generate thumbnail", err)
-            return
-        }
-        // 获取原始文件信息
-        originalInfo, err := file.Stat(filepath)
-        if err != nil {
-            c.JSON(500, gin.H{"error": "failed to get original file info", err)
-            return
-        }
-
-        c.JSON(200, gin.H{"message": "image uploaded successfully"})
-        c.JSON(200, gin.H{"data": asset})
-    }
+	Success(c, gin.H{
+		"id": assetID,
+		// "asset": asset,
+	})
 }
 
+// CreateAsset 创建资源记录
+// POST /api/assets
+func (h *Handler) CreateAsset(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
 
-    return asset
-} else {
-    c.JSON(400, gin.H{"error": err.Error()})
-    return
+	var req struct {
+		URL      string `json:"url" binding:"required"`
+		Type     string `json:"type" binding:"required"` // image, audio, video
+		Name     string `json:"name"`
+		MimeType string `json:"mimeType"`
+		Size     int64  `json:"size"`
+		Width    int    `json:"width"`
+		Height   int    `json:"height"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	// TODO: 实现创建资源记录
+	// asset, err := h.svc.CreateAsset(c.Request.Context(), &req, userID)
+
+	Success(c, gin.H{
+		"message": "asset created",
+		// "asset": asset,
+	})
+}
+
+// UpdateAsset 更新资源
+// PUT /api/assets/:id
+func (h *Handler) UpdateAsset(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	assetID := c.Param("id")
+	if assetID == "" {
+		InvalidParams(c, "asset id is required")
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	// TODO: 实现更新资源
+	// asset, err := h.svc.UpdateAsset(c.Request.Context(), assetID, &req, userID)
+
+	Success(c, gin.H{
+		"message": "asset updated",
+		"id":      assetID,
+	})
+}
+
+// DeleteAsset 删除资源
+// DELETE /api/assets/:id
+func (h *Handler) DeleteAsset(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	assetID := c.Param("id")
+	if assetID == "" {
+		InvalidParams(c, "asset id is required")
+		return
+	}
+
+	// TODO: 实现删除资源
+	// err := h.svc.DeleteAsset(c.Request.Context(), assetID, userID)
+
+	Success(c, gin.H{
+		"message": "asset deleted",
+		"id":      assetID,
+	})
 }

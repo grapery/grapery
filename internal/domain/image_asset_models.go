@@ -13,9 +13,9 @@ const (
 
 // ImageDimensions 图片尺寸信息
 type ImageDimensions struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-	Size   int `json:"size"` // 字节大小
+	Width  int   `json:"width"`
+	Height int   `json:"height"`
+	Size   int64 `json:"size"` // 字节大小
 }
 
 // ImageInfo 图片信息
