@@ -579,19 +579,26 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 			}
 		}
 
+		// MySQL JSON columns reject "" ("The document is empty"); use minimal valid JSON.
+		contextSnapshot := scene.ContextSnapshot
+		if contextSnapshot == "" || !json.Valid([]byte(contextSnapshot)) {
+			contextSnapshot = "{}"
+		}
+
 		dbScenes[i] = StoryboardScene{
-			ID:            uuid.NewString(),
-			StoryboardID:  storyboardID,
-			StorySceneID:  storySceneID,
-			Sequence:      scene.Sequence,
-			Title:         scene.Title,
-			Description:   scene.Description,
-			Image:         scene.Image,
-			Location:      scene.Location,
-			TimeOfDay:     scene.TimeOfDay,
-			Characters:    charactersJSON,
-			Mood:          scene.Mood,
-			IsAIGenerated: scene.IsAIGenerated,
+			ID:              uuid.NewString(),
+			StoryboardID:    storyboardID,
+			StorySceneID:    storySceneID,
+			Sequence:        scene.Sequence,
+			Title:           scene.Title,
+			Description:     scene.Description,
+			Image:           scene.Image,
+			Location:        scene.Location,
+			TimeOfDay:       scene.TimeOfDay,
+			Characters:      charactersJSON,
+			Mood:            scene.Mood,
+			IsAIGenerated:   scene.IsAIGenerated,
+			ContextSnapshot: contextSnapshot,
 		}
 		// Also update the domain object with the generated ID
 		scenes[i].ID = dbScenes[i].ID
@@ -764,7 +771,8 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		TimeOfDay:     dbScene.TimeOfDay,
 		Mood:          dbScene.Mood,
 		IsAIGenerated: dbScene.IsAIGenerated,
-		IsSubdivided:  dbScene.IsSubdivided,
+		IsSubdivided:      dbScene.IsSubdivided,
+		ContextSnapshot:   dbScene.ContextSnapshot,
 	}
 
 	if dbScene.StorySceneID != nil {
