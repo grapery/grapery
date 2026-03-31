@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
@@ -272,6 +273,7 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewerID)
 	Success(c, gin.H{
 		"storyboards": storyboards,
 		"count":       len(storyboards),
@@ -344,6 +346,7 @@ func (h *Handler) GetLikedStoryboards(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewerID)
 	Success(c, gin.H{
 		"storyboards": storyboards,
 		"count":       len(storyboards),

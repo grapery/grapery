@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
@@ -260,6 +261,7 @@ func (h *Handler) GetCharacterStoryboards(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, authPkg.GetUserID(c))
 	Success(c, gin.H{
 		"storyboards": storyboards,
 		"total":       total,

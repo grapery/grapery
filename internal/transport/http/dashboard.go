@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // REMOVED: GetDashboardStoryboards - not in StoryCreationAppUI design
@@ -27,6 +28,7 @@ func (h *Handler) GetPublicTrendingStoryboards(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(items, userID)
 	Success(c, gin.H{
 		"storyboards": items,
 		"total":       total,

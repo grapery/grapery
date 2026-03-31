@@ -177,6 +177,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		zap.String("parentId", storyboard.ParentID),
 		zap.String("workflowStatus", storyboard.WorkflowStatus))
 
+	domain.RedactStoryboardViewsUnlessCreator(storyboard, uid)
 	Success(c, storyboard)
 }
 
@@ -194,6 +195,7 @@ func (h *Handler) GetStoryboard(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreator(storyboard, GetUserID(c))
 	Success(c, storyboard)
 }
 
@@ -267,6 +269,7 @@ func (h *Handler) UpdateStoryboard(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreator(updatedStoryboard, userID.(string))
 	Success(c, updatedStoryboard)
 }
 
@@ -312,6 +315,7 @@ func (h *Handler) GetStoryboardFeed(c *gin.Context) {
 		zap.Int("count", len(storyboards)),
 		zap.Int64("total", total))
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, uid)
 	Success(c, gin.H{
 		"storyboards": storyboards,
 		"total":       total,
@@ -392,6 +396,9 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		zap.String("storyId", storyID),
 		zap.Int("count", len(storyboards)))
 
+	viewer := GetUserID(c)
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewer)
+	domain.RedactStoryboardViewsUnlessCreator(parentStoryboard, viewer)
 	Success(c, gin.H{
 		"storyboards":      storyboards,
 		"parentStoryboard": parentStoryboard,
@@ -411,6 +418,7 @@ func (h *Handler) GetStoryboardChildren(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(children, GetUserID(c))
 	Success(c, gin.H{
 		"children": children,
 		"count":    len(children),
@@ -427,6 +435,7 @@ func (h *Handler) GetStoryboardTree(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreatorMany(tree, GetUserID(c))
 	Success(c, gin.H{
 		"tree":  tree,
 		"count": len(tree),
@@ -505,6 +514,7 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		return
 	}
 
+	domain.RedactStoryboardViewsUnlessCreator(newStoryboard, userID.(string))
 	Success(c, newStoryboard)
 }
 
@@ -548,6 +558,9 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 		return
 	}
 
+	if result != nil && result.NewStoryboard != nil {
+		domain.RedactStoryboardViewsUnlessCreator(result.NewStoryboard, userID.(string))
+	}
 	Success(c, result)
 }
 
