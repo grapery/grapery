@@ -1300,7 +1300,7 @@ func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*doma
 }
 
 // GetStoryboardFeed 获取故事板 feed。
-// tab: for_you（默认，推荐/热度排序，后续可接文本向量）；following（关注的故事下已发布故事板，按更新时间）；community（社区时间线，带缓存）。
+// tab: for_you（默认，推荐/热度排序，后续可接文本向量）；following（关注的故事下可读故事板：published / images_ready / video_ready，按 storyboards.updated_at）；community（社区时间线，带缓存）。
 func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
 	if tab == "" || tab == "recommended" {

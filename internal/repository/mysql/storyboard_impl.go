@@ -865,8 +865,12 @@ func (r *Repository) StoryboardFeed(ctx context.Context, limit, offset int) ([]*
 	return result, total, nil
 }
 
-// StoryboardFeedFromFollowedStories returns published storyboards for stories the user follows,
+// StoryboardFeedFromFollowedStories returns storyboards for stories the user follows (active follow rows only),
 // ordered by storyboard activity (updated_at) descending.
+//
+// Includes workflow statuses that are typically reader-visible in the app (not only final "published"),
+// so the following tab stays useful when authors have not yet tapped publish but already have images/video ready.
+// Uses IN (subquery on story_follows) so GORM applies soft-delete scopes on follows; excludes soft-deleted stories.
 func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	if userID == "" {
 		return []*domain.Storyboard{}, 0, nil
@@ -881,11 +885,22 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		offset = 0
 	}
 
+	followedStoryIDs := r.db.WithContext(ctx).
+		Model(&StoryFollow{}).
+		Select("story_id").
+		Where("user_id = ?", userID)
+
+	visibleWorkflow := []string{
+		domain.WorkflowStatusPublished,
+		domain.WorkflowStatusImagesReady,
+		domain.WorkflowStatusVideoReady,
+	}
+
 	base := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
-		Joins("JOIN story_follows sf ON sf.story_id = storyboards.story_id AND sf.user_id = ?", userID).
-		Joins("JOIN stories ON stories.id = storyboards.story_id").
-		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished)
+		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
+		Where("storyboards.workflow_status IN ?", visibleWorkflow).
+		Where("storyboards.story_id IN (?)", followedStoryIDs)
 
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
@@ -898,9 +913,9 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		Preload("Story").
 		Preload("Story.Author").
 		Model(&Storyboard{}).
-		Joins("JOIN story_follows sf ON sf.story_id = storyboards.story_id AND sf.user_id = ?", userID).
-		Joins("JOIN stories ON stories.id = storyboards.story_id").
-		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
+		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
+		Where("storyboards.workflow_status IN ?", visibleWorkflow).
+		Where("storyboards.story_id IN (?)", followedStoryIDs).
 		Order("storyboards.updated_at DESC").
 		Limit(limit).
 		Offset(offset).

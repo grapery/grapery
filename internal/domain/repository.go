@@ -188,7 +188,7 @@ type Repository interface {
 	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
 	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
-	// StoryboardFeedFromFollowedStories returns published storyboards for stories the user follows, newest activity first.
+	// StoryboardFeedFromFollowedStories returns reader-visible storyboards for stories the user follows (active follow rows), newest storyboard activity first.
 	StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	// StoryboardFeedRecommended ranks published storyboards for the “for you” tab (genre signals from followed stories + engagement; vector stage can replace ranking later).
 	StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)

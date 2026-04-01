@@ -288,7 +288,7 @@ func (h *Handler) DeleteStoryboard(c *gin.Context) {
 
 // GetStoryboardFeed 获取故事板 feed 流
 // Query params:
-//   - tab: for_you（默认，推荐/热度）；following（关注的故事下已发布故事板，按更新时间）；community（全站时间线）
+//   - tab: for_you（默认，推荐/热度）；following（关注的故事下可读故事板，按更新时间）；community（全站时间线）
 //   - limit: 分页限制（默认20）
 //   - offset: 分页偏移（默认0）
 func (h *Handler) GetStoryboardFeed(c *gin.Context) {
@@ -296,11 +296,16 @@ func (h *Handler) GetStoryboardFeed(c *gin.Context) {
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	tab := c.DefaultQuery("tab", "for_you")
 
-	userID, _ := c.Get("userID")
-	uid, _ := userID.(string)
+	uid := ""
+	if v, ok := c.Get("userID"); ok {
+		if s, ok := v.(string); ok {
+			uid = s
+		}
+	}
 
 	h.logger.Info("GetStoryboardFeed called",
 		zap.String("tab", tab),
+		zap.String("userID", uid),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
