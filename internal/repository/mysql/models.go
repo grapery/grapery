@@ -819,26 +819,6 @@ type ViewHistory struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
 }
 
-// ========== 举报系统 ==========
-
-// Report 举报
-type Report struct {
-	ID          string         `gorm:"primaryKey;size:36"`
-	ReporterID  string         `gorm:"size:36;not null;index"`
-	Reporter    User           `gorm:"foreignKey:ReporterID"`
-	EntityType  string         `gorm:"size:50;not null;index"` // story, comment, user, character
-	EntityID    string         `gorm:"size:36;not null;index"`
-	Reason      string         `gorm:"size:50;not null"` // spam, inappropriate, copyright, other
-	Description string         `gorm:"type:text"`
-	Status      string         `gorm:"size:20;not null;index"` // pending, reviewed, resolved, rejected
-	ReviewerID  string         `gorm:"size:36;index"`
-	Reviewer    *User          `gorm:"foreignKey:ReviewerID"`
-	ReviewNote  string         `gorm:"type:text"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime;index"`
-	ReviewedAt  *time.Time     `gorm:"index"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
-}
-
 // REMOVED: UserActivity - not in StoryCreationAppUI design
 
 // ========== 角色海报 ==========

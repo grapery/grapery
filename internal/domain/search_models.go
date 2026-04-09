@@ -79,22 +79,3 @@ func (sr *SearchResult) MarshalJSON() ([]byte, error) {
 		Alias: (*Alias)(sr),
 	})
 }
-
-// Report 举报
-type Report struct {
-	ID          string `json:"id"`
-	ReporterID  string `json:"reporterId"`
-	EntityType  string `json:"entityType"` // story, comment, user, character
-	EntityID    string `json:"entityId"`
-	Reason      string `json:"reason"` // spam, inappropriate, copyright, other
-	Description string `json:"description"`
-	Status      string `json:"status"` // pending, reviewed, resolved, rejected
-	ReviewerID  string `json:"reviewerId,omitempty"`
-	ReviewNote  string `json:"reviewNote,omitempty"`
-	CreatedAt   int64  `json:"createdAt"`
-	ReviewedAt  *int64 `json:"reviewedAt,omitempty"`
-
-	// Relations
-	Reporter *User `json:"reporter,omitempty"`
-	Reviewer *User `json:"reviewer,omitempty"`
-}

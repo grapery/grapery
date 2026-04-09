@@ -16,6 +16,6 @@ package domain
 // - ai_models.go: AITask, AIGenerationRecord, RenderTask, RenderConfig
 // - style_models.go: StyleConfig
 // - payment_models.go: Membership, SubscriptionPlan, SubscriptionOrder, TokenTransaction
-// - search_models.go: SearchHistory, ViewHistory, SearchFilter, SearchResult, Report
+// - search_models.go: SearchHistory, ViewHistory, SearchFilter, SearchResult
 
 // All types are automatically available when importing this package.

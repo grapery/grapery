@@ -201,6 +201,15 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_storyboard_panels",
+		Description: "Create and migrate storyboard_panels table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardPanel{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_storyboard_content_generations",
 		Description: "Create and migrate storyboard_content_generations table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -374,16 +383,6 @@ func init() {
 		Description: "Create and migrate view_histories table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &ViewHistory{})
-		},
-		Required: true,
-	})
-
-	// ========== 举报系统表 ==========
-	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_reports",
-		Description: "Create and migrate reports table",
-		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Report{})
 		},
 		Required: true,
 	})
@@ -568,6 +567,24 @@ func init() {
 		Description: "Create and migrate user_follows table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserFollow{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_user_blocks",
+		Description: "Create and migrate user_blocks table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserBlock{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_user_reports",
+		Description: "Create and migrate user_reports table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserReport{})
 		},
 		Required: true,
 	})

@@ -1795,58 +1795,6 @@ func ModelToViewHistory(m *ViewHistory) *domain.ViewHistory {
 	}
 }
 
-// ========== Report 转换 ==========
-
-// ReportToModel 将 domain.Report 转换为 MySQL Report 模型
-func ReportToModel(d *domain.Report) *Report {
-	if d == nil {
-		return nil
-	}
-	var reviewedAt *time.Time
-	if d.ReviewedAt != nil && *d.ReviewedAt != 0 {
-		t := unixToTime(*d.ReviewedAt)
-		reviewedAt = &t
-	}
-	return &Report{
-		ID:          d.ID,
-		ReporterID:  d.ReporterID,
-		EntityType:  d.EntityType,
-		EntityID:    d.EntityID,
-		Reason:      d.Reason,
-		Description: d.Description,
-		Status:      d.Status,
-		ReviewerID:  d.ReviewerID,
-		ReviewNote:  d.ReviewNote,
-		CreatedAt:   unixToTime(d.CreatedAt),
-		ReviewedAt:  reviewedAt,
-	}
-}
-
-// ModelToReport 将 MySQL Report 模型转换为 domain.Report
-func ModelToReport(m *Report) *domain.Report {
-	if m == nil {
-		return nil
-	}
-	var reviewedAt *int64
-	if m.ReviewedAt != nil && !m.ReviewedAt.IsZero() {
-		unix := timeToUnix(*m.ReviewedAt)
-		reviewedAt = &unix
-	}
-	return &domain.Report{
-		ID:          m.ID,
-		ReporterID:  m.ReporterID,
-		EntityType:  m.EntityType,
-		EntityID:    m.EntityID,
-		Reason:      m.Reason,
-		Description: m.Description,
-		Status:      m.Status,
-		ReviewerID:  m.ReviewerID,
-		ReviewNote:  m.ReviewNote,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-		ReviewedAt:  reviewedAt,
-	}
-}
-
 // REMOVED: CharacterPoster conversion functions - not in StoryCreationAppUI design
 
 // ========== CharacterAnalytics 转换 ==========
