@@ -15,6 +15,8 @@ const (
 	FragmentSourceStoryExcerpt    FragmentSourceType = "story_excerpt"
 	FragmentSourceStoryboardNode  FragmentSourceType = "storyboard_node"
 	FragmentSourcePanelGeneration FragmentSourceType = "panel_generation"
+	// FragmentSourceAIGeneration 无参考图 / 文本发起的 AI 碎片生成任务对应的草稿（source_id 为 fragment_generation_tasks.id）
+	FragmentSourceAIGeneration FragmentSourceType = "ai_fragment_generation"
 )
 
 // FragmentStatus 片段状态 - 使用 common.BaseStatus 作为类型别名以保持向后兼容

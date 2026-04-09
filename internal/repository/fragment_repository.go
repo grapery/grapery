@@ -96,6 +96,19 @@ func (r *FragmentRepository) GetByID(ctx context.Context, id string) (*domain.Fr
 	return mysql.FragmentDBToDomain(&fragment), nil
 }
 
+// GetBySource returns the newest fragment row for the given source_type + source_id (e.g. AI 任务草稿).
+func (r *FragmentRepository) GetBySource(ctx context.Context, sourceType, sourceID string) (*domain.Fragment, error) {
+	var fragment mysql.FragmentDB
+	err := r.db.WithContext(ctx).Preload("Creator").
+		Where("source_type = ? AND source_id = ?", sourceType, sourceID).
+		Order("created_at DESC").
+		First(&fragment).Error
+	if err != nil {
+		return nil, err
+	}
+	return mysql.FragmentDBToDomain(&fragment), nil
+}
+
 // List retrieves fragments with pagination
 func (r *FragmentRepository) List(ctx context.Context, limit, offset int, visibility string) ([]*domain.Fragment, int64, error) {
 	var dbFragments []*mysql.FragmentDB

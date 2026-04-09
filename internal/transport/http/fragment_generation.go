@@ -79,18 +79,21 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		domainReq.ImageCount = 1
 	}
 
-	// 调用服务生成碎片
-	task, err := h.fragmentGenService.GenerateFragment(c.Request.Context(), userID, domainReq)
+	task, draftFragmentID, err := h.fragmentGenService.GenerateFragment(c.Request.Context(), userID, domainReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create generation task"})
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
+	resp := gin.H{
 		"taskId":   task.ID,
 		"status":   task.Status,
 		"progress": task.Progress,
-	})
+	}
+	if draftFragmentID != "" {
+		resp["draftFragmentId"] = draftFragmentID
+	}
+	c.JSON(http.StatusAccepted, resp)
 }
 
 // GetGenerationStatus handles GET /fragments/generate/:taskId

@@ -36,9 +36,8 @@ func NewFragmentGenerationService(
 	}
 }
 
-// GenerateFragment 生成碎片故事（完整流程）
-func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentGenerationTask, error) {
-	// 创建生成任务
+// GenerateFragment 创建生成任务并立即落库占位草稿（与多格参考图流程对齐），返回 task 与 draftFragmentId。
+func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentGenerationTask, string, error) {
 	taskID := uuid.New().String()
 	task := &domain.FragmentGenerationTask{
 		ID:        taskID,
@@ -50,18 +49,44 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	}
 
 	if err := s.fragmentGenRepo.Create(ctx, task); err != nil {
-		return nil, fmt.Errorf("failed to create generation task: %w", err)
+		return nil, "", fmt.Errorf("failed to create generation task: %w", err)
+	}
+
+	nowMs := time.Now().UnixMilli()
+	draft := &domain.Fragment{
+		BaseModel: common.BaseModel{
+			ID:        uuid.New().String(),
+			CreatedAt: nowMs,
+			UpdatedAt: nowMs,
+		},
+		UserID:          userID,
+		CreatorID:       userID,
+		Content:         "生成中…",
+		MediaURLs:       []string{},
+		ImageUrls:       "[]",
+		Visibility:      domain.FragmentVisibilityPrivate,
+		IsDraft:         true,
+		SourceType:      string(domain.FragmentSourceAIGeneration),
+		SourceID:        taskID,
+		EngagementStats: common.EngagementStats{},
+	}
+	if err := s.fragmentRepo.Create(ctx, draft); err != nil {
+		if delErr := s.fragmentGenRepo.Delete(ctx, taskID); delErr != nil {
+			s.logger.Warn("rollback: failed to delete generation task after draft create error",
+				zap.String("task_id", taskID), zap.Error(delErr))
+		}
+		return nil, "", fmt.Errorf("failed to create placeholder draft: %w", err)
 	}
 
 	s.logger.Info("Fragment generation task created",
 		zap.String("task_id", taskID),
+		zap.String("draft_id", draft.ID),
 		zap.String("user_id", userID),
 		zap.Int("image_count", req.ImageCount))
 
-	// 异步处理生成流程
 	go s.processFragmentGeneration(context.Background(), taskID)
 
-	return task, nil
+	return task, draft.ID, nil
 }
 
 // processFragmentGeneration 处理碎片生成流程
@@ -106,7 +131,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "completed")
 
-	// 落库草稿碎片：保存 AI 生成的正文与图片，供「草稿」列表与再次编辑；客户端点「发布」时对同一 ID 执行 PUT 并 isDraft=false，避免重复 POST 产生两条记录。
+	// 更新任务创建时已落库的占位草稿（source = ai_fragment_generation + taskID）
 	now := time.Now().UnixMilli()
 	imgCount := len(result.ImageUrls)
 	if imgCount < 1 {
@@ -114,37 +139,62 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	}
 	style := task.Request.Style
 	caption := captionFromGenerationContent(result.Content)
-	fragment := &domain.Fragment{
-		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
-		UserID:          task.UserID,
-		CreatorID:       task.UserID,
-		Content:         result.Content,
-		MediaURLs:       append([]string(nil), result.ImageUrls...),
-		ImageUrls:       stringifyGenerationImageURLs(result.ImageUrls),
-		Style:           &style,
-		FragmentCount:   &imgCount,
-		Visibility:      domain.FragmentVisibilityPrivate,
-		IsDraft:         true,
-		SourceType:      string(domain.FragmentSourceOriginal),
-		SourceID:        taskID,
-		EngagementStats: common.EngagementStats{},
-	}
-	if caption != "" {
-		fragment.Caption = caption
-	}
 
-	if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
-		s.logger.Error("Failed to create draft fragment from generation",
-			zap.String("task_id", taskID),
-			zap.Error(err))
+	existing, gerr := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID)
+	if gerr == nil && existing != nil {
+		existing.Content = result.Content
+		existing.MediaURLs = append([]string(nil), result.ImageUrls...)
+		existing.ImageUrls = stringifyGenerationImageURLs(result.ImageUrls)
+		existing.Style = &style
+		existing.FragmentCount = &imgCount
+		existing.UpdatedAt = now
+		if caption != "" {
+			existing.Caption = caption
+		}
+		if err := s.fragmentRepo.Update(ctx, existing); err != nil {
+			s.logger.Error("Failed to update draft fragment from generation",
+				zap.String("task_id", taskID),
+				zap.String("draft_id", existing.ID),
+				zap.Error(err))
+		} else {
+			result.DraftFragmentID = existing.ID
+			if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
+				s.logger.Warn("Failed to persist draftFragmentId on generation task", zap.Error(err))
+			}
+		}
 	} else {
-		result.DraftFragmentID = fragment.ID
-		if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
-			s.logger.Warn("Failed to persist draftFragmentId on generation task", zap.Error(err))
+		// 兼容旧数据：无占位草稿时仍创建新行
+		fragment := &domain.Fragment{
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			UserID:          task.UserID,
+			CreatorID:       task.UserID,
+			Content:         result.Content,
+			MediaURLs:       append([]string(nil), result.ImageUrls...),
+			ImageUrls:       stringifyGenerationImageURLs(result.ImageUrls),
+			Style:           &style,
+			FragmentCount:   &imgCount,
+			Visibility:      domain.FragmentVisibilityPrivate,
+			IsDraft:         true,
+			SourceType:      string(domain.FragmentSourceOriginal),
+			SourceID:        taskID,
+			EngagementStats: common.EngagementStats{},
+		}
+		if caption != "" {
+			fragment.Caption = caption
+		}
+		if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
+			s.logger.Error("Failed to create draft fragment from generation",
+				zap.String("task_id", taskID),
+				zap.Error(err))
+		} else {
+			result.DraftFragmentID = fragment.ID
+			if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
+				s.logger.Warn("Failed to persist draftFragmentId on generation task", zap.Error(err))
+			}
 		}
 	}
 
