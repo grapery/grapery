@@ -174,7 +174,8 @@ func (r *Repository) StoryboardsByStory(ctx context.Context, storyID string, lim
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -213,7 +214,8 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -243,7 +245,8 @@ func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID 
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -271,7 +274,8 @@ func (r *Repository) StoryboardsByCreator(ctx context.Context, creatorID string,
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -301,7 +305,8 @@ func (r *Repository) DraftStoryboardsByCreator(ctx context.Context, creatorID st
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -379,7 +384,8 @@ func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -859,18 +865,16 @@ func (r *Repository) StoryboardFeed(ctx context.Context, limit, offset int) ([]*
 		if err != nil {
 			return nil, 0, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, total, nil
 }
 
-// StoryboardFeedFromFollowedStories returns storyboards for stories the user follows (active follow rows only),
-// ordered by storyboard activity (updated_at) descending.
-//
-// Includes workflow statuses that are typically reader-visible in the app (not only final "published"),
-// so the following tab stays useful when authors have not yet tapped publish but already have images/video ready.
-// Uses IN (subquery on story_follows) so GORM applies soft-delete scopes on follows; excludes soft-deleted stories.
+// StoryboardFeedFromFollowedStories is the “following” tab: reader-visible storyboards on
+// (1) stories the user follows (story_follows), (2) public stories by users the viewer follows (user_follows),
+// and (3) the viewer’s own stories (author_id = viewer), so self is always included like an implicit self-follow.
 func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	if userID == "" {
 		return []*domain.Storyboard{}, 0, nil
@@ -885,37 +889,39 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		offset = 0
 	}
 
-	followedStoryIDs := r.db.WithContext(ctx).
-		Model(&StoryFollow{}).
-		Select("story_id").
-		Where("user_id = ?", userID)
-
-	visibleWorkflow := []string{
+	visibleForFollowedStory := []string{
 		domain.WorkflowStatusPublished,
 		domain.WorkflowStatusImagesReady,
 		domain.WorkflowStatusVideoReady,
 	}
+	publicVis := string(domain.StoryVisibilityPublic)
 
-	base := r.db.WithContext(ctx).
-		Model(&Storyboard{}).
-		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
-		Where("storyboards.workflow_status IN ?", visibleWorkflow).
-		Where("storyboards.story_id IN (?)", followedStoryIDs)
+	// OR: followed stories, followed users’ public stories, or own stories (any visibility).
+	buildBase := func() *gorm.DB {
+		return r.db.WithContext(ctx).
+			Model(&Storyboard{}).
+			Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
+			Where(`(
+				(storyboards.story_id IN (SELECT story_id FROM story_follows WHERE user_id = ? AND deleted_at IS NULL)
+				 AND storyboards.workflow_status IN ?)
+				OR
+				(stories.visibility = ? AND storyboards.workflow_status IN ?
+				 AND stories.author_id IN (SELECT followee_id FROM user_follows WHERE follower_id = ? AND deleted_at IS NULL))
+				OR
+				(stories.author_id = ? AND storyboards.workflow_status IN ?)
+			)`, userID, visibleForFollowedStory, publicVis, visibleForFollowedStory, userID, userID, visibleForFollowedStory)
+	}
 
 	var total int64
-	if err := base.Count(&total).Error; err != nil {
+	if err := buildBase().Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("storyboard feed following count: %w", err)
 	}
 
 	var rows []Storyboard
-	if err := r.db.WithContext(ctx).
+	if err := buildBase().
 		Preload("Creator").
 		Preload("Story").
 		Preload("Story.Author").
-		Model(&Storyboard{}).
-		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
-		Where("storyboards.workflow_status IN ?", visibleWorkflow).
-		Where("storyboards.story_id IN (?)", followedStoryIDs).
 		Order("storyboards.updated_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -929,7 +935,8 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		if err != nil {
 			return nil, 0, err
 		}
-		out = append(out, &domainSb)
+		copySb := domainSb
+		out = append(out, &copySb)
 	}
 	return out, total, nil
 }

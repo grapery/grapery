@@ -23,7 +23,7 @@ const (
 type Like struct {
 	ID           string       `json:"id"`
 	UserID       string       `json:"userId"`
-	LikeableType LikeableType `json:"likeableType"` // story, character, storyboard_node, fragment, character_poster
+	LikeableType LikeableType `json:"likeableType"` // story, character, storyboard_node (→storyboard_likes), fragment, character_poster
 	LikeableID   string       `json:"likeableId"`
 	CreatedAt    int64        `json:"createdAt"`
 }
@@ -34,7 +34,8 @@ type LikeableType string
 const (
 	LikeableTypeStory           LikeableType = "story"
 	LikeableTypeCharacter       LikeableType = "character"
-	LikeableTypeStoryboardNode  LikeableType = "storyboard_node"
+	// LikeableTypeStoryboardNode 在互动服务内委托到 Repository.LikeStoryboard（storyboard_likes），勿再写入通用 likes 表。
+	LikeableTypeStoryboardNode LikeableType = "storyboard_node"
 	LikeableTypeFragment        LikeableType = "fragment"
 	LikeableTypeCharacterPoster LikeableType = "character_poster"
 )

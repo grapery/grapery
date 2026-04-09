@@ -37,7 +37,6 @@ DELETE FROM panels WHERE 1=1;
 DELETE FROM story_contributors WHERE 1=1;
 DELETE FROM stories WHERE 1=1;
 DELETE FROM likes WHERE 1=1;
-DELETE FROM follows WHERE 1=1;
 DELETE FROM user_follows WHERE 1=1;
 DELETE FROM story_likes WHERE 1=1;
 DELETE FROM story_follows WHERE 1=1;
@@ -227,37 +226,18 @@ INSERT INTO likes (id, user_id, likeable_type, likeable_id, created_at) VALUES
 -- Eve 对故事点赞
 (UUID(), 'user-0001-0000-0000-000000000005', 'story', 'story-0001-0000-0000-000000000001', UNIX_TIMESTAMP() - 1728000),
 (UUID(), 'user-0001-0000-0000-000000000005', 'story', 'story-0001-0000-0000-000000000002', UNIX_TIMESTAMP() - 1555200),
--- 对故事板点赞
-(UUID(), 'user-0001-0000-0000-000000000002', 'storyboard', 'board-0001-0000-0000-000000000001', UNIX_TIMESTAMP() - 777600),
-(UUID(), 'user-0001-0000-0000-000000000003', 'storyboard', 'board-0001-0000-0000-000000000001', UNIX_TIMESTAMP() - 1296000),
 -- 对碎片点赞
 (UUID(), 'user-0001-0000-0000-000000000002', 'fragment', 'frag-0001-0000-0000-000000000001', UNIX_TIMESTAMP() - 864000),
 (UUID(), 'user-0001-0000-0000-000000000003', 'fragment', 'frag-0001-0000-0000-000000000002', UNIX_TIMESTAMP() - 691200);
 
 -- ============================================================
--- 10. Follows (关注)
+-- 9b. Storyboard likes (canonical storyboard_likes; do not use polymorphic likes for boards)
+-- Bob/Charlie 点赞用于联调 isLiked；storyboards.likes 列仍为演示用汇总，可与 COUNT(storyboard_likes) 不完全一致。
 -- ============================================================
 
-INSERT INTO follows (id, follower_id, followable_type, followable_id, notifications_enabled, created_at) VALUES
--- Bob 关注了 Alice
-(UUID(), 'user-0001-0000-0000-000000000002', 'user', 'user-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 864000),
--- Bob 关注了 Charlie
-(UUID(), 'user-0001-0000-0000-000000000002', 'user', 'user-0001-0000-0000-000000000003', 1, UNIX_TIMESTAMP() - 691200),
--- Charlie 关注了 Alice
-(UUID(), 'user-0001-0000-0000-000000000003', 'user', 'user-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 1296000),
--- Diana 关注了 Alice
-(UUID(), 'user-0001-0000-0000-000000000004', 'user', 'user-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 172800),
--- Diana 关注了 Eve
-(UUID(), 'user-0001-0000-0000-000000000004', 'user', 'user-0001-0000-0000-000000000005', 1, UNIX_TIMESTAMP() - 86400),
--- Eve 关注了 Alice
-(UUID(), 'user-0001-0000-0000-000000000005', 'user', 'user-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 1728000),
--- Eve 关注了 Charlie
-(UUID(), 'user-0001-0000-0000-000000000005', 'user', 'user-0001-0000-0000-000000000003', 1, UNIX_TIMESTAMP() - 1555200),
--- 对故事的关注
-(UUID(), 'user-0001-0000-0000-000000000002', 'story', 'story-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 777600),
-(UUID(), 'user-0001-0000-0000-000000000003', 'story', 'story-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 1296000),
--- 对角色的关注
-(UUID(), 'user-0001-0000-0000-000000000002', 'character', 'char-0001-0000-0000-000000000001', 1, UNIX_TIMESTAMP() - 777600);
+INSERT INTO storyboard_likes (id, user_id, storyboard_id, created_at, deleted_at) VALUES
+(UUID(), 'user-0001-0000-0000-000000000002', 'board-0001-0000-0000-000000000001', FROM_UNIXTIME(UNIX_TIMESTAMP() - 777600), NULL),
+(UUID(), 'user-0001-0000-0000-000000000003', 'board-0001-0000-0000-000000000001', FROM_UNIXTIME(UNIX_TIMESTAMP() - 1296000), NULL);
 
 -- ============================================================
 -- 11. Comments (评论)

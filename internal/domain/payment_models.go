@@ -63,15 +63,16 @@ type Membership struct {
 
 // MembershipPlan 会员方案（新版，用于前端展示）
 type MembershipPlan struct {
-	ID        string             `json:"id"`
-	Tier      MembershipTierType `json:"tier"`
-	Period    string             `json:"period"` // monthly, quarterly, yearly
-	Price     float64            `json:"price"`
-	PerMonth  float64            `json:"perMonth"` // 月均价格
-	AIQuota   int                `json:"aiQuota"`  // -1 为无限制
-	Features  []string           `json:"features"`
-	IsActive  bool               `json:"isActive"`
-	SortOrder int                `json:"sortOrder"`
+	ID           string             `json:"id"`
+	Tier         MembershipTierType `json:"tier"`
+	Period       string             `json:"period"` // monthly, quarterly, yearly
+	IAPProductID string             `json:"iapProductId,omitempty"`
+	Price        float64            `json:"price"`
+	PerMonth     float64            `json:"perMonth"` // 月均价格
+	AIQuota      int                `json:"aiQuota"`  // -1 为无限制
+	Features     []string           `json:"features"`
+	IsActive     bool               `json:"isActive"`
+	SortOrder    int                `json:"sortOrder"`
 }
 
 // UserMembership 用户会员信息（新版，用于前端展示）
@@ -92,19 +93,22 @@ type UserMembership struct {
 
 // SubscriptionPlan 订阅计划
 type SubscriptionPlan struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`          // Free, Basic, Pro, Enterprise
-	Price         float64 `json:"price"`         // 月费
-	Currency      string  `json:"currency"`      // USD, CNY
-	TokenQuota    int     `json:"tokenQuota"`    // 每月Token配额
-	StorageQuota  int64   `json:"storageQuota"`  // 存储配额（字节）
-	MaxStories    int     `json:"maxStories"`    // 最大故事数
-	MaxCharacters int     `json:"maxCharacters"` // 最大角色数
-	Features      string  `json:"features"`      // JSON格式的功能列表
-	IsActive      bool    `json:"isActive"`
-	SortOrder     int     `json:"sortOrder"`
-	CreatedAt     int64   `json:"createdAt"`
-	UpdatedAt     int64   `json:"updatedAt"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"` // Free, Basic, Pro, Enterprise
+	IAPProductID   string  `json:"iapProductId,omitempty"`
+	MembershipTier string  `json:"membershipTier,omitempty"` // free, pro, prime, ultra
+	BillingPeriod  string  `json:"billingPeriod,omitempty"`  // monthly, quarterly, yearly
+	Price          float64 `json:"price"`                    // 月费
+	Currency       string  `json:"currency"`                 // USD, CNY
+	TokenQuota     int     `json:"tokenQuota"`               // 每月Token配额
+	StorageQuota   int64   `json:"storageQuota"`             // 存储配额（字节）
+	MaxStories     int     `json:"maxStories"`               // 最大故事数
+	MaxCharacters  int     `json:"maxCharacters"`            // 最大角色数
+	Features       string  `json:"features"`                 // JSON格式的功能列表
+	IsActive       bool    `json:"isActive"`
+	SortOrder      int     `json:"sortOrder"`
+	CreatedAt      int64   `json:"createdAt"`
+	UpdatedAt      int64   `json:"updatedAt"`
 }
 
 // SubscriptionOrder 订阅订单

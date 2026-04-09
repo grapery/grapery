@@ -80,6 +80,15 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_user_feedback",
+		Description: "Create user_feedback table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserFeedback{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_user_devices",
 		Description: "Create and migrate user_devices table for push notifications",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -168,6 +177,15 @@ func init() {
 		Description: "Create and migrate story_follows table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryFollow{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_bookmarks",
+		Description: "Create and migrate bookmarks table (story / fragment / storyboard saves)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Bookmark{})
 		},
 		Required: true,
 	})
@@ -446,9 +464,13 @@ func init() {
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_ai_generation_records",
-		Description: "Create and migrate ai_generation_records table",
+		Description: "Create and migrate ai_generation_records table; force utf8mb4 on prompt columns (fixes MySQL 1366)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AIGenerationRecord{})
+			if err := autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AIGenerationRecord{}); err != nil {
+				return err
+			}
+			repo := &Repository{db: db, log: log}
+			return repo.ensureAIGenerationRecordsSchema()
 		},
 		Required: true,
 	})
@@ -599,10 +621,10 @@ func init() {
 
 	// ========== 多态关注/点赞表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
-		Name:        "migrate_follows",
-		Description: "Create and migrate follows table (polymorphic follow)",
+		Name:        "migrate_legacy_polymorphic_follows_then_drop",
+		Description: "Copy legacy follows rows into story_follows, character_follows, user_follows; drop follows",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Follow{})
+			return MigrateLegacyPolymorphicFollowsThenDrop(ctx, db, log)
 		},
 		Required: true,
 	})
@@ -612,6 +634,19 @@ func init() {
 		Description: "Create and migrate likes table (polymorphic like)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &Like{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_comic_styles",
+		Description: "Create fragment_comic_styles, user_fragment_comic_style_cursors and seed defaults",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			if err := autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentComicStyle{}, &UserFragmentComicStyleCursor{}); err != nil {
+				return err
+			}
+			return SeedFragmentComicStylesIfEmpty(db, log)
 		},
 		Required: true,
 	})
@@ -657,7 +692,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_ai_generation_records_schema",
-		Description: "Ensure ai_generation_records prompt fields support Unicode (utf8mb4)",
+		Description: "Ensure ai_generation_records (incl. original_prompt) uses utf8mb4 for Unicode",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureAIGenerationRecordsSchema()
@@ -707,6 +742,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_characters_role_column",
+		Description: "Ensure characters has role column (与 API role / 编辑器角色定位对齐)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			m := migrations.NewMigrationManager(db, log)
+			return m.AddColumn("characters", "role", "VARCHAR(100) NULL COMMENT '故事内定位'")
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_is_collaboration_open_column",
 		Description: "Ensure stories has is_collaboration_open column",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -722,6 +767,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureUserFragmentsCountColumn()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_user_settings_preferred_genres_column",
+		Description: "Ensure user_settings has preferred_genres_json column",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureUserSettingsPreferredGenresColumn()
 		},
 		Required: false,
 	})
@@ -782,6 +837,15 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Description: "Ensure users has points and referral_code columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &User{})
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "migrate_legacy_polymorphic_storyboard_likes",
+		Description: "Copy likes(storyboard_node|storyboard) into storyboard_likes; drop those likes rows; reconcile storyboards.likes",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return MigrateLegacyPolymorphicStoryboardLikes(ctx, db, log)
 		},
 		Required: false,
 	})

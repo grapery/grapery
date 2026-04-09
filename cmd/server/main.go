@@ -17,6 +17,7 @@ import (
 
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
@@ -206,7 +207,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to initialize database connection", zap.Error(err))
 	}
-	repo := mysql.NewRepository(db, logger)
+	repo := mysql.NewRepository(db, logger, cfg.Recommendation)
 
 	// Run database migrations
 	logger.Info("running database migrations")
@@ -218,7 +219,14 @@ func main() {
 	logger.Info("database migrations completed successfully")
 
 	// Initialize service
-	svc := service.New(repo, logger)
+	svc := service.New(repo, logger, cfg.Recommendation)
+	var redisCache cache.Cache
+	redisCache, err = cache.NewRedisCache(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.Database, logger)
+	if err != nil {
+		logger.Warn("failed to initialize redis cache; recommendation cache disabled", zap.Error(err))
+	} else {
+		svc.SetCache(redisCache)
+	}
 
 	// Set metrics if enabled
 	if telemetryManager.Metrics != nil {
@@ -233,7 +241,7 @@ func main() {
 
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
-	fragmentRepo := repository.NewFragmentRepository(repo.DB())
+	fragmentRepo := repository.NewFragmentRepository(repo.DB(), cfg.Recommendation, redisCache, logger)
 	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, svc.AIService(), logger)
 	logger.Info("fragment generation service initialized")
 
@@ -245,13 +253,12 @@ func main() {
 	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
 	logger.Info("user settings repository initialized")
 
-	// Initialize Fragment Handler
-	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo)
-	logger.Info("fragment handler initialized")
+	// Comic style batches (DB + AI backfill)
+	comicStyleSvc := service.NewFragmentComicStyleService(repo.DB(), svc.AIGenerationService(), logger)
 
-	// Initialize Follow Repository
-	followRepo := mysql.NewFollowRepository(repo.DB())
-	logger.Info("follow repository initialized")
+	// Initialize Fragment Handler
+	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo, comicStyleSvc)
+	logger.Info("fragment handler initialized")
 
 	// Initialize Like Repository
 	likeRepo := mysql.NewLikeRepository(repo.DB())
@@ -262,15 +269,19 @@ func main() {
 	logger.Info("bookmark repository initialized")
 
 	// Initialize Interaction Service
-	interactionService := service.NewInteractionService(followRepo, likeRepo, bookmarkRepo, repo, logger)
+	interactionService := service.NewInteractionService(likeRepo, bookmarkRepo, repo, svc, logger)
 	logger.Info("interaction service initialized")
 
 	// Initialize User Settings Service
-	userSettingsService := service.NewUserSettingsService(userSettingsRepo, logger)
+	userSettingsService := service.NewUserSettingsService(userSettingsRepo, logger, redisCache)
 	logger.Info("user settings service initialized")
 
+	feedbackRepo := mysql.NewFeedbackRepository(repo.DB())
+	feedbackService := service.NewFeedbackService(feedbackRepo, logger)
+	logger.Info("feedback service initialized")
+
 	// Initialize Storyboard Path Service
-	storyboardPathService := service.NewStoryboardPathService(repo, likeRepo, logger)
+	storyboardPathService := service.NewStoryboardPathService(repo, logger)
 	logger.Info("storyboard path service initialized")
 
 	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
@@ -280,6 +291,7 @@ func main() {
 		StoryboardPathService: storyboardPathService,
 		InteractionService:    interactionService,
 		UserSettingsService:   userSettingsService,
+		FeedbackService:       feedbackService,
 		Logger:                logger,
 	}
 	router := transport.SetupRouter(deps)
@@ -302,6 +314,7 @@ func main() {
 	// Use OptionalAuthMiddleware for GET endpoints to support both authenticated and unauthenticated access
 	apiGroup.GET("/v1/fragments", authPkg.OptionalAuthMiddleware(), fragmentHandler.ListFragments)
 	apiGroup.GET("/v1/fragments/styles", fragmentHandler.GetFragmentStyles)
+	apiGroup.POST("/v1/fragments/styles/next", authPkg.AuthMiddleware(), fragmentHandler.PostFragmentStylesNext)
 	apiGroup.GET("/v1/fragments/:id", authPkg.OptionalAuthMiddleware(), fragmentHandler.GetFragment)
 	apiGroup.POST("/v1/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
 	apiGroup.PUT("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.UpdateFragment)
@@ -459,6 +472,35 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 		}
 	} else {
 		missingProviders = append(missingProviders, "huoshan (HUOSHAN_API_KEY)")
+	}
+
+	// Kling (可灵) — AccessKey + SecretKey, JWT to api-singapore.klingai.com
+	if cfg.AI.KlingAccessKey != "" && cfg.AI.KlingSecretKey != "" {
+		klingCfg := &genapi.Config{
+			Provider: genapi.ProviderKling,
+			APIKey:   cfg.AI.KlingAccessKey,
+			Secret:   cfg.AI.KlingSecretKey,
+			BaseURL:  cfg.AI.KlingBaseURL,
+		}
+		if _, err := genAPI.RegisterProviderConfig(klingCfg); err != nil {
+			logger.Error("❌ Kling provider registration failed",
+				zap.Error(err),
+				zap.String("baseURL", cfg.AI.KlingBaseURL),
+			)
+		} else {
+			base := cfg.AI.KlingBaseURL
+			if base == "" {
+				base = "(default api-singapore.klingai.com)"
+			}
+			logger.Info("✅ Kling provider registered",
+				zap.String("baseURL", base),
+				zap.Int("accessKeyLength", len(cfg.AI.KlingAccessKey)),
+			)
+			configuredProviders = append(configuredProviders, "kling")
+			hasProvider = true
+		}
+	} else {
+		missingProviders = append(missingProviders, "kling (KLING_ACCESS_KEY + KLING_SECRET_KEY)")
 	}
 
 	// Check and register Gemini provider

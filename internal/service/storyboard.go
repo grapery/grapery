@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/recommendation"
 	"go.uber.org/zap"
 )
 
@@ -1299,12 +1301,17 @@ func (s *Service) GetStoryboardTree(ctx context.Context, rootID string) ([]*doma
 	return tree, nil
 }
 
+// RecordStoryboardFeedSeen marks a storyboard as seen for for_you exclusion (Redis ZSET; no-op if cache is nil).
+func (s *Service) RecordStoryboardFeedSeen(ctx context.Context, userID, storyboardID string) {
+	recommendation.RecordStoryboardSeen(ctx, s.getCache(), s.recoCfg, userID, storyboardID)
+}
+
 // GetStoryboardFeed 获取故事板 feed。
-// tab: for_you（默认，推荐/热度排序，后续可接文本向量）；following（关注的故事下可读故事板：published / images_ready / video_ready，按 storyboards.updated_at）；community（社区时间线，带缓存）。
+// tab: discover（默认：仅 onboarding 体裁；未登录 trending）；for_you / recommended 为 discover 别名；following；community（带缓存）。
 func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
-	if tab == "" || tab == "recommended" {
-		tab = "for_you"
+	if tab == "" || tab == "recommended" || tab == "for_you" {
+		tab = "discover"
 	}
 
 	s.logger.Debug("getting storyboard feed",
@@ -1326,7 +1333,11 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab stri
 		}
 		storyboards, total, err := s.repo.StoryboardFeedFromFollowedStories(ctx, userID, limit, offset)
 		if err != nil {
-			s.logger.Error("failed to get following storyboard feed", zap.Error(err))
+			if errors.Is(err, context.Canceled) {
+				s.logger.Debug("following storyboard feed: request context canceled")
+			} else {
+				s.logger.Error("failed to get following storyboard feed", zap.Error(err))
+			}
 			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
 		}
 		s.logger.Info("following storyboard feed fetched",
@@ -1351,7 +1362,11 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab stri
 
 		storyboards, total, err := s.repo.StoryboardFeed(ctx, limit, offset)
 		if err != nil {
-			s.logger.Error("failed to get community storyboard feed", zap.Error(err))
+			if errors.Is(err, context.Canceled) {
+				s.logger.Debug("community storyboard feed: request context canceled")
+			} else {
+				s.logger.Error("failed to get community storyboard feed", zap.Error(err))
+			}
 			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
 		}
 
@@ -1367,15 +1382,31 @@ func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab stri
 		s.logger.Info("community storyboard feed fetched", zap.Int("count", len(storyboards)), zap.Int64("total", total))
 		return storyboards, total, nil
 
-	default: // for_you, recommended
-		storyboards, total, err := s.repo.StoryboardFeedRecommended(ctx, userID, limit, offset)
+	case "discover":
+		storyboards, total, err := s.repo.StoryboardFeedDiscover(ctx, userID, limit, offset)
 		if err != nil {
-			s.logger.Error("failed to get recommended storyboard feed", zap.Error(err))
+			if errors.Is(err, context.Canceled) {
+				s.logger.Debug("discover storyboard feed: request context canceled")
+			} else {
+				s.logger.Error("failed to get discover storyboard feed", zap.Error(err))
+			}
 			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
 		}
-		s.logger.Info("recommended storyboard feed fetched",
+		s.logger.Info("discover storyboard feed fetched",
 			zap.Int("count", len(storyboards)),
 			zap.Int64("total", total))
+		return storyboards, total, nil
+
+	default:
+		storyboards, total, err := s.repo.StoryboardFeedDiscover(ctx, userID, limit, offset)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				s.logger.Debug("discover storyboard feed: request context canceled")
+			} else {
+				s.logger.Error("failed to get discover storyboard feed", zap.Error(err))
+			}
+			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
+		}
 		return storyboards, total, nil
 	}
 }
@@ -1583,7 +1614,8 @@ func (s *Service) LikeStoryboard(ctx context.Context, userID, storyboardID strin
 				liker.DisplayName,
 				liker.Avatar,
 				"storyboard",
-				storyboardID); err != nil {
+				storyboardID,
+				storyboard.StoryID); err != nil {
 				s.logger.Warn("failed to send like notification",
 					zap.Error(err),
 					zap.String("storyboardId", storyboardID))
@@ -1633,6 +1665,19 @@ func (s *Service) UnlikeStoryboard(ctx context.Context, userID, storyboardID str
 		zap.String("storyboardId", storyboardID))
 
 	return nil
+}
+
+// IsStoryboardLikedByUser returns whether the user has liked the storyboard (storyboard_likes).
+func (s *Service) IsStoryboardLikedByUser(ctx context.Context, userID, storyboardID string) (bool, error) {
+	return s.repo.IsStoryboardLiked(ctx, userID, storyboardID)
+}
+
+// BatchIsStoryboardLikedByUser returns liked flags for many storyboards in one query.
+func (s *Service) BatchIsStoryboardLikedByUser(ctx context.Context, userID string, storyboardIDs []string) (map[string]bool, error) {
+	if len(storyboardIDs) == 0 {
+		return map[string]bool{}, nil
+	}
+	return s.repo.BatchIsStoryboardLiked(ctx, userID, storyboardIDs)
 }
 
 // GenerateStoryboardWithAI 使用 AI 生成 storyboard 内容

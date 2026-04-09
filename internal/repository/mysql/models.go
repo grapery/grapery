@@ -278,6 +278,7 @@ type Character struct {
 	AbilityFeatures          string `gorm:"type:text"` // Special skills and capabilities
 	Appearance               string `gorm:"type:text"` // Physical appearance and features
 	DressPreference          string `gorm:"type:text"` // Clothing preferences and style
+	Role                     string `gorm:"size:100"`  // 故事内角色定位（主角/配角等），与 API role 对齐
 	SourceType               string `gorm:"size:20;not null;default:'manual';index"`
 	SourcePrompt             string `gorm:"type:text"`
 	SourceImage              string `gorm:"size:500"`
@@ -300,26 +301,6 @@ type Character struct {
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
-// CharacterCameo database model (角色客串关系表)
-// 用于管理角色跨故事客串关系
-type CharacterCameo struct {
-	ID              string         `gorm:"primaryKey;size:36"`
-	CharacterID     string         `gorm:"size:36;not null;index:idx_cameo_character_target,unique"`
-	Character       Character      `gorm:"foreignKey:CharacterID;constraint:OnDelete:CASCADE"`
-	TargetStoryID   string         `gorm:"size:36;not null;index:idx_cameo_target_story;index:idx_cameo_character_target,unique"`
-	TargetStory     Story          `gorm:"foreignKey:TargetStoryID;constraint:OnDelete:CASCADE"`
-	CameoRole       string         `gorm:"size:100"`  // 客串角色定位（如：主角、配角、NPC等）
-	AdaptationNotes string         `gorm:"type:text"` // 角色适配说明，记录如何在目标故事中调整角色
-	CreatedAt       int64          `gorm:"type:bigint;autoCreateTime;index"`
-	UpdatedAt       *int64         `gorm:"type:bigint"`
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
-}
-
-// TableName specifies the table name for CharacterCameo
-func (CharacterCameo) TableName() string {
-	return "character_cameos"
 }
 
 // StoryScene database model (story-scoped scene assets - static locations)
@@ -426,6 +407,8 @@ type Comment struct {
 }
 
 // Fragment database model (碎片故事 - StoryCreationAppUI)
+// Deprecated duplicate mapping: same physical table `fragments` as FragmentDB (creator_id).
+// Prefer FragmentDB for new code; Fragment remains for bookmark_impl and legacy queries until consolidated.
 type Fragment struct {
 	ID                 string         `gorm:"primaryKey;size:36"`
 	UserID             string         `gorm:"column:author_id;size:36;not null;index"`
@@ -649,6 +632,8 @@ type UserSettings struct {
 	AIEnabled                 bool           `gorm:"default:true"`
 	AIDataSharing             bool           `gorm:"default:true"`
 	NotificationSettings      string         `gorm:"type:json"`
+	PreferredGenresJSON       string         `gorm:"column:preferred_genres_json;type:json"`
+	TeenProtectionEnabled     bool           `gorm:"column:teen_protection_enabled;default:false"`
 	UpdatedAt                 int64          `gorm:"autoUpdateTime"`
 	DeletedAt                 gorm.DeletedAt `gorm:"index"`
 }
@@ -657,29 +642,31 @@ func (UserSettings) TableName() string {
 	return "user_settings"
 }
 
-// ========== 多态关注表 ==========
-
-// Follow 关注表（多态关联）
-type Follow struct {
-	ID                   string `gorm:"primaryKey;size:36"`
-	FollowerID           string `gorm:"size:36;index;not null"`
-	FollowableType       string `gorm:"size:50;index;not null"` // story, user, group, character
-	FollowableID         string `gorm:"size:36;index;not null"`
-	NotificationsEnabled bool   `gorm:"default:true"`
-	CreatedAt            int64  `gorm:"autoCreateTime"`
+// UserFeedback 用户反馈
+type UserFeedback struct {
+	ID          string `gorm:"primaryKey;size:36"`
+	UserID      string `gorm:"size:36;index;not null"`
+	Category    string `gorm:"size:50;not null"`
+	Content     string `gorm:"type:text;not null"`
+	ContactInfo string `gorm:"size:255"`
+	Status      string `gorm:"size:30;default:'received';index"`
+	Response    string `gorm:"type:text"`
+	CreatedAt   int64  `gorm:"type:bigint;autoCreateTime;index"`
+	UpdatedAt   int64  `gorm:"type:bigint;autoUpdateTime"`
 }
 
-func (Follow) TableName() string {
-	return "follows"
+func (UserFeedback) TableName() string {
+	return "user_feedback"
 }
 
 // ========== 多态点赞表 ==========
 
 // Like 点赞表（多态关联）
 type Like struct {
-	ID           string `gorm:"primaryKey;size:36"`
-	UserID       string `gorm:"size:36;index;not null"`
-	LikeableType string `gorm:"size:50;index;not null"` // story, character, storyboard_node, fragment, character_poster
+	ID     string `gorm:"primaryKey;size:36"`
+	UserID string `gorm:"size:36;index;not null"`
+	// storyboard_node / storyboard: deprecated on this table — use storyboard_likes + POST/DELETE /storyboards/:id/like; startup migrates legacy rows.
+	LikeableType string `gorm:"size:50;index;not null"` // story, character, fragment, character_poster (+ legacy storyboard_node|storyboard until migrated)
 	LikeableID   string `gorm:"size:36;index;not null"`
 	CreatedAt    int64  `gorm:"autoCreateTime"`
 }
@@ -1055,20 +1042,23 @@ type StoryPublication struct {
 
 // SubscriptionPlan 订阅计划
 type SubscriptionPlan struct {
-	ID            string         `gorm:"primaryKey;size:36"`
-	Name          string         `gorm:"size:100;not null;uniqueIndex"`
-	Price         float64        `gorm:"not null"`
-	Currency      string         `gorm:"size:10;not null;default:'USD'"`
-	TokenQuota    int            `gorm:"default:0"`
-	StorageQuota  int64          `gorm:"default:0"`
-	MaxStories    int            `gorm:"default:0"`
-	MaxCharacters int            `gorm:"default:0"`
-	Features      string         `gorm:"type:json"` // JSON array
-	IsActive      bool           `gorm:"default:true;index"`
-	SortOrder     int            `gorm:"default:0;index"`
-	CreatedAt     time.Time      `gorm:"autoCreateTime"`
-	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt     gorm.DeletedAt `gorm:"index"`
+	ID             string         `gorm:"primaryKey;size:36"`
+	Name           string         `gorm:"size:100;not null;uniqueIndex"`
+	IAPProductID   string         `gorm:"size:191;index"`
+	MembershipTier string         `gorm:"size:32;index"`
+	BillingPeriod  string         `gorm:"size:32;default:'monthly';index"`
+	Price          float64        `gorm:"not null"`
+	Currency       string         `gorm:"size:10;not null;default:'USD'"`
+	TokenQuota     int            `gorm:"default:0"`
+	StorageQuota   int64          `gorm:"default:0"`
+	MaxStories     int            `gorm:"default:0"`
+	MaxCharacters  int            `gorm:"default:0"`
+	Features       string         `gorm:"type:json"` // JSON array
+	IsActive       bool           `gorm:"default:true;index"`
+	SortOrder      int            `gorm:"default:0;index"`
+	CreatedAt      time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt      time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
 }
 
 // SubscriptionOrder 订阅订单
@@ -1170,6 +1160,7 @@ type FragmentDB struct {
 	Caption            string  `gorm:"type:text"`                                                 // 标题/简介文字 (StoryCreationAppUI)
 	ConvertedToStoryID *string `gorm:"size:36;index"`                                             // 转换为的故事ID
 	IsConverted        bool    `gorm:"default:false;index"`                                       // 是否已转换
+	IsDraft            bool    `gorm:"column:is_draft;type:tinyint(1);default:0;index"`           // 草稿（AI 生成落库等）
 	Likes              int     `gorm:"type:int;default:0"`                                        // 点赞数
 	Comments           int     `gorm:"type:int;default:0"`                                        // 评论数
 	Shares             int     `gorm:"type:int;default:0"`                                        // 分享数

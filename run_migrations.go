@@ -21,7 +21,7 @@ func main() {
 	cfg := config.Load("migration-runner")
 
 	// Build DSN
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local",
 		cfg.Database.Username,
 		cfg.Database.Password,
 		cfg.Database.Address,

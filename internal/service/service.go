@@ -25,10 +25,11 @@ type Service struct {
 	videoProvider    string                 // Provider for video generation (gemini, huoshan, hailuo)
 	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
 	userStatsService *UserStatisticsService // 用户统计服务
+	recoCfg          config.RecommendationConfig
 }
 
 // New creates a new service instance
-func New(repo domain.Repository, log *zap.Logger) *Service {
+func New(repo domain.Repository, log *zap.Logger, recoCfg config.RecommendationConfig) *Service {
 	return &Service{
 		repo:          repo,
 		log:           log,
@@ -36,6 +37,7 @@ func New(repo domain.Repository, log *zap.Logger) *Service {
 		cache:         nil,       // 稍后通过 SetCache 设置
 		imageProvider: "huoshan", // Default image provider
 		videoProvider: "hailuo",  // Default video provider
+		recoCfg:       recoCfg,
 	}
 }
 

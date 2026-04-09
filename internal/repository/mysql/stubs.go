@@ -1643,6 +1643,70 @@ func (r *Repository) UnlikeStoryboard(ctx context.Context, userID, storyboardID 
 		UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1)).Error
 }
 
+// IsStoryboardLiked reports whether the user has a row in storyboard_likes.
+func (r *Repository) IsStoryboardLiked(ctx context.Context, userID, storyboardID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// BatchIsStoryboardLiked reports which of the given storyboard IDs the user has liked.
+func (r *Repository) BatchIsStoryboardLiked(ctx context.Context, userID string, storyboardIDs []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	for _, id := range storyboardIDs {
+		if id != "" {
+			out[id] = false
+		}
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+	ids := make([]string, 0, len(out))
+	for id := range out {
+		ids = append(ids, id)
+	}
+	var rows []StoryboardLike
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Select("storyboard_id").
+		Where("user_id = ? AND storyboard_id IN ?", userID, ids).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		out[rows[i].StoryboardID] = true
+	}
+	return out, nil
+}
+
+// ListStoryboardLikers lists users who liked a storyboard (canonical storyboard_likes table).
+func (r *Repository) ListStoryboardLikers(ctx context.Context, storyboardID string, limit, offset int) ([]*domain.User, int, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("storyboard_id = ?", storyboardID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []StoryboardLike
+	if err := r.db.WithContext(ctx).
+		Preload("User").
+		Where("storyboard_id = ?", storyboardID).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	out := make([]*domain.User, 0, len(rows))
+	for i := range rows {
+		out = append(out, r.userToDomainPtr(&rows[i].User))
+	}
+	return out, int(total), nil
+}
+
 // ListStories retrieves stories with filtering
 func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter) ([]*domain.Story, int64, error) {
 	var stories []Story

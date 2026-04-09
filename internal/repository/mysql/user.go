@@ -2,6 +2,8 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -216,6 +218,10 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 
 // userSettingsToDomain 转换 UserSettings 到 domain
 func (r *Repository) userSettingsToDomain(settings *UserSettings) *domain.UserSettings {
+	var preferredGenres []string
+	if strings.TrimSpace(settings.PreferredGenresJSON) != "" {
+		_ = json.Unmarshal([]byte(settings.PreferredGenresJSON), &preferredGenres)
+	}
 	return &domain.UserSettings{
 		BaseModel: common.BaseModel{
 			ID:        settings.ID,
@@ -241,11 +247,16 @@ func (r *Repository) userSettingsToDomain(settings *UserSettings) *domain.UserSe
 		AIEnabled:                 settings.AIEnabled,
 		AIDataSharing:             settings.AIDataSharing,
 		NotificationSettings:      settings.NotificationSettings,
+		PreferredGenres:           preferredGenres,
 	}
 }
 
 // userSettingsFromDomain 从 domain 转换到 UserSettings
 func (r *Repository) userSettingsFromDomain(settings *domain.UserSettings) *UserSettings {
+	preferredGenresJSON := "[]"
+	if b, err := json.Marshal(settings.PreferredGenres); err == nil {
+		preferredGenresJSON = string(b)
+	}
 	return &UserSettings{
 		ID:                        settings.ID,
 		UserID:                    settings.UserID,
@@ -267,6 +278,7 @@ func (r *Repository) userSettingsFromDomain(settings *domain.UserSettings) *User
 		AIEnabled:                 settings.AIEnabled,
 		AIDataSharing:             settings.AIDataSharing,
 		NotificationSettings:      settings.NotificationSettings,
+		PreferredGenresJSON:       preferredGenresJSON,
 		UpdatedAt:                 settings.UpdatedAt,
 	}
 }

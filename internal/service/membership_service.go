@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,15 +26,21 @@ func (s *Service) ListMembershipPlans(ctx context.Context) ([]domain.MembershipP
 	// 转换为 MembershipPlan 格式
 	result := make([]domain.MembershipPlan, len(plans))
 	for i, p := range plans {
+		features := parsePlanFeatures(p.Features)
+		period := normalizeBillingPeriod(p.BillingPeriod)
+		tier := normalizeMembershipTier(p.MembershipTier, p.Name)
+
 		result[i] = domain.MembershipPlan{
-			ID:        p.ID,
-			Tier:      domain.MembershipTierType(p.Name),
-			Period:    "monthly",
-			Price:     p.Price,
-			PerMonth:  p.Price,
-			AIQuota:   p.TokenQuota,
-			IsActive:  p.IsActive,
-			SortOrder: p.SortOrder,
+			ID:           p.ID,
+			Tier:         tier,
+			Period:       period,
+			IAPProductID: p.IAPProductID,
+			Price:        p.Price,
+			PerMonth:     perMonthPrice(p.Price, period),
+			AIQuota:      p.TokenQuota,
+			Features:     features,
+			IsActive:     p.IsActive,
+			SortOrder:    p.SortOrder,
 		}
 	}
 
@@ -177,6 +185,53 @@ func getExpiresAt(endDate *int64) int64 {
 		return 0
 	}
 	return *endDate
+}
+
+func parsePlanFeatures(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{}
+	}
+
+	var features []string
+	if err := json.Unmarshal([]byte(raw), &features); err != nil {
+		return []string{}
+	}
+	return features
+}
+
+func normalizeBillingPeriod(raw string) string {
+	period := strings.ToLower(strings.TrimSpace(raw))
+	switch period {
+	case string(domain.PeriodMonthly), string(domain.PeriodQuarterly), string(domain.PeriodYearly):
+		return period
+	default:
+		return string(domain.PeriodMonthly)
+	}
+}
+
+func normalizeMembershipTier(tierRaw string, nameFallback string) domain.MembershipTierType {
+	raw := strings.ToLower(strings.TrimSpace(tierRaw))
+	if raw == "" {
+		raw = strings.ToLower(strings.TrimSpace(nameFallback))
+	}
+
+	switch domain.MembershipTierType(raw) {
+	case domain.TierTypeFree, domain.TierTypePro, domain.TierTypePrime, domain.TierTypeUltra:
+		return domain.MembershipTierType(raw)
+	default:
+		return domain.TierTypeFree
+	}
+}
+
+func perMonthPrice(price float64, period string) float64 {
+	switch period {
+	case string(domain.PeriodQuarterly):
+		return price / 3
+	case string(domain.PeriodYearly):
+		return price / 12
+	default:
+		return price
+	}
 }
 
 // MembershipUsage 会员使用量

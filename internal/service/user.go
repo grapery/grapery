@@ -25,6 +25,8 @@ func (s *Service) FollowUser(ctx context.Context, followerID, followeeID string)
 	// 使相关缓存失效
 	c := s.getCache()
 	if c != nil {
+		_ = c.Delete(ctx, cache.UserKey(followerID))
+		_ = c.Delete(ctx, cache.UserKey(followeeID))
 		// 清除关注者和被关注者的关注列表缓存
 		for limit := 20; limit <= 100; limit += 20 {
 			for offset := 0; offset < 200; offset += limit {
@@ -67,6 +69,8 @@ func (s *Service) UnfollowUser(ctx context.Context, followerID, followeeID strin
 	// 使相关缓存失效
 	c := s.getCache()
 	if c != nil {
+		_ = c.Delete(ctx, cache.UserKey(followerID))
+		_ = c.Delete(ctx, cache.UserKey(followeeID))
 		// 清除关注者和被关注者的关注列表缓存
 		for limit := 20; limit <= 100; limit += 20 {
 			for offset := 0; offset < 200; offset += limit {

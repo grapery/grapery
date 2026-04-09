@@ -51,7 +51,7 @@ func NormalizeStatus(raw string) string {
 		return string(StatusPending)
 	case "processing", "running", "in_progress", "inprogress", "started", "working":
 		return string(StatusProcessing)
-	case "completed", "succeeded", "success", "done", "finished", "ready":
+	case "completed", "succeeded", "success", "succeed", "done", "finished", "ready":
 		return string(StatusCompleted)
 	case "failed", "error", "failure", "errored":
 		return string(StatusFailed)

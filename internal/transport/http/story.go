@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -211,6 +212,10 @@ func (h *Handler) FollowStory(c *gin.Context) {
 
 	err := h.svc.FollowStory(c.Request.Context(), userID, storyID)
 	if err != nil {
+		if errors.Is(err, service.ErrAuthUserNotFound) {
+			Unauthorized(c, "session invalid, please sign in again")
+			return
+		}
 		if err.Error() == "story not found" {
 			NotFound(c, "story not found")
 			return
@@ -238,6 +243,10 @@ func (h *Handler) UnfollowStory(c *gin.Context) {
 
 	err := h.svc.UnfollowStory(c.Request.Context(), userID, storyID)
 	if err != nil {
+		if errors.Is(err, service.ErrAuthUserNotFound) {
+			Unauthorized(c, "session invalid, please sign in again")
+			return
+		}
 		Error(c, CodeError, err.Error())
 		return
 	}

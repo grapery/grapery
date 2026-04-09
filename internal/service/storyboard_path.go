@@ -13,19 +13,16 @@ import (
 // StoryboardPathService 故事板路径服务
 type StoryboardPathService struct {
 	storyRepo domain.Repository
-	likeRepo  domain.LikeRepository
 	logger    *zap.Logger
 }
 
 // NewStoryboardPathService 创建路径服务
 func NewStoryboardPathService(
 	storyRepo domain.Repository,
-	likeRepo domain.LikeRepository,
 	logger *zap.Logger,
 ) *StoryboardPathService {
 	return &StoryboardPathService{
 		storyRepo: storyRepo,
-		likeRepo:  likeRepo,
 		logger:    logger,
 	}
 }
@@ -97,12 +94,8 @@ func (s *StoryboardPathService) CalculateAutoPath(ctx context.Context, storyID s
 
 	nodes := make([]weightedNode, 0, len(storyboards))
 	for _, sb := range storyboards {
-		// 获取点赞数
-		likeCount, err := s.likeRepo.GetLikesCount(ctx, domain.LikeableTypeStoryboardNode, sb.ID)
-		if err != nil {
-			s.logger.Warn("failed to get like count", zap.Error(err))
-			likeCount = 0
-		}
+		// 点赞数以 storyboards.likes 为准（与 storyboard_likes / 专用点赞接口一致）
+		likeCount := sb.Likes
 
 		// 权重 = 点赞数 + 基础权重
 		weight := likeCount + 1

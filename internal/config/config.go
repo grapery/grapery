@@ -11,19 +11,20 @@ import (
 
 // Config holds server configuration
 type Config struct {
-	Env          string          `yaml:"env"`
-	HTTPPort     string          `yaml:"http_port"`
-	ReadTimeout  time.Duration   `yaml:"read_timeout"`
-	WriteTimeout time.Duration   `yaml:"write_timeout"`
-	IdleTimeout  time.Duration   `yaml:"idle_timeout"`
-	LogLevel     string          `yaml:"log_level"`
-	AllowOrigins []string        `yaml:"allow_origins"`
-	Database     DatabaseConfig  `yaml:"database"`
-	Redis        RedisConfig     `yaml:"redis"`
-	AI           AIConfig        `yaml:"ai"`
-	JWT          JWTConfig       `yaml:"jwt"`
-	Aliyun       AliyunConfig    `yaml:"aliyun"`
-	Telemetry    TelemetryConfig `yaml:"telemetry"`
+	Env            string               `yaml:"env"`
+	HTTPPort       string               `yaml:"http_port"`
+	ReadTimeout    time.Duration        `yaml:"read_timeout"`
+	WriteTimeout   time.Duration        `yaml:"write_timeout"`
+	IdleTimeout    time.Duration        `yaml:"idle_timeout"`
+	LogLevel       string               `yaml:"log_level"`
+	AllowOrigins   []string             `yaml:"allow_origins"`
+	Database       DatabaseConfig       `yaml:"database"`
+	Redis          RedisConfig          `yaml:"redis"`
+	Recommendation RecommendationConfig `yaml:"recommendation"`
+	AI             AIConfig             `yaml:"ai"`
+	JWT            JWTConfig            `yaml:"jwt"`
+	Aliyun         AliyunConfig         `yaml:"aliyun"`
+	Telemetry      TelemetryConfig      `yaml:"telemetry"`
 }
 
 // DatabaseConfig holds MySQL database configuration
@@ -44,6 +45,20 @@ type RedisConfig struct {
 	PingInterval time.Duration `yaml:"ping_interval"`
 }
 
+// RecommendationConfig holds recommendation and feed cache configuration
+type RecommendationConfig struct {
+	FragmentGenreRatio      int `yaml:"fragment_genre_ratio"`
+	FragmentFallbackRatio   int `yaml:"fragment_fallback_ratio"`
+	StoryboardGenreRatio    int `yaml:"storyboard_genre_ratio"`
+	StoryboardFallbackRatio int `yaml:"storyboard_fallback_ratio"`
+	CandidateMultiplier     int `yaml:"candidate_multiplier"`
+	CacheTTLSeconds         int `yaml:"cache_ttl_seconds"`
+	// SeenMaxEntries caps per-user Redis ZSET for for_you "already seen" storyboard/fragment IDs (0 = default 5000).
+	SeenMaxEntries int `yaml:"seen_max_entries"`
+	// SeenTTLDays sets Redis key TTL for those ZSETs; 0 = no expiration on the key.
+	SeenTTLDays int `yaml:"seen_ttl_days"`
+}
+
 // AIConfig holds AI service configuration
 type AIConfig struct {
 	HuoshanAPIKey     string `yaml:"huoshan_api_key"`
@@ -51,9 +66,12 @@ type AIConfig struct {
 	HuoshanImageModel string `yaml:"huoshan_image_model"` // Image model for Huoshan
 	GeminiAPIKey      string `yaml:"gemini_api_key"`
 	GeminiBaseURL     string `yaml:"gemini_base_url"`
+	KlingAccessKey    string `yaml:"kling_access_key"`
+	KlingSecretKey    string `yaml:"kling_secret_key"`
+	KlingBaseURL      string `yaml:"kling_base_url"`
 	DefaultProvider   string `yaml:"default_provider"` // Default provider for text generation
-	ImageProvider     string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan)
-	VideoProvider     string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo)
+	ImageProvider     string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
+	VideoProvider     string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
 }
 
 // JWTConfig holds JWT configuration
@@ -171,12 +189,25 @@ func Load(app string) Config {
 			Database:     redisDB,
 			PingInterval: time.Duration(pingInterval) * time.Second,
 		},
+		Recommendation: RecommendationConfig{
+			FragmentGenreRatio:      getEnvInt("RECO_FRAGMENT_GENRE_RATIO", 3),
+			FragmentFallbackRatio:   getEnvInt("RECO_FRAGMENT_FALLBACK_RATIO", 2),
+			StoryboardGenreRatio:    getEnvInt("RECO_STORYBOARD_GENRE_RATIO", 3),
+			StoryboardFallbackRatio: getEnvInt("RECO_STORYBOARD_FALLBACK_RATIO", 2),
+			CandidateMultiplier:     getEnvInt("RECO_CANDIDATE_MULTIPLIER", 4),
+			CacheTTLSeconds:         getEnvInt("RECO_CACHE_TTL_SECONDS", 180),
+			SeenMaxEntries:          getEnvInt("RECO_SEEN_MAX_ENTRIES", 5000),
+			SeenTTLDays:             getEnvInt("RECO_SEEN_TTL_DAYS", 30),
+		},
 		AI: AIConfig{
 			HuoshanAPIKey:     getEnv("HUOSHAN_API_KEY", ""),
 			HuoshanBaseURL:    getEnv("HUOSHAN_BASE_URL", ""),
 			HuoshanImageModel: getEnv("HUOSHAN_IMAGE_MODEL", ""),
 			GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
 			GeminiBaseURL:     getEnv("GEMINI_BASE_URL", ""),
+			KlingAccessKey:    getEnv("KLING_ACCESS_KEY", ""),
+			KlingSecretKey:    getEnv("KLING_SECRET_KEY", ""),
+			KlingBaseURL:      getEnv("KLING_BASE_URL", ""),
 			DefaultProvider:   getEnv("AI_DEFAULT_PROVIDER", "huoshan"),
 			ImageProvider:     getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
 			VideoProvider:     getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
@@ -235,7 +266,8 @@ func (c Config) Addr() string {
 
 // DSN returns MySQL connection string
 func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	// collation=utf8mb4_unicode_ci: ensures each pooled connection uses utf8mb4 end-to-end (avoids 1366 with Chinese prompts).
+	return fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local",
 		d.Username, d.Password, d.Address, d.Database)
 }
 
@@ -308,6 +340,16 @@ func getDefaultConfig() Config {
 			Password:     "",
 			Database:     0,
 			PingInterval: 30 * time.Second,
+		},
+		Recommendation: RecommendationConfig{
+			FragmentGenreRatio:      3,
+			FragmentFallbackRatio:   2,
+			StoryboardGenreRatio:    3,
+			StoryboardFallbackRatio: 2,
+			CandidateMultiplier:     4,
+			CacheTTLSeconds:         180,
+			SeenMaxEntries:            5000,
+			SeenTTLDays:               30,
 		},
 		AI: AIConfig{
 			HuoshanAPIKey:   "",
@@ -386,12 +428,27 @@ func overrideWithEnv(cfg Config, app string) Config {
 		cfg.Redis.PingInterval = time.Duration(pingInterval) * time.Second
 	}
 
+	// Recommendation config
+	cfg.Recommendation.FragmentGenreRatio = getEnvInt("RECO_FRAGMENT_GENRE_RATIO", cfg.Recommendation.FragmentGenreRatio)
+	cfg.Recommendation.FragmentFallbackRatio = getEnvInt("RECO_FRAGMENT_FALLBACK_RATIO", cfg.Recommendation.FragmentFallbackRatio)
+	cfg.Recommendation.StoryboardGenreRatio = getEnvInt("RECO_STORYBOARD_GENRE_RATIO", cfg.Recommendation.StoryboardGenreRatio)
+	cfg.Recommendation.StoryboardFallbackRatio = getEnvInt("RECO_STORYBOARD_FALLBACK_RATIO", cfg.Recommendation.StoryboardFallbackRatio)
+	cfg.Recommendation.CandidateMultiplier = getEnvInt("RECO_CANDIDATE_MULTIPLIER", cfg.Recommendation.CandidateMultiplier)
+	cfg.Recommendation.CacheTTLSeconds = getEnvInt("RECO_CACHE_TTL_SECONDS", cfg.Recommendation.CacheTTLSeconds)
+	cfg.Recommendation.SeenMaxEntries = getEnvInt("RECO_SEEN_MAX_ENTRIES", cfg.Recommendation.SeenMaxEntries)
+	cfg.Recommendation.SeenTTLDays = getEnvInt("RECO_SEEN_TTL_DAYS", cfg.Recommendation.SeenTTLDays)
+
 	// AI config
 	cfg.AI.HuoshanAPIKey = getEnv("HUOSHAN_API_KEY", cfg.AI.HuoshanAPIKey)
 	cfg.AI.HuoshanBaseURL = getEnv("HUOSHAN_BASE_URL", cfg.AI.HuoshanBaseURL)
 	cfg.AI.GeminiAPIKey = getEnv("GEMINI_API_KEY", cfg.AI.GeminiAPIKey)
 	cfg.AI.GeminiBaseURL = getEnv("GEMINI_BASE_URL", cfg.AI.GeminiBaseURL)
+	cfg.AI.KlingAccessKey = getEnv("KLING_ACCESS_KEY", cfg.AI.KlingAccessKey)
+	cfg.AI.KlingSecretKey = getEnv("KLING_SECRET_KEY", cfg.AI.KlingSecretKey)
+	cfg.AI.KlingBaseURL = getEnv("KLING_BASE_URL", cfg.AI.KlingBaseURL)
 	cfg.AI.DefaultProvider = getEnv("AI_DEFAULT_PROVIDER", cfg.AI.DefaultProvider)
+	cfg.AI.ImageProvider = getEnv("AI_IMAGE_PROVIDER", cfg.AI.ImageProvider)
+	cfg.AI.VideoProvider = getEnv("AI_VIDEO_PROVIDER", cfg.AI.VideoProvider)
 
 	// JWT config
 	cfg.JWT.Secret = getEnv("JWT_SECRET", cfg.JWT.Secret)

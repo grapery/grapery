@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -24,17 +25,55 @@ func (r *Repository) FollowUser(ctx context.Context, followerID, followeeID stri
 		return fmt.Errorf("failed to check existing follow: %w", err)
 	}
 
+	// 软删行被默认 scope 过滤，但唯一键 (follower_id, followee_id) 仍冲突，应恢复而非 INSERT
+	var soft UserFollow
+	errSoft := r.db.WithContext(ctx).Unscoped().
+		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		First(&soft).Error
+	if errSoft == nil {
+		if soft.DeletedAt.Valid {
+			if err := r.db.WithContext(ctx).Unscoped().Model(&UserFollow{}).
+				Where("id = ?", soft.ID).
+				UpdateColumn("deleted_at", nil).Error; err != nil {
+				return fmt.Errorf("failed to restore follow: %w", err)
+			}
+			r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
+			r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
+		}
+		return nil
+	}
+	if !errors.Is(errSoft, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check soft-deleted follow: %w", errSoft)
+	}
+
 	follow := UserFollow{
 		ID:         uuid.New().String(),
 		FollowerID: followerID,
 		FolloweeID: followeeID,
 	}
-
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			var dup UserFollow
+			if err2 := r.db.WithContext(ctx).Unscoped().
+				Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+				First(&dup).Error; err2 != nil {
+				return fmt.Errorf("failed to create follow: %w", err)
+			}
+			if dup.DeletedAt.Valid {
+				if err := r.db.WithContext(ctx).Unscoped().Model(&UserFollow{}).
+					Where("id = ?", dup.ID).
+					UpdateColumn("deleted_at", nil).Error; err != nil {
+					return fmt.Errorf("failed to restore follow after duplicate: %w", err)
+				}
+				r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
+				r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to create follow: %w", err)
 	}
 
-	// Update follower/following counts
 	r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
 	r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
 
@@ -99,6 +138,46 @@ func (r *Repository) Following(ctx context.Context, userID string, limit, offset
 		result[i] = &user
 	}
 	return result, nil
+}
+
+func (r *Repository) CountFollowersOfUser(ctx context.Context, followeeID string) (int64, error) {
+	var c int64
+	if err := r.db.WithContext(ctx).Model(&UserFollow{}).Where("followee_id = ?", followeeID).Count(&c).Error; err != nil {
+		return 0, fmt.Errorf("failed to count user followers: %w", err)
+	}
+	return c, nil
+}
+
+func (r *Repository) CountFollowingOfUser(ctx context.Context, followerID string) (int64, error) {
+	var c int64
+	if err := r.db.WithContext(ctx).Model(&UserFollow{}).Where("follower_id = ?", followerID).Count(&c).Error; err != nil {
+		return 0, fmt.Errorf("failed to count user following: %w", err)
+	}
+	return c, nil
+}
+
+func (r *Repository) ListUserFollowsByFollower(ctx context.Context, followerID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []UserFollow
+	q := r.db.WithContext(ctx).Where("follower_id = ?", followerID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to list user follows: %w", err)
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.FollowerID,
+			FollowableType:       domain.FollowableTypeUser,
+			FollowableID:         row.FolloweeID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
 }
 
 // ========== Liked Content ==========

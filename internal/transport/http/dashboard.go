@@ -28,6 +28,7 @@ func (h *Handler) GetPublicTrendingStoryboards(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, items)
 	domain.RedactStoryboardViewsUnlessCreatorMany(items, userID)
 	Success(c, gin.H{
 		"storyboards": items,

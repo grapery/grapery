@@ -387,6 +387,14 @@ func registerRoutes(router *gin.Engine) {
 		googleOAuthHandler = pay.NewGoogleOAuthHandler()
 	}
 
+	// 创建 WeChat OAuth2 处理器（网站应用扫码登录；需 WECHAT_APP_ID / WECHAT_APP_SECRET）
+	var wechatOAuthHandler *pay.WeChatOAuthHandler
+	if oauthRepo != nil {
+		wechatOAuthHandler = pay.NewWeChatOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		wechatOAuthHandler = pay.NewWeChatOAuthHandler()
+	}
+
 	// 创建徽章 Repository 和处理器
 	badgeRepo := paymodels.NewBadgeRepository()
 	var badgeHandler *pay.BadgeHandler
@@ -652,6 +660,21 @@ func registerRoutes(router *gin.Engine) {
 			{
 				googleOAuthAuth.POST("/link", googleOAuthHandler.HandleGoogleLink)
 				googleOAuthAuth.POST("/unlink", googleOAuthHandler.HandleGoogleUnlink)
+			}
+		}
+
+		// WeChat OAuth2 相关路由（开放平台网站应用 qrconnect + snsapi_login）
+		wechatOAuth := api.Group("/wechat-oauth")
+		{
+			wechatOAuth.POST("/signin", wechatOAuthHandler.HandleWeChatSignIn)
+			wechatOAuth.GET("/status", wechatOAuthHandler.HandleWeChatSignInStatus)
+			wechatOAuth.GET("/config", wechatOAuthHandler.GetWeChatOAuthConfig)
+
+			wechatOAuthAuth := wechatOAuth.Group("")
+			wechatOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				wechatOAuthAuth.POST("/link", wechatOAuthHandler.HandleWeChatLink)
+				wechatOAuthAuth.POST("/unlink", wechatOAuthHandler.HandleWeChatUnlink)
 			}
 		}
 

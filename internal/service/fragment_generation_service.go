@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,50 +104,77 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		s.logger.Error("Failed to update result", zap.Error(err))
 	}
 
-	// 更新为完成状态
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "completed")
 
-	// 步骤4: 创建碎片
-	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "creating_fragment")
-
-	now := time.Now().Unix()
+	// 落库草稿碎片：保存 AI 生成的正文与图片，供「草稿」列表与再次编辑；客户端点「发布」时对同一 ID 执行 PUT 并 isDraft=false，避免重复 POST 产生两条记录。
+	now := time.Now().UnixMilli()
+	imgCount := len(result.ImageUrls)
+	if imgCount < 1 {
+		imgCount = 1
+	}
+	style := task.Request.Style
+	caption := captionFromGenerationContent(result.Content)
 	fragment := &domain.Fragment{
 		BaseModel: common.BaseModel{
 			ID:        uuid.New().String(),
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		UserID:        task.UserID,
-		Content:       result.Content,
-		ImageUrls:     stringifyArray(result.ImageUrls),
-		Style:         &task.Request.Style,
-		FragmentCount: intPtr(len(result.ImageUrls)),
-		Visibility:    task.Request.Visibility,
-		SourceType:    string(domain.FragmentSourceOriginal), // AI生成的碎片为原创内容
-		SourceID:      "",                                    // 原创碎片无来源ID
-		EngagementStats: common.EngagementStats{
-			Likes:    0,
-			Comments: 0,
-			Shares:   0,
-			Views:    0,
-		},
+		UserID:          task.UserID,
+		CreatorID:       task.UserID,
+		Content:         result.Content,
+		MediaURLs:       append([]string(nil), result.ImageUrls...),
+		ImageUrls:       stringifyGenerationImageURLs(result.ImageUrls),
+		Style:           &style,
+		FragmentCount:   &imgCount,
+		Visibility:      domain.FragmentVisibilityPrivate,
+		IsDraft:         true,
+		SourceType:      string(domain.FragmentSourceOriginal),
+		SourceID:        taskID,
+		EngagementStats: common.EngagementStats{},
+	}
+	if caption != "" {
+		fragment.Caption = caption
 	}
 
 	if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
-		s.logger.Error("Failed to create fragment from generation task",
+		s.logger.Error("Failed to create draft fragment from generation",
 			zap.String("task_id", taskID),
 			zap.Error(err))
-		// 继续，因为任务本身已完成，只是创建碎片失败
 	} else {
-		s.logger.Info("Fragment created from generation task",
-			zap.String("task_id", taskID),
-			zap.String("fragment_id", fragment.ID))
+		result.DraftFragmentID = fragment.ID
+		if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
+			s.logger.Warn("Failed to persist draftFragmentId on generation task", zap.Error(err))
+		}
 	}
 
 	s.logger.Info("Fragment generation completed",
 		zap.String("task_id", taskID),
 		zap.Int("tokens_used", result.TokensUsed),
 		zap.Int("image_count", len(result.ImageUrls)))
+}
+
+func stringifyGenerationImageURLs(urls []string) string {
+	if len(urls) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(urls)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+func captionFromGenerationContent(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) > 32 {
+		return string(runes[:32])
+	}
+	return s
 }
 
 // generateContent 生成文字内容
@@ -250,7 +279,11 @@ func (s *FragmentGenerationService) buildContentPrompt(req domain.FragmentGenera
 	case "scifi":
 		styleDesc = "科幻风格，未来科技感"
 	default:
-		styleDesc = "生动有趣的故事风格"
+		if strings.TrimSpace(req.Style) != "" {
+			styleDesc = fmt.Sprintf("视觉与叙事贴近「%s」风格（漫画/插画向）", req.Style)
+		} else {
+			styleDesc = "生动有趣的故事风格"
+		}
 	}
 
 	moodDesc := ""
@@ -360,23 +393,6 @@ func extractKeywords(text string, maxWords int) string {
 // currentTime 获取当前时间戳
 func currentTime() int64 {
 	return time.Now().Unix()
-}
-
-// stringifyArray 将字符串数组转换为逗号分隔的字符串
-func stringifyArray(arr []string) string {
-	result := ""
-	for i, s := range arr {
-		if i > 0 {
-			result += ","
-		}
-		result += s
-	}
-	return result
-}
-
-// intPtr 返回int的指针
-func intPtr(i int) *int {
-	return &i
 }
 
 // GetTask retrieves a generation task by ID

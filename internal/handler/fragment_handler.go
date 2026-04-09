@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -12,19 +13,22 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
+	coreservice "github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 type FragmentHandler struct {
 	fragmentRepo     *repository.FragmentRepository
 	userSettingsRepo domain.UserSettingsRepository
 	repo             domain.Repository
+	comicStyleSvc    *coreservice.FragmentComicStyleService
 }
 
-func NewFragmentHandler(fragmentRepo *repository.FragmentRepository, userSettingsRepo domain.UserSettingsRepository, repo domain.Repository) *FragmentHandler {
+func NewFragmentHandler(fragmentRepo *repository.FragmentRepository, userSettingsRepo domain.UserSettingsRepository, repo domain.Repository, comicStyleSvc *coreservice.FragmentComicStyleService) *FragmentHandler {
 	return &FragmentHandler{
 		fragmentRepo:     fragmentRepo,
 		userSettingsRepo: userSettingsRepo,
 		repo:             repo,
+		comicStyleSvc:    comicStyleSvc,
 	}
 }
 
@@ -80,6 +84,35 @@ func (h *FragmentHandler) GetFragmentStyles(c *gin.Context) {
 	})
 }
 
+// PostFragmentStylesNext handles POST /fragments/styles/next — next 8 comic styles for the authenticated user.
+func (h *FragmentHandler) PostFragmentStylesNext(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if h.comicStyleSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "comic styles service unavailable"})
+		return
+	}
+	items, err := h.comicStyleSvc.NextBatch(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	out := make([]FragmentStyle, 0, len(items))
+	for _, it := range items {
+		out = append(out, FragmentStyle{
+			ID:       it.ID,
+			Value:    it.Value,
+			Name:     it.Name,
+			Icon:     it.Icon,
+			Category: it.Category,
+		})
+	}
+	c.JSON(http.StatusOK, FragmentStyleListResponse{Styles: out})
+}
+
 // Helper function to create string pointer
 func stringPtr(s string) *string {
 	return &s
@@ -113,6 +146,7 @@ type UpdateFragmentRequest struct {
 	Topic         *string   `json:"topic" binding:"omitempty,max=200"`
 	Caption       *string   `json:"caption" binding:"omitempty,max=500"`
 	Visibility    *string   `json:"visibility" binding:"omitempty,oneof=public followers followers_only private"`
+	IsDraft       *bool     `json:"isDraft,omitempty"`
 }
 
 // CreateFragment handles POST /fragments
@@ -215,6 +249,11 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 
 	// Increment view count
 	go h.fragmentRepo.IncrementViews(c.Request.Context(), id)
+	if userID != "" {
+		go func(uid, fid string) {
+			h.fragmentRepo.RecordFragmentForYouSeen(context.Background(), uid, fid)
+		}(userID, id)
+	}
 
 	c.JSON(http.StatusOK, fragment)
 }
@@ -230,8 +269,11 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	// Parse query parameters
-	tab := c.DefaultQuery("tab", "for_you") // for_you, following
-	topic := c.Query("topic")               // optional: filter by topic
+	tab := strings.TrimSpace(strings.ToLower(c.DefaultQuery("tab", "discover"))) // discover (default), for_you / recommended (alias), following
+	if tab == "" {
+		tab = "discover"
+	}
+	topic := c.Query("topic") // optional: filter by topic
 	converted := c.Query("converted")
 	if converted == "" {
 		converted = c.Query("convertedOnly") // Voyager / OpenAPI-friendly alias
@@ -282,8 +324,8 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 				return
 			}
 			fragments, total, err = h.fragmentRepo.ListFollowing(c.Request.Context(), userID, limit, offset)
-		default: // for_you
-			fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+		default: // discover, for_you, recommended — onboarding genres only; guests = public chronological
+			fragments, total, err = h.fragmentRepo.ListDiscoverFragmentsForUser(c.Request.Context(), userID, limit, offset)
 		}
 	}
 
@@ -344,6 +386,28 @@ func (h *FragmentHandler) GetUserFragments(c *gin.Context) {
 
 	if limit > 100 {
 		limit = 100
+	}
+
+	draftsOnly := c.Query("drafts_only") == "1" || c.Query("draftsOnly") == "true"
+	if draftsOnly {
+		if currentUserID == "" || currentUserID != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		fragments, total, err := h.fragmentRepo.ListDraftsByCreatorID(c.Request.Context(), userID, limit, offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch drafts"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"fragments": fragments,
+			"total":     total,
+			"page":      page,
+			"limit":     limit,
+			"offset":    offset,
+			"hasMore":   int64(offset+len(fragments)) < total,
+		})
+		return
 	}
 
 	// Respect owner's profile visibility configuration.
@@ -469,9 +533,30 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 		fragment.Visibility = domain.NormalizeFragmentVisibility(*req.Visibility)
 	}
 
+	wasDraft := fragment.IsDraft
+	if req.IsDraft != nil {
+		fragment.IsDraft = *req.IsDraft
+	}
+
 	if err := h.fragmentRepo.Update(c.Request.Context(), fragment); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update fragment"})
 		return
+	}
+
+	// 草稿 ↔ 已发布 时同步用户 fragments_count（创建草稿时未计入）
+	if req.IsDraft != nil {
+		if wasDraft && !fragment.IsDraft {
+			if err := h.fragmentRepo.IncrementUserFragmentsCount(c.Request.Context(), fragment.UserID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user stats"})
+				return
+			}
+		}
+		if !wasDraft && fragment.IsDraft {
+			if err := h.fragmentRepo.DecrementUserFragmentsCount(c.Request.Context(), fragment.UserID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user stats"})
+				return
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, fragment)

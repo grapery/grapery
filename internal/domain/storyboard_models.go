@@ -101,6 +101,9 @@ type Storyboard struct {
 
 	// 在默认路径中的顺序（用于排序）
 	DefaultPathOrder int `json:"defaultPathOrder,omitempty" gorm:"default:0"`
+
+	// 当前登录用户是否已点赞（仅 API 响应填充，非 storyboards 表字段）
+	IsLiked *bool `json:"isLiked,omitempty" gorm:"-"`
 }
 
 // StoryboardLike Storyboard 点赞

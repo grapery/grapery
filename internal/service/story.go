@@ -949,6 +949,16 @@ func (s *Service) FollowStory(ctx context.Context, userID, storyID string) error
 		zap.String("storyID", storyID),
 		zap.String("title", story.Title))
 
+	if err := s.EnsureUserExists(ctx, userID); err != nil {
+		if errors.Is(err, ErrAuthUserNotFound) {
+			return err
+		}
+		s.logger.Error("failed to verify user before follow story",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return errors.New("failed to follow story")
+	}
+
 	s.logger.Debug("executing follow operation",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
@@ -978,6 +988,16 @@ func (s *Service) UnfollowStory(ctx context.Context, userID, storyID string) err
 	s.logger.Info("unfollowing story",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
+
+	if err := s.EnsureUserExists(ctx, userID); err != nil {
+		if errors.Is(err, ErrAuthUserNotFound) {
+			return err
+		}
+		s.logger.Error("failed to verify user before unfollow story",
+			zap.String("userID", userID),
+			zap.Error(err))
+		return errors.New("failed to unfollow story")
+	}
 
 	s.logger.Debug("executing unfollow operation",
 		zap.String("userID", userID),
@@ -3071,7 +3091,7 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 			Shares:   0,
 			Views:    0,
 		},
-		Followers: 0,
+		Followers:  0,
 		PanelCount: 0,
 	}
 

@@ -94,7 +94,7 @@ func (s *Service) sendCommentNotifications(ctx context.Context, comment *domain.
 			return
 		}
 
-		if err := s.NotifyComment(ctx, targetAuthorID, author.ID, author.DisplayName, author.Avatar, s.getTargetTypeName(comment.TargetType), comment.TargetID, comment.ID); err != nil {
+		if err := s.NotifyComment(ctx, targetAuthorID, author.ID, author.DisplayName, author.Avatar, comment.TargetType, comment.TargetID, comment.ID); err != nil {
 			s.logger.Error("failed to send comment notification to target author",
 				zap.Error(err),
 				zap.String("commentId", comment.ID),

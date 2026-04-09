@@ -83,7 +83,9 @@ type UserSettings struct {
 	AIDataSharing bool `json:"aiDataSharing"`
 
 	// 通知设置 (JSON)
-	NotificationSettings string `json:"notificationSettings"` // JSON string
+	NotificationSettings  string   `json:"notificationSettings"` // JSON string
+	PreferredGenres       []string `json:"preferredGenres,omitempty"`
+	TeenProtectionEnabled bool     `json:"teenProtectionEnabled"`
 
 	// Relations
 	User *User `json:"user,omitempty"`

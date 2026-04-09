@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -35,7 +36,7 @@ type GenerateFragmentRequest struct {
 	UserInput  string   `json:"userInput" binding:"required,min=1,max=500"`
 	ImageUrls  []string `json:"imageUrls" binding:"max=10"`
 	ImageCount int      `json:"imageCount" binding:"min=0,max=10"`
-	Style      string   `json:"style" binding:"omitempty,oneof=fantasy realistic anime scifi"`
+	Style      string   `json:"style" binding:"omitempty,max=64"`
 	Mood       string   `json:"mood" binding:"omitempty,oneof=happy sad mysterious romantic"`
 	Length     string   `json:"length" binding:"omitempty,oneof=short medium long"`
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
@@ -56,12 +57,17 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		return
 	}
 
+	style := strings.TrimSpace(req.Style)
+	if style == "" {
+		style = "fantasy"
+	}
+
 	// 转换为领域模型
 	domainReq := domain.FragmentGenerationRequest{
 		UserInput:  req.UserInput,
 		ImageUrls:  req.ImageUrls,
 		ImageCount: req.ImageCount,
-		Style:      req.Style,
+		Style:      style,
 		Mood:       req.Mood,
 		Length:     req.Length,
 		Language:   req.Language,

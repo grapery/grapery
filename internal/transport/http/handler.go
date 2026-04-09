@@ -23,6 +23,7 @@ type HandlerDependencies struct {
 	StoryboardPathService *service.StoryboardPathService
 	InteractionService    service.InteractionService
 	UserSettingsService   service.UserSettingsService
+	FeedbackService       service.FeedbackService
 	Logger                *zap.Logger
 }
 
@@ -78,6 +79,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 		{
 			// 公开路由迁移（现在需要认证）
 			authenticated.GET("/search", h.Search)
+			authenticated.GET("/plaza", h.GetPlaza)
 			authenticated.GET("/users/:id", h.GetUserProfile)
 			authenticated.GET("/users/:id/followers", h.GetFollowers)
 			authenticated.GET("/users/:id/following", h.GetFollowing)
@@ -322,6 +324,12 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// 用户设置相关 (User Settings)
 			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
 			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
+
+			// 用户反馈
+			if deps.FeedbackService != nil {
+				feedbackHandler := NewFeedbackHandler(deps.FeedbackService)
+				feedbackHandler.RegisterFeedbackRoutes(authenticated)
+			}
 
 			// 碎片相关 (Fragments)
 			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
@@ -625,6 +633,7 @@ func (h *Handler) GetDefaultPath(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, path)
 	Success(c, gin.H{
 		"path":  path,
 		"count": len(path),

@@ -29,6 +29,7 @@ type CreateCharacterRequest struct {
 	AbilityFeatures string   `json:"abilityFeatures" binding:"max=1000"`
 	Appearance      string   `json:"appearance" binding:"max=1000"`
 	DressPreference string   `json:"dressPreference" binding:"max=1000"`
+	Role            string   `json:"role" binding:"omitempty,max=100"` // 故事内定位，与 characters.role、编辑器一致
 	StoryID         string   `json:"storyId" binding:"required"`
 	IsPublic        bool     `json:"isPublic"`
 	SourceType      string   `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
@@ -56,6 +57,7 @@ type UpdateCharacterRequest struct {
 	AbilityFeatures *string `json:"abilityFeatures" binding:"omitempty,max=1000"`
 	Appearance      *string `json:"appearance" binding:"omitempty,max=1000"`
 	DressPreference *string `json:"dressPreference" binding:"omitempty,max=1000"`
+	Role            *string `json:"role" binding:"omitempty,max=100"`
 	IsPublic        *bool   `json:"isPublic"`
 	SourceType      *string `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
 	SourcePrompt    *string `json:"sourcePrompt"`
@@ -102,7 +104,7 @@ type GenerateCharacterThreeViewsResult struct {
 	Views domain.CharacterThreeViews `json:"views"`
 }
 
-// GeneratedCharacterAttributes AI生成的角色属性
+// GeneratedCharacterAttributes AI生成的角色属性（键名与 domain.Character / 客户端 / DB 叙事字段一一对应）
 type GeneratedCharacterAttributes struct {
 	Description     string `json:"description"`
 	Personality     string `json:"personality"`
@@ -114,6 +116,7 @@ type GeneratedCharacterAttributes struct {
 	AbilityFeatures string `json:"abilityFeatures"`
 	Appearance      string `json:"appearance"`
 	DressPreference string `json:"dressPreference"`
+	Role            string `json:"role"`
 }
 
 // CharacterListRequest 角色列表请求
@@ -203,6 +206,7 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		AbilityFeatures:          req.AbilityFeatures,
 		Appearance:               req.Appearance,
 		DressPreference:          req.DressPreference,
+		Role:                     req.Role,
 		IsPublic:                 req.IsPublic,
 		SourceType:               sourceType,
 		SourcePrompt:             req.SourcePrompt,
@@ -471,6 +475,9 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 	if req.DressPreference != nil {
 		character.DressPreference = *req.DressPreference
 	}
+	if req.Role != nil {
+		character.Role = *req.Role
+	}
 	if req.SourceType != nil {
 		character.SourceType = strings.ToLower(*req.SourceType)
 	}
@@ -728,15 +735,28 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 		return nil, errors.New("AI generation service not configured")
 	}
 
-	// 构建生成提示词（必须输出全部键，避免客户端/数据库字段缺失）
-	systemPrompt := `你是一个专业的故事角色设计师。请根据用户描述生成角色属性。
+	// 构建生成提示词（键名与 domain.Character JSON、characters 表文本列、客户端表单字段严格一致）
+	systemPrompt := `你是一个专业的故事角色设计师。请根据用户描述生成角色结构化属性。
 
 硬性要求：
 1. 只输出一个 JSON 对象，不要 markdown 代码块，不要多余说明文字。
-2. 必须包含以下全部 10 个键，键名与示例完全一致（camelCase），不要省略任何键：description, personality, background, shortTermGoal, longTermGoal, handlingStyle, cognitionRange, abilityFeatures, appearance, dressPreference。
+2. 必须包含以下全部 11 个键，键名与下表完全一致（camelCase），不要省略任何键：description, personality, background, shortTermGoal, longTermGoal, handlingStyle, cognitionRange, abilityFeatures, appearance, dressPreference, role。
 3. 每个键的值必须是字符串；若无内容可写简短占位如「未特别设定」，禁止省略键或设为 null。
-4. description 总长不超过 400 字；其余字段各约 80–200 字中文，简洁连贯。
+4. description 为角色整体概要，总长不超过 400 字；background、personality 可略长；其余字段各约 80–200 字中文（role 为短标签即可，见下）。
 5. 确保 JSON 语法完整（引号、逗号、大括号闭合）。
+
+各键含义（须按此语义撰写，便于写入数据库与客户端表单）：
+- description：角色整体介绍与第一印象。
+- personality：性格、情绪特点与待人气质。
+- background：出身、经历与当前处境。
+- shortTermGoal：当前故事阶段最想达成的事。
+- longTermGoal：更长期的抱负或人生方向。
+- handlingStyle：面对冲突或难题时的处理习惯与决策方式。
+- cognitionRange：其知识边界、世界观与思维方式（知道什么、不知道什么）。
+- abilityFeatures：特长、技能与突出能力。
+- appearance：外貌、体态与辨识度特征。
+- dressPreference：日常着装风格与偏好。
+- role：在本故事中的功能定位，用简短中文短语（例如：主角、配角、反派、导师、神秘人、NPC 等），不超过 20 字。
 
 示例结构：
 {
@@ -749,7 +769,8 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
   "cognitionRange": "...",
   "abilityFeatures": "...",
   "appearance": "...",
-  "dressPreference": "..."
+  "dressPreference": "...",
+  "role": "..."
 }`
 
 	prompt := "请为以下角色生成详细属性：\n\n"
@@ -857,6 +878,7 @@ func (s *Service) extractAttributesFromText(text string) GeneratedCharacterAttri
 		"abilityFeatures": &attributes.AbilityFeatures,
 		"appearance":      &attributes.Appearance,
 		"dressPreference": &attributes.DressPreference,
+		"role":            &attributes.Role,
 	}
 
 	for fieldName, fieldPtr := range fieldExtractors {

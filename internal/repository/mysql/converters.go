@@ -480,6 +480,7 @@ func CharacterToModel(d *domain.Character) *Character {
 		AbilityFeatures:          d.AbilityFeatures,
 		Appearance:               d.Appearance,
 		DressPreference:          d.DressPreference,
+		Role:                     d.Role,
 		SourceType:               d.SourceType,
 		SourcePrompt:             d.SourcePrompt,
 		SourceImage:              d.SourceImage,
@@ -497,9 +498,12 @@ func CharacterToModel(d *domain.Character) *Character {
 		UpdatedAt:                unixToTime(d.UpdatedAt),
 	}
 	if d.Views != nil {
-		if b, err := json.Marshal(d.Views); err == nil {
+		if b, err := json.Marshal(d.Views); err == nil && strings.TrimSpace(string(b)) != "" {
 			ch.ViewsJSON = string(b)
 		}
+	}
+	if strings.TrimSpace(ch.ViewsJSON) == "" {
+		ch.ViewsJSON = "{}"
 	}
 	return ch
 }
@@ -534,6 +538,7 @@ func ModelToCharacter(m *Character) *domain.Character {
 		AbilityFeatures:          m.AbilityFeatures,
 		Appearance:               m.Appearance,
 		DressPreference:          m.DressPreference,
+		Role:                     m.Role,
 		TraitsJSON:               m.Traits,
 		SkillsJSON:               m.Skills,
 		IsPublic:                 m.IsPublic,
@@ -1185,6 +1190,10 @@ func UserSettingsToModel(d *domain.UserSettings) *UserSettings {
 	if d == nil {
 		return nil
 	}
+	preferredGenresJSON := "[]"
+	if b, err := json.Marshal(d.PreferredGenres); err == nil {
+		preferredGenresJSON = string(b)
+	}
 	return &UserSettings{
 		ID:                        d.ID,
 		UserID:                    d.UserID,
@@ -1206,6 +1215,8 @@ func UserSettingsToModel(d *domain.UserSettings) *UserSettings {
 		AIEnabled:                 d.AIEnabled,
 		AIDataSharing:             d.AIDataSharing,
 		NotificationSettings:      d.NotificationSettings,
+		PreferredGenresJSON:       preferredGenresJSON,
+		TeenProtectionEnabled:     d.TeenProtectionEnabled,
 		UpdatedAt:                 d.UpdatedAt,
 	}
 }
@@ -1214,6 +1225,10 @@ func UserSettingsToModel(d *domain.UserSettings) *UserSettings {
 func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 	if m == nil {
 		return nil
+	}
+	var preferredGenres []string
+	if strings.TrimSpace(m.PreferredGenresJSON) != "" {
+		_ = json.Unmarshal([]byte(m.PreferredGenresJSON), &preferredGenres)
 	}
 	return &domain.UserSettings{
 		BaseModel: common.BaseModel{
@@ -1239,6 +1254,8 @@ func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 		AIEnabled:                 m.AIEnabled,
 		AIDataSharing:             m.AIDataSharing,
 		NotificationSettings:      m.NotificationSettings,
+		PreferredGenres:           preferredGenres,
+		TeenProtectionEnabled:     m.TeenProtectionEnabled,
 	}
 }
 
@@ -1378,12 +1395,24 @@ func AIGenerationRecordToModel(d *domain.AIGenerationRecord) *AIGenerationRecord
 		return nil
 	}
 
-	// 转换 Metadata
+	// 转换 Metadata。MySQL JSON 列不接受 ""（Error 3140: document is empty）；nil/序列化失败时用 "{}".
 	var metadataJSON string
 	if d.Metadata != nil {
-		if data, err := json.Marshal(d.Metadata); err == nil {
+		if data, err := json.Marshal(d.Metadata); err == nil && len(data) > 0 {
 			metadataJSON = string(data)
 		}
+	}
+	if strings.TrimSpace(metadataJSON) == "" {
+		metadataJSON = "{}"
+	}
+
+	inputParams := strings.TrimSpace(d.InputParams)
+	if inputParams == "" {
+		inputParams = "{}"
+	}
+	outputResult := strings.TrimSpace(d.OutputResult)
+	if outputResult == "" {
+		outputResult = "{}"
 	}
 
 	m := &AIGenerationRecord{
@@ -1397,8 +1426,8 @@ func AIGenerationRecordToModel(d *domain.AIGenerationRecord) *AIGenerationRecord
 		OriginalPrompt: d.OriginalPrompt,
 		EnhancedPrompt: d.EnhancedPrompt,
 		SystemPrompt:   d.SystemPrompt,
-		InputParams:    d.InputParams,
-		OutputResult:   d.OutputResult,
+		InputParams:    inputParams,
+		OutputResult:   outputResult,
 
 		// Token 消耗统计
 		InputTokens:  d.InputTokens,
@@ -2370,19 +2399,22 @@ func SubscriptionPlanToModel(d *domain.SubscriptionPlan) *SubscriptionPlan {
 		return nil
 	}
 	return &SubscriptionPlan{
-		ID:            d.ID,
-		Name:          d.Name,
-		Price:         d.Price,
-		Currency:      d.Currency,
-		TokenQuota:    d.TokenQuota,
-		StorageQuota:  d.StorageQuota,
-		MaxStories:    d.MaxStories,
-		MaxCharacters: d.MaxCharacters,
-		Features:      d.Features,
-		IsActive:      d.IsActive,
-		SortOrder:     d.SortOrder,
-		CreatedAt:     unixToTime(d.CreatedAt),
-		UpdatedAt:     unixToTime(d.UpdatedAt),
+		ID:             d.ID,
+		Name:           d.Name,
+		IAPProductID:   d.IAPProductID,
+		MembershipTier: d.MembershipTier,
+		BillingPeriod:  d.BillingPeriod,
+		Price:          d.Price,
+		Currency:       d.Currency,
+		TokenQuota:     d.TokenQuota,
+		StorageQuota:   d.StorageQuota,
+		MaxStories:     d.MaxStories,
+		MaxCharacters:  d.MaxCharacters,
+		Features:       d.Features,
+		IsActive:       d.IsActive,
+		SortOrder:      d.SortOrder,
+		CreatedAt:      unixToTime(d.CreatedAt),
+		UpdatedAt:      unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -2392,19 +2424,22 @@ func ModelToSubscriptionPlan(m *SubscriptionPlan) *domain.SubscriptionPlan {
 		return nil
 	}
 	return &domain.SubscriptionPlan{
-		ID:            m.ID,
-		Name:          m.Name,
-		Price:         m.Price,
-		Currency:      m.Currency,
-		TokenQuota:    m.TokenQuota,
-		StorageQuota:  m.StorageQuota,
-		MaxStories:    m.MaxStories,
-		MaxCharacters: m.MaxCharacters,
-		Features:      m.Features,
-		IsActive:      m.IsActive,
-		SortOrder:     m.SortOrder,
-		CreatedAt:     timeToUnix(m.CreatedAt),
-		UpdatedAt:     timeToUnix(m.UpdatedAt),
+		ID:             m.ID,
+		Name:           m.Name,
+		IAPProductID:   m.IAPProductID,
+		MembershipTier: m.MembershipTier,
+		BillingPeriod:  m.BillingPeriod,
+		Price:          m.Price,
+		Currency:       m.Currency,
+		TokenQuota:     m.TokenQuota,
+		StorageQuota:   m.StorageQuota,
+		MaxStories:     m.MaxStories,
+		MaxCharacters:  m.MaxCharacters,
+		Features:       m.Features,
+		IsActive:       m.IsActive,
+		SortOrder:      m.SortOrder,
+		CreatedAt:      timeToUnix(m.CreatedAt),
+		UpdatedAt:      timeToUnix(m.UpdatedAt),
 	}
 }
 
@@ -2643,47 +2678,6 @@ func jsonToVideoPromptDetails(jsonStr string) *domain.VideoPromptDetails {
 }
 
 // REMOVED: posterConceptDetailsToJSON, jsonToPosterConceptDetails - not in StoryCreationAppUI design
-
-// ========== Follow 转换 ==========
-
-// FollowToModel 将 domain.Follow 转换为 MySQL Follow 模型
-func FollowToModel(d *domain.Follow) *Follow {
-	if d == nil {
-		return nil
-	}
-	return &Follow{
-		ID:                   d.ID,
-		FollowerID:           d.FollowerID,
-		FollowableType:       string(d.FollowableType),
-		FollowableID:         d.FollowableID,
-		NotificationsEnabled: d.NotificationsEnabled,
-		CreatedAt:            d.CreatedAt,
-	}
-}
-
-// ModelToFollow 将 MySQL Follow 模型转换为 domain.Follow
-func ModelToFollow(m *Follow) *domain.Follow {
-	if m == nil {
-		return nil
-	}
-	return &domain.Follow{
-		ID:                   m.ID,
-		FollowerID:           m.FollowerID,
-		FollowableType:       domain.FollowableType(m.FollowableType),
-		FollowableID:         m.FollowableID,
-		NotificationsEnabled: m.NotificationsEnabled,
-		CreatedAt:            m.CreatedAt,
-	}
-}
-
-// ModelsToFollows 批量转换 Follow
-func ModelsToFollows(models []Follow) []*domain.Follow {
-	follows := make([]*domain.Follow, len(models))
-	for i := range models {
-		follows[i] = ModelToFollow(&models[i])
-	}
-	return follows
-}
 
 // ========== Like 转换 ==========
 

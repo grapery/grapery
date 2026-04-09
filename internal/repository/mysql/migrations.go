@@ -260,6 +260,21 @@ func (r *Repository) ensureUserFragmentsCountColumn() error {
 	return nil
 }
 
+// ensureUserSettingsPreferredGenresColumn ensures the user_settings table has preferred_genres_json column
+func (r *Repository) ensureUserSettingsPreferredGenresColumn() error {
+	migrator := r.db.Migrator()
+	type UserSettings struct{}
+	if !migrator.HasColumn(&UserSettings{}, "preferred_genres_json") {
+		r.log.Info("Adding preferred_genres_json column to user_settings table")
+		if err := r.db.Exec("ALTER TABLE user_settings ADD COLUMN preferred_genres_json JSON NULL COMMENT 'onboarding multi-select genres'").Error; err != nil {
+			r.log.Error("failed to add preferred_genres_json column", zap.Error(err))
+			return err
+		}
+		r.log.Info("Successfully added preferred_genres_json column to user_settings table")
+	}
+	return nil
+}
+
 // ensureStoriesAIEnabledColumn ensures the stories table has the ai_enabled column
 func (r *Repository) ensureStoriesAIEnabledColumn() error {
 	migrator := r.db.Migrator()
@@ -382,23 +397,56 @@ func (r *Repository) ensureStoriesStyleSchema() error {
 	return nil
 }
 
-// ensureAIGenerationRecordsSchema ensures ai_generation_records prompt fields support Unicode (utf8mb4)
+// ensureAIGenerationRecordsSchema ensures ai_generation_records supports Unicode (utf8mb4) for all
+// prompt and error text, including original_prompt / enhanced_prompt / system_prompt (not only legacy prompt columns).
+// MySQL error 1366 on UTF-8 bytes indicates a latin1 (or non-utf8mb4) column charset.
+//
+// We MODIFY critical LONGTEXT columns first (fixes 1366 even if CONVERT fails on some hosts), then CONVERT the table.
 func (r *Repository) ensureAIGenerationRecordsSchema() error {
-	// MySQL utf8mb4 support for emoji and extended Unicode
-	columns := []struct {
-		table  string
+	const table = "`ai_generation_records`"
+
+	// LONGTEXT avoids edge cases where the column was MEDIUMTEXT/TEXT with a non-utf8 charset.
+	priorityUTF8 := []struct {
 		column string
 		def    string
 	}{
-		{"ai_generation_records", "prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
-		{"ai_generation_records", "negative_prompt", "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"original_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"enhanced_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"system_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"error_message", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+	}
+	for _, p := range priorityUTF8 {
+		q := fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN `%s` %s", table, p.column, p.def)
+		if err := r.db.Exec(q).Error; err != nil {
+			r.log.Warn("ai_generation_records utf8mb4 MODIFY failed",
+				zap.String("column", p.column), zap.Error(err))
+		} else {
+			r.log.Info("ai_generation_records column set to utf8mb4",
+				zap.String("column", p.column))
+		}
 	}
 
-	for _, col := range columns {
-		r.log.Info("Ensuring utf8mb4 for column", zap.String("table", col.table), zap.String("column", col.column))
-		if err := r.db.Exec(fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s", col.table, col.column, col.def)).Error; err != nil {
-			r.log.Warn("failed to modify column to utf8mb4", zap.String("column", col.column), zap.Error(err))
-			// Don't return error - this may already be correct
+	const convertSQL = "ALTER TABLE `ai_generation_records` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+	convertErr := r.db.Exec(convertSQL).Error
+	if convertErr == nil {
+		r.log.Info("ai_generation_records table converted to utf8mb4")
+		return nil
+	}
+	r.log.Warn("ai_generation_records CONVERT TO utf8mb4 failed, applying remaining per-column MODIFY",
+		zap.Error(convertErr))
+
+	legacy := []struct {
+		column string
+		def    string
+	}{
+		{"prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"negative_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+	}
+	for _, col := range legacy {
+		q := fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN `%s` %s", table, col.column, col.def)
+		if err := r.db.Exec(q).Error; err != nil {
+			r.log.Warn("failed to modify column to utf8mb4",
+				zap.String("column", col.column), zap.Error(err))
 		}
 	}
 

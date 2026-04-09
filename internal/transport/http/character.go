@@ -261,6 +261,7 @@ func (h *Handler) GetCharacterStoryboards(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, storyboards)
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, authPkg.GetUserID(c))
 	Success(c, gin.H{
 		"storyboards": storyboards,

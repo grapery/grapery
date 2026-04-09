@@ -130,6 +130,9 @@ type Repository interface {
 	IsFollowing(ctx context.Context, followerID, followeeID string) (bool, error)
 	Followers(ctx context.Context, userID string, limit, offset int) ([]*User, error)
 	Following(ctx context.Context, userID string, limit, offset int) ([]*User, error)
+	CountFollowersOfUser(ctx context.Context, followeeID string) (int64, error)
+	CountFollowingOfUser(ctx context.Context, followerID string) (int64, error)
+	ListUserFollowsByFollower(ctx context.Context, followerID string, limit, offset int) ([]*Follow, error)
 
 	// Block/Unblock
 	BlockUser(ctx context.Context, blockerID, blockedID string) error
@@ -151,14 +154,28 @@ type Repository interface {
 
 	LikeStoryboard(ctx context.Context, userID, storyboardID string) error
 	UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error
+	IsStoryboardLiked(ctx context.Context, userID, storyboardID string) (bool, error)
+	// BatchIsStoryboardLiked returns liked=true for IDs present in storyboard_likes for this user.
+	BatchIsStoryboardLiked(ctx context.Context, userID string, storyboardIDs []string) (map[string]bool, error)
+	// ListStoryboardLikers returns users who liked a storyboard (storyboard_likes), newest first.
+	ListStoryboardLikers(ctx context.Context, storyboardID string, limit, offset int) ([]*User, int, error)
 
 	// Follow content
 	FollowStory(ctx context.Context, userID, storyID string) error
 	UnfollowStory(ctx context.Context, userID, storyID string) error
+	IsStoryFollowing(ctx context.Context, userID, storyID string) (bool, error)
+	CountFollowersOfStory(ctx context.Context, storyID string) (int64, error)
+	ListStoryFollowRecordsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Follow, error)
+	CountStoriesFollowedByUser(ctx context.Context, userID string) (int64, error)
+	ListStoryFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*Follow, error)
 
 	FollowCharacter(ctx context.Context, userID, characterID string) error
 	UnfollowCharacter(ctx context.Context, userID, characterID string) error
 	IsCharacterFollowing(ctx context.Context, userID, characterID string) (bool, error)
+	CountFollowersOfCharacter(ctx context.Context, characterID string) (int64, error)
+	ListCharacterFollowRecordsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*Follow, error)
+	CountCharactersFollowedByUser(ctx context.Context, userID string) (int64, error)
+	ListCharacterFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*Follow, error)
 
 	// ========== User Statistics operations ==========
 	CountAllUsers(ctx context.Context) (int, error)
@@ -188,10 +205,14 @@ type Repository interface {
 	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
 	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
-	// StoryboardFeedFromFollowedStories returns reader-visible storyboards for stories the user follows (active follow rows), newest storyboard activity first.
+	// StoryboardFeedFromFollowedStories returns the following tab: reader-visible storyboards on followed stories (story_follows),
+	// on public stories by followed users (user_follows), and on the viewer’s own stories (author match; any story visibility).
 	StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
-	// StoryboardFeedRecommended ranks published storyboards for the “for you” tab (genre signals from followed stories + engagement; vector stage can replace ranking later).
-	StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// StoryboardFeedRecommended is the “for you” tab: published storyboards matching onboarding preferred genres, plus a public engagement fallback (guests: trending).
+	// excludeStoryboardIDs may be nil; IDs in the set are omitted from the merged list (oversampling fills the page when possible).
+	StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int, excludeStoryboardIDs map[string]struct{}) ([]*Storyboard, int64, error)
+	// StoryboardFeedDiscover is the discover tab: only published public storyboards whose story genre is in preferredGenres, by updated_at; guests get trending; empty genres => empty.
+	StoryboardFeedDiscover(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *Storyboard) error
 	IncrementStoryboardViews(ctx context.Context, id string) error
 	IncrementStoryStoryboardCount(ctx context.Context, storyID string) error
@@ -468,17 +489,6 @@ type Repository interface {
 	UpdateUserDeviceLastActive(ctx context.Context, deviceToken string, lastActiveAt int64) error
 }
 
-// FollowRepository 关注相关操作（多态关联）
-type FollowRepository interface {
-	CreateFollow(ctx context.Context, follow *Follow) error
-	DeleteFollow(ctx context.Context, id string) error
-	GetFollowByID(ctx context.Context, id string) (*Follow, error)
-	GetFollowsByFollower(ctx context.Context, userID string, followableType FollowableType) ([]*Follow, error)
-	GetFollowsByFollowable(ctx context.Context, followableType FollowableType, followableID string) ([]*Follow, error)
-	CheckFollowStatus(ctx context.Context, followerID string, followableType FollowableType, followableID string) (bool, error)
-	GetFollowersCount(ctx context.Context, followableType FollowableType, followableID string) (int, error)
-}
-
 // LikeRepository 点赞相关操作（多态关联）
 type LikeRepository interface {
 	CreateLike(ctx context.Context, like *Like) error
@@ -508,4 +518,10 @@ type UserSettingsRepository interface {
 	GetUserSettings(userID string) (*UserSettings, error)
 	CreateUserSettings(settings *UserSettings) error
 	UpdateUserSettings(settings *UserSettings) error
+}
+
+// FeedbackRepository 用户反馈
+type FeedbackRepository interface {
+	CreateFeedback(ctx context.Context, fb *UserFeedback) error
+	ListFeedbackByUserID(ctx context.Context, userID string, limit, offset int) ([]*UserFeedback, int64, error)
 }

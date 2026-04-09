@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/recommendation"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
 )
@@ -23,6 +26,7 @@ type UserSettingsService interface {
 	UpdatePrivacy(ctx context.Context, userID string, privacy map[string]interface{}) error
 	UpdateAISettings(ctx context.Context, userID string, aiEnabled, aiDataSharing bool) error
 	UpdateNotificationSettings(ctx context.Context, userID string, settings map[string]interface{}) error
+	UpdatePreferredGenres(ctx context.Context, userID string, genres []string) ([]string, error)
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 }
 
@@ -30,13 +34,15 @@ type UserSettingsService interface {
 type userSettingsService struct {
 	settingsRepo domain.UserSettingsRepository
 	logger       *zap.Logger
+	cache        cache.Cache
 }
 
 // NewUserSettingsService 创建用户设置服务
-func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, logger *zap.Logger) UserSettingsService {
+func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, logger *zap.Logger, c cache.Cache) UserSettingsService {
 	return &userSettingsService{
 		settingsRepo: settingsRepo,
 		logger:       logger,
+		cache:        c,
 	}
 }
 
@@ -54,6 +60,14 @@ func (s *userSettingsService) GetSettings(ctx context.Context, userID string) (*
 			zap.String("userID", userID),
 			zap.Error(err))
 		return s.CreateDefaultSettings(ctx, userID)
+	}
+
+	if s.canonicalizeStoredUserSettings(settings) {
+		if err := s.settingsRepo.UpdateUserSettings(settings); err != nil {
+			s.logger.Warn("failed to persist canonical user settings",
+				zap.Error(err),
+				zap.String("userID", userID))
+		}
 	}
 
 	s.logger.Debug("user settings retrieved",
@@ -91,6 +105,8 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 		AIEnabled:                 true,
 		AIDataSharing:             true,
 		NotificationSettings:      s.getDefaultNotificationSettings(),
+		PreferredGenres:           []string{},
+		TeenProtectionEnabled:     false,
 	}
 
 	if err := s.settingsRepo.CreateUserSettings(defaultSettings); err != nil {
@@ -107,6 +123,7 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 
 // UpdateSettings 更新设置（通用）
 func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string, updates map[string]interface{}) (*domain.UserSettings, error) {
+	preferredGenresChanged := false
 	s.logger.Info("updating user settings",
 		zap.String("userID", userID))
 
@@ -121,6 +138,7 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 
 	// 应用更新
 	if language, ok := updates["language"].(string); ok && language != "" {
+		language = s.canonicalLanguage(language)
 		if s.isValidLanguage(language) {
 			settings.Language = language
 		}
@@ -154,16 +172,19 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 		}
 	}
 	if allowFollowFrom, ok := updates["allowFollowFrom"].(string); ok && allowFollowFrom != "" {
+		allowFollowFrom = s.canonicalAllowFrom(allowFollowFrom)
 		if s.isValidAllowFrom(allowFollowFrom) {
 			settings.AllowFollowFrom = allowFollowFrom
 		}
 	}
 	if allowCommentsFrom, ok := updates["allowCommentsFrom"].(string); ok && allowCommentsFrom != "" {
+		allowCommentsFrom = s.canonicalAllowFrom(allowCommentsFrom)
 		if s.isValidAllowFrom(allowCommentsFrom) {
 			settings.AllowCommentsFrom = allowCommentsFrom
 		}
 	}
 	if allowMessagesFrom, ok := updates["allowMessagesFrom"].(string); ok && allowMessagesFrom != "" {
+		allowMessagesFrom = s.canonicalAllowFrom(allowMessagesFrom)
 		if s.isValidAllowFrom(allowMessagesFrom) {
 			settings.AllowMessagesFrom = allowMessagesFrom
 		}
@@ -189,6 +210,22 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 	if aiDataSharing, ok := updates["aiDataSharing"].(bool); ok {
 		settings.AIDataSharing = aiDataSharing
 	}
+	if teen, ok := updates["teenProtectionEnabled"].(bool); ok {
+		settings.TeenProtectionEnabled = teen
+	}
+	if raw, ok := updates["notificationSettings"]; ok {
+		if patch, ok := raw.(map[string]interface{}); ok {
+			if err := s.applyNotificationPatch(settings, patch); err != nil {
+				return nil, fmt.Errorf("failed to merge notification settings: %w", err)
+			}
+		}
+	}
+	if rawGenres, ok := updates["preferredGenres"]; ok {
+		if genres, ok := parseStringSliceFlexible(rawGenres); ok {
+			settings.PreferredGenres = s.sanitizePreferredGenres(genres)
+			preferredGenresChanged = true
+		}
+	}
 
 	settings.UpdatedAt = time.Now().Unix()
 
@@ -201,7 +238,25 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 
 	s.logger.Info("user settings updated",
 		zap.String("userID", userID))
+	if preferredGenresChanged {
+		recommendation.InvalidateAllForUser(ctx, s.cache, userID)
+	}
 	return settings, nil
+}
+
+func (s *userSettingsService) UpdatePreferredGenres(ctx context.Context, userID string, genres []string) ([]string, error) {
+	settings, err := s.GetSettings(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	sanitized := s.sanitizePreferredGenres(genres)
+	settings.PreferredGenres = sanitized
+	settings.UpdatedAt = time.Now().Unix()
+	if err := s.settingsRepo.UpdateUserSettings(settings); err != nil {
+		return nil, fmt.Errorf("failed to update preferred genres: %w", err)
+	}
+	recommendation.InvalidateAllForUser(ctx, s.cache, userID)
+	return sanitized, nil
 }
 
 // UpdateLanguage 更新语言设置
@@ -210,6 +265,7 @@ func (s *userSettingsService) UpdateLanguage(ctx context.Context, userID string,
 		zap.String("userID", userID),
 		zap.String("language", language))
 
+	language = s.canonicalLanguage(language)
 	if !s.isValidLanguage(language) {
 		return fmt.Errorf("invalid language: %s", language)
 	}
@@ -287,16 +343,19 @@ func (s *userSettingsService) UpdatePrivacy(ctx context.Context, userID string, 
 		}
 	}
 	if allowFollowFrom, ok := privacy["allowFollowFrom"].(string); ok && allowFollowFrom != "" {
+		allowFollowFrom = s.canonicalAllowFrom(allowFollowFrom)
 		if s.isValidAllowFrom(allowFollowFrom) {
 			settings.AllowFollowFrom = allowFollowFrom
 		}
 	}
 	if allowCommentsFrom, ok := privacy["allowCommentsFrom"].(string); ok && allowCommentsFrom != "" {
+		allowCommentsFrom = s.canonicalAllowFrom(allowCommentsFrom)
 		if s.isValidAllowFrom(allowCommentsFrom) {
 			settings.AllowCommentsFrom = allowCommentsFrom
 		}
 	}
 	if allowMessagesFrom, ok := privacy["allowMessagesFrom"].(string); ok && allowMessagesFrom != "" {
+		allowMessagesFrom = s.canonicalAllowFrom(allowMessagesFrom)
 		if s.isValidAllowFrom(allowMessagesFrom) {
 			settings.AllowMessagesFrom = allowMessagesFrom
 		}
@@ -349,6 +408,60 @@ func (s *userSettingsService) UpdateAISettings(ctx context.Context, userID strin
 	return nil
 }
 
+// mergeNotificationMaps deep-merges src into dst (nested maps for push/email/inApp).
+func mergeNotificationMaps(dst, src map[string]interface{}) {
+	for k, v := range src {
+		srcMap, smOk := v.(map[string]interface{})
+		if !smOk {
+			if sm, ok := v.(map[string]bool); ok {
+				srcMap = make(map[string]interface{}, len(sm))
+				for kk, vv := range sm {
+					srcMap[kk] = vv
+				}
+				smOk = true
+			}
+		}
+		if smOk {
+			if dstVal, ok := dst[k]; ok {
+				if dstMap, ok := dstVal.(map[string]interface{}); ok {
+					mergeNotificationMaps(dstMap, srcMap)
+					continue
+				}
+			}
+			// replace missing or non-map destination with a copy of src branch
+			dst[k] = deepCopyMap(srcMap)
+			continue
+		}
+		dst[k] = v
+	}
+}
+
+func deepCopyMap(m map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		if vm, ok := v.(map[string]interface{}); ok {
+			out[k] = deepCopyMap(vm)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func (s *userSettingsService) applyNotificationPatch(dest *domain.UserSettings, patch map[string]interface{}) error {
+	var existing map[string]interface{}
+	if err := json.Unmarshal([]byte(dest.NotificationSettings), &existing); err != nil || existing == nil {
+		existing = s.getDefaultNotificationSettingsMap()
+	}
+	mergeNotificationMaps(existing, patch)
+	jsonBytes, err := json.Marshal(existing)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification settings: %w", err)
+	}
+	dest.NotificationSettings = string(jsonBytes)
+	return nil
+}
+
 // UpdateNotificationSettings 更新通知设置
 func (s *userSettingsService) UpdateNotificationSettings(ctx context.Context, userID string, settings map[string]interface{}) error {
 	s.logger.Info("updating notification settings",
@@ -359,28 +472,13 @@ func (s *userSettingsService) UpdateNotificationSettings(ctx context.Context, us
 		return err
 	}
 
-	// 将新的通知设置合并到现有设置中
-	var existingSettings map[string]interface{}
-	if err := json.Unmarshal([]byte(userSettings.NotificationSettings), &existingSettings); err != nil {
-		// 如果解析失败，使用默认设置
-		existingSettings = s.getDefaultNotificationSettingsMap()
-	}
-
-	// 合并设置
-	for key, value := range settings {
-		existingSettings[key] = value
-	}
-
-	// 序列化回 JSON
-	jsonBytes, err := json.Marshal(existingSettings)
-	if err != nil {
-		s.logger.Error("failed to marshal notification settings",
+	if err := s.applyNotificationPatch(userSettings, settings); err != nil {
+		s.logger.Error("failed to merge notification settings",
 			zap.Error(err),
 			zap.String("userID", userID))
-		return fmt.Errorf("failed to marshal notification settings: %w", err)
+		return err
 	}
 
-	userSettings.NotificationSettings = string(jsonBytes)
 	userSettings.UpdatedAt = time.Now().Unix()
 
 	if err := s.settingsRepo.UpdateUserSettings(userSettings); err != nil {
@@ -403,7 +501,7 @@ func (s *userSettingsService) getDefaultNotificationSettings() string {
 // getDefaultNotificationSettingsMap 获取默认通知设置（map）
 func (s *userSettingsService) getDefaultNotificationSettingsMap() map[string]interface{} {
 	return map[string]interface{}{
-		"push": map[string]bool{
+		"push": map[string]interface{}{
 			"enabled":            true,
 			"newFollower":        true,
 			"newLike":            true,
@@ -411,17 +509,20 @@ func (s *userSettingsService) getDefaultNotificationSettingsMap() map[string]int
 			"storyUpdate":        true,
 			"directMessage":      true,
 			"systemAnnouncement": true,
+			"marketing":          false,
 		},
-		"email": map[string]bool{
-			"enabled":       true,
-			"weeklyDigest":  true,
-			"securityAlert": true,
-			"marketing":     false,
+		"email": map[string]interface{}{
+			"enabled":        true,
+			"weeklyDigest":   true,
+			"securityAlert":  true,
+			"marketing":      false,
+			"productUpdates": true,
 		},
 		"inApp": map[string]interface{}{
-			"enabled":      true,
-			"showPreview":  true,
-			"soundEnabled": true,
+			"enabled":           true,
+			"showPreview":       true,
+			"soundEnabled":      true,
+			"vibrationEnabled": true,
 		},
 	}
 }
@@ -517,4 +618,27 @@ func (s *userSettingsService) ChangePassword(ctx context.Context, userID, curren
 		zap.String("userID", userID))
 
 	return fmt.Errorf("change password not fully implemented yet")
+}
+
+func (s *userSettingsService) sanitizePreferredGenres(genres []string) []string {
+	if len(genres) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(genres))
+	seen := map[string]struct{}{}
+	for _, g := range genres {
+		genre := strings.ToLower(strings.TrimSpace(g))
+		if genre == "" {
+			continue
+		}
+		if _, ok := seen[genre]; ok {
+			continue
+		}
+		seen[genre] = struct{}{}
+		out = append(out, genre)
+		if len(out) >= 12 {
+			break
+		}
+	}
+	return out
 }

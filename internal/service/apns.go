@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,11 +110,58 @@ func (a *APNsService) IsEnabled() bool {
 // APNsPayload Apple Push Notification 载荷
 type APNsPayload struct {
 	Aps APNsAps `json:"aps"`
-	// 自定义数据
+	// 自定义数据（与 Voyager iOS UNNotification userInfo 对齐）
 	NotificationID string `json:"notificationId,omitempty"`
 	Type           string `json:"type,omitempty"`
 	TargetID       string `json:"targetId,omitempty"`
 	Link           string `json:"link,omitempty"`
+	StoryID        string `json:"story_id,omitempty"`
+	UserID         string `json:"user_id,omitempty"`
+	CharacterID    string `json:"character_id,omitempty"`
+}
+
+// pushNotificationDataMap builds custom fields for APNs / FCM (Voyager client).
+func pushNotificationDataMap(n *domain.Notification) map[string]string {
+	data := map[string]string{
+		"notificationId": n.ID,
+		"type":           n.Type,
+		"link":           n.Link,
+	}
+	if n.StoryID != "" {
+		data["story_id"] = n.StoryID
+	}
+	if n.ActorID != "" {
+		data["user_id"] = n.ActorID
+	}
+	if id := extractPathSegmentID(n.Link, "characters"); id != "" {
+		data["character_id"] = id
+	}
+	if _, ok := data["story_id"]; !ok {
+		if id := extractPathSegmentID(n.Link, "stories"); id != "" {
+			data["story_id"] = id
+		}
+	}
+	return data
+}
+
+func extractPathSegmentID(link, segment string) string {
+	if link == "" {
+		return ""
+	}
+	prefix := "/" + segment + "/"
+	idx := strings.Index(link, prefix)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(prefix)
+	end := start
+	for end < len(link) && link[end] != '/' && link[end] != '#' && link[end] != '?' {
+		end++
+	}
+	if end <= start || end-start > 64 {
+		return ""
+	}
+	return link[start:end]
 }
 
 // APNsAps APNs标准载荷
@@ -224,6 +272,15 @@ func (a *APNsService) SendToDevice(ctx context.Context, deviceToken string, payl
 		}
 		if v, ok := payload.Data["link"]; ok {
 			apnsPayload.Link = v
+		}
+		if v, ok := payload.Data["story_id"]; ok {
+			apnsPayload.StoryID = v
+		}
+		if v, ok := payload.Data["user_id"]; ok {
+			apnsPayload.UserID = v
+		}
+		if v, ok := payload.Data["character_id"]; ok {
+			apnsPayload.CharacterID = v
 		}
 	}
 
@@ -507,17 +564,19 @@ func (s *Service) SendNotificationToAPNs(ctx context.Context, userID string, not
 		return nil
 	}
 
-	// 构建推送载荷
+	badge, uerr := s.repo.UnreadNotificationCount(ctx, userID)
+	if uerr != nil {
+		s.logger.Debug("unread count for push badge unavailable", zap.Error(uerr))
+		badge = 0
+	}
+
 	payload := &domain.PushNotificationPayload{
 		Title:    notification.Title,
 		Body:     notification.Content,
 		Sound:    "default",
 		Category: notification.Type,
-		Data: map[string]string{
-			"notificationId": notification.ID,
-			"type":           notification.Type,
-			"link":           notification.Link,
-		},
+		Badge:    badge,
+		Data:     pushNotificationDataMap(notification),
 	}
 
 	// 发送到每个设备
@@ -618,22 +677,28 @@ func (s *Service) CreateNotificationWithPush(ctx context.Context, notification *
 		return err
 	}
 
+	if !s.userAllowsPushForNotificationType(ctx, notification.UserID, notification.Type) {
+		return nil
+	}
+
+	n := *notification
+
 	// 异步推送到所有设备
 	go func() {
 		bgCtx := context.Background()
 
 		// 推送到 Apple 设备
-		if err := s.SendNotificationToAPNs(bgCtx, notification.UserID, notification); err != nil {
+		if err := s.SendNotificationToAPNs(bgCtx, n.UserID, &n); err != nil {
 			s.logger.Error("failed to send APNs notification",
 				zap.Error(err),
-				zap.String("notificationId", notification.ID))
+				zap.String("notificationId", n.ID))
 		}
 
 		// 推送到 Android 设备
-		if err := s.SendNotificationToFCM(bgCtx, notification.UserID, notification); err != nil {
+		if err := s.SendNotificationToFCM(bgCtx, n.UserID, &n); err != nil {
 			s.logger.Error("failed to send FCM notification",
 				zap.Error(err),
-				zap.String("notificationId", notification.ID))
+				zap.String("notificationId", n.ID))
 		}
 	}()
 

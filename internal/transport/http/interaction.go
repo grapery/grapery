@@ -221,7 +221,7 @@ func (h *InteractionHandler) BatchCheckFollowStatus(c *gin.Context) {
 
 // LikeRequest 点赞请求
 type LikeRequest struct {
-	LikeableType string `json:"likeableType" binding:"required"` // story, character, storyboard_node, fragment, character_poster
+	LikeableType string `json:"likeableType" binding:"required"` // story, character, storyboard_node (canonical: storyboard_likes), fragment, character_poster
 	LikeableID   string `json:"likeableId" binding:"required"`
 }
 

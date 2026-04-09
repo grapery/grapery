@@ -10,6 +10,7 @@ const (
 	ProviderHuoshan ProviderKind = "huoshan"
 	ProviderGemini  ProviderKind = "gemini"
 	ProviderQwen    ProviderKind = "qwen"
+	ProviderKling   ProviderKind = "kling"
 )
 
 // Config encapsulates the minimal credentials and preferences required to bootstrap a provider adapter.

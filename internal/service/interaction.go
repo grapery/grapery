@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -46,26 +47,26 @@ type InteractionService interface {
 
 // interactionService 互动服务实现
 type interactionService struct {
-	followRepo   domain.FollowRepository
 	likeRepo     domain.LikeRepository
 	bookmarkRepo domain.BookmarkRepository
 	repo         domain.Repository
+	social       *Service
 	logger       *zap.Logger
 }
 
 // NewInteractionService 创建互动服务
 func NewInteractionService(
-	followRepo domain.FollowRepository,
 	likeRepo domain.LikeRepository,
 	bookmarkRepo domain.BookmarkRepository,
 	repo domain.Repository,
+	social *Service,
 	logger *zap.Logger,
 ) InteractionService {
 	return &interactionService{
-		followRepo:   followRepo,
 		likeRepo:     likeRepo,
 		bookmarkRepo: bookmarkRepo,
 		repo:         repo,
+		social:       social,
 		logger:       logger,
 	}
 }
@@ -77,48 +78,65 @@ func (s *interactionService) Follow(ctx context.Context, followerID string, foll
 		zap.String("followableType", string(followableType)),
 		zap.String("followableID", followableID))
 
-	// 1. 检查是否已关注
-	exists, err := s.followRepo.CheckFollowStatus(ctx, followerID, followableType, followableID)
-	if err != nil {
-		s.logger.Error("failed to check follow status",
-			zap.Error(err),
+	if followableType == domain.FollowableTypeUser {
+		if err := s.checkFollowableExists(ctx, followableType, followableID); err != nil {
+			return err
+		}
+		if s.social == nil {
+			return fmt.Errorf("interaction service: Service dependency required for user follow")
+		}
+		return s.social.FollowUser(ctx, followerID, followableID)
+	}
+
+	if followableType == domain.FollowableTypeStory {
+		ok, err := s.repo.IsStoryFollowing(ctx, followerID, followableID)
+		if err != nil {
+			return fmt.Errorf("failed to check follow status: %w", err)
+		}
+		if ok {
+			return fmt.Errorf("already following")
+		}
+		if err := s.checkFollowableExists(ctx, followableType, followableID); err != nil {
+			return err
+		}
+		if err := s.repo.FollowStory(ctx, followerID, followableID); err != nil {
+			if errors.Is(err, domain.ErrAlreadyExists) {
+				return fmt.Errorf("already following")
+			}
+			return fmt.Errorf("failed to create follow: %w", err)
+		}
+		s.logger.Info("followed successfully",
 			zap.String("followerID", followerID),
+			zap.String("followableType", string(followableType)),
 			zap.String("followableID", followableID))
-		return fmt.Errorf("failed to check follow status: %w", err)
-	}
-	if exists {
-		return fmt.Errorf("already following")
+		return nil
 	}
 
-	// 2. 检查被关注对象是否存在
-	if err := s.checkFollowableExists(ctx, followableType, followableID); err != nil {
-		return err
-	}
-
-	// 3. 创建关注关系
-	follow := &domain.Follow{
-		ID:                   utils.GenerateID(),
-		FollowerID:           followerID,
-		FollowableType:       followableType,
-		FollowableID:         followableID,
-		NotificationsEnabled: true,
-		CreatedAt:            time.Now().Unix(),
-	}
-
-	if err := s.followRepo.CreateFollow(ctx, follow); err != nil {
-		s.logger.Error("failed to create follow",
-			zap.Error(err),
+	if followableType == domain.FollowableTypeCharacter {
+		ok, err := s.repo.IsCharacterFollowing(ctx, followerID, followableID)
+		if err != nil {
+			return fmt.Errorf("failed to check follow status: %w", err)
+		}
+		if ok {
+			return fmt.Errorf("already following")
+		}
+		if err := s.checkFollowableExists(ctx, followableType, followableID); err != nil {
+			return err
+		}
+		if err := s.repo.FollowCharacter(ctx, followerID, followableID); err != nil {
+			if errors.Is(err, domain.ErrAlreadyExists) {
+				return fmt.Errorf("already following")
+			}
+			return fmt.Errorf("failed to create follow: %w", err)
+		}
+		s.logger.Info("followed successfully",
 			zap.String("followerID", followerID),
+			zap.String("followableType", string(followableType)),
 			zap.String("followableID", followableID))
-		return fmt.Errorf("failed to create follow: %w", err)
+		return nil
 	}
 
-	s.logger.Info("followed successfully",
-		zap.String("followerID", followerID),
-		zap.String("followableType", string(followableType)),
-		zap.String("followableID", followableID))
-
-	return nil
+	return fmt.Errorf("invalid followable type: %s", followableType)
 }
 
 // Unfollow 取消关注
@@ -128,36 +146,54 @@ func (s *interactionService) Unfollow(ctx context.Context, followerID string, fo
 		zap.String("followableType", string(followableType)),
 		zap.String("followableID", followableID))
 
-	// 获取关注记录
-	follows, err := s.followRepo.GetFollowsByFollower(ctx, followerID, followableType)
-	if err != nil {
-		s.logger.Error("failed to get follows by follower",
-			zap.Error(err),
-			zap.String("followerID", followerID))
-		return fmt.Errorf("failed to get follows: %w", err)
-	}
-
-	for _, f := range follows {
-		if f.FollowableID == followableID {
-			if err := s.followRepo.DeleteFollow(ctx, f.ID); err != nil {
-				s.logger.Error("failed to delete follow",
-					zap.Error(err),
-					zap.String("followID", f.ID))
-				return fmt.Errorf("failed to delete follow: %w", err)
-			}
-			s.logger.Info("unfollowed successfully",
-				zap.String("followerID", followerID),
-				zap.String("followableID", followableID))
-			return nil
+	if followableType == domain.FollowableTypeUser {
+		if s.social == nil {
+			return fmt.Errorf("interaction service: Service dependency required for user unfollow")
 		}
+		return s.social.UnfollowUser(ctx, followerID, followableID)
 	}
 
-	return fmt.Errorf("not following")
+	if followableType == domain.FollowableTypeStory {
+		if err := s.repo.UnfollowStory(ctx, followerID, followableID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("not following")
+			}
+			return fmt.Errorf("failed to delete follow: %w", err)
+		}
+		s.logger.Info("unfollowed successfully",
+			zap.String("followerID", followerID),
+			zap.String("followableID", followableID))
+		return nil
+	}
+
+	if followableType == domain.FollowableTypeCharacter {
+		if err := s.repo.UnfollowCharacter(ctx, followerID, followableID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("not following")
+			}
+			return fmt.Errorf("failed to delete follow: %w", err)
+		}
+		s.logger.Info("unfollowed successfully",
+			zap.String("followerID", followerID),
+			zap.String("followableID", followableID))
+		return nil
+	}
+
+	return fmt.Errorf("invalid followable type: %s", followableType)
 }
 
 // CheckFollowStatus 检查关注状态
 func (s *interactionService) CheckFollowStatus(ctx context.Context, followerID string, followableType domain.FollowableType, followableID string) (bool, error) {
-	return s.followRepo.CheckFollowStatus(ctx, followerID, followableType, followableID)
+	if followableType == domain.FollowableTypeUser {
+		return s.repo.IsFollowing(ctx, followerID, followableID)
+	}
+	if followableType == domain.FollowableTypeStory {
+		return s.repo.IsStoryFollowing(ctx, followerID, followableID)
+	}
+	if followableType == domain.FollowableTypeCharacter {
+		return s.repo.IsCharacterFollowing(ctx, followerID, followableID)
+	}
+	return false, fmt.Errorf("invalid followable type: %s", followableType)
 }
 
 // GetFollowers 获取粉丝列表
@@ -174,30 +210,50 @@ func (s *interactionService) GetFollowers(ctx context.Context, followableType do
 
 	offset := (page - 1) * pageSize
 
-	// 获取关注记录
-	follows, err := s.followRepo.GetFollowsByFollowable(ctx, followableType, followableID)
+	if followableType == domain.FollowableTypeUser {
+		total64, err := s.repo.CountFollowersOfUser(ctx, followableID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count user followers: %w", err)
+		}
+		total := int(total64)
+		if offset >= total {
+			return []*domain.User{}, total, nil
+		}
+		users, err := s.repo.Followers(ctx, followableID, pageSize, offset)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get user followers: %w", err)
+		}
+		return users, total, nil
+	}
+
+	var follows []*domain.Follow
+	var total64 int64
+	var err error
+	switch followableType {
+	case domain.FollowableTypeStory:
+		total64, err = s.repo.CountFollowersOfStory(ctx, followableID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count story followers: %w", err)
+		}
+		follows, err = s.repo.ListStoryFollowRecordsByStory(ctx, followableID, pageSize, offset)
+	case domain.FollowableTypeCharacter:
+		total64, err = s.repo.CountFollowersOfCharacter(ctx, followableID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count character followers: %w", err)
+		}
+		follows, err = s.repo.ListCharacterFollowRecordsByCharacter(ctx, followableID, pageSize, offset)
+	default:
+		return nil, 0, fmt.Errorf("invalid followable type: %s", followableType)
+	}
 	if err != nil {
-		s.logger.Error("failed to get follows by followable",
-			zap.Error(err),
-			zap.String("followableType", string(followableType)),
-			zap.String("followableID", followableID))
 		return nil, 0, fmt.Errorf("failed to get followers: %w", err)
 	}
 
-	total := len(follows)
-
-	// 分页
+	total := int(total64)
 	if offset >= total {
 		return []*domain.User{}, total, nil
 	}
 
-	end := offset + pageSize
-	if end > total {
-		end = total
-	}
-	follows = follows[offset:end]
-
-	// 获取用户信息
 	users := make([]*domain.User, 0, len(follows))
 	for _, follow := range follows {
 		user, err := s.repo.UserByID(ctx, follow.FollowerID)
@@ -227,34 +283,77 @@ func (s *interactionService) GetFollowing(ctx context.Context, userID string, fo
 
 	offset := (page - 1) * pageSize
 
-	// 获取关注记录
-	follows, err := s.followRepo.GetFollowsByFollower(ctx, userID, followableType)
+	if followableType == domain.FollowableTypeUser {
+		total64, err := s.repo.CountFollowingOfUser(ctx, userID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count user following: %w", err)
+		}
+		total := int(total64)
+		if offset >= total {
+			return []*domain.Follow{}, total, nil
+		}
+		follows, err := s.repo.ListUserFollowsByFollower(ctx, userID, pageSize, offset)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get user following list: %w", err)
+		}
+		return follows, total, nil
+	}
+
+	var follows []*domain.Follow
+	var total64 int64
+	var err error
+	switch followableType {
+	case domain.FollowableTypeStory:
+		total64, err = s.repo.CountStoriesFollowedByUser(ctx, userID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count story following: %w", err)
+		}
+		follows, err = s.repo.ListStoryFollowRecordsByUser(ctx, userID, pageSize, offset)
+	case domain.FollowableTypeCharacter:
+		total64, err = s.repo.CountCharactersFollowedByUser(ctx, userID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to count character following: %w", err)
+		}
+		follows, err = s.repo.ListCharacterFollowRecordsByUser(ctx, userID, pageSize, offset)
+	default:
+		return nil, 0, fmt.Errorf("invalid followable type: %s", followableType)
+	}
 	if err != nil {
-		s.logger.Error("failed to get follows by follower",
-			zap.Error(err),
-			zap.String("userID", userID))
 		return nil, 0, fmt.Errorf("failed to get following: %w", err)
 	}
 
-	total := len(follows)
-
-	// 分页
+	total := int(total64)
 	if offset >= total {
 		return []*domain.Follow{}, total, nil
 	}
-
-	end := offset + pageSize
-	if end > total {
-		end = total
-	}
-	follows = follows[offset:end]
 
 	return follows, total, nil
 }
 
 // GetFollowersCount 获取粉丝数量
 func (s *interactionService) GetFollowersCount(ctx context.Context, followableType domain.FollowableType, followableID string) (int, error) {
-	return s.followRepo.GetFollowersCount(ctx, followableType, followableID)
+	if followableType == domain.FollowableTypeUser {
+		n, err := s.repo.CountFollowersOfUser(ctx, followableID)
+		if err != nil {
+			return 0, err
+		}
+		return int(n), nil
+	}
+	if followableType == domain.FollowableTypeStory {
+		n, err := s.repo.CountFollowersOfStory(ctx, followableID)
+		if err != nil {
+			return 0, err
+		}
+		return int(n), nil
+	}
+	if followableType == domain.FollowableTypeCharacter {
+		n, err := s.repo.CountFollowersOfCharacter(ctx, followableID)
+		if err != nil {
+			return 0, err
+		}
+		return int(n), nil
+	}
+	return 0, fmt.Errorf("invalid followable type: %s", followableType)
 }
 
 // Like 点赞
@@ -263,6 +362,23 @@ func (s *interactionService) Like(ctx context.Context, userID string, likeableTy
 		zap.String("userID", userID),
 		zap.String("likeableType", string(likeableType)),
 		zap.String("likeableID", likeableID))
+
+	// 故事板点赞走 Service.LikeStoryboard：与 POST /storyboards/:id/like 同逻辑（缓存失效、通知等）
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		if err := s.checkLikeableExists(ctx, likeableType, likeableID); err != nil {
+			return err
+		}
+		if s.social == nil {
+			return fmt.Errorf("interaction service: storyboard like requires Service dependency")
+		}
+		if err := s.social.LikeStoryboard(ctx, userID, likeableID); err != nil {
+			if errors.Is(err, domain.ErrAlreadyLiked) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
 
 	// 1. 检查是否已点赞
 	exists, err := s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, likeableID)
@@ -326,6 +442,19 @@ func (s *interactionService) Unlike(ctx context.Context, userID string, likeable
 		zap.String("likeableType", string(likeableType)),
 		zap.String("likeableID", likeableID))
 
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		if s.social == nil {
+			return fmt.Errorf("interaction service: storyboard unlike requires Service dependency")
+		}
+		if err := s.social.UnlikeStoryboard(ctx, userID, likeableID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+
 	// 获取点赞记录
 	likes, err := s.likeRepo.GetLikesByUser(ctx, userID, likeableType)
 	if err != nil {
@@ -359,6 +488,9 @@ func (s *interactionService) Unlike(ctx context.Context, userID string, likeable
 
 // CheckLikeStatus 检查点赞状态
 func (s *interactionService) CheckLikeStatus(ctx context.Context, userID string, likeableType domain.LikeableType, likeableID string) (bool, error) {
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		return s.repo.IsStoryboardLiked(ctx, userID, likeableID)
+	}
 	return s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, likeableID)
 }
 
@@ -375,6 +507,17 @@ func (s *interactionService) GetLikes(ctx context.Context, likeableType domain.L
 	}
 
 	offset := (page - 1) * pageSize
+
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		users, total, err := s.repo.ListStoryboardLikers(ctx, likeableID, pageSize, offset)
+		if err != nil {
+			s.logger.Error("failed to list storyboard likers",
+				zap.Error(err),
+				zap.String("likeableID", likeableID))
+			return nil, 0, fmt.Errorf("failed to get likes: %w", err)
+		}
+		return users, total, nil
+	}
 
 	// 获取点赞记录
 	likes, err := s.likeRepo.GetLikesByLikeable(ctx, likeableType, likeableID)
@@ -417,6 +560,13 @@ func (s *interactionService) GetLikes(ctx context.Context, likeableType domain.L
 
 // GetLikesCount 获取点赞数量
 func (s *interactionService) GetLikesCount(ctx context.Context, likeableType domain.LikeableType, likeableID string) (int, error) {
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		sb, err := s.repo.StoryboardByID(ctx, likeableID)
+		if err != nil {
+			return 0, err
+		}
+		return sb.Likes, nil
+	}
 	return s.likeRepo.GetLikesCount(ctx, likeableType, likeableID)
 }
 
@@ -424,8 +574,33 @@ func (s *interactionService) GetLikesCount(ctx context.Context, likeableType dom
 func (s *interactionService) BatchCheckFollowStatus(ctx context.Context, userID string, followableType domain.FollowableType, followableIDs []string) (map[string]bool, error) {
 	result := make(map[string]bool, len(followableIDs))
 
+	if followableType == domain.FollowableTypeUser {
+		for _, id := range followableIDs {
+			ok, err := s.repo.IsFollowing(ctx, userID, id)
+			if err != nil {
+				s.logger.Warn("failed to check user follow status in batch",
+					zap.Error(err),
+					zap.String("userID", userID),
+					zap.String("followableID", id))
+				result[id] = false
+				continue
+			}
+			result[id] = ok
+		}
+		return result, nil
+	}
+
 	for _, id := range followableIDs {
-		status, err := s.followRepo.CheckFollowStatus(ctx, userID, followableType, id)
+		var status bool
+		var err error
+		switch followableType {
+		case domain.FollowableTypeStory:
+			status, err = s.repo.IsStoryFollowing(ctx, userID, id)
+		case domain.FollowableTypeCharacter:
+			status, err = s.repo.IsCharacterFollowing(ctx, userID, id)
+		default:
+			err = fmt.Errorf("invalid followable type: %s", followableType)
+		}
 		if err != nil {
 			s.logger.Warn("failed to check follow status in batch",
 				zap.Error(err),
@@ -443,6 +618,22 @@ func (s *interactionService) BatchCheckFollowStatus(ctx context.Context, userID 
 // BatchCheckLikeStatus 批量检查点赞状态
 func (s *interactionService) BatchCheckLikeStatus(ctx context.Context, userID string, likeableType domain.LikeableType, likeableIDs []string) (map[string]bool, error) {
 	result := make(map[string]bool, len(likeableIDs))
+
+	if likeableType == domain.LikeableTypeStoryboardNode {
+		for _, id := range likeableIDs {
+			ok, err := s.repo.IsStoryboardLiked(ctx, userID, id)
+			if err != nil {
+				s.logger.Warn("failed to check storyboard like status in batch",
+					zap.Error(err),
+					zap.String("userID", userID),
+					zap.String("likeableID", id))
+				result[id] = false
+				continue
+			}
+			result[id] = ok
+		}
+		return result, nil
+	}
 
 	for _, id := range likeableIDs {
 		status, err := s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, id)

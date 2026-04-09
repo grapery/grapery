@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 
+	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -11,15 +12,17 @@ import (
 // Repository is the main repository struct that implements domain.Repository
 // It contains database access methods for all entities
 type Repository struct {
-	db  *gorm.DB
-	log *zap.Logger
+	db      *gorm.DB
+	log     *zap.Logger
+	recoCfg config.RecommendationConfig
 }
 
 // NewRepository creates a new Repository instance
-func NewRepository(db *gorm.DB, log *zap.Logger) *Repository {
+func NewRepository(db *gorm.DB, log *zap.Logger, recoCfg config.RecommendationConfig) *Repository {
 	return &Repository{
-		db:  db,
-		log: log,
+		db:      db,
+		log:     log,
+		recoCfg: recoCfg,
 	}
 }
 
@@ -45,8 +48,9 @@ func (r *Repository) WithTransaction(ctx context.Context, fn func(tx domain.Repo
 	// Create a transaction-scoped repository
 	txRepo := &transactionRepository{
 		Repository: &Repository{
-			db:  tx,
-			log: r.log,
+			db:      tx,
+			log:     r.log,
+			recoCfg: r.recoCfg,
 		},
 		tx: tx,
 	}

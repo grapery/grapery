@@ -1,9 +1,34 @@
 package http
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
+
+// userSettingsAPIResponse returns a JSON-friendly map with notificationSettings as object (not escaped string).
+func userSettingsAPIResponse(settings *domain.UserSettings) (map[string]interface{}, error) {
+	b, err := json.Marshal(settings)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(settings.NotificationSettings)
+	var notif interface{}
+	if raw == "" {
+		notif = map[string]interface{}{}
+	} else if err := json.Unmarshal([]byte(raw), &notif); err != nil {
+		notif = map[string]interface{}{}
+	}
+	m["notificationSettings"] = notif
+	return m, nil
+}
 
 // UserSettingsHandler 用户设置处理器
 type UserSettingsHandler struct {
@@ -21,6 +46,7 @@ func (h *UserSettingsHandler) RegisterUserSettingsRoutes(r *gin.RouterGroup) {
 	{
 		settings.GET("", h.GetSettings)
 		settings.PUT("", h.UpdateSettings)
+		settings.PUT("/preferences/genres", h.UpdatePreferredGenres)
 		settings.PUT("/language", h.UpdateLanguage)
 		settings.PUT("/theme", h.UpdateTheme)
 		settings.PUT("/font-size", h.UpdateFontSize)
@@ -43,7 +69,12 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 		return
 	}
 
-	Success(c, settings)
+	resp, err := userSettingsAPIResponse(settings)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, resp)
 }
 
 // UpdateSettingsRequest 更新设置请求
@@ -66,6 +97,8 @@ type UpdateSettingsRequest struct {
 	AIEnabled                 *bool                  `json:"aiEnabled,omitempty"`
 	AIDataSharing             *bool                  `json:"aiDataSharing,omitempty"`
 	NotificationSettings      map[string]interface{} `json:"notificationSettings,omitempty"`
+	PreferredGenres           []string               `json:"preferredGenres,omitempty"`
+	TeenProtectionEnabled     *bool                  `json:"teenProtectionEnabled,omitempty"`
 }
 
 // UpdateSettings 更新用户设置
@@ -135,6 +168,12 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	if req.NotificationSettings != nil {
 		updates["notificationSettings"] = req.NotificationSettings
 	}
+	if req.PreferredGenres != nil {
+		updates["preferredGenres"] = req.PreferredGenres
+	}
+	if req.TeenProtectionEnabled != nil {
+		updates["teenProtectionEnabled"] = *req.TeenProtectionEnabled
+	}
 
 	settings, err := h.settingsService.UpdateSettings(c.Request.Context(), userID, updates)
 	if err != nil {
@@ -142,7 +181,36 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	Success(c, settings)
+	resp, err := userSettingsAPIResponse(settings)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, resp)
+}
+
+type UpdatePreferredGenresRequest struct {
+	PreferredGenres []string `json:"preferredGenres"`
+}
+
+func (h *UserSettingsHandler) UpdatePreferredGenres(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	var req UpdatePreferredGenresRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	genres, err := h.settingsService.UpdatePreferredGenres(c.Request.Context(), userID, req.PreferredGenres)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{
+		"preferredGenres": genres,
+		"message":         "preferred genres updated successfully",
+	})
 }
 
 // UpdateLanguageRequest 更新语言请求
@@ -315,12 +383,17 @@ func (h *UserSettingsHandler) UpdateNotificationSettings(c *gin.Context) {
 		return
 	}
 
-	var settings map[string]interface{}
-	if !BindJSON(c, &settings) {
+	var body map[string]interface{}
+	if !BindJSON(c, &body) {
 		return
 	}
 
-	if err := h.settingsService.UpdateNotificationSettings(c.Request.Context(), userID, settings); err != nil {
+	patch := body
+	if inner, ok := body["notificationSettings"].(map[string]interface{}); ok {
+		patch = inner
+	}
+
+	if err := h.settingsService.UpdateNotificationSettings(c.Request.Context(), userID, patch); err != nil {
 		HandleError(c, err)
 		return
 	}

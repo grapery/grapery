@@ -370,17 +370,23 @@ func (s *Service) SendNotificationToFCM(ctx context.Context, userID string, noti
 		return nil
 	}
 
-	// 构建推送载荷
+	badge, uerr := s.repo.UnreadNotificationCount(ctx, userID)
+	if uerr != nil {
+		s.logger.Debug("unread count for FCM badge unavailable", zap.Error(uerr))
+		badge = 0
+	}
+	data := pushNotificationDataMap(notification)
+	if badge > 0 {
+		data["badge"] = fmt.Sprintf("%d", badge)
+	}
+
 	payload := &domain.PushNotificationPayload{
 		Title:    notification.Title,
 		Body:     notification.Content,
 		Sound:    "default",
 		Category: notification.Type,
-		Data: map[string]string{
-			"notificationId": notification.ID,
-			"type":           notification.Type,
-			"link":           notification.Link,
-		},
+		Badge:    badge,
+		Data:     data,
 	}
 
 	// 发送到每个设备

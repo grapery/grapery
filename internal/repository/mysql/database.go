@@ -46,6 +46,11 @@ func InitDB(dsn string, log *zap.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("create orm failed: %w", err)
 	}
 
+	// Session charset (runs on the connection used for this statement; DSN charset/collation covers pooled conns).
+	if err := db.Exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
+		log.Warn("SET NAMES utf8mb4 failed (DSN charset should still apply)", zap.Error(err))
+	}
+
 	return db, nil
 }
 

@@ -2,12 +2,83 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
+
+// targetPathSegment maps domain target type keys to URL path segments (Voyager / API style).
+func targetPathSegment(targetTypeKey string) string {
+	switch targetTypeKey {
+	case "story":
+		return "stories"
+	case "storyboard":
+		return "storyboards"
+	case "fragment":
+		return "fragments"
+	case "character":
+		return "characters"
+	default:
+		return targetTypeKey
+	}
+}
+
+func (s *Service) resolveStoryIDForCommentTarget(ctx context.Context, targetTypeKey, targetID string) string {
+	switch targetTypeKey {
+	case "story":
+		return targetID
+	case "storyboard":
+		sb, err := s.repo.StoryboardByID(ctx, targetID)
+		if err == nil && sb != nil {
+			return sb.StoryID
+		}
+	case "character":
+		ch, err := s.repo.CharacterByID(ctx, targetID)
+		if err == nil && ch != nil {
+			return ch.StoryID
+		}
+	}
+	return ""
+}
+
+// userAllowsPushForNotificationType respects nested notificationSettings.push; defaults to allow if settings missing.
+func (s *Service) userAllowsPushForNotificationType(ctx context.Context, userID, typ string) bool {
+	settings, err := s.repo.UserSettings(ctx, userID)
+	if err != nil || settings == nil {
+		return true
+	}
+	raw := strings.TrimSpace(settings.NotificationSettings)
+	if raw == "" {
+		return settings.PushNotifications
+	}
+	var ns domain.NotificationSettings
+	if err := json.Unmarshal([]byte(raw), &ns); err != nil {
+		return settings.PushNotifications
+	}
+	if !ns.Push.Enabled {
+		return false
+	}
+	switch typ {
+	case "like":
+		return ns.Push.NewLike
+	case "comment", "reply", "mention":
+		return ns.Push.NewComment
+	case "follow":
+		return ns.Push.NewFollower
+	case "storyboard", "fork":
+		return ns.Push.StoryUpdate
+	case "group_invite":
+		return ns.Push.SystemAnnouncement
+	case "system":
+		return ns.Push.SystemAnnouncement
+	default:
+		return true
+	}
+}
 
 func (s *Service) ListNotifications(ctx context.Context, userID string, limit, offset int) ([]*domain.Notification, error) {
 	if limit <= 0 {
@@ -59,34 +130,38 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 	return nil
 }
 
-// NotifyComment 评论通知
-func (s *Service) NotifyComment(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetType, targetID, commentID string) error {
+// NotifyComment 评论通知（targetTypeKey 为 story / storyboard / character / fragment 等英文 key）
+func (s *Service) NotifyComment(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, commentID string) error {
+	seg := targetPathSegment(targetTypeKey)
 	notification := &domain.Notification{
 		UserID:      targetUserID,
 		Type:        "comment",
 		Title:       "新评论",
-		Content:     fmt.Sprintf("%s 评论了你的%s", actorName, targetType),
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", targetType, targetID, commentID),
+		Content:     fmt.Sprintf("%s 评论了你的%s", actorName, s.getTargetTypeName(targetTypeKey)),
+		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
 		ActorID:     actorID,
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
+		StoryID:     s.resolveStoryIDForCommentTarget(ctx, targetTypeKey, targetID),
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
-// NotifyLike 点赞通知
-func (s *Service) NotifyLike(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetType, targetID string) error {
+// NotifyLike 点赞通知（targetTypeKey 如 storyboard；storyID 在分镜点赞时传入故事 ID，其它可为空）
+func (s *Service) NotifyLike(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, storyID string) error {
+	seg := targetPathSegment(targetTypeKey)
 	notification := &domain.Notification{
 		UserID:      targetUserID,
 		Type:        "like",
 		Title:       "新点赞",
-		Content:     fmt.Sprintf("%s 赞了你的%s", actorName, targetType),
-		Link:        fmt.Sprintf("/%s/%s", targetType, targetID),
+		Content:     fmt.Sprintf("%s 赞了你的%s", actorName, s.getTargetTypeName(targetTypeKey)),
+		Link:        fmt.Sprintf("/%s/%s", seg, targetID),
 		ActorID:     actorID,
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
+		StoryID:     storyID,
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyFollow 关注通知
@@ -101,7 +176,7 @@ func (s *Service) NotifyFollow(ctx context.Context, targetUserID, actorID, actor
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyStoryboardCreated 新 storyboard 创建通知
@@ -120,8 +195,9 @@ func (s *Service) NotifyStoryboardCreated(ctx context.Context, storyOwnerID, cre
 		ActorID:     creatorID,
 		ActorName:   creatorName,
 		ActorAvatar: creatorAvatar,
+		StoryID:     storyID,
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyStoryboardForked Fork storyboard 通知
@@ -140,68 +216,75 @@ func (s *Service) NotifyStoryboardForked(ctx context.Context, parentCreatorID, f
 		ActorID:     forkerID,
 		ActorName:   forkerName,
 		ActorAvatar: forkerAvatar,
+		StoryID:     storyID,
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
-// NotifyCommentReply 评论回复通知
-func (s *Service) NotifyCommentReply(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetType, targetID, commentID string) error {
+// NotifyCommentReply 评论回复通知（targetTypeKey 为 story / storyboard / character 等）
+func (s *Service) NotifyCommentReply(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, commentID string) error {
 	// 不通知自己
 	if targetUserID == actorID {
 		return nil
 	}
 
+	seg := targetPathSegment(targetTypeKey)
 	notification := &domain.Notification{
 		UserID:      targetUserID,
 		Type:        "reply",
 		Title:       "新回复",
 		Content:     fmt.Sprintf("%s 回复了你的评论", actorName),
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", targetType, targetID, commentID),
+		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
 		ActorID:     actorID,
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
+		StoryID:     s.resolveStoryIDForCommentTarget(ctx, targetTypeKey, targetID),
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyCommentLike 评论点赞通知
-func (s *Service) NotifyCommentLike(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetType, targetID, commentID string) error {
+func (s *Service) NotifyCommentLike(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, commentID string) error {
 	// 不通知自己
 	if targetUserID == actorID {
 		return nil
 	}
 
+	seg := targetPathSegment(targetTypeKey)
 	notification := &domain.Notification{
 		UserID:      targetUserID,
 		Type:        "like",
 		Title:       "评论被赞",
 		Content:     fmt.Sprintf("%s 赞了你的评论", actorName),
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", targetType, targetID, commentID),
+		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
 		ActorID:     actorID,
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
+		StoryID:     s.resolveStoryIDForCommentTarget(ctx, targetTypeKey, targetID),
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyMention 提及通知
-func (s *Service) NotifyMention(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetType, targetID, commentID string) error {
+func (s *Service) NotifyMention(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, commentID string) error {
 	// 不通知自己
 	if targetUserID == actorID {
 		return nil
 	}
 
+	seg := targetPathSegment(targetTypeKey)
 	notification := &domain.Notification{
 		UserID:      targetUserID,
 		Type:        "mention",
 		Title:       "有人提及了你",
 		Content:     fmt.Sprintf("%s 在评论中提及了你", actorName),
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", targetType, targetID, commentID),
+		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
 		ActorID:     actorID,
 		ActorName:   actorName,
 		ActorAvatar: actorAvatar,
+		StoryID:     s.resolveStoryIDForCommentTarget(ctx, targetTypeKey, targetID),
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }
 
 // NotifyGroupInvitation 群组邀请通知
@@ -216,5 +299,5 @@ func (s *Service) NotifyGroupInvitation(ctx context.Context, inviteeID, inviterI
 		ActorName:   inviterName,
 		ActorAvatar: inviterAvatar,
 	}
-	return s.CreateNotification(ctx, notification)
+	return s.CreateNotificationWithPush(ctx, notification)
 }

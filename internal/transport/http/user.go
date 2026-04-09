@@ -273,6 +273,7 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, storyboards)
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewerID)
 	Success(c, gin.H{
 		"storyboards": storyboards,
@@ -346,6 +347,7 @@ func (h *Handler) GetLikedStoryboards(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, storyboards)
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewerID)
 	Success(c, gin.H{
 		"storyboards": storyboards,

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"context"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -177,6 +179,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		zap.String("parentId", storyboard.ParentID),
 		zap.String("workflowStatus", storyboard.WorkflowStatus))
 
+	h.attachStoryboardIsLiked(c, storyboard)
 	domain.RedactStoryboardViewsUnlessCreator(storyboard, uid)
 	Success(c, storyboard)
 }
@@ -195,6 +198,13 @@ func (h *Handler) GetStoryboard(c *gin.Context) {
 		return
 	}
 
+	if uid := GetUserID(c); uid != "" {
+		go func(sbID, viewer string) {
+			h.svc.RecordStoryboardFeedSeen(context.Background(), viewer, sbID)
+		}(id, uid)
+	}
+
+	h.attachStoryboardIsLiked(c, storyboard)
 	domain.RedactStoryboardViewsUnlessCreator(storyboard, GetUserID(c))
 	Success(c, storyboard)
 }
@@ -269,8 +279,57 @@ func (h *Handler) UpdateStoryboard(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLiked(c, updatedStoryboard)
 	domain.RedactStoryboardViewsUnlessCreator(updatedStoryboard, userID.(string))
 	Success(c, updatedStoryboard)
+}
+
+// attachStoryboardIsLiked sets storyboard.IsLiked for the current viewer when authenticated.
+func (h *Handler) attachStoryboardIsLiked(c *gin.Context, storyboard *domain.Storyboard) {
+	if storyboard == nil {
+		return
+	}
+	uid := GetUserID(c)
+	if uid == "" {
+		return
+	}
+	liked, err := h.svc.IsStoryboardLikedByUser(c.Request.Context(), uid, storyboard.ID)
+	if err != nil {
+		h.logger.Debug("attachStoryboardIsLiked skipped",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
+		return
+	}
+	storyboard.IsLiked = &liked
+}
+
+// attachStoryboardIsLikedMany sets IsLiked on each item for the current viewer (batch query).
+func (h *Handler) attachStoryboardIsLikedMany(c *gin.Context, boards []*domain.Storyboard) {
+	uid := GetUserID(c)
+	if uid == "" || len(boards) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(boards))
+	for _, b := range boards {
+		if b != nil && b.ID != "" {
+			ids = append(ids, b.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	m, err := h.svc.BatchIsStoryboardLikedByUser(c.Request.Context(), uid, ids)
+	if err != nil {
+		h.logger.Debug("attachStoryboardIsLikedMany skipped", zap.Error(err))
+		return
+	}
+	for _, b := range boards {
+		if b == nil {
+			continue
+		}
+		liked := m[b.ID]
+		b.IsLiked = &liked
+	}
 }
 
 // DeleteStoryboard 删除 storyboard
@@ -288,13 +347,13 @@ func (h *Handler) DeleteStoryboard(c *gin.Context) {
 
 // GetStoryboardFeed 获取故事板 feed 流
 // Query params:
-//   - tab: for_you（默认，推荐/热度）；following（关注的故事下可读故事板，按更新时间）；community（全站时间线）
+//   - tab: discover（默认，仅 onboarding 体裁；for_you/recommended 为别名）；following；community（全站时间线）
 //   - limit: 分页限制（默认20）
 //   - offset: 分页偏移（默认0）
 func (h *Handler) GetStoryboardFeed(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	tab := c.DefaultQuery("tab", "for_you")
+	tab := c.DefaultQuery("tab", "discover")
 
 	uid := ""
 	if v, ok := c.Get("userID"); ok {
@@ -320,6 +379,7 @@ func (h *Handler) GetStoryboardFeed(c *gin.Context) {
 		zap.Int("count", len(storyboards)),
 		zap.Int64("total", total))
 
+	h.attachStoryboardIsLikedMany(c, storyboards)
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, uid)
 	Success(c, gin.H{
 		"storyboards": storyboards,
@@ -402,6 +462,10 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		zap.Int("count", len(storyboards)))
 
 	viewer := GetUserID(c)
+	h.attachStoryboardIsLikedMany(c, storyboards)
+	if parentStoryboard != nil {
+		h.attachStoryboardIsLiked(c, parentStoryboard)
+	}
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewer)
 	domain.RedactStoryboardViewsUnlessCreator(parentStoryboard, viewer)
 	Success(c, gin.H{
@@ -423,6 +487,7 @@ func (h *Handler) GetStoryboardChildren(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, children)
 	domain.RedactStoryboardViewsUnlessCreatorMany(children, GetUserID(c))
 	Success(c, gin.H{
 		"children": children,
@@ -440,6 +505,7 @@ func (h *Handler) GetStoryboardTree(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLikedMany(c, tree)
 	domain.RedactStoryboardViewsUnlessCreatorMany(tree, GetUserID(c))
 	Success(c, gin.H{
 		"tree":  tree,
@@ -519,6 +585,7 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryboardIsLiked(c, newStoryboard)
 	domain.RedactStoryboardViewsUnlessCreator(newStoryboard, userID.(string))
 	Success(c, newStoryboard)
 }
@@ -564,6 +631,7 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 	}
 
 	if result != nil && result.NewStoryboard != nil {
+		h.attachStoryboardIsLiked(c, result.NewStoryboard)
 		domain.RedactStoryboardViewsUnlessCreator(result.NewStoryboard, userID.(string))
 	}
 	Success(c, result)
@@ -575,6 +643,10 @@ func (h *Handler) LikeStoryboard(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.LikeStoryboard(c.Request.Context(), userID.(string), id); err != nil {
+		if errors.Is(err, domain.ErrAlreadyLiked) {
+			Success(c, gin.H{"message": "storyboard liked successfully"})
+			return
+		}
 		InternalError(c, err.Error())
 		return
 	}
@@ -588,6 +660,10 @@ func (h *Handler) UnlikeStoryboard(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.UnlikeStoryboard(c.Request.Context(), userID.(string), id); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			Success(c, gin.H{"message": "storyboard unliked successfully"})
+			return
+		}
 		InternalError(c, err.Error())
 		return
 	}

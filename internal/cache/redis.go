@@ -33,6 +33,8 @@ type Cache interface {
 	ZAdd(ctx context.Context, key string, members ...*redis.Z) error
 	ZRange(ctx context.Context, key string, start, stop int64) ([]string, error)
 	ZRevRange(ctx context.Context, key string, start, stop int64) ([]string, error)
+	ZCard(ctx context.Context, key string) (int64, error)
+	ZRemRangeByRank(ctx context.Context, key string, start, stop int64) error
 	ZScore(ctx context.Context, key string, member string) (float64, error)
 	ZIncrBy(ctx context.Context, key string, increment float64, member string) (float64, error)
 
@@ -171,6 +173,16 @@ func (r *redisCache) ZRange(ctx context.Context, key string, start, stop int64) 
 // ZRevRange 有序集合范围查询（降序）
 func (r *redisCache) ZRevRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
 	return r.client.ZRevRange(ctx, key, start, stop).Result()
+}
+
+// ZCard returns the number of members in a sorted set.
+func (r *redisCache) ZCard(ctx context.Context, key string) (int64, error) {
+	return r.client.ZCard(ctx, key).Result()
+}
+
+// ZRemRangeByRank removes members in the rank range [start, stop] (inclusive).
+func (r *redisCache) ZRemRangeByRank(ctx context.Context, key string, start, stop int64) error {
+	return r.client.ZRemRangeByRank(ctx, key, start, stop).Err()
 }
 
 // ZScore 获取有序集合成员分数

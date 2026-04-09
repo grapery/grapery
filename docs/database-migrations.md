@@ -29,13 +29,15 @@
 - INDEX: created_at
 
 #### likes
-存储点赞关系，支持多态关联（story, character, storyboard_node, fragment, character_poster）。
+存储点赞关系，支持多态关联（story, character, fragment, character_poster）。
+
+故事板点赞的**权威数据**在 `storyboard_likes` 表与 `storyboards.likes` 计数列；API 仍接受互动类型 `storyboard_node`，由服务端映射到 `storyboard_likes`。历史上若存在 `likeable_type` 为 `storyboard_node` 或误用的 `storyboard` 的行，应用启动时会迁入 `storyboard_likes` 并从 `likes` 删除（见 `migrations/021_cleanup_legacy_polymorphic_storyboard_likes.sql`）。
 
 | Field | Type | Description |
 |-------|------|-------------|
 | id | VARCHAR(36) | 主键 |
 | user_id | VARCHAR(36) | 点赞用户ID |
-| likeable_type | VARCHAR(50) | 被点赞对象类型: story, character, storyboard_node, fragment, character_poster |
+| likeable_type | VARCHAR(50) | 被点赞对象类型: story, character, fragment, character_poster（遗留行可能含 storyboard_node / storyboard，迁移后应清空） |
 | likeable_id | VARCHAR(36) | 被点赞对象ID |
 | created_at | BIGINT | 创建时间戳 |
 
@@ -94,6 +96,41 @@
    ```
 
 ---
+
+## Migration 021: Cleanup legacy polymorphic storyboard likes (2026-04)
+
+### 概述
+
+将 `likes` 表中 `likeable_type` 为 `storyboard_node` 或历史误用 `storyboard` 的行迁入 `storyboard_likes`，删除对应 `likes` 行，并按 `storyboard_likes` 活行数重算 `storyboards.likes`。
+
+### 执行方式
+
+1. **自动**：应用启动 Schema Fixes 阶段执行 `MigrateLegacyPolymorphicStoryboardLikes`（幂等；仅在有行迁入或删除时用新计数刷新全部 `storyboards.likes`）。
+2. **手动**：
+
+   ```bash
+   mysql -u username -p database_name < migrations/021_cleanup_legacy_polymorphic_storyboard_likes.sql
+   ```
+
+   手动脚本**总是**执行第三步全量重算 `storyboards.likes`。
+
+---
+
+## 模型维护说明（2026-04）
+
+- 已从代码中移除 `CharacterCameo` / `character_cameos`：该 struct 从未在 `migrations_register` 中注册，无业务引用；若旧库存在该表可手工 `DROP TABLE character_cameos`。
+- `Fragment` 与 `FragmentDB` 均映射 `fragments` 表，属历史重复定义；新逻辑以 `FragmentDB` 为准，合并需改 `bookmark_impl` 等引用。
+
+### 开发种子数据（≥200 行）
+
+迁移完成后可加载多样化测试数据：
+
+```bash
+python3 scripts/generate_seed_200plus.py   # 生成 scripts/seed_dev_diverse_200plus.sql
+mysql -h "$DB_ADDRESS" -u "$DB_USERNAME" -p"$DB_PASSWORD" "$DB_DATABASE" < scripts/seed_dev_diverse_200plus.sql
+```
+
+种子用户 `username` 形如 `seed200_u01`…`seed200_u20`；重复执行会先按模式删除同批种子再插入。
 
 ## 历史 Migrations
 

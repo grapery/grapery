@@ -93,6 +93,7 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		AbilityFeatures:          character.AbilityFeatures,
 		Appearance:               character.Appearance,
 		DressPreference:          character.DressPreference,
+		Role:                     character.Role,
 		SourceType:               sourceType,
 		SourcePrompt:             character.SourcePrompt,
 		SourceImage:              character.SourceImage,
@@ -106,8 +107,10 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 		CreatedAt:                now,
 		UpdatedAt:                now,
 	}
+	// MySQL JSON 列不接受空字符串；无三视图数据时用 "{}"。
+	dbCharacter.ViewsJSON = "{}"
 	if character.Views != nil {
-		if b, err := json.Marshal(character.Views); err == nil {
+		if b, err := json.Marshal(character.Views); err == nil && len(strings.TrimSpace(string(b))) > 0 {
 			dbCharacter.ViewsJSON = string(b)
 		}
 	}
@@ -149,6 +152,7 @@ func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Char
 		"ability_features":           character.AbilityFeatures,
 		"appearance":                 character.Appearance,
 		"dress_preference":           character.DressPreference,
+		"role":                       character.Role,
 		"source_type":                character.SourceType,
 		"source_prompt":              character.SourcePrompt,
 		"source_image":               character.SourceImage,
@@ -310,6 +314,74 @@ func (r *Repository) IsCharacterFollowing(ctx context.Context, userID, character
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// CountFollowersOfCharacter counts character_follows rows for the character.
+func (r *Repository) CountFollowersOfCharacter(ctx context.Context, characterID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&CharacterFollow{}).Where("character_id = ?", characterID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListCharacterFollowRecordsByCharacter lists followers (newest first) as domain.Follow.
+func (r *Repository) ListCharacterFollowRecordsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []CharacterFollow
+	q := r.db.WithContext(ctx).Where("character_id = ?", characterID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.UserID,
+			FollowableType:       domain.FollowableTypeCharacter,
+			FollowableID:         characterID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
+// CountCharactersFollowedByUser counts characters this user follows.
+func (r *Repository) CountCharactersFollowedByUser(ctx context.Context, userID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&CharacterFollow{}).Where("user_id = ?", userID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListCharacterFollowRecordsByUser lists followed characters (newest first) as domain.Follow.
+func (r *Repository) ListCharacterFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []CharacterFollow
+	q := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           userID,
+			FollowableType:       domain.FollowableTypeCharacter,
+			FollowableID:         row.CharacterID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
 }
 
 // StoryboardsByCharacter retrieves storyboards that a character participates in

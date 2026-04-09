@@ -236,6 +236,85 @@ func (r *Repository) UnfollowStory(ctx context.Context, userID, storyID string) 
 	return nil
 }
 
+// IsStoryFollowing reports whether userID has an active row in story_follows for storyID.
+func (r *Repository) IsStoryFollowing(ctx context.Context, userID, storyID string) (bool, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// CountFollowersOfStory counts active story_follows rows for the story.
+func (r *Repository) CountFollowersOfStory(ctx context.Context, storyID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).Where("story_id = ?", storyID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListStoryFollowRecordsByStory lists followers (newest first) as domain.Follow for the polymorphic /follows API.
+func (r *Repository) ListStoryFollowRecordsByStory(ctx context.Context, storyID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []StoryFollow
+	q := r.db.WithContext(ctx).Where("story_id = ?", storyID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.UserID,
+			FollowableType:       domain.FollowableTypeStory,
+			FollowableID:         storyID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
+// CountStoriesFollowedByUser counts stories this user follows.
+func (r *Repository) CountStoriesFollowedByUser(ctx context.Context, userID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).Where("user_id = ?", userID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListStoryFollowRecordsByUser lists followed stories (newest first) as domain.Follow.
+func (r *Repository) ListStoryFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []StoryFollow
+	q := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           userID,
+			FollowableType:       domain.FollowableTypeStory,
+			FollowableID:         row.StoryID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
 // ========== Story Contributor operations ==========
 
 // AddStoryContributor adds a contributor to a story

@@ -21,9 +21,10 @@ type FragmentGenerationRequest struct {
 
 // FragmentGenerationResult 碎片故事生成结果
 type FragmentGenerationResult struct {
-	Content    string   `json:"content"`    // 生成的文字内容
-	ImageUrls  []string `json:"imageUrls"`  // 生成的图片URL列表
-	TokensUsed int      `json:"tokensUsed"` // 使用的token数量
+	Content           string   `json:"content"`                     // 生成的文字内容
+	ImageUrls         []string `json:"imageUrls"`                   // 生成的图片URL列表
+	TokensUsed        int      `json:"tokensUsed"`                  // 使用的token数量
+	DraftFragmentID   string   `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
 }
 
 // FragmentContentGenerationRequest 碎片故事内容生成请求
