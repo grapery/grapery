@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -37,8 +38,23 @@ func NewFragmentRepository(db *gorm.DB, recoCfg config.RecommendationConfig, c c
 	}
 }
 
+// DB exposes the underlying GORM handle for cross-repository transactions.
+func (r *FragmentRepository) DB() *gorm.DB {
+	return r.db
+}
+
 // Create creates a new fragment and increments user's fragments count
 func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragment) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return r.CreateWithTx(ctx, tx, fragment)
+	})
+}
+
+// CreateWithTx inserts a fragment inside an existing transaction (no nested transaction).
+func (r *FragmentRepository) CreateWithTx(ctx context.Context, tx *gorm.DB, fragment *domain.Fragment) error {
+	if tx == nil {
+		return fmt.Errorf("nil transaction")
+	}
 	dbFragment := mysql.DomainToFragmentDB(fragment)
 	if dbFragment == nil {
 		return domain.ErrInvalidInput
@@ -49,30 +65,25 @@ func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragme
 		userID = fragment.CreatorID
 	}
 
-	// Start a transaction
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Create the fragment
-		if err := tx.Create(dbFragment).Error; err != nil {
+	tx = tx.WithContext(ctx)
+	if err := tx.Create(dbFragment).Error; err != nil {
+		return err
+	}
+
+	fragment.ID = dbFragment.ID
+	fragment.CreatedAt = dbFragment.CreatedAt
+	fragment.UpdatedAt = dbFragment.UpdatedAt
+
+	if !fragment.IsDraft {
+		if err := tx.Model(&domain.User{}).
+			Where("id = ?", userID).
+			UpdateColumn("fragments_count", gorm.Expr("fragments_count + 1")).
+			Error; err != nil {
 			return err
 		}
+	}
 
-		// Copy ID back to domain fragment
-		fragment.ID = dbFragment.ID
-		fragment.CreatedAt = dbFragment.CreatedAt
-		fragment.UpdatedAt = dbFragment.UpdatedAt
-
-		// 仅已发布（非草稿）计入用户碎片数
-		if !fragment.IsDraft {
-			if err := tx.Model(&domain.User{}).
-				Where("id = ?", userID).
-				UpdateColumn("fragments_count", gorm.Expr("fragments_count + 1")).
-				Error; err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
+	return nil
 }
 
 // GetByID retrieves a fragment by ID

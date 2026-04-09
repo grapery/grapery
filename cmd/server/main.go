@@ -245,6 +245,10 @@ func main() {
 	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, svc.AIService(), logger)
 	logger.Info("fragment generation service initialized")
 
+	panelGenRepo := repository.NewFragmentPanelGenerationRepository(repo.DB())
+	panelGenService := service.NewFragmentPanelGenerationService(panelGenRepo, fragmentRepo, repo, cfg.AI.ImageProvider, svc.AIGenerationService(), logger)
+	logger.Info("fragment panel generation service initialized")
+
 	// Initialize Fragment Interaction Service
 	fragmentInteractionRepo := repository.NewFragmentInteractionRepository(repo.DB())
 	logger.Info("fragment interaction repository initialized")
@@ -303,6 +307,10 @@ func main() {
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
 	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/v1/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment generation routes registered")
+
+	panelGenHandler := transport.NewFragmentPanelGenerationHandler(panelGenService, logger)
+	panelGenHandler.RegisterRoutes(apiGroup.Group("/v1/fragment-panels"), authPkg.AuthMiddleware())
+	logger.Info("fragment panel generation routes registered")
 
 	// Register Fragment Interaction routes (likes, comments, shares)
 	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, logger)
@@ -453,9 +461,11 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 	// Check and register Huoshan provider (火山引擎/豆包)
 	if cfg.AI.HuoshanAPIKey != "" {
 		huoshanCfg := &genapi.Config{
-			Provider: genapi.ProviderHuoshan,
-			APIKey:   cfg.AI.HuoshanAPIKey,
-			BaseURL:  cfg.AI.HuoshanBaseURL,
+			Provider:   genapi.ProviderHuoshan,
+			APIKey:     cfg.AI.HuoshanAPIKey,
+			BaseURL:    cfg.AI.HuoshanBaseURL,
+			ImageModel: cfg.AI.HuoshanImageModel,
+			TextModel:  cfg.AI.HuoshanTextModel,
 		}
 		if _, err := genAPI.RegisterProviderConfig(huoshanCfg); err != nil {
 			logger.Error("❌ Huoshan provider registration failed",

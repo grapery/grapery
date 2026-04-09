@@ -71,6 +71,19 @@ func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
 		zap.Bool("enabled", enabled))
 }
 
+// GeminiAvailable 是否已注册 Gemini（海外用户面板计划等可走 Gemini）。
+func (s *AIGenerationService) GeminiAvailable() bool {
+	return s != nil && s.geminiClient != nil
+}
+
+// GenAPI 返回统一 GenAI 门面（图像等）。
+func (s *AIGenerationService) GenAPI() *genapi.GenAPI {
+	if s == nil {
+		return nil
+	}
+	return s.genAPI
+}
+
 // GetAsyncVideoCompletionService 获取异步视频完成处理服务
 func (s *AIGenerationService) GetAsyncVideoCompletionService() *AsyncVideoCompletionService {
 	return s.asyncVideoCompletion
@@ -485,13 +498,12 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
 	// 3. 调用GenAPI生成图片 (支持风格和重试)
-	// Choose operation type based on whether reference images are provided
 	operation := genapi.OperationTextToImage
-		referenceImageURL := ""
-		if len(req.ReferenceImages) > 0 {
-			operation = genapi.OperationImageToImage
-			referenceImageURL = req.ReferenceImages[0]
-		}
+	referenceImageURL := ""
+	if len(req.ReferenceImages) > 0 {
+		operation = genapi.OperationImageToImage
+		referenceImageURL = req.ReferenceImages[0]
+	}
 
 	genReq := &genapi.GenerateRequest{
 		Prompt:            req.Prompt,

@@ -15,23 +15,32 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	huoshanclient "github.com/grapestree/fgrapery/grapery/internal/genai/providers/huoshan"
 )
 
 // AIService AI 生成服务
 type AIService struct {
-	genAPI       *genapi.GenAPI // 用于图片/视频生成
-	geminiClient *gemini.Client // 用于文本生成
-	repo         domain.Repository
-	logger       *zap.Logger
+	genAPI               *genapi.GenAPI // 用于直连能力探测（如火山对话）
+	geminiClient         *gemini.Client // 文本（海外优先时）
+	aiGen                *AIGenerationService // 碎片配图等：统一配额与 AIGenerationRecord
+	defaultImageProvider string               // 与 cfg.AI.ImageProvider 对齐
+	repo                 domain.Repository
+	logger               *zap.Logger
 }
 
 // NewAIService 创建 AI 服务
-func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, repo domain.Repository, logger *zap.Logger) *AIService {
+func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIGenerationService, defaultImageProvider string, repo domain.Repository, logger *zap.Logger) *AIService {
+	dp := strings.TrimSpace(defaultImageProvider)
+	if dp == "" {
+		dp = "huoshan"
+	}
 	return &AIService{
-		genAPI:       genAPI,
-		geminiClient: geminiClient,
-		repo:         repo,
-		logger:       logger,
+		genAPI:               genAPI,
+		geminiClient:         geminiClient,
+		aiGen:                aiGen,
+		defaultImageProvider: dp,
+		repo:                 repo,
+		logger:               logger,
 	}
 }
 
@@ -806,90 +815,171 @@ func ptrInt32(v int) *int32 {
 
 // ============== Fragment Generation Helpers ==============
 
-// GenerateTextForFragment 生成文本内容（为 FragmentGenerationService 提供简化接口）
+// GenerateTextForFragment 生成文本内容（为 FragmentGenerationService 提供简化接口）。
+// 国内默认火山方舟对话；海外用户且已配置 Gemini 时用 Gemini；否则在火山不可用时回退 Gemini。
 func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
-	if s.geminiClient == nil {
-		return "", 0, fmt.Errorf("gemini client not available")
+	if aiTask == nil {
+		return "", 0, fmt.Errorf("ai task is nil")
 	}
 
-	// 从 Input 字段解析 prompt
 	var prompt string
 	if err := json.Unmarshal([]byte(aiTask.Input), &prompt); err != nil {
-		// 如果解析失败，直接使用 Input 作为 prompt
 		prompt = aiTask.Input
 	}
 
-	// 配置生成参数
+	region := s.fragmentTextUserRegion(ctx, aiTask.UserID)
+	wantGemini := PreferGeminiForFragmentText(region, s.geminiClient != nil)
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+
+	if wantGemini {
+		text, n, err := s.generateFragmentTextGemini(ctx, prompt)
+		if err == nil {
+			return text, n, nil
+		}
+		if huoshanOK {
+			s.logger.Warn("fragment text: gemini failed, falling back to huoshan",
+				zap.String("userId", aiTask.UserID), zap.Error(err))
+			return s.generateFragmentTextHuoshan(ctx, prompt)
+		}
+		return "", 0, err
+	}
+
+	if huoshanOK {
+		text, n, err := s.generateFragmentTextHuoshan(ctx, prompt)
+		if err == nil {
+			return text, n, nil
+		}
+		if s.geminiClient != nil {
+			s.logger.Warn("fragment text: huoshan failed, falling back to gemini",
+				zap.String("userId", aiTask.UserID), zap.Error(err))
+			return s.generateFragmentTextGemini(ctx, prompt)
+		}
+		return "", 0, err
+	}
+
+	if s.geminiClient != nil {
+		return s.generateFragmentTextGemini(ctx, prompt)
+	}
+
+	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
+}
+
+func (s *AIService) fragmentTextUserRegion(ctx context.Context, userID string) string {
+	if s.repo == nil || strings.TrimSpace(userID) == "" {
+		return ""
+	}
+	st, err := s.repo.UserSettings(ctx, userID)
+	if err != nil || st == nil {
+		return ""
+	}
+	return st.Region
+}
+
+func (s *AIService) generateFragmentTextGemini(ctx context.Context, prompt string) (string, int, error) {
+	if s.geminiClient == nil {
+		return "", 0, fmt.Errorf("gemini client not available")
+	}
 	temperature := float32(0.7)
 	maxTokens := int32(1000)
 	genConfig := &genai.GenerateContentConfig{
 		Temperature:     &temperature,
 		MaxOutputTokens: maxTokens,
 	}
-
-	// 调用 Gemini 生成文本
 	text, geminiResp, err := s.geminiClient.GenerateText(ctx, "", prompt, genConfig)
 	if err != nil {
 		return "", 0, fmt.Errorf("gemini generate text failed: %w", err)
 	}
-
-	// 计算 token 使用量
 	tokensUsed := 0
 	if geminiResp != nil && geminiResp.UsageMetadata != nil {
 		tokensUsed = int(geminiResp.UsageMetadata.TotalTokenCount)
 	}
-
 	return text, tokensUsed, nil
 }
 
-// GenerateImageForFragment 生成图片（为 FragmentGenerationService 提供简化接口）
-func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
+func (s *AIService) generateFragmentTextHuoshan(ctx context.Context, prompt string) (string, int, error) {
 	if s.genAPI == nil {
 		return "", 0, fmt.Errorf("genAPI not available")
 	}
+	hc := s.genAPI.HuoshanInternalClient()
+	if hc == nil {
+		return "", 0, fmt.Errorf("huoshan client not available")
+	}
+	resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+		Prompt:      prompt,
+		MaxTokens:   1000,
+		Temperature: 0.7,
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("huoshan generate text failed: %w", err)
+	}
+	if resp == nil {
+		return "", 0, fmt.Errorf("huoshan returned empty response")
+	}
+	tokens := resp.TotalTokens
+	if tokens == 0 {
+		tokens = resp.InputTokens + resp.OutputTokens
+	}
+	return strings.TrimSpace(resp.Text), tokens, nil
+}
 
-	// 从 Input 字段解析 prompt
+// GenerateImageForFragment 生成图片（为 FragmentGenerationService 提供简化接口）。
+// 走 AIGenerationService.GenerateImage：配额、扣费记录与用户归因一致；国内默认火山配图，海外且 Gemini 已注册时用 Gemini。
+func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
+	if aiTask == nil {
+		return "", 0, fmt.Errorf("ai task is nil")
+	}
+	if s.aiGen == nil {
+		return "", 0, fmt.Errorf("AI generation service not configured")
+	}
+
 	var prompt string
 	if err := json.Unmarshal([]byte(aiTask.Input), &prompt); err != nil {
-		// 如果解析失败，直接使用 Input 作为 prompt
 		prompt = aiTask.Input
 	}
 
-	// 构建图片生成请求
-	genReq := &genapi.GenerateRequest{
-		Operation:   genapi.OperationTextToImage,
-		Prompt:      prompt,
-		Size:        "1024x1024",
-		Quality:     "standard",
-		OutputCount: 1,
+	region := s.fragmentTextUserRegion(ctx, aiTask.UserID)
+	_, preferred := ResolvePanelGenerationAIProviders(region, s.defaultImageProvider, s.aiGen)
+	provider := strings.TrimSpace(aiTask.Provider)
+	if provider != "" {
+		provider = CoalesceRegisteredImageProvider(s.genAPI, provider)
+	} else {
+		provider = CoalesceRegisteredImageProvider(s.genAPI, preferred)
+	}
+	if s.genAPI != nil && s.genAPI.GetImageProvider(provider) == nil {
+		return "", 0, fmt.Errorf("image provider %q is not registered", provider)
 	}
 
-	// 使用默认的图片提供商
-	providerName := "huoshan" // 火山引擎支持图片生成
-	if aiTask.Provider != "" {
-		providerName = aiTask.Provider
+	relatedID := strings.TrimSpace(aiTask.RelatedEntityID)
+	if relatedID == "" {
+		relatedID = aiTask.ID
+	}
+	relatedType := strings.TrimSpace(aiTask.RelatedEntityType)
+	if relatedType == "" {
+		relatedType = "fragment_generation"
 	}
 
-	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
+	imgOut, err := s.aiGen.GenerateImage(ctx, &GenerateImageRequest{
+		UserID:            strings.TrimSpace(aiTask.UserID),
+		Prompt:            prompt,
+		Provider:          provider,
+		Size:              "1024x1024",
+		Quality:           "standard",
+		OutputCount:       1,
+		RelatedEntityID:   relatedID,
+		RelatedEntityType: relatedType,
+		Metadata: map[string]interface{}{
+			"source": "fragment_generation_image",
+		},
+	})
 	if err != nil {
-		return "", 0, fmt.Errorf("generate image failed: %w", err)
+		return "", 0, err
 	}
-
-	// 检查响应错误
-	if resp.Error != "" {
-		return "", 0, fmt.Errorf("provider returned error: %s", resp.Error)
+	if imgOut == nil || len(imgOut.ImageURLs) == 0 {
+		tok := 0
+		if imgOut != nil {
+			tok = imgOut.TokensUsed
+		}
+		return "", tok, fmt.Errorf("no images generated")
 	}
-
-	// 计算 token 使用量
-	tokensUsed := 0
-	if resp.Usage != nil {
-		tokensUsed = resp.Usage.TotalTokens
-	}
-
-	// 返回第一张图片的 URL
-	if len(resp.ImageURLs) == 0 {
-		return "", tokensUsed, fmt.Errorf("no images generated")
-	}
-
-	return resp.ImageURLs[0], tokensUsed, nil
+	return imgOut.ImageURLs[0], imgOut.TokensUsed, nil
 }

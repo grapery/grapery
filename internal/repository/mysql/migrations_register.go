@@ -591,6 +591,15 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_panel_generation_tasks",
+		Description: "Create and migrate fragment_panel_generation_tasks table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentPanelGenerationTaskDB{})
+		},
+		Required: true,
+	})
+
 	// ========== Fragment Interaction 相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_likes",

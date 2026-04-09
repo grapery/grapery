@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	huoshanprovider "github.com/grapestree/fgrapery/grapery/internal/genai/providers/huoshan"
 )
 
 // Package genapi provides a high-level API for generating media using various providers.
@@ -177,6 +179,21 @@ func (g *GenAPI) GetImageProvider(name string) ImageProvider {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.imageProviders[normalizeProviderName(name)]
+}
+
+// HuoshanInternalClient returns the Huoshan Ark client for chat / multimodal text APIs, or nil if Huoshan is not registered.
+func (g *GenAPI) HuoshanInternalClient() *huoshanprovider.Client {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	p := g.providers[normalizeProviderName("huoshan")]
+	if p == nil {
+		return nil
+	}
+	hp, ok := p.(*huoshanProvider)
+	if !ok || hp == nil {
+		return nil
+	}
+	return hp.client
 }
 
 // GetVideoProvider returns the video provider registered under the given name.

@@ -64,6 +64,8 @@ type AIConfig struct {
 	HuoshanAPIKey     string `yaml:"huoshan_api_key"`
 	HuoshanBaseURL    string `yaml:"huoshan_base_url"`
 	HuoshanImageModel string `yaml:"huoshan_image_model"` // Image model for Huoshan
+	// HuoshanTextModel 火山方舟对话/多模态接入点 ID（如 ep-xxxx），用于国内用户文本与分镜规划。
+	HuoshanTextModel string `yaml:"huoshan_text_model"`
 	GeminiAPIKey      string `yaml:"gemini_api_key"`
 	GeminiBaseURL     string `yaml:"gemini_base_url"`
 	KlingAccessKey    string `yaml:"kling_access_key"`
@@ -203,6 +205,7 @@ func Load(app string) Config {
 			HuoshanAPIKey:     getEnv("HUOSHAN_API_KEY", ""),
 			HuoshanBaseURL:    getEnv("HUOSHAN_BASE_URL", ""),
 			HuoshanImageModel: getEnv("HUOSHAN_IMAGE_MODEL", ""),
+			HuoshanTextModel:  getEnv("HUOSHAN_TEXT_MODEL", ""),
 			GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
 			GeminiBaseURL:     getEnv("GEMINI_BASE_URL", ""),
 			KlingAccessKey:    getEnv("KLING_ACCESS_KEY", ""),
@@ -441,6 +444,8 @@ func overrideWithEnv(cfg Config, app string) Config {
 	// AI config
 	cfg.AI.HuoshanAPIKey = getEnv("HUOSHAN_API_KEY", cfg.AI.HuoshanAPIKey)
 	cfg.AI.HuoshanBaseURL = getEnv("HUOSHAN_BASE_URL", cfg.AI.HuoshanBaseURL)
+	cfg.AI.HuoshanImageModel = getEnv("HUOSHAN_IMAGE_MODEL", cfg.AI.HuoshanImageModel)
+	cfg.AI.HuoshanTextModel = getEnv("HUOSHAN_TEXT_MODEL", cfg.AI.HuoshanTextModel)
 	cfg.AI.GeminiAPIKey = getEnv("GEMINI_API_KEY", cfg.AI.GeminiAPIKey)
 	cfg.AI.GeminiBaseURL = getEnv("GEMINI_BASE_URL", cfg.AI.GeminiBaseURL)
 	cfg.AI.KlingAccessKey = getEnv("KLING_ACCESS_KEY", cfg.AI.KlingAccessKey)

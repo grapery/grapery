@@ -87,7 +87,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	// 步骤2: 生成图片
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 50, "generating_images")
 
-	imageResult, err := s.generateImages(ctx, task.Request, contentResult.Content)
+	imageResult, err := s.generateImages(ctx, task.UserID, taskID, task.Request, contentResult.Content)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
 		return
@@ -187,7 +187,7 @@ func (s *FragmentGenerationService) generateContent(ctx context.Context, userID 
 		UserID:   userID,
 		Type:     domain.AITaskGenerateFragmentContent,
 		Status:   domain.AITaskStatusProcessing,
-		Provider: "gemini", // 或其他 provider
+		Provider: "", // 由 AIService 按用户区域选择火山 / Gemini
 		Input:    prompt,
 	}
 
@@ -203,8 +203,8 @@ func (s *FragmentGenerationService) generateContent(ctx context.Context, userID 
 	}, nil
 }
 
-// generateImages 生成图片
-func (s *FragmentGenerationService) generateImages(ctx context.Context, req domain.FragmentGenerationRequest, content string) (*domain.FragmentImageGenerationResult, error) {
+// generateImages 生成图片（顺序调用：与 AIGenerationService 按 userID 的图片分布式锁一致，避免同用户并发多张时互斥失败）
+func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content string) (*domain.FragmentImageGenerationResult, error) {
 	if req.ImageCount <= 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
@@ -212,51 +212,32 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, req doma
 		}, nil
 	}
 
-	// 构建图片生成提示词
 	imagePrompt := s.buildImagePrompt(req, content)
 
 	var allImageUrls []string
 	totalTokens := 0
 
-	// 并发生成多张图片
-	type ImageResult struct {
-		URL        string
-		TokensUsed int
-		Err        error
-	}
-
-	resultChan := make(chan ImageResult, req.ImageCount)
-
 	for i := 0; i < req.ImageCount; i++ {
-		go func(index int) {
-			aiReq := domain.AITask{
-				ID:       uuid.New().String(),
-				Type:     domain.AITaskGenerateFragmentImages,
-				Status:   domain.AITaskStatusProcessing,
-				Provider: "huoshan", // 或其他图片生成 provider
-				Input:    imagePrompt,
-			}
+		aiReq := domain.AITask{
+			ID:                uuid.New().String(),
+			UserID:            userID,
+			Type:              domain.AITaskGenerateFragmentImages,
+			Status:            domain.AITaskStatusProcessing,
+			Provider:          "",
+			Input:             imagePrompt,
+			RelatedEntityID:   genTaskID,
+			RelatedEntityType: "fragment_generation",
+		}
 
-			imageUrl, tokens, err := s.aiService.GenerateImageForFragment(ctx, &aiReq)
-			resultChan <- ImageResult{
-				URL:        imageUrl,
-				TokensUsed: tokens,
-				Err:        err,
-			}
-		}(i)
-	}
-
-	// 收集结果
-	for i := 0; i < req.ImageCount; i++ {
-		result := <-resultChan
-		if result.Err != nil {
+		imageURL, tokens, err := s.aiService.GenerateImageForFragment(ctx, &aiReq)
+		if err != nil {
 			s.logger.Warn("Image generation failed",
-				zap.Error(result.Err),
+				zap.Error(err),
 				zap.Int("index", i))
 			continue
 		}
-		allImageUrls = append(allImageUrls, result.URL)
-		totalTokens += result.TokensUsed
+		allImageUrls = append(allImageUrls, imageURL)
+		totalTokens += tokens
 	}
 
 	return &domain.FragmentImageGenerationResult{
