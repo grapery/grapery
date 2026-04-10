@@ -71,7 +71,7 @@ func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
 		zap.Bool("enabled", enabled))
 }
 
-// GeminiAvailable 是否已注册 Gemini（海外用户面板计划等可走 Gemini）。
+// GeminiAvailable 是否已注册 Gemini（显式指定 planProvider=gemini 时使用）。
 func (s *AIGenerationService) GeminiAvailable() bool {
 	return s != nil && s.geminiClient != nil
 }
@@ -1629,7 +1629,7 @@ func (s *AIGenerationService) generateSingleVideoSegment(ctx context.Context, pa
 
 	provider := params.provider
 	if provider == "" {
-		provider = "hailuo" // Default video provider
+		provider = "huoshan"
 	}
 
 	genReq := &genapi.GenerateRequest{

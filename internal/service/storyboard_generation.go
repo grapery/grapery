@@ -1370,7 +1370,7 @@ Important: Return ONLY the JSON object, no explanations or markdown formatting.`
 		// Use configured video provider (default: hailuo)
 		videoProvider := s.videoProvider
 		if videoProvider == "" {
-			videoProvider = "hailuo"
+			videoProvider = "huoshan"
 			s.logger.Debug("using default video provider",
 				zap.String("generationId", gen.ID),
 				zap.String("provider", videoProvider))

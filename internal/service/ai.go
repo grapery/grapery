@@ -21,24 +21,30 @@ import (
 // AIService AI 生成服务
 type AIService struct {
 	genAPI               *genapi.GenAPI // 用于直连能力探测（如火山对话）
-	geminiClient         *gemini.Client // 文本（海外优先时）
+	geminiClient         *gemini.Client // 文本回退
 	aiGen                *AIGenerationService // 碎片配图等：统一配额与 AIGenerationRecord
 	defaultImageProvider string               // 与 cfg.AI.ImageProvider 对齐
+	defaultVideoProvider string               // 与 cfg.AI.VideoProvider 对齐
 	repo                 domain.Repository
 	logger               *zap.Logger
 }
 
 // NewAIService 创建 AI 服务
-func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIGenerationService, defaultImageProvider string, repo domain.Repository, logger *zap.Logger) *AIService {
+func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIGenerationService, defaultImageProvider, defaultVideoProvider string, repo domain.Repository, logger *zap.Logger) *AIService {
 	dp := strings.TrimSpace(defaultImageProvider)
 	if dp == "" {
 		dp = "huoshan"
+	}
+	vp := strings.TrimSpace(defaultVideoProvider)
+	if vp == "" {
+		vp = "huoshan"
 	}
 	return &AIService{
 		genAPI:               genAPI,
 		geminiClient:         geminiClient,
 		aiGen:                aiGen,
 		defaultImageProvider: dp,
+		defaultVideoProvider: vp,
 		repo:                 repo,
 		logger:               logger,
 	}
@@ -448,10 +454,12 @@ func (s *AIService) processImageGeneration(ctx context.Context, task *domain.AIT
 
 	task.Progress = 50
 
-	// 使用默认的图片提供商（需要事先注册）
-	providerName := "gemini" // 或 "hailuo", "huoshan"
-	if task.Provider != "" {
-		providerName = task.Provider
+	providerName := strings.TrimSpace(task.Provider)
+	if providerName == "" {
+		providerName = s.defaultImageProvider
+	}
+	if s.genAPI != nil {
+		providerName = CoalesceRegisteredImageProvider(s.genAPI, providerName)
 	}
 
 	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
@@ -610,10 +618,12 @@ func (s *AIService) processVideoGeneration(ctx context.Context, task *domain.AIT
 
 	task.Progress = 30
 
-	// 使用默认的视频提供商（需要事先注册）
-	providerName := "hailuo" // 或 "huoshan", "gemini"
-	if task.Provider != "" {
-		providerName = task.Provider
+	providerName := strings.TrimSpace(task.Provider)
+	if providerName == "" {
+		providerName = s.defaultVideoProvider
+	}
+	if s.genAPI != nil {
+		providerName = CoalesceRegisteredVideoProvider(s.genAPI, providerName)
 	}
 
 	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
@@ -816,7 +826,7 @@ func ptrInt32(v int) *int32 {
 // ============== Fragment Generation Helpers ==============
 
 // GenerateTextForFragment 生成文本内容（为 FragmentGenerationService 提供简化接口）。
-// 国内默认火山方舟对话；海外用户且已配置 Gemini 时用 Gemini；否则在火山不可用时回退 Gemini。
+// 优先火山方舟对话；火山不可用时回退 Gemini。
 func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, error) {
 	if aiTask == nil {
 		return "", 0, fmt.Errorf("ai task is nil")
@@ -827,22 +837,7 @@ func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.
 		prompt = aiTask.Input
 	}
 
-	region := s.fragmentTextUserRegion(ctx, aiTask.UserID)
-	wantGemini := PreferGeminiForFragmentText(region, s.geminiClient != nil)
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
-
-	if wantGemini {
-		text, n, err := s.generateFragmentTextGemini(ctx, prompt)
-		if err == nil {
-			return text, n, nil
-		}
-		if huoshanOK {
-			s.logger.Warn("fragment text: gemini failed, falling back to huoshan",
-				zap.String("userId", aiTask.UserID), zap.Error(err))
-			return s.generateFragmentTextHuoshan(ctx, prompt)
-		}
-		return "", 0, err
-	}
 
 	if huoshanOK {
 		text, n, err := s.generateFragmentTextHuoshan(ctx, prompt)

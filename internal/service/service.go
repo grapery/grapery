@@ -36,7 +36,7 @@ func New(repo domain.Repository, log *zap.Logger, recoCfg config.RecommendationC
 		logger:        log,
 		cache:         nil,       // 稍后通过 SetCache 设置
 		imageProvider: "huoshan", // Default image provider
-		videoProvider: "hailuo",  // Default video provider
+		videoProvider: "huoshan", // Default video provider (火山优先)
 		recoCfg:       recoCfg,
 	}
 }
@@ -96,7 +96,7 @@ func (s *Service) AIGenerationService() *AIGenerationService {
 
 // AIService 获取AI服务（用于 FragmentGenerationService）
 func (s *Service) AIService() *AIService {
-	return NewAIService(s.genAPI, s.geminiClient, s.aiGenService, s.imageProvider, s.repo, s.logger)
+	return NewAIService(s.genAPI, s.geminiClient, s.aiGenService, s.imageProvider, s.videoProvider, s.repo, s.logger)
 }
 
 // UserStatsService 获取用户统计服务

@@ -598,10 +598,12 @@ func (w *Worker) processVideoGeneration(ctx context.Context, task *domain.AITask
 		w.logger.Warn("failed to update progress", zap.Error(err))
 	}
 
-	// 使用指定的提供商或默认提供商
-	providerName := task.Provider
+	providerName := strings.TrimSpace(task.Provider)
 	if providerName == "" {
-		providerName = "hailuo" // 默认使用 hailuo 视频生成
+		providerName = "huoshan"
+	}
+	if w.genAPI != nil {
+		providerName = w.genAPI.CoalesceVideoProvider(providerName)
 	}
 
 	w.logger.Info("calling video generation API",
@@ -947,7 +949,11 @@ func (w *Worker) renderVideo(ctx context.Context, task *domain.RenderTask, story
 		}
 
 		// 调用视频生成
-		resp, err := w.genAPI.GenerateVideo(ctx, "hailuo", genReq)
+		prov := "huoshan"
+		if w.genAPI != nil {
+			prov = w.genAPI.CoalesceVideoProvider(prov)
+		}
+		resp, err := w.genAPI.GenerateVideo(ctx, prov, genReq)
 		if err != nil {
 			w.logger.Error("failed to generate video for storyboard",
 				zap.String("taskId", task.ID),
@@ -960,7 +966,7 @@ func (w *Worker) renderVideo(ctx context.Context, task *domain.RenderTask, story
 		// 如果是异步任务，等待完成
 		if resp.Status == "processing" || resp.Status == "pending" {
 			aiTask := &domain.AITask{ID: task.ID}
-			resp, err = w.pollVideoTaskStatus(ctx, aiTask, "hailuo", resp.TaskID)
+			resp, err = w.pollVideoTaskStatus(ctx, aiTask, prov, resp.TaskID)
 			if err != nil {
 				w.logger.Error("failed to poll video status",
 					zap.String("taskId", task.ID),

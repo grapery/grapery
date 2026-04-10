@@ -21,8 +21,8 @@ func TestNormalizeTextPlanProvider_klingResolvesByRegion(t *testing.T) {
 		t.Fatalf("CN + kling: want huoshan, got %q", got)
 	}
 	aiGemini := &AIGenerationService{geminiClient: &gemini.Client{}}
-	if got := NormalizeTextPlanProvider("kling", "US", aiGemini); got != "gemini" {
-		t.Fatalf("US + gemini + kling requested: want gemini, got %q", got)
+	if got := NormalizeTextPlanProvider("kling", "US", aiGemini); got != "huoshan" {
+		t.Fatalf("US + gemini + kling requested: want huoshan default, got %q", got)
 	}
 	if got := NormalizeTextPlanProvider("kling", "US", nil); got != "huoshan" {
 		t.Fatalf("US + no gemini + kling: want huoshan, got %q", got)
@@ -34,8 +34,8 @@ func TestNormalizeTextPlanProvider_emptyUsesResolve(t *testing.T) {
 		t.Fatalf("empty CN: want huoshan, got %q", got)
 	}
 	aiGemini := &AIGenerationService{geminiClient: &gemini.Client{}}
-	if got := NormalizeTextPlanProvider("  ", "US", aiGemini); got != "gemini" {
-		t.Fatalf("empty US + gemini: want gemini, got %q", got)
+	if got := NormalizeTextPlanProvider("  ", "US", aiGemini); got != "huoshan" {
+		t.Fatalf("empty US + gemini: want huoshan default, got %q", got)
 	}
 }
 
@@ -47,7 +47,7 @@ func TestResolveTextPlanProvider(t *testing.T) {
 	if got := ResolveTextPlanProvider("US", nil); got != "huoshan" {
 		t.Fatalf("US nil ai: got %q", got)
 	}
-	if got := ResolveTextPlanProvider("US", aiGemini); got != "gemini" {
-		t.Fatalf("US + gemini: got %q", got)
+	if got := ResolveTextPlanProvider("US", aiGemini); got != "huoshan" {
+		t.Fatalf("US + gemini: want huoshan default, got %q", got)
 	}
 }

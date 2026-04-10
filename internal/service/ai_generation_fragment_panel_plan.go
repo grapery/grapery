@@ -29,7 +29,7 @@ type GenerateFragmentPanelPlanRequest struct {
 	Metadata          map[string]interface{}
 	// UserRegion 与 FragmentPanelGenerationRequest 一致，服务端写入；用于在 PlanProvider 非法时归一化文本侧路由。
 	UserRegion string
-	// PlanProvider "huoshan" (国内默认) or "gemini"（海外用户）.
+	// PlanProvider 显式 "huoshan" 或 "gemini"；默认由服务端归一为火山优先。
 	PlanProvider string
 }
 

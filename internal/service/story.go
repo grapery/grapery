@@ -3191,7 +3191,7 @@ func (s *Service) generateVideoFromImage(ctx context.Context, userID string, ima
 	// Use configured video provider or default
 	providerName := s.videoProvider
 	if providerName == "" {
-		providerName = "hailuo" // Default to Hailuo for video
+		providerName = "huoshan"
 	}
 
 	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
@@ -3305,10 +3305,9 @@ func (s *Service) generateAnimationFromImage(ctx context.Context, userID string,
 		Metadata:          map[string]interface{}{"user_id": userID},
 	}
 
-	// Use configured video provider or default to Hailuo (best for creative video)
 	providerName := s.videoProvider
 	if providerName == "" {
-		providerName = "hailuo"
+		providerName = "huoshan"
 	}
 
 	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)

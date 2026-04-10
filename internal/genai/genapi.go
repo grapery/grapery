@@ -181,6 +181,31 @@ func (g *GenAPI) GetImageProvider(name string) ImageProvider {
 	return g.imageProviders[normalizeProviderName(name)]
 }
 
+// CoalesceImageProvider picks a registered image provider: prefers preferred, then huoshan when available.
+// Uses a single read lock because nested GetImageProvider calls would deadlock on the same goroutine.
+func (g *GenAPI) CoalesceImageProvider(preferred string) string {
+	p := strings.TrimSpace(preferred)
+	if p == "" {
+		p = "huoshan"
+	}
+	if g == nil {
+		return p
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	n := normalizeProviderName(p)
+	if _, ok := g.imageProviders[n]; ok {
+		return n
+	}
+	huoshanKey := normalizeProviderName("huoshan")
+	if n != huoshanKey {
+		if _, ok := g.imageProviders[huoshanKey]; ok {
+			return huoshanKey
+		}
+	}
+	return n
+}
+
 // HuoshanInternalClient returns the Huoshan Ark client for chat / multimodal text APIs, or nil if Huoshan is not registered.
 func (g *GenAPI) HuoshanInternalClient() *huoshanprovider.Client {
 	g.mu.RLock()
@@ -201,6 +226,31 @@ func (g *GenAPI) GetVideoProvider(name string) VideoProvider {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.videoProviders[normalizeProviderName(name)]
+}
+
+// CoalesceVideoProvider picks a registered video provider: prefers non-empty preferred, then huoshan when available.
+// Uses a single read lock because nested GetVideoProvider calls would deadlock on the same goroutine.
+func (g *GenAPI) CoalesceVideoProvider(preferred string) string {
+	p := strings.TrimSpace(preferred)
+	if p == "" {
+		p = "huoshan"
+	}
+	if g == nil {
+		return p
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	n := normalizeProviderName(p)
+	if _, ok := g.videoProviders[n]; ok {
+		return n
+	}
+	huoshanKey := normalizeProviderName("huoshan")
+	if n != huoshanKey {
+		if _, ok := g.videoProviders[huoshanKey]; ok {
+			return huoshanKey
+		}
+	}
+	return n
 }
 
 // GenerateImage runs an image generation workflow on the selected provider.
