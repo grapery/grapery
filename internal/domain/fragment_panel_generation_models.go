@@ -1,6 +1,7 @@
 package domain
 
 // FragmentPanelGenerationRequest 多图面板生成请求（持久化在任务表 request_json）
+// 分镜规划/文本 LLM 仅使用 huoshan 或 gemini（由服务端按 UserRegion 决定）；图片可走 kling 等，由 AI_IMAGE_PROVIDER 等配置。
 type FragmentPanelGenerationRequest struct {
 	UserInput          string `json:"userInput"`
 	ReferenceImageURL  string `json:"referenceImageUrl"`

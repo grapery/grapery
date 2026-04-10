@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -74,6 +76,23 @@ type AIConfig struct {
 	DefaultProvider   string `yaml:"default_provider"` // Default provider for text generation
 	ImageProvider     string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
 	VideoProvider     string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
+	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
+	// (Gemini, Huoshan, Kling). 0 or negative means default 120.
+	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`
+}
+
+// NormalizeAITextDefaultProvider coerces default_provider / AI_DEFAULT_PROVIDER to a text-LLM-capable name (huoshan or gemini).
+// Values like kling or hailuo are not valid for chat/planning; they map to huoshan. warn is true when a non-empty invalid value was replaced.
+func NormalizeAITextDefaultProvider(p string) (normalized string, warn bool) {
+	s := strings.ToLower(strings.TrimSpace(p))
+	switch s {
+	case "gemini", "huoshan":
+		return s, false
+	case "":
+		return "huoshan", false
+	default:
+		return "huoshan", true
+	}
 }
 
 // JWTConfig holds JWT configuration
@@ -213,7 +232,8 @@ func Load(app string) Config {
 			KlingBaseURL:      getEnv("KLING_BASE_URL", ""),
 			DefaultProvider:   getEnv("AI_DEFAULT_PROVIDER", "huoshan"),
 			ImageProvider:     getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
-			VideoProvider:     getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
+			VideoProvider:         getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
+			RequestTimeoutSeconds: normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", 120)),
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", ""), // SECURITY: No default - must be set via env
@@ -306,6 +326,14 @@ func getEnvFloat(key string, fallback float64) float64 {
 	return fallback
 }
 
+// normalizeAIRequestTimeoutSeconds returns sec if positive, otherwise default 120 (seconds per AI HTTP call).
+func normalizeAIRequestTimeoutSeconds(sec int) int {
+	if sec <= 0 {
+		return 120
+	}
+	return sec
+}
+
 // getSLSSourceWithDefault returns the SLS source, using provided default or app parameter
 func getSLSSourceWithDefault(defaultSource string, app string) string {
 	if source := getEnv("TELEMETRY_SLS_SOURCE", ""); source != "" {
@@ -355,11 +383,12 @@ func getDefaultConfig() Config {
 			SeenTTLDays:               30,
 		},
 		AI: AIConfig{
-			HuoshanAPIKey:   "",
-			HuoshanBaseURL:  "",
-			GeminiAPIKey:    "",
-			GeminiBaseURL:   "",
-			DefaultProvider: "huoshan",
+			HuoshanAPIKey:         "",
+			HuoshanBaseURL:        "",
+			GeminiAPIKey:          "",
+			GeminiBaseURL:         "",
+			DefaultProvider:       "huoshan",
+			RequestTimeoutSeconds: 120,
 		},
 		JWT: JWTConfig{
 			Secret: "", // SECURITY: No default secret - must be set via JWT_SECRET env var
@@ -452,8 +481,17 @@ func overrideWithEnv(cfg Config, app string) Config {
 	cfg.AI.KlingSecretKey = getEnv("KLING_SECRET_KEY", cfg.AI.KlingSecretKey)
 	cfg.AI.KlingBaseURL = getEnv("KLING_BASE_URL", cfg.AI.KlingBaseURL)
 	cfg.AI.DefaultProvider = getEnv("AI_DEFAULT_PROVIDER", cfg.AI.DefaultProvider)
+	origDefaultAI := cfg.AI.DefaultProvider
+	if norm, warn := NormalizeAITextDefaultProvider(cfg.AI.DefaultProvider); warn {
+		log.Printf("config: AI_DEFAULT_PROVIDER=%q is not valid for text LLM (use huoshan or gemini); coerced to %q",
+			strings.TrimSpace(origDefaultAI), norm)
+		cfg.AI.DefaultProvider = norm
+	} else {
+		cfg.AI.DefaultProvider = norm
+	}
 	cfg.AI.ImageProvider = getEnv("AI_IMAGE_PROVIDER", cfg.AI.ImageProvider)
 	cfg.AI.VideoProvider = getEnv("AI_VIDEO_PROVIDER", cfg.AI.VideoProvider)
+	cfg.AI.RequestTimeoutSeconds = normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", cfg.AI.RequestTimeoutSeconds))
 
 	// JWT config
 	cfg.JWT.Secret = getEnv("JWT_SECRET", cfg.JWT.Secret)

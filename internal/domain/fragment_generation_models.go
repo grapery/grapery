@@ -8,6 +8,7 @@ const (
 )
 
 // FragmentGenerationRequest 碎片故事生成请求
+// 若将来增加统一 provider 字段，应仅作用于图片/视频；文案与规划仍由服务端按用户区域在 huoshan/gemini 间路由。
 type FragmentGenerationRequest struct {
 	UserInput  string   `json:"userInput"`  // 用户输入的描述
 	ImageUrls  []string `json:"imageUrls"`  // 用户提供的参考图片（可选）

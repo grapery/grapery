@@ -33,6 +33,22 @@ func ResolvePanelGenerationAIProviders(userRegion, defaultImage string, ai *AIGe
 	return "huoshan", imageProvider
 }
 
+// ResolveTextPlanProvider returns the LLM provider for text / multimodal JSON planning only: "gemini" or "huoshan".
+// It reuses the same region + Gemini availability rules as fragment story text (see ResolvePanelGenerationAIProviders).
+func ResolveTextPlanProvider(userRegion string, ai *AIGenerationService) string {
+	p, _ := ResolvePanelGenerationAIProviders(userRegion, "", ai)
+	return p
+}
+
+// NormalizeTextPlanProvider keeps an explicit "gemini" or "huoshan"; otherwise resolves from userRegion (never kling or other media-only providers).
+func NormalizeTextPlanProvider(requested, userRegion string, ai *AIGenerationService) string {
+	p := strings.ToLower(strings.TrimSpace(requested))
+	if p == "gemini" || p == "huoshan" {
+		return p
+	}
+	return ResolveTextPlanProvider(userRegion, ai)
+}
+
 // CoalesceRegisteredImageProvider returns a provider name that is actually registered on GenAPI, preferring `preferred` then huoshan.
 func CoalesceRegisteredImageProvider(g *genapi.GenAPI, preferred string) string {
 	p := strings.TrimSpace(preferred)

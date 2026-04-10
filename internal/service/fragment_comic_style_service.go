@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -17,6 +18,10 @@ import (
 )
 
 const fragmentComicStyleBatchSize = 8
+
+// fragmentComicStyleOpTimeout 漫画风格批次含 Gemini 调用，耗时常超过网关/客户端默认超时。
+// 使用 WithoutCancel + 本超时，避免 c.Request.Context 在客户端断开后取消 DB/AI 导致 context canceled。
+const fragmentComicStyleOpTimeout = 4 * time.Minute
 
 var fragmentComicStyleSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,62}$`)
 
@@ -56,9 +61,13 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 		return nil, errors.New("database not configured")
 	}
 
+	// 不随 HTTP 请求取消：否则客户端超时/断连会取消 Gemini 与 gorm，日志见 context canceled。
+	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fragmentComicStyleOpTimeout)
+	defer cancel()
+
 	var out []FragmentComicStyleItem
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(opCtx).Transaction(func(tx *gorm.DB) error {
 		var cur mysql.UserFragmentComicStyleCursor
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("user_id = ?", userID).
@@ -104,7 +113,7 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 					Update("last_style_id", maxID).Error
 			}
 
-			inserted, genErr := s.generateAndInsertStyles(ctx, tx, userID, need)
+			inserted, genErr := s.generateAndInsertStyles(opCtx, tx, userID, need)
 			if genErr != nil {
 				lastGenErr = genErr
 				s.logger.Warn("AI comic style generation failed", zap.Int("round", round+1), zap.Error(genErr))

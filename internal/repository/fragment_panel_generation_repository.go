@@ -168,3 +168,37 @@ func (r *FragmentPanelGenerationRepository) UpdateError(ctx context.Context, id 
 			"updated_at":     now,
 		}).Error
 }
+
+// TryAcquireResumeProcessing atomically moves a task from failed or pending to processing.
+// Clears error_message and completed_at. Returns true if a row was updated (caller won the race).
+func (r *FragmentPanelGenerationRepository) TryAcquireResumeProcessing(ctx context.Context, taskID, userID string, progress int, currentStep string) (bool, error) {
+	now := time.Now().Unix()
+	res := r.db.WithContext(ctx).Model(&mysql.FragmentPanelGenerationTaskDB{}).
+		Where("id = ? AND user_id = ? AND status IN ?", taskID, userID, []string{"failed", "pending"}).
+		Updates(map[string]interface{}{
+			"status":         "processing",
+			"error_message":  "",
+			"completed_at":   nil,
+			"progress":       progress,
+			"current_step":   currentStep,
+			"updated_at":     now,
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// RevertProcessingToFailed sets status back to failed when resume setup fails (e.g. draft reset).
+// Only affects rows still in processing for this user.
+func (r *FragmentPanelGenerationRepository) RevertProcessingToFailed(ctx context.Context, taskID, userID, errMsg string) error {
+	now := time.Now().Unix()
+	return r.db.WithContext(ctx).Model(&mysql.FragmentPanelGenerationTaskDB{}).
+		Where("id = ? AND user_id = ? AND status = ?", taskID, userID, "processing").
+		Updates(map[string]interface{}{
+			"status":         "failed",
+			"error_message":  errMsg,
+			"completed_at":   now,
+			"updated_at":     now,
+		}).Error
+}

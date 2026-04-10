@@ -27,6 +27,8 @@ type GenerateFragmentPanelPlanRequest struct {
 	RelatedEntityID   string
 	RelatedEntityType string
 	Metadata          map[string]interface{}
+	// UserRegion 与 FragmentPanelGenerationRequest 一致，服务端写入；用于在 PlanProvider 非法时归一化文本侧路由。
+	UserRegion string
 	// PlanProvider "huoshan" (国内默认) or "gemini"（海外用户）.
 	PlanProvider string
 }
@@ -54,9 +56,13 @@ func (s *AIGenerationService) GenerateFragmentPanelPlan(ctx context.Context, req
 		return nil, fmt.Errorf("reference image URL is required")
 	}
 
-	prov := strings.ToLower(strings.TrimSpace(req.PlanProvider))
-	if prov == "" {
-		prov = "huoshan"
+	rawPlan := strings.ToLower(strings.TrimSpace(req.PlanProvider))
+	prov := NormalizeTextPlanProvider(req.PlanProvider, req.UserRegion, s)
+	if rawPlan != "" && rawPlan != "gemini" && rawPlan != "huoshan" {
+		s.logger.Warn("fragment_panel_plan: invalid PlanProvider for text, resolved via user region",
+			zap.String("requested", rawPlan),
+			zap.String("resolved", prov),
+			zap.String("userRegion", req.UserRegion))
 	}
 	switch prov {
 	case "gemini":
@@ -163,7 +169,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 	contents := []*genai.Content{{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{
-			genai.NewPartFromText("User reference image (analyze composition, characters, palette, mood):"),
+			genai.NewPartFromText("User reference image. First infer: main subjects/objects, environment, spatial layout, lighting, color palette, mood, and what the user likely cares about. Treat this as a story anchor (world + identity + atmosphere), not as a frame to copy pixel-by-pixel in every panel."),
 			imgPart,
 			genai.NewPartFromText(userText),
 		},
@@ -431,24 +437,36 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int) s
 	if st == "" {
 		st = "unspecified"
 	}
-	return fmt.Sprintf(`You are planning a %d-panel visual story (comic strip) based on the reference image and the user's intent.
+	return fmt.Sprintf(`You are the director for a %d-panel visual story (comic / story fragments). The user attached a reference image AND text. Your job has two phases (do both before writing JSON):
 
-User text (may be Chinese or English; interpret intent):
+PHASE 1 — UNDERSTAND THE IMAGE (mental checklist, do not output this as prose):
+- Identify concrete entities: people/characters, objects, architecture, nature, props, text/signs if any.
+- Scene: indoor/outdoor, time of day, weather, spatial relationships (foreground/background).
+- Aesthetic signals: palette, lighting, camera feel (wide vs close), mood.
+- What the user probably wants to preserve (e.g. same characters, same trip, same vibe) vs what can vary.
+
+PHASE 2 — PLAN PANELS AROUND IMAGE + USER INTENT:
+- Merge the user's text (Chinese or English) with your scene understanding. The story should EXTEND and DIVERSIFY from the reference: new moments, beats, angles, distances, actions — while keeping thematic continuity (same world, recognizable subjects where relevant).
+- Do NOT treat every panel as "redraw the reference photo with small edits". Later panels should advance the narrative or show different facets of the same story.
+- Panel 0 may establish the situation (can relate closely to the reference) but should still allow creative composition; panels 1..%d should clearly change shot type, action, or story time unless the user explicitly asks for repetition.
+
+Visual style slug for downstream image models: %s
+
+User text:
 %s
 
-Visual style slug for downstream image generation: %s
+Return ONLY valid JSON (no markdown, no commentary) with this exact shape:
+{"panels":[{"index":0,"image_prompt":"English, for the image model: one panel, concrete visual description including camera/composition/lighting; emphasize creative expansion from the anchor image, not slavish duplication","caption":"Short Chinese caption for readers"}, ...]}
 
-Return ONLY valid JSON (no markdown) with this exact shape:
-{"panels":[{"index":0,"image_prompt":"English prompt for image-to-image model: scene for this panel, composition, keep consistency with reference where appropriate","caption":"Short Chinese caption for readers for this panel"}, ...]}
-
-Rules:
-- Exactly %d items in "panels", with index 0..%d in order.
-- image_prompt: concrete, visual, suitable for an image-to-image model; English.
-- caption: concise Chinese (one line).
-- Panels should form a coherent mini-narrative aligned with the user text and the reference image.`,
+Hard rules:
+- Exactly %d items in "panels", index 0..%d in order.
+- image_prompt: English only; specific enough to draw; explicitly call for variation across panels (different framing, focal length, or story beat) where appropriate.
+- caption: one concise Chinese line per panel.
+- image_prompt must NOT instruct to "copy", "duplicate", or "recreate the reference exactly" for every panel; anchor identity/mood, but encourage diverse storytelling visuals.`,
 		panelCount,
-		ui,
+		panelCount-1,
 		st,
+		ui,
 		panelCount,
 		panelCount-1,
 	)

@@ -458,6 +458,16 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 	var configuredProviders []string
 	var missingProviders []string
 
+	aiReqSec := cfg.AI.RequestTimeoutSeconds
+	if aiReqSec <= 0 {
+		aiReqSec = 120
+	}
+	aiHTTPTimeout := time.Duration(aiReqSec) * time.Second
+	logger.Info("AI outbound HTTP client timeout",
+		zap.Int("seconds", aiReqSec),
+		zap.Duration("duration", aiHTTPTimeout),
+	)
+
 	// Check and register Huoshan provider (火山引擎/豆包)
 	if cfg.AI.HuoshanAPIKey != "" {
 		huoshanCfg := &genapi.Config{
@@ -466,6 +476,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			BaseURL:    cfg.AI.HuoshanBaseURL,
 			ImageModel: cfg.AI.HuoshanImageModel,
 			TextModel:  cfg.AI.HuoshanTextModel,
+			Timeout:    aiHTTPTimeout,
 		}
 		if _, err := genAPI.RegisterProviderConfig(huoshanCfg); err != nil {
 			logger.Error("❌ Huoshan provider registration failed",
@@ -491,6 +502,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			APIKey:   cfg.AI.KlingAccessKey,
 			Secret:   cfg.AI.KlingSecretKey,
 			BaseURL:  cfg.AI.KlingBaseURL,
+			Timeout:  aiHTTPTimeout,
 		}
 		if _, err := genAPI.RegisterProviderConfig(klingCfg); err != nil {
 			logger.Error("❌ Kling provider registration failed",
@@ -519,6 +531,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			Provider: genapi.ProviderGemini,
 			APIKey:   cfg.AI.GeminiAPIKey,
 			BaseURL:  cfg.AI.GeminiBaseURL,
+			Timeout:  aiHTTPTimeout,
 		}
 		if _, err := genAPI.RegisterProviderConfig(geminiCfg); err != nil {
 			logger.Error("❌ Gemini provider registration failed",
@@ -542,6 +555,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			geminiClient, err = gemini.New(gemini.Config{
 				APIKey:  cfg.AI.GeminiAPIKey,
 				BaseURL: cfg.AI.GeminiBaseURL,
+				Timeout: aiHTTPTimeout,
 			})
 			if err != nil {
 				logger.Error("❌ Failed to create Gemini client",

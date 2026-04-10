@@ -20,6 +20,15 @@ import (
 // ErrFragmentPanelTaskForbidden when task user does not match.
 var ErrFragmentPanelTaskForbidden = errors.New("forbidden: task does not belong to user")
 
+// ErrPanelGenerationResumeConflict when a resume is requested while the task is already processing.
+var ErrPanelGenerationResumeConflict = errors.New("panel generation already in progress")
+
+// ErrPanelGenerationNotResumable when resume preconditions are not met (completed, no plan, bad data, etc.).
+var ErrPanelGenerationNotResumable = errors.New("panel generation task cannot be resumed")
+
+// ErrPanelGenerationDraftResetFailed when the draft fragment could not be set back to generating after acquiring resume lock.
+var ErrPanelGenerationDraftResetFailed = errors.New("draft reset failed after resume lock")
+
 // FragmentPanelGenerationService orchestrates multi-panel reference-based fragment generation.
 type FragmentPanelGenerationService struct {
 	panelRepo             *repository.FragmentPanelGenerationRepository
@@ -151,6 +160,122 @@ func (s *FragmentPanelGenerationService) GetTask(ctx context.Context, taskID, us
 	return task, nil
 }
 
+// ResumeGeneration restarts a failed (or stuck pending) panel task from the first panel that has no image yet (or runs finalize only if all panels exist).
+// Uses a conditional DB update so concurrent resume requests only one wins (others get ErrPanelGenerationResumeConflict).
+func (s *FragmentPanelGenerationService) ResumeGeneration(ctx context.Context, userID, taskID string) (*domain.FragmentPanelGenerationTask, error) {
+	task, err := s.GetTask(ctx, taskID, userID)
+	if err != nil {
+		return nil, err
+	}
+	switch task.Status {
+	case "completed":
+		return nil, fmt.Errorf("%w: 任务已完成", ErrPanelGenerationNotResumable)
+	case "processing":
+		return nil, ErrPanelGenerationResumeConflict
+	case "failed", "pending":
+		// ok
+	default:
+		return nil, fmt.Errorf("%w: 仅失败或排队中的任务可续跑", ErrPanelGenerationNotResumable)
+	}
+
+	// Stuck pending, never entered pipeline: restart full process (same as initial goroutine).
+	if task.Status == "pending" && len(task.Plan) == 0 {
+		acquired, err := s.panelRepo.TryAcquireResumeProcessing(ctx, taskID, userID, 5, "understanding_reference")
+		if err != nil {
+			return nil, fmt.Errorf("acquire resume lock: %w", err)
+		}
+		if !acquired {
+			return nil, ErrPanelGenerationResumeConflict
+		}
+		if err := s.resetDraftGeneratingContent(ctx, task.DraftFragmentID); err != nil {
+			_ = s.panelRepo.RevertProcessingToFailed(ctx, taskID, userID, fmt.Sprintf("恢复草稿失败: %v", err))
+			return nil, fmt.Errorf("%w: %v", ErrPanelGenerationDraftResetFailed, err)
+		}
+		s.logger.Info("panel_generation_resume",
+			zap.String("task_id", taskID),
+			zap.String("user_id", userID),
+			zap.String("mode", "full_restart_pending"),
+			zap.Int("plan_len", 0),
+			zap.Int("start_panel", 0),
+		)
+		go s.process(context.Background(), taskID)
+		out, err := s.panelRepo.GetByID(ctx, taskID)
+		if err != nil {
+			return task, nil
+		}
+		return out, nil
+	}
+
+	if task.Status == "failed" && len(task.Plan) == 0 {
+		return nil, fmt.Errorf("%w: 无分镜规划，请重新创作", ErrPanelGenerationNotResumable)
+	}
+
+	n := len(task.Plan)
+	start := 0
+	if task.Result != nil {
+		start = len(task.Result.Panels)
+	}
+	if start > n {
+		return nil, fmt.Errorf("%w: 任务数据不一致", ErrPanelGenerationNotResumable)
+	}
+
+	progress := 28
+	currentStep := "plan_ready"
+	if start >= n {
+		currentStep = "assembling"
+		progress = 92
+	} else {
+		currentStep = fmt.Sprintf("generating_panel_%d", start)
+		den := n
+		if den < 1 {
+			den = 1
+		}
+		progress = 28 + (62 * start / den)
+	}
+
+	acquired, err := s.panelRepo.TryAcquireResumeProcessing(ctx, taskID, userID, progress, currentStep)
+	if err != nil {
+		return nil, fmt.Errorf("acquire resume lock: %w", err)
+	}
+	if !acquired {
+		return nil, ErrPanelGenerationResumeConflict
+	}
+	if err := s.resetDraftGeneratingContent(ctx, task.DraftFragmentID); err != nil {
+		_ = s.panelRepo.RevertProcessingToFailed(ctx, taskID, userID, fmt.Sprintf("恢复草稿失败: %v", err))
+		return nil, fmt.Errorf("%w: %v", ErrPanelGenerationDraftResetFailed, err)
+	}
+
+	s.logger.Info("panel_generation_resume",
+		zap.String("task_id", taskID),
+		zap.String("user_id", userID),
+		zap.String("mode", "from_plan"),
+		zap.Int("plan_len", n),
+		zap.Int("start_panel", start),
+		zap.Int("progress", progress),
+		zap.String("current_step", currentStep),
+	)
+
+	go s.processResume(context.Background(), taskID, start)
+	out, err := s.panelRepo.GetByID(ctx, taskID)
+	if err != nil {
+		return task, nil
+	}
+	return out, nil
+}
+
+func (s *FragmentPanelGenerationService) resetDraftGeneratingContent(ctx context.Context, draftID string) error {
+	if draftID == "" {
+		return nil
+	}
+	frag, err := s.fragmentRepo.GetByID(ctx, draftID)
+	if err != nil {
+		return err
+	}
+	frag.Content = "生成中…"
+	frag.UpdatedAt = time.Now().UnixMilli()
+	return s.fragmentRepo.Update(ctx, frag)
+}
+
 func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID string) {
 	task, err := s.panelRepo.GetByID(ctx, taskID)
 	if err != nil {
@@ -191,6 +316,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		RelatedEntityID:   taskID,
 		RelatedEntityType: "fragment_panel_generation",
 		Metadata:          map[string]interface{}{"step": "panel_gen_step1_plan"},
+		UserRegion:        req.UserRegion,
 		PlanProvider:      planProv,
 	})
 	if err != nil {
@@ -213,16 +339,98 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 	n := len(task.Plan)
 	task.Result = &domain.FragmentPanelResultData{Panels: make([]domain.FragmentPanelResultItem, 0, n)}
 
-	for i := 0; i < n; i++ {
+	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, 0, n); err != nil {
+		s.failTask(ctx, taskID, draftID, err.Error())
+		return
+	}
+	s.completePanelGeneration(ctx, task, taskID, draftID, n)
+}
+
+func (s *FragmentPanelGenerationService) processResume(ctx context.Context, taskID string, startIdx int) {
+	s.logger.Info("panel_generation_resume_worker_start",
+		zap.String("task_id", taskID),
+		zap.Int("start_panel", startIdx),
+	)
+	task, err := s.panelRepo.GetByID(ctx, taskID)
+	if err != nil {
+		s.logger.Error("panel resume: load task", zap.String("task_id", taskID), zap.Error(err))
+		return
+	}
+	if task.Metrics == nil {
+		task.Metrics = &domain.FragmentPanelMetricsData{Steps: []domain.FragmentPanelStepMetric{}}
+	}
+	req := task.Request
+	draftID := task.DraftFragmentID
+	n := len(task.Plan)
+	if n == 0 {
+		s.failTask(ctx, taskID, draftID, "无分镜规划，无法续跑")
+		return
+	}
+
+	_, imgPreferred := ResolvePanelGenerationAIProviders(req.UserRegion, s.defaultImageProvider, s.aiGen)
+	imgProv := CoalesceRegisteredImageProvider(s.aiGen.GenAPI(), imgPreferred)
+	if s.aiGen.GenAPI() == nil || s.aiGen.GenAPI().GetImageProvider(imgProv) == nil {
+		s.failTask(ctx, taskID, draftID, "未配置可用的图片生成服务")
+		return
+	}
+
+	if startIdx >= n {
+		if task.Result == nil || len(task.Result.Panels) != n {
+			s.failTask(ctx, taskID, draftID, "任务数据不完整，无法完成")
+			return
+		}
+		s.completePanelGeneration(ctx, task, taskID, draftID, n)
+		return
+	}
+
+	if task.Result == nil {
+		task.Result = &domain.FragmentPanelResultData{Panels: make([]domain.FragmentPanelResultItem, 0, n)}
+	}
+	if len(task.Result.Panels) != startIdx {
+		s.failTask(ctx, taskID, draftID, "已生成格数与任务不一致，无法续跑")
+		return
+	}
+
+	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, startIdx, n); err != nil {
+		s.failTask(ctx, taskID, draftID, err.Error())
+		return
+	}
+	s.completePanelGeneration(ctx, task, taskID, draftID, n)
+}
+
+func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, task *domain.FragmentPanelGenerationTask, taskID, draftID string, req domain.FragmentPanelGenerationRequest, imgProv string, startIdx, n int) error {
+	den := n
+	if den < 1 {
+		den = 1
+	}
+	for i := startIdx; i < n; i++ {
 		stepName := fmt.Sprintf("generating_panel_%d", i)
 		task.CurrentStep = stepName
-		task.Progress = 28 + (62 * (i + 1) / n)
+		task.Progress = 28 + (62 * (i + 1) / den)
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 
 		planItem := task.Plan[i]
-		prompt := fmt.Sprintf("%s Visual style hint: %s.", strings.TrimSpace(planItem.ImagePrompt), req.Style)
+		base := strings.TrimSpace(planItem.ImagePrompt)
+		var prompt string
+		if i == 0 {
+			prompt = fmt.Sprintf("%s Visual style: %s. Anchor: use the user's reference for character/setting/mood identity; reinterpret with creative composition and detail — avoid a literal 1:1 copy of the reference photo.", base, req.Style)
+		} else {
+			prompt = fmt.Sprintf("%s Visual style: %s. Continuity: match the ongoing story and cast from prior panels; this is a NEW beat — different shot, moment, or angle — not a near-duplicate of the previous frame.", base, req.Style)
+		}
 
+		refURL := strings.TrimSpace(req.ReferenceImageURL)
+		if i > 0 && len(task.Result.Panels) > 0 && i-1 < len(task.Result.Panels) {
+			prev := strings.TrimSpace(task.Result.Panels[i-1].ImageURL)
+			if prev != "" {
+				refURL = prev
+			}
+		}
+
+		refKind := "previous_panel"
+		if i == 0 {
+			refKind = "user_upload"
+		}
 		imgStart := time.Now()
 		imgOut, genErr := s.aiGen.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            task.UserID,
@@ -232,21 +440,20 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 			Quality:           "standard",
 			Style:             req.Style,
 			OutputCount:       1,
-			ReferenceImages:   []string{strings.TrimSpace(req.ReferenceImageURL)},
+			ReferenceImages:   []string{refURL},
 			RelatedEntityID:   taskID,
 			RelatedEntityType: "fragment_panel_generation",
 			Metadata: map[string]interface{}{
-				"step":  stepName,
-				"panel": i,
+				"step":           stepName,
+				"panel":          i,
+				"reference_kind": refKind,
 			},
 		})
 		if genErr != nil {
-			s.failTask(ctx, taskID, draftID, fmt.Sprintf("第 %d 张图生成失败: %v", i+1, genErr))
-			return
+			return fmt.Errorf("第 %d 张图生成失败: %v", i+1, genErr)
 		}
 		if imgOut == nil || len(imgOut.ImageURLs) == 0 {
-			s.failTask(ctx, taskID, draftID, fmt.Sprintf("第 %d 张图无返回", i+1))
-			return
+			return fmt.Errorf("第 %d 张图无返回", i+1)
 		}
 		dur := time.Since(imgStart).Milliseconds()
 		if imgOut.DurationMs > 0 {
@@ -266,8 +473,16 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		}
 		s.syncDraftFromTask(ctx, task)
 	}
+	return nil
+}
 
-	// Step 3–4 — assemble + finalize
+func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Context, task *domain.FragmentPanelGenerationTask, taskID, draftID string, n int) {
+	req := task.Request
+	if task.Result == nil || len(task.Result.Panels) != n {
+		s.failTask(ctx, taskID, draftID, "任务数据不完整，无法完成")
+		return
+	}
+
 	task.CurrentStep = "assembling"
 	task.Progress = 92
 	task.UpdatedAt = time.Now().Unix()

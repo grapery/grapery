@@ -10,7 +10,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const defaultHTTPTimeout = 60 * time.Second
+const defaultHTTPTimeout = 120 * time.Second
 
 // Config holds Gemini API configuration.
 type Config struct {
