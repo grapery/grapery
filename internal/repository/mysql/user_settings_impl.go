@@ -47,7 +47,15 @@ func (r *UserSettingsRepositoryImpl) UpdateUserSettings(settings *domain.UserSet
 		return fmt.Errorf("failed to update user settings: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("user settings not found")
+		// MySQL reports 0 rows affected when all SET values equal existing values (e.g. duplicate
+		// identical PUTs). Only treat as missing when no row matches user_id.
+		var count int64
+		if err := r.db.Model(&UserSettings{}).Where("user_id = ?", settings.UserID).Count(&count).Error; err != nil {
+			return fmt.Errorf("failed to verify user settings: %w", err)
+		}
+		if count == 0 {
+			return errors.New("user settings not found")
+		}
 	}
 	return nil
 }

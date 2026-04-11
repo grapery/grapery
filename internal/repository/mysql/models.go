@@ -642,6 +642,24 @@ func (UserSettings) TableName() string {
 	return "user_settings"
 }
 
+// GenreCatalogEntry 发现页体裁目录（分页：page_index；同页内 sort_order 排序）。
+type GenreCatalogEntry struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	Slug      string `gorm:"uniqueIndex;size:64;not null"`
+	PageIndex int    `gorm:"column:page_index;not null;index:idx_genre_catalog_page"`
+	SortOrder int    `gorm:"column:sort_order;not null"`
+	TitleZh   string `gorm:"column:title_zh;size:120;not null"`
+	TitleEn   string `gorm:"column:title_en;size:120"`
+	TitleJa   string `gorm:"column:title_ja;size:120"`
+	Emoji     string `gorm:"size:32"`
+	Source    string `gorm:"size:20;not null"` // seed | ai
+	CreatedAt int64  `gorm:"autoCreateTime"`
+}
+
+func (GenreCatalogEntry) TableName() string {
+	return "genre_catalog_entries"
+}
+
 // UserFeedback 用户反馈
 type UserFeedback struct {
 	ID          string `gorm:"primaryKey;size:36"`

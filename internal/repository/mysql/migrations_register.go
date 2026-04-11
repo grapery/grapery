@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
@@ -75,6 +76,29 @@ func init() {
 		Description: "Create and migrate user_settings table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserSettings{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_genre_catalog_entries",
+		Description: "Create genre_catalog_entries for discovery feed genre preferences",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &GenreCatalogEntry{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "seed_genre_catalog_page0",
+		Description: "Seed default discovery genres (page 0) when genre_catalog_entries is empty",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			return SeedGenreCatalogPage0IfEmpty(db, func(msg string, args ...interface{}) {
+				if log != nil {
+					log.Info(fmt.Sprintf(msg, args...))
+				}
+			})
 		},
 		Required: true,
 	})
@@ -803,6 +827,27 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureUserSettingsPreferredGenresColumn()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_genre_catalog_title_ja_column",
+		Description: "Add title_ja to genre_catalog_entries for Japanese UI",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &GenreCatalogEntry{})
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "backfill_genre_catalog_title_ja",
+		Description: "Populate title_ja for genre catalog (seeds + fallback from title_zh)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			_ = log
+			return BackfillGenreCatalogTitleJa(db)
 		},
 		Required: false,
 	})

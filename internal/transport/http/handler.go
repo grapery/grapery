@@ -23,6 +23,7 @@ type HandlerDependencies struct {
 	StoryboardPathService *service.StoryboardPathService
 	InteractionService    service.InteractionService
 	UserSettingsService   service.UserSettingsService
+	GenreCatalogService   *service.GenreCatalogService
 	FeedbackService       service.FeedbackService
 	Logger                *zap.Logger
 }
@@ -121,6 +122,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 用户相关
 			authenticated.GET("/auth/me", h.CurrentUser)
+			authenticated.GET("/me/creator-analytics", h.GetMyCreatorAnalytics)
 			authenticated.POST("/auth/password/change", h.ChangePassword)
 			authenticated.PUT("/users/:id", h.UpdateUserProfile)
 			authenticated.PUT("/users/:id/avatar", h.UpdateUserAvatar)
@@ -322,7 +324,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			interactionHandler.RegisterInteractionRoutes(authenticated)
 
 			// 用户设置相关 (User Settings)
-			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService)
+			userSettingsHandler := NewUserSettingsHandler(deps.UserSettingsService, deps.GenreCatalogService)
 			userSettingsHandler.RegisterUserSettingsRoutes(authenticated)
 
 			// 用户反馈

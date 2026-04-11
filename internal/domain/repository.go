@@ -487,6 +487,10 @@ type Repository interface {
 	DeleteUserDeviceByToken(ctx context.Context, deviceToken string) error
 	DeactivateUserDevice(ctx context.Context, deviceToken string) error
 	UpdateUserDeviceLastActive(ctx context.Context, deviceToken string, lastActiveAt int64) error
+
+	// Creator analytics (settings / dashboard; aggregate + top storyboards)
+	CreatorAnalyticsAggregate(ctx context.Context, userID string) (*CreatorAnalyticsAggregate, error)
+	TopCreatorStoryboards(ctx context.Context, userID string, limit int) ([]*CreatorAnalyticsStoryboardRow, error)
 }
 
 // LikeRepository 点赞相关操作（多态关联）
@@ -518,6 +522,16 @@ type UserSettingsRepository interface {
 	GetUserSettings(userID string) (*UserSettings, error)
 	CreateUserSettings(settings *UserSettings) error
 	UpdateUserSettings(settings *UserSettings) error
+}
+
+// GenreCatalogRepository 发现页体裁目录（分页，供客户端「获取更多」与偏好校验）。
+type GenreCatalogRepository interface {
+	ListByPage(pageIndex int) ([]*GenreCatalogEntry, error)
+	InsertBatch(entries []*GenreCatalogEntry) error
+	AllSlugs() ([]string, error)
+	CountByPage(pageIndex int) (int64, error)
+	// WithGenerationLock 在生成某页 AI 内容前串行化（MySQL GET_LOCK）。
+	WithGenerationLock(ctx context.Context, pageIndex int, fn func() error) error
 }
 
 // FeedbackRepository 用户反馈

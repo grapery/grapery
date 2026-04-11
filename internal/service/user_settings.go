@@ -27,22 +27,26 @@ type UserSettingsService interface {
 	UpdateAISettings(ctx context.Context, userID string, aiEnabled, aiDataSharing bool) error
 	UpdateNotificationSettings(ctx context.Context, userID string, settings map[string]interface{}) error
 	UpdatePreferredGenres(ctx context.Context, userID string, genres []string) ([]string, error)
+	// GetPreferredGenresPreferences 返回当前用户已选体裁与服务端允许的 slug 列表（供设置页展示）。
+	GetPreferredGenresPreferences(ctx context.Context, userID string) (preferred []string, allowed []string, err error)
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 }
 
 // userSettingsService 用户设置服务实现
 type userSettingsService struct {
-	settingsRepo domain.UserSettingsRepository
-	logger       *zap.Logger
-	cache        cache.Cache
+	settingsRepo     domain.UserSettingsRepository
+	genreCatalogRepo domain.GenreCatalogRepository
+	logger           *zap.Logger
+	cache            cache.Cache
 }
 
 // NewUserSettingsService 创建用户设置服务
-func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, logger *zap.Logger, c cache.Cache) UserSettingsService {
+func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, genreCatalogRepo domain.GenreCatalogRepository, logger *zap.Logger, c cache.Cache) UserSettingsService {
 	return &userSettingsService{
-		settingsRepo: settingsRepo,
-		logger:       logger,
-		cache:        c,
+		settingsRepo:     settingsRepo,
+		genreCatalogRepo: genreCatalogRepo,
+		logger:           logger,
+		cache:            c,
 	}
 }
 
@@ -257,6 +261,19 @@ func (s *userSettingsService) UpdatePreferredGenres(ctx context.Context, userID 
 	}
 	recommendation.InvalidateAllForUser(ctx, s.cache, userID)
 	return sanitized, nil
+}
+
+func (s *userSettingsService) GetPreferredGenresPreferences(ctx context.Context, userID string) ([]string, []string, error) {
+	if userID == "" {
+		return nil, nil, fmt.Errorf("user id required")
+	}
+	settings, err := s.GetSettings(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	allowed := s.allowedGenreSlugsOrdered()
+	preferred := s.sanitizePreferredGenres(settings.PreferredGenres)
+	return preferred, allowed, nil
 }
 
 // UpdateLanguage 更新语言设置
@@ -620,15 +637,57 @@ func (s *userSettingsService) ChangePassword(ctx context.Context, userID, curren
 	return fmt.Errorf("change password not fully implemented yet")
 }
 
+func (s *userSettingsService) allowedGenreSlugSet() map[string]struct{} {
+	if s.genreCatalogRepo == nil {
+		return domain.AllowedPreferredGenreSet()
+	}
+	slugs, err := s.genreCatalogRepo.AllSlugs()
+	if err != nil {
+		s.logger.Warn("genre catalog slugs unavailable, falling back to static allowlist",
+			zap.Error(err))
+		return domain.AllowedPreferredGenreSet()
+	}
+	if len(slugs) == 0 {
+		return domain.AllowedPreferredGenreSet()
+	}
+	m := make(map[string]struct{}, len(slugs))
+	for _, g := range slugs {
+		k := strings.ToLower(strings.TrimSpace(g))
+		if k != "" {
+			m[k] = struct{}{}
+		}
+	}
+	return m
+}
+
+func (s *userSettingsService) allowedGenreSlugsOrdered() []string {
+	if s.genreCatalogRepo == nil {
+		out := make([]string, len(domain.AllowedPreferredGenreSlugs))
+		copy(out, domain.AllowedPreferredGenreSlugs)
+		return out
+	}
+	slugs, err := s.genreCatalogRepo.AllSlugs()
+	if err != nil || len(slugs) == 0 {
+		out := make([]string, len(domain.AllowedPreferredGenreSlugs))
+		copy(out, domain.AllowedPreferredGenreSlugs)
+		return out
+	}
+	return slugs
+}
+
 func (s *userSettingsService) sanitizePreferredGenres(genres []string) []string {
 	if len(genres) == 0 {
 		return []string{}
 	}
+	allowed := s.allowedGenreSlugSet()
 	out := make([]string, 0, len(genres))
 	seen := map[string]struct{}{}
 	for _, g := range genres {
 		genre := strings.ToLower(strings.TrimSpace(g))
 		if genre == "" {
+			continue
+		}
+		if _, ok := allowed[genre]; !ok {
 			continue
 		}
 		if _, ok := seen[genre]; ok {

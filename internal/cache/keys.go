@@ -21,6 +21,8 @@ const (
 	// 统计缓存
 	PrefixStoryLikes    = "story_likes:"
 	PrefixStoryViews    = "story_views:"
+	// 创作者数据分析（设置页；短 TTL 防重复重查询）
+	PrefixCreatorAnalytics = "creator_analytics:"
 	PrefixUserFollowers = "user_followers:"
 	PrefixUserFollowing = "user_following:"
 
@@ -205,4 +207,9 @@ func StyleConfigByIDKey(id string) string {
 
 func StyleConfigByStyleKey(styleName string) string {
 	return fmt.Sprintf("%sstyle:%s", PrefixStyleConfigs, styleName)
+}
+
+// CreatorAnalyticsKey caches GET /me/creator-analytics payloads per user and range.
+func CreatorAnalyticsKey(userID, rangeKey string) string {
+	return fmt.Sprintf("%s%s:%s", PrefixCreatorAnalytics, userID, rangeKey)
 }

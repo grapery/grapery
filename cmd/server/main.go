@@ -257,6 +257,10 @@ func main() {
 	userSettingsRepo := mysql.NewUserSettingsRepository(repo.DB())
 	logger.Info("user settings repository initialized")
 
+	genreCatalogRepo := mysql.NewGenreCatalogRepository(repo.DB())
+	genreCatalogService := service.NewGenreCatalogService(genreCatalogRepo, svc.AIGenerationService(), logger)
+	logger.Info("genre catalog service initialized")
+
 	// Comic style batches (DB + AI backfill)
 	comicStyleSvc := service.NewFragmentComicStyleService(repo.DB(), svc.AIGenerationService(), logger)
 
@@ -277,7 +281,7 @@ func main() {
 	logger.Info("interaction service initialized")
 
 	// Initialize User Settings Service
-	userSettingsService := service.NewUserSettingsService(userSettingsRepo, logger, redisCache)
+	userSettingsService := service.NewUserSettingsService(userSettingsRepo, genreCatalogRepo, logger, redisCache)
 	logger.Info("user settings service initialized")
 
 	feedbackRepo := mysql.NewFeedbackRepository(repo.DB())
@@ -295,6 +299,7 @@ func main() {
 		StoryboardPathService: storyboardPathService,
 		InteractionService:    interactionService,
 		UserSettingsService:   userSettingsService,
+		GenreCatalogService:   genreCatalogService,
 		FeedbackService:       feedbackService,
 		Logger:                logger,
 	}

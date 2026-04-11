@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -32,12 +33,16 @@ func userSettingsAPIResponse(settings *domain.UserSettings) (map[string]interfac
 
 // UserSettingsHandler 用户设置处理器
 type UserSettingsHandler struct {
-	settingsService service.UserSettingsService
+	settingsService    service.UserSettingsService
+	genreCatalogService *service.GenreCatalogService
 }
 
 // NewUserSettingsHandler 创建用户设置处理器
-func NewUserSettingsHandler(settingsService service.UserSettingsService) *UserSettingsHandler {
-	return &UserSettingsHandler{settingsService: settingsService}
+func NewUserSettingsHandler(settingsService service.UserSettingsService, genreCatalog *service.GenreCatalogService) *UserSettingsHandler {
+	return &UserSettingsHandler{
+		settingsService:     settingsService,
+		genreCatalogService: genreCatalog,
+	}
 }
 
 // RegisterUserSettingsRoutes 注册用户设置相关路由
@@ -46,6 +51,8 @@ func (h *UserSettingsHandler) RegisterUserSettingsRoutes(r *gin.RouterGroup) {
 	{
 		settings.GET("", h.GetSettings)
 		settings.PUT("", h.UpdateSettings)
+		settings.GET("/preferences/genres", h.GetPreferredGenres)
+		settings.GET("/preferences/genres/catalog", h.GetGenreCatalogPage)
 		settings.PUT("/preferences/genres", h.UpdatePreferredGenres)
 		settings.PUT("/language", h.UpdateLanguage)
 		settings.PUT("/theme", h.UpdateTheme)
@@ -187,6 +194,48 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 	Success(c, resp)
+}
+
+// GetPreferredGenres GET /api/v1/settings/preferences/genres
+func (h *UserSettingsHandler) GetPreferredGenres(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	preferred, allowed, err := h.settingsService.GetPreferredGenresPreferences(c.Request.Context(), userID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{
+		"preferredGenres": preferred,
+		"allowedGenres":   allowed,
+	})
+}
+
+// GetGenreCatalogPage GET /api/v1/settings/preferences/genres/catalog?page=0
+// 优先读库中该页；若无数据且已配置 Gemini，则 AI 生成一页并写入 genre_catalog_entries 后返回。
+func (h *UserSettingsHandler) GetGenreCatalogPage(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	if h.genreCatalogService == nil {
+		Error(c, CodeInternalError, "genre catalog service unavailable")
+		return
+	}
+	page := 0
+	if v := strings.TrimSpace(c.Query("page")); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			page = p
+		}
+	}
+	result, err := h.genreCatalogService.FetchPage(c.Request.Context(), userID, page)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, result)
 }
 
 type UpdatePreferredGenresRequest struct {
