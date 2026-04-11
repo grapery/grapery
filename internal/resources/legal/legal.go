@@ -80,6 +80,17 @@ func ParsePreferredLang(acceptLanguageHeader, queryLang string) string {
 	return LangEN
 }
 
+// PreferredLangForAPI prefers explicit ?lang= (mobile clients), then Accept-Language, then English.
+func PreferredLangForAPI(queryLang, acceptLanguageHeader string) string {
+	if lang := normalizeLang(queryLang); lang != "" {
+		return lang
+	}
+	if lang := parseAcceptLanguage(acceptLanguageHeader); lang != "" {
+		return lang
+	}
+	return LangEN
+}
+
 func Get(key, lang string) (content string, chosenLang string, err error) {
 	normalized := normalizeLang(lang)
 	if normalized == "" {

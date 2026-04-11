@@ -74,6 +74,13 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			auth.POST("/refresh", h.RefreshToken)
 		}
 
+		// 主 API 公开法律文档（无需登录；Grapery 信封 code=1）
+		legalPublic := api.Group("/v1/legal")
+		{
+			legalPublic.GET("/terms-of-service", h.GetLegalTermsOfService)
+			legalPublic.GET("/privacy-policy", h.GetLegalPrivacyPolicy)
+		}
+
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
 		authenticated.Use(authPkg.AuthMiddleware())
