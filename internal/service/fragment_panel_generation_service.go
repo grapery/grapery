@@ -20,6 +20,21 @@ import (
 // ErrFragmentPanelTaskForbidden when task user does not match.
 var ErrFragmentPanelTaskForbidden = errors.New("forbidden: task does not belong to user")
 
+// defaultFragmentPanelTopicLabel 与 Voyager「故事碎片」占位一致（存库展示；非 i18n 键）。
+const defaultFragmentPanelTopicLabel = "故事碎片"
+
+func panelTopicForFragment(req domain.FragmentPanelGenerationRequest, existing string) string {
+	t := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(req.Topic), "#"))
+	if t != "" {
+		return t
+	}
+	t = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(existing), "#"))
+	if t != "" {
+		return t
+	}
+	return defaultFragmentPanelTopicLabel
+}
+
 // ErrPanelGenerationResumeConflict when a resume is requested while the task is already processing.
 var ErrPanelGenerationResumeConflict = errors.New("panel generation already in progress")
 
@@ -107,6 +122,7 @@ func (s *FragmentPanelGenerationService) StartGeneration(ctx context.Context, us
 		CreatorID:       userID,
 		Content:         "生成中…",
 		MediaURLs:       []string{},
+		Topic:           panelTopicForFragment(req, ""),
 		Visibility:      domain.FragmentVisibilityPrivate,
 		IsDraft:         true,
 		SourceType:      string(domain.FragmentSourcePanelGeneration),
@@ -510,7 +526,7 @@ func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Con
 	styleVal := req.Style
 	caption := captionFromPanelCaptions(captions, task.Result.CombinedContent)
 
-	if err := s.finalizeDraft(ctx, draftID, task.Result.CombinedContent, urls, &styleVal, imgCount, caption); err != nil {
+	if err := s.finalizeDraft(ctx, draftID, task.Result.CombinedContent, urls, &styleVal, imgCount, caption, req); err != nil {
 		s.logger.Error("panel gen: finalize draft", zap.Error(err))
 		s.failTask(ctx, taskID, draftID, fmt.Sprintf("保存草稿失败: %v", err))
 		return
@@ -571,11 +587,12 @@ func (s *FragmentPanelGenerationService) syncDraftFromTask(ctx context.Context, 
 		partial = "生成中…"
 	}
 	frag.Content = partial
+	frag.Topic = panelTopicForFragment(task.Request, frag.Topic)
 	frag.UpdatedAt = time.Now().UnixMilli()
 	_ = s.fragmentRepo.Update(ctx, frag)
 }
 
-func (s *FragmentPanelGenerationService) finalizeDraft(ctx context.Context, draftID, content string, urls []string, style *string, fragmentCount int, caption string) error {
+func (s *FragmentPanelGenerationService) finalizeDraft(ctx context.Context, draftID, content string, urls []string, style *string, fragmentCount int, caption string, req domain.FragmentPanelGenerationRequest) error {
 	frag, err := s.fragmentRepo.GetByID(ctx, draftID)
 	if err != nil {
 		return err
@@ -591,6 +608,7 @@ func (s *FragmentPanelGenerationService) finalizeDraft(ctx context.Context, draf
 	if caption != "" {
 		frag.Caption = caption
 	}
+	frag.Topic = panelTopicForFragment(req, frag.Topic)
 	frag.UpdatedAt = time.Now().UnixMilli()
 	return s.fragmentRepo.Update(ctx, frag)
 }

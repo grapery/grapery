@@ -18,6 +18,21 @@ type FragmentPanelGenerationHandler struct {
 	logger *zap.Logger
 }
 
+// normalizePanelTopicLabel trims whitespace and a single leading “#”; max 200 runes for DB.
+func normalizePanelTopicLabel(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimPrefix(s, "#")
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) > 200 {
+		s = string(r[:200])
+	}
+	return strings.TrimSpace(s)
+}
+
 // NewFragmentPanelGenerationHandler constructs the handler.
 func NewFragmentPanelGenerationHandler(svc *service.FragmentPanelGenerationService, logger *zap.Logger) *FragmentPanelGenerationHandler {
 	return &FragmentPanelGenerationHandler{svc: svc, logger: logger}
@@ -30,6 +45,7 @@ type CreatePanelGenerationRequest struct {
 	Style              string `json:"style"`
 	PanelCount         int    `json:"panelCount"`
 	Visibility         string `json:"visibility"`
+	Topic              string `json:"topic"`
 }
 
 // CreatePanelGeneration POST /fragment-panels/generate
@@ -52,6 +68,7 @@ func (h *FragmentPanelGenerationHandler) CreatePanelGeneration(c *gin.Context) {
 		Style:             strings.TrimSpace(req.Style),
 		PanelCount:        req.PanelCount,
 		Visibility:        strings.TrimSpace(req.Visibility),
+		Topic:             normalizePanelTopicLabel(req.Topic),
 	}
 
 	task, err := h.svc.StartGeneration(c.Request.Context(), userID, domainReq)
@@ -105,6 +122,15 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 		"createdAt":       task.CreatedAt,
 		"startedAt":       task.StartedAt,
 		"completedAt":     task.CompletedAt,
+		// 客户端生成记录页展示原始提示词与风格等（来自任务表 request_json）
+		"request": gin.H{
+			"userInput":         task.Request.UserInput,
+			"referenceImageUrl": task.Request.ReferenceImageURL,
+			"style":             task.Request.Style,
+			"panelCount":        task.Request.PanelCount,
+			"visibility":        task.Request.Visibility,
+			"topic":             task.Request.Topic,
+		},
 	}
 
 	if len(task.Plan) > 0 {

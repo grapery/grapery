@@ -19,7 +19,9 @@ type plazaSectionDTO struct {
 	BadgeColor    string          `json:"badgeColor,omitempty"`
 	CreatorUserID string          `json:"creatorUserId,omitempty"`
 	AvatarURL     string          `json:"avatarUrl,omitempty"`
-	Stories       []*domain.Story `json:"stories"`
+	// TopicTag 与 `GET /fragments?topic=` 检索串一致；客户端可优先用此字段拉碎片预览。
+	TopicTag string `json:"topicTag,omitempty"`
+	Stories  []*domain.Story `json:"stories"`
 }
 
 type plazaSectionDef struct {
@@ -60,6 +62,7 @@ func buildPlazaSections(ctx context.Context, h *Handler) []plazaSectionDTO {
 			SubtitleKey: def.SubtitleKey,
 			BadgeKey:    def.BadgeKey,
 			BadgeColor:  def.BadgeColor,
+			TopicTag:    def.SearchTag,
 			Stories:     stories,
 		}
 		if len(stories) > 0 {

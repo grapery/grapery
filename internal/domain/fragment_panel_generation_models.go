@@ -8,6 +8,8 @@ type FragmentPanelGenerationRequest struct {
 	Style              string `json:"style"`
 	PanelCount         int    `json:"panelCount"`
 	Visibility         string `json:"visibility"`
+	// Topic 话题标签（展示用，不含 #）；与碎片表 topic 对齐。
+	Topic string `json:"topic,omitempty"`
 	// UserRegion 服务端根据用户资料写入（如 CN / US），用于选择 Huoshan vs Gemini；客户端勿伪造。
 	UserRegion string `json:"userRegion,omitempty"`
 }
