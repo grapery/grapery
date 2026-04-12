@@ -1324,7 +1324,47 @@ func buildStoryPrompt(req *domain.AIStoryGenerationRequest) string {
 }
 
 func buildEnhancePrompt(req *domain.AIPromptEnhanceRequest) string {
-	return fmt.Sprintf("作为专业的AI提示词工程师，请优化以下提示词：\n\n%s", req.OriginalPrompt)
+	targetTypeDesc := map[string]string{
+		"image":      "图片生成",
+		"video":      "视频生成",
+		"storyboard": "故事板分支的剧情走向（续写多格漫画前的文字说明，叙事性、可拍成连续分镜，不要写成 Stable Diffusion 式图像提示词）",
+	}
+	targetLabel := targetTypeDesc[req.TargetType]
+	if targetLabel == "" {
+		targetLabel = req.TargetType
+		if targetLabel == "" {
+			targetLabel = "图片生成"
+		}
+	}
+
+	prompt := "作为专业的AI提示词工程师，请帮我优化以下输入：\n\n"
+	prompt += fmt.Sprintf("原始内容: %s\n\n", req.OriginalPrompt)
+	prompt += fmt.Sprintf("目标用途: %s\n", targetLabel)
+
+	if req.TargetType == "storyboard" {
+		prompt += "\n专项要求：润色为一段连贯、具体的剧情走向描述；突出冲突、动机或转折；适合作为多格漫画分镜的文字基础；使用与原文一致的语言；总长度建议不超过 200 个字符（中文按字计）。\n"
+	}
+
+	if req.Style != "" {
+		prompt += fmt.Sprintf("期望风格/气质参考: %s\n", req.Style)
+	}
+
+	detailLevelDesc := map[string]string{
+		"low":    "简洁明了，关注核心要素",
+		"medium": "中等细节，平衡描述",
+		"high":   "极致细节，包含环境、氛围与节奏感",
+	}
+	if desc, ok := detailLevelDesc[req.DetailLevel]; ok {
+		prompt += fmt.Sprintf("细节程度: %s\n", desc)
+	}
+
+	prompt += "\n请返回JSON格式：\n"
+	prompt += "{\n"
+	prompt += "  \"enhancedPrompt\": \"增强后的文本（字段名保持不变以便系统解析）\",\n"
+	prompt += "  \"improvements\": \"改进说明\"\n"
+	prompt += "}\n"
+
+	return prompt
 }
 
 func parseStoryResult(text string, req *domain.AIStoryGenerationRequest) *domain.AIStoryGenerationResult {

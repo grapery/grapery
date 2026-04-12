@@ -344,13 +344,23 @@ func (s *AIService) processPromptEnhancement(ctx context.Context, task *domain.A
 // buildEnhancePrompt 构建增强提示词的提示
 func (s *AIService) buildEnhancePrompt(req *domain.AIPromptEnhanceRequest) string {
 	targetTypeDesc := map[string]string{
-		"image": "图片生成",
-		"video": "视频生成",
+		"image":      "图片生成",
+		"video":      "视频生成",
+		"storyboard": "故事板分支的剧情走向（续写多格漫画前的文字说明，叙事性、可拍成连续分镜，不要写成图像提示词）",
 	}
 
-	prompt := "作为专业的AI提示词工程师，请帮我优化以下提示词：\n\n"
-	prompt += fmt.Sprintf("原始提示词: %s\n\n", req.OriginalPrompt)
-	prompt += fmt.Sprintf("目标用途: %s\n", targetTypeDesc[req.TargetType])
+	targetLabel := targetTypeDesc[req.TargetType]
+	if targetLabel == "" {
+		targetLabel = req.TargetType
+	}
+
+	prompt := "作为专业的AI提示词工程师，请帮我优化以下输入：\n\n"
+	prompt += fmt.Sprintf("原始内容: %s\n\n", req.OriginalPrompt)
+	prompt += fmt.Sprintf("目标用途: %s\n", targetLabel)
+
+	if req.TargetType == "storyboard" {
+		prompt += "\n专项要求：润色为一段连贯、具体的剧情走向描述；突出冲突、动机或转折；适合作为多格漫画分镜的文字基础；使用与原文一致的语言；总长度建议不超过 200 个字符（中文按字计）。\n"
+	}
 
 	if req.Style != "" {
 		prompt += fmt.Sprintf("期望风格: %s\n", req.Style)

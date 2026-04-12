@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -326,7 +327,5 @@ func (h *Handler) CancelTask(c *gin.Context) {
 
 // jsonUnmarshal JSON反序列化辅助函数
 func jsonUnmarshal(data []byte, v interface{}) error {
-	// 实际应该导入 encoding/json
-	// 暂时返回nil
-	return nil
+	return json.Unmarshal(data, v)
 }

@@ -76,7 +76,7 @@ type AIStoryGenerationResult struct {
 // AIPromptEnhanceRequest AI 提示词增强请求
 type AIPromptEnhanceRequest struct {
 	OriginalPrompt string `json:"originalPrompt"`
-	TargetType     string `json:"targetType"`            // image, video
+	TargetType     string `json:"targetType"`            // image, video, storyboard
 	Style          string `json:"style,omitempty"`       // 风格
 	DetailLevel    string `json:"detailLevel,omitempty"` // low, medium, high
 }
