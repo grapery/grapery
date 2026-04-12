@@ -84,7 +84,8 @@ func (h *FragmentHandler) GetFragmentStyles(c *gin.Context) {
 	})
 }
 
-// PostFragmentStylesNext handles POST /fragments/styles/next — next 8 comic styles for the authenticated user.
+// PostFragmentStylesNext handles POST /fragments/styles/next — first 8 comic styles from the global catalog (ordered by id).
+// Query allow_ai=false reads only the database; allow_ai=true may call Gemini when the catalog table is empty.
 func (h *FragmentHandler) PostFragmentStylesNext(c *gin.Context) {
 	userID := c.GetString("userID")
 	if userID == "" {
@@ -95,7 +96,14 @@ func (h *FragmentHandler) PostFragmentStylesNext(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "comic styles service unavailable"})
 		return
 	}
-	items, err := h.comicStyleSvc.NextBatch(c.Request.Context(), userID)
+	allowAI := c.DefaultQuery("allow_ai", "true") != "false"
+	var items []coreservice.FragmentComicStyleItem
+	var err error
+	if allowAI {
+		items, err = h.comicStyleSvc.NextBatch(c.Request.Context(), userID)
+	} else {
+		items, err = h.comicStyleSvc.NextBatchDBOnly(c.Request.Context(), userID)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

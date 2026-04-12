@@ -690,10 +690,10 @@ func init() {
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_comic_styles",
-		Description: "Create fragment_comic_styles, user_fragment_comic_style_cursors and seed defaults",
+		Description: "Create fragment_comic_styles and seed defaults",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			_ = ctx
-			if err := autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentComicStyle{}, &UserFragmentComicStyleCursor{}); err != nil {
+			if err := autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentComicStyle{}); err != nil {
 				return err
 			}
 			return SeedFragmentComicStylesIfEmpty(db, log)

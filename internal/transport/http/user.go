@@ -281,6 +281,30 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 	})
 }
 
+// GetDashboardStoryboards 当前登录用户的故事板列表（含草稿与已发布），供草稿箱等与碎片草稿合并展示。
+// GET /api/v1/dashboard/storyboards?limit=20&offset=0
+func (h *Handler) GetDashboardStoryboards(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	storyboards, total, err := h.svc.ListDashboardStoryboards(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	h.attachStoryboardIsLikedMany(c, storyboards)
+	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, userID)
+	Success(c, gin.H{
+		"storyboards": storyboards,
+		"total":       total,
+	})
+}
+
 // REMOVED: GetUserDrafts - not in StoryCreationAppUI design
 // REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
 // REMOVED: GetUserActivityList - not in StoryCreationAppUI design

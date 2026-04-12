@@ -799,6 +799,26 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID strin
 	return s.filterStoryboardsForViewer(ctx, storyboards, userID, viewerID)
 }
 
+// ListDashboardStoryboards returns storyboards created by the authenticated user (all workflow states),
+// ordered by created_at DESC, for merged drafts UI and creator tools. Not cached.
+func (s *Service) ListDashboardStoryboards(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	total, err := s.repo.CountStoryboardsByCreator(ctx, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	storyboards, err := s.repo.StoryboardsByCreator(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return storyboards, total, nil
+}
+
 func (s *Service) isUserContentPublicEnabled(ctx context.Context, ownerID string) (stories bool, fragments bool, bookmarks bool) {
 	stories, fragments, bookmarks = true, true, true
 	settings, err := s.repo.UserSettings(ctx, ownerID)

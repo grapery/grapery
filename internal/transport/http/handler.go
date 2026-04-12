@@ -94,6 +94,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/users/:id/stories", h.GetUserStories)
 			authenticated.GET("/users/:id/characters", h.GetUserCharacters)
 			authenticated.GET("/users/:id/storyboards", h.GetUserStoryboards)
+			authenticated.GET("/dashboard/storyboards", h.GetDashboardStoryboards)
 			// REMOVED: /users/:id/drafts - not in StoryCreationAppUI design
 			authenticated.GET("/users/:id/liked-stories", h.GetLikedStories)
 			authenticated.GET("/users/:id/liked-characters", h.GetLikedCharacters)

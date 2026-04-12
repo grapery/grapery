@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
 )
@@ -34,7 +33,7 @@ type FragmentComicStyleItem struct {
 	Category *string
 }
 
-// FragmentComicStyleService serves paginated comic style batches per user cursor.
+// FragmentComicStyleService reads the global fragment_comic_styles pool (no per-user cursor).
 type FragmentComicStyleService struct {
 	db     *gorm.DB
 	aiGen  *AIGenerationService
@@ -52,7 +51,8 @@ func NewFragmentComicStyleService(db *gorm.DB, aiGen *AIGenerationService, logge
 	}
 }
 
-// NextBatch returns the next fragmentComicStyleBatchSize styles for the user, advancing the cursor.
+// NextBatch returns the first fragmentComicStyleBatchSize rows by id (global catalog head).
+// If the table is empty, inserts via AI (when configured) and retries until rows exist or attempts exhaust.
 func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string) ([]FragmentComicStyleItem, error) {
 	if userID == "" {
 		return nil, errors.New("userID required")
@@ -68,70 +68,40 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 	var out []FragmentComicStyleItem
 
 	err := s.db.WithContext(opCtx).Transaction(func(tx *gorm.DB) error {
-		var cur mysql.UserFragmentComicStyleCursor
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("user_id = ?", userID).
-			First(&cur).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			cur = mysql.UserFragmentComicStyleCursor{UserID: userID, LastStyleID: 0}
-			if err := tx.Create(&cur).Error; err != nil {
-				return fmt.Errorf("create style cursor: %w", err)
-			}
-		} else if err != nil {
-			return fmt.Errorf("load style cursor: %w", err)
-		}
-
-		lastID := cur.LastStyleID
 		const maxRounds = 6
 		var lastGenErr error
 
 		for round := 0; round < maxRounds; round++ {
 			var batch []mysql.FragmentComicStyle
-			if err := tx.Where("id > ?", lastID).Order("id ASC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
+			if err := tx.Order("id ASC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
 				return err
 			}
 
 			if len(batch) >= fragmentComicStyleBatchSize {
 				out = toStyleItems(batch)
-				maxID := batch[fragmentComicStyleBatchSize-1].ID
-				return tx.Model(&mysql.UserFragmentComicStyleCursor{}).
-					Where("user_id = ?", userID).
-					Update("last_style_id", maxID).Error
+				return nil
 			}
 
-			need := fragmentComicStyleBatchSize - len(batch)
-			if s.aiGen == nil {
-				if len(batch) == 0 {
-					return errors.New("Gemini client not configured and no styles in database")
-				}
-				s.logger.Warn("AI generation unavailable; returning partial comic style batch",
-					zap.Int("count", len(batch)))
+			if len(batch) > 0 {
 				out = toStyleItems(batch)
-				maxID := batch[len(batch)-1].ID
-				return tx.Model(&mysql.UserFragmentComicStyleCursor{}).
-					Where("user_id = ?", userID).
-					Update("last_style_id", maxID).Error
+				return nil
 			}
 
-			inserted, genErr := s.generateAndInsertStyles(opCtx, tx, userID, need)
+			if s.aiGen == nil {
+				return errors.New("Gemini client not configured and no styles in database")
+			}
+
+			inserted, genErr := s.generateAndInsertStyles(opCtx, tx, userID, fragmentComicStyleBatchSize)
 			if genErr != nil {
 				lastGenErr = genErr
 				s.logger.Warn("AI comic style generation failed", zap.Int("round", round+1), zap.Error(genErr))
 			}
 			if inserted == 0 {
-				if len(batch) > 0 {
-					out = toStyleItems(batch)
-					maxID := batch[len(batch)-1].ID
-					return tx.Model(&mysql.UserFragmentComicStyleCursor{}).
-						Where("user_id = ?", userID).
-						Update("last_style_id", maxID).Error
-				}
 				if genErr != nil {
 					return fmt.Errorf("generate comic styles: %w", genErr)
 				}
 				return errors.New("AI returned no valid comic styles")
 			}
-			// More rows may now exist with id > lastID; loop and re-query.
 		}
 
 		if lastGenErr != nil {
@@ -141,6 +111,24 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 	})
 
 	return out, err
+}
+
+// NextBatchDBOnly returns the first fragmentComicStyleBatchSize rows by id without calling AI.
+func (s *FragmentComicStyleService) NextBatchDBOnly(ctx context.Context, userID string) ([]FragmentComicStyleItem, error) {
+	if userID == "" {
+		return nil, errors.New("userID required")
+	}
+	if s.db == nil {
+		return nil, errors.New("database not configured")
+	}
+	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+
+	var batch []mysql.FragmentComicStyle
+	if err := s.db.WithContext(opCtx).Order("id ASC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
+		return nil, err
+	}
+	return toStyleItems(batch), nil
 }
 
 func toStyleItems(rows []mysql.FragmentComicStyle) []FragmentComicStyleItem {

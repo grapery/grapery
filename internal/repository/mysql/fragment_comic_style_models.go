@@ -20,15 +20,6 @@ type FragmentComicStyle struct {
 
 func (FragmentComicStyle) TableName() string { return "fragment_comic_styles" }
 
-// UserFragmentComicStyleCursor 每用户已消费到的最大 fragment_comic_styles.id
-type UserFragmentComicStyleCursor struct {
-	UserID      string `gorm:"primaryKey;size:36"`
-	LastStyleID int64  `gorm:"not null;default:0"`
-	UpdatedAt   int64  `gorm:"autoUpdateTime"`
-}
-
-func (UserFragmentComicStyleCursor) TableName() string { return "user_fragment_comic_style_cursors" }
-
 type fragmentComicStyleSeed struct {
 	Value    string
 	Name     string
