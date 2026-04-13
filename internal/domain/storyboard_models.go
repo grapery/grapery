@@ -74,6 +74,10 @@ type Storyboard struct {
 	WorkflowStatus string `json:"workflowStatus"` // draft, content_ready, images_ready, video_ready, published
 	CurrentStep    int    `json:"currentStep"`    // 1-5 (setup, create, images, video, publish)
 
+	// 续写 / 创作选项（持久化；默认仅生图，勾选后生图完成再基于首帧图生视频）
+	GenerateVideoAfterImages bool   `json:"generateVideoAfterImages"` // 默认 false
+	ContinuationComicStyle   string `json:"comicStyle,omitempty"`     // 漫画风格 slug（如日系动漫），可选
+
 	// Engagement stats fields
 	common.EngagementStats
 

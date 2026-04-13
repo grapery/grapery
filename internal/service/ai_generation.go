@@ -15,6 +15,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	huoshanark "github.com/grapestree/fgrapery/grapery/internal/genai/providers/huoshan"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
@@ -76,6 +77,11 @@ func (s *AIGenerationService) GeminiAvailable() bool {
 	return s != nil && s.geminiClient != nil
 }
 
+// HuoshanTextAvailable 是否已注册火山方舟对话（文本生成优先走此通路，避免 Gemini 地域限制）。
+func (s *AIGenerationService) HuoshanTextAvailable() bool {
+	return s != nil && s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+}
+
 // GenAPI 返回统一 GenAI 门面（图像等）。
 func (s *AIGenerationService) GenAPI() *genapi.GenAPI {
 	if s == nil {
@@ -111,11 +117,11 @@ type GenerateTextResult struct {
 	Metadata   map[string]interface{}
 }
 
-// GenerateText 使用Gemini生成文本内容，并记录AI使用数据
+// GenerateText 生成文本：优先火山方舟（Huoshan），失败或未配置时回退 Gemini，并记录 AI 使用数据。
 func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTextRequest) (*GenerateTextResult, error) {
-	// Check if gemini client is configured
-	if s.geminiClient == nil {
-		return nil, fmt.Errorf("Gemini client not configured")
+	huoshanOK := s.HuoshanTextAvailable()
+	if !huoshanOK && s.geminiClient == nil {
+		return nil, fmt.Errorf("no text generation provider configured (need HUOSHAN_API_KEY or GEMINI_API_KEY)")
 	}
 
 	startTime := time.Now()
@@ -191,12 +197,19 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	}()
 	// ============== 配额预留和分布式锁结束 ==============
 
+	recordProvider := "gemini"
+	recordModel := req.Model
+	if huoshanOK {
+		recordProvider = "huoshan"
+		recordModel = ""
+	}
+
 	// 1. 创建AI生成记录（状态：pending）
 	record := &domain.AIGenerationRecord{
 		UserID:            req.UserID,
 		Type:              "text",
-		Provider:          "gemini",
-		Model:             req.Model,
+		Provider:          recordProvider,
+		Model:             recordModel,
 		OriginalPrompt:    req.OriginalPrompt,
 		SystemPrompt:      req.SystemPrompt,
 		Status:            domain.AITaskStatusPending,
@@ -209,11 +222,12 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 	// 保存输入参数
 	inputParams := map[string]interface{}{
-		"prompt":      req.OriginalPrompt,
-		"system":      req.SystemPrompt,
-		"model":       req.Model,
-		"temperature": req.Temperature,
-		"maxTokens":   req.MaxTokens,
+		"prompt":           req.OriginalPrompt,
+		"system":           req.SystemPrompt,
+		"model":            req.Model,
+		"temperature":      req.Temperature,
+		"maxTokens":        req.MaxTokens,
+		"textProviderPlan": "huoshan_first",
 	}
 	if inputJSON, err := json.Marshal(inputParams); err == nil {
 		record.InputParams = string(inputJSON)
@@ -231,28 +245,96 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	// 3. 调用AI生成
-	genConfig := &genai.GenerateContentConfig{
-		Temperature:     &req.Temperature,
-		MaxOutputTokens: req.MaxTokens,
-	}
-	if req.SystemPrompt != "" {
-		genConfig.SystemInstruction = &genai.Content{
-			Role:  genai.RoleUser,
-			Parts: []*genai.Part{genai.NewPartFromText(req.SystemPrompt)},
+	// 3. 调用 AI：优先火山，再 Gemini
+	var text string
+	var geminiResp *genai.GenerateContentResponse
+	var usedProvider string
+	var lastErr error
+
+	if huoshanOK {
+		hc := s.genAPI.HuoshanInternalClient()
+		maxTok := int(req.MaxTokens)
+		if maxTok <= 0 {
+			maxTok = 4096
+		}
+		hreq := &huoshanark.TextGenerationRequest{
+			Prompt:       req.OriginalPrompt,
+			SystemPrompt: req.SystemPrompt,
+			MaxTokens:    maxTok,
+			Temperature:  req.Temperature,
+		}
+		hresp, hErr := hc.GenerateText(ctx, hreq)
+		if hErr != nil {
+			lastErr = hErr
+			s.logger.Warn("huoshan text generation failed, will try gemini if configured",
+				zap.Error(hErr))
+		} else if hresp == nil || strings.TrimSpace(hresp.Text) == "" {
+			lastErr = fmt.Errorf("huoshan returned empty text")
+			s.logger.Warn("huoshan returned empty text, will try gemini if configured")
+		} else {
+			text = strings.TrimSpace(hresp.Text)
+			usedProvider = "huoshan"
+			record.Provider = "huoshan"
+			if m := strings.TrimSpace(hresp.Model); m != "" {
+				record.Model = m
+			} else {
+				record.Model = "huoshan-ark"
+			}
+			record.InputTokens = hresp.InputTokens
+			record.OutputTokens = hresp.OutputTokens
+			record.TotalTokens = hresp.TotalTokens
+			if record.TotalTokens == 0 {
+				record.TotalTokens = record.InputTokens + record.OutputTokens
+			}
 		}
 	}
 
-	text, geminiResp, err := s.geminiClient.GenerateText(ctx, req.Model, req.OriginalPrompt, genConfig)
+	if text == "" && s.geminiClient != nil {
+		record.Provider = "gemini"
+		record.Model = req.Model
+		_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+
+		genConfig := &genai.GenerateContentConfig{
+			Temperature:     &req.Temperature,
+			MaxOutputTokens: req.MaxTokens,
+		}
+		if req.SystemPrompt != "" {
+			genConfig.SystemInstruction = &genai.Content{
+				Role:  genai.RoleUser,
+				Parts: []*genai.Part{genai.NewPartFromText(req.SystemPrompt)},
+			}
+		}
+		var gErr error
+		text, geminiResp, gErr = s.geminiClient.GenerateText(ctx, req.Model, req.OriginalPrompt, genConfig)
+		if gErr != nil {
+			lastErr = gErr
+			text = ""
+		} else {
+			text = strings.TrimSpace(text)
+			if text == "" {
+				lastErr = fmt.Errorf("gemini returned empty text")
+			} else {
+				usedProvider = "gemini"
+				if geminiResp != nil && geminiResp.UsageMetadata != nil {
+					record.InputTokens = int(geminiResp.UsageMetadata.PromptTokenCount)
+					record.OutputTokens = int(geminiResp.UsageMetadata.CandidatesTokenCount)
+					record.TotalTokens = int(geminiResp.UsageMetadata.TotalTokenCount)
+				}
+			}
+		}
+	}
 
 	completedTime := time.Now()
 	durationMs := completedTime.Sub(startTime).Milliseconds()
 
-	// 4. 更新记录状态
-	if err != nil {
-		// 生成失败
+	if text == "" {
+		errMsg := "text generation failed (huoshan and/or gemini returned no usable text)"
+		if lastErr != nil {
+			errMsg = lastErr.Error()
+		}
+
 		record.Status = domain.AITaskStatusFailed
-		record.ErrorMessage = err.Error()
+		record.ErrorMessage = errMsg
 		record.DurationMs = durationMs
 		completedUnix := completedTime.Unix()
 		record.CompletedAt = &completedUnix
@@ -260,8 +342,9 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 		s.logger.Error("AI text generation failed",
 			zap.String("recordId", record.ID),
-			zap.Error(err))
-		return nil, fmt.Errorf("AI generation failed: %w", err)
+			zap.String("usedProvider", usedProvider),
+			zap.String("error", errMsg))
+		return nil, fmt.Errorf("AI generation failed: %s", errMsg)
 	}
 
 	// 生成成功
@@ -271,17 +354,15 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	completedUnix := completedTime.Unix()
 	record.CompletedAt = &completedUnix
 
-	// 记录Token使用量
-	if geminiResp != nil && geminiResp.UsageMetadata != nil {
-		record.InputTokens = int(geminiResp.UsageMetadata.PromptTokenCount)
-		record.OutputTokens = int(geminiResp.UsageMetadata.CandidatesTokenCount)
-		record.TotalTokens = int(geminiResp.UsageMetadata.TotalTokenCount)
+	if usedProvider == "" {
+		usedProvider = record.Provider
 	}
 
 	// 保存输出结果
 	outputResult := map[string]interface{}{
-		"text":   text,
-		"tokens": record.TotalTokens,
+		"text":     text,
+		"tokens":   record.TotalTokens,
+		"provider": usedProvider,
 	}
 	if outputJSON, err := json.Marshal(outputResult); err == nil {
 		record.OutputResult = string(outputJSON)
@@ -322,11 +403,12 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 	// Record metrics
 	if s.metrics != nil {
-		s.metrics.RecordAIGeneration("gemini", "text")
+		s.metrics.RecordAIGeneration(usedProvider, "text")
 	}
 
 	s.logger.Info("AI text generation completed",
 		zap.String("recordId", record.ID),
+		zap.String("provider", usedProvider),
 		zap.Int("tokensUsed", record.TotalTokens),
 		zap.Int64("durationMs", durationMs))
 

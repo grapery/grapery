@@ -213,3 +213,8 @@ func StyleConfigByStyleKey(styleName string) string {
 func CreatorAnalyticsKey(userID, rangeKey string) string {
 	return fmt.Sprintf("%s%s:%s", PrefixCreatorAnalytics, userID, rangeKey)
 }
+
+// PlazaTopFragmentTopicsKeyV1 caches JSON array of top public fragment topic labels for GET /plaza (bump version if semantics change).
+func PlazaTopFragmentTopicsKeyV1() string {
+	return "plaza:top_fragment_topics:v1"
+}

@@ -175,3 +175,26 @@ type ConvertFragmentResponse struct {
 	Storyboard *Storyboard `json:"storyboard,omitempty"` // 已废弃：始终为空，保留字段仅兼容旧客户端
 	FragmentID string      `json:"fragmentId"`           // 原碎片ID
 }
+
+// FragmentStoryPrefillAIRequest POST /fragments/:id/story-prefill-ai — 不落库、不标记碎片已转换
+type FragmentStoryPrefillAIRequest struct {
+	SceneCount int `json:"sceneCount,omitempty"` // 2–8，默认 3
+}
+
+// FragmentStoryPrefillCharacter AI 建议角色（客户端可在创建故事后写入 Character）
+type FragmentStoryPrefillCharacter struct {
+	Name       string `json:"name"`
+	Role       string `json:"role,omitempty"`
+	Background string `json:"background,omitempty"`
+}
+
+// FragmentStoryPrefillAIResponse 供新建故事页预填；title 已由服务端截断为最多 7 个字（rune）
+type FragmentStoryPrefillAIResponse struct {
+	Title               string                          `json:"title"`
+	Description         string                          `json:"description"`
+	Summary             string                          `json:"summary,omitempty"`
+	Style               string                          `json:"style"`
+	Genre               string                          `json:"genre,omitempty"`
+	Tags                []string                        `json:"tags,omitempty"`
+	SuggestedCharacters []FragmentStoryPrefillCharacter `json:"suggestedCharacters,omitempty"`
+}

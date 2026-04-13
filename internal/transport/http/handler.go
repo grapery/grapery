@@ -343,6 +343,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 碎片相关 (Fragments)
 			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
+			authenticated.POST("/fragments/:id/story-prefill-ai", h.ExpandFragmentStoryPrefillAI)
 		}
 
 		// 公开接口（无需认证）

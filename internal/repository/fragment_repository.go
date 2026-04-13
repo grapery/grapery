@@ -308,8 +308,9 @@ func (r *FragmentRepository) ListDiscoverFragmentsForUser(ctx context.Context, u
 	if err != nil {
 		return nil, 0, err
 	}
+	// 无体裁偏好时退回公开时间序，避免登录用户发现页与广场碎片 Rail 永久空白。
 	if len(genres) == 0 {
-		return []*domain.Fragment{}, 0, nil
+		return r.List(ctx, limit, offset, domain.FragmentVisibilityPublic)
 	}
 
 	q := r.discoverFragmentsGenreScope(ctx, genres)

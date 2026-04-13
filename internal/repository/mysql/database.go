@@ -51,6 +51,11 @@ func InitDB(dsn string, log *zap.Logger) (*gorm.DB, error) {
 		log.Warn("SET NAMES utf8mb4 failed (DSN charset should still apply)", zap.Error(err))
 	}
 
+	// Runs before unified migrations: fixes legacy DBs where ai_generation_records.*_prompt stayed latin1 (MySQL 1366 on Chinese).
+	if err := ApplyAIGenerationRecordsUTF8MB4IfNeeded(db, log); err != nil {
+		return nil, fmt.Errorf("ai_generation_records utf8mb4 repair: %w", err)
+	}
+
 	return db, nil
 }
 

@@ -26,6 +26,7 @@ type Service struct {
 	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
 	userStatsService *UserStatisticsService // 用户统计服务
 	recoCfg          config.RecommendationConfig
+	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
 }
 
 // New creates a new service instance
@@ -52,6 +53,11 @@ func (s *Service) SetAIConfig(cfg config.AIConfig) {
 	s.logger.Info("AI provider configuration set",
 		zap.String("imageProvider", s.imageProvider),
 		zap.String("videoProvider", s.videoProvider))
+}
+
+// SetFragmentComicStyleService 注入碎片风格目录服务（用于预填等按 value 解析展示名）。
+func (s *Service) SetFragmentComicStyleService(svc *FragmentComicStyleService) {
+	s.comicStyleSvc = svc
 }
 
 // SetCache 设置缓存实例

@@ -751,11 +751,11 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 - background：出身、经历与当前处境。
 - shortTermGoal：当前故事阶段最想达成的事。
 - longTermGoal：更长期的抱负或人生方向。
-- handlingStyle：面对冲突或难题时的处理习惯与决策方式。
+- handlingStyle：面对冲突或难题时的决策方式，必须包含标志性的微表情（如皱眉、假笑）与习惯性肢体动作倾向（如摸下巴、特定的站姿重心）。
 - cognitionRange：其知识边界、世界观与思维方式（知道什么、不知道什么）。
 - abilityFeatures：特长、技能与突出能力。
-- appearance：外貌、体态与辨识度特征。
-- dressPreference：日常着装风格与偏好。
+- appearance：不仅写相貌，必须包含物理质感极其丰富的发丝（形态、光泽）、皮肤细节（纹理/疤痕/色泽）、具体的面部骨骼特征（眼型/下颌线）、以及身高体型比例。
+- dressPreference：日常着装风格与偏好，必须提供细致的材质明细（如天鹅绒/破损皮革/重麻布）、层次感混搭习惯、标志性的色彩搭配，以及穿戴磨损痕迹和特征配饰。
 - role：在本故事中的功能定位，用简短中文短语（例如：主角、配角、反派、导师、神秘人、NPC 等），不超过 20 字。
 
 示例结构：

@@ -28,7 +28,8 @@ const (
 	defaultPassword    = "test123456"
 )
 
-var plazaTopics = []string{"奇幻", "科幻", "日常", "悬疑", "浪漫"}
+// 碎片话题标签（与广场 `fragments_topic` 示例一致含「日常」）；非故事「体裁」。
+var fragmentTopicTags = []string{"日常", "灵感", "连载", "随笔", "幕后"}
 
 func main() {
 	force := flag.Bool("force", false, "delete existing seed users (seed_user_*) and related rows, then re-seed")
@@ -209,15 +210,15 @@ func createUsers(ctx context.Context, repo *mysql.Repository, log *zap.Logger, n
 			refCode = refCode[:20]
 		}
 		u := &domain.User{
-			BaseModel:     common.BaseModel{ID: uid},
-			Username:      uname,
-			Email:         email,
-			PasswordHash:  hash,
-			DisplayName:   fmt.Sprintf("Seed User %02d", i),
-			Bio:           "Local seed account for development.",
-			Status:        "active",
+			BaseModel:    common.BaseModel{ID: uid},
+			Username:     uname,
+			Email:        email,
+			PasswordHash: hash,
+			DisplayName:  fmt.Sprintf("Seed User %02d", i),
+			Bio:          "Local seed account for development.",
+			Status:       "active",
 			EmailVerified: true,
-			ReferralCode:  refCode,
+			ReferralCode: refCode,
 		}
 		if err := repo.CreateUser(ctx, u); err != nil {
 			return nil, fmt.Errorf("user %s: %w", uname, err)
@@ -247,15 +248,14 @@ func createFollows(ctx context.Context, repo *mysql.Repository, userIDs []string
 
 func createStories(ctx context.Context, repo *mysql.Repository, userIDs []string, count int) ([]string, error) {
 	ids := make([]string, 0, count)
-	genres := []string{"奇幻", "科幻", "日常", "悬疑", "治愈"}
 	for s := 0; s < count; s++ {
 		authorID := userIDs[s%len(userIDs)]
 		sid := uuid.NewString()
 		st := &domain.Story{
 			BaseModel:           common.BaseModel{ID: sid},
-			Title:               fmt.Sprintf("种子故事 %d · %s", s+1, genres[s%len(genres)]),
+			Title:               fmt.Sprintf("种子故事 %d", s+1),
 			Description:         fmt.Sprintf("本地种子数据：第 %d 条故事，用于联调列表与详情。", s+1),
-			Genre:               genres[s%len(genres)],
+			Genre:               "fiction",
 			Status:              "published",
 			Visibility:          "public",
 			UseAI:               false,
@@ -361,22 +361,22 @@ func createFragments(ctx context.Context, repo *mysql.Repository, userIDs []stri
 	for i := 0; i < n; i++ {
 		author := userIDs[i%len(userIDs)]
 		fid := uuid.NewString()
-		topic := plazaTopics[i%len(plazaTopics)]
+		topic := fragmentTopicTags[i%len(fragmentTopicTags)]
 		isDraft := i%7 == 0
 		vis := domain.FragmentVisibilityPublic
 		if i%11 == 0 {
 			vis = domain.FragmentVisibilityFollowers
 		}
 		frag := &domain.Fragment{
-			BaseModel:  common.BaseModel{ID: fid},
-			UserID:     author,
-			Content:    fmt.Sprintf("【%s】种子碎片 #%d：用于广场与详情联调。", topic, i+1),
-			Visibility: vis,
-			SourceType: string(domain.FragmentSourceOriginal),
-			Topic:      topic,
-			Caption:    fmt.Sprintf("碎片标题 %d", i+1),
-			IsDraft:    isDraft,
-			MediaURLs:  nil,
+			BaseModel:   common.BaseModel{ID: fid},
+			UserID:      author,
+			Content:     fmt.Sprintf("【%s】种子碎片 #%d：用于广场与详情联调。", topic, i+1),
+			Visibility:  vis,
+			SourceType:  string(domain.FragmentSourceOriginal),
+			Topic:       topic,
+			Caption:     fmt.Sprintf("碎片标题 %d", i+1),
+			IsDraft:     isDraft,
+			MediaURLs:   nil,
 		}
 		if err := repo.CreateFragment(ctx, frag); err != nil {
 			return nil, fmt.Errorf("fragment %d: %w", i, err)

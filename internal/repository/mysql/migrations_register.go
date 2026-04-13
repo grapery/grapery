@@ -747,7 +747,8 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureAIGenerationRecordsSchema()
 		},
-		Required: false,
+		// Required: old DBs may have passed core migrate when ALTER failures were ignored; re-run must fail loud if still broken.
+		Required: true,
 	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
@@ -777,6 +778,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureStoryboardVideoGenerationPromptDetailsSchema()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_storyboard_continuation_generation_options_schema",
+		Description: "Ensure storyboards has generate_video_after_images and continuation_comic_style",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureStoryboardContinuationGenerationOptionsSchema()
 		},
 		Required: false,
 	})

@@ -59,6 +59,95 @@ func (r *Repository) ListFragments(ctx context.Context, limit, offset int, visib
 	return result, total, nil
 }
 
+// ListPublicNonDraftFragments lists public non-draft fragments, newest first.
+func (r *Repository) ListPublicNonDraftFragments(ctx context.Context, limit, offset int) ([]*domain.Fragment, int64, error) {
+	var fragments []*FragmentDB
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&FragmentDB{}).
+		Where("visibility = ? AND COALESCE(is_draft, 0) = ?", domain.FragmentVisibilityPublic, 0)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Preload("Creator").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&fragments).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]*domain.Fragment, len(fragments))
+	for i, f := range fragments {
+		domainFragment := r.fragmentToDomain(*f)
+		result[i] = &domainFragment
+	}
+	return result, total, nil
+}
+
+// ListPublicFragmentsByTopic lists public non-draft fragments with exact topic match.
+func (r *Repository) ListPublicFragmentsByTopic(ctx context.Context, topic string, limit, offset int) ([]*domain.Fragment, int64, error) {
+	var fragments []*FragmentDB
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&FragmentDB{}).
+		Where("topic = ? AND visibility = ? AND COALESCE(is_draft, 0) = ?", topic, domain.FragmentVisibilityPublic, 0)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Preload("Creator").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&fragments).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]*domain.Fragment, len(fragments))
+	for i, f := range fragments {
+		domainFragment := r.fragmentToDomain(*f)
+		result[i] = &domainFragment
+	}
+	return result, total, nil
+}
+
+// ListTopPublicFragmentTopicLabels implements domain.Repository.
+func (r *Repository) ListTopPublicFragmentTopicLabels(ctx context.Context, minCount, limit int) ([]string, error) {
+	if minCount < 1 {
+		minCount = 2
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	var rows []struct {
+		Topic string `gorm:"column:topic"`
+	}
+	err := r.db.WithContext(ctx).Raw(`
+SELECT topic FROM fragments
+WHERE visibility = ? AND COALESCE(is_draft, 0) = ? AND TRIM(topic) <> ''
+GROUP BY topic
+HAVING COUNT(*) >= ?
+ORDER BY COUNT(*) DESC, MAX(created_at) DESC
+LIMIT ?
+`, domain.FragmentVisibilityPublic, 0, minCount, limit).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.Topic != "" {
+			out = append(out, row.Topic)
+		}
+	}
+	return out, nil
+}
+
 // CreateFragment creates a new fragment
 func (r *Repository) CreateFragment(ctx context.Context, fragment *domain.Fragment) error {
 	dbFragment := r.fragmentToModel(fragment)

@@ -22,6 +22,9 @@ type ContinueRequest struct {
 	UserPrompt         string   `json:"userPrompt"`
 	SceneCount         int      `json:"sceneCount"`
 	Characters         []string `json:"characters,omitempty"` // Optional: specific character IDs to include
+	// GenerateVideo: 为 true 时，每格场景图生成完成后自动基于该图发起视频生成（默认仅图片）
+	GenerateVideo bool   `json:"generateVideo"`
+	ComicStyle    string `json:"comicStyle,omitempty"` // 漫画风格 slug，持久化到故事板
 }
 
 // ContinueResult represents the result of continuing a storyboard
@@ -58,7 +61,9 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		zap.String("userId", userID),
 		zap.String("parentStoryboardId", req.ParentStoryboardID),
 		zap.String("userPrompt", truncateLog(req.UserPrompt, 200)),
-		zap.Int("requestedSceneCount", req.SceneCount))
+		zap.Int("requestedSceneCount", req.SceneCount),
+		zap.Bool("generateVideoAfterImages", req.GenerateVideo),
+		zap.String("comicStyle", strings.TrimSpace(req.ComicStyle)))
 
 	// Step 1: Validate and fetch parent storyboard
 	parentStoryboard, err := s.repo.StoryboardByID(ctx, req.ParentStoryboardID)
@@ -149,8 +154,10 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		IsStandalone:   false,
 		IsAIGenerated:  true,
 		SceneCount:     req.SceneCount,
-		WorkflowStatus: domain.WorkflowStatusDraft,
-		CurrentStep:    1,
+		WorkflowStatus:           domain.WorkflowStatusDraft,
+		CurrentStep:              1,
+		GenerateVideoAfterImages: req.GenerateVideo,
+		ContinuationComicStyle:   strings.TrimSpace(req.ComicStyle),
 		EngagementStats: common.EngagementStats{
 			Likes:    0,
 			Comments: 0,
@@ -176,16 +183,39 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		return nil, fmt.Errorf("failed to generate storyboard: %w", err)
 	}
 
-	// Attach scenes to storyboard (content is already updated inside generateContinuationStoryboard)
+	// Attach scenes for response payload (same slice as persisted in transaction)
 	newStoryboard.StoryboardScenes = generatedScenes
 
-	// Step 7: Save new storyboard
-	if err := s.repo.CreateStoryboard(ctx, newStoryboard); err != nil {
-		s.logger.Error("failed to create new storyboard",
-			zap.String("newStoryboardId", newStoryboardID),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to create storyboard: %w", err)
+	// Step 7: Persist storyboard + scenes in one transaction, then start async image jobs
+	if err := s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
+		if err := tx.CreateStoryboard(ctx, newStoryboard); err != nil {
+			s.logger.Error("failed to create new storyboard in transaction",
+				zap.String("newStoryboardId", newStoryboardID),
+				zap.Error(err))
+			return fmt.Errorf("failed to create storyboard: %w", err)
+		}
+		if len(generatedScenes) > 0 {
+			scenes := make([]*domain.StoryboardScene, len(generatedScenes))
+			for i := range generatedScenes {
+				scenes[i] = &generatedScenes[i]
+			}
+			if err := tx.CreateStoryboardScenes(ctx, newStoryboard.ID, scenes); err != nil {
+				s.logger.Error("failed to persist continuation storyboard scenes",
+					zap.String("newStoryboardId", newStoryboardID),
+					zap.Int("sceneCount", len(scenes)),
+					zap.Error(err))
+				return fmt.Errorf("failed to persist storyboard scenes: %w", err)
+			}
+			s.logger.Info("continuation storyboard scenes persisted",
+				zap.String("newStoryboardId", newStoryboardID),
+				zap.Int("sceneCount", len(scenes)))
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
+
+	s.startContinuationSceneImageGenerations(newStoryboard.ID, newStoryboard.ContinuationComicStyle, generatedScenes)
 
 	// Update parent storyboard's fork count
 	parentStoryboard.ForkCount++
@@ -248,7 +278,7 @@ func generateContinuationTitle(parent *domain.Storyboard) string {
 // 这是平行宇宙续写的核心生成逻辑：
 // 1. 生成 Storyboard.Content（AI 叙述文本）
 // 2. 基于 Content 生成多个 Scene（场景细分）
-// 3. 启动场景图片生成任务（异步）
+// 生图在事务落库之后由 startContinuationSceneImageGenerations 启动。
 func (s *Service) generateContinuationStoryboard(
 	ctx context.Context,
 	newStoryboard *domain.Storyboard,
@@ -283,6 +313,7 @@ func (s *Service) generateContinuationStoryboard(
 		newStoryboard.ID,
 		content,
 		newStoryboard.SceneCount,
+		newStoryboard.ContinuationComicStyle,
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to generate scenes from content: %w", err)
@@ -295,54 +326,53 @@ func (s *Service) generateContinuationStoryboard(
 		zap.Int("scenesGenerated", len(scenes)),
 		zap.Int("totalTokens", totalTokens))
 
-	// Step 3: Start async image generation for each scene
-	// 启动异步图片生成任务
-	s.logger.Info("starting async image generation for scenes",
-		zap.String("storyboardId", newStoryboard.ID),
-		zap.Int("sceneCount", len(scenes)))
+	return scenes, totalTokens, nil
+}
+
+// startContinuationSceneImageGenerations 在故事板与分镜行已提交后，为每个分镜异步拉起 GenerateSceneImage。
+func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyle string, scenes []domain.StoryboardScene) {
+	if len(scenes) == 0 {
+		return
+	}
+	comicStyle = strings.TrimSpace(comicStyle)
+	s.logger.Info("starting async image generation for continuation scenes",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("sceneCount", len(scenes)),
+		zap.String("comicStyle", comicStyle))
 
 	for _, scene := range scenes {
-		// Create image generation request
+		scene := scene
 		imageReq := &ImageGenerationRequest{
-			StoryboardID:     newStoryboard.ID,
+			StoryboardID:     storyboardID,
 			SceneID:          scene.ID,
 			SceneTitle:       scene.Title,
 			SceneDescription: scene.Description,
-			// TODO: Add character references if available
-			SceneCharacters: []string{}, // Will be populated from context
+			SceneCharacters:  []string{},
+			ComicStyle:       comicStyle,
 		}
-
-		// Start async image generation (non-blocking)
-		// This will create a generation record and process in background
-		go func(sceneID string) {
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					s.logger.Error("panic in image generation",
-						zap.String("sceneId", sceneID),
+					s.logger.Error("panic in continuation image generation",
+						zap.String("storyboardId", storyboardID),
+						zap.String("sceneId", scene.ID),
 						zap.Any("panic", r))
 				}
 			}()
-
 			gen, err := s.GenerateSceneImage(context.Background(), imageReq)
 			if err != nil {
-				s.logger.Warn("failed to start image generation for scene",
-					zap.String("storyboardId", newStoryboard.ID),
-					zap.String("sceneId", sceneID),
+				s.logger.Warn("failed to start image generation for continuation scene",
+					zap.String("storyboardId", storyboardID),
+					zap.String("sceneId", scene.ID),
 					zap.Error(err))
-			} else {
-				s.logger.Debug("image generation started for scene",
-					zap.String("storyboardId", newStoryboard.ID),
-					zap.String("sceneId", sceneID),
-					zap.String("generationId", gen.ID))
+				return
 			}
-		}(scene.ID)
+			s.logger.Debug("continuation image generation started",
+				zap.String("storyboardId", storyboardID),
+				zap.String("sceneId", scene.ID),
+				zap.String("generationId", gen.ID))
+		}()
 	}
-
-	s.logger.Info("async image generation tasks started",
-		zap.String("storyboardId", newStoryboard.ID),
-		zap.Int("tasksStarted", len(scenes)))
-
-	return scenes, totalTokens, nil
 }
 
 // generateStoryboardContent 生成故事板的叙述内容
@@ -413,10 +443,19 @@ func (s *Service) generateStoryboardContent(
 	}
 
 	// Build the prompt
+	comicStyleBlock := ""
+	if cs := strings.TrimSpace(newStoryboard.ContinuationComicStyle); cs != "" {
+		comicStyleBlock = fmt.Sprintf(`
+## 漫画/视觉风格
+用户选择的漫画风格 slug：%s
+叙述与节奏应贴合该风格的气质与画面感（为后续分镜图生成一致）。
+
+`, cs)
+	}
 	prompt := fmt.Sprintf(`你是一位专业的小说作家。请根据以下上下文和用户输入，续写一个引人入胜的故事章节。
 
 %s
-
+%s
 ## 用户输入
 %s
 
@@ -427,7 +466,7 @@ func (s *Service) generateStoryboardContent(
 4. 篇幅控制在 800-1500 字
 5. 只输出故事内容，不要输出其他解释或说明
 
-请开始创作:`, contextBuilder.String(), userPrompt)
+请开始创作:`, contextBuilder.String(), comicStyleBlock, userPrompt)
 
 	s.logger.Debug("calling gemini for storyboard content generation",
 		zap.String("storyboardId", newStoryboard.ID),
@@ -465,6 +504,7 @@ func (s *Service) generateScenesFromContent(
 	storyboardID string,
 	content string,
 	sceneCount int,
+	comicStyle string,
 ) ([]domain.StoryboardScene, int, error) {
 	s.logger.Info("generating scenes from content",
 		zap.String("storyboardId", storyboardID),
@@ -484,12 +524,20 @@ func (s *Service) generateScenesFromContent(
 		return s.generatePlaceholderScenes(storyboardID, sceneCount), 0, nil
 	}
 
+	comicHint := ""
+	if cs := strings.TrimSpace(comicStyle); cs != "" {
+		comicHint = fmt.Sprintf(`
+## 漫画/视觉风格
+分镜描述需在构图、氛围上与漫画风格「%s」一致，便于后续生图。
+
+`, cs)
+	}
 	// Build the prompt for structured scene generation
 	prompt := fmt.Sprintf(`你是一位专业的编剧。请将以下故事内容细分为 %d 个场景，并为每个场景生成详细信息。
 
 ## 故事内容
 %s
-
+%s
 ## 要求
 1. 将故事自然地划分为 %d 个场景
 2. 每个场景包含：标题、描述、地点、时间段
@@ -511,7 +559,7 @@ func (s *Service) generateScenesFromContent(
   ]
 }
 
-请生成场景信息:`, sceneCount, contentForPrompt, sceneCount)
+请生成场景信息:`, sceneCount, contentForPrompt, comicHint, sceneCount)
 
 	s.logger.Debug("calling gemini for scene generation",
 		zap.String("storyboardId", storyboardID),

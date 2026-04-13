@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -27,17 +28,26 @@ type sceneRefPayload struct {
 }
 
 type continueStoryboardPayload struct {
-	RawInput   string   `json:"rawInput" binding:"required"`
-	SceneCount int      `json:"sceneCount"`
-	Characters []string `json:"characters,omitempty"` // Optional: specific character IDs to include
+	RawInput      string   `json:"rawInput" binding:"required"`
+	SceneCount    int      `json:"sceneCount"`
+	Characters    []string `json:"characters,omitempty"` // Optional: specific character IDs to include
+	GenerateVideo bool     `json:"generateVideo"`        // 默认 false：仅生图；true 时生图后再基于图生视频
+	ComicStyle    string   `json:"comicStyle,omitempty"` // 漫画风格 slug，写入故事板
 }
 
-// truncateForLog truncates a string for logging purposes
+// truncateForLog truncates for logging; maxLen is bytes, adjusted to a UTF-8 boundary.
 func truncateForLog(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	truncated := s[:maxLen]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated + "..."
 }
 
 // CreateStoryboard 创建 storyboard
@@ -607,7 +617,9 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 		zap.String("parentId", parentID),
 		zap.String("userId", userID.(string)),
 		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
-		zap.Int("sceneCount", req.SceneCount))
+		zap.Int("sceneCount", req.SceneCount),
+		zap.Bool("generateVideo", req.GenerateVideo),
+		zap.String("comicStyle", req.ComicStyle))
 
 	sceneCount, err := service.NormalizeStoryboardSceneCount(req.SceneCount)
 	if err != nil {
@@ -621,6 +633,8 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 		UserPrompt:         req.RawInput,
 		SceneCount:         sceneCount,
 		Characters:         req.Characters,
+		GenerateVideo:      req.GenerateVideo,
+		ComicStyle:         req.ComicStyle,
 	})
 	if err != nil {
 		h.logger.Error("ContinueStoryboard failed",

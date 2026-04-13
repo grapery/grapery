@@ -58,3 +58,31 @@ func (h *Handler) ConvertFragmentToStory(c *gin.Context) {
 
 	Success(c, resp)
 }
+
+// ExpandFragmentStoryPrefillAI POST /api/v1/fragments/:id/story-prefill-ai
+func (h *Handler) ExpandFragmentStoryPrefillAI(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	fragmentID := c.Param("id")
+
+	var req domain.FragmentStoryPrefillAIRequest
+	_ = c.ShouldBindJSON(&req) // 允许空 body
+
+	if req.SceneCount < 2 || req.SceneCount > 8 {
+		req.SceneCount = 3
+	}
+
+	resp, err := h.svc.ExpandFragmentStoryPrefillAI(c.Request.Context(), userID, fragmentID, req)
+	if err != nil {
+		h.logger.Error("fragment story prefill AI failed",
+			zap.String("userID", userID),
+			zap.String("fragmentID", fragmentID),
+			zap.Error(err))
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, resp)
+}

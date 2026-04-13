@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -23,7 +24,7 @@ func (r *Repository) StoriesByUser(ctx context.Context, userID string, limit, of
 	var stories []Story
 	err := r.db.WithContext(ctx).
 		Preload("Author").
-		Where("author_id = ?", userID).
+		Where("author_id = ? AND status != ?", userID, string(common.ContentStatusArchived)).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -227,6 +228,61 @@ func (r *Repository) PopularCharacters(ctx context.Context, limit int) ([]*domai
 
 // ========== AI Generation operations ==========
 
+func isMySQLIncorrectStringValue(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "1366") && strings.Contains(s, "Incorrect string value")
+}
+
+// validateAIGenerationRecordDBUTF8 rejects strings that are not valid UTF-8. MySQL utf8mb4 still errors (often 1366) on invalid byte sequences.
+func validateAIGenerationRecordDBUTF8(m *AIGenerationRecord) error {
+	if m == nil {
+		return nil
+	}
+	checks := []struct {
+		field, value string
+	}{
+		{"id", m.ID},
+		{"user_id", m.UserID},
+		{"type", m.Type},
+		{"provider", m.Provider},
+		{"model", m.Model},
+		{"original_prompt", m.OriginalPrompt},
+		{"enhanced_prompt", m.EnhancedPrompt},
+		{"system_prompt", m.SystemPrompt},
+		{"input_params", m.InputParams},
+		{"output_result", m.OutputResult},
+		{"status", m.Status},
+		{"error_message", m.ErrorMessage},
+		{"error_code", m.ErrorCode},
+		{"related_entity_id", m.RelatedEntityID},
+		{"related_entity_type", m.RelatedEntityType},
+		{"metadata", m.Metadata},
+	}
+	for _, c := range checks {
+		if c.value == "" {
+			continue
+		}
+		if !utf8.ValidString(c.value) {
+			return fmt.Errorf("%w: field %q is not valid UTF-8 (cannot store in MySQL utf8mb4; check upstream encoding)", domain.ErrInvalidInput, c.field)
+		}
+	}
+	return nil
+}
+
+// createAIGenerationRecordPinned pins one pooled connection and sets session charset to utf8mb4 before INSERT.
+// Columns can already be utf8mb4 while character_set_client/connection are still latin1, which yields MySQL 1366 on Chinese text.
+func (r *Repository) createAIGenerationRecordPinned(ctx context.Context, dbRecord *AIGenerationRecord) error {
+	return r.db.WithContext(ctx).Connection(func(tx *gorm.DB) error {
+		if err := tx.Exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
+			return err
+		}
+		return tx.Create(dbRecord).Error
+	})
+}
+
 func (r *Repository) CreateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
 
@@ -238,11 +294,20 @@ func (r *Repository) CreateAIGenerationRecord(ctx context.Context, record *domai
 		dbRecord.CreatedAt = time.Now()
 	}
 
-	if err := r.db.WithContext(ctx).Create(dbRecord).Error; err != nil {
+	if err := validateAIGenerationRecordDBUTF8(dbRecord); err != nil {
 		return err
 	}
 
-	// 更新 record ID
+	err := r.createAIGenerationRecordPinned(ctx, dbRecord)
+	if err != nil && isMySQLIncorrectStringValue(err) {
+		// 列已是 utf8mb4 时仍 1366：多为其它负载列未改全；或 information_schema 与真实表不一致。
+		ForceAIGenerationRecordsUTF8MB4Columns(r.db, r.log)
+		err = r.createAIGenerationRecordPinned(ctx, dbRecord)
+	}
+	if err != nil {
+		return err
+	}
+
 	record.ID = dbRecord.ID
 	return nil
 }
@@ -263,6 +328,10 @@ func (r *Repository) GetAIGenerationRecord(ctx context.Context, recordID string)
 
 func (r *Repository) UpdateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
+
+	if err := validateAIGenerationRecordDBUTF8(dbRecord); err != nil {
+		return err
+	}
 
 	result := r.db.WithContext(ctx).
 		Model(&AIGenerationRecord{}).
@@ -1717,6 +1786,9 @@ func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter)
 	// Apply filters
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	} else {
+		// 默认列表不展示已归档（显式传 status=archived 时仍可查询）
+		query = query.Where("status != ?", string(common.ContentStatusArchived))
 	}
 	if filter.UserID != "" {
 		query = query.Where("author_id = ?", filter.UserID)

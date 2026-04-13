@@ -239,10 +239,13 @@ func main() {
 	// Initialize AI clients
 	initAIClients(cfg, svc, repo, logger)
 
+	// 与 Fragment 生成等共用同一套 AI 依赖；HTTP 路由上的 /ai/*（含 enhance-prompt）必须非 nil，否则异步 goroutine 会在 nil 接收者上 panic。
+	aiSvc := svc.AIService()
+
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
 	fragmentRepo := repository.NewFragmentRepository(repo.DB(), cfg.Recommendation, redisCache, logger)
-	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, svc.AIService(), logger)
+	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, aiSvc, logger)
 	logger.Info("fragment generation service initialized")
 
 	panelGenRepo := repository.NewFragmentPanelGenerationRepository(repo.DB())
@@ -263,6 +266,7 @@ func main() {
 
 	// Comic style batches (DB + AI backfill)
 	comicStyleSvc := service.NewFragmentComicStyleService(repo.DB(), svc.AIGenerationService(), logger)
+	svc.SetFragmentComicStyleService(comicStyleSvc)
 
 	// Initialize Fragment Handler
 	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo, comicStyleSvc)
@@ -295,7 +299,7 @@ func main() {
 	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
-		AIService:             nil,
+		AIService:             aiSvc,
 		StoryboardPathService: storyboardPathService,
 		InteractionService:    interactionService,
 		UserSettingsService:   userSettingsService,

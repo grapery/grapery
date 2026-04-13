@@ -131,6 +131,29 @@ func (s *FragmentComicStyleService) NextBatchDBOnly(ctx context.Context, userID 
 	return toStyleItems(batch), nil
 }
 
+// LookupByValue 按碎片表 `style` 字段存储的 value slug 查询全局目录 fragment_comic_styles（与创作页 `PostFragmentStylesNext` 同源）。
+// 未命中或 value 为空时返回 (nil, nil)；仅数据库错误时返回 err。
+func (s *FragmentComicStyleService) LookupByValue(ctx context.Context, value string) (*FragmentComicStyleItem, error) {
+	v := strings.TrimSpace(value)
+	if v == "" || s.db == nil {
+		return nil, nil
+	}
+	var row mysql.FragmentComicStyle
+	err := s.db.WithContext(ctx).Where("LOWER(value) = ?", strings.ToLower(v)).First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	items := toStyleItems([]mysql.FragmentComicStyle{row})
+	if len(items) == 0 {
+		return nil, nil
+	}
+	out := items[0]
+	return &out, nil
+}
+
 func toStyleItems(rows []mysql.FragmentComicStyle) []FragmentComicStyleItem {
 	out := make([]FragmentComicStyleItem, 0, len(rows))
 	for _, r := range rows {

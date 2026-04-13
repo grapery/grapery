@@ -71,6 +71,7 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		CoverImage:          story.CoverImage,
 		UserID:              authorID,
 		Genre:               story.Genre,
+		Style:               styleConfigToJSON(story.Style),
 		Status:              story.Status,
 		Likes:               story.Likes,
 		Followers:           story.Followers,

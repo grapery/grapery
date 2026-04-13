@@ -272,6 +272,9 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 //   - topic: exact topic label to list (same as stored on fragments, no leading #)
 //   - converted / convertedOnly: optional filter — "true" (hatched to story only),
 //     "false" (not hatched only), empty or other (all). Aliases are equivalent.
+//   - public_feed=1: when tab is discover / for_you / recommended (and no topic), return all public non-draft
+//     fragments by time — same catalog as GET /plaza embedded previews. Ignores onboarding genre filter so
+//     plaza “查看全部” matches the rail.
 //   - page, limit, offset: pagination (offset overrides page-derived offset when valid)
 func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	userID := c.GetString("userID")
@@ -280,6 +283,11 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	tab := strings.TrimSpace(strings.ToLower(c.DefaultQuery("tab", "discover"))) // discover (default), for_you / recommended (alias), following
 	if tab == "" {
 		tab = "discover"
+	}
+	publicFeed := false
+	switch strings.ToLower(strings.TrimSpace(c.Query("public_feed"))) {
+	case "1", "true", "yes":
+		publicFeed = true
 	}
 	topic := c.Query("topic") // optional: filter by topic
 	converted := c.Query("converted")
@@ -332,8 +340,13 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 				return
 			}
 			fragments, total, err = h.fragmentRepo.ListFollowing(c.Request.Context(), userID, limit, offset)
-		default: // discover, for_you, recommended — onboarding genres only; guests = public chronological
-			fragments, total, err = h.fragmentRepo.ListDiscoverFragmentsForUser(c.Request.Context(), userID, limit, offset)
+		default: // discover, for_you, recommended
+			if publicFeed {
+				// Align with plaza rail: full public timeline (not genre-scoped discover).
+				fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+			} else {
+				fragments, total, err = h.fragmentRepo.ListDiscoverFragmentsForUser(c.Request.Context(), userID, limit, offset)
+			}
 		}
 	}
 

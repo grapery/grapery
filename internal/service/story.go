@@ -90,7 +90,7 @@ type UpdateStoryRequest struct {
 	Description *string `json:"description" binding:"omitempty,max=2000"`
 	CoverImage  *string `json:"coverImage" binding:"omitempty,url"`
 	Genre       *string `json:"genre" binding:"omitempty"`
-	Status      *string `json:"status" binding:"omitempty,oneof=draft published rendering"`
+	Status      *string `json:"status" binding:"omitempty,oneof=draft published rendering archived"`
 
 	// Collaboration settings
 	IsCollaborationOpen *bool `json:"isCollaborationOpen"` // Whether collaboration is open: true=anyone can edit, false=only author can edit
@@ -106,11 +106,14 @@ type UpdateStoryRequest struct {
 
 	// Tags
 	Tags *[]string `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
+
+	// 漫画 / AI 创作风格（slug，与碎片 `fragment_comic_styles.value` 一致）
+	Style *string `json:"style,omitempty"`
 }
 
 // StoryListRequest 故事列表请求
 type StoryListRequest struct {
-	Status string `form:"status" binding:"omitempty,oneof=draft published rendering"`
+	Status string `form:"status" binding:"omitempty,oneof=draft published rendering archived"`
 	Genre  string `form:"genre"`
 	UserID string `form:"authorId"`
 	Search string `form:"search"`
@@ -719,6 +722,22 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 			zap.String("oldGenre", oldGenre),
 			zap.String("newGenre", story.Genre))
 	}
+	if req.Style != nil {
+		v := strings.TrimSpace(*req.Style)
+		if v != "" {
+			var styleToSet *domain.StyleConfig
+			if sc, err := s.GetStyleConfigByStyle(ctx, v); err == nil && sc != nil {
+				styleToSet = sc
+			} else {
+				styleToSet = &domain.StyleConfig{Style: v}
+			}
+			story.Style = styleToSet
+			fieldsUpdated = append(fieldsUpdated, "style")
+			s.logger.Debug("style updated",
+				zap.String("storyID", storyID),
+				zap.String("style", v))
+		}
+	}
 	if req.Status != nil {
 		oldStatus := story.Status
 		story.Status = *req.Status
@@ -828,6 +847,36 @@ func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error
 	s.logger.Debug("authorization verified for story deletion",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID))
+
+	if story.StoryboardCount > 0 {
+		s.logger.Warn("story delete rejected: has storyboards",
+			zap.String("storyID", storyID),
+			zap.Int("storyboardCount", story.StoryboardCount))
+		return errors.New("cannot delete story with storyboards")
+	}
+
+	authorID := userID
+	if story.UserID != "" {
+		authorID = story.UserID
+	}
+	contributors, err := s.repo.GetStoryContributors(ctx, storyID, 100, 0)
+	if err != nil {
+		s.logger.Error("failed to load contributors for delete check",
+			zap.String("storyID", storyID),
+			zap.Error(err))
+		return errors.New("failed to get story")
+	}
+	for _, c := range contributors {
+		if c == nil {
+			continue
+		}
+		if c.UserID != "" && c.UserID != authorID {
+			s.logger.Warn("story delete rejected: other contributors",
+				zap.String("storyID", storyID),
+				zap.String("contributorUserID", c.UserID))
+			return errors.New("cannot delete story with other contributors")
+		}
+	}
 
 	s.logger.Debug("deleting story from database",
 		zap.String("storyID", storyID))
@@ -2349,7 +2398,8 @@ func (s *Service) buildEnrichDescriptionPrompt(originalDesc, genre string, style
 	prompt += `
 【写作目标】
 - 输出一段 300-500 字左右的中文背景描述（自然段即可）
-- 强化环境描写、氛围、世界观细节，让读者“能看到画面”
+- 强化环境描写、氛围、世界观细节，包含多重感官体验（视觉的光影/色彩、温度、气味、服饰材质细节等），让读者“能看到画面”
+- 尽量包含特定的时间维度、天气动态特征，展现电影般的空间感与场景纵深
 - 暗示潜在冲突/悬念，但不要剧透完整情节
 
 【硬性规则】
@@ -2580,11 +2630,11 @@ Create a professional, cinematic key art concept that is:
 # JSON Output Schema
 {
   "cover_concept": {
-    "visual_subject": "string (main subject with concrete visual details)",
-    "scene_environment": "string (setting + weather + props, if any)",
-    "composition_camera": "string (camera angle + framing + depth of field + negative space guidance)",
-    "lighting_atmosphere": "string (lighting + color palette + mood)",
-    "art_style": "string (medium + rendering style keywords)"
+    "visual_subject": "string (main subject with concrete visual details, including specific posture, highly detailed clothing fabric/texture, micro-expressions, accessories)",
+    "scene_environment": "string (setting + weather + atmospheric effects like fog/dust motes + background props/architecture)",
+    "composition_camera": "string (specific camera lens e.g. 50mm/anamorphic, low/high angle, depth of field, framing, rule of thirds, negative space guidance)",
+    "lighting_atmosphere": "string (lighting setup e.g. volumetric, rim light, chiaroscuro, cinematic, specific color grading/palettes, temperature, mood)",
+    "art_style": "string (medium + rendering style keywords e.g. Unreal Engine 5, Octane render, cinematic concept art, photorealistic)"
   },
   "typography_instruction": {
     "title_content": "string (MUST be 'NONE' — do not generate text in image)",

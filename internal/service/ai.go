@@ -243,6 +243,9 @@ func (s *AIService) extractSummary(text string) string {
 
 // EnhancePrompt 增强提示词
 func (s *AIService) EnhancePrompt(ctx context.Context, userID string, req *domain.AIPromptEnhanceRequest) (*domain.AITask, error) {
+	if s == nil {
+		return nil, fmt.Errorf("ai service is not initialized")
+	}
 	// 创建 AI 任务
 	task := &domain.AITask{
 		ID:        uuid.New().String(),
@@ -925,6 +928,82 @@ func (s *AIService) generateFragmentTextHuoshan(ctx context.Context, prompt stri
 		tokens = resp.InputTokens + resp.OutputTokens
 	}
 	return strings.TrimSpace(resp.Text), tokens, nil
+}
+
+// fragmentPrefillHTTPImageURLs 仅保留公网 http(s) URL，供火山多模态对话使用（最多 maxN 张）。
+func fragmentPrefillHTTPImageURLs(urls []string, maxN int) []string {
+	if maxN <= 0 {
+		return nil
+	}
+	var out []string
+	for _, u := range urls {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		low := strings.ToLower(u)
+		if !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+			continue
+		}
+		out = append(out, u)
+		if len(out) >= maxN {
+			break
+		}
+	}
+	return out
+}
+
+// GenerateTextForFragmentStoryPrefill 碎片「生成故事」预填：优先火山方舟（JSON 模式 + 可选参考图），失败回退 Gemini。
+func (s *AIService) GenerateTextForFragmentStoryPrefill(ctx context.Context, prompt string, referenceImageURLs []string) (string, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return "", fmt.Errorf("prompt is required")
+	}
+	imgURLs := fragmentPrefillHTTPImageURLs(referenceImageURLs, 4)
+
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	if huoshanOK {
+		hc := s.genAPI.HuoshanInternalClient()
+		req := &huoshanclient.TextGenerationRequest{
+			Prompt:       prompt,
+			MaxTokens:    2048,
+			Temperature:  0.35,
+			JSONResponse: true,
+			ImageURLs:    imgURLs,
+		}
+		resp, err := hc.GenerateText(ctx, req)
+		if err == nil && resp != nil {
+			text := strings.TrimSpace(resp.Text)
+			if text != "" {
+				return text, nil
+			}
+		}
+		if err != nil {
+			s.logger.Warn("fragment story prefill: huoshan failed, falling back to gemini",
+				zap.Error(err))
+		} else {
+			s.logger.Warn("fragment story prefill: huoshan returned empty text, falling back to gemini")
+		}
+	}
+
+	if s.geminiClient == nil {
+		if !huoshanOK {
+			return "", fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
+		}
+		return "", fmt.Errorf("huoshan text generation failed and gemini is not configured")
+	}
+
+	temp := float32(0.35)
+	maxTok := int32(2048)
+	cfg := &genai.GenerateContentConfig{
+		Temperature:     &temp,
+		MaxOutputTokens: maxTok,
+	}
+	raw, _, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+	if err != nil {
+		return "", fmt.Errorf("gemini generate text failed: %w", err)
+	}
+	return raw, nil
 }
 
 // GenerateImageForFragment 生成图片（为 FragmentGenerationService 提供简化接口）。

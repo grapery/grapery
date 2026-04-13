@@ -467,6 +467,13 @@ type Repository interface {
 	FragmentByID(ctx context.Context, id string) (*Fragment, error)
 	// ListFragments retrieves fragments with pagination
 	ListFragments(ctx context.Context, limit, offset int, visibility string) ([]*Fragment, int64, error)
+	// ListPublicNonDraftFragments lists public non-draft fragments, newest first (plaza previews, discover fallback).
+	ListPublicNonDraftFragments(ctx context.Context, limit, offset int) ([]*Fragment, int64, error)
+	// ListPublicFragmentsByTopic lists public non-draft fragments with exact topic match (plaza topic rail).
+	ListPublicFragmentsByTopic(ctx context.Context, topic string, limit, offset int) ([]*Fragment, int64, error)
+	// ListTopPublicFragmentTopicLabels returns distinct topic labels from public non-draft fragments with TRIM(topic) non-empty,
+	// grouped by stored topic, HAVING count >= minCount, ordered by count DESC then MAX(created_at) DESC, limited to limit rows.
+	ListTopPublicFragmentTopicLabels(ctx context.Context, minCount, limit int) ([]string, error)
 	// CreateFragment creates a new fragment
 	CreateFragment(ctx context.Context, fragment *Fragment) error
 	// UpdateFragment updates a fragment

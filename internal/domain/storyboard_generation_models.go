@@ -99,6 +99,8 @@ type StoryboardImageGeneration struct {
 	CharacterReferenceImages []string     `json:"characterReferenceImages,omitempty"` // 角色参考图片 URL 列表
 	StoryStyle               *StyleConfig `json:"storyStyle,omitempty"`               // 故事的风格配置
 	IsTransitionScene        bool         `json:"isTransitionScene"`                  // 是否为过渡场景（无角色出现）
+	// ComicStyle 续写或请求指定的漫画/视觉风格 slug（不入库列，仅随当次生成记录传递）
+	ComicStyle string `json:"comicStyle,omitempty"`
 
 	// Relations
 	Storyboard *Storyboard `json:"storyboard,omitempty"`
@@ -150,6 +152,43 @@ type StoryboardVideoGeneration struct {
 	Storyboard *Storyboard `json:"storyboard,omitempty"`
 }
 
+// Generation pipeline (wizard-oriented): coarse phases for client UI.
+const (
+	PipelinePhaseContent = "content"
+	PipelinePhaseScenes  = "scenes"
+	PipelinePhaseImages  = "images"
+
+	PipelineStepPending   = "pending"
+	PipelineStepRunning   = "running"
+	PipelineStepCompleted = "completed"
+	PipelineStepFailed    = "failed"
+	PipelineStepSkipped   = "skipped"
+
+	SuggestedResumeNone = "none"
+	SuggestedResumeRetryFailedImages  = "retry_failed_images"
+	SuggestedResumeRegenerateContent  = "regenerate_content"
+	SuggestedResumeRegenerateScenes   = "regenerate_scenes"
+)
+
+// GenerationPipelineSceneItem is per-scene status within a pipeline step (e.g. image failures).
+type GenerationPipelineSceneItem struct {
+	SceneID      string `json:"sceneId"`
+	SceneTitle   string `json:"sceneTitle,omitempty"`
+	Status       string `json:"status"` // pending, running, completed, failed
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}
+
+// GenerationPipelineStep is one wizard-visible stage derived from DB state (no extra tables).
+type GenerationPipelineStep struct {
+	Phase        string                        `json:"phase"` // content | scenes | images
+	Status       string                        `json:"status"`
+	Order        int                           `json:"order"`
+	Title        string                        `json:"title"`
+	Summary      string                        `json:"summary,omitempty"`
+	ErrorMessage string                        `json:"errorMessage,omitempty"`
+	SceneItems   []GenerationPipelineSceneItem `json:"sceneItems,omitempty"`
+}
+
 // StoryboardGenerationProgress aggregates all generation records for a storyboard
 type StoryboardGenerationProgress struct {
 	StoryboardID      string                       `json:"storyboardId"`
@@ -163,4 +202,8 @@ type StoryboardGenerationProgress struct {
 	SceneGenerations  []*StoryboardSceneGeneration `json:"sceneGenerations,omitempty"`
 	ImageGenerations  []*StoryboardImageGeneration `json:"imageGenerations,omitempty"`
 	VideoGenerations  []*StoryboardVideoGeneration `json:"videoGenerations,omitempty"`
+	// PipelineSteps 面向客户端「生成步骤详情」；由服务端从现有记录派生。
+	PipelineSteps []GenerationPipelineStep `json:"pipelineSteps,omitempty"`
+	// SuggestedResumeAction 建议的下一步恢复动作（与现有 POST 接口对齐）。
+	SuggestedResumeAction string `json:"suggestedResumeAction,omitempty"`
 }

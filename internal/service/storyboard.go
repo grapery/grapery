@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -2028,7 +2029,7 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "  \"scenes\": [\n"
 	prompt += "    {\n"
 	prompt += "      \"title\": \"场景标题（10字以内）\",\n"
-	prompt += "      \"description\": \"场景描述（100-200字）\",\n"
+	prompt += "      \"description\": \"场景描述（100-200字）。请使用视觉导向语言，包含：具体的摄影机视角/运镜、光影效果、角色的服装与微表情动作特写、环境的具体质感与氛围。\",\n"
 	prompt += "      \"location\": \"地点\",\n"
 	prompt += "      \"timeOfDay\": \"时间\",\n"
 	prompt += "      \"storySceneId\": \"场景ID（仅当使用提供的场景时填写）\",\n"
@@ -2096,7 +2097,7 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 # 内容质量标准
 - content字段：润色后的完整故事概述，**必须严格控制在420字以内**（建议300-400字），语言流畅优美，避免冗长
 - 场景标题：简洁有力，10字以内，体现场景核心
-- 场景描述：100-200字，包含环境、动作、情感三个维度
+- 场景描述：100-200字。必须具有清晰的影视画面定格表现力，明确包含：摄影机位（全景/中景/特写极意）、光线分布（逆光/柔光/明暗对比）、人物面部表情/肢体语言服装细节、以及场景中的环境质感。
 - 地点和时间：具体明确，与场景内容呼应
 - 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）
 - 角色选择：只在characters数组中包含确实参与该场景的角色
@@ -2377,12 +2378,37 @@ func truncateAtSentence(text string, maxLength int) string {
 	return truncated + "..."
 }
 
-// truncateForLog truncates a string for logging purposes
+// truncateForLog truncates a string for logging or prompt context. maxLen is a byte budget;
+// the cut is adjusted backward so the result is always valid UTF-8 (avoids splitting a multibyte rune).
 func truncateForLog(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "...(truncated)"
+	truncated := s[:maxLen]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated + "...(truncated)"
+}
+
+// maxStoryboardAIGeneratedPromptRunes caps text prompts produced in the image/video pipeline
+// (previous-step AI output) at ~200 汉字 when the string is mostly CJK; uses rune count for UTF-8 safety.
+const maxStoryboardAIGeneratedPromptRunes = 200
+
+// truncateStringToMaxRunes returns s with at most maxRunes Unicode code points. The result is always
+// valid UTF-8 (invalid sequences in s become U+FFFD when decoded to runes).
+func truncateStringToMaxRunes(s string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes])
 }
 
 // generateSceneImages 为故事板场景生成图片（使用AI生成服务记录）

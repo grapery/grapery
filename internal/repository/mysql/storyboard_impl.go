@@ -66,22 +66,50 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		return fmt.Errorf("invalid fate_snapshot: %w", err)
 	}
 
+	id := strings.TrimSpace(storyboard.ID)
+	if id == "" {
+		id = uuid.New().String()
+	}
+	sceneCount := storyboard.SceneCount
+	if sceneCount <= 0 {
+		sceneCount = 3
+	}
+	wfStatus := strings.TrimSpace(storyboard.WorkflowStatus)
+	if wfStatus == "" {
+		wfStatus = domain.WorkflowStatusDraft
+	}
+	currentStep := storyboard.CurrentStep
+	if currentStep <= 0 {
+		currentStep = 1
+	}
+	comicStyle := strings.TrimSpace(storyboard.ContinuationComicStyle)
+	if rs := []rune(comicStyle); len(rs) > 80 {
+		comicStyle = string(rs[:80])
+	}
+
 	dbStoryboard := Storyboard{
-		ID:               uuid.New().String(),
-		StoryID:          storyboard.StoryID,
-		ParentID:         parentID,
-		UserID:           storyboard.UserID,
-		Title:            storyboard.Title,
-		Content:          storyboard.Content,
-		RawInput:         storyboard.RawInput,
-		Likes:            0,
-		Comments:         0,
-		Shares:           0,
-		ForkCount:        0,
-		Views:            0,
-		TokenConsumption: storyboard.TokenConsumption,
-		FateSnapshot:     fateSnap,
-		FateSnapshotHash: storyboard.FateSnapshotHash,
+		ID:                       id,
+		StoryID:                  storyboard.StoryID,
+		ParentID:                 parentID,
+		UserID:                   storyboard.UserID,
+		Title:                    storyboard.Title,
+		Content:                  storyboard.Content,
+		RawInput:                 storyboard.RawInput,
+		IsStandalone:             storyboard.IsStandalone,
+		IsAIGenerated:            storyboard.IsAIGenerated,
+		SceneCount:               sceneCount,
+		WorkflowStatus:           wfStatus,
+		CurrentStep:              currentStep,
+		GenerateVideoAfterImages: storyboard.GenerateVideoAfterImages,
+		ContinuationComicStyle:   comicStyle,
+		Likes:                    0,
+		Comments:                 0,
+		Shares:                   0,
+		ForkCount:                0,
+		Views:                    0,
+		TokenConsumption:         storyboard.TokenConsumption,
+		FateSnapshot:             fateSnap,
+		FateSnapshotHash:         storyboard.FateSnapshotHash,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbStoryboard).Error; err != nil {
@@ -541,11 +569,13 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		Title:          sb.Title,
 		Content:        sb.Content,
 		RawInput:       sb.RawInput,
-		IsStandalone:   sb.IsStandalone,
-		IsAIGenerated:  sb.IsAIGenerated,
-		SceneCount:     sb.SceneCount,
-		WorkflowStatus: sb.WorkflowStatus,
-		CurrentStep:    sb.CurrentStep,
+		IsStandalone:             sb.IsStandalone,
+		IsAIGenerated:            sb.IsAIGenerated,
+		SceneCount:               sb.SceneCount,
+		WorkflowStatus:           sb.WorkflowStatus,
+		CurrentStep:              sb.CurrentStep,
+		GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
+		ContinuationComicStyle:   sb.ContinuationComicStyle,
 		EngagementStats: common.EngagementStats{
 			Likes:    sb.Likes,
 			Comments: sb.Comments,

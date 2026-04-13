@@ -2,12 +2,15 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // MigrateStoryboardLegacyData converts legacy inline storyboard scenes/characters
@@ -397,6 +400,113 @@ func (r *Repository) ensureStoriesStyleSchema() error {
 	return nil
 }
 
+func aiGenerationRecordsUTF8PriorityColumns() []struct {
+	column string
+	def    string
+} {
+	return []struct {
+		column string
+		def    string
+	}{
+		{"original_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"enhanced_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"system_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"error_message", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		// 含中文的 JSON 若落在 latin1 TEXT 上会 1366；改为 utf8mb4 LONGTEXT（仍存 JSON 字符串，与 GORM type:json 兼容）
+		{"input_params", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"output_result", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+		{"metadata", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
+	}
+}
+
+// ForceAIGenerationRecordsUTF8MB4Columns 对已知列逐个执行 MODIFY（幂等）。在仍出现 1366 时调用，避免 information_schema 与真实表不一致。
+func ForceAIGenerationRecordsUTF8MB4Columns(db *gorm.DB, log *zap.Logger) {
+	for _, p := range aiGenerationRecordsUTF8PriorityColumns() {
+		q := fmt.Sprintf("ALTER TABLE `ai_generation_records` MODIFY COLUMN `%s` %s", p.column, p.def)
+		if err := db.Exec(q).Error; err != nil {
+			if log != nil {
+				log.Warn("ai_generation_records utf8mb4 ALTER failed or column missing",
+					zap.String("column", p.column), zap.Error(err))
+			}
+			continue
+		}
+		if log != nil {
+			log.Info("ai_generation_records column coerced to utf8mb4", zap.String("column", p.column))
+		}
+	}
+}
+
+// ApplyAIGenerationRecordsUTF8MB4IfNeeded runs before migrations on each server start. If the table already exists
+// but original_prompt is not utf8mb4 (common after legacy latin1 schemas), ALTER fixes MySQL 1366 on Chinese text.
+func ApplyAIGenerationRecordsUTF8MB4IfNeeded(db *gorm.DB, log *zap.Logger) error {
+	var tableCount int64
+	if err := db.Raw(`
+SELECT COUNT(*) FROM information_schema.tables
+WHERE table_schema = DATABASE() AND table_name = 'ai_generation_records'
+`).Scan(&tableCount).Error; err != nil {
+		return fmt.Errorf("check ai_generation_records table: %w", err)
+	}
+	if tableCount == 0 {
+		return nil
+	}
+
+	var rows []struct {
+		ColumnName       string         `gorm:"column:column_name"`
+		CharacterSetName sql.NullString `gorm:"column:character_set_name"`
+		DataType         string         `gorm:"column:data_type"`
+	}
+	if err := db.Raw(`
+SELECT COLUMN_NAME AS column_name, CHARACTER_SET_NAME AS character_set_name, DATA_TYPE AS data_type
+FROM information_schema.columns
+WHERE table_schema = DATABASE() AND table_name = 'ai_generation_records'
+  AND COLUMN_NAME IN (
+    'original_prompt','enhanced_prompt','system_prompt','error_message',
+    'input_params','output_result','metadata'
+  )
+`).Scan(&rows).Error; err != nil {
+		return fmt.Errorf("list ai_generation_records text column charsets: %w", err)
+	}
+	meta := make(map[string]struct {
+		Charset  sql.NullString
+		DataType string
+	}, len(rows))
+	for _, r := range rows {
+		meta[r.ColumnName] = struct {
+			Charset  sql.NullString
+			DataType string
+		}{r.CharacterSetName, strings.ToLower(strings.TrimSpace(r.DataType))}
+	}
+
+	for _, p := range aiGenerationRecordsUTF8PriorityColumns() {
+		m, ok := meta[p.column]
+		if !ok {
+			continue
+		}
+		if m.Charset.Valid && strings.EqualFold(strings.TrimSpace(m.Charset.String), "utf8mb4") {
+			continue
+		}
+		// 原生 JSON 类型在 information_schema 中常无 CHARACTER_SET_NAME，按 MySQL 语义已是 utf8mb4，跳过以免无谓改类型
+		if !m.Charset.Valid && m.DataType == "json" {
+			continue
+		}
+
+		if log != nil {
+			log.Warn("ai_generation_records column is not utf8mb4; applying ALTER (fixes MySQL 1366 for Chinese/emoji)",
+				zap.String("column", p.column),
+				zap.Any("character_set", m.Charset),
+				zap.String("data_type", m.DataType))
+		}
+		q := fmt.Sprintf("ALTER TABLE `ai_generation_records` MODIFY COLUMN `%s` %s", p.column, p.def)
+		if err := db.Exec(q).Error; err != nil {
+			return fmt.Errorf("ai_generation_records: MODIFY %s to utf8mb4: %w (grant ALTER or run SQL manually)", p.column, err)
+		}
+		if log != nil {
+			log.Info("ai_generation_records column set to utf8mb4", zap.String("column", p.column))
+		}
+	}
+	return nil
+}
+
 // ensureAIGenerationRecordsSchema ensures ai_generation_records supports Unicode (utf8mb4) for all
 // prompt and error text, including original_prompt / enhanced_prompt / system_prompt (not only legacy prompt columns).
 // MySQL error 1366 on UTF-8 bytes indicates a latin1 (or non-utf8mb4) column charset.
@@ -405,25 +515,8 @@ func (r *Repository) ensureStoriesStyleSchema() error {
 func (r *Repository) ensureAIGenerationRecordsSchema() error {
 	const table = "`ai_generation_records`"
 
-	// LONGTEXT avoids edge cases where the column was MEDIUMTEXT/TEXT with a non-utf8 charset.
-	priorityUTF8 := []struct {
-		column string
-		def    string
-	}{
-		{"original_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
-		{"enhanced_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
-		{"system_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
-		{"error_message", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
-	}
-	for _, p := range priorityUTF8 {
-		q := fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN `%s` %s", table, p.column, p.def)
-		if err := r.db.Exec(q).Error; err != nil {
-			r.log.Warn("ai_generation_records utf8mb4 MODIFY failed",
-				zap.String("column", p.column), zap.Error(err))
-		} else {
-			r.log.Info("ai_generation_records column set to utf8mb4",
-				zap.String("column", p.column))
-		}
+	if err := ApplyAIGenerationRecordsUTF8MB4IfNeeded(r.db, r.log); err != nil {
+		return err
 	}
 
 	const convertSQL = "ALTER TABLE `ai_generation_records` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
@@ -482,6 +575,26 @@ func (r *Repository) ensureStoryboardVideoGenerationPromptDetailsSchema() error 
 		}
 	}
 
+	return nil
+}
+
+// ensureStoryboardContinuationGenerationOptionsSchema adds continuation generation option columns on storyboards.
+func (r *Repository) ensureStoryboardContinuationGenerationOptionsSchema() error {
+	migrator := r.db.Migrator()
+	if !migrator.HasColumn(&Storyboard{}, "GenerateVideoAfterImages") {
+		r.log.Info("Adding generate_video_after_images to storyboards")
+		if err := r.db.Exec(`ALTER TABLE storyboards ADD COLUMN generate_video_after_images TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'After scene image: also generate video from image'`).Error; err != nil {
+			r.log.Error("failed to add generate_video_after_images", zap.Error(err))
+			return err
+		}
+	}
+	if !migrator.HasColumn(&Storyboard{}, "ContinuationComicStyle") {
+		r.log.Info("Adding continuation_comic_style to storyboards")
+		if err := r.db.Exec(`ALTER TABLE storyboards ADD COLUMN continuation_comic_style VARCHAR(80) NOT NULL DEFAULT '' COMMENT 'Comic/manga style slug for AI continuation'`).Error; err != nil {
+			r.log.Error("failed to add continuation_comic_style", zap.Error(err))
+			return err
+		}
+	}
 	return nil
 }
 

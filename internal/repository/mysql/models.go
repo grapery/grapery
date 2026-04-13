@@ -140,6 +140,8 @@ type Storyboard struct {
 	SceneCount       int         `gorm:"default:3"`                     // Requested number of scenes to generate (2-5)
 	WorkflowStatus   string      `gorm:"size:20;default:'draft';index"` // draft, content_ready, images_ready, video_ready, published
 	CurrentStep      int         `gorm:"default:1"`                     // 1-5 (setup, create, images, video, publish)
+	GenerateVideoAfterImages bool   `gorm:"column:generate_video_after_images;default:false;index"`
+	ContinuationComicStyle   string `gorm:"column:continuation_comic_style;size:80;default:''"`
 	Likes            int         `gorm:"default:0;index"`
 	Comments         int         `gorm:"default:0"`
 	Shares           int         `gorm:"default:0"`
@@ -725,12 +727,12 @@ type AIGenerationRecord struct {
 	Provider string `gorm:"size:50;not null;index"` // gemini, hailuo, huoshan, qwen
 	Model    string `gorm:"size:100"`
 
-	// 提示词信息
-	OriginalPrompt string `gorm:"type:text"` // 原始提示词
-	EnhancedPrompt string `gorm:"type:text"` // 增强后的提示词
-	SystemPrompt   string `gorm:"type:text"` // 系统提示词
-	InputParams    string `gorm:"type:json"` // 完整的输入参数（JSON）
-	OutputResult   string `gorm:"type:json"` // 完整的输出结果（JSON）
+	// 提示词信息（显式 utf8mb4，避免表/库默认 latin1 导致写入中文报 MySQL 1366）
+	OriginalPrompt string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 原始提示词
+	EnhancedPrompt string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 增强后的提示词
+	SystemPrompt   string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 系统提示词
+	InputParams  string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 完整的输入参数（JSON 文本）
+	OutputResult string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`  // 完整的输出结果（JSON 文本）
 
 	// Token 消耗统计
 	InputTokens  int `gorm:"default:0"`       // 输入 token 数
@@ -742,7 +744,7 @@ type AIGenerationRecord struct {
 	// 任务状态
 	Status       string `gorm:"size:20;not null;index"` // pending, processing, completed, failed
 	Progress     int    `gorm:"default:0"`              // 0-100
-	ErrorMessage string `gorm:"type:text"`              // 错误信息
+	ErrorMessage string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 错误信息
 	ErrorCode    string `gorm:"size:50"`                // 错误码
 
 	// 时间统计（毫秒）
@@ -760,8 +762,13 @@ type AIGenerationRecord struct {
 	CompletedAt *time.Time `gorm:"index"`                // 完成时间
 
 	// 扩展元数据
-	Metadata  string         `gorm:"type:json"` // 扩展元数据（JSON）
+	Metadata  string         `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 扩展元数据（JSON 文本）
 	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+// TableName 固定表名，避免与手动迁移 / 多环境 plural 配置不一致。
+func (AIGenerationRecord) TableName() string {
+	return "ai_generation_records"
 }
 
 // ========== 标签系统 ==========
