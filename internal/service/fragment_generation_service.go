@@ -271,7 +271,7 @@ func (s *FragmentGenerationService) generateContent(ctx context.Context, userID 
 	}, nil
 }
 
-// generateImages 生成图片（顺序调用：与 AIGenerationService 按 userID 的图片分布式锁一致，避免同用户并发多张时互斥失败）
+// generateImages 生成图片：先用 LLM 将文案转化为结构化视觉描述，再逐张生图。
 func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content, aspectRatio string) (*domain.FragmentImageGenerationResult, error) {
 	if req.ImageCount <= 0 {
 		return &domain.FragmentImageGenerationResult{
@@ -284,7 +284,17 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 	if ar == "" {
 		ar = domain.FragmentAspectDefault
 	}
-	imagePrompt := s.buildImagePrompt(req, content, ar)
+
+	// 两步法：先用 LLM 生成结构化视觉描述，再合并为英文图片提示词
+	imagePrompt, extraTokens, err := s.generateVisualDescription(ctx, userID, genTaskID, req, content, ar)
+	if err != nil {
+		s.logger.Warn("visual description generation failed, using fallback prompt",
+			zap.Error(err))
+		// 回退：用文案前 80 字 + 风格拼接（比旧的 extractKeywords 稍好）
+		fallback := truncateRunes(content, 80)
+		imagePrompt = fmt.Sprintf("%s, %s style, %s mood, aspect ratio %s", fallback, req.Style, req.Mood, ar)
+		extraTokens = 0
+	}
 
 	imgInput, err := json.Marshal(map[string]string{
 		"prompt":      imagePrompt,
@@ -295,7 +305,7 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 	}
 
 	var allImageUrls []string
-	totalTokens := 0
+	totalTokens := extraTokens
 
 	for i := 0; i < req.ImageCount; i++ {
 		aiReq := domain.AITask{
@@ -324,6 +334,152 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 		ImageUrls:  allImageUrls,
 		TokensUsed: totalTokens,
 	}, nil
+}
+
+// generateVisualDescription 调用 LLM 将故事文案转化为结构化视觉描述，再合并为英文图片提示词。
+func (s *FragmentGenerationService) generateVisualDescription(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content, aspectRatio string) (imagePrompt string, tokensUsed int, err error) {
+	visualPrompt := s.buildVisualDescriptionPrompt(req, content)
+
+	payloadBytes, merr := json.Marshal(map[string]interface{}{"prompt": visualPrompt})
+	if merr != nil {
+		return "", 0, fmt.Errorf("marshal visual description input: %w", merr)
+	}
+
+	aiReq := domain.AITask{
+		ID:                uuid.New().String(),
+		UserID:            userID,
+		Type:              domain.AITaskGenerateFragmentContent,
+		Status:            domain.AITaskStatusProcessing,
+		Provider:          "",
+		Input:             string(payloadBytes),
+		RelatedEntityID:   genTaskID,
+		RelatedEntityType: "fragment_generation",
+	}
+
+	rawJSON, tok, _, gerr := s.aiService.GenerateTextForFragment(ctx, &aiReq)
+	if gerr != nil {
+		return "", tok, gerr
+	}
+
+	desc, perr := parseFragmentVisualDescription(rawJSON)
+	if perr != nil {
+		s.logger.Warn("visual description JSON parse failed, using raw text as fallback",
+			zap.Error(perr),
+			zap.String("snippet", truncateRunes(rawJSON, 120)))
+		// JSON 解析失败，直接用原文作为图片提示词
+		return truncateRunes(rawJSON, 500), tok, nil
+	}
+
+	return combineFragmentImagePrompt(desc, aspectRatio), tok, nil
+}
+
+// buildVisualDescriptionPrompt 构建结构化视觉描述提示词。
+func (s *FragmentGenerationService) buildVisualDescriptionPrompt(req domain.FragmentGenerationRequest, content string) string {
+	style := strings.TrimSpace(req.Style)
+	if style == "" {
+		style = "unspecified"
+	}
+	mood := strings.TrimSpace(req.Mood)
+	if mood == "" {
+		mood = "unspecified"
+	}
+
+	return fmt.Sprintf(`You are a professional visual director. Based on the following story fragment, generate a detailed visual description for ONE illustration that captures the most impactful moment or scene.
+
+Story text:
+%s
+
+Story style: %s
+Story mood: %s
+
+Return ONLY a valid JSON object (no markdown fences, no commentary) with these fields:
+{
+  "artStyle": "English. Art style for the illustration (e.g. watercolor illustration, cinematic photography, cel-shaded anime, oil painting, digital concept art)",
+  "lighting": "English. Lighting description with direction and color temperature (e.g. golden hour backlight from the left, cold fluorescent overhead, dramatic chiaroscuro with warm key light)",
+  "colorPalette": "English. Dominant colors (e.g. warm amber and teal, muted pastels, high-contrast black and crimson, soft lavender and cream)",
+  "composition": "English. Shot composition with lens distance and angle (e.g. low-angle wide shot with deep depth of field, centered close-up portrait, rule-of-thirds landscape)",
+  "keyElements": ["English. Core visual element 1", "element 2", "element 3"],
+  "mood": "English. Visual mood and atmosphere",
+  "characterDescription": "English. Main character appearance: clothing, posture, expression. Empty string if no character.",
+  "environment": "English. Setting and background description",
+  "additionalNotes": "English. Extra details: special materials, effects, reference styles, textures"
+}
+
+Rules:
+- All field values MUST be in English for the image generation model.
+- keyElements: maximum 5 items, ordered by visual importance.
+- Be specific and concrete: "red silk dress with gold embroidery" not "nice clothes"; "ancient stone bridge over misty river at dawn" not "a bridge".
+- composition must include shot type (wide/medium/close-up) AND camera angle.
+- lighting must include direction AND color temperature.
+- Choose the single most visually compelling moment from the story — not the entire narrative.
+- The description should feel like a frame from a high-quality visual story.`, content, style, mood)
+}
+
+// fragmentVisualDescription 解析 LLM 返回的结构化视觉描述 JSON。
+type fragmentVisualDescription struct {
+	ArtStyle            string   `json:"artStyle"`
+	Lighting            string   `json:"lighting"`
+	ColorPalette        string   `json:"colorPalette"`
+	Composition         string   `json:"composition"`
+	KeyElements         []string `json:"keyElements"`
+	Mood                string   `json:"mood"`
+	CharacterDescription string   `json:"characterDescription"`
+	Environment         string   `json:"environment"`
+	AdditionalNotes     string   `json:"additionalNotes"`
+}
+
+func parseFragmentVisualDescription(raw string) (*fragmentVisualDescription, error) {
+	s := strings.TrimSpace(raw)
+	// 去除可能的 markdown 代码围栏
+	if m := jsonFenceRE.FindStringSubmatch(s); len(m) > 1 {
+		s = strings.TrimSpace(m[1])
+	}
+	var desc fragmentVisualDescription
+	if err := json.Unmarshal([]byte(s), &desc); err != nil {
+		return nil, fmt.Errorf("parse visual description JSON: %w", err)
+	}
+	if strings.TrimSpace(desc.ArtStyle) == "" {
+		return nil, fmt.Errorf("visual description missing artStyle")
+	}
+	return &desc, nil
+}
+
+// combineFragmentImagePrompt 将结构化视觉描述合并为一段连贯的英文图片提示词。
+func combineFragmentImagePrompt(desc *fragmentVisualDescription, aspectRatio string) string {
+	var parts []string
+
+	if v := strings.TrimSpace(desc.ArtStyle); v != "" {
+		parts = append(parts, v)
+	}
+	if v := strings.TrimSpace(desc.CharacterDescription); v != "" {
+		parts = append(parts, v)
+	}
+	if v := strings.TrimSpace(desc.Environment); v != "" {
+		parts = append(parts, v)
+	}
+	if v := strings.TrimSpace(desc.Composition); v != "" {
+		parts = append(parts, fmt.Sprintf("Composition: %s", v))
+	}
+	if v := strings.TrimSpace(desc.Lighting); v != "" {
+		parts = append(parts, fmt.Sprintf("Lighting: %s", v))
+	}
+	if v := strings.TrimSpace(desc.ColorPalette); v != "" {
+		parts = append(parts, fmt.Sprintf("Color palette: %s", v))
+	}
+	if len(desc.KeyElements) > 0 {
+		parts = append(parts, fmt.Sprintf("Key elements: %s", strings.Join(desc.KeyElements, ", ")))
+	}
+	if v := strings.TrimSpace(desc.Mood); v != "" {
+		parts = append(parts, fmt.Sprintf("Mood: %s", v))
+	}
+	if v := strings.TrimSpace(desc.AdditionalNotes); v != "" {
+		parts = append(parts, v)
+	}
+	if ar := strings.TrimSpace(aspectRatio); ar != "" {
+		parts = append(parts, fmt.Sprintf("Aspect ratio: %s", ar))
+	}
+
+	return strings.Join(parts, ". ")
 }
 
 // buildFragmentStoryPrompt 构建碎片故事文案提示词；jsonOutput 为 true 时要求输出含 aspectRatio 的 JSON（多模态参考图路径）。
@@ -380,8 +536,16 @@ func (s *FragmentGenerationService) buildFragmentStoryPrompt(req domain.Fragment
 - 长度：%s
 - 语言：%s`, req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
 
+	visualGuide := `写作指引：
+1. 开头用 1-2 句具体的环境描写建立画面（光线方向、色调、空间感）
+2. 角色或物体要有可辨识的外形特征（衣着材质、姿态、表情）
+3. 关键动作或转折处用动词驱动，让读者能"看到"画面而非被告知
+4. 避免纯抽象心理描写，用场景细节和动作暗示情绪`
+
 	if jsonOutput {
 		return fmt.Sprintf(`请根据用户提供的参考图（若有）与上述文字，理解画面构图与叙事意图，生成一个碎片故事。
+
+%s
 
 %s
 
@@ -389,80 +553,16 @@ func (s *FragmentGenerationService) buildFragmentStoryPrompt(req domain.Fragment
 - "content": 字符串，故事正文，直接可读；
 - "aspectRatio": 字符串，必须是以下之一：1:1、16:9、9:16、3:4、4:3。请结合参考图构图与叙事选择最合适的配图长宽比；不确定时用 "16:9"。
 
-内容要简洁有力，适合社交媒体分享。`, base)
+内容要简洁有力，适合社交媒体分享。`, base, visualGuide)
 	}
 
 	return fmt.Sprintf(`请根据以下要求生成一个碎片故事：
 
 %s
 
-请直接输出故事内容，不要有任何前缀或解释。内容要简洁有力，适合社交媒体分享。`, base)
-}
+%s
 
-// buildImagePrompt 构建图片生成提示词（将已定比例写入提示，便于各文生图模型对齐构图）。
-func (s *FragmentGenerationService) buildImagePrompt(req domain.FragmentGenerationRequest, content, aspectRatio string) string {
-	ar := aspectRatio
-	if ar == "" {
-		ar = domain.FragmentAspectDefault
-	}
-	return fmt.Sprintf("%s，%s风格，%s氛围，画面长宽比 %s",
-		extractKeywords(content, 50),
-		req.Style,
-		req.Mood,
-		ar)
-}
-
-// extractKeywords 从文本中提取关键词
-func extractKeywords(text string, maxWords int) string {
-	// 简化的关键词提取逻辑
-	// 实际项目中可以使用更复杂的 NLP 算法
-	words := []string{}
-	wordCount := 0
-
-	// 简单分词（按空格和标点）
-	currentWord := ""
-	for _, char := range text {
-		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') || (char >= 0x4e00 && char <= 0x9fff) {
-			currentWord += string(char)
-		} else {
-			if len(currentWord) > 0 {
-				words = append(words, currentWord)
-				wordCount++
-				if wordCount >= maxWords {
-					break
-				}
-				currentWord = ""
-			}
-		}
-	}
-
-	if len(currentWord) > 0 {
-		words = append(words, currentWord)
-	}
-
-	// 简单去重并拼接
-	uniqueWords := []string{}
-	seen := make(map[string]bool)
-	for _, word := range words {
-		if !seen[word] {
-			uniqueWords = append(uniqueWords, word)
-			seen[word] = true
-		}
-	}
-
-	result := ""
-	for i, word := range uniqueWords {
-		if i > 0 && i < 5 {
-			result += ", "
-		}
-		if i >= 5 {
-			break
-		}
-		result += word
-	}
-
-	return result
+请直接输出故事内容，不要有任何前缀或解释。内容要简洁有力，适合社交媒体分享。`, base, visualGuide)
 }
 
 // currentTime 获取当前时间戳
