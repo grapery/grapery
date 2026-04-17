@@ -112,7 +112,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	// 步骤2: 生成图片
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 50, "generating_images")
 
-	imageResult, err := s.generateImages(ctx, task.UserID, taskID, task.Request, contentResult.Content)
+	imageResult, err := s.generateImages(ctx, task.UserID, taskID, task.Request, contentResult.Content, contentResult.AspectRatio)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
 		return
@@ -120,9 +120,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	// 步骤3: 完成并保存结果
 	result := &domain.FragmentGenerationResult{
-		Content:    contentResult.Content,
-		ImageUrls:  imageResult.ImageUrls,
-		TokensUsed: contentResult.TokensUsed + imageResult.TokensUsed,
+		Content:     contentResult.Content,
+		ImageUrls:   imageResult.ImageUrls,
+		AspectRatio: contentResult.AspectRatio,
+		TokensUsed:  contentResult.TokensUsed + imageResult.TokensUsed,
 	}
 
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
@@ -229,32 +230,49 @@ func captionFromGenerationContent(s string) string {
 
 // generateContent 生成文字内容
 func (s *FragmentGenerationService) generateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentContentGenerationResult, error) {
-	prompt := s.buildContentPrompt(req)
+	jsonStory := len(fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)) > 0
+	prompt := s.buildFragmentStoryPrompt(req, jsonStory)
 
-	// 调用 AI 服务生成内容
+	payload := map[string]interface{}{"prompt": prompt}
+	if imgs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10); len(imgs) > 0 {
+		payload["imageUrls"] = imgs
+	}
+	inputBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal fragment text input: %w", err)
+	}
+
 	aiReq := domain.AITask{
 		ID:       uuid.New().String(),
 		UserID:   userID,
 		Type:     domain.AITaskGenerateFragmentContent,
 		Status:   domain.AITaskStatusProcessing,
 		Provider: "", // 由 AIService 按用户区域选择火山 / Gemini
-		Input:    prompt,
+		Input:    string(inputBytes),
 	}
 
-	// 调用 AI 服务
-	content, tokensUsed, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
+	content, tokensUsed, inferredAR, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
 	if err != nil {
 		return nil, fmt.Errorf("AI text generation failed: %w", err)
 	}
 
+	resolved := domain.NormalizeFragmentAspectRatio(req.AspectRatio)
+	if resolved == "" {
+		resolved = domain.NormalizeFragmentAspectRatio(inferredAR)
+	}
+	if resolved == "" {
+		resolved = domain.FragmentAspectDefault
+	}
+
 	return &domain.FragmentContentGenerationResult{
-		Content:    content,
-		TokensUsed: tokensUsed,
+		Content:     content,
+		AspectRatio: resolved,
+		TokensUsed:  tokensUsed,
 	}, nil
 }
 
 // generateImages 生成图片（顺序调用：与 AIGenerationService 按 userID 的图片分布式锁一致，避免同用户并发多张时互斥失败）
-func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content string) (*domain.FragmentImageGenerationResult, error) {
+func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content, aspectRatio string) (*domain.FragmentImageGenerationResult, error) {
 	if req.ImageCount <= 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
@@ -262,7 +280,19 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 		}, nil
 	}
 
-	imagePrompt := s.buildImagePrompt(req, content)
+	ar := domain.NormalizeFragmentAspectRatio(aspectRatio)
+	if ar == "" {
+		ar = domain.FragmentAspectDefault
+	}
+	imagePrompt := s.buildImagePrompt(req, content, ar)
+
+	imgInput, err := json.Marshal(map[string]string{
+		"prompt":      imagePrompt,
+		"aspectRatio": ar,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal fragment image input: %w", err)
+	}
 
 	var allImageUrls []string
 	totalTokens := 0
@@ -274,7 +304,7 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 			Type:              domain.AITaskGenerateFragmentImages,
 			Status:            domain.AITaskStatusProcessing,
 			Provider:          "",
-			Input:             imagePrompt,
+			Input:             string(imgInput),
 			RelatedEntityID:   genTaskID,
 			RelatedEntityType: "fragment_generation",
 		}
@@ -296,9 +326,8 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 	}, nil
 }
 
-// buildContentPrompt 构建文字生成提示词
-func (s *FragmentGenerationService) buildContentPrompt(req domain.FragmentGenerationRequest) string {
-	// 根据风格和情绪构建详细的提示词
+// buildFragmentStoryPrompt 构建碎片故事文案提示词；jsonOutput 为 true 时要求输出含 aspectRatio 的 JSON（多模态参考图路径）。
+func (s *FragmentGenerationService) buildFragmentStoryPrompt(req domain.FragmentGenerationRequest, jsonOutput bool) string {
 	styleDesc := ""
 	switch req.Style {
 	case "fantasy":
@@ -343,29 +372,44 @@ func (s *FragmentGenerationService) buildContentPrompt(req domain.FragmentGenera
 		lengthDesc = "100-200字"
 	}
 
-	return fmt.Sprintf(`请根据以下要求生成一个碎片故事：
-
-用户输入：%s
+	base := fmt.Sprintf(`用户输入：%s
 
 要求：
 - 风格：%s
 - 情绪：%s
 - 长度：%s
-- 语言：%s
+- 语言：%s`, req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
 
-请直接输出故事内容，不要有任何前缀或解释。内容要简洁有力，适合社交媒体分享。`,
-		req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
+	if jsonOutput {
+		return fmt.Sprintf(`请根据用户提供的参考图（若有）与上述文字，理解画面构图与叙事意图，生成一个碎片故事。
+
+%s
+
+请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
+- "content": 字符串，故事正文，直接可读；
+- "aspectRatio": 字符串，必须是以下之一：1:1、16:9、9:16、3:4、4:3。请结合参考图构图与叙事选择最合适的配图长宽比；不确定时用 "16:9"。
+
+内容要简洁有力，适合社交媒体分享。`, base)
+	}
+
+	return fmt.Sprintf(`请根据以下要求生成一个碎片故事：
+
+%s
+
+请直接输出故事内容，不要有任何前缀或解释。内容要简洁有力，适合社交媒体分享。`, base)
 }
 
-// buildImagePrompt 构建图片生成提示词
-func (s *FragmentGenerationService) buildImagePrompt(req domain.FragmentGenerationRequest, content string) string {
-	// 提取内容的关键元素作为图片提示词
-	prompt := fmt.Sprintf("%s，%s风格，%s氛围",
+// buildImagePrompt 构建图片生成提示词（将已定比例写入提示，便于各文生图模型对齐构图）。
+func (s *FragmentGenerationService) buildImagePrompt(req domain.FragmentGenerationRequest, content, aspectRatio string) string {
+	ar := aspectRatio
+	if ar == "" {
+		ar = domain.FragmentAspectDefault
+	}
+	return fmt.Sprintf("%s，%s风格，%s氛围，画面长宽比 %s",
 		extractKeywords(content, 50),
 		req.Style,
-		req.Mood)
-
-	return prompt
+		req.Mood,
+		ar)
 }
 
 // extractKeywords 从文本中提取关键词

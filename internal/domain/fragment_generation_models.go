@@ -1,11 +1,51 @@
 package domain
 
+import "strings"
+
 const (
 	// Fragment AI 任务类型
 	AITaskGenerateFragment        AITaskType = "generate_fragment"
 	AITaskGenerateFragmentContent AITaskType = "generate_fragment_content"
 	AITaskGenerateFragmentImages  AITaskType = "generate_fragment_images"
 )
+
+// 碎片配图长宽比（与 Gemini / 客户端约定一致）
+const (
+	FragmentAspect1x1     = "1:1"
+	FragmentAspect16x9    = "16:9"
+	FragmentAspect9x16    = "9:16"
+	FragmentAspect3x4     = "3:4"
+	FragmentAspect4x3     = "4:3"
+	FragmentAspectDefault = FragmentAspect16x9
+)
+
+// NormalizeFragmentAspectRatio 将输入规范为允许的比例；无法识别时返回空字符串。
+func NormalizeFragmentAspectRatio(s string) string {
+	switch strings.TrimSpace(s) {
+	case FragmentAspect1x1, FragmentAspect16x9, FragmentAspect9x16, FragmentAspect3x4, FragmentAspect4x3:
+		return strings.TrimSpace(s)
+	default:
+		return ""
+	}
+}
+
+// FragmentImagePixelSizeForAspectRatio 将比例映射为火山等使用像素尺寸时的字符串（与角色立绘逻辑对齐）。
+func FragmentImagePixelSizeForAspectRatio(ar string) string {
+	switch NormalizeFragmentAspectRatio(ar) {
+	case FragmentAspect1x1:
+		return "1024x1024"
+	case FragmentAspect16x9:
+		return "1920x1080"
+	case FragmentAspect9x16:
+		return "1080x1920"
+	case FragmentAspect4x3:
+		return "1024x768"
+	case FragmentAspect3x4:
+		return "768x1024"
+	default:
+		return "1920x1080"
+	}
+}
 
 // FragmentGenerationRequest 碎片故事生成请求
 // 若将来增加统一 provider 字段，应仅作用于图片/视频；文案与规划仍由服务端按用户区域在 huoshan/gemini 间路由。
@@ -18,14 +58,17 @@ type FragmentGenerationRequest struct {
 	Length     string   `json:"length"`     // 内容长度：short, medium, long
 	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
 	Visibility string   `json:"visibility"` // 可见性：public, followers, private
+	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
+	AspectRatio string `json:"aspectRatio,omitempty"`
 }
 
 // FragmentGenerationResult 碎片故事生成结果
 type FragmentGenerationResult struct {
-	Content           string   `json:"content"`                     // 生成的文字内容
-	ImageUrls         []string `json:"imageUrls"`                   // 生成的图片URL列表
-	TokensUsed        int      `json:"tokensUsed"`                  // 使用的token数量
-	DraftFragmentID   string   `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	Content         string   `json:"content"`                   // 生成的文字内容
+	ImageUrls       []string `json:"imageUrls"`                 // 生成的图片URL列表
+	AspectRatio     string   `json:"aspectRatio,omitempty"`     // 实际使用的配图长宽比
+	TokensUsed      int      `json:"tokensUsed"`                // 使用的token数量
+	DraftFragmentID string   `json:"draftFragmentId,omitempty"` // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
 }
 
 // FragmentContentGenerationRequest 碎片故事内容生成请求
@@ -40,8 +83,9 @@ type FragmentContentGenerationRequest struct {
 
 // FragmentContentGenerationResult 碎片故事内容生成结果
 type FragmentContentGenerationResult struct {
-	Content    string `json:"content"`    // 生成的文字内容
-	TokensUsed int    `json:"tokensUsed"` // 使用的token数量
+	Content     string `json:"content"`               // 生成的文字内容
+	AspectRatio string `json:"aspectRatio,omitempty"` // 解析后的配图比例（已含默认值）
+	TokensUsed  int    `json:"tokensUsed"`            // 使用的token数量
 }
 
 // FragmentImageGenerationRequest 碎片故事图片生成请求

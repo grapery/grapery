@@ -41,6 +41,8 @@ type GenerateFragmentRequest struct {
 	Length     string   `json:"length" binding:"omitempty,oneof=short medium long"`
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
 	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
+	// AspectRatio 配图长宽比；空表示由多模态（有参考图时）推断，否则默认 16:9
+	AspectRatio string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 }
 
 // GenerateFragment handles POST /fragments/generate
@@ -64,14 +66,15 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 
 	// 转换为领域模型
 	domainReq := domain.FragmentGenerationRequest{
-		UserInput:  req.UserInput,
-		ImageUrls:  req.ImageUrls,
-		ImageCount: req.ImageCount,
-		Style:      style,
-		Mood:       req.Mood,
-		Length:     req.Length,
-		Language:   req.Language,
-		Visibility: domain.NormalizeFragmentVisibility(req.Visibility),
+		UserInput:   req.UserInput,
+		ImageUrls:   req.ImageUrls,
+		ImageCount:  req.ImageCount,
+		Style:       style,
+		Mood:        req.Mood,
+		Length:      req.Length,
+		Language:    req.Language,
+		Visibility:  domain.NormalizeFragmentVisibility(req.Visibility),
+		AspectRatio: strings.TrimSpace(req.AspectRatio),
 	}
 
 	// 如果用户没有指定图片数量，默认生成1张
@@ -119,11 +122,15 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 	}
 
 	if task.Result != nil {
-		response["result"] = gin.H{
+		res := gin.H{
 			"content":    task.Result.Content,
 			"imageUrls":  task.Result.ImageUrls,
 			"tokensUsed": task.Result.TokensUsed,
 		}
+		if task.Result.AspectRatio != "" {
+			res["aspectRatio"] = task.Result.AspectRatio
+		}
+		response["result"] = res
 	}
 
 	if task.ErrorMessage != "" {
@@ -171,19 +178,23 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 			"createdAt":   task.CreatedAt,
 		}
 		if task.Result != nil {
-			taskResponses[i]["result"] = gin.H{
+			r := gin.H{
 				"content":    task.Result.Content,
 				"imageUrls":  task.Result.ImageUrls,
 				"tokensUsed": task.Result.TokensUsed,
 			}
+			if task.Result.AspectRatio != "" {
+				r["aspectRatio"] = task.Result.AspectRatio
+			}
+			taskResponses[i]["result"] = r
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tasks":  taskResponses,
-		"total":  total,
-		"page":   page,
-		"limit":  limit,
+		"tasks": taskResponses,
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
