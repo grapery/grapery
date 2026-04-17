@@ -89,10 +89,12 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	return task, draft.ID, nil
 }
 
-// processFragmentGeneration 处理碎片生成流程
+// processFragmentGeneration 处理碎片生成流程：
+// Step 1: 元素提取 + 文案生成（一次 LLM 调用）
+// Step 2: 场景扩展（将元素+文案扩展为 N 个场景，每个场景含独立的图片提示词）
+// Step 3: 逐场景生成图片
 func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Context, taskID string) {
-	// 更新状态为处理中
-	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 10, "starting")
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 5, "starting")
 
 	task, err := s.fragmentGenRepo.GetByID(ctx, taskID)
 	if err != nil {
@@ -100,30 +102,51 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		return
 	}
 
-	// 步骤1: 生成文字内容
-	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 20, "generating_content")
+	// ── Step 1: 元素提取 + 文案生成 ──
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 10, "extracting_elements")
 
-	contentResult, err := s.generateContent(ctx, task.UserID, task.Request)
+	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, task.Request)
 	if err != nil {
-		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Content generation failed: %v", err))
+		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Element extraction failed: %v", err))
 		return
 	}
 
-	// 步骤2: 生成图片
-	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 50, "generating_images")
+	resolvedAR := domain.NormalizeFragmentAspectRatio(task.Request.AspectRatio)
+	if resolvedAR == "" {
+		resolvedAR = domain.NormalizeFragmentAspectRatio(elemResult.AspectRatio)
+	}
+	if resolvedAR == "" {
+		resolvedAR = domain.FragmentAspectDefault
+	}
 
-	imageResult, err := s.generateImages(ctx, task.UserID, taskID, task.Request, contentResult.Content, contentResult.AspectRatio)
+	// ── Step 2: 场景扩展 ──
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 35, "expanding_scenes")
+
+	sceneCount := task.Request.ImageCount
+	if sceneCount <= 0 {
+		sceneCount = 1
+	}
+	scenesResult, err := s.expandScenes(ctx, task.UserID, task.Request, elemResult, sceneCount, resolvedAR)
+	if err != nil {
+		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Scene expansion failed: %v", err))
+		return
+	}
+
+	// ── Step 3: 逐场景生成图片 ──
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 55, "generating_images")
+
+	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, scenesResult.Scenes)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
 		return
 	}
 
-	// 步骤3: 完成并保存结果
+	// ── 汇总结果 ──
 	result := &domain.FragmentGenerationResult{
-		Content:     contentResult.Content,
+		Content:     elemResult.Content,
 		ImageUrls:   imageResult.ImageUrls,
-		AspectRatio: contentResult.AspectRatio,
-		TokensUsed:  contentResult.TokensUsed + imageResult.TokensUsed,
+		AspectRatio: resolvedAR,
+		TokensUsed:  elemResult.TokensUsed + scenesResult.TokensUsed + imageResult.TokensUsed,
 	}
 
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
@@ -132,7 +155,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "completed", 100, "completed")
 
-	// 更新任务创建时已落库的占位草稿（source = ai_fragment_generation + taskID）
+	// 更新占位草稿
 	now := time.Now().UnixMilli()
 	imgCount := len(result.ImageUrls)
 	if imgCount < 1 {
@@ -164,7 +187,6 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			}
 		}
 	} else {
-		// 兼容旧数据：无占位草稿时仍创建新行
 		fragment := &domain.Fragment{
 			BaseModel: common.BaseModel{
 				ID:        uuid.New().String(),
@@ -202,7 +224,8 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	s.logger.Info("Fragment generation completed",
 		zap.String("task_id", taskID),
 		zap.Int("tokens_used", result.TokensUsed),
-		zap.Int("image_count", len(result.ImageUrls)))
+		zap.Int("image_count", len(result.ImageUrls)),
+		zap.Int("scenes", len(scenesResult.Scenes)))
 }
 
 func stringifyGenerationImageURLs(urls []string) string {
@@ -228,10 +251,30 @@ func captionFromGenerationContent(s string) string {
 	return s
 }
 
-// generateContent 生成文字内容
-func (s *FragmentGenerationService) generateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentContentGenerationResult, error) {
-	jsonStory := len(fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)) > 0
-	prompt := s.buildFragmentStoryPrompt(req, jsonStory)
+// ────────────────────── Step 1: 元素提取 + 文案生成 ──────────────────────
+
+// fragmentElementExtractionResult 元素提取 + 文案生成的输出。
+type fragmentElementExtractionResult struct {
+	Elements    fragmentStoryElements `json:"elements"`
+	Content     string                `json:"content"`
+	AspectRatio string                `json:"aspectRatio"`
+	TokensUsed  int
+}
+
+// fragmentStoryElements 从用户输入和参考图中提取的结构化元素。
+type fragmentStoryElements struct {
+	Weather     string   `json:"weather"`     // 天气：晴朗、雨天、暴风雪等
+	Objects     []string `json:"objects"`     // 关键物品
+	Scenes      []string `json:"scenes"`      // 场景类型：室内/室外/森林/城市等
+	TimeOfDay   string   `json:"timeOfDay"`   // 时间：清晨/正午/黄昏/深夜等
+	Location    string   `json:"location"`    // 地点描述
+	Characters  []string `json:"characters"`  // 人物/角色描述
+	Tendency    string   `json:"tendency"`    // 情感倾向/叙事方向
+}
+
+func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
+	hasImages := len(fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)) > 0
+	prompt := s.buildExtractionAndStoryPrompt(req, hasImages)
 
 	payload := map[string]interface{}{"prompt": prompt}
 	if imgs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10); len(imgs) > 0 {
@@ -239,7 +282,7 @@ func (s *FragmentGenerationService) generateContent(ctx context.Context, userID 
 	}
 	inputBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("marshal fragment text input: %w", err)
+		return nil, fmt.Errorf("marshal extraction input: %w", err)
 	}
 
 	aiReq := domain.AITask{
@@ -247,33 +290,260 @@ func (s *FragmentGenerationService) generateContent(ctx context.Context, userID 
 		UserID:   userID,
 		Type:     domain.AITaskGenerateFragmentContent,
 		Status:   domain.AITaskStatusProcessing,
-		Provider: "", // 由 AIService 按用户区域选择火山 / Gemini
+		Provider: "",
 		Input:    string(inputBytes),
 	}
 
-	content, tokensUsed, inferredAR, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
+	raw, tokensUsed, inferredAR, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
 	if err != nil {
-		return nil, fmt.Errorf("AI text generation failed: %w", err)
+		return nil, fmt.Errorf("AI extraction+story generation failed: %w", err)
 	}
 
-	resolved := domain.NormalizeFragmentAspectRatio(req.AspectRatio)
-	if resolved == "" {
-		resolved = domain.NormalizeFragmentAspectRatio(inferredAR)
+	result, perr := parseExtractionResult(raw)
+	if perr != nil {
+		s.logger.Warn("extraction JSON parse failed, using raw text as content",
+			zap.Error(perr),
+			zap.String("snippet", truncateRunes(raw, 120)))
+		// 回退：JSON 解析失败时把原文作为 content
+		result = &fragmentElementExtractionResult{
+			Content:     truncateRunes(raw, 500),
+			AspectRatio: inferredAR,
+		}
 	}
-	if resolved == "" {
-		resolved = domain.FragmentAspectDefault
+	if result.AspectRatio == "" {
+		result.AspectRatio = inferredAR
+	}
+	result.TokensUsed = tokensUsed
+	return result, nil
+}
+
+// buildExtractionAndStoryPrompt 构建元素提取 + 文案生成的组合提示词。
+func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.FragmentGenerationRequest, hasImages bool) string {
+	styleDesc := fragmentStyleDesc(req.Style)
+	moodDesc := fragmentMoodDesc(req.Mood)
+	lengthDesc := fragmentLengthDesc(req.Length)
+
+	imgNote := ""
+	if hasImages {
+		imgNote = `
+
+用户提供了参考图。请先理解参考图的画面内容（构图、主体、环境、色彩、情绪），将其作为元素提取的重要来源。`
 	}
 
-	return &domain.FragmentContentGenerationResult{
-		Content:     content,
-		AspectRatio: resolved,
-		TokensUsed:  tokensUsed,
+	return fmt.Sprintf(`你是一位专业的故事碎片创作助手。你的任务分两步：
+
+第一步：从用户的文字描述%s中提取故事元素，包括：
+- weather（天气）：天气状况
+- objects（物品）：画面中关键物品（最多 5 个）
+- scenes（场景）：场景类型/空间描述（最多 3 个）
+- timeOfDay（时间）：一天中的时段
+- location（地点）：具体地点
+- characters（人物）：角色外观与身份描述（最多 3 个）
+- tendency（倾向）：整体情感走向与叙事基调
+
+第二步：基于提取的元素，写一个碎片故事。
+
+用户输入：%s
+
+要求：
+- 风格：%s
+- 情绪：%s
+- 长度：%s
+- 语言：%s
+
+写作指引：
+1. 开头用 1-2 句具体的环境描写建立画面（光线方向、色调、空间感）
+2. 角色或物体要有可辨识的外形特征（衣着材质、姿态、表情）
+3. 关键动作或转折处用动词驱动，让读者能"看到"画面而非被告知
+4. 避免纯抽象心理描写，用场景细节和动作暗示情绪
+
+请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
+{
+  "elements": {
+    "weather": "天气描述（中文）",
+    "objects": ["物品1", "物品2"],
+    "scenes": ["场景1", "场景2"],
+    "timeOfDay": "时段描述（中文）",
+    "location": "地点描述（中文）",
+    "characters": ["角色1：外观+身份", "角色2"],
+    "tendency": "情感倾向与叙事方向（中文）"
+  },
+  "content": "基于以上元素写出的碎片故事正文（中文），直接可读",
+  "aspectRatio": "配图推荐长宽比，必须是以下之一：1:1、16:9、9:16、3:4、4:3。结合画面构图选择；不确定时用 16:9"
+}`,
+		imgNote,
+		req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
+}
+
+// parseExtractionResult 解析元素提取 + 文案的 JSON 输出。
+func parseExtractionResult(raw string) (*fragmentElementExtractionResult, error) {
+	s := strings.TrimSpace(raw)
+	if m := jsonFenceRE.FindStringSubmatch(s); len(m) > 1 {
+		s = strings.TrimSpace(m[1])
+	}
+	var out fragmentElementExtractionResult
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return nil, fmt.Errorf("parse extraction JSON: %w", err)
+	}
+	if strings.TrimSpace(out.Content) == "" {
+		return nil, fmt.Errorf("extraction result missing content")
+	}
+	return &out, nil
+}
+
+// ────────────────────── Step 2: 场景扩展 ──────────────────────
+
+// fragmentSceneExpansionResult 场景扩展输出。
+type fragmentSceneExpansionResult struct {
+	Scenes     []fragmentExpandedScene `json:"scenes"`
+	TokensUsed int
+}
+
+// fragmentExpandedScene 扩展出的单个场景，含中文描述和英文图片提示词。
+type fragmentExpandedScene struct {
+	Index         int    `json:"index"`
+	SceneDesc     string `json:"sceneDesc"`     // 中文场景描述（面向读者）
+	ImagePrompt   string `json:"imagePrompt"`   // 英文图片生成提示词（面向图片模型）
+}
+
+func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
+	elementsJSON, _ := json.Marshal(elemResult.Elements)
+
+	var narrativeHint string
+	switch {
+	case sceneCount == 1:
+		narrativeHint = `1 格：选取故事中最有视觉冲击力的一瞬间——可以是一个悬念、一个反转、一个让人好奇"之前发生了什么"的定格。`
+	case sceneCount == 2:
+		narrativeHint = `2 格：两格之间制造反差或悬念。可以是从平静到意外、从微观到宏观、从现实到奇幻——让观众看完想"然后呢？"或者"等等，怎么会这样？"`
+	case sceneCount == 3:
+		narrativeHint = `3 格：不必严格三幕式。可以是一个出乎意料的转折打破常规节奏，比如第二格突然切换视角、时空跳转、或者出现意想不到的元素。惊喜比工整更重要。`
+	default:
+		narrativeHint = `%d 格：整体是一条故事线，但不必步步紧接。允许在中间插入：
+- 意外的视角切换（突然变成俯视、虫眼视角、镜中倒影）
+- 时空的跳跃或闪回
+- 打破第四面墙的幽默
+- 超现实的梦幻/想象片段
+- 一个完全出乎意料的新元素闯入
+
+开头建立世界观，中间自由发挥制造惊喜，结尾呼应或留下悬念。让观众看完觉得"没猜到会这样"。`
+	}
+
+	if sceneCount >= 4 {
+		narrativeHint = fmt.Sprintf(narrativeHint, sceneCount)
+	}
+
+	prompt := fmt.Sprintf(`你是一位脑洞大开的漫画分镜师。基于以下故事元素和正文，将故事扩展为 %d 个画面格，合成一组有趣的故事碎片。
+
+%s
+
+故事元素：
+%s
+
+故事正文：
+%s
+
+风格：%s
+情绪：%s
+画面长宽比：%s
+
+创作原则：
+1. 世界观一致：角色、核心设定、视觉风格在所有格之间统一
+2. 但叙事可以自由——允许跳切、闪回、视角反转、超现实片段、意外闯入的新元素
+3. 构图要有变化：不要每格都是正面中景，混用远景/特写/俯拍/仰拍/ Dutch angle
+4. 光线和色调可以配合情绪变化：暖 → 冷、明亮 → 阴暗、真实 → 梦幻，不必严格对应时间推移
+5. 每格 sceneDesc 简要说明画面内容，让观众按顺序浏览时能感受到故事的走向
+6. 优先有趣 > 优先合理。一个让人"哇没想到"的画面比一个逻辑完美但无聊的画面好得多
+
+请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明）：
+{
+  "scenes": [
+    {
+      "index": 0,
+      "sceneDesc": "中文：这格画面的内容描述",
+      "imagePrompt": "English: detailed visual description for image generation including art style, character appearance, environment, composition, lighting, color palette, mood. At least 50 words."
+    }
+  ]
+}
+
+硬性规则：
+- scenes 数组恰好 %d 项，index 从 0 到 %d
+- imagePrompt 必须是英文，sceneDesc 必须是中文
+- 每个 imagePrompt 至少 50 个英文单词，内容具体可画
+- 角色/核心设定的外观在各格之间保持一致`,
+		sceneCount,
+		narrativeHint,
+		sceneCount,
+		string(elementsJSON),
+		elemResult.Content,
+		req.Style,
+		req.Mood,
+		aspectRatio,
+		sceneCount,
+		sceneCount-1)
+
+	payloadBytes, _ := json.Marshal(map[string]interface{}{"prompt": prompt})
+	aiReq := domain.AITask{
+		ID:       uuid.New().String(),
+		UserID:   userID,
+		Type:     domain.AITaskGenerateFragmentContent,
+		Status:   domain.AITaskStatusProcessing,
+		Provider: "",
+		Input:    string(payloadBytes),
+	}
+
+	raw, tokensUsed, _, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
+	if err != nil {
+		return nil, fmt.Errorf("AI scene expansion failed: %w", err)
+	}
+
+	scenes, perr := parseSceneExpansion(raw, sceneCount)
+	if perr != nil {
+		s.logger.Warn("scene expansion JSON parse failed, generating single fallback scene",
+			zap.Error(perr))
+		// 回退：生成一个默认场景
+		fallback := fmt.Sprintf("%s, %s style, %s mood, aspect ratio %s",
+			truncateRunes(elemResult.Content, 100), req.Style, req.Mood, aspectRatio)
+		scenes = []fragmentExpandedScene{
+			{Index: 0, SceneDesc: truncateRunes(elemResult.Content, 50), ImagePrompt: fallback},
+		}
+	}
+
+	return &fragmentSceneExpansionResult{
+		Scenes:     scenes,
+		TokensUsed: tokensUsed,
 	}, nil
 }
 
-// generateImages 生成图片：先用 LLM 将文案转化为结构化视觉描述，再逐张生图。
-func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content, aspectRatio string) (*domain.FragmentImageGenerationResult, error) {
-	if req.ImageCount <= 0 {
+// parseSceneExpansion 解析场景扩展 JSON 输出。
+func parseSceneExpansion(raw string, want int) ([]fragmentExpandedScene, error) {
+	s := strings.TrimSpace(raw)
+	if m := jsonFenceRE.FindStringSubmatch(s); len(m) > 1 {
+		s = strings.TrimSpace(m[1])
+	}
+	var env struct {
+		Scenes []fragmentExpandedScene `json:"scenes"`
+	}
+	if err := json.Unmarshal([]byte(s), &env); err != nil {
+		return nil, fmt.Errorf("parse scene expansion JSON: %w", err)
+	}
+	if len(env.Scenes) == 0 {
+		return nil, fmt.Errorf("scene expansion returned 0 scenes")
+	}
+	// 校验每个场景都有 imagePrompt
+	for i, sc := range env.Scenes {
+		if strings.TrimSpace(sc.ImagePrompt) == "" {
+			return nil, fmt.Errorf("scene %d has empty imagePrompt", i)
+		}
+		sc.Index = i
+		env.Scenes[i] = sc
+	}
+	return env.Scenes, nil
+}
+
+// ────────────────────── Step 3: 逐场景生成图片 ──────────────────────
+
+func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, scenes []fragmentExpandedScene) (*domain.FragmentImageGenerationResult, error) {
+	if len(scenes) == 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
 			TokensUsed: 0,
@@ -285,29 +555,15 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 		ar = domain.FragmentAspectDefault
 	}
 
-	// 两步法：先用 LLM 生成结构化视觉描述，再合并为英文图片提示词
-	imagePrompt, extraTokens, err := s.generateVisualDescription(ctx, userID, genTaskID, req, content, ar)
-	if err != nil {
-		s.logger.Warn("visual description generation failed, using fallback prompt",
-			zap.Error(err))
-		// 回退：用文案前 80 字 + 风格拼接（比旧的 extractKeywords 稍好）
-		fallback := truncateRunes(content, 80)
-		imagePrompt = fmt.Sprintf("%s, %s style, %s mood, aspect ratio %s", fallback, req.Style, req.Mood, ar)
-		extraTokens = 0
-	}
-
-	imgInput, err := json.Marshal(map[string]string{
-		"prompt":      imagePrompt,
-		"aspectRatio": ar,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal fragment image input: %w", err)
-	}
-
 	var allImageUrls []string
-	totalTokens := extraTokens
+	totalTokens := 0
 
-	for i := 0; i < req.ImageCount; i++ {
+	for _, scene := range scenes {
+		imgInput, _ := json.Marshal(map[string]string{
+			"prompt":      scene.ImagePrompt,
+			"aspectRatio": ar,
+		})
+
 		aiReq := domain.AITask{
 			ID:                uuid.New().String(),
 			UserID:            userID,
@@ -321,9 +577,9 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 
 		imageURL, tokens, err := s.aiService.GenerateImageForFragment(ctx, &aiReq)
 		if err != nil {
-			s.logger.Warn("Image generation failed",
+			s.logger.Warn("Image generation failed for scene",
 				zap.Error(err),
-				zap.Int("index", i))
+				zap.Int("scene_index", scene.Index))
 			continue
 		}
 		allImageUrls = append(allImageUrls, imageURL)
@@ -336,233 +592,52 @@ func (s *FragmentGenerationService) generateImages(ctx context.Context, userID, 
 	}, nil
 }
 
-// generateVisualDescription 调用 LLM 将故事文案转化为结构化视觉描述，再合并为英文图片提示词。
-func (s *FragmentGenerationService) generateVisualDescription(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, content, aspectRatio string) (imagePrompt string, tokensUsed int, err error) {
-	visualPrompt := s.buildVisualDescriptionPrompt(req, content)
+// ────────────────────── 风格/情绪/长度映射 ──────────────────────
 
-	payloadBytes, merr := json.Marshal(map[string]interface{}{"prompt": visualPrompt})
-	if merr != nil {
-		return "", 0, fmt.Errorf("marshal visual description input: %w", merr)
-	}
-
-	aiReq := domain.AITask{
-		ID:                uuid.New().String(),
-		UserID:            userID,
-		Type:              domain.AITaskGenerateFragmentContent,
-		Status:            domain.AITaskStatusProcessing,
-		Provider:          "",
-		Input:             string(payloadBytes),
-		RelatedEntityID:   genTaskID,
-		RelatedEntityType: "fragment_generation",
-	}
-
-	rawJSON, tok, _, gerr := s.aiService.GenerateTextForFragment(ctx, &aiReq)
-	if gerr != nil {
-		return "", tok, gerr
-	}
-
-	desc, perr := parseFragmentVisualDescription(rawJSON)
-	if perr != nil {
-		s.logger.Warn("visual description JSON parse failed, using raw text as fallback",
-			zap.Error(perr),
-			zap.String("snippet", truncateRunes(rawJSON, 120)))
-		// JSON 解析失败，直接用原文作为图片提示词
-		return truncateRunes(rawJSON, 500), tok, nil
-	}
-
-	return combineFragmentImagePrompt(desc, aspectRatio), tok, nil
-}
-
-// buildVisualDescriptionPrompt 构建结构化视觉描述提示词。
-func (s *FragmentGenerationService) buildVisualDescriptionPrompt(req domain.FragmentGenerationRequest, content string) string {
-	style := strings.TrimSpace(req.Style)
-	if style == "" {
-		style = "unspecified"
-	}
-	mood := strings.TrimSpace(req.Mood)
-	if mood == "" {
-		mood = "unspecified"
-	}
-
-	return fmt.Sprintf(`You are a professional visual director. Based on the following story fragment, generate a detailed visual description for ONE illustration that captures the most impactful moment or scene.
-
-Story text:
-%s
-
-Story style: %s
-Story mood: %s
-
-Return ONLY a valid JSON object (no markdown fences, no commentary) with these fields:
-{
-  "artStyle": "English. Art style for the illustration (e.g. watercolor illustration, cinematic photography, cel-shaded anime, oil painting, digital concept art)",
-  "lighting": "English. Lighting description with direction and color temperature (e.g. golden hour backlight from the left, cold fluorescent overhead, dramatic chiaroscuro with warm key light)",
-  "colorPalette": "English. Dominant colors (e.g. warm amber and teal, muted pastels, high-contrast black and crimson, soft lavender and cream)",
-  "composition": "English. Shot composition with lens distance and angle (e.g. low-angle wide shot with deep depth of field, centered close-up portrait, rule-of-thirds landscape)",
-  "keyElements": ["English. Core visual element 1", "element 2", "element 3"],
-  "mood": "English. Visual mood and atmosphere",
-  "characterDescription": "English. Main character appearance: clothing, posture, expression. Empty string if no character.",
-  "environment": "English. Setting and background description",
-  "additionalNotes": "English. Extra details: special materials, effects, reference styles, textures"
-}
-
-Rules:
-- All field values MUST be in English for the image generation model.
-- keyElements: maximum 5 items, ordered by visual importance.
-- Be specific and concrete: "red silk dress with gold embroidery" not "nice clothes"; "ancient stone bridge over misty river at dawn" not "a bridge".
-- composition must include shot type (wide/medium/close-up) AND camera angle.
-- lighting must include direction AND color temperature.
-- Choose the single most visually compelling moment from the story — not the entire narrative.
-- The description should feel like a frame from a high-quality visual story.`, content, style, mood)
-}
-
-// fragmentVisualDescription 解析 LLM 返回的结构化视觉描述 JSON。
-type fragmentVisualDescription struct {
-	ArtStyle            string   `json:"artStyle"`
-	Lighting            string   `json:"lighting"`
-	ColorPalette        string   `json:"colorPalette"`
-	Composition         string   `json:"composition"`
-	KeyElements         []string `json:"keyElements"`
-	Mood                string   `json:"mood"`
-	CharacterDescription string   `json:"characterDescription"`
-	Environment         string   `json:"environment"`
-	AdditionalNotes     string   `json:"additionalNotes"`
-}
-
-func parseFragmentVisualDescription(raw string) (*fragmentVisualDescription, error) {
-	s := strings.TrimSpace(raw)
-	// 去除可能的 markdown 代码围栏
-	if m := jsonFenceRE.FindStringSubmatch(s); len(m) > 1 {
-		s = strings.TrimSpace(m[1])
-	}
-	var desc fragmentVisualDescription
-	if err := json.Unmarshal([]byte(s), &desc); err != nil {
-		return nil, fmt.Errorf("parse visual description JSON: %w", err)
-	}
-	if strings.TrimSpace(desc.ArtStyle) == "" {
-		return nil, fmt.Errorf("visual description missing artStyle")
-	}
-	return &desc, nil
-}
-
-// combineFragmentImagePrompt 将结构化视觉描述合并为一段连贯的英文图片提示词。
-func combineFragmentImagePrompt(desc *fragmentVisualDescription, aspectRatio string) string {
-	var parts []string
-
-	if v := strings.TrimSpace(desc.ArtStyle); v != "" {
-		parts = append(parts, v)
-	}
-	if v := strings.TrimSpace(desc.CharacterDescription); v != "" {
-		parts = append(parts, v)
-	}
-	if v := strings.TrimSpace(desc.Environment); v != "" {
-		parts = append(parts, v)
-	}
-	if v := strings.TrimSpace(desc.Composition); v != "" {
-		parts = append(parts, fmt.Sprintf("Composition: %s", v))
-	}
-	if v := strings.TrimSpace(desc.Lighting); v != "" {
-		parts = append(parts, fmt.Sprintf("Lighting: %s", v))
-	}
-	if v := strings.TrimSpace(desc.ColorPalette); v != "" {
-		parts = append(parts, fmt.Sprintf("Color palette: %s", v))
-	}
-	if len(desc.KeyElements) > 0 {
-		parts = append(parts, fmt.Sprintf("Key elements: %s", strings.Join(desc.KeyElements, ", ")))
-	}
-	if v := strings.TrimSpace(desc.Mood); v != "" {
-		parts = append(parts, fmt.Sprintf("Mood: %s", v))
-	}
-	if v := strings.TrimSpace(desc.AdditionalNotes); v != "" {
-		parts = append(parts, v)
-	}
-	if ar := strings.TrimSpace(aspectRatio); ar != "" {
-		parts = append(parts, fmt.Sprintf("Aspect ratio: %s", ar))
-	}
-
-	return strings.Join(parts, ". ")
-}
-
-// buildFragmentStoryPrompt 构建碎片故事文案提示词；jsonOutput 为 true 时要求输出含 aspectRatio 的 JSON（多模态参考图路径）。
-func (s *FragmentGenerationService) buildFragmentStoryPrompt(req domain.FragmentGenerationRequest, jsonOutput bool) string {
-	styleDesc := ""
-	switch req.Style {
+func fragmentStyleDesc(style string) string {
+	switch strings.TrimSpace(style) {
 	case "fantasy":
-		styleDesc = "奇幻风格，充满魔法和冒险元素"
+		return "奇幻风格，充满魔法和冒险元素"
 	case "realistic":
-		styleDesc = "现实主义风格，贴近日常生活"
+		return "现实主义风格，贴近日常生活"
 	case "anime":
-		styleDesc = "动漫风格，角色形象鲜明"
+		return "动漫风格，角色形象鲜明"
 	case "scifi":
-		styleDesc = "科幻风格，未来科技感"
+		return "科幻风格，未来科技感"
 	default:
-		if strings.TrimSpace(req.Style) != "" {
-			styleDesc = fmt.Sprintf("视觉与叙事贴近「%s」风格（漫画/插画向）", req.Style)
-		} else {
-			styleDesc = "生动有趣的故事风格"
+		if style != "" {
+			return fmt.Sprintf("视觉与叙事贴近「%s」风格（漫画/插画向）", style)
 		}
+		return "生动有趣的故事风格"
 	}
+}
 
-	moodDesc := ""
-	switch req.Mood {
+func fragmentMoodDesc(mood string) string {
+	switch strings.TrimSpace(mood) {
 	case "happy":
-		moodDesc = "轻松愉快，积极向上"
+		return "轻松愉快，积极向上"
 	case "sad":
-		moodDesc = "感人至深，略带忧伤"
+		return "感人至深，略带忧伤"
 	case "mysterious":
-		moodDesc = "神秘莫测，引人入胜"
+		return "神秘莫测，引人入胜"
 	case "romantic":
-		moodDesc = "浪漫温馨，情感细腻"
+		return "浪漫温馨，情感细腻"
 	default:
-		moodDesc = "情感丰富，引人共鸣"
+		return "情感丰富，引人共鸣"
 	}
+}
 
-	lengthDesc := ""
-	switch req.Length {
+func fragmentLengthDesc(length string) string {
+	switch strings.TrimSpace(length) {
 	case "short":
-		lengthDesc = "50-100字"
+		return "50-100字"
 	case "medium":
-		lengthDesc = "100-200字"
+		return "100-200字"
 	case "long":
-		lengthDesc = "200-500字"
+		return "200-500字"
 	default:
-		lengthDesc = "100-200字"
+		return "100-200字"
 	}
-
-	base := fmt.Sprintf(`用户输入：%s
-
-要求：
-- 风格：%s
-- 情绪：%s
-- 长度：%s
-- 语言：%s`, req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
-
-	visualGuide := `写作指引：
-1. 开头用 1-2 句具体的环境描写建立画面（光线方向、色调、空间感）
-2. 角色或物体要有可辨识的外形特征（衣着材质、姿态、表情）
-3. 关键动作或转折处用动词驱动，让读者能"看到"画面而非被告知
-4. 避免纯抽象心理描写，用场景细节和动作暗示情绪`
-
-	if jsonOutput {
-		return fmt.Sprintf(`请根据用户提供的参考图（若有）与上述文字，理解画面构图与叙事意图，生成一个碎片故事。
-
-%s
-
-%s
-
-请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
-- "content": 字符串，故事正文，直接可读；
-- "aspectRatio": 字符串，必须是以下之一：1:1、16:9、9:16、3:4、4:3。请结合参考图构图与叙事选择最合适的配图长宽比；不确定时用 "16:9"。
-
-内容要简洁有力，适合社交媒体分享。`, base, visualGuide)
-	}
-
-	return fmt.Sprintf(`请根据以下要求生成一个碎片故事：
-
-%s
-
-%s
-
-请直接输出故事内容，不要有任何前缀或解释。内容要简洁有力，适合社交媒体分享。`, base, visualGuide)
 }
 
 // currentTime 获取当前时间戳
