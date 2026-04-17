@@ -327,21 +327,33 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 	if hasImages {
 		imgNote = `
 
-用户提供了参考图。请先理解参考图的画面内容（构图、主体、环境、色彩、情绪），将其作为元素提取的重要来源。`
+用户提供了参考图。请仔细观察参考图，提取以下视觉信息：
+- 画面中的主体人物/物体（外观、姿态、表情、穿着）
+- 环境场景（室内/室外、建筑/自然、季节特征）
+- 色调与光影（暖色/冷色、光源方向、明暗对比）
+- 构图特征（景别、视角、前景/背景层次）
+- 整体氛围与情绪暗示
+
+将以上视觉信息融入元素提取，确保生成的故事与参考图有画面上的呼应，而不是只基于文字。`
 	}
 
-	return fmt.Sprintf(`你是一位专业的故事碎片创作助手。你的任务分两步：
+	return fmt.Sprintf(`你是一位擅长在短篇幅中制造惊喜的故事碎片创作助手。你需要完成两件事：
 
-第一步：从用户的文字描述%s中提取故事元素，包括：
-- weather（天气）：天气状况
-- objects（物品）：画面中关键物品（最多 5 个）
-- scenes（场景）：场景类型/空间描述（最多 3 个）
-- timeOfDay（时间）：一天中的时段
-- location（地点）：具体地点
-- characters（人物）：角色外观与身份描述（最多 3 个）
-- tendency（倾向）：整体情感走向与叙事基调
+── 第一件事：元素提取 ──
 
-第二步：基于提取的元素，写一个碎片故事。
+从用户的文字描述%s中提炼出以下故事元素。元素不是简单的关键词罗列，而是带有画面感和叙事暗示的具体描述：
+
+- weather（天气）：不只是"晴天/雨天"，要写出天气的氛围感（如"雨后初晴，空气里有青草被碾碎的味道"）
+- objects（物品）：画面中关键物品，写清材质、状态、与角色的关系（最多 5 个）
+- scenes（场景）：场景的空间感和感官细节——声音、气味、触感（最多 3 个）
+- timeOfDay（时间）：时段 + 光线状态（如"正午，日光像白色刀刃劈进走廊"）
+- location（地点）：具体地点，包含时代感和空间特征
+- characters（人物）：角色的视觉身份卡——体型、穿着、标志性特征、当前状态（最多 3 个）
+- tendency（倾向）：用一句话概括这段故事想传达的核心感受，不是分类标签而是"如果这是一首歌的封面，上面写着什么"
+
+── 第二件事：碎片故事 ──
+
+基于提取的元素，写一个让人看完想转发的碎片故事。
 
 用户输入：%s
 
@@ -351,25 +363,26 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 长度：%s
 - 语言：%s
 
-写作指引：
-1. 开头用 1-2 句具体的环境描写建立画面（光线方向、色调、空间感）
-2. 角色或物体要有可辨识的外形特征（衣着材质、姿态、表情）
-3. 关键动作或转折处用动词驱动，让读者能"看到"画面而非被告知
-4. 避免纯抽象心理描写，用场景细节和动作暗示情绪
+故事心法：
+- 第一句话就要有画面——读者点进来不是因为"你好"开头的故事
+- 少用形容词堆砌，多用动词和具体名词推动画面（"她把伞扔进河里" > "她感到无比解脱"）
+- 留白比写满好——最好的结尾是让读者自己脑补下一秒
+- 可以有一句出人意料的话或转折，但不强求
+- 如果是奇幻/科幻风格，用一个小细节建立世界观就够了（"咖啡杯飘在半空，她懒得去接"）
 
 请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
 {
   "elements": {
-    "weather": "天气描述（中文）",
-    "objects": ["物品1", "物品2"],
-    "scenes": ["场景1", "场景2"],
-    "timeOfDay": "时段描述（中文）",
-    "location": "地点描述（中文）",
-    "characters": ["角色1：外观+身份", "角色2"],
-    "tendency": "情感倾向与叙事方向（中文）"
+    "weather": "天气氛围描述（中文）",
+    "objects": ["物品1：具体描述", "物品2"],
+    "scenes": ["场景1：感官细节", "场景2"],
+    "timeOfDay": "时段+光线（中文）",
+    "location": "地点+时代感（中文）",
+    "characters": ["角色1：外观+身份+当前状态", "角色2"],
+    "tendency": "核心感受一句话（中文）"
   },
-  "content": "基于以上元素写出的碎片故事正文（中文），直接可读",
-  "aspectRatio": "配图推荐长宽比，必须是以下之一：1:1、16:9、9:16、3:4、4:3。结合画面构图选择；不确定时用 16:9"
+  "content": "碎片故事正文（中文），直接可读，不要标题",
+  "aspectRatio": "推荐长宽比：1:1、16:9、9:16、3:4、4:3，结合画面构图选择；不确定用 16:9"
 }`,
 		imgNote,
 		req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
@@ -412,27 +425,16 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
 	var narrativeHint string
 	switch {
 	case sceneCount == 1:
-		narrativeHint = `1 格：选取故事中最有视觉冲击力的一瞬间——可以是一个悬念、一个反转、一个让人好奇"之前发生了什么"的定格。`
+		narrativeHint = "1 格：选取故事中最有视觉冲击力的一瞬间——可以是一个悬念、一个反转、一个让人好奇\"之前发生了什么\"的定格。让这一帧本身就充满故事张力。"
 	case sceneCount == 2:
-		narrativeHint = `2 格：两格之间制造反差或悬念。可以是从平静到意外、从微观到宏观、从现实到奇幻——让观众看完想"然后呢？"或者"等等，怎么会这样？"`
+		narrativeHint = "2 格：制造认知落差。第一格建立预期，第二格打破它——可以是视角的反转、情绪的急转、尺度的突变。观众看完两格后应该产生\"等等，怎么会这样？\"的感觉。"
 	case sceneCount == 3:
-		narrativeHint = `3 格：不必严格三幕式。可以是一个出乎意料的转折打破常规节奏，比如第二格突然切换视角、时空跳转、或者出现意想不到的元素。惊喜比工整更重要。`
+		narrativeHint = "3 格：自由节奏，不要三幕式。第一格抽出引子，第二格可以突然转向（换视角、换时空、换叙事者），第三格收束但不一定给答案——留一个让人回味的尾巴。惊喜感比工整重要十倍。"
 	default:
-		narrativeHint = `%d 格：整体是一条故事线，但不必步步紧接。允许在中间插入：
-- 意外的视角切换（突然变成俯视、虫眼视角、镜中倒影）
-- 时空的跳跃或闪回
-- 打破第四面墙的幽默
-- 超现实的梦幻/想象片段
-- 一个完全出乎意料的新元素闯入
-
-开头建立世界观，中间自由发挥制造惊喜，结尾呼应或留下悬念。让观众看完觉得"没猜到会这样"。`
+		narrativeHint = fmt.Sprintf("%d 格：一条故事线但不拘泥线性叙事。鼓励在这些格中穿插：视角突变（俯视/虫眼/镜中倒影/万物视角）、时空跳跃或闪回、打破第四面墙、超现实梦境、意料之外的新元素闯入。开头建立世界观，中间尽情放飞制造惊喜，结尾可以呼应开头也可以留悬念。", sceneCount)
 	}
 
-	if sceneCount >= 4 {
-		narrativeHint = fmt.Sprintf(narrativeHint, sceneCount)
-	}
-
-	prompt := fmt.Sprintf(`你是一位脑洞大开的漫画分镜师。基于以下故事元素和正文，将故事扩展为 %d 个画面格，合成一组有趣的故事碎片。
+	prompt := fmt.Sprintf(`你是一位脑洞大开的视觉故事创作者。基于以下故事元素和正文，将故事扩展为 %d 个画面格，创造一组让人过目不忘的故事碎片。
 
 %s
 
@@ -447,20 +449,21 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
 画面长宽比：%s
 
 创作原则：
-1. 世界观一致：角色、核心设定、视觉风格在所有格之间统一
-2. 但叙事可以自由——允许跳切、闪回、视角反转、超现实片段、意外闯入的新元素
-3. 构图要有变化：不要每格都是正面中景，混用远景/特写/俯拍/仰拍/ Dutch angle
-4. 光线和色调可以配合情绪变化：暖 → 冷、明亮 → 阴暗、真实 → 梦幻，不必严格对应时间推移
-5. 每格 sceneDesc 简要说明画面内容，让观众按顺序浏览时能感受到故事的走向
-6. 优先有趣 > 优先合理。一个让人"哇没想到"的画面比一个逻辑完美但无聊的画面好得多
+1. 世界观一致：角色外貌、核心设定、视觉风格在所有格之间统一
+2. 叙事自由奔放——跳切、闪回、视角反转、超现实片段、意外闯入的新元素，全部欢迎
+3. 构图大胆变化：远景/特写/俯拍/仰拍/Dutch angle/非人类视角（虫眼/鸟瞰/鱼眼），拒绝连续两格相同构图
+4. 光影和色调为情绪服务：暖转冷、明亮转阴暗、真实转梦幻，不必对应时间推移
+5. sceneDesc 是给读者的：按顺序浏览时应能感受到故事走向，同时保留悬念和惊喜
+6. 有趣 > 合理。一个让人"哇没想到"的画面远胜于逻辑完美但无聊的画面
+7. imagePrompt 要像给一位顶级插画师下 brief：具体到色彩、材质、光线方向、镜头语言
 
 请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明）：
 {
   "scenes": [
     {
       "index": 0,
-      "sceneDesc": "中文：这格画面的内容描述",
-      "imagePrompt": "English: detailed visual description for image generation including art style, character appearance, environment, composition, lighting, color palette, mood. At least 50 words."
+      "sceneDesc": "中文：这格画面的内容描述，简洁有画面感",
+      "imagePrompt": "English: structured visual description. Must include these layers separated by periods: (1) artStyle: overall visual approach, e.g. 'cinematic watercolor', 'hyperrealistic 3D render', 'charcoal sketch with digital color' (2) subject: who/what is in frame, specific appearance and pose (3) environment: background, setting, depth cues (4) composition: camera angle, shot type, framing, rule-of-thirds or centered or asymmetrical (5) lighting: direction, color temperature, shadows, highlights (6) colorPalette: dominant colors, contrast level (7) mood: emotional atmosphere (8) any extra details: textures, particles, weather effects, lens effects. At least 60 words total."
     }
   ]
 }
@@ -468,11 +471,11 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
 硬性规则：
 - scenes 数组恰好 %d 项，index 从 0 到 %d
 - imagePrompt 必须是英文，sceneDesc 必须是中文
-- 每个 imagePrompt 至少 50 个英文单词，内容具体可画
-- 角色/核心设定的外观在各格之间保持一致`,
+- 每个 imagePrompt 至少 60 个英文单词，覆盖上述 8 个视觉层
+- 所有格的 artStyle 必须一致（相同的艺术风格前缀），角色外观在各格之间保持一致
+- 相邻格的构图必须有明显差异（不能连续两格正面中景）`,
 		sceneCount,
 		narrativeHint,
-		sceneCount,
 		string(elementsJSON),
 		elemResult.Content,
 		req.Style,
