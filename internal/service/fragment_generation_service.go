@@ -263,13 +263,13 @@ type fragmentElementExtractionResult struct {
 
 // fragmentStoryElements 从用户输入和参考图中提取的结构化元素。
 type fragmentStoryElements struct {
-	Weather     string   `json:"weather"`     // 天气：晴朗、雨天、暴风雪等
-	Objects     []string `json:"objects"`     // 关键物品
-	Scenes      []string `json:"scenes"`      // 场景类型：室内/室外/森林/城市等
-	TimeOfDay   string   `json:"timeOfDay"`   // 时间：清晨/正午/黄昏/深夜等
-	Location    string   `json:"location"`    // 地点描述
-	Characters  []string `json:"characters"`  // 人物/角色描述
-	Tendency    string   `json:"tendency"`    // 情感倾向/叙事方向
+	Weather    string   `json:"weather"`    // 天气：晴朗、雨天、暴风雪等
+	Objects    []string `json:"objects"`    // 关键物品
+	Scenes     []string `json:"scenes"`     // 场景类型：室内/室外/森林/城市等
+	TimeOfDay  string   `json:"timeOfDay"`  // 时间：清晨/正午/黄昏/深夜等
+	Location   string   `json:"location"`   // 地点描述
+	Characters []string `json:"characters"` // 人物/角色描述
+	Tendency   string   `json:"tendency"`   // 情感倾向/叙事方向
 }
 
 func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
@@ -322,6 +322,10 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 	styleDesc := fragmentStyleDesc(req.Style)
 	moodDesc := fragmentMoodDesc(req.Mood)
 	lengthDesc := fragmentLengthDesc(req.Length)
+	language := strings.TrimSpace(req.Language)
+	if language == "" {
+		language = "中文"
+	}
 
 	imgNote := ""
 	if hasImages {
@@ -378,7 +382,12 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 光影与色彩 → weather 的情绪化天气描述
 - 构图与细节 → tendency 的核心感受方向
 - 确保生成的故事与参考图在画面上有真实呼应，而不是只基于文字做文字推理
-- 从参考图中提取的元素应该让读者感觉"这个故事确实可能发生在那张图片里"`
+- 从参考图中提取的元素应该让读者感觉"这个故事确实可能发生在那张图片里"
+
+第四阶段——冲突裁决与创意边界：
+- 若参考图与用户文字存在轻微冲突：以用户文字为剧情主线，以参考图为视觉锚点
+- 允许创造惊喜与反转，但不能引入与图文都无关的核心设定
+- 每个关键转折都要能在 elements 或原始输入中找到伏笔或视觉依据`
 	}
 
 	return fmt.Sprintf(`你是一位兼具文学才华和电影美术指导素养的故事碎片创作大师。你同时拥有小说家的叙事直觉、摄影师的画面敏感度、和漫画编辑的商业嗅觉——你知道什么样的内容能让人停下手指、点开、读完、然后截图转发。你需要完成两件事：
@@ -449,7 +458,12 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 风格：%s
 - 情绪：%s
 - 长度：%s
-- 语言：%s
+- 语言：%s（elements 与 content 的自然语言都必须与该语言一致）
+
+创作优先级（从高到低，不能颠倒）：
+- 第一优先级：贴合用户输入与参考图锚点
+- 第二优先级：画面感与可传播性
+- 第三优先级：反转、奇观和风格实验
 
 故事创作心法（这是你的创作工具箱，按主题分类）：
 
@@ -502,19 +516,19 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
 {
   "elements": {
-    "weather": "天气氛围描述——写出天气如何渗透进画面和情绪（中文）",
+    "weather": "天气氛围描述——写出天气如何渗透进画面和情绪（与上方语言要求一致）",
     "objects": ["物品1：外观+材质+状态+与角色空间关系", "物品2"],
     "scenes": ["场景1：五感空间描述（视觉+听觉+嗅觉+触感+温度）", "场景2"],
-    "timeOfDay": "时段+该时段特有的光线氛围（中文）",
-    "location": "具体地点+时代感+空间性格（开阔/封闭/纵深）+标志性细节（中文）",
+    "timeOfDay": "时段+该时段特有的光线氛围（与上方语言要求一致）",
+    "location": "具体地点+时代感+空间性格（开阔/封闭/纵深）+标志性细节（与上方语言要求一致）",
     "characters": ["角色1：体型+穿着（款式颜色材质）+标志性特征+当前动作和表情", "角色2"],
-    "tendency": "核心感受一句话——像专辑封面或电影海报上印的那一行字（中文）"
+    "tendency": "核心感受一句话——像专辑封面或电影海报上印的那一行字（与上方语言要求一致）"
   },
-  "content": "碎片故事正文（中文），直接可读，不要标题，不要前缀说明",
+  "content": "碎片故事正文（与上方语言要求一致），直接可读，不要标题，不要前缀说明",
   "aspectRatio": "推荐长宽比：1:1、16:9、9:16、3:4、4:3，结合画面构图选择；不确定用 16:9"
 }`,
 		imgNote,
-		req.UserInput, styleDesc, moodDesc, lengthDesc, req.Language)
+		req.UserInput, styleDesc, moodDesc, lengthDesc, language)
 }
 
 // parseExtractionResult 解析元素提取 + 文案的 JSON 输出。
@@ -543,9 +557,9 @@ type fragmentSceneExpansionResult struct {
 
 // fragmentExpandedScene 扩展出的单个场景，含中文描述和英文图片提示词。
 type fragmentExpandedScene struct {
-	Index         int    `json:"index"`
-	SceneDesc     string `json:"sceneDesc"`     // 中文场景描述（面向读者）
-	ImagePrompt   string `json:"imagePrompt"`   // 英文图片生成提示词（面向图片模型）
+	Index       int    `json:"index"`
+	SceneDesc   string `json:"sceneDesc"`   // 中文场景描述（面向读者）
+	ImagePrompt string `json:"imagePrompt"` // 英文图片生成提示词（面向图片模型）
 }
 
 func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
@@ -600,8 +614,8 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
   · 跳切：时间突然推进，中间的过程留白让读者脑补
   · 闪回：突然回到过去，揭示之前没展示的信息
   · 视角反转：突然换成配角、动物、甚至无生命物体的视角
-  · 超现实片段：梦境/幻觉/想象——可以画风突变，但回归后要有交代
-  · 意外闯入：一个全新的角色/物体突然出现在画面中，改变故事走向
+  · 超现实片段：梦境/幻觉/想象——可以让光影与空间反常，但仍保持同一主风格体系
+  · 意外闯入：可以有新角色/物体突然出现，但必须与已有元素或故事正文存在因果关联
   · 静帧与留白：一格完全静止的画面（空房间、雨中的长椅、桌面上的物品）——不推进剧情但传递情绪，这种"停顿"本身就是节奏
 - 每一格都可以是不同类型的画面：
   · 写实叙事场景（角色在行动）
@@ -735,7 +749,7 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
     {
       "index": 0,
       "sceneDesc": "中文：这格画面的内容描述，1-2句，让读者脑中浮现画面",
-      "imagePrompt": "English: (1) artStyle. (2) subject. (3) environment. (4) composition. (5) lighting. (6) colorPalette. (7) mood. (8) extra details. At least 80 words total. Be specific and concrete — every word should help the image model make a visual decision. Do not use vague terms."
+      "imagePrompt": "English: (1) artStyle. (2) subject. (3) environment. (4) composition. (5) lighting. (6) colorPalette. (7) mood. (8) extra details. At least 70 words total. Be specific and concrete — every word should help the image model make a visual decision. Do not use vague terms."
     }
   ]
 }
@@ -746,10 +760,11 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
 
 - scenes 数组恰好 %d 项，index 从 0 到 %d
 - imagePrompt 必须是英文，sceneDesc 必须是中文
-- 每个 imagePrompt 至少 80 个英文单词，必须覆盖上述全部 8 个视觉层
+- 每个 imagePrompt 至少 70 个英文单词，必须覆盖上述全部 8 个视觉层
 - 所有格的 artStyle 必须以相同的风格描述开头，确保视觉风格统一
 - 角色外貌（发型、服装颜色款式、体型、标志性特征）在各格之间完全一致
 - 相邻两格的 composition 必须有明显差异（不同景别或不同角度，不能连续两格正面中景）
+- 每一格必须引用至少 2 个可追溯锚点（来自 elements 或故事正文的具体角色/物品/场景细节），禁止无依据“硬反转”
 - imagePrompt 中绝对不要出现"copy the reference image"或"exactly like the reference"——每格都应该是原创的视觉创作
 - sceneDesc 中不要出现格式化标记（不要 #、不要 **、不要列表符号）
 - 不要在 JSON 之外输出任何文字（包括开头和结尾的说明）`,
