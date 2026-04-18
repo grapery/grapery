@@ -1,21 +1,15 @@
 package telemetry
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/md5"
-	"crypto/sha1"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"math"
 	"os"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
+	sls "github.com/aliyun/aliyun-log-go-sdk"
+	"github.com/golang/protobuf/proto"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -30,17 +24,10 @@ type SLSConfig struct {
 	Source          string
 }
 
-// SLSLog represents a single log entry for SLS
+// SLSLog represents a single log entry for SLS (internal representation)
 type SLSLog struct {
-	Time     int64             `json:"time"`
-	Contents map[string]string `json:"contents"`
-}
-
-// SLSLogGroup represents a group of logs for SLS
-type SLSLogGroup struct {
-	Topic  string   `json:"topic"`
-	Source string   `json:"source"`
-	Logs   []SLSLog `json:"logs"`
+	Time     int64
+	Contents map[string]string
 }
 
 // SLSCore implements zapcore.Core for sending logs to Alibaba Cloud SLS
@@ -48,7 +35,7 @@ type SLSCore struct {
 	config     SLSConfig
 	level      zapcore.Level
 	fields     []zapcore.Field
-	httpClient *http.Client
+	client     sls.ClientInterface
 	mu         sync.Mutex
 	buffer     []SLSLog
 	bufferSize int
@@ -69,11 +56,14 @@ func NewSLSCore(config SLSConfig, level zapcore.Level) (*SLSCore, error) {
 		}
 	}
 
+	// Create official SLS client
+	client := sls.CreateNormalInterface(config.Endpoint, config.AccessKeyID, config.AccessKeySecret, "")
+
 	core := &SLSCore{
 		config:     config,
 		level:      level,
 		fields:     make([]zapcore.Field, 0),
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		client:     client,
 		buffer:     make([]SLSLog, 0, 100),
 		bufferSize: 100,
 		stopChan:   make(chan struct{}),
@@ -111,7 +101,7 @@ func (c *SLSCore) With(fields []zapcore.Field) zapcore.Core {
 	clone := &SLSCore{
 		config:     c.config,
 		level:      c.level,
-		httpClient: c.httpClient,
+		client:     c.client,
 		buffer:     c.buffer,
 		bufferSize: c.bufferSize,
 		flushTick:  c.flushTick,
@@ -172,7 +162,7 @@ func (c *SLSCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	return nil
 }
 
-// flush sends buffered logs to SLS
+// flush sends buffered logs to SLS using official SDK
 func (c *SLSCore) flush() {
 	c.mu.Lock()
 	if len(c.buffer) == 0 {
@@ -183,95 +173,37 @@ func (c *SLSCore) flush() {
 	c.buffer = make([]SLSLog, 0, c.bufferSize)
 	c.mu.Unlock()
 
-	logGroup := SLSLogGroup{
-		Topic:  c.config.Topic,
-		Source: c.config.Source,
-		Logs:   logs,
-	}
-
-	_ = c.sendToSLS(logGroup)
-}
-
-// sendToSLS sends a log group to SLS via HTTP API
-func (c *SLSCore) sendToSLS(logGroup SLSLogGroup) error {
-	body, err := json.Marshal(logGroup)
-	if err != nil {
-		return fmt.Errorf("failed to marshal log group: %w", err)
-	}
-
-	url := fmt.Sprintf("https://%s.%s/logstores/%s/shards/lb",
-		c.config.Project, c.config.Endpoint, c.config.Logstore)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Calculate MD5 of body
-	bodyMD5 := md5.Sum(body)
-	contentMD5 := strings.ToUpper(fmt.Sprintf("%x", bodyMD5))
-
-	now := time.Now().UTC().Format(http.TimeFormat)
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-MD5", contentMD5)
-	req.Header.Set("Date", now)
-	req.Header.Set("x-log-apiversion", "0.6.0")
-	req.Header.Set("x-log-bodyrawsize", fmt.Sprintf("%d", len(body)))
-	req.Header.Set("Host", fmt.Sprintf("%s.%s", c.config.Project, c.config.Endpoint))
-
-	// Sign the request
-	signature := c.signRequest(req, contentMD5)
-	req.Header.Set("Authorization", fmt.Sprintf("LOG %s:%s", c.config.AccessKeyID, signature))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("SLS returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
-}
-
-// signRequest creates the signature for SLS API
-func (c *SLSCore) signRequest(req *http.Request, contentMD5 string) string {
-	// Build string to sign
-	var headers []string
-	for key := range req.Header {
-		lowerKey := strings.ToLower(key)
-		if strings.HasPrefix(lowerKey, "x-log-") || strings.HasPrefix(lowerKey, "x-acs-") {
-			headers = append(headers, lowerKey)
+	// Convert internal logs to official SDK format
+	slsLogs := make([]*sls.Log, 0, len(logs))
+	for _, log := range logs {
+		contents := make([]*sls.LogContent, 0, len(log.Contents))
+		for k, v := range log.Contents {
+			contents = append(contents, &sls.LogContent{
+				Key:   proto.String(k),
+				Value: proto.String(v), // Official SDK ensures Value is always string
+			})
 		}
-	}
-	sort.Strings(headers)
 
-	var canonicalHeaders strings.Builder
-	for _, key := range headers {
-		canonicalHeaders.WriteString(key)
-		canonicalHeaders.WriteString(":")
-		canonicalHeaders.WriteString(req.Header.Get(key))
-		canonicalHeaders.WriteString("\n")
+		slsLogs = append(slsLogs, &sls.Log{
+			Time:     proto.Uint32(uint32(log.Time)),
+			Contents: contents,
+		})
 	}
 
-	stringToSign := fmt.Sprintf("%s\n%s\n%s\n%s\n%s%s",
-		req.Method,
-		contentMD5,
-		req.Header.Get("Content-Type"),
-		req.Header.Get("Date"),
-		canonicalHeaders.String(),
-		req.URL.Path,
-	)
+	// Create log group using official SDK format
+	logGroup := &sls.LogGroup{
+		Logs:   slsLogs,
+		Topic:  proto.String(c.config.Topic),
+		Source: proto.String(c.config.Source),
+	}
 
-	// HMAC-SHA1
-	mac := hmac.New(sha1.New, []byte(c.config.AccessKeySecret))
-	mac.Write([]byte(stringToSign))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	// Send logs using official SDK
+	err := c.client.PutLogs(c.config.Project, c.config.Logstore, logGroup)
+	if err != nil {
+		fmt.Printf("sendToSLS error: %v\n", err)
+	} else {
+		fmt.Println("sendToSLS success")
+	}
 }
 
 // Sync flushes buffered logs
@@ -290,7 +222,31 @@ func (c *SLSCore) Close() {
 }
 
 // fieldToString converts a zap field to string representation
+// Always returns a string to ensure SLS API compatibility
 func fieldToString(field zapcore.Field) string {
+	// Try Interface first for complex types
+	if field.Interface != nil {
+		switch v := field.Interface.(type) {
+		case float64:
+			return fmt.Sprintf("%g", v)
+		case float32:
+			return fmt.Sprintf("%g", v)
+		case time.Time:
+			return v.Format(time.RFC3339Nano)
+		case error:
+			return v.Error()
+		case string:
+			return v
+		default:
+			// For complex types, try JSON marshaling
+			if data, err := json.Marshal(v); err == nil {
+				return string(data)
+			}
+			return fmt.Sprintf("%v", v)
+		}
+	}
+
+	// Handle primitive types based on field type
 	switch field.Type {
 	case zapcore.StringType:
 		return field.String
@@ -299,45 +255,30 @@ func fieldToString(field zapcore.Field) string {
 	case zapcore.Uint64Type, zapcore.Uint32Type, zapcore.Uint16Type, zapcore.Uint8Type:
 		return fmt.Sprintf("%d", field.Integer)
 	case zapcore.Float64Type:
-		return fmt.Sprintf("%f", float64(field.Integer))
+		// Float64 is stored as bits in Integer field
+		// Use math.Float64frombits to extract the value
+		return fmt.Sprintf("%g", math.Float64frombits(uint64(field.Integer)))
 	case zapcore.Float32Type:
-		return fmt.Sprintf("%f", float32(field.Integer))
+		// Float32 is stored as bits in Integer field
+		return fmt.Sprintf("%g", math.Float32frombits(uint32(field.Integer)))
 	case zapcore.BoolType:
 		if field.Integer == 1 {
 			return "true"
 		}
 		return "false"
 	case zapcore.TimeType:
-		if field.Interface != nil {
-			if t, ok := field.Interface.(time.Time); ok {
-				return t.Format(time.RFC3339Nano)
-			}
-		}
 		return time.Unix(0, field.Integer).Format(time.RFC3339Nano)
 	case zapcore.DurationType:
 		return time.Duration(field.Integer).String()
 	case zapcore.ErrorType:
-		if field.Interface != nil {
-			if e, ok := field.Interface.(error); ok {
-				return e.Error()
-			}
-		}
 		return ""
 	case zapcore.ReflectType:
-		if field.Interface != nil {
-			if data, err := json.Marshal(field.Interface); err == nil {
-				return string(data)
-			}
-		}
 		return fmt.Sprintf("%v", field.Interface)
 	default:
-		if field.Interface != nil {
-			if data, err := json.Marshal(field.Interface); err == nil {
-				return string(data)
-			}
-			return fmt.Sprintf("%v", field.Interface)
+		if field.String != "" {
+			return field.String
 		}
-		return field.String
+		return fmt.Sprintf("%v", field.Interface)
 	}
 }
 

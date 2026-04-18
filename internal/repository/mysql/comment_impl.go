@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -33,7 +35,7 @@ func (r *Repository) CommentByID(ctx context.Context, id string) (*domain.Commen
 func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment) error {
 	dbComment := Comment{
 		ID:         uuid.New().String(),
-		AuthorID:   comment.AuthorID,
+		UserID:     comment.UserID,
 		Content:    comment.Content,
 		TargetType: comment.TargetType,
 		TargetID:   comment.TargetID,
@@ -47,7 +49,7 @@ func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment)
 	// 如果是回复，设置 ParentID 和 RootID
 	if comment.ParentID != "" {
 		dbComment.ParentID = &comment.ParentID
-		
+
 		// 获取父评论
 		var parent Comment
 		if err := r.db.WithContext(ctx).Where("id = ?", comment.ParentID).First(&parent).Error; err != nil {
@@ -189,6 +191,46 @@ func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit,
 	return result, nil
 }
 
+// CommentsByParent retrieves comments by parent ID (alias for CommentReplies)
+func (r *Repository) CommentsByParent(ctx context.Context, parentID string) ([]*domain.Comment, error) {
+	var comments []Comment
+	if err := r.db.WithContext(ctx).
+		Preload("Author").
+		Where("parent_id = ?", parentID).
+		Order("created_at ASC").
+		Find(&comments).Error; err != nil {
+		return nil, fmt.Errorf("failed to get comments by parent: %w", err)
+	}
+
+	result := make([]*domain.Comment, len(comments))
+	for i, c := range comments {
+		domainComment := r.commentToDomain(c)
+		result[i] = &domainComment
+	}
+
+	return result, nil
+}
+
+// CommentsByStory retrieves all comments for a story
+func (r *Repository) CommentsByStory(ctx context.Context, storyID string) ([]*domain.Comment, error) {
+	var comments []Comment
+	if err := r.db.WithContext(ctx).
+		Preload("Author").
+		Where("target_type = ? AND target_id = ?", "story", storyID).
+		Order("created_at ASC").
+		Find(&comments).Error; err != nil {
+		return nil, fmt.Errorf("failed to get comments by story: %w", err)
+	}
+
+	result := make([]*domain.Comment, len(comments))
+	for i, c := range comments {
+		domainComment := r.commentToDomain(c)
+		result[i] = &domainComment
+	}
+
+	return result, nil
+}
+
 // CommentTree retrieves the entire comment tree
 func (r *Repository) CommentTree(ctx context.Context, rootID string) ([]*domain.Comment, error) {
 	var comments []Comment
@@ -257,7 +299,21 @@ func (r *Repository) LikeComment(ctx context.Context, userID, commentID string, 
 	}
 
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
-		return fmt.Errorf("failed to create like: %w", err)
+		// Handle MySQL duplicate entry error (Error 1062) due to race condition
+		if strings.Contains(err.Error(), "Error 1062") ||
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
+			// Race condition: another request created the like
+			// Try to update instead
+			if err := r.db.WithContext(ctx).
+				Model(&CommentLike{}).
+				Where("user_id = ? AND comment_id = ?", userID, commentID).
+				Update("is_like", isLike).Error; err != nil {
+				return fmt.Errorf("failed to update like: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create like: %w", err)
+		}
 	}
 
 	// 更新评论的点赞/踩计数
@@ -321,7 +377,7 @@ func (r *Repository) IsCommentLiked(ctx context.Context, userID, commentID strin
 // commentToDomain converts database model to domain model
 func (r *Repository) commentToDomain(c Comment) domain.Comment {
 	refAuthor := r.userToDomain(c.Author)
-	
+
 	// Handle nullable pointer fields
 	var parentID, rootID string
 	if c.ParentID != nil {
@@ -330,10 +386,14 @@ func (r *Repository) commentToDomain(c Comment) domain.Comment {
 	if c.RootID != nil {
 		rootID = *c.RootID
 	}
-	
+
 	return domain.Comment{
-		ID:         c.ID,
-		AuthorID:   c.AuthorID,
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt.Unix(),
+			UpdatedAt: c.UpdatedAt.Unix(),
+		},
+		UserID:     c.UserID,
 		Author:     &refAuthor,
 		Content:    c.Content,
 		TargetType: c.TargetType,
@@ -344,8 +404,6 @@ func (r *Repository) commentToDomain(c Comment) domain.Comment {
 		Dislikes:   c.Dislikes,
 		ReplyCount: c.ReplyCount,
 		Replies:    nil, // 不自动加载回复，需要单独查询
-		CreatedAt:  c.CreatedAt.Unix(),
-		UpdatedAt:  c.UpdatedAt.Unix(),
 	}
 }
 

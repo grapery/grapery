@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	huoshanprovider "github.com/grapestree/fgrapery/grapery/internal/genai/providers/huoshan"
 )
 
 // Package genapi provides a high-level API for generating media using various providers.
@@ -51,25 +53,60 @@ type VideoProvider interface {
 	VideoStatusFetcher
 }
 
+// UsageRecordContext holds metadata for recording AI generation usage (e.g. to DB).
+// Pass via request Metadata or context when calling GenAPI.
+type UsageRecordContext struct {
+	UserID             string // User ID for attribution
+	RelatedEntityID    string // e.g. storyboard ID, story ID
+	RelatedEntityType  string // e.g. "storyboard", "story"
+	OriginalPrompt     string // Original prompt (for text/image/video)
+	EnhancedPrompt     string // Enhanced prompt if any
+}
+
+// Context keys for passing UsageRecordContext when request is not available (e.g. GetVideoStatus).
+type usageRecordContextKey struct{}
+
+// ContextWithUsageRecord attaches usage record metadata to ctx for TokenUsageRecorder.
+func ContextWithUsageRecord(ctx context.Context, userID, relatedEntityID, relatedEntityType string) context.Context {
+	if ctx == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, usageRecordContextKey{}, &UsageRecordContext{
+		UserID:            userID,
+		RelatedEntityID:   relatedEntityID,
+		RelatedEntityType: relatedEntityType,
+	})
+}
+
+// UsageRecordFromContext extracts UsageRecordContext from ctx.
+func UsageRecordFromContext(ctx context.Context) *UsageRecordContext {
+	if ctx == nil {
+		return nil
+	}
+	v, _ := ctx.Value(usageRecordContextKey{}).(*UsageRecordContext)
+	return v
+}
+
 // TokenUsageRecorder allows callers to track token/billing usage emitted by providers.
+// Receives full request/response/error for both success and failure recording.
 type TokenUsageRecorder interface {
-	RecordUsage(ctx context.Context, provider string, usage *Usage)
+	RecordUsage(ctx context.Context, req *GenerateRequest, rsp *GenerateResponse, err error)
 }
 
 // TokenUsageRecorderFunc is an adapter to allow ordinary functions to be used as recorders.
-type TokenUsageRecorderFunc func(ctx context.Context, provider string, usage *Usage)
+type TokenUsageRecorderFunc func(ctx context.Context, req *GenerateRequest, rsp *GenerateResponse, err error)
 
 // RecordUsage implements TokenUsageRecorder.
-func (f TokenUsageRecorderFunc) RecordUsage(ctx context.Context, provider string, usage *Usage) {
+func (f TokenUsageRecorderFunc) RecordUsage(ctx context.Context, req *GenerateRequest, rsp *GenerateResponse, err error) {
 	if f == nil {
 		return
 	}
-	f(ctx, provider, usage)
+	f(ctx, req, rsp, err)
 }
 
 type noopTokenUsageRecorder struct{}
 
-func (noopTokenUsageRecorder) RecordUsage(context.Context, string, *Usage) {}
+func (noopTokenUsageRecorder) RecordUsage(context.Context, *GenerateRequest, *GenerateResponse, error) {}
 
 var (
 	recorderMu          sync.RWMutex
@@ -144,11 +181,76 @@ func (g *GenAPI) GetImageProvider(name string) ImageProvider {
 	return g.imageProviders[normalizeProviderName(name)]
 }
 
+// CoalesceImageProvider picks a registered image provider: prefers preferred, then huoshan when available.
+// Uses a single read lock because nested GetImageProvider calls would deadlock on the same goroutine.
+func (g *GenAPI) CoalesceImageProvider(preferred string) string {
+	p := strings.TrimSpace(preferred)
+	if p == "" {
+		p = "huoshan"
+	}
+	if g == nil {
+		return p
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	n := normalizeProviderName(p)
+	if _, ok := g.imageProviders[n]; ok {
+		return n
+	}
+	huoshanKey := normalizeProviderName("huoshan")
+	if n != huoshanKey {
+		if _, ok := g.imageProviders[huoshanKey]; ok {
+			return huoshanKey
+		}
+	}
+	return n
+}
+
+// HuoshanInternalClient returns the Huoshan Ark client for chat / multimodal text APIs, or nil if Huoshan is not registered.
+func (g *GenAPI) HuoshanInternalClient() *huoshanprovider.Client {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	p := g.providers[normalizeProviderName("huoshan")]
+	if p == nil {
+		return nil
+	}
+	hp, ok := p.(*huoshanProvider)
+	if !ok || hp == nil {
+		return nil
+	}
+	return hp.client
+}
+
 // GetVideoProvider returns the video provider registered under the given name.
 func (g *GenAPI) GetVideoProvider(name string) VideoProvider {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.videoProviders[normalizeProviderName(name)]
+}
+
+// CoalesceVideoProvider picks a registered video provider: prefers non-empty preferred, then huoshan when available.
+// Uses a single read lock because nested GetVideoProvider calls would deadlock on the same goroutine.
+func (g *GenAPI) CoalesceVideoProvider(preferred string) string {
+	p := strings.TrimSpace(preferred)
+	if p == "" {
+		p = "huoshan"
+	}
+	if g == nil {
+		return p
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	n := normalizeProviderName(p)
+	if _, ok := g.videoProviders[n]; ok {
+		return n
+	}
+	huoshanKey := normalizeProviderName("huoshan")
+	if n != huoshanKey {
+		if _, ok := g.videoProviders[huoshanKey]; ok {
+			return huoshanKey
+		}
+	}
+	return n
 }
 
 // GenerateImage runs an image generation workflow on the selected provider.
@@ -189,9 +291,7 @@ func (g *GenAPI) GenerateImage(ctx context.Context, providerName string, req *Ge
 		Error:     err,
 	})
 
-	if err == nil {
-		g.recordUsage(ctx, rsp)
-	}
+	g.recordUsage(ctx, cloned, rsp, err)
 	return rsp, err
 }
 
@@ -233,9 +333,7 @@ func (g *GenAPI) GenerateVideo(ctx context.Context, providerName string, req *Ge
 		Error:     err,
 	})
 
-	if err == nil {
-		g.recordUsage(ctx, rsp)
-	}
+	g.recordUsage(ctx, cloned, rsp, err)
 	return rsp, err
 }
 
@@ -255,10 +353,8 @@ func (g *GenAPI) GetVideoStatus(ctx context.Context, providerName, taskID string
 
 	if err != nil {
 		logError(ctx, "GetVideoStatus failed", "provider", providerName, "task_id", taskID, "error", err, "duration_ms", duration.Milliseconds())
-	} else {
-		logDebug(ctx, "GetVideoStatus completed", "provider", providerName, "task_id", taskID, "status", rsp.Status, "duration_ms", duration.Milliseconds())
-		g.recordUsage(ctx, rsp)
 	}
+	g.recordUsage(ctx, nil, rsp, err)
 	return rsp, err
 }
 
@@ -287,10 +383,8 @@ func (g *GenAPI) GetImageStatus(ctx context.Context, providerName, taskID string
 
 	if err != nil {
 		logError(ctx, "GetImageStatus failed", "provider", providerName, "task_id", taskID, "error", err, "duration_ms", duration.Milliseconds())
-	} else {
-		logDebug(ctx, "GetImageStatus completed", "provider", providerName, "task_id", taskID, "status", rsp.Status, "duration_ms", duration.Milliseconds())
-		g.recordUsage(ctx, rsp)
 	}
+	g.recordUsage(ctx, nil, rsp, err)
 	return rsp, err
 }
 
@@ -423,14 +517,15 @@ func (g *GenAPI) normalizeResponse(rsp *GenerateResponse, providerName string, r
 	return rsp
 }
 
-func (g *GenAPI) recordUsage(ctx context.Context, rsp *GenerateResponse) {
-	if rsp == nil || rsp.Usage == nil || rsp.Usage.IsEmpty() {
-		return
-	}
+func (g *GenAPI) recordUsage(ctx context.Context, req *GenerateRequest, rsp *GenerateResponse, err error) {
 	if g.usageRecorder == nil {
 		return
 	}
-	g.usageRecorder.RecordUsage(ctx, rsp.Provider, rsp.Usage)
+	// Record both success and failure for analytics; skip only when we have nothing to record
+	if rsp == nil && err == nil {
+		return
+	}
+	g.usageRecorder.RecordUsage(ctx, req, rsp, err)
 }
 
 func defaultVideoOperation(req *GenerateRequest) OperationType {

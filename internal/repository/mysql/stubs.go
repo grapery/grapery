@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -16,15 +18,13 @@ import (
 // 这个文件包含所有其他repository方法的实现
 // 这些方法补充了其他impl文件中未实现的方法
 
-var ErrNotImplemented = errors.New("not implemented yet")
-
 // ========== Story operations ==========
 
-func (r *Repository) StoriesByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*domain.Story, error) {
+func (r *Repository) StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
 	var stories []Story
 	err := r.db.WithContext(ctx).
 		Preload("Author").
-		Where("author_id = ?", authorID).
+		Where("author_id = ? AND status != ?", userID, string(common.ContentStatusArchived)).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -68,11 +68,21 @@ func (r *Repository) StoriesByAuthor(ctx context.Context, authorID string, limit
 
 func (r *Repository) TrendingStories(ctx context.Context, limit int) ([]*domain.Story, error) {
 	var stories []Story
-	// 根据点赞数、关注数和创建时间计算趋势分数
+
+	// Default/cap: trending is non-paginated and should not exceed 20.
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	// Simple hotness ordering: followers > likes > updated recency.
+	// No time range limit - includes all published stories.
 	err := r.db.WithContext(ctx).
 		Preload("Author").
-		Where("status = ?", "published").
-		Order("likes DESC, followers DESC, created_at DESC").
+		Where("status = ?", string(common.ContentStatusPublished)).
+		Order("followers DESC, likes DESC, updated_at DESC").
 		Limit(limit).
 		Find(&stories).Error
 	if err != nil {
@@ -216,268 +226,88 @@ func (r *Repository) PopularCharacters(ctx context.Context, limit int) ([]*domai
 	return result, nil
 }
 
-// ========== Group operations ==========
-
-func (r *Repository) GroupsByUser(ctx context.Context, userID string) ([]*domain.Group, error) {
-	var groupMembers []GroupMember
-	err := r.db.WithContext(ctx).
-		Preload("Group").
-		Preload("Group.Creator").
-		Where("user_id = ?", userID).
-		Find(&groupMembers).Error
-	if err != nil {
-		return nil, err
-	}
-
-	groups := make([]*domain.Group, len(groupMembers))
-	for i, gm := range groupMembers {
-		groups[i] = ModelToGroup(&gm.Group)
-	}
-	return groups, nil
-}
-
-// ========== Comment operations ==========
-
-func (r *Repository) CommentsByParent(ctx context.Context, parentID string) ([]*domain.Comment, error) {
-	var comments []Comment
-	err := r.db.WithContext(ctx).
-		Preload("Author").
-		Where("parent_id = ?", parentID).
-		Order("created_at ASC").
-		Find(&comments).Error
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*domain.Comment, len(comments))
-	for i := range comments {
-		result[i] = ModelToComment(&comments[i])
-	}
-	return result, nil
-}
-
-// ========== Storyboard operations ==========
-
-func (r *Repository) StoryCompositionByID(ctx context.Context, id string) (*domain.StoryComposition, error) {
-	var composition StoryComposition
-	err := r.db.WithContext(ctx).First(&composition, "id = ?", id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, domain.ErrNotFound
-		}
-		return nil, err
-	}
-	return ModelToStoryComposition(&composition), nil
-}
-
-func (r *Repository) ListStoryCompositions(ctx context.Context, limit, offset int) ([]*domain.StoryComposition, error) {
-	var compositions []StoryComposition
-	err := r.db.WithContext(ctx).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&compositions).Error
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*domain.StoryComposition, len(compositions))
-	for i := range compositions {
-		result[i] = ModelToStoryComposition(&compositions[i])
-	}
-	return result, nil
-}
-
-func (r *Repository) CreateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
-	dbComp := StoryCompositionToModel(composition)
-	if dbComp.ID == "" {
-		dbComp.ID = uuid.New().String()
-	}
-	dbComp.CreatedAt = time.Now()
-	dbComp.UpdatedAt = time.Now()
-
-	if err := r.db.WithContext(ctx).Create(dbComp).Error; err != nil {
-		return err
-	}
-
-	composition.ID = dbComp.ID
-	composition.CreatedAt = timeToUnix(dbComp.CreatedAt)
-	composition.UpdatedAt = timeToUnix(dbComp.UpdatedAt)
-	return nil
-}
-
-func (r *Repository) UpdateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
-	dbComp := StoryCompositionToModel(composition)
-	dbComp.UpdatedAt = time.Now()
-
-	result := r.db.WithContext(ctx).
-		Model(&StoryComposition{}).
-		Where("id = ?", composition.ID).
-		Updates(dbComp)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-
-	composition.UpdatedAt = timeToUnix(dbComp.UpdatedAt)
-	return nil
-}
-
-// ========== Relationship operations ==========
-
-func (r *Repository) IsStoryLiked(ctx context.Context, userID, storyID string) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&StoryLike{}).
-		Where("user_id = ? AND story_id = ?", userID, storyID).
-		Count(&count).Error
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-func (r *Repository) LikeStoryboard(ctx context.Context, userID, storyboardID string) error {
-	// 检查是否已经点赞
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
-		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
-		Count(&count).Error; err != nil {
-		return err
-	}
-
-	if count > 0 {
-		return errors.New("already liked")
-	}
-
-	// 创建点赞记录
-	like := &StoryboardLike{
-		ID:           uuid.New().String(),
-		UserID:       userID,
-		StoryboardID: storyboardID,
-		CreatedAt:    time.Now(),
-	}
-
-	if err := r.db.WithContext(ctx).Create(like).Error; err != nil {
-		return err
-	}
-
-	// 更新故事板的点赞数
-	if err := r.db.WithContext(ctx).Model(&Storyboard{}).
-		Where("id = ?", storyboardID).
-		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error {
-	// 删除点赞记录
-	result := r.db.WithContext(ctx).
-		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
-		Delete(&StoryboardLike{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("like not found")
-	}
-
-	// 更新故事板的点赞数
-	if err := r.db.WithContext(ctx).Model(&Storyboard{}).
-		Where("id = ?", storyboardID).
-		UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) JoinGroup(ctx context.Context, groupID, userID, role string) error {
-	member := &GroupMember{
-		ID:       uuid.New().String(),
-		GroupID:  groupID,
-		UserID:   userID,
-		Role:     role,
-		JoinedAt: time.Now(),
-	}
-
-	if err := r.db.WithContext(ctx).Create(member).Error; err != nil {
-		return err
-	}
-
-	// 更新群组成员数
-	if err := r.db.WithContext(ctx).Model(&Group{}).
-		Where("id = ?", groupID).
-		UpdateColumn("members", gorm.Expr("members + ?", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) LeaveGroup(ctx context.Context, groupID, userID string) error {
-	result := r.db.WithContext(ctx).
-		Where("group_id = ? AND user_id = ?", groupID, userID).
-		Delete(&GroupMember{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("member not found")
-	}
-
-	// 更新群组成员数
-	if err := r.db.WithContext(ctx).Model(&Group{}).
-		Where("id = ?", groupID).
-		UpdateColumn("members", gorm.Expr("GREATEST(members - ?, 0)", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Repository) GroupMembers(ctx context.Context, groupID string) ([]*domain.User, error) {
-	var members []GroupMember
-	err := r.db.WithContext(ctx).
-		Preload("User").
-		Where("group_id = ?", groupID).
-		Find(&members).Error
-	if err != nil {
-		return nil, err
-	}
-
-	users := make([]*domain.User, len(members))
-	for i := range members {
-		users[i] = ModelToUser(&members[i].User)
-	}
-	return users, nil
-}
-
 // ========== AI Generation operations ==========
+
+func isMySQLIncorrectStringValue(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "1366") && strings.Contains(s, "Incorrect string value")
+}
+
+// validateAIGenerationRecordDBUTF8 rejects strings that are not valid UTF-8. MySQL utf8mb4 still errors (often 1366) on invalid byte sequences.
+func validateAIGenerationRecordDBUTF8(m *AIGenerationRecord) error {
+	if m == nil {
+		return nil
+	}
+	checks := []struct {
+		field, value string
+	}{
+		{"id", m.ID},
+		{"user_id", m.UserID},
+		{"type", m.Type},
+		{"provider", m.Provider},
+		{"model", m.Model},
+		{"original_prompt", m.OriginalPrompt},
+		{"enhanced_prompt", m.EnhancedPrompt},
+		{"system_prompt", m.SystemPrompt},
+		{"input_params", m.InputParams},
+		{"output_result", m.OutputResult},
+		{"status", m.Status},
+		{"error_message", m.ErrorMessage},
+		{"error_code", m.ErrorCode},
+		{"related_entity_id", m.RelatedEntityID},
+		{"related_entity_type", m.RelatedEntityType},
+		{"metadata", m.Metadata},
+	}
+	for _, c := range checks {
+		if c.value == "" {
+			continue
+		}
+		if !utf8.ValidString(c.value) {
+			return fmt.Errorf("%w: field %q is not valid UTF-8 (cannot store in MySQL utf8mb4; check upstream encoding)", domain.ErrInvalidInput, c.field)
+		}
+	}
+	return nil
+}
+
+// createAIGenerationRecordPinned pins one pooled connection and sets session charset to utf8mb4 before INSERT.
+// Columns can already be utf8mb4 while character_set_client/connection are still latin1, which yields MySQL 1366 on Chinese text.
+func (r *Repository) createAIGenerationRecordPinned(ctx context.Context, dbRecord *AIGenerationRecord) error {
+	return r.db.WithContext(ctx).Connection(func(tx *gorm.DB) error {
+		if err := tx.Exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
+			return err
+		}
+		return tx.Create(dbRecord).Error
+	})
+}
 
 func (r *Repository) CreateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
-	
+
 	if dbRecord.ID == "" {
 		dbRecord.ID = uuid.New().String()
 	}
-	
+
 	if dbRecord.CreatedAt.IsZero() {
 		dbRecord.CreatedAt = time.Now()
 	}
 
-	if err := r.db.WithContext(ctx).Create(dbRecord).Error; err != nil {
+	if err := validateAIGenerationRecordDBUTF8(dbRecord); err != nil {
 		return err
 	}
-	
-	// 更新 record ID
+
+	err := r.createAIGenerationRecordPinned(ctx, dbRecord)
+	if err != nil && isMySQLIncorrectStringValue(err) {
+		// 列已是 utf8mb4 时仍 1366：多为其它负载列未改全；或 information_schema 与真实表不一致。
+		ForceAIGenerationRecordsUTF8MB4Columns(r.db, r.log)
+		err = r.createAIGenerationRecordPinned(ctx, dbRecord)
+	}
+	if err != nil {
+		return err
+	}
+
 	record.ID = dbRecord.ID
 	return nil
 }
@@ -498,7 +328,11 @@ func (r *Repository) GetAIGenerationRecord(ctx context.Context, recordID string)
 
 func (r *Repository) UpdateAIGenerationRecord(ctx context.Context, record *domain.AIGenerationRecord) error {
 	dbRecord := AIGenerationRecordToModel(record)
-	
+
+	if err := validateAIGenerationRecordDBUTF8(dbRecord); err != nil {
+		return err
+	}
+
 	result := r.db.WithContext(ctx).
 		Model(&AIGenerationRecord{}).
 		Where("id = ?", record.ID).
@@ -547,7 +381,7 @@ func (r *Repository) ListAIGenerationRecordsByTimeRange(ctx context.Context, use
 	var records []AIGenerationRecord
 	start := unixToTime(startTime)
 	end := unixToTime(endTime)
-	
+
 	err := r.db.WithContext(ctx).
 		Preload("User").
 		Where("user_id = ? AND created_at >= ? AND created_at <= ?", userID, start, end).
@@ -618,6 +452,38 @@ func (r *Repository) GetUserTokenStats(ctx context.Context, userID string, start
 		"byProvider":    byProvider,
 		"byType":        byType,
 	}, nil
+}
+
+// GetPendingAIGenerationRecords 获取待处理的AI生成记录（用于服务重启恢复）
+func (r *Repository) GetPendingAIGenerationRecords(ctx context.Context, statuses []domain.AITaskStatus, limit int) ([]*domain.AIGenerationRecord, error) {
+	var records []AIGenerationRecord
+
+	// 将状态转换为字符串数组
+	statusStrings := make([]string, len(statuses))
+	for i, status := range statuses {
+		statusStrings[i] = string(status)
+	}
+
+	query := r.db.WithContext(ctx).
+		Preload("User").
+		Where("status IN ?", statusStrings).
+		Where("type = ?", domain.AITaskGenerateVideo). // 只获取视频生成任务
+		Order("created_at ASC")
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	err := query.Find(&records).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.AIGenerationRecord, len(records))
+	for i := range records {
+		result[i] = ModelToAIGenerationRecord(&records[i])
+	}
+	return result, nil
 }
 
 // ========== Asset operations ==========
@@ -947,8 +813,8 @@ func (r *Repository) searchStories(ctx context.Context, filter *domain.SearchFil
 		query = query.Where("status = ?", filter.Status)
 	}
 
-	if filter.AuthorID != "" {
-		query = query.Where("author_id = ?", filter.AuthorID)
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
 	}
 
 	if filter.MinLikes > 0 {
@@ -986,7 +852,7 @@ func (r *Repository) searchStories(ctx context.Context, filter *domain.SearchFil
 			Title:       story.Title,
 			Description: story.Description,
 			Cover:       story.CoverImage,
-			AuthorID:    story.AuthorID,
+			UserID:      story.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 			Likes:       story.Likes,
 			CreatedAt:   timeToUnix(story.CreatedAt),
 			Relevance:   1.0,
@@ -1007,8 +873,8 @@ func (r *Repository) searchCharacters(ctx context.Context, filter *domain.Search
 			"%"+filter.Query+"%", "%"+filter.Query+"%")
 	}
 
-	if filter.AuthorID != "" {
-		query = query.Where("author_id = ?", filter.AuthorID)
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
 	}
 
 	if filter.MinLikes > 0 {
@@ -1039,7 +905,7 @@ func (r *Repository) searchCharacters(ctx context.Context, filter *domain.Search
 			Title:       char.Name,
 			Description: char.Description,
 			Cover:       char.Avatar,
-			AuthorID:    char.AuthorID,
+			UserID:      char.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 			Likes:       char.Likes,
 			CreatedAt:   timeToUnix(char.CreatedAt),
 			Relevance:   1.0,
@@ -1130,7 +996,7 @@ func (r *Repository) SearchByTags(ctx context.Context, tags []string, searchType
 				Title:       story.Title,
 				Description: story.Description,
 				Cover:       story.CoverImage,
-				AuthorID:    story.AuthorID,
+				UserID:      story.UserID, // MySQL 模型中的 UserID 字段映射到 author_id 列
 				Likes:       story.Likes,
 				CreatedAt:   timeToUnix(story.CreatedAt),
 				Relevance:   1.0,
@@ -1285,6 +1151,29 @@ func (r *Repository) ListTokenTransactions(ctx context.Context, userID string, l
 	return result, total, nil
 }
 
+// applyLegacyFreeTierQuotaFix 将偏低的免费会员 token_quota 提升到当前默认（含历史 0 与旧默认 10000）。
+func applyLegacyFreeTierQuotaFix(db *gorm.DB, m *Membership) error {
+	if m.Tier != "free" || m.TokenQuota >= common.DefaultFreeTierTokenQuota {
+		return nil
+	}
+	updates := map[string]interface{}{
+		"token_quota": common.DefaultFreeTierTokenQuota,
+		"updated_at":  time.Now(),
+	}
+	minStorage := int64(common.DefaultFreeTierStorageBytes)
+	if m.StorageQuota < minStorage {
+		updates["storage_quota"] = minStorage
+	}
+	if err := db.Model(&Membership{}).Where("id = ?", m.ID).Updates(updates).Error; err != nil {
+		return err
+	}
+	m.TokenQuota = common.DefaultFreeTierTokenQuota
+	if m.StorageQuota < minStorage {
+		m.StorageQuota = minStorage
+	}
+	return nil
+}
+
 func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, error) {
 	var membership Membership
 	err := r.db.WithContext(ctx).First(&membership, "user_id = ?", userID).Error
@@ -1292,6 +1181,9 @@ func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, e
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil // 未找到会员信息，返回0
 		}
+		return 0, err
+	}
+	if err := applyLegacyFreeTierQuotaFix(r.db.WithContext(ctx), &membership); err != nil {
 		return 0, err
 	}
 	return membership.TokenQuota - membership.TokenUsed, nil
@@ -1307,15 +1199,17 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				// 创建新的会员记录
 				membership = Membership{
-					ID:         uuid.New().String(),
-					UserID:     userID,
-					Tier:       "free",
-					Status:     "active",
-					StartDate:  time.Now(),
-					TokenQuota: 0,
-					TokenUsed:  0,
-					CreatedAt:  time.Now(),
-					UpdatedAt:  time.Now(),
+					ID:           uuid.New().String(),
+					UserID:       userID,
+					Tier:         "free",
+					Status:       string(common.MembershipStatusActive),
+					StartDate:    time.Now(),
+					TokenQuota:   common.DefaultFreeTierTokenQuota,
+					TokenUsed:    0,
+					StorageQuota: common.DefaultFreeTierStorageBytes,
+					StorageUsed:  0,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
 				}
 				if err := tx.Create(&membership).Error; err != nil {
 					return err
@@ -1323,6 +1217,8 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			} else {
 				return err
 			}
+		} else if err := applyLegacyFreeTierQuotaFix(tx, &membership); err != nil {
+			return err
 		}
 
 		// 计算新余额
@@ -1534,7 +1430,7 @@ func (r *Repository) GetActiveSubscription(ctx context.Context, userID string) (
 	now := time.Now()
 	err := r.db.WithContext(ctx).
 		Preload("Plan").
-		Where("user_id = ? AND status = ? AND end_date > ?", userID, "paid", now).
+		Where("user_id = ? AND status = ? AND end_date > ?", userID, string(common.OrderStatusPaid), now).
 		Order("end_date DESC").
 		First(&order).Error
 	if err != nil {
@@ -1567,10 +1463,14 @@ func (r *Repository) GetUserNotificationSettings(ctx context.Context, userID str
 		return nil, err
 	}
 
-	return map[string]bool{
-		"email": settings.EmailNotifications,
-		"push":  settings.PushNotifications,
-	}, nil
+	// 从 JSON 字段解析通知设置
+	notificationSettings := map[string]bool{
+		"email": true,
+		"push":  true,
+	}
+	// TODO: 从 settings.NotificationSettings 解析更多通知选项
+
+	return notificationSettings, nil
 }
 
 func (r *Repository) UpdateUserNotificationSettings(ctx context.Context, userID string, settings map[string]bool) error {
@@ -1580,25 +1480,17 @@ func (r *Repository) UpdateUserNotificationSettings(ctx context.Context, userID 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 创建新设置
 			userSettings = UserSettings{
-				ID:                 uuid.New().String(),
-				UserID:             userID,
-				EmailNotifications: true,
-				PushNotifications:  true,
-				UpdatedAt:          time.Now(),
+				ID:        uuid.New().String(),
+				UserID:    userID,
+				UpdatedAt: time.Now().Unix(),
 			}
 		} else {
 			return err
 		}
 	}
 
-	// 更新设置
-	if email, ok := settings["email"]; ok {
-		userSettings.EmailNotifications = email
-	}
-	if push, ok := settings["push"]; ok {
-		userSettings.PushNotifications = push
-	}
-	userSettings.UpdatedAt = time.Now()
+	// 更新通知设置 JSON
+	userSettings.UpdatedAt = time.Now().Unix()
 
 	return r.db.WithContext(ctx).Save(&userSettings).Error
 }
@@ -1610,22 +1502,20 @@ func (r *Repository) GetUserPrivacySettings(ctx context.Context, userID string) 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 返回默认设置
 			return map[string]interface{}{
-				"profile_visibility": "public",
-				"allow_comments":     true,
-				"allow_messages":     true,
-				"show_online_status": true,
-				"show_adult_content": false,
+				"profile_visibility":  "public",
+				"allow_comments_from": "everyone",
+				"allow_messages_from": "followers_only",
+				"show_online_status":  true,
 			}, nil
 		}
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"profile_visibility": settings.ProfileVisibility,
-		"allow_comments":     settings.AllowComments,
-		"allow_messages":     settings.AllowMessages,
-		"show_online_status": settings.ShowOnlineStatus,
-		"show_adult_content": settings.ShowAdultContent,
+		"profile_visibility":  settings.ProfileVisibility,
+		"allow_comments_from": settings.AllowCommentsFrom,
+		"allow_messages_from": settings.AllowMessagesFrom,
+		"show_online_status":  settings.ShowOnlineStatus,
 	}, nil
 }
 
@@ -1639,10 +1529,8 @@ func (r *Repository) UpdateUserPrivacySettings(ctx context.Context, userID strin
 				ID:                uuid.New().String(),
 				UserID:            userID,
 				ProfileVisibility: "public",
-				AllowComments:     true,
-				AllowMessages:     true,
 				ShowOnlineStatus:  true,
-				UpdatedAt:         time.Now(),
+				UpdatedAt:         time.Now().Unix(),
 			}
 		} else {
 			return err
@@ -1653,19 +1541,16 @@ func (r *Repository) UpdateUserPrivacySettings(ctx context.Context, userID strin
 	if profileVisibility, ok := settings["profile_visibility"].(string); ok {
 		userSettings.ProfileVisibility = profileVisibility
 	}
-	if allowComments, ok := settings["allow_comments"].(bool); ok {
-		userSettings.AllowComments = allowComments
+	if allowCommentsFrom, ok := settings["allow_comments_from"].(string); ok {
+		userSettings.AllowCommentsFrom = allowCommentsFrom
 	}
-	if allowMessages, ok := settings["allow_messages"].(bool); ok {
-		userSettings.AllowMessages = allowMessages
+	if allowMessagesFrom, ok := settings["allow_messages_from"].(string); ok {
+		userSettings.AllowMessagesFrom = allowMessagesFrom
 	}
 	if showOnlineStatus, ok := settings["show_online_status"].(bool); ok {
 		userSettings.ShowOnlineStatus = showOnlineStatus
 	}
-	if showAdultContent, ok := settings["show_adult_content"].(bool); ok {
-		userSettings.ShowAdultContent = showAdultContent
-	}
-	userSettings.UpdatedAt = time.Now()
+	userSettings.UpdatedAt = time.Now().Unix()
 
 	return r.db.WithContext(ctx).Save(&userSettings).Error
 }
@@ -1720,4 +1605,311 @@ func formatError(operation string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("%s failed: %w", operation, err)
+}
+
+// ========== Story Composition operations ==========
+
+// StoryCompositionByID retrieves a story composition by ID
+func (r *Repository) StoryCompositionByID(ctx context.Context, id string) (*domain.StoryComposition, error) {
+	var composition domain.StoryComposition
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&composition).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &composition, nil
+}
+
+// ListStoryCompositions retrieves all story compositions
+func (r *Repository) ListStoryCompositions(ctx context.Context, limit, offset int) ([]*domain.StoryComposition, error) {
+	var compositions []*domain.StoryComposition
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&compositions).Error; err != nil {
+		return nil, err
+	}
+	return compositions, nil
+}
+
+// CreateStoryComposition creates a new story composition
+func (r *Repository) CreateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
+	if composition.ID == "" {
+		composition.ID = uuid.New().String()
+	}
+	return r.db.WithContext(ctx).Create(composition).Error
+}
+
+// UpdateStoryComposition updates an existing story composition
+func (r *Repository) UpdateStoryComposition(ctx context.Context, composition *domain.StoryComposition) error {
+	return r.db.WithContext(ctx).Save(composition).Error
+}
+
+// IsStoryLiked checks if a user has liked a story
+func (r *Repository) IsStoryLiked(ctx context.Context, userID, storyID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryLike{}).
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// LikeStoryboard likes a storyboard
+func (r *Repository) LikeStoryboard(ctx context.Context, userID, storyboardID string) error {
+	// Check if already liked
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return domain.ErrAlreadyLiked
+	}
+
+	// Create like record
+	like := StoryboardLike{
+		ID:           uuid.New().String(),
+		UserID:       userID,
+		StoryboardID: storyboardID,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
+		return err
+	}
+
+	// Update storyboard likes count
+	return r.db.WithContext(ctx).Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error
+}
+
+// UnlikeStoryboard removes a like from a storyboard
+func (r *Repository) UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error {
+	result := r.db.WithContext(ctx).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Delete(&StoryboardLike{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+
+	// Update storyboard likes count
+	return r.db.WithContext(ctx).Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1)).Error
+}
+
+// IsStoryboardLiked reports whether the user has a row in storyboard_likes.
+func (r *Repository) IsStoryboardLiked(ctx context.Context, userID, storyboardID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("user_id = ? AND storyboard_id = ?", userID, storyboardID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// BatchIsStoryboardLiked reports which of the given storyboard IDs the user has liked.
+func (r *Repository) BatchIsStoryboardLiked(ctx context.Context, userID string, storyboardIDs []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	for _, id := range storyboardIDs {
+		if id != "" {
+			out[id] = false
+		}
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+	ids := make([]string, 0, len(out))
+	for id := range out {
+		ids = append(ids, id)
+	}
+	var rows []StoryboardLike
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Select("storyboard_id").
+		Where("user_id = ? AND storyboard_id IN ?", userID, ids).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		out[rows[i].StoryboardID] = true
+	}
+	return out, nil
+}
+
+// ListStoryboardLikers lists users who liked a storyboard (canonical storyboard_likes table).
+func (r *Repository) ListStoryboardLikers(ctx context.Context, storyboardID string, limit, offset int) ([]*domain.User, int, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&StoryboardLike{}).
+		Where("storyboard_id = ?", storyboardID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []StoryboardLike
+	if err := r.db.WithContext(ctx).
+		Preload("User").
+		Where("storyboard_id = ?", storyboardID).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	out := make([]*domain.User, 0, len(rows))
+	for i := range rows {
+		out = append(out, r.userToDomainPtr(&rows[i].User))
+	}
+	return out, int(total), nil
+}
+
+// ListStories retrieves stories with filtering
+func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter) ([]*domain.Story, int64, error) {
+	var stories []Story
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&Story{})
+
+	// Apply filters
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	} else {
+		// 默认列表不展示已归档（显式传 status=archived 时仍可查询）
+		query = query.Where("status != ?", string(common.ContentStatusArchived))
+	}
+	if filter.UserID != "" {
+		query = query.Where("author_id = ?", filter.UserID)
+	}
+	if filter.Search != "" {
+		query = query.Where("title LIKE ? OR description LIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+	if filter.Genre != "" {
+		query = query.Where("genre = ?", filter.Genre)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination and fetch data
+	query = query.Preload("Author").Order("created_at DESC")
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit).Offset(filter.Offset)
+	}
+
+	if err := query.Find(&stories).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]*domain.Story, len(stories))
+	for i := range stories {
+		result[i] = ModelToStory(&stories[i])
+	}
+
+	return result, total, nil
+}
+
+// PanelsByStory retrieves all panels for a story
+func (r *Repository) PanelsByStory(ctx context.Context, storyID string) ([]*domain.Panel, error) {
+	var panels []Panel
+	if err := r.db.WithContext(ctx).
+		Where("story_id = ?", storyID).
+		Order("sequence ASC").
+		Find(&panels).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Panel, len(panels))
+	for i := range panels {
+		result[i] = ModelToPanel(&panels[i])
+	}
+
+	return result, nil
+}
+
+// ========== StoryboardPanel Model ==========
+
+// StoryboardPanel is the MySQL model for storybook panels
+type StoryboardPanel struct {
+	common.BaseModel
+
+	StoryboardID string `gorm:"column:storyboard_id;index"`
+	Sequence     int    `gorm:"column:sequence"`
+
+	ImageURL  string `gorm:"column:image_url"`
+	Text      string `gorm:"column:text"`
+	TextPos   string `gorm:"column:text_pos"`
+	TextRight string `gorm:"column:text_right"`
+
+	IsAIGenerated bool   `gorm:"column:is_ai_generated"`
+	Prompt        string `gorm:"column:prompt"`
+}
+
+// TableName returns the table name for StoryboardPanel
+func (StoryboardPanel) TableName() string {
+	return "storyboard_panels"
+}
+
+// ModelToStoryboardPanel converts MySQL model to domain model
+func ModelToStoryboardPanel(p *StoryboardPanel) *domain.StoryboardPanel {
+	return &domain.StoryboardPanel{
+		BaseModel:     p.BaseModel,
+		StoryboardID:  p.StoryboardID,
+		Sequence:      p.Sequence,
+		ImageURL:      p.ImageURL,
+		Text:          p.Text,
+		TextPos:       p.TextPos,
+		TextRight:     p.TextRight,
+		IsAIGenerated: p.IsAIGenerated,
+		Prompt:        p.Prompt,
+	}
+}
+
+// PanelsByStoryboard retrieves all panels for a storyboard
+func (r *Repository) PanelsByStoryboard(ctx context.Context, storyboardID string) ([]*domain.StoryboardPanel, error) {
+	var panels []StoryboardPanel
+	if err := r.db.WithContext(ctx).
+		Where("storyboard_id = ?", storyboardID).
+		Order("sequence ASC").
+		Find(&panels).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.StoryboardPanel, len(panels))
+	for i := range panels {
+		result[i] = ModelToStoryboardPanel(&panels[i])
+	}
+
+	return result, nil
+}
+
+// CreateStoryboardPanel creates a new storyboard panel
+func (r *Repository) CreateStoryboardPanel(ctx context.Context, panel *domain.StoryboardPanel) error {
+	mysqlPanel := &StoryboardPanel{
+		BaseModel:     panel.BaseModel,
+		StoryboardID:  panel.StoryboardID,
+		Sequence:      panel.Sequence,
+		ImageURL:      panel.ImageURL,
+		Text:          panel.Text,
+		TextPos:       panel.TextPos,
+		TextRight:     panel.TextRight,
+		IsAIGenerated: panel.IsAIGenerated,
+		Prompt:        panel.Prompt,
+	}
+
+	return r.db.WithContext(ctx).Create(mysqlPanel).Error
 }

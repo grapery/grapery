@@ -2,22 +2,32 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
+
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/config"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	paypkg "github.com/grapestree/fgrapery/grapery/internal/service/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	pay "github.com/grapestree/fgrapery/grapery/internal/transport/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"github.com/grapestree/fgrapery/grapery/internal/version"
-	"github.com/sirupsen/logrus"
 )
 
 var printVersion = flag.Bool("version", false, "app build version")
@@ -30,17 +40,139 @@ func main() {
 		return
 	}
 
-	// 加载配置（简化版，不依赖GlobalConfig）
-	logrus.Info("Starting VIP payment service...")
+	// Get host information
+	hostname := utils.GetHostname()
+	hostIP := utils.GetHostIP()
+
+	// Load configuration
+	var cfg config.Config
+	var err error
+
+	if *configPath != "" {
+		cfg, err = config.LoadFromFile(*configPath, "vippay")
+		if err != nil {
+			// If config file doesn't exist, fall back to environment variables
+			if errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "Config file %s not found, falling back to environment variables\n", *configPath)
+				cfg = config.Load("vippay")
+			} else {
+				// For other errors (e.g., invalid YAML), exit
+				fmt.Fprintf(os.Stderr, "Failed to load config file: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	} else {
+		fmt.Println("loading config from environment variables")
+		cfg = config.Load("vippay")
+	}
+
+	// Initialize telemetry manager
+	telemetryConfig := telemetry.TelemetryManagerConfig{
+		LogLevel: cfg.LogLevel,
+	}
+	cfg.Telemetry.SLS.Enabled = false // Disable SLS by default for vippay service
+	// Configure SLS if enabled
+	if cfg.Telemetry.SLS.Enabled && cfg.Telemetry.SLS.Endpoint != "" {
+		telemetryConfig.SLS = &telemetry.SLSConfig{
+			Endpoint:        cfg.Telemetry.SLS.Endpoint,
+			AccessKeyID:     cfg.Telemetry.SLS.AccessKeyID,
+			AccessKeySecret: cfg.Telemetry.SLS.AccessKeySecret,
+			Project:         cfg.Telemetry.SLS.Project,
+			Logstore:        cfg.Telemetry.SLS.Logstore,
+			Topic:           cfg.Telemetry.SLS.Topic,
+			Source:          cfg.Telemetry.SLS.Source,
+		}
+	}
+	cfg.Telemetry.Prometheus.Enabled = false // Disable Prometheus for vippay service
+	// Configure Prometheus if enabled
+	if cfg.Telemetry.Prometheus.Enabled {
+		fmt.Println("telemetry Prometheus enable")
+		prometheusConfigData, _ := json.Marshal(cfg.Telemetry.Prometheus)
+		fmt.Println("prometheus config:", string(prometheusConfigData))
+		telemetryConfig.Prometheus = &telemetry.PrometheusConfig{
+			Enabled:      cfg.Telemetry.Prometheus.Enabled,
+			Path:         cfg.Telemetry.Prometheus.Path,
+			PushGateway:  cfg.Telemetry.Prometheus.PushGateway,
+			PushInterval: cfg.Telemetry.Prometheus.PushInterval,
+			JobName:      cfg.Telemetry.Prometheus.JobName,
+			AccessKey:    cfg.Telemetry.SLS.AccessKeyID,
+			SecretKey:    cfg.Telemetry.SLS.AccessKeySecret,
+			Grouping: map[string]string{
+				"appname": "vippay",
+				"host":    hostname,
+				"ip":      hostIP,
+			},
+		}
+	} else {
+		fmt.Println("telemetry Prometheus disable")
+	}
+
+	cfg.Telemetry.Tracing.Enabled = false
+	// Configure tracing if enabled
+	if cfg.Telemetry.Tracing.Enabled {
+		telemetryConfig.Tracing = &telemetry.TracingConfig{
+			Enabled:        cfg.Telemetry.Tracing.Enabled,
+			ServiceName:    cfg.Telemetry.Tracing.ServiceName,
+			ServiceVersion: cfg.Telemetry.Tracing.ServiceVersion,
+			Environment:    cfg.Telemetry.Tracing.Environment,
+			JaegerEndpoint: cfg.Telemetry.Tracing.JaegerEndpoint,
+			OTLPEndpoint:   cfg.Telemetry.Tracing.OTLPEndpoint,
+			SamplingRatio:  cfg.Telemetry.Tracing.SamplingRatio,
+		}
+	} else {
+		fmt.Println("telemetry tracing disable")
+	}
+
+	telemetryManager, err := telemetry.NewTelemetryManager(telemetryConfig)
+	if err != nil {
+		panic(err)
+	}
+	defer telemetryManager.Close()
+
+	logger := telemetryManager.Logger
+
+	logger.Info("starting grapery vip payment service",
+		zap.String("env", cfg.Env),
+		zap.String("addr", cfg.Addr()),
+	)
+
+	// 配置 JWT Secret
+	logger.Info("========== JWT Configuration ==========")
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		logger.Info("JWT_SECRET environment variable not set")
+		jwtSecret = cfg.JWT.Secret
+		if jwtSecret == "" {
+			logger.Error("JWT_SECRET not configured - authentication will fail")
+			logger.Error("Set JWT_SECRET environment variable or configure it in the config file")
+			// Continue without secret - token generation will fail with ErrSecretNotSet
+		} else {
+			logger.Info("JWT Secret loaded from config file")
+		}
+	} else {
+		logger.Info("JWT Secret loaded from environment variable")
+	}
+
+	// 记录JWT Secret的长度和预览（安全性考虑不记录完整值）
+	logger.Info("JWT Secret configuration",
+		zap.Int("secret_length", len(jwtSecret)),
+		zap.String("secret_preview", jwtSecret[:min(len(jwtSecret), 10)]+"..."),
+		zap.Bool("from_env", os.Getenv("JWT_SECRET") != ""),
+		zap.Bool("is_default", jwtSecret == "grapery-secret-key-change-in-production"),
+	)
+
+	auth.SetJWTSecret(jwtSecret)
+	logger.Info("=========================================")
 
 	// 初始化数据库
-	err := initializeServices()
+	err = initializeServices(logger)
 	if err != nil {
-		logrus.Fatal("initialize services failed : ", err)
+		logger.Fatal("initialize services failed", zap.Error(err))
 	}
 
 	// 创建 Gin 引擎
-	router := createGinEngine()
+	router := createGinEngine(cfg, logger, telemetryManager)
 
 	// 注册路由
 	registerRoutes(router)
@@ -55,20 +187,39 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Setup graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Start metrics pusher if configured
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.PushGateway != "" {
+		go telemetryManager.Metrics.Start(context.Background())
+		logger.Info("Metrics pusher started",
+			zap.String("gateway", cfg.Telemetry.Prometheus.PushGateway),
+			zap.Int("interval", cfg.Telemetry.Prometheus.PushInterval),
+		)
+	}
+
 	// 启动服务器
 	go func() {
-		logrus.Infof("Starting VIP payment server on port %s", port)
+		logger.Info("VIP payment server listening",
+			zap.String("addr", ":"+port),
+		)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logrus.Fatalf("start server failed: %v", err)
+			logger.Fatal("start server failed", zap.Error(err))
 		}
 	}()
 
+	// Wait for interrupt signal
+	<-ctx.Done()
+	logger.Info("shutdown signal received")
+
 	// 优雅关闭
-	gracefulShutdown(server)
+	gracefulShutdown(ctx, server, logger)
 }
 
 // initializeServices 初始化服务
-func initializeServices() error {
+func initializeServices(logger *zap.Logger) error {
 	// 从环境变量获取数据库配置
 	dbUser := os.Getenv("DB_USERNAME")
 	if dbUser == "" {
@@ -90,19 +241,27 @@ func initializeServices() error {
 	// 初始化支付数据库
 	err := paymodels.Init(dbUser, dbPass, dbAddr, dbName)
 	if err != nil {
-		logrus.Fatal("init vippay database failed : ", err)
+		logger.Fatal("init vippay database failed", zap.Error(err))
 		return err
 	}
 
-	logrus.Info("init vippay database success")
+	// 初始化 Web 支付表
+	err = paymodels.AutoMigrateWebPayments()
+	if err != nil {
+		logger.Warn("failed to auto-migrate web payments table", zap.Error(err))
+		// 不阻断启动，只记录警告
+	} else {
+		logger.Info("web payments table migrated successfully")
+	}
+
+	logger.Info("init vippay database success")
 	return nil
 }
 
 // createGinEngine 创建 Gin 引擎
-func createGinEngine() *gin.Engine {
+func createGinEngine(cfg config.Config, logger *zap.Logger, telemetryManager *telemetry.TelemetryManager) *gin.Engine {
 	// 设置 Gin 模式
-	logLevel := getLogLevel()
-	if logLevel == "debug" {
+	if cfg.Env == "development" || cfg.LogLevel == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -115,28 +274,73 @@ func createGinEngine() *gin.Engine {
 	router.Use(
 		// 恢复中间件 - 处理 panic
 		gin.Recovery(),
-		// 日志中间件
-		gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-			return fmt.Sprintf("[VIP-PAY] %v | %3d | %13v | %15s | %-7s %s\n%s",
-				param.TimeStamp.Format("2006/01/02 - 15:04:05"),
-				param.StatusCode,
-				param.Latency,
-				param.ClientIP,
-				param.Method,
-				param.Path,
-				param.ErrorMessage,
-			)
-		}),
-		// CORS 中间件
-		cors.New(cors.Config{
-			AllowOrigins:     []string{"*"},
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
-			ExposeHeaders:    []string{"Content-Length"},
-			AllowCredentials: true,
-			MaxAge:           12 * time.Hour,
-		}),
 	)
+
+	// Configure CORS
+	allowOrigins := cfg.AllowOrigins
+	isDevelopment := cfg.Env == "development" || os.Getenv("GIN_MODE") == "debug"
+
+	if len(allowOrigins) == 0 {
+		if isDevelopment {
+			// Development: allow common local development origins
+			allowOrigins = []string{
+				"http://localhost:3000",
+				"http://localhost:5173",
+				"http://localhost:8080",
+				"http://127.0.0.1:3000",
+				"http://127.0.0.1:5173",
+				"http://127.0.0.1:8080",
+			}
+		} else {
+			// Production: no default - must be configured via CORS_ALLOW_ORIGINS or config
+			logger.Warn("No CORS origins configured for production - CORS will be restrictive")
+			allowOrigins = []string{} // Empty = no origins allowed
+		}
+	}
+
+	corsConfig := cors.Config{
+		AllowOrigins:     allowOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", telemetry.CorrelationIDHeader},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+
+	// In development, use AllowOriginFunc for flexibility
+	if isDevelopment && len(allowOrigins) > 0 {
+		corsConfig.AllowOriginFunc = func(origin string) bool {
+			// In development, allow any localhost/127.0.0.1 origin
+			if strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
+			for _, allowed := range allowOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	router.Use(cors.New(corsConfig))
+
+	// Add telemetry middleware
+	router.Use(telemetry.GinCorrelationMiddleware(logger))
+	router.Use(telemetry.GinRequestIDMiddleware(logger))
+	if telemetryManager.Tracer != nil {
+		router.Use(telemetryManager.Tracer.GinTraceMiddleware())
+	}
+	if telemetryManager.Metrics != nil {
+		router.Use(telemetry.GinHTTPMiddleware(logger, telemetryManager.Metrics))
+	}
+
+	// Add metrics endpoint if Prometheus is enabled
+	if telemetryManager.Metrics != nil && cfg.Telemetry.Prometheus.Enabled {
+		router.GET(cfg.Telemetry.Prometheus.Path, gin.WrapH(telemetryManager.Metrics.Handler()))
+		logger.Info("Metrics endpoint registered", zap.String("path", cfg.Telemetry.Prometheus.Path))
+	}
 
 	return router
 }
@@ -146,7 +350,7 @@ func registerRoutes(router *gin.Engine) {
 	// 获取配置的域名，如果未配置则使用默认值
 	domain := getVipPayDomain()
 	if domain == "" {
-		domain = "https://www.grapery.xyz"
+		domain = "https://www.rankquantity.xyz"
 	}
 
 	// 创建 IAP 配置
@@ -164,11 +368,39 @@ func registerRoutes(router *gin.Engine) {
 	// 创建 IAP 处理器，传入产品服务
 	iapHandler := pay.NewIAPHandler(iapService, productService)
 
-	// 创建 Apple OAuth2 处理器
-	appleOAuthHandler := pay.NewAppleOAuthHandler()
+	// 创建 OAuth Repository（用于持久化用户数据和第三方登录绑定）
+	oauthRepo := paymodels.NewOAuthRepository()
 
-	// 创建 Google OAuth2 处理器
-	googleOAuthHandler := pay.NewGoogleOAuthHandler()
+	// 创建 Apple OAuth2 处理器（带 Repository 支持跨设备登录和账户关联）
+	var appleOAuthHandler *pay.AppleOAuthHandler
+	if oauthRepo != nil {
+		appleOAuthHandler = pay.NewAppleOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		appleOAuthHandler = pay.NewAppleOAuthHandler()
+	}
+
+	// 创建 Google OAuth2 处理器（带 Repository 支持跨设备登录和账户关联）
+	var googleOAuthHandler *pay.GoogleOAuthHandler
+	if oauthRepo != nil {
+		googleOAuthHandler = pay.NewGoogleOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		googleOAuthHandler = pay.NewGoogleOAuthHandler()
+	}
+
+	// 创建 WeChat OAuth2 处理器（网站应用扫码登录；需 WECHAT_APP_ID / WECHAT_APP_SECRET）
+	var wechatOAuthHandler *pay.WeChatOAuthHandler
+	if oauthRepo != nil {
+		wechatOAuthHandler = pay.NewWeChatOAuthHandlerWithRepo(oauthRepo)
+	} else {
+		wechatOAuthHandler = pay.NewWeChatOAuthHandler()
+	}
+
+	// 创建徽章 Repository 和处理器
+	badgeRepo := paymodels.NewBadgeRepository()
+	var badgeHandler *pay.BadgeHandler
+	if badgeRepo != nil {
+		badgeHandler = pay.NewBadgeHandler(badgeRepo)
+	}
 
 	// API 路由组
 	api := router.Group("/api/vippay")
@@ -353,6 +585,10 @@ func registerRoutes(router *gin.Engine) {
 			c.String(http.StatusOK, privacyHTML)
 		})
 
+		// Legal docs (JSON + markdown, localized)
+		api.GET("/legal/terms-of-service", pay.GetTermsOfService)
+		api.GET("/legal/privacy-policy", pay.GetPrivacyPolicy)
+
 		// IAP 相关路由
 		iap := api.Group("/iap")
 		{
@@ -400,6 +636,14 @@ func registerRoutes(router *gin.Engine) {
 			appleOAuth.POST("/signin", appleOAuthHandler.HandleAppleSignIn)
 			appleOAuth.GET("/status", appleOAuthHandler.HandleAppleSignInStatus)
 			appleOAuth.GET("/config", appleOAuthHandler.GetAppleOAuthConfig)
+
+			// 需要鉴权的接口
+			appleOAuthAuth := appleOAuth.Group("")
+			appleOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				appleOAuthAuth.POST("/link", appleOAuthHandler.HandleAppleLink)
+				appleOAuthAuth.POST("/unlink", appleOAuthHandler.HandleAppleUnlink)
+			}
 		}
 
 		// Google OAuth2 相关路由
@@ -409,6 +653,29 @@ func registerRoutes(router *gin.Engine) {
 			googleOAuth.POST("/signin", googleOAuthHandler.HandleGoogleSignIn)
 			googleOAuth.GET("/status", googleOAuthHandler.HandleGoogleSignInStatus)
 			googleOAuth.GET("/config", googleOAuthHandler.GetGoogleOAuthConfig)
+
+			// 需要鉴权的接口
+			googleOAuthAuth := googleOAuth.Group("")
+			googleOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				googleOAuthAuth.POST("/link", googleOAuthHandler.HandleGoogleLink)
+				googleOAuthAuth.POST("/unlink", googleOAuthHandler.HandleGoogleUnlink)
+			}
+		}
+
+		// WeChat OAuth2 相关路由（开放平台网站应用 qrconnect + snsapi_login）
+		wechatOAuth := api.Group("/wechat-oauth")
+		{
+			wechatOAuth.POST("/signin", wechatOAuthHandler.HandleWeChatSignIn)
+			wechatOAuth.GET("/status", wechatOAuthHandler.HandleWeChatSignInStatus)
+			wechatOAuth.GET("/config", wechatOAuthHandler.GetWeChatOAuthConfig)
+
+			wechatOAuthAuth := wechatOAuth.Group("")
+			wechatOAuthAuth.Use(paymiddleware.AuthMiddleware())
+			{
+				wechatOAuthAuth.POST("/link", wechatOAuthHandler.HandleWeChatLink)
+				wechatOAuthAuth.POST("/unlink", wechatOAuthHandler.HandleWeChatUnlink)
+			}
 		}
 
 		// VIP 会员相关路由 - 需要鉴权
@@ -416,137 +683,419 @@ func registerRoutes(router *gin.Engine) {
 		vip.Use(paymiddleware.AuthMiddleware())
 		{
 			vip.GET("/info", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
-				// 简单的VIP信息响应
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+
+				// 查询用户活跃订阅
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				if err != nil {
+					// 没有活跃订阅，返回默认值
+					c.JSON(http.StatusOK, gin.H{
+						"code": 0,
+						"msg":  "success",
+						"data": gin.H{
+							"user_id":      userID,
+							"is_vip":       false,
+							"level":        0,
+							"status":       0,
+							"auto_renew":   false,
+							"quota_used":   0,
+							"quota_limit":  0,
+							"max_roles":    2, // 免费用户默认值
+							"max_contexts": 5, // 免费用户默认值
+							"expires_at":   nil,
+						},
+					})
+					return
+				}
+
+				// 计算VIP等级（根据订阅套餐）
+				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
+
+				// 格式化过期时间
+				var expiresAt *string
+				if !subscription.EndTime.IsZero() {
+					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
+					expiresAt = &expiresAtStr
+				}
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"is_vip":       false,
-						"level":        0,
-						"status":       0,
-						"auto_renew":   false,
-						"quota_used":   0,
-						"quota_limit":  0,
-						"max_roles":    2,
-						"max_contexts": 5,
+						"is_vip":       subscription.IsActive(),
+						"level":        vipLevel,
+						"status":       int(subscription.Status),
+						"auto_renew":   subscription.AutoRenew,
+						"quota_used":   subscription.QuotaUsed,
+						"quota_limit":  subscription.QuotaLimit,
+						"max_roles":    subscription.MaxRoles,
+						"max_contexts": subscription.MaxContexts,
+						"expires_at":   expiresAt,
 					},
 				})
 			})
 			vip.GET("/check", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				isVip := err == nil && subscription != nil && subscription.IsActive()
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id": userID,
-						"is_vip":  false,
+						"is_vip":  isVip,
 					},
 				})
 			})
 			vip.GET("/quota", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				if err != nil {
+					// 没有活跃订阅
+					c.JSON(http.StatusOK, gin.H{
+						"code": 0,
+						"msg":  "success",
+						"data": gin.H{
+							"user_id":     userID,
+							"quota_used":  0,
+							"quota_limit": 0,
+							"remaining":   0,
+						},
+					})
+					return
+				}
+
+				remaining := subscription.GetRemainingQuota()
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":     userID,
-						"quota_used":  0,
-						"quota_limit": 0,
-						"remaining":   0,
+						"quota_used":  subscription.QuotaUsed,
+						"quota_limit": subscription.QuotaLimit,
+						"remaining":   remaining,
 					},
 				})
 			})
 			vip.GET("/max-roles", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				maxRoles := 2 // 默认值
+				if err == nil && subscription != nil {
+					maxRoles = subscription.MaxRoles
+				}
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":   userID,
-						"max_roles": 2,
+						"max_roles": maxRoles,
 					},
 				})
 			})
 			vip.GET("/max-contexts", func(c *gin.Context) {
-				userID := paymiddleware.GetUserIDFromContext(c)
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
+
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				maxContexts := 5 // 默认值
+				if err == nil && subscription != nil {
+					maxContexts = subscription.MaxContexts
+				}
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"max_contexts": 5,
+						"max_contexts": maxContexts,
 					},
 				})
 			})
 		}
+
+		// 徽章相关路由
+		if badgeHandler != nil {
+			badges := api.Group("/badges")
+			{
+				// 公开接口 - 无需鉴权
+				badges.GET("", badgeHandler.GetAllBadges)                           // 获取所有徽章定义
+				badges.GET("/category/:category", badgeHandler.GetBadgesByCategory) // 根据类别获取徽章
+				badges.GET("/user", badgeHandler.GetUserBadges)                     // 获取用户已获得的徽章（支持user_id参数）
+				badges.GET("/pinned", badgeHandler.GetUserPinnedBadges)             // 获取用户置顶的徽章
+
+				// 需要鉴权的接口
+				authBadges := badges.Group("")
+				authBadges.Use(paymiddleware.AuthMiddleware())
+				{
+					authBadges.GET("/profile", badgeHandler.GetUserBadgeProfile)   // 获取用户徽章档案
+					authBadges.GET("/stats", badgeHandler.GetUserStats)            // 获取用户统计
+					authBadges.GET("/progress", badgeHandler.GetBadgeProgress)     // 获取徽章进度
+					authBadges.POST("/pin", badgeHandler.PinBadge)                 // 置顶徽章
+					authBadges.POST("/unpin/:badge_id", badgeHandler.UnpinBadge)   // 取消置顶
+					authBadges.POST("/mark-viewed", badgeHandler.MarkBadgesViewed) // 标记徽章已查看
+					authBadges.POST("/check", badgeHandler.CheckAndAwardBadges)    // 检查并授予徽章
+					authBadges.POST("/sync-stats", badgeHandler.SyncUserStats)     // 同步用户统计
+				}
+			}
+		}
+
+		// Token 用量统计相关路由 - 需要鉴权
+		usage := api.Group("/usage")
+		usage.Use(paymiddleware.AuthMiddleware())
+		{
+			// 创建 TokenUsageService 和 TokenUsageLogService
+			logrusLogger := &logrus.Logger{
+				Out:       os.Stderr,
+				Formatter: new(logrus.TextFormatter),
+				Hooks:     make(logrus.LevelHooks),
+				Level:     logrus.InfoLevel,
+			}
+			tokenUsageService := paypkg.NewTokenUsageService(logrusLogger)
+			tokenUsageLogService := paypkg.NewTokenUsageLogService(logrusLogger)
+			usageHandler := paypkg.NewUsageLimitHandler(tokenUsageService, logrusLogger)
+			usageLogHandler := pay.NewTokenUsageLogHandler(tokenUsageLogService, logrusLogger)
+
+			// 获取用户总用量统计（支持 daily/weekly/monthly/yearly 周期）
+			usage.GET("/stats", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.GetUsageStats(c)
+			})
+
+			// 获取用户各类型用量统计
+			usage.GET("/by-type", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.GetUsageByType(c)
+			})
+
+			// 检查特定类型的用量限制
+			usage.GET("/limit/:type", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				c.Set("user_id", userID)
+				usageHandler.CheckUsageLimit(c)
+			})
+
+			// Token 用量日志相关路由
+			logs := usage.Group("/logs")
+			{
+				// 查询日志列表
+				logs.GET("", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetLogs(c)
+				})
+
+				// 获取汇总统计
+				logs.GET("/summary", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetSummary(c)
+				})
+
+				// 按实体类型汇总
+				logs.GET("/summary/by-type", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetSummaryByEntityType(c)
+				})
+
+				// 导出日志（CSV/JSON）
+				logs.GET("/export", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.ExportLogs(c)
+				})
+
+				// 按业务实体查询日志
+				logs.GET("/by-entity/:entity_type/:entity_id", usageLogHandler.GetLogsByEntity)
+
+				// 获取计费汇总
+				logs.GET("/billing", func(c *gin.Context) {
+					userIDStr := paymiddleware.GetUserIDFromContext(c)
+					userID := stringToInt64(userIDStr)
+					c.Set("user_id", userID)
+					usageLogHandler.GetBilling(c)
+				})
+
+				// 标记为已计费
+				logs.POST("/mark-billed", usageLogHandler.MarkAsBilled)
+			}
+		}
+
+		// Web 支付相关路由 - 增量添加
+		web := api.Group("/web")
+		{
+			// 创建日志记录器
+			webLogger := &logrus.Logger{
+				Out:       os.Stderr,
+				Formatter: new(logrus.TextFormatter),
+				Hooks:     make(logrus.LevelHooks),
+				Level:     logrus.InfoLevel,
+			}
+
+			// 创建 Web 支付配置
+			webPaymentConfig := &paypkg.WebPaymentConfig{
+				StripeSecretKey:      os.Getenv("STRIPE_SECRET_KEY"),
+				StripeWebhookSecret:  os.Getenv("STRIPE_WEBHOOK_SECRET"),
+				StripePublishableKey: os.Getenv("STRIPE_PUBLISHABLE_KEY"),
+				AlipayAppID:          os.Getenv("ALIPAY_APP_ID"),
+				AlipayPrivateKey:     os.Getenv("ALIPAY_PRIVATE_KEY"),
+				AlipayPublicKey:      os.Getenv("ALIPAY_PUBLIC_KEY"),
+			}
+
+			// 创建 Web 支付服务
+			webPaymentService := paypkg.NewWebPaymentService(webLogger, webPaymentConfig)
+
+			// 创建 Web 支付处理器
+			webPaymentHandler := pay.NewWebPaymentHandler(webPaymentService, webLogger)
+
+			// 需要鉴权的接口
+			authWeb := web.Group("")
+			authWeb.Use(paymiddleware.AuthMiddleware())
+			{
+				// 支付管理
+				authWeb.POST("/payments", webPaymentHandler.CreatePayment)
+				authWeb.GET("/payments/:id", webPaymentHandler.GetPayment)
+				authWeb.GET("/payments/user/:userId", webPaymentHandler.GetUserPayments)
+			}
+
+			// Webhook 接口（无需鉴权，由支付服务商直接调用）
+			web.POST("/webhooks/stripe", webPaymentHandler.HandleStripeWebhook)
+			web.POST("/webhooks/alipay", webPaymentHandler.HandleAlipayWebhook)
+		}
 	}
 }
 
-// createIAPConfig 创建IAP配置
+// createIAPConfig 创建IAP配置（从环境变量加载）
 func createIAPConfig() *paypkg.IAPConfig {
-	// 默认配置
+	// Apple 配置
+	appleBundleID := getEnvWithDefault("APPLE_BUNDLE_ID", "com.rankquantity.voyager")
+	appleIssuerID := os.Getenv("APPLE_ISSUER_ID")
+	appleKeyID := os.Getenv("APPLE_KEY_ID")
+	applePrivateKey := os.Getenv("APPLE_PRIVATE_KEY")
+
+	// Apple Sandbox 配置（如不设置，使用生产配置）
+	appleSandboxBundleID := getEnvWithDefault("APPLE_SANDBOX_BUNDLE_ID", appleBundleID)
+	appleSandboxIssuerID := getEnvWithDefault("APPLE_SANDBOX_ISSUER_ID", appleIssuerID)
+	appleSandboxKeyID := getEnvWithDefault("APPLE_SANDBOX_KEY_ID", appleKeyID)
+	appleSandboxPrivateKey := getEnvWithDefault("APPLE_SANDBOX_PRIVATE_KEY", applePrivateKey)
+
+	// Google 配置
+	googlePackageName := getEnvWithDefault("GOOGLE_PACKAGE_NAME", "com.rankquantity.pioneer")
+	googleServiceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+
+	// Google Sandbox 配置（如不设置，使用生产配置）
+	googleSandboxPackageName := getEnvWithDefault("GOOGLE_SANDBOX_PACKAGE_NAME", googlePackageName)
+	googleSandboxServiceAccountKey := getEnvWithDefault("GOOGLE_SANDBOX_SERVICE_ACCOUNT_KEY", googleServiceAccountKey)
+
 	config := &paypkg.IAPConfig{
 		Apple: paypkg.AppleConfig{
-			BundleID:       "com.yourapp.bundleid", // 需要配置实际的Bundle ID
+			BundleID:       appleBundleID,
 			SandboxURL:     "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/verifyReceipt",
 			ProductionURL:  "https://api.storekit.itunes.apple.com/inApps/v1/verifyReceipt",
-			IssuerID:       "YOUR_APPLE_ISSUER_ID",   // 需要配置实际的Issuer ID
-			KeyID:          "YOUR_APPLE_KEY_ID",      // 需要配置实际的Key ID
-			PrivateKey:     "YOUR_APPLE_PRIVATE_KEY", // 需要配置实际的Private Key
+			IssuerID:       appleIssuerID,
+			KeyID:          appleKeyID,
+			PrivateKey:     applePrivateKey,
 			APIBaseURL:     "https://api.appstoreconnect.apple.com",
 			TimeoutSeconds: 30,
 			MaxRetries:     3,
 			RetryDelayMs:   1000,
-			// Sandbox特定配置
-			SandboxBundleID:   "com.yourapp.sandbox",      // 如果需要不同的Sandbox Bundle ID
-			SandboxIssuerID:   "YOUR_SANDBOX_ISSUER_ID",   // 如果需要不同的Sandbox Issuer ID
-			SandboxKeyID:      "YOUR_SANDBOX_KEY_ID",      // 如果需要不同的Sandbox Key ID
-			SandboxPrivateKey: "YOUR_SANDBOX_PRIVATE_KEY", // 如果需要不同的Sandbox Private Key
+			// Sandbox 特定配置
+			SandboxBundleID:   appleSandboxBundleID,
+			SandboxIssuerID:   appleSandboxIssuerID,
+			SandboxKeyID:      appleSandboxKeyID,
+			SandboxPrivateKey: appleSandboxPrivateKey,
 		},
 		Google: paypkg.GoogleConfig{
-			PackageName:       "com.yourapp.packagename",         // 需要配置实际的Package Name
-			ServiceAccountKey: "YOUR_GOOGLE_SERVICE_ACCOUNT_KEY", // 需要配置实际的Service Account Key
+			PackageName:       googlePackageName,
+			ServiceAccountKey: googleServiceAccountKey,
 			APIBaseURL:        "https://androidpublisher.googleapis.com",
 			TimeoutSeconds:    30,
 			MaxRetries:        3,
 			RetryDelayMs:      1000,
-			// Sandbox特定配置
-			SandboxPackageName:       "com.yourapp.sandbox",              // 如果需要不同的Sandbox Package Name
-			SandboxServiceAccountKey: "YOUR_SANDBOX_SERVICE_ACCOUNT_KEY", // 如果需要不同的Sandbox Service Account Key
+			// Sandbox 特定配置
+			SandboxPackageName:       googleSandboxPackageName,
+			SandboxServiceAccountKey: googleSandboxServiceAccountKey,
 		},
 	}
-
-	// TODO: 从配置文件或环境变量加载实际的配置
-	// 这里可以从 config.GlobalConfig 中读取IAP相关配置
-	// 或者从环境变量中读取敏感信息如私钥等
 
 	return config
 }
 
-// gracefulShutdown 优雅关闭
-func gracefulShutdown(server *http.Server) {
-	// 等待中断信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	<-quit
+// getEnvWithDefault 获取环境变量，如果不存在则返回默认值
+func getEnvWithDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
-	logrus.Info("Shutting down VIP payment server...")
+// gracefulShutdown 优雅关闭
+func gracefulShutdown(ctx context.Context, server *http.Server, logger *zap.Logger) {
+	logger.Info("Shutting down VIP payment server...")
 
 	// 设置关闭超时
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// 优雅关闭服务器
-	if err := server.Shutdown(ctx); err != nil {
-		logrus.Fatal("Server forced to shutdown:", err)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("graceful shutdown failed", zap.Error(err))
 	}
 
-	logrus.Info("VIP payment server exited")
+	logger.Info("VIP payment server exited")
 }
 
 // Helper functions for safe config access
+
+// stringToInt64 将字符串用户ID转换为int64
+// 使用 FNV-1a 哈希将字符串UUID转换为稳定的数值ID
+func stringToInt64(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return int64(h.Sum64())
+}
+
+// calculateVIPLevel 根据套餐计划ID计算VIP等级
+// 这里可以根据实际的套餐计划配置来映射等级
+func calculateVIPLevel(packagePlanID uint) int {
+	// 简单的映射逻辑，实际应该从数据库查询套餐计划配置
+	// 这里可以根据 packagePlanID 映射到不同的VIP等级
+	// 例如：1=免费, 2=基础, 3=高级, 4=专业
+	if packagePlanID == 0 {
+		return 0 // 免费用户
+	}
+	// 可以根据实际业务逻辑调整
+	return int(packagePlanID)
+}
 
 func getVipPayPort() string {
 	// 尝试从环境变量获取
@@ -563,11 +1112,4 @@ func getVipPayDomain() string {
 		return domain
 	}
 	return "https://www.grapery.xyz"
-}
-
-func getLogLevel() string {
-	if level := os.Getenv("LOG_LEVEL"); level != "" {
-		return level
-	}
-	return "info"
 }

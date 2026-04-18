@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -27,7 +28,7 @@ func (r *Repository) NotificationsByUser(ctx context.Context, userID string, lim
 
 func (r *Repository) UnreadNotificationCount(ctx context.Context, userID string) (int, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ? AND read = ?", userID, false).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ? AND `read` = ?", userID, false).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count unread notifications: %w", err)
 	}
 	return int(count), nil
@@ -45,6 +46,15 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 		ActorID:     notification.ActorID,
 		ActorName:   notification.ActorName,
 		ActorAvatar: notification.ActorAvatar,
+		// Story context
+		StoryTitle:  notification.StoryTitle,
+		StoryCover:  notification.StoryCover,
+		StoryID:     notification.StoryID,
+		CommentText: notification.CommentText,
+		// System notification
+		SysTitle: notification.SysTitle,
+		SysBody:  notification.SysBody,
+		SysIcon:  notification.SysIcon,
 	}
 	if err := r.db.WithContext(ctx).Create(&dbNotif).Error; err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
@@ -55,14 +65,14 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 }
 
 func (r *Repository) MarkNotificationRead(ctx context.Context, id string) error {
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("id = ?", id).Update("read", true).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("id = ?", id).Update("`read`", true).Error; err != nil {
 		return fmt.Errorf("failed to mark notification as read: %w", err)
 	}
 	return nil
 }
 
 func (r *Repository) MarkAllNotificationsRead(ctx context.Context, userID string) error {
-	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ?", userID).Update("read", true).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Notification{}).Where("user_id = ?", userID).Update("`read`", true).Error; err != nil {
 		return fmt.Errorf("failed to mark all notifications as read: %w", err)
 	}
 	return nil
@@ -77,7 +87,10 @@ func (r *Repository) DeleteNotification(ctx context.Context, id string) error {
 
 func (r *Repository) notificationToDomain(n Notification) domain.Notification {
 	return domain.Notification{
-		ID:          n.ID,
+		BaseModel: common.BaseModel{
+			ID:        n.ID,
+			CreatedAt: n.CreatedAt.Unix(),
+		},
 		UserID:      n.UserID,
 		Type:        n.Type,
 		Title:       n.Title,
@@ -87,6 +100,14 @@ func (r *Repository) notificationToDomain(n Notification) domain.Notification {
 		ActorID:     n.ActorID,
 		ActorName:   n.ActorName,
 		ActorAvatar: n.ActorAvatar,
-		CreatedAt:   n.CreatedAt.Unix(),
+		// Story context
+		StoryTitle:  n.StoryTitle,
+		StoryCover:  n.StoryCover,
+		StoryID:     n.StoryID,
+		CommentText: n.CommentText,
+		// System notification
+		SysTitle: n.SysTitle,
+		SysBody:  n.SysBody,
+		SysIcon:  n.SysIcon,
 	}
 }

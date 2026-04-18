@@ -8,13 +8,11 @@ import (
 )
 
 // GetStyleConfigs 获取风格配置列表
-// 支持 groupId 参数，当提供时优先返回该小组的风格
 func (h *Handler) GetStyleConfigs(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	groupID := c.Query("groupId")
 
-	styleConfigs, total, err := h.svc.ListStyleConfigs(c.Request.Context(), groupID, limit, offset)
+	styleConfigs, total, err := h.svc.ListStyleConfigs(c.Request.Context(), limit, offset)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -81,9 +79,8 @@ func (h *Handler) SearchStyleConfigs(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	groupID := c.Query("groupId")
 
-	styleConfigs, total, err := h.svc.SearchStyleConfigs(c.Request.Context(), keyword, groupID, limit, offset)
+	styleConfigs, total, err := h.svc.SearchStyleConfigs(c.Request.Context(), keyword, limit, offset)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -103,7 +100,6 @@ func (h *Handler) CreateStyleConfig(c *gin.Context) {
 		Style          string `json:"style" binding:"required"`
 		Description    string `json:"description"`
 		SampleImageURL string `json:"sampleImageUrl"`
-		GroupID        string `json:"groupId"`
 		UserID         string `json:"userId"`
 	}
 
@@ -116,7 +112,6 @@ func (h *Handler) CreateStyleConfig(c *gin.Context) {
 		Style:          req.Style,
 		Description:    req.Description,
 		SampleImageURL: req.SampleImageURL,
-		GroupID:        req.GroupID,
 		UserID:         req.UserID,
 	}
 

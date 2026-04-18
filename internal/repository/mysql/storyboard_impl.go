@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"github.com/grapestree/fgrapery/grapery/internal/common"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // StoryboardByID retrieves a storyboard by ID
@@ -34,6 +37,22 @@ func (r *Repository) StoryboardByID(ctx context.Context, id string) (*domain.Sto
 	return &domainSb, nil
 }
 
+// fateSnapshotForMySQLColumn returns JSON acceptable for MySQL JSON columns.
+// An empty Go string maps to invalid SQL JSON ("document is empty"); use "{}" when unset.
+func fateSnapshotForMySQLColumn(p *string) (string, error) {
+	if p == nil {
+		return "{}", nil
+	}
+	t := strings.TrimSpace(*p)
+	if t == "" {
+		return "{}", nil
+	}
+	if !json.Valid([]byte(t)) {
+		return "", fmt.Errorf("fate_snapshot is not valid JSON")
+	}
+	return t, nil
+}
+
 // CreateStoryboard creates a new storyboard
 func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
 	// Set parentID to NULL for root storyboards (empty or "__root__" marker)
@@ -42,20 +61,55 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		parentID = &storyboard.ParentID
 	}
 
+	fateSnap, err := fateSnapshotForMySQLColumn(storyboard.FateSnapshot)
+	if err != nil {
+		return fmt.Errorf("invalid fate_snapshot: %w", err)
+	}
+
+	id := strings.TrimSpace(storyboard.ID)
+	if id == "" {
+		id = uuid.New().String()
+	}
+	sceneCount := storyboard.SceneCount
+	if sceneCount <= 0 {
+		sceneCount = 3
+	}
+	wfStatus := strings.TrimSpace(storyboard.WorkflowStatus)
+	if wfStatus == "" {
+		wfStatus = domain.WorkflowStatusDraft
+	}
+	currentStep := storyboard.CurrentStep
+	if currentStep <= 0 {
+		currentStep = 1
+	}
+	comicStyle := strings.TrimSpace(storyboard.ContinuationComicStyle)
+	if rs := []rune(comicStyle); len(rs) > 80 {
+		comicStyle = string(rs[:80])
+	}
+
 	dbStoryboard := Storyboard{
-		ID:               uuid.New().String(),
-		StoryID:          storyboard.StoryID,
-		ParentID:         parentID,
-		CreatorID:        storyboard.CreatorID,
-		Title:            storyboard.Title,
-		Content:          storyboard.Content,
-		RawInput:         storyboard.RawInput,
-		Likes:            0,
-		Comments:         0,
-		Shares:           0,
-		ForkCount:        0,
-		Views:            0,
-		TokenConsumption: storyboard.TokenConsumption,
+		ID:                       id,
+		StoryID:                  storyboard.StoryID,
+		ParentID:                 parentID,
+		UserID:                   storyboard.UserID,
+		Title:                    storyboard.Title,
+		Content:                  storyboard.Content,
+		RawInput:                 storyboard.RawInput,
+		IsStandalone:             storyboard.IsStandalone,
+		IsAIGenerated:            storyboard.IsAIGenerated,
+		SceneCount:               sceneCount,
+		WorkflowStatus:           wfStatus,
+		CurrentStep:              currentStep,
+		GenerateVideoAfterImages: storyboard.GenerateVideoAfterImages,
+		ContinuationComicStyle:   comicStyle,
+		Likes:                    0,
+		Comments:                 0,
+		Shares:                   0,
+		ForkCount:                0,
+		Views:                    0,
+		TokenConsumption:         storyboard.TokenConsumption,
+		FateSnapshot:             fateSnap,
+		FateSnapshotHash:         storyboard.FateSnapshotHash,
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbStoryboard).Error; err != nil {
@@ -148,7 +202,8 @@ func (r *Repository) StoryboardsByStory(ctx context.Context, storyID string, lim
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -187,21 +242,21 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
 }
 
-// StoryboardsByParent retrieves storyboards by parent ID
-// Only returns published storyboards for public viewing
+// StoryboardsByParent retrieves storyboards by parent ID.
+// For branch continuation flow, return all children regardless of workflow status.
 func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("story_id = ?", storyID).
 		Where("parent_id = ?", parentID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished). // Only return published storyboards
 		Order("created_at ASC")
 
 	if limit > 0 {
@@ -218,7 +273,8 @@ func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID 
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -246,7 +302,8 @@ func (r *Repository) StoryboardsByCreator(ctx context.Context, creatorID string,
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -276,7 +333,8 @@ func (r *Repository) DraftStoryboardsByCreator(ctx context.Context, creatorID st
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -292,6 +350,48 @@ func (r *Repository) CountStoryboardsByCreator(ctx context.Context, creatorID st
 		return 0, fmt.Errorf("failed to count storyboards by creator: %w", err)
 	}
 	return count, nil
+}
+
+// CountStoryboardsByStory counts storyboards that belong to a given story.
+func (r *Repository) CountStoryboardsByStory(ctx context.Context, storyID string) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("story_id = ?", storyID).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count storyboards by story: %w", err)
+	}
+	return count, nil
+}
+
+// CharacterStoryboardCountsByStory returns participation counts keyed by characterID,
+// counting distinct storyboard IDs within the given story.
+func (r *Repository) CharacterStoryboardCountsByStory(ctx context.Context, storyID string) (map[string]int64, error) {
+	type row struct {
+		CharacterID string `gorm:"column:character_id"`
+		Cnt         int64  `gorm:"column:cnt"`
+	}
+
+	var rows []row
+	if err := r.db.WithContext(ctx).
+		Table("storyboard_character_links").
+		Select("storyboard_character_links.character_id as character_id, COUNT(DISTINCT storyboard_character_links.storyboard_id) as cnt").
+		Joins("JOIN storyboards ON storyboards.id = storyboard_character_links.storyboard_id AND storyboards.deleted_at IS NULL").
+		Where("storyboards.story_id = ?", storyID).
+		Where("storyboard_character_links.character_id IS NOT NULL").
+		Group("storyboard_character_links.character_id").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to count character storyboard participation by story: %w", err)
+	}
+
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		if r.CharacterID == "" {
+			continue
+		}
+		out[r.CharacterID] = r.Cnt
+	}
+	return out, nil
 }
 
 // StoryboardChildren retrieves child storyboards (forks/continuations)
@@ -312,7 +412,8 @@ func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, nil
@@ -365,7 +466,7 @@ func (r *Repository) StoryboardTree(ctx context.Context, rootID string) ([]*doma
 func (r *Repository) ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *domain.Storyboard) error {
 	// 设置父节点
 	storyboard.ParentID = parentID
-	storyboard.CreatorID = creatorID
+	storyboard.UserID = creatorID
 
 	// 创建新的 storyboard
 	return r.CreateStoryboard(ctx, storyboard)
@@ -378,6 +479,28 @@ func (r *Repository) IncrementStoryboardViews(ctx context.Context, id string) er
 		Where("id = ?", id).
 		UpdateColumn("views", gorm.Expr("views + ?", 1)).Error; err != nil {
 		return fmt.Errorf("failed to increment views: %w", err)
+	}
+	return nil
+}
+
+// IncrementStoryStoryboardCount increments the storyboard count for a story
+func (r *Repository) IncrementStoryStoryboardCount(ctx context.Context, storyID string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Story{}).
+		Where("id = ?", storyID).
+		UpdateColumn("storyboard_count", gorm.Expr("storyboard_count + ?", 1)).Error; err != nil {
+		return fmt.Errorf("failed to increment story storyboard count: %w", err)
+	}
+	return nil
+}
+
+// DecrementStoryStoryboardCount decrements the storyboard count for a story
+func (r *Repository) DecrementStoryStoryboardCount(ctx context.Context, storyID string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Story{}).
+		Where("id = ?", storyID).
+		UpdateColumn("storyboard_count", gorm.Expr("GREATEST(storyboard_count - ?, 0)", 1)).Error; err != nil {
+		return fmt.Errorf("failed to decrement story storyboard count: %w", err)
 	}
 	return nil
 }
@@ -405,7 +528,7 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		return domain.Storyboard{}, fmt.Errorf("load storyboard scenes: %w", err)
 	}
 
-	r.log.Info("storyboardToDomain: loaded storyboard scenes",
+	r.log.Debug("storyboardToDomain: loaded storyboard scenes",
 		zap.String("storyboardId", sb.ID),
 		zap.Int("sceneCount", len(storyboardScenes)))
 
@@ -414,7 +537,7 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 	for i, scene := range storyboardScenes {
 		if scene != nil {
 			scenes[i] = *scene
-			r.log.Info("storyboardToDomain: scene detail",
+			r.log.Debug("storyboardToDomain: scene detail",
 				zap.String("sceneId", scene.ID),
 				zap.String("image", scene.Image),
 				zap.String("title", scene.Title))
@@ -426,33 +549,46 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		parentID = *sb.ParentID
 	}
 
+	var storyRel *domain.Story
+	if sb.Story.ID != "" {
+		s := r.storyToDomain(sb.Story)
+		storyRel = &s
+	}
+
 	return domain.Storyboard{
-		ID:               sb.ID,
-		StoryID:          sb.StoryID,
-		ParentID:         parentID,
-		CreatorID:        sb.CreatorID,
-		CreatorName:      sb.Creator.DisplayName,
-		CreatorAvatar:    sb.Creator.Avatar,
-		Title:            sb.Title,
-		Content:          sb.Content,
-		RawInput:         sb.RawInput,
-		IsStandalone:     sb.IsStandalone,
-		IsAIGenerated:    sb.IsAIGenerated,
-		SceneCount:       sb.SceneCount,
-		WorkflowStatus:   sb.WorkflowStatus,
-		CurrentStep:      sb.CurrentStep,
-		Likes:            sb.Likes,
-		Comments:         sb.Comments,
-		Shares:           sb.Shares,
+		BaseModel: common.BaseModel{
+			ID:        sb.ID,
+			CreatedAt: sb.CreatedAt.Unix(),
+			UpdatedAt: sb.UpdatedAt.Unix(),
+		},
+		StoryID:        sb.StoryID,
+		ParentID:       parentID,
+		UserID:         sb.UserID,
+		CreatorName:    sb.Creator.DisplayName,
+		CreatorAvatar:  sb.Creator.Avatar,
+		Title:          sb.Title,
+		Content:        sb.Content,
+		RawInput:       sb.RawInput,
+		IsStandalone:             sb.IsStandalone,
+		IsAIGenerated:            sb.IsAIGenerated,
+		SceneCount:               sb.SceneCount,
+		WorkflowStatus:           sb.WorkflowStatus,
+		CurrentStep:              sb.CurrentStep,
+		GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
+		ContinuationComicStyle:   sb.ContinuationComicStyle,
+		EngagementStats: common.EngagementStats{
+			Likes:    sb.Likes,
+			Comments: sb.Comments,
+			Shares:   sb.Shares,
+			Views:    sb.Views,
+		},
 		ForkCount:        sb.ForkCount,
-		Views:            sb.Views,
 		TokenConsumption: sb.TokenConsumption,
 		ChildrenIds:      childrenIds,
-		CreatedAt:        sb.CreatedAt.Unix(),
-		UpdatedAt:        sb.UpdatedAt.Unix(),
 		StoryboardScenes: scenes,
 		CharacterRefs:    charRefs,
 		SceneRefs:        sceneRefs,
+		Story:            storyRel,
 	}, nil
 }
 
@@ -479,19 +615,26 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 			}
 		}
 
+		// MySQL JSON columns reject "" ("The document is empty"); use minimal valid JSON.
+		contextSnapshot := scene.ContextSnapshot
+		if contextSnapshot == "" || !json.Valid([]byte(contextSnapshot)) {
+			contextSnapshot = "{}"
+		}
+
 		dbScenes[i] = StoryboardScene{
-			ID:            uuid.NewString(),
-			StoryboardID:  storyboardID,
-			StorySceneID:  storySceneID,
-			Sequence:      scene.Sequence,
-			Title:         scene.Title,
-			Description:   scene.Description,
-			Image:         scene.Image,
-			Location:      scene.Location,
-			TimeOfDay:     scene.TimeOfDay,
-			Characters:    charactersJSON,
-			Mood:          scene.Mood,
-			IsAIGenerated: scene.IsAIGenerated,
+			ID:              uuid.NewString(),
+			StoryboardID:    storyboardID,
+			StorySceneID:    storySceneID,
+			Sequence:        scene.Sequence,
+			Title:           scene.Title,
+			Description:     scene.Description,
+			Image:           scene.Image,
+			Location:        scene.Location,
+			TimeOfDay:       scene.TimeOfDay,
+			Characters:      charactersJSON,
+			Mood:            scene.Mood,
+			IsAIGenerated:   scene.IsAIGenerated,
+			ContextSnapshot: contextSnapshot,
 		}
 		// Also update the domain object with the generated ID
 		scenes[i].ID = dbScenes[i].ID
@@ -554,16 +697,33 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 		}
 	}
 
+	videoSegmentsJSON := ""
+	if len(scene.VideoSegments) > 0 {
+		if jsonBytes, err := json.Marshal(scene.VideoSegments); err == nil {
+			videoSegmentsJSON = string(jsonBytes)
+		}
+	}
+
+	middleFrameURLsJSON := ""
+	if len(scene.MiddleFrameURLs) > 0 {
+		if jsonBytes, err := json.Marshal(scene.MiddleFrameURLs); err == nil {
+			middleFrameURLsJSON = string(jsonBytes)
+		}
+	}
+
 	updates := map[string]interface{}{
-		"story_scene_id": storySceneID,
-		"sequence":       scene.Sequence,
-		"title":          scene.Title,
-		"description":    scene.Description,
-		"image":          scene.Image,
-		"location":       scene.Location,
-		"time_of_day":    scene.TimeOfDay,
-		"characters":     charactersJSON,
-		"mood":           scene.Mood,
+		"story_scene_id":      storySceneID,
+		"sequence":            scene.Sequence,
+		"title":               scene.Title,
+		"description":         scene.Description,
+		"image":               scene.Image,
+		"location":            scene.Location,
+		"time_of_day":         scene.TimeOfDay,
+		"characters":          charactersJSON,
+		"mood":                scene.Mood,
+		"is_subdivided":       scene.IsSubdivided,
+		"video_segments_json": videoSegmentsJSON,
+		"middle_frame_urls":   middleFrameURLsJSON,
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -606,10 +766,37 @@ func (r *Repository) UpdateStoryboardSceneVideo(ctx context.Context, sceneID, vi
 	return nil
 }
 
+// UpdateStoryboardSceneVideoWithSubdivision updates video URL and subdivision info for a scene
+func (r *Repository) UpdateStoryboardSceneVideoWithSubdivision(ctx context.Context, sceneID, videoURL string, isSubdivided bool, videoSegmentsJSON, middleFrameURLsJSON string) error {
+	updates := map[string]interface{}{
+		"video_url":           videoURL,
+		"is_subdivided":       isSubdivided,
+		"video_segments_json": videoSegmentsJSON,
+		"middle_frame_urls":   middleFrameURLsJSON,
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&StoryboardScene{}).
+		Where("id = ?", sceneID).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update storyboard scene video with subdivision: %w", err)
+	}
+
+	r.log.Info("storyboard scene video with subdivision updated",
+		zap.String("sceneId", sceneID),
+		zap.String("videoUrl", videoURL),
+		zap.Bool("isSubdivided", isSubdivided))
+	return nil
+}
+
 // storyboardSceneToDomain converts database StoryboardScene to domain StoryboardScene
 func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.StoryboardScene {
 	scene := &domain.StoryboardScene{
-		ID:            dbScene.ID,
+		BaseModel: common.BaseModel{
+			ID:        dbScene.ID,
+			CreatedAt: dbScene.CreatedAt.Unix(),
+			UpdatedAt: dbScene.UpdatedAt.Unix(),
+		},
 		StoryboardID:  dbScene.StoryboardID,
 		Sequence:      dbScene.Sequence,
 		Title:         dbScene.Title,
@@ -620,8 +807,8 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		TimeOfDay:     dbScene.TimeOfDay,
 		Mood:          dbScene.Mood,
 		IsAIGenerated: dbScene.IsAIGenerated,
-		CreatedAt:     dbScene.CreatedAt.Unix(),
-		UpdatedAt:     dbScene.UpdatedAt.Unix(),
+		IsSubdivided:      dbScene.IsSubdivided,
+		ContextSnapshot:   dbScene.ContextSnapshot,
 	}
 
 	if dbScene.StorySceneID != nil {
@@ -633,6 +820,22 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		var characters []string
 		if err := json.Unmarshal([]byte(dbScene.Characters), &characters); err == nil {
 			scene.Characters = characters
+		}
+	}
+
+	// Parse video segments JSON
+	if dbScene.VideoSegmentsJSON != "" && dbScene.VideoSegmentsJSON != "[]" {
+		var segments []domain.VideoSegmentInfo
+		if err := json.Unmarshal([]byte(dbScene.VideoSegmentsJSON), &segments); err == nil {
+			scene.VideoSegments = segments
+		}
+	}
+
+	// Parse middle frame URLs JSON
+	if dbScene.MiddleFrameURLs != "" && dbScene.MiddleFrameURLs != "[]" {
+		var urls []string
+		if err := json.Unmarshal([]byte(dbScene.MiddleFrameURLs), &urls); err == nil {
+			scene.MiddleFrameURLs = urls
 		}
 	}
 
@@ -692,8 +895,78 @@ func (r *Repository) StoryboardFeed(ctx context.Context, limit, offset int) ([]*
 		if err != nil {
 			return nil, 0, err
 		}
-		result = append(result, &domainSb)
+		copySb := domainSb
+		result = append(result, &copySb)
 	}
 
 	return result, total, nil
+}
+
+// StoryboardFeedFromFollowedStories is the “following” tab: reader-visible storyboards on
+// (1) stories the user follows (story_follows), (2) public stories by users the viewer follows (user_follows),
+// and (3) the viewer’s own stories (author_id = viewer), so self is always included like an implicit self-follow.
+func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	if userID == "" {
+		return []*domain.Storyboard{}, 0, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	visibleForFollowedStory := []string{
+		domain.WorkflowStatusPublished,
+		domain.WorkflowStatusImagesReady,
+		domain.WorkflowStatusVideoReady,
+	}
+	publicVis := string(domain.StoryVisibilityPublic)
+
+	// OR: followed stories, followed users’ public stories, or own stories (any visibility).
+	buildBase := func() *gorm.DB {
+		return r.db.WithContext(ctx).
+			Model(&Storyboard{}).
+			Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
+			Where(`(
+				(storyboards.story_id IN (SELECT story_id FROM story_follows WHERE user_id = ? AND deleted_at IS NULL)
+				 AND storyboards.workflow_status IN ?)
+				OR
+				(stories.visibility = ? AND storyboards.workflow_status IN ?
+				 AND stories.author_id IN (SELECT followee_id FROM user_follows WHERE follower_id = ? AND deleted_at IS NULL))
+				OR
+				(stories.author_id = ? AND storyboards.workflow_status IN ?)
+			)`, userID, visibleForFollowedStory, publicVis, visibleForFollowedStory, userID, userID, visibleForFollowedStory)
+	}
+
+	var total int64
+	if err := buildBase().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard feed following count: %w", err)
+	}
+
+	var rows []Storyboard
+	if err := buildBase().
+		Preload("Creator").
+		Preload("Story").
+		Preload("Story.Author").
+		Order("storyboards.updated_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard feed following: %w", err)
+	}
+
+	out := make([]*domain.Storyboard, 0, len(rows))
+	for _, sb := range rows {
+		domainSb, err := r.storyboardToDomain(ctx, sb)
+		if err != nil {
+			return nil, 0, err
+		}
+		copySb := domainSb
+		out = append(out, &copySb)
+	}
+	return out, total, nil
 }

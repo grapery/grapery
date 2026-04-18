@@ -1,0 +1,183 @@
+package domain
+
+import "strings"
+
+const (
+	// Fragment AI 任务类型
+	AITaskGenerateFragment        AITaskType = "generate_fragment"
+	AITaskGenerateFragmentContent AITaskType = "generate_fragment_content"
+	AITaskGenerateFragmentImages  AITaskType = "generate_fragment_images"
+)
+
+// 碎片配图长宽比（与 Gemini / 客户端约定一致）
+const (
+	FragmentAspect1x1     = "1:1"
+	FragmentAspect16x9    = "16:9"
+	FragmentAspect9x16    = "9:16"
+	FragmentAspect3x4     = "3:4"
+	FragmentAspect4x3     = "4:3"
+	FragmentAspectDefault = FragmentAspect16x9
+)
+
+// NormalizeFragmentAspectRatio 将输入规范为允许的比例；无法识别时返回空字符串。
+func NormalizeFragmentAspectRatio(s string) string {
+	switch strings.TrimSpace(s) {
+	case FragmentAspect1x1, FragmentAspect16x9, FragmentAspect9x16, FragmentAspect3x4, FragmentAspect4x3:
+		return strings.TrimSpace(s)
+	default:
+		return ""
+	}
+}
+
+// FragmentImagePixelSizeForAspectRatio 将比例映射为火山等使用像素尺寸时的字符串（与角色立绘逻辑对齐）。
+func FragmentImagePixelSizeForAspectRatio(ar string) string {
+	switch NormalizeFragmentAspectRatio(ar) {
+	case FragmentAspect1x1:
+		return "1024x1024"
+	case FragmentAspect16x9:
+		return "1920x1080"
+	case FragmentAspect9x16:
+		return "1080x1920"
+	case FragmentAspect4x3:
+		return "1024x768"
+	case FragmentAspect3x4:
+		return "768x1024"
+	default:
+		return "1920x1080"
+	}
+}
+
+// FragmentGenerationRequest 碎片故事生成请求
+// 若将来增加统一 provider 字段，应仅作用于图片/视频；文案与规划仍由服务端按用户区域在 huoshan/gemini 间路由。
+type FragmentGenerationRequest struct {
+	UserInput  string   `json:"userInput"`  // 用户输入的描述
+	ImageUrls  []string `json:"imageUrls"`  // 用户提供的参考图片（可选）
+	ImageCount int      `json:"imageCount"` // 需要生成的图片数量 (1-10)
+	Style      string   `json:"style"`      // 风格：fantasy, realistic, anime, etc.
+	Mood       string   `json:"mood"`       // 情绪：happy, sad, mysterious, etc.
+	Length     string   `json:"length"`     // 内容长度：short, medium, long
+	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
+	Visibility string   `json:"visibility"` // 可见性：public, followers, private
+	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
+	AspectRatio string `json:"aspectRatio,omitempty"`
+}
+
+// FragmentVisualStyleBible 视觉圣经：全局画风锚点（英文描述为主，便于出图模型对齐）。
+type FragmentVisualStyleBible struct {
+	ArtStyle     string `json:"artStyle,omitempty"`
+	LineQuality  string `json:"lineQuality,omitempty"`
+	Palette      string `json:"palette,omitempty"`
+	LightingMood string `json:"lightingMood,omitempty"`
+}
+
+// FragmentVisualCharacter 角色视觉资产（稳定 key + 不可变特征列表）。
+type FragmentVisualCharacter struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualProp 道具视觉资产。
+type FragmentVisualProp struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualLocation 场景/地点视觉资产。
+type FragmentVisualLocation struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualBible Step1 结构化视觉设定，用于锚点图、参考图拼接与一致性检查。
+type FragmentVisualBible struct {
+	StyleBible *FragmentVisualStyleBible `json:"styleBible,omitempty"`
+	Characters []FragmentVisualCharacter `json:"characters,omitempty"`
+	Props      []FragmentVisualProp      `json:"props,omitempty"`
+	Locations  []FragmentVisualLocation  `json:"locations,omitempty"`
+}
+
+// FragmentAnchorImage 锚点图记录（referenceKey -> 出图 URL）。
+type FragmentAnchorImage struct {
+	Key      string `json:"key"`
+	Kind     string `json:"kind"` // character | prop | location
+	ImageURL string `json:"imageUrl"`
+}
+
+// FragmentConsistencyIssue 一致性检查问题（仅记录，不阻断任务）。
+type FragmentConsistencyIssue struct {
+	SceneIndex int    `json:"sceneIndex,omitempty"`
+	Severity   string `json:"severity,omitempty"` // low | medium | high
+	Detail     string `json:"detail"`
+}
+
+// FragmentGenerationResult 碎片故事生成结果
+type FragmentGenerationResult struct {
+	Content           string                     `json:"content"`                     // 生成的文字内容
+	ImageUrls         []string                   `json:"imageUrls"`                   // 生成的图片URL列表
+	AspectRatio       string                     `json:"aspectRatio,omitempty"`       // 实际使用的配图长宽比
+	TokensUsed        int                        `json:"tokensUsed"`                  // 使用的token数量
+	DraftFragmentID   string                     `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	VisualBible       *FragmentVisualBible       `json:"visualBible,omitempty"`       // 结构化视觉设定（方案 B）
+	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`      // 锚点参考图
+	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"` // 一致性检查（best-effort）
+}
+
+// FragmentContentGenerationRequest 碎片故事内容生成请求
+type FragmentContentGenerationRequest struct {
+	UserInput string `json:"userInput"` // 用户输入
+	Style     string `json:"style"`     // 风格
+	Mood      string `json:"mood"`      // 情绪
+	Length    string `json:"length"`    // 长度
+	Language  string `json:"language"`  // 语言
+	Context   string `json:"context"`   // 额外上下文
+}
+
+// FragmentContentGenerationResult 碎片故事内容生成结果
+type FragmentContentGenerationResult struct {
+	Content     string `json:"content"`               // 生成的文字内容
+	AspectRatio string `json:"aspectRatio,omitempty"` // 解析后的配图比例（已含默认值）
+	TokensUsed  int    `json:"tokensUsed"`            // 使用的token数量
+}
+
+// FragmentImageGenerationRequest 碎片故事图片生成请求
+type FragmentImageGenerationRequest struct {
+	Content    string `json:"content"`    // 文字内容（用于生成图片）
+	ImageCount int    `json:"imageCount"` // 生成图片数量
+	Style      string `json:"style"`      // 图片风格
+	Size       string `json:"size"`       // 图片尺寸
+	Quality    string `json:"quality"`    // 图片质量
+}
+
+// FragmentImageGenerationResult 碎片故事图片生成结果
+type FragmentImageGenerationResult struct {
+	ImageUrls  []string `json:"imageUrls"`  // 生成的图片URL列表
+	TokensUsed int      `json:"tokensUsed"` // 使用的token数量
+}
+
+// FragmentGenerationTask 碎片故事生成任务
+type FragmentGenerationTask struct {
+	ID           string                    `json:"id"`
+	UserID       string                    `json:"userId"`
+	Status       string                    `json:"status"` // pending, processing, completed, failed
+	Request      FragmentGenerationRequest `json:"request"`
+	Result       *FragmentGenerationResult `json:"result,omitempty"`
+	Progress     int                       `json:"progress"`    // 0-100
+	CurrentStep  string                    `json:"currentStep"` // 当前步骤
+	ErrorMessage string                    `json:"errorMessage,omitempty"`
+	TokensUsed   int                       `json:"tokensUsed"`
+	CreatedAt    int64                     `json:"createdAt"`
+	StartedAt    *int64                    `json:"startedAt,omitempty"`
+	CompletedAt  *int64                    `json:"completedAt,omitempty"`
+	UpdatedAt    int64                     `json:"updatedAt"`
+
+	// Relations
+	User *User `json:"user,omitempty"`
+}
+
+// TableName specifies the table name for FragmentGenerationTask
+func (FragmentGenerationTask) TableName() string {
+	return "fragment_generation_tasks"
+}

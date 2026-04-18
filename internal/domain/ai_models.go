@@ -76,7 +76,7 @@ type AIStoryGenerationResult struct {
 // AIPromptEnhanceRequest AI 提示词增强请求
 type AIPromptEnhanceRequest struct {
 	OriginalPrompt string `json:"originalPrompt"`
-	TargetType     string `json:"targetType"`            // image, video
+	TargetType     string `json:"targetType"`            // image, video, storyboard
 	Style          string `json:"style,omitempty"`       // 风格
 	DetailLevel    string `json:"detailLevel,omitempty"` // low, medium, high
 }
@@ -146,6 +146,12 @@ type AIGenerationRecord struct {
 	TotalTokens  int `json:"totalTokens"`  // 总 token 数
 	ImageCount   int `json:"imageCount"`   // 生成图片数量
 	VideoCount   int `json:"videoCount"`   // 生成视频数量
+
+	// 重试统计
+	RetryCount int `json:"retryCount"` // 重试次数
+
+	// 风格设置
+	Style string `json:"style,omitempty"` // 生成风格
 
 	// 任务状态
 	Status       AITaskStatus `json:"status"`                 // pending, processing, completed, failed

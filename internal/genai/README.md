@@ -371,10 +371,15 @@ config := &genapi.Config{
 config := &genapi.Config{
     Provider: genapi.ProviderGemini,
     APIKey:   "your-google-api-key",
-    Model:    "veo-001",           // 视频模型
+    Model:    "veo-3.1-generate-preview",  // 视频模型 (Veo 3.1)
     Timeout:  60 * time.Second,
 }
 ```
+
+**默认模型**（未指定时使用）：
+- 文本：`gemini-2.5-flash`
+- 图片：`gemini-2.5-flash-image`（conversational API）
+- 视频：`veo-3.1-generate-preview`
 
 **支持的操作**：
 - ✅ 文本生视频 (text_to_video)
@@ -733,14 +738,15 @@ genapi.SetLogger(logger)
 ### 设置全局Token记录器
 
 ```go
-// 在应用启动时设置
+// 在应用启动时设置（新接口支持 req/rsp/err，可记录成功和失败）
 genapi.SetTokenUsageRecorder(genapi.TokenUsageRecorderFunc(
-    func(ctx context.Context, provider string, usage *genapi.Usage) {
-        log.Printf("Provider: %s, Tokens: %d, Images: %d, Videos: %d",
-            provider, usage.TotalTokens, usage.ImageCount, usage.VideoCount)
-        
-        // 保存到数据库
-        saveUsageToDatabase(ctx, provider, usage)
+    func(ctx context.Context, req *genapi.GenerateRequest, rsp *genapi.GenerateResponse, err error) {
+        if rsp != nil && rsp.Usage != nil {
+            log.Printf("Provider: %s, Tokens: %d, Images: %d, Videos: %d",
+                rsp.Provider, rsp.Usage.TotalTokens, rsp.Usage.ImageCount, rsp.Usage.VideoCount)
+        }
+        // 保存到数据库（含 user_id、related_entity_id 等，从 req.Metadata 或 context 获取）
+        saveUsageToDatabase(ctx, req, rsp, err)
     },
 ))
 ```

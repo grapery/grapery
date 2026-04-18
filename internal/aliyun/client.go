@@ -29,7 +29,11 @@ type Config struct {
 	SecretKey string
 	Endpoint  string
 	Bucket    string
-	RoleARN   string // for STS token
+	RoleARN   string // for STS token (legacy)
+	// OSS STS credentials (RAM user for AssumeRole)
+	OSSAccessKeyID     string
+	OSSAccessKeySecret string
+	OSSRoleARN         string
 }
 
 // Client wraps Aliyun OSS client
@@ -147,14 +151,16 @@ func (c *Client) UploadFileFromURL(objectKey string, url string) (string, error)
 		return "", err
 	}
 
-	// Persist multi-level images
-	imageLevels, err := c.PersistMultiLevelImages(objectKey)
-	if err != nil {
-		c.logger.Warn("failed to persist multi-level images", zap.Error(err), zap.String("objectKey", objectKey))
-		// Continue even if multi-level persistence fails
-	} else {
-		levelData, _ := json.Marshal(imageLevels)
-		c.logger.Debug("multi-level images persisted", zap.String("levels", string(levelData)))
+	// Persist multi-level images only for image files
+	if c.isImageFile(objectKey) {
+		imageLevels, err := c.PersistMultiLevelImages(objectKey)
+		if err != nil {
+			c.logger.Warn("failed to persist multi-level images", zap.Error(err), zap.String("objectKey", objectKey))
+			// Continue even if multi-level persistence fails
+		} else {
+			levelData, _ := json.Marshal(imageLevels)
+			c.logger.Debug("multi-level images persisted", zap.String("levels", string(levelData)))
+		}
 	}
 
 	// Clean URL: remove query params and ensure HTTPS
@@ -319,6 +325,22 @@ func (c *Client) PersistMultiLevelImages(objectKey string) (ImageLevels, error) 
 	return result, nil
 }
 
+// isImageFile checks if the object key represents an image file
+func (c *Client) isImageFile(objectKey string) bool {
+	lastDot := strings.LastIndex(objectKey, ".")
+	if lastDot == -1 || lastDot == len(objectKey)-1 {
+		return false
+	}
+	ext := strings.ToLower(objectKey[lastDot:])
+	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	for _, imgExt := range imageExts {
+		if ext == imgExt {
+			return true
+		}
+	}
+	return false
+}
+
 // ListAllObjects lists all objects in the bucket with the given prefix
 func (c *Client) ListAllObjects(prefix string) ([]string, error) {
 	var allKeys []string
@@ -353,16 +375,32 @@ type STSCredentials struct {
 	AccessKeySecret string `json:"accessKeySecret"`
 	SecurityToken   string `json:"securityToken"`
 	Expiration      string `json:"expiration"`
+	Region          string `json:"region"`
+	Bucket          string `json:"bucket"`
+	Endpoint        string `json:"endpoint"`
 }
 
 // GetSTSToken returns Aliyun STS temporary credentials
 func (c *Client) GetSTSToken() (*STSCredentials, error) {
-	if c.config.RoleARN == "" {
-		return nil, errors.New("ALIYUN_ROLE_ARN is not set")
+	// RAM Role ARN format: acs:ram::<account-id>:role/<role-name>
+	// Read from config: ALIYUN_OSS_ROLE_ARN
+	roleARN := c.config.OSSRoleARN
+	if roleARN == "" {
+		return nil, errors.New("ALIYUN_OSS_ROLE_ARN is not set")
 	}
 
-	// Create STS client
-	client, err := stssdk.NewClientWithAccessKey("cn-shanghai", c.config.APIKey, c.config.SecretKey)
+	// Use RAM user credentials from config (not root account)
+	// Read from config: ALIYUN_OSS_ACCESS_KEY_ID, ALIYUN_OSS_ACCESS_KEY_SECRET
+	if c.config.OSSAccessKeyID == "" || c.config.OSSAccessKeySecret == "" {
+		return nil, errors.New("ALIYUN_OSS_ACCESS_KEY_ID and ALIYUN_OSS_ACCESS_KEY_SECRET are required for STS")
+	}
+
+	// Create STS client with RAM user credentials
+	client, err := stssdk.NewClientWithAccessKey(
+		"cn-shanghai",
+		c.config.OSSAccessKeyID,
+		c.config.OSSAccessKeySecret,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create STS client: %w", err)
 	}
@@ -370,7 +408,7 @@ func (c *Client) GetSTSToken() (*STSCredentials, error) {
 	// Build AssumeRole request
 	req := stssdk.CreateAssumeRoleRequest()
 	req.Scheme = "https"
-	req.RoleArn = c.config.RoleARN
+	req.RoleArn = roleARN
 	req.RoleSessionName = "grapery-session"
 	req.DurationSeconds = "1200" // 20 minutes
 
@@ -381,10 +419,24 @@ func (c *Client) GetSTSToken() (*STSCredentials, error) {
 	}
 
 	cred := resp.Credentials
+
+	// Extract region from endpoint (e.g., "oss-cn-shanghai.aliyuncs.com" -> "cn-shanghai")
+	region := "cn-shanghai"
+	if c.config.Endpoint != "" {
+		// Parse endpoint like "oss-cn-shanghai.aliyuncs.com"
+		parts := strings.Split(c.config.Endpoint, ".")
+		if len(parts) > 0 && strings.HasPrefix(parts[0], "oss-") {
+			region = strings.TrimPrefix(parts[0], "oss-")
+		}
+	}
+
 	return &STSCredentials{
 		AccessKeyId:     cred.AccessKeyId,
 		AccessKeySecret: cred.AccessKeySecret,
 		SecurityToken:   cred.SecurityToken,
 		Expiration:      cred.Expiration,
+		Region:          region,
+		Bucket:          c.config.Bucket,
+		Endpoint:        c.config.Endpoint,
 	}, nil
 }

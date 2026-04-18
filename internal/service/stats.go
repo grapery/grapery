@@ -46,13 +46,13 @@ func (s *Service) GetUserStats(ctx context.Context, userID string) (*UserStats, 
 	}
 
 	// 获取用户故事
-	stories, err := s.repo.StoriesByAuthor(ctx, userID, 0, 0)
+	stories, err := s.repo.StoriesByUser(ctx, userID, 0, 0)
 	if err != nil {
 		stories = []*domain.Story{}
 	}
 
 	// 获取用户角色
-	characters, err := s.repo.CharactersByAuthor(ctx, userID, 0, 0)
+	characters, err := s.repo.CharactersByUser(ctx, userID, 0, 0)
 	if err != nil {
 		characters = []*domain.Character{}
 	}
@@ -62,8 +62,14 @@ func (s *Service) GetUserStats(ctx context.Context, userID string) (*UserStats, 
 	totalLikes := 0
 	for _, story := range stories {
 		totalLikes += story.Likes
-		// totalViews 需要从story中获取，这里暂时使用likes * 10作为估算
-		totalViews += story.Likes * 10
+
+		// 获取该故事的所有故事板，累加真实的浏览量
+		storyboards, err := s.repo.StoryboardsByStory(ctx, story.ID, 0, 0)
+		if err == nil {
+			for _, sb := range storyboards {
+				totalViews += sb.Views
+			}
+		}
 	}
 
 	// 获取用户创建的分镜数量
@@ -98,12 +104,21 @@ func (s *Service) GetStoryStats(ctx context.Context, storyID string) (*StoryStat
 		comments = []*domain.Comment{}
 	}
 
+	// 计算故事的实际浏览量（累加所有故事板的浏览量）
+	totalViews := 0
+	storyboards, err := s.repo.StoryboardsByStory(ctx, storyID, 0, 0)
+	if err == nil {
+		for _, sb := range storyboards {
+			totalViews += sb.Views
+		}
+	}
+
 	stats := &StoryStats{
-		Views:     story.Likes * 15, // 估算浏览量
+		Views:     totalViews,
 		Likes:     story.Likes,
 		Followers: story.Followers,
 		Comments:  len(comments),
-		Panels:    story.Panels,
+		Panels:    story.PanelCount,
 	}
 
 	return stats, nil
@@ -117,7 +132,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, userID string) (*Dashbo
 	}
 
 	// 获取用户故事
-	stories, err := s.repo.StoriesByAuthor(ctx, userID, 0, 0)
+	stories, err := s.repo.StoriesByUser(ctx, userID, 0, 0)
 	if err != nil {
 		stories = []*domain.Story{}
 	}
@@ -125,7 +140,13 @@ func (s *Service) GetDashboardStats(ctx context.Context, userID string) (*Dashbo
 	// 计算总浏览量
 	totalViews := 0
 	for _, story := range stories {
-		totalViews += story.Likes * 10
+		// 获取该故事的所有故事板，累加真实的浏览量
+		storyboards, err := s.repo.StoryboardsByStory(ctx, story.ID, 0, 0)
+		if err == nil {
+			for _, sb := range storyboards {
+				totalViews += sb.Views
+			}
+		}
 	}
 
 	stats := &DashboardStats{

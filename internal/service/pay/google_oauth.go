@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
@@ -30,14 +31,15 @@ type GoogleIdentityTokenClaims struct {
 	IssuedAt  int64  `json:"iat,omitempty"` // 签发时间
 
 	// Google 特定声明
-	Email         string `json:"email,omitempty"`          // 用户邮箱
-	EmailVerified bool   `json:"email_verified,omitempty"` // 邮箱是否已验证
-	Name          string `json:"name,omitempty"`           // 用户全名
-	GivenName     string `json:"given_name,omitempty"`     // 名
-	FamilyName    string `json:"family_name,omitempty"`    // 姓
-	Picture       string `json:"picture,omitempty"`        // 用户头像 URL
-	Locale        string `json:"locale,omitempty"`         // 用户语言环境
-	HostedDomain  string `json:"hd,omitempty"`             // G Suite 域（如果是企业账号）
+	Email           string `json:"email,omitempty"`          // 用户邮箱
+	EmailVerified   bool   `json:"email_verified,omitempty"` // 邮箱是否已验证
+	AuthorizedParty string `json:"azp,omitempty"`            // authorized party (when multiple audiences)
+	Name            string `json:"name,omitempty"`           // 用户全名
+	GivenName       string `json:"given_name,omitempty"`     // 名
+	FamilyName      string `json:"family_name,omitempty"`    // 姓
+	Picture         string `json:"picture,omitempty"`        // 用户头像 URL
+	Locale          string `json:"locale,omitempty"`         // 用户语言环境
+	HostedDomain    string `json:"hd,omitempty"`             // G Suite 域（如果是企业账号）
 }
 
 // GoogleSignInVerifier Google Sign-In 验证器
@@ -70,10 +72,16 @@ func NewGoogleSignInVerifier(config *GoogleOAuthConfig) *GoogleSignInVerifier {
 
 // VerifyToken 验证 Google Identity Token
 func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityTokenClaims, error) {
+	startTime := time.Now()
+
 	// 1. 获取 Google 的公钥集（带缓存）
 	fmt.Printf("开始获取 Google 公钥集，Client ID: %s\n", v.config.ClientID)
 	keySet, err := v.getGooglePublicKeys()
 	if err != nil {
+		// 记录 OAuth 登录错误
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLoginError("google", "network")
+		}
 		return nil, fmt.Errorf("failed to get Google public keys: %w", err)
 	}
 	fmt.Printf("成功获取 Google 公钥集，包含 %d 个密钥\n", keySet.Len())
@@ -86,13 +94,44 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 		jwt.WithAudience(v.config.ClientID),
 	)
 	if err != nil {
+		// 记录 OAuth 登录失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
 		return nil, fmt.Errorf("failed to parse/validate token: %w", err)
 	}
 
 	// 验证 issuer（手动验证，因为 Google 有两种格式）
 	issuer := token.Issuer()
 	if issuer != "https://accounts.google.com" && issuer != "accounts.google.com" {
+		// 记录 OAuth 登录失败
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
 		return nil, fmt.Errorf("invalid issuer: %s", issuer)
+	}
+
+	// Basic strictness: ensure token has exp/iat populated (jwx validates exp, but we want to fail fast if missing)
+	if token.Expiration().IsZero() || token.IssuedAt().IsZero() {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+			metrics.RecordOAuthLoginError("google", "invalid_token")
+		}
+		return nil, fmt.Errorf("invalid token: missing exp/iat")
+	}
+
+	// If token has multiple audiences, Google requires "azp" to be present (authorized party).
+	audiences := token.Audience()
+	if len(audiences) > 1 {
+		if azp, ok := token.Get("azp"); !ok || azp == nil || azp == "" {
+			if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+				metrics.RecordOAuthLogin("google", "failed", time.Since(startTime))
+				metrics.RecordOAuthLoginError("google", "invalid_token")
+			}
+			return nil, fmt.Errorf("invalid token: missing azp for multiple audiences")
+		}
 	}
 
 	// 3. 提取声明
@@ -120,8 +159,15 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 	if email, ok := rawClaims["email"].(string); ok {
 		claims.Email = email
 	}
-	if emailVerified, ok := rawClaims["email_verified"].(bool); ok {
-		claims.EmailVerified = emailVerified
+	// email_verified may be bool or string ("true"/"false") depending on issuer/version
+	switch v := rawClaims["email_verified"].(type) {
+	case bool:
+		claims.EmailVerified = v
+	case string:
+		claims.EmailVerified = v == "true" || v == "1"
+	}
+	if azp, ok := rawClaims["azp"].(string); ok {
+		claims.AuthorizedParty = azp
 	}
 	if name, ok := rawClaims["name"].(string); ok {
 		claims.Name = name
@@ -140,6 +186,11 @@ func (v *GoogleSignInVerifier) VerifyToken(tokenString string) (*GoogleIdentityT
 	}
 	if hd, ok := rawClaims["hd"].(string); ok {
 		claims.HostedDomain = hd
+	}
+
+	// 记录 OAuth 登录成功
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordOAuthLogin("google", "success", time.Since(startTime))
 	}
 
 	return claims, nil

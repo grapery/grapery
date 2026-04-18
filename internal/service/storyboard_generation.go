@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -38,6 +39,16 @@ type ImageGenerationRequest struct {
 	SceneTitle       string   `json:"sceneTitle"`
 	SceneDescription string   `json:"sceneDescription"`
 	ReferenceImages  []string `json:"referenceImages"`
+
+	// 场景关联的角色名称列表（用于判断是否为过渡场景）
+	SceneCharacters []string `json:"sceneCharacters,omitempty"`
+	// 场景关联的角色图片（用于 AI 生成时作为参考）
+	CharacterReferenceImages []string `json:"characterReferenceImages,omitempty"`
+
+	// 故事风格配置
+	StoryStyle *domain.StyleConfig `json:"storyStyle,omitempty"`
+	// ComicStyle 漫画/视觉风格 slug（如续写 continuation_comic_style）
+	ComicStyle string `json:"comicStyle,omitempty"`
 }
 
 // VideoGenerationRequest represents a request to generate scene videos
@@ -50,13 +61,87 @@ type VideoGenerationRequest struct {
 	EndFrameURL       string `json:"endFrameUrl"`       // End keyframe image for video transitions
 }
 
+// VideoSegmentInfo represents a video segment for HLS playlist generation
+type VideoSegmentInfo struct {
+	Index        int    `json:"index"`
+	VideoURL     string `json:"videoUrl"`
+	StartFrame   string `json:"startFrame"`
+	EndFrame     string `json:"endFrame"`
+	DurationSecs int    `json:"durationSecs"`
+}
+
+// VideoGenerationInfo represents video generation data for HLS playlist
+type VideoGenerationInfo struct {
+	SceneID           string             `json:"sceneId"`
+	GeneratedVideoURL string             `json:"generatedVideoUrl"`
+	Duration          int                `json:"duration"`
+	IsSubdivided      bool               `json:"isSubdivided"`
+	VideoSegments     []VideoSegmentInfo `json:"videoSegments,omitempty"`
+}
+
+type GenerationErrorCode string
+
+const (
+	GenerationErrorTimeout       GenerationErrorCode = "provider_timeout"
+	GenerationErrorQuota         GenerationErrorCode = "provider_quota"
+	GenerationErrorInvalidPrompt GenerationErrorCode = "invalid_prompt"
+	GenerationErrorNetwork       GenerationErrorCode = "network_error"
+	GenerationErrorProvider      GenerationErrorCode = "provider_error"
+	GenerationErrorUnknown       GenerationErrorCode = "unknown_error"
+	GenerationErrorCancelled     GenerationErrorCode = "cancelled"
+)
+
+func classifyGenerationError(err error, fallback GenerationErrorCode) GenerationErrorCode {
+	if err == nil {
+		return fallback
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "timeout"), strings.Contains(msg, "deadline exceeded"):
+		return GenerationErrorTimeout
+	case strings.Contains(msg, "quota"), strings.Contains(msg, "rate limit"), strings.Contains(msg, "429"):
+		return GenerationErrorQuota
+	case strings.Contains(msg, "prompt"), strings.Contains(msg, "invalid argument"), strings.Contains(msg, "malformed"):
+		return GenerationErrorInvalidPrompt
+	case strings.Contains(msg, "network"), strings.Contains(msg, "connection refused"), strings.Contains(msg, "connection reset"), strings.Contains(msg, "temporary failure"):
+		return GenerationErrorNetwork
+	case strings.Contains(msg, "provider"), strings.Contains(msg, "upstream"), strings.Contains(msg, "api error"):
+		return GenerationErrorProvider
+	default:
+		return fallback
+	}
+}
+
+func formatGenerationError(code GenerationErrorCode, message string) string {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "generation failed"
+	}
+	return fmt.Sprintf("[%s] %s", code, msg)
+}
+
 // StartContentGeneration starts the AI content generation process (Step 1)
 func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenerationRequest) (*domain.StoryboardContentGeneration, error) {
+	s.logger.Info("starting content generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
+		zap.Int("characterCount", len(req.CharacterIDs)),
+		zap.Int("sceneCount", len(req.SceneIDs)),
+		zap.String("style", req.Style))
+
 	// Verify storyboard exists
 	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for content generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for content generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("title", storyboard.Title))
 
 	// Create generation record
 	gen := &domain.StoryboardContentGeneration{
@@ -70,16 +155,39 @@ func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenera
 		CreatedAt:    time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating content generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("status", string(gen.Status)))
+
 	if err := s.repo.CreateContentGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create content generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create content generation record: %w", err)
 	}
 
+	s.logger.Info("content generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID))
+
 	// Update storyboard workflow status
 	if err := s.repo.UpdateStoryboardWorkflow(ctx, req.StoryboardID, domain.WorkflowStatusDraft, 2); err != nil {
-		s.logger.Warn("failed to update storyboard workflow", zap.Error(err))
+		s.logger.Warn("failed to update storyboard workflow",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow status updated",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("workflowStatus", string(domain.WorkflowStatusDraft)),
+			zap.Int("currentStep", 2))
 	}
 
 	// Start async AI generation
+	s.logger.Info("starting async content generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID))
 	go s.processContentGeneration(context.Background(), gen, storyboard)
 
 	return gen, nil
@@ -87,28 +195,86 @@ func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenera
 
 // processContentGeneration processes the content generation in background
 func (s *Service) processContentGeneration(ctx context.Context, gen *domain.StoryboardContentGeneration, storyboard *domain.Storyboard) {
+	startTime := time.Now()
+	s.logger.Info("processing content generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("rawInput", truncateForLog(gen.RawInput, 200)),
+		zap.String("style", gen.Style))
+
+	// Record metrics: pending -> processing
+	if s.metrics != nil {
+		s.metrics.RecordStoryboardContentGeneration("processing", 0)
+	}
+
 	// Update status to processing
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateContentGeneration(ctx, gen)
+	if err := s.repo.UpdateContentGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update content generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("content generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Build context from characters and scenes
-	contextStr := s.buildGenerationContext(ctx, gen.CharacterIDs, gen.SceneIDs, storyboard.StoryID)
+	s.logger.Debug("building generation context",
+		zap.String("generationId", gen.ID),
+		zap.Int("characterCount", len(gen.CharacterIDs)),
+		zap.Int("sceneCount", len(gen.SceneIDs)))
+	contextStr := s.buildGenerationContext(ctx, storyboard, gen.CharacterIDs, gen.SceneIDs)
+	s.logger.Debug("generation context built",
+		zap.String("generationId", gen.ID),
+		zap.Int("contextLength", len(contextStr)))
 
-	// Determine style: use provided style, or fallback to story's genre
+	// Determine style: use provided style, or fallback to story's genre or style
 	style := gen.Style
 	if style == "" {
-		// Try to get story's genre as the default style
+		s.logger.Debug("style not provided, attempting to get from story",
+			zap.String("generationId", gen.ID),
+			zap.String("storyId", storyboard.StoryID))
+		// Try to get story's genre or style as the default style
 		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
-		if err == nil && story.Genre != "" {
-			style = story.Genre
+		if err == nil {
+			if story.Genre != "" {
+				style = story.Genre
+				s.logger.Debug("using story genre as style",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
+			} else if story.Style != nil && story.Style.Style != "" {
+				style = story.Style.Style
+				s.logger.Debug("using story style as style",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
+			} else {
+				style = "drama" // Ultimate fallback
+				s.logger.Debug("using default style fallback",
+					zap.String("generationId", gen.ID),
+					zap.String("style", style))
+			}
 		} else {
 			style = "drama" // Ultimate fallback
+			s.logger.Warn("failed to get story for style fallback, using default",
+				zap.String("generationId", gen.ID),
+				zap.String("storyId", storyboard.StoryID),
+				zap.String("style", style),
+				zap.Error(err))
 		}
+	} else {
+		s.logger.Debug("using provided style",
+			zap.String("generationId", gen.ID),
+			zap.String("style", style))
 	}
 
 	// Generate content using AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardContentGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
+		s.logger.Info("generating content with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("style", style),
+			zap.Int("contextLength", len(contextStr)),
+			zap.Int("rawInputLength", len(gen.RawInput)))
 		// Fallback to direct gemini client if aiGenService not available
 		prompt := fmt.Sprintf(`You are a creative story writer. Based on the following context and user input, generate an engaging story chapter.
 
@@ -120,11 +286,30 @@ Style: %s
 
 Generate a compelling narrative that continues the story naturally. Keep the tone consistent with the style requested.`, contextStr, gen.RawInput, style)
 
+		s.logger.Debug("calling gemini client for content generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(prompt)))
+
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
 		if err != nil {
+			s.logger.Error("AI content generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateContentGeneration(ctx, gen)
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorUnknown), err.Error())
+			if updateErr := s.repo.UpdateContentGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update content generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
+			// Record metrics: failed
+			if s.metrics != nil {
+				duration := time.Since(startTime)
+				s.metrics.RecordStoryboardContentGeneration("failed", duration)
+				s.metrics.RecordAIGenerationRetry("content", "gemini", 0) // 0 means no retry, just failed
+			}
 			return
 		}
 
@@ -133,9 +318,27 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("content generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+
+		s.logger.Info("content generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.Int("contentLength", len(gen.GeneratedContent)),
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// If no AI client, use raw input as content
+		s.logger.Warn("no AI client available, using raw input as content",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID))
 		gen.GeneratedContent = gen.RawInput
 	}
 
@@ -143,30 +346,90 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 	gen.Status = domain.GenerationStatusCompleted
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateContentGeneration(ctx, gen)
+	if err := s.repo.UpdateContentGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update content generation status to completed",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("content generation status updated to completed",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Update storyboard content and token consumption
 	storyboard.Content = gen.GeneratedContent
 	storyboard.IsAIGenerated = true
-	_ = s.repo.UpdateStoryboard(ctx, storyboard)
+	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
+		s.logger.Error("failed to update storyboard content",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard content updated",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Int("contentLength", len(storyboard.Content)))
+	}
 
 	// Aggregate and update token consumption
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
 	// Update workflow status
-	_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusContentReady, 2)
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusContentReady, 2); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to content ready",
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to content ready",
+			zap.String("storyboardId", gen.StoryboardID))
+		// Record metrics: workflow milestone
+		if s.metrics != nil {
+			// Duration is tracked separately via workflow duration metric
+			s.metrics.RecordStoryboardWorkflowCompleted("content_ready", 0)
+		}
+	}
 
-	s.logger.Info("content generation completed",
+	// Record metrics: completed
+	if s.metrics != nil {
+		duration := time.Since(startTime)
+		s.metrics.RecordStoryboardContentGeneration("completed", duration)
+		// Record AI generation
+		s.metrics.RecordAIGeneration("gemini", "content")
+		if gen.TotalTokens > 0 {
+			s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
+		}
+	}
+
+	s.logger.Info("content generation completed successfully",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
-		zap.Int("tokens", gen.TotalTokens))
+		zap.Int("tokens", gen.TotalTokens),
+		zap.Int("contentLength", len(gen.GeneratedContent)))
 }
 
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequest) (*domain.StoryboardSceneGeneration, error) {
+	s.logger.Info("starting scene detail generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("sceneLocation", req.SceneLocation),
+		zap.String("inputDescription", truncateForLog(req.InputDescription, 200)))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for scene detail generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for scene detail generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
 
 	// Create generation record
 	gen := &domain.StoryboardSceneGeneration{
@@ -180,11 +443,29 @@ func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequ
 		CreatedAt:        time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating scene generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	if err := s.repo.CreateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create scene generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create scene generation record: %w", err)
 	}
 
+	s.logger.Info("scene generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	// Start async AI generation
+	s.logger.Info("starting async scene detail generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processSceneGeneration(context.Background(), gen)
 
 	return gen, nil
@@ -192,29 +473,75 @@ func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequ
 
 // processSceneGeneration processes scene detail generation in background
 func (s *Service) processSceneGeneration(ctx context.Context, gen *domain.StoryboardSceneGeneration) {
+	startTime := time.Now()
+	s.logger.Info("processing scene detail generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.String("sceneTitle", gen.SceneTitle),
+		zap.String("sceneLocation", gen.SceneLocation))
+
+	// Record metrics: pending -> processing
+	if s.metrics != nil {
+		s.metrics.RecordStoryboardSceneGeneration("processing", 0)
+	}
+
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateSceneGeneration(ctx, gen)
+	if err := s.repo.UpdateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update scene generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("scene generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// 直接调用 geminiClient，将结果记录到 StoryboardSceneGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
+		s.logger.Info("generating scene details with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("sceneTitle", gen.SceneTitle))
 		// Fallback to direct gemini client if aiGenService not available
-		prompt := fmt.Sprintf(`Enhance and expand the following scene description with vivid details:
+		prompt := fmt.Sprintf(`Transform the following scene description into a highly detailed, cinematic script ideal for high-end text-to-video or text-to-image AI generators:
 
 Scene Title: %s
 Location: %s
 Original Description: %s
 
-Provide a rich, detailed description that includes:
-- Visual details (lighting, colors, atmosphere)
-- Sensory elements (sounds, smells, textures)
-- Character positions and actions
-- Emotional tone and mood`, gen.SceneTitle, gen.SceneLocation, gen.InputDescription)
+You must enrich the scene using the following exhaustive dimensions:
+1. **Camera & Cinematography**: Specify shot size (Extreme Close-Up, Wide Shot, Medium Full Shot), Camera Angle (Low angle, High angle, Dutch angle), Camera Movement (Slow push-in, Dolly track, Handheld panning, Drone shot), and Lens type (e.g. 50mm, anamorphic lens, telephoto, macro).
+2. **Subject & Performance**: Detail micro-expressions (e.g. slight furrowed brows, tear welling up), Body language & Posture, specific eye direction/contact, and dynamic action/interaction.
+3. **Wardrobe & Textures**: Describe fabric types (silk, distressed leather, heavy wool, etc.), clothing layering, flowing physics (e.g. cape blowing in the wind), and specific accessories.
+4. **Lighting Setup**: Define the lighting strictly (e.g. Key light, volumetric god rays, rim light, neon glow, chiaroscuro, bounce light, harsh shadows, soft cinematic lighting).
+5. **Environment & Atmosphere**: Include atmospheric effects (fog, dust motes, rain, atmospheric perspective), depth of field (shallow/deep focus), specific time of day nuances, and weather dynamics.
+
+Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not use bullet points in the final output.`, gen.SceneTitle, gen.SceneLocation, gen.InputDescription)
+
+		s.logger.Debug("calling gemini client for scene detail generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(prompt)))
 
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
 		if err != nil {
+			s.logger.Error("AI scene detail generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateSceneGeneration(ctx, gen)
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorUnknown), err.Error())
+			if updateErr := s.repo.UpdateSceneGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update scene generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
+			// Record metrics: failed
+			if s.metrics != nil {
+				duration := time.Since(startTime)
+				s.metrics.RecordStoryboardSceneGeneration("failed", duration)
+			}
 			return
 		}
 
@@ -223,96 +550,382 @@ Provide a rich, detailed description that includes:
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("scene generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+
+		s.logger.Info("scene details generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.Int("detailLength", len(gen.GeneratedDetail)),
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
+		s.logger.Warn("no AI client available, using input description as generated detail",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
 		gen.GeneratedDetail = gen.InputDescription
 	}
 
 	gen.Status = domain.GenerationStatusCompleted
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateSceneGeneration(ctx, gen)
+	if err := s.repo.UpdateSceneGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update scene generation status to completed",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("scene generation status updated to completed",
+			zap.String("generationId", gen.ID))
+	}
 
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
-	s.logger.Info("scene generation completed",
+	// Record metrics: completed
+	if s.metrics != nil {
+		duration := time.Since(startTime)
+		s.metrics.RecordStoryboardSceneGeneration("completed", duration)
+		// Record AI generation
+		s.metrics.RecordAIGeneration("gemini", "scene")
+		if gen.TotalTokens > 0 {
+			s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
+		}
+	}
+
+	s.logger.Info("scene generation completed successfully",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
-		zap.String("sceneId", gen.SceneID))
+		zap.String("sceneId", gen.SceneID),
+		zap.Int("totalTokens", gen.TotalTokens))
 }
 
 // GenerateSceneImage generates an image for a scene (Step 3)
 func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRequest) (*domain.StoryboardImageGeneration, error) {
+	s.logger.Info("starting scene image generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("sceneDescription", truncateForLog(req.SceneDescription, 200)),
+		zap.Int("referenceImageCount", len(req.ReferenceImages)),
+		zap.Int("sceneCharacterCount", len(req.SceneCharacters)),
+		zap.Int("characterReferenceImageCount", len(req.CharacterReferenceImages)))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for image generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
+	}
+
+	s.logger.Debug("storyboard verified for image generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
+
+	// 获取故事信息和风格配置
+	var storyStyle *domain.StyleConfig
+	if req.StoryStyle != nil {
+		storyStyle = req.StoryStyle
+		s.logger.Debug("using provided story style",
+			zap.String("style", storyStyle.Style),
+			zap.String("description", storyStyle.Description))
+	} else if storyboard.StoryID != "" {
+		// 尝试从故事获取风格配置
+		story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+		if err == nil && story.Style != nil {
+			storyStyle = story.Style
+			s.logger.Debug("fetched story style from story",
+				zap.String("storyId", storyboard.StoryID),
+				zap.String("style", storyStyle.Style))
+		}
+	}
+
+	// 获取场景关联的角色图片
+	characterRefImages := req.CharacterReferenceImages
+	if len(characterRefImages) == 0 && len(req.SceneCharacters) > 0 && storyboard.StoryID != "" {
+		// 如果没有提供角色参考图片，但有角色名称，尝试从故事中获取角色图片
+		characterRefImages = s.getCharacterImagesForScene(ctx, storyboard.StoryID, req.SceneCharacters)
+		s.logger.Debug("fetched character reference images",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Strings("sceneCharacters", req.SceneCharacters),
+			zap.Int("imageCount", len(characterRefImages)))
+	}
+
+	// 判断是否为过渡场景（没有角色出现）
+	isTransitionScene := len(req.SceneCharacters) == 0 && len(characterRefImages) == 0
+
+	// 合并参考图片：原始参考图片 + 角色参考图片
+	allReferenceImages := make([]string, 0, len(req.ReferenceImages)+len(characterRefImages))
+	allReferenceImages = append(allReferenceImages, req.ReferenceImages...)
+	// 只有非过渡场景才添加角色参考图片
+	if !isTransitionScene {
+		allReferenceImages = append(allReferenceImages, characterRefImages...)
 	}
 
 	// Create generation record
 	gen := &domain.StoryboardImageGeneration{
-		ID:               uuid.New().String(),
-		StoryboardID:     req.StoryboardID,
-		SceneID:          req.SceneID,
-		SceneTitle:       req.SceneTitle,
-		SceneDescription: req.SceneDescription,
-		ReferenceImages:  req.ReferenceImages,
-		Status:           domain.GenerationStatusPending,
-		CreatedAt:        time.Now().Unix(),
+		ID:                       uuid.New().String(),
+		StoryboardID:             req.StoryboardID,
+		SceneID:                  req.SceneID,
+		SceneTitle:               req.SceneTitle,
+		SceneDescription:         req.SceneDescription,
+		ReferenceImages:          allReferenceImages,
+		SceneCharacters:          req.SceneCharacters,
+		CharacterReferenceImages: characterRefImages,
+		StoryStyle:               storyStyle,
+		IsTransitionScene:        isTransitionScene,
+		ComicStyle:               strings.TrimSpace(req.ComicStyle),
+		Status:                   domain.GenerationStatusPending,
+		CreatedAt:                time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating image generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.Bool("isTransitionScene", isTransitionScene),
+		zap.Int("totalReferenceImages", len(allReferenceImages)))
+
 	if err := s.repo.CreateImageGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create image generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create image generation record: %w", err)
 	}
 
+	s.logger.Info("image generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.Bool("hasStoryStyle", storyStyle != nil),
+		zap.Bool("isTransitionScene", isTransitionScene))
+
 	// Start async generation
+	s.logger.Info("starting async image generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processImageGeneration(context.Background(), gen)
 
 	return gen, nil
 }
 
+// getCharacterImagesForScene 根据场景中的角色名称获取角色图片
+// 限制最多5个主要角色，超过的角色将被忽略
+func (s *Service) getCharacterImagesForScene(ctx context.Context, storyID string, characterNames []string) []string {
+	if len(characterNames) == 0 {
+		return nil
+	}
+
+	// 限制主要角色数量最多5个
+	maxMainCharacters := 5
+	mainCharacterNames := characterNames
+	if len(mainCharacterNames) > maxMainCharacters {
+		mainCharacterNames = mainCharacterNames[:maxMainCharacters]
+		s.logger.Debug("limiting main characters to 5",
+			zap.String("storyId", storyID),
+			zap.Int("originalCount", len(characterNames)),
+			zap.Int("limitedCount", len(mainCharacterNames)))
+	}
+
+	// 获取故事的所有角色
+	characters, err := s.repo.CharactersByStory(ctx, storyID)
+	if err != nil {
+		s.logger.Warn("failed to fetch characters for story",
+			zap.String("storyId", storyID),
+			zap.Error(err))
+		return nil
+	}
+
+	// 创建角色名称到角色的映射
+	charMap := make(map[string]*domain.Character)
+	for _, char := range characters {
+		charMap[char.Name] = char
+	}
+
+	// 收集匹配角色的图片（仅主要角色，最多5个）
+	// 只使用Portrait，如果没有Portrait则跳过该角色（该角色只会在文本中描述，不参与图片生成）
+	var images []string
+	for _, name := range mainCharacterNames {
+		if char, ok := charMap[name]; ok {
+			// 只使用Portrait（完整角色形象图），如果没有Portrait则跳过该角色
+			if char.Portrait != "" {
+				images = append(images, char.Portrait)
+			} else {
+				s.logger.Debug("character has no portrait, skipping from image generation",
+					zap.String("storyId", storyID),
+					zap.String("characterName", name),
+					zap.String("characterId", char.ID))
+			}
+		}
+	}
+
+	return images
+}
+
 // processImageGeneration processes image generation in background
 func (s *Service) processImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration) {
+	startTime := time.Now()
+	s.logger.Info("processing image generation",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID),
+		zap.String("sceneTitle", gen.SceneTitle),
+		zap.Int("referenceImageCount", len(gen.ReferenceImages)))
+
+	// Determine scene type for metrics
+	sceneType := "with_characters"
+	characterCount := len(gen.SceneCharacters)
+	if gen.IsTransitionScene || characterCount == 0 {
+		sceneType = "transition"
+	}
+
+	// Record metrics: pending -> processing
+	if s.metrics != nil {
+		s.metrics.RecordStoryboardImageGeneration("processing", sceneType, 0)
+		// Record character references
+		if characterCount > 0 {
+			s.metrics.RecordImageGenerationCharacterRefs(sceneType, float64(characterCount))
+			s.metrics.RecordImageGenerationWithCharacters("processing", characterCount)
+		}
+		// Record style usage
+		hasStyle := gen.StoryStyle != nil
+		s.metrics.RecordImageGenerationWithStyle("processing", hasStyle)
+		if hasStyle {
+			s.metrics.RecordStoryStyleConfigUsage(gen.StoryStyle.ID, "image_generation")
+		}
+	}
+
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateImageGeneration(ctx, gen)
+	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update image generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("image generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// First, generate image prompt using text AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
-		// Fallback to direct gemini client if aiGenService not available
-		promptGen := fmt.Sprintf(`Create a detailed image generation prompt for the following scene:
+		s.logger.Info("generating image prompt with AI",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("sceneTitle", gen.SceneTitle),
+			zap.Bool("hasStoryStyle", gen.StoryStyle != nil),
+			zap.Bool("isTransitionScene", gen.IsTransitionScene),
+			zap.Int("characterCount", len(gen.SceneCharacters)))
 
-Scene Title: %s
-Scene Description: %s
+		// 构建提示词，包含故事风格配置和场景类型信息
+		promptGen := s.buildImageGenerationPrompt(gen)
 
-Generate a prompt that would create a visually stunning image. Include:
-- Art style and medium
-- Lighting and atmosphere
-- Color palette
-- Composition details
-- Key visual elements
-
-Keep the prompt concise but descriptive, suitable for an image generation AI. Output ONLY the prompt, no explanations.`, gen.SceneTitle, gen.SceneDescription)
+		s.logger.Debug("calling gemini client for image prompt generation",
+			zap.String("generationId", gen.ID),
+			zap.Int("promptLength", len(promptGen)))
 
 		text, resp, err := s.geminiClient.GenerateText(ctx, "", promptGen, nil)
 		if err != nil {
+			s.logger.Error("AI image prompt generation failed",
+				zap.String("generationId", gen.ID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
-			_ = s.repo.UpdateImageGeneration(ctx, gen)
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
+			if updateErr := s.repo.UpdateImageGeneration(ctx, gen); updateErr != nil {
+				s.logger.Error("failed to update image generation status to failed",
+					zap.String("generationId", gen.ID),
+					zap.Error(updateErr))
+			}
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
+			// Record metrics: failed
+			if s.metrics != nil {
+				duration := time.Since(startTime)
+				s.metrics.RecordStoryboardImageGeneration("failed", sceneType, duration)
+				s.metrics.RecordImageGenerationError("ai_error")
+				if characterCount > 0 {
+					s.metrics.RecordImageGenerationWithCharacters("failed", characterCount)
+				}
+			}
 			return
 		}
 
-		gen.GeneratedPrompt = text
+		// Parse structured prompt details from AI response
+		promptDetails, combinedPrompt := s.parseImagePromptDetails(text)
+		if promptDetails != nil {
+			gen.PromptDetails = promptDetails
+			gen.GeneratedPrompt = combinedPrompt
+			s.logger.Debug("structured prompt details parsed successfully",
+				zap.String("generationId", gen.ID),
+				zap.String("artStyle", promptDetails.ArtStyle),
+				zap.String("mood", promptDetails.Mood))
+			// Record metrics: structured prompt details used
+			if s.metrics != nil {
+				s.metrics.RecordImageGenerationPromptDetails(true)
+			}
+		} else {
+			// Fallback: use raw text as prompt if parsing fails
+			gen.GeneratedPrompt = text
+			s.logger.Warn("failed to parse structured prompt, using raw text",
+				zap.String("generationId", gen.ID),
+				zap.String("rawText", truncateForLog(text, 200)))
+			// Record metrics: parsing error
+			if s.metrics != nil {
+				s.metrics.RecordImageGenerationError("parsing_error")
+				s.metrics.RecordImageGenerationPromptDetails(false)
+			}
+		}
 		if resp != nil && resp.UsageMetadata != nil {
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			s.logger.Debug("image prompt generation token usage recorded",
+				zap.String("generationId", gen.ID),
+				zap.Int("inputTokens", gen.InputTokens),
+				zap.Int("outputTokens", gen.OutputTokens),
+				zap.Int("totalTokens", gen.TotalTokens))
+			// Record metrics: token consumption for prompt generation
+			if s.metrics != nil && gen.TotalTokens > 0 {
+				s.metrics.RecordImageGenerationTokenConsumed("prompt", sceneType, float64(gen.TotalTokens))
+			}
+		} else {
+			s.logger.Warn("no usage metadata in AI response",
+				zap.String("generationId", gen.ID))
 		}
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+
+		s.logger.Info("image prompt generated successfully",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 	} else {
 		// If no AI client, use scene description as prompt
+		s.logger.Warn("no AI client available, using scene description as prompt",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
 		gen.GeneratedPrompt = gen.SceneDescription
 	}
 
+	if gen.GeneratedPrompt != "" {
+		gen.GeneratedPrompt = truncateStringToMaxRunes(strings.TrimSpace(gen.GeneratedPrompt), maxStoryboardAIGeneratedPromptRunes)
+	}
+
 	// Generate actual image using genAPI directly
-	// 直接调用 genAPI，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
+	// TokenUsageRecorder 会自动将 token 消耗和成功/失败记录到 AIGenerationRecord
 	if s.genAPI != nil && gen.GeneratedPrompt != "" {
 		genReq := &genapi.GenerateRequest{
 			Prompt:          gen.GeneratedPrompt,
@@ -320,6 +933,7 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 			Quality:         "high",
 			OutputCount:     1,
 			ReferenceImages: gen.ReferenceImages, // Use character reference images
+			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
 
 		// Choose operation type based on whether reference images are provided
@@ -327,28 +941,52 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 			genReq.Operation = genapi.OperationImageToImage
 			// Use first reference image as the primary reference
 			genReq.ReferenceImageURL = gen.ReferenceImages[0]
+			s.logger.Debug("using image-to-image operation",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("referenceImageURL", genReq.ReferenceImageURL))
 		} else {
 			genReq.Operation = genapi.OperationTextToImage
+			s.logger.Debug("using text-to-image operation",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID))
 		}
 
 		// Use configured image provider (default: huoshan)
 		imageProvider := s.imageProvider
 		if imageProvider == "" {
 			imageProvider = "huoshan"
+			s.logger.Debug("using default image provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", imageProvider))
 		}
 
 		s.logger.Info("generating scene image",
+			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("provider", imageProvider))
+			zap.String("provider", imageProvider),
+			zap.String("operation", string(genReq.Operation)),
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
 			s.logger.Warn("AI image generation failed, keeping prompt only",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("provider", imageProvider),
+				zap.String("operation", string(genReq.Operation)),
+				zap.Error(err))
+			// Record metrics: image API error
+			if s.metrics != nil {
+				s.metrics.RecordImageGenerationError("image_api_error")
+			}
+		} else if resp != nil && len(resp.ImageURLs) > 0 {
+			s.logger.Info("image generation API call succeeded",
+				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
 				zap.String("provider", imageProvider),
-				zap.Error(err))
-			// Don't fail completely, just mark as completed without image
-		} else if resp != nil && len(resp.ImageURLs) > 0 {
+				zap.Int("imageCount", len(resp.ImageURLs)))
 			// 上传图片到OSS并替换URL
 			originalImageURL := resp.ImageURLs[0]
 			ossClient := aliyun.GetGlobalClient()
@@ -383,6 +1021,10 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 			// Add image generation tokens to total (if available)
 			if resp.Usage != nil {
 				gen.TotalTokens += resp.Usage.TotalTokens
+				// Record metrics: token consumption for image generation
+				if s.metrics != nil && resp.Usage.TotalTokens > 0 {
+					s.metrics.RecordImageGenerationTokenConsumed("image", sceneType, float64(resp.Usage.TotalTokens))
+				}
 			}
 
 			s.logger.Info("scene image generated",
@@ -390,8 +1032,15 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 				zap.String("provider", imageProvider),
 				zap.String("imageURL", gen.GeneratedImageURL))
 		} else if resp != nil && resp.Metadata != nil {
+			s.logger.Debug("checking for image bytes in metadata",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID))
 			// Check for image bytes in metadata (for conversational image generation)
 			if imageBytes, ok := resp.Metadata["image_bytes"].([][]byte); ok && len(imageBytes) > 0 {
+				s.logger.Info("found image bytes in metadata",
+					zap.String("generationId", gen.ID),
+					zap.String("sceneId", gen.SceneID),
+					zap.Int("imageByteCount", len(imageBytes)))
 				// Upload image bytes to OSS
 				ossClient := aliyun.GetGlobalClient()
 				if ossClient != nil {
@@ -425,37 +1074,325 @@ Keep the prompt concise but descriptive, suitable for an image generation AI. Ou
 		}
 	}
 
-	gen.Status = domain.GenerationStatusCompleted
+	if gen.GeneratedImageURL == "" {
+		gen.Status = domain.GenerationStatusFailed
+		if gen.ErrorMessage == "" {
+			gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "image generation failed: empty generated image url")
+		}
+	} else {
+		gen.Status = domain.GenerationStatusCompleted
+		gen.ErrorMessage = ""
+	}
 	now := time.Now().Unix()
 	gen.CompletedAt = &now
-	_ = s.repo.UpdateImageGeneration(ctx, gen)
+	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to update image generation final status",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("image generation final status updated",
+			zap.String("generationId", gen.ID),
+			zap.String("status", gen.Status))
+	}
 
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
 	// Sync generated image URL to storyboard scene
 	if gen.GeneratedImageURL != "" && gen.SceneID != "" {
+		s.logger.Debug("syncing image URL to storyboard scene",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("imageURL", gen.GeneratedImageURL))
 		if err := s.repo.UpdateStoryboardSceneImage(ctx, gen.SceneID, gen.GeneratedImageURL); err != nil {
 			s.logger.Warn("failed to sync image to storyboard scene",
+				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
+				zap.String("imageURL", gen.GeneratedImageURL),
 				zap.Error(err))
+		} else {
+			s.logger.Info("image URL synced to storyboard scene",
+				zap.String("generationId", gen.ID),
+				zap.String("sceneId", gen.SceneID),
+				zap.String("imageURL", gen.GeneratedImageURL))
+		}
+	} else {
+		s.logger.Debug("skipping image URL sync - missing image URL or scene ID",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("imageURL", gen.GeneratedImageURL))
+	}
+
+	s.afterSceneImageWritten(ctx, gen)
+
+	// Record metrics: completed
+	if s.metrics != nil {
+		duration := time.Since(startTime)
+		status := gen.Status
+		s.metrics.RecordStoryboardImageGeneration(status, sceneType, duration)
+		if characterCount > 0 {
+			s.metrics.RecordImageGenerationWithCharacters(status, characterCount)
+		}
+		hasStyle := gen.StoryStyle != nil
+		s.metrics.RecordImageGenerationWithStyle(status, hasStyle)
+		// Record AI generation
+		s.metrics.RecordAIGeneration("gemini", "image")
+		if gen.TotalTokens > 0 {
+			s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
 		}
 	}
 
-	// Update workflow status
-	_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3)
-
-	s.logger.Info("image generation completed",
+	s.logger.Info("image generation finished",
+		zap.String("generationId", gen.ID),
 		zap.String("storyboardId", gen.StoryboardID),
 		zap.String("sceneId", gen.SceneID),
-		zap.String("imageURL", gen.GeneratedImageURL))
+		zap.String("status", gen.Status),
+		zap.String("errorMessage", gen.ErrorMessage),
+		zap.String("imageURL", gen.GeneratedImageURL),
+		zap.Int("totalTokens", gen.TotalTokens))
+}
+
+// videoSceneHasInFlightJob reports whether there is a pending or processing video generation for the scene.
+func videoSceneHasInFlightJob(list []*domain.StoryboardVideoGeneration, sceneID string) bool {
+	for _, v := range list {
+		if v == nil || v.SceneID != sceneID {
+			continue
+		}
+		if v.Status == domain.GenerationStatusPending || v.Status == domain.GenerationStatusProcessing {
+			return true
+		}
+	}
+	return false
+}
+
+// hasInFlightVideoGeneration uses persisted video generation rows to avoid duplicate CreateVideoGeneration.
+func (s *Service) hasInFlightVideoGeneration(ctx context.Context, storyboardID, sceneID string) bool {
+	if s.repo == nil {
+		return false
+	}
+	list, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		s.logger.Debug("hasInFlightVideoGeneration: list failed",
+			zap.String("storyboardId", storyboardID),
+			zap.String("sceneId", sceneID),
+			zap.Error(err))
+		return false
+	}
+	return videoSceneHasInFlightJob(list, sceneID)
+}
+
+// maybeStartBatchVideoAfterAllImages 在「全部分镜图已写入场景」且故事板开启图后视频时，一次性置 images_ready 并批量排队视频。
+func (s *Service) maybeStartBatchVideoAfterAllImages(ctx context.Context, storyboardID string) {
+	if s.repo == nil {
+		return
+	}
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil || sb == nil || !sb.GenerateVideoAfterImages {
+		return
+	}
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil || len(scenes) == 0 {
+		return
+	}
+	allHaveImage := true
+	for _, sc := range scenes {
+		if sc == nil || strings.TrimSpace(sc.Image) == "" {
+			allHaveImage = false
+			break
+		}
+	}
+	if !allHaveImage {
+		return
+	}
+	videos, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		s.logger.Warn("maybeStartBatchVideoAfterAllImages: list video generations failed",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		videos = nil
+	}
+	if sb.WorkflowStatus != domain.WorkflowStatusImagesReady || sb.CurrentStep < 3 {
+		if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusImagesReady, 3); err != nil {
+			s.logger.Warn("failed to update storyboard workflow to images ready (batch gate)",
+				zap.String("storyboardId", storyboardID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("storyboard workflow updated to images ready (all scene images)",
+				zap.String("storyboardId", storyboardID))
+			if s.metrics != nil {
+				s.metrics.RecordStoryboardWorkflowCompleted("images_ready", 0)
+			}
+		}
+	}
+	for _, sc := range scenes {
+		if sc == nil {
+			continue
+		}
+		if strings.TrimSpace(sc.Image) == "" {
+			continue
+		}
+		if strings.TrimSpace(sc.VideoUrl) != "" {
+			continue
+		}
+		if videoSceneHasInFlightJob(videos, sc.ID) {
+			s.logger.Debug("skip batch video enqueue: in-flight job for scene",
+				zap.String("storyboardId", storyboardID),
+				zap.String("sceneId", sc.ID))
+			continue
+		}
+		scene := *sc
+		sbID := storyboardID
+		desc := strings.TrimSpace(scene.Description)
+		if desc == "" {
+			desc = strings.TrimSpace(scene.Title)
+		}
+		refURL := strings.TrimSpace(scene.Image)
+		s.logger.Info("batch enqueue scene video after all images ready",
+			zap.String("storyboardId", sbID),
+			zap.String("sceneId", scene.ID))
+		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					s.logger.Error("panic in batched video generation after all images",
+						zap.Any("panic", rec),
+						zap.String("storyboardId", sbID),
+						zap.String("sceneId", scene.ID))
+				}
+			}()
+			_, vErr := s.GenerateSceneVideo(context.Background(), &VideoGenerationRequest{
+				StoryboardID:      sbID,
+				SceneID:           scene.ID,
+				SceneTitle:        scene.Title,
+				InputDescription:  desc,
+				ReferenceImageURL: refURL,
+			})
+			if vErr != nil {
+				s.logger.Warn("failed to start batched scene video",
+					zap.String("storyboardId", sbID),
+					zap.String("sceneId", scene.ID),
+					zap.Error(vErr))
+			}
+		}()
+	}
+}
+
+// afterSceneImageWritten 在图片生成终态落库且（如有）同步到分镜行之后调用，驱动批量视频门禁与 images_ready。
+func (s *Service) afterSceneImageWritten(ctx context.Context, gen *domain.StoryboardImageGeneration) {
+	if s.repo == nil || gen == nil {
+		return
+	}
+	s.maybeStartBatchVideoAfterAllImages(ctx, gen.StoryboardID)
+	if gen.Status != domain.GenerationStatusCompleted {
+		return
+	}
+	sb, err := s.repo.StoryboardByID(ctx, gen.StoryboardID)
+	if err != nil || sb == nil {
+		return
+	}
+	if sb.GenerateVideoAfterImages {
+		return
+	}
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusImagesReady, 3); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to images ready",
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to images ready",
+			zap.String("storyboardId", gen.StoryboardID))
+		if s.metrics != nil {
+			s.metrics.RecordStoryboardWorkflowCompleted("images_ready", 0)
+		}
+	}
+}
+
+// maybeFinalizeBatchVideoWorkflow 在 GenerateVideoAfterImages 模式下，当每个有图分镜的视频任务均已终态且无进行中的任务时置 video_ready。
+func (s *Service) maybeFinalizeBatchVideoWorkflow(ctx context.Context, storyboardID string) {
+	if s.repo == nil {
+		return
+	}
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil || sb == nil || !sb.GenerateVideoAfterImages {
+		return
+	}
+	if sb.WorkflowStatus == domain.WorkflowStatusVideoReady && sb.CurrentStep >= 4 {
+		return
+	}
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil || len(scenes) == 0 {
+		return
+	}
+	videos, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		s.logger.Warn("maybeFinalizeBatchVideoWorkflow: list video generations failed",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+		return
+	}
+	byScene := make(map[string][]*domain.StoryboardVideoGeneration)
+	for _, v := range videos {
+		if v == nil {
+			continue
+		}
+		byScene[v.SceneID] = append(byScene[v.SceneID], v)
+	}
+	for _, sc := range scenes {
+		if sc == nil || strings.TrimSpace(sc.Image) == "" {
+			continue
+		}
+		if videoSceneHasInFlightJob(videos, sc.ID) {
+			return
+		}
+		if strings.TrimSpace(sc.VideoUrl) != "" {
+			continue
+		}
+		terminal := false
+		for _, v := range byScene[sc.ID] {
+			if v.Status == domain.GenerationStatusCompleted || v.Status == domain.GenerationStatusFailed {
+				terminal = true
+				break
+			}
+		}
+		if !terminal {
+			return
+		}
+	}
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusVideoReady, 4); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to video ready (batch finalize)",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to video ready (all batch videos terminal)",
+			zap.String("storyboardId", storyboardID))
+		if s.metrics != nil {
+			s.metrics.RecordStoryboardWorkflowCompleted("video_ready", 0)
+		}
+	}
 }
 
 // GenerateSceneVideo generates a video for a scene (Step 4)
 func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRequest) (*domain.StoryboardVideoGeneration, error) {
+	s.logger.Info("starting scene video generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("sceneTitle", req.SceneTitle),
+		zap.String("inputDescription", truncateForLog(req.InputDescription, 200)),
+		zap.String("referenceImageURL", req.ReferenceImageURL),
+		zap.String("endFrameURL", req.EndFrameURL))
+
 	// Verify storyboard exists
-	if _, err := s.repo.StoryboardByID(ctx, req.StoryboardID); err != nil {
+	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	if err != nil {
+		s.logger.Error("storyboard not found for video generation",
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard verified for video generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("storyId", storyboard.StoryID))
 
 	// Create generation record
 	gen := &domain.StoryboardVideoGeneration{
@@ -470,11 +1407,29 @@ func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRe
 		CreatedAt:         time.Now().Unix(),
 	}
 
+	s.logger.Debug("creating video generation record",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	if err := s.repo.CreateVideoGeneration(ctx, gen); err != nil {
+		s.logger.Error("failed to create video generation record",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", req.StoryboardID),
+			zap.String("sceneId", req.SceneID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to create video generation record: %w", err)
 	}
 
+	s.logger.Info("video generation record created",
+		zap.String("generationId", gen.ID),
+		zap.String("storyboardId", gen.StoryboardID),
+		zap.String("sceneId", gen.SceneID))
+
 	// Start async generation
+	s.logger.Info("starting async video generation process",
+		zap.String("generationId", gen.ID),
+		zap.String("sceneId", gen.SceneID))
 	go s.processVideoGeneration(context.Background(), gen)
 
 	return gen, nil
@@ -482,6 +1437,7 @@ func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRe
 
 // processVideoGeneration processes video generation in background
 func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.StoryboardVideoGeneration) {
+	startTime := time.Now()
 	s.logger.Info("starting video generation process",
 		zap.String("sceneId", gen.SceneID),
 		zap.String("storyboardId", gen.StoryboardID),
@@ -489,9 +1445,21 @@ func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.Storyb
 		zap.String("referenceImageURL", gen.ReferenceImageURL),
 		zap.String("endFrameURL", gen.EndFrameURL),
 		zap.String("inputDescription", gen.InputDescription))
-	
+
+	// Record metrics: pending -> processing
+	if s.metrics != nil {
+		s.metrics.RecordStoryboardVideoGeneration("processing", false, 0)
+	}
+
 	gen.Status = domain.GenerationStatusProcessing
-	_ = s.repo.UpdateVideoGeneration(ctx, gen)
+	if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+		s.logger.Warn("failed to update video generation status to processing",
+			zap.String("generationId", gen.ID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("video generation status updated to processing",
+			zap.String("generationId", gen.ID))
+	}
 
 	// Generate video prompt using text AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardVideoGeneration 表，不创建 AIGenerationRecord
@@ -502,13 +1470,19 @@ func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.Storyb
 Scene Title: %s
 Scene Description: %s
 
-Generate a prompt for a short video clip (5-10 seconds). Include:
-- Camera movement (pan, zoom, static)
-- Subject motion and actions
-- Atmosphere and mood
-- Transition style
+Please return a structured JSON object (without markdown code blocks) with the following format:
+{
+  "cameraMovement": "摄像机运动，如 slow pan left, zoom in, static, dolly forward",
+  "subjectMotion": "主体动作描述，如 walking slowly, turning around, gesturing",
+  "atmosphere": "氛围描述，如 peaceful morning, tense night, mysterious fog",
+  "transitionStyle": "转场风格，如 fade, cut, crossfade",
+  "duration": "时长描述，如 5 seconds",
+  "keyMoments": ["关键时刻1", "关键时刻2"],
+  "additionalNotes": "其他补充说明（可选）"
+}
 
-Keep it concise and suitable for AI video generation. Output ONLY the prompt, no explanations.`, gen.SceneTitle, gen.InputDescription)
+Important: Return ONLY the JSON object, no explanations or markdown formatting.
+LENGTH: When merged into one video prompt, keep the total substantive Chinese text (汉字) within 200 characters — be concise.`, gen.SceneTitle, gen.InputDescription)
 
 		s.logger.Info("generating video prompt with AI",
 			zap.String("sceneId", gen.SceneID),
@@ -521,18 +1495,47 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 				zap.String("sceneId", gen.SceneID),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = err.Error()
+			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
+			// Record metrics: failed
+			if s.metrics != nil {
+				duration := time.Since(startTime)
+				s.metrics.RecordStoryboardVideoGeneration("failed", false, duration)
+				s.metrics.RecordVideoGenerationError("ai_error")
+			}
+			s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
 			return
 		}
 
-		gen.GeneratedPrompt = text
+		// Parse structured prompt details from AI response
+		videoPromptDetails, combinedPrompt := s.parseVideoPromptDetails(text)
+		if videoPromptDetails != nil {
+			gen.PromptDetails = videoPromptDetails
+			gen.GeneratedPrompt = combinedPrompt
+			s.logger.Debug("structured video prompt details parsed successfully",
+				zap.String("generationId", gen.ID),
+				zap.String("cameraMovement", videoPromptDetails.CameraMovement),
+				zap.String("atmosphere", videoPromptDetails.Atmosphere))
+		} else {
+			// Fallback: use raw text as prompt if parsing fails
+			gen.GeneratedPrompt = text
+			s.logger.Warn("failed to parse structured video prompt, using raw text",
+				zap.String("generationId", gen.ID),
+				zap.String("rawText", truncateForLog(text, 200)))
+		}
 		if resp != nil && resp.UsageMetadata != nil {
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
 			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+			// Record metrics: token consumption for prompt generation
+			if s.metrics != nil && gen.TotalTokens > 0 {
+				s.metrics.RecordVideoGenerationTokenConsumed("prompt", float64(gen.TotalTokens))
+			}
 		}
-		
+
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+
 		s.logger.Info("video prompt generated successfully",
 			zap.String("sceneId", gen.SceneID),
 			zap.String("generatedPrompt", gen.GeneratedPrompt),
@@ -541,15 +1544,32 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// If no AI client, use scene description as prompt
+		s.logger.Warn("no AI client available, using input description as video prompt",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("storyboardId", gen.StoryboardID))
 		gen.GeneratedPrompt = gen.InputDescription
 		s.logger.Info("using input description as video prompt (no AI client)",
+			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("prompt", gen.GeneratedPrompt))
+			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
+	}
+
+	if gen.GeneratedPrompt != "" {
+		gen.GeneratedPrompt = truncateStringToMaxRunes(strings.TrimSpace(gen.GeneratedPrompt), maxStoryboardAIGeneratedPromptRunes)
 	}
 
 	// Generate actual video using genAPI directly
 	// 直接调用 genAPI，将结果记录到 StoryboardVideoGeneration 表，不创建 AIGenerationRecord
-	if s.genAPI != nil && gen.GeneratedPrompt != "" {
+	if s.genAPI == nil {
+		s.logger.Warn("genAPI not available, cannot generate video",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
+	} else if gen.GeneratedPrompt == "" {
+		s.logger.Warn("generated prompt is empty, cannot generate video",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID))
+	} else if s.genAPI != nil && gen.GeneratedPrompt != "" {
 		// Log all input parameters
 		s.logger.Info("preparing video generation request",
 			zap.String("sceneId", gen.SceneID),
@@ -562,18 +1582,78 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			Prompt:          gen.GeneratedPrompt,
 			DurationSeconds: 5, // 5 second video clips
 			AspectRatio:     "16:9",
+			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
+		}
+
+		// Use configured video provider (default: hailuo)
+		videoProvider := s.videoProvider
+		if videoProvider == "" {
+			videoProvider = "huoshan"
+			s.logger.Debug("using default video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
+		} else {
+			s.logger.Debug("using configured video provider",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", videoProvider))
 		}
 
 		// Choose operation type based on whether reference images are provided
 		if gen.ReferenceImageURL != "" && gen.EndFrameURL != "" {
-			// Keyframe mode: need both FirstFrameURL and LastFrameURL
-			genReq.Operation = genapi.OperationKeyframeToVideo
-			genReq.FirstFrameURL = gen.ReferenceImageURL // Map ReferenceImageURL to FirstFrameURL
-			genReq.LastFrameURL = gen.EndFrameURL
-			s.logger.Info("using keyframe-to-video mode",
+			// Keyframe mode: use subdivision strategy for smooth transitions
+			s.logger.Info("using keyframe-to-video mode with subdivision strategy",
 				zap.String("sceneId", gen.SceneID),
-				zap.String("firstFrameURL", genReq.FirstFrameURL),
-				zap.String("lastFrameURL", genReq.LastFrameURL))
+				zap.String("firstFrameURL", gen.ReferenceImageURL),
+				zap.String("lastFrameURL", gen.EndFrameURL))
+
+			// Use AIGenerationService for subdivision if available
+			if s.aiGenService != nil {
+				subdivResult, err := s.aiGenService.GenerateVideoWithSubdivision(ctx, &genapi.SubdivisionVideoRequest{
+					FirstFrameURL:   gen.ReferenceImageURL,
+					LastFrameURL:    gen.EndFrameURL,
+					Prompt:          gen.GeneratedPrompt,
+					DurationSeconds: 5,
+					MaxDepth:        3,
+					Provider:        videoProvider,
+					AspectRatio:     "16:9",
+				})
+				if err != nil {
+					s.logger.Warn("subdivision video generation failed, falling back to direct generation",
+						zap.String("sceneId", gen.SceneID),
+						zap.Error(err))
+					// Fall back to direct keyframe-to-video
+				} else if subdivResult != nil && len(subdivResult.Segments) > 0 {
+					// Successfully generated with subdivision
+					s.logger.Info("subdivision video generation succeeded",
+						zap.String("sceneId", gen.SceneID),
+						zap.Int("segmentCount", len(subdivResult.Segments)),
+						zap.Bool("isSubdivided", subdivResult.IsSubdivided))
+
+					// Use the first segment's video URL as the main video
+					gen.GeneratedVideoURL = subdivResult.Segments[0].VideoURL
+
+					// Store subdivision info in generation record
+					if subdivResult.IsSubdivided {
+						gen.VideoSegmentsJSON = s.serializeVideoSegments(subdivResult.Segments)
+						gen.MiddleFrameURLsJSON = s.serializeMiddleFrames(subdivResult.MiddleFrames)
+						gen.IsSubdivided = true
+					}
+
+					// Record metrics: subdivision video generation
+					if s.metrics != nil {
+						s.metrics.RecordVideoGenerationSubdivided(true, "processing")
+						s.metrics.RecordVideoGenerationSegmentCount(true, float64(len(subdivResult.Segments)))
+					}
+
+					// Skip the normal generation flow
+					goto updateGeneration
+				}
+			}
+
+			// Direct keyframe-to-video generation (fallback or no aiGenService)
+			genReq.Operation = genapi.OperationKeyframeToVideo
+			genReq.FirstFrameURL = gen.ReferenceImageURL
+			genReq.LastFrameURL = gen.EndFrameURL
 		} else if gen.ReferenceImageURL != "" {
 			// Image to video mode: only need ReferenceImageURL
 			genReq.Operation = genapi.OperationImageToVideo
@@ -586,12 +1666,6 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 			genReq.Operation = genapi.OperationTextToVideo
 			s.logger.Info("using text-to-video mode",
 				zap.String("sceneId", gen.SceneID))
-		}
-
-		// Use configured video provider (default: hailuo)
-		videoProvider := s.videoProvider
-		if videoProvider == "" {
-			videoProvider = "hailuo"
 		}
 
 		// Log final request details
@@ -618,6 +1692,10 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 				zap.String("referenceImageURL", genReq.ReferenceImageURL),
 				zap.String("prompt", genReq.Prompt),
 				zap.Error(err))
+			// Record metrics: video API error
+			if s.metrics != nil {
+				s.metrics.RecordVideoGenerationError("video_api_error")
+			}
 			// Don't fail completely, just mark as completed without video
 		} else if resp != nil {
 			s.logger.Info("video generation API call succeeded",
@@ -631,7 +1709,7 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 				s.logger.Info("received video URL from provider",
 					zap.String("sceneId", gen.SceneID),
 					zap.String("originalVideoURL", resp.VideoURL))
-				
+
 				// 上传视频到OSS并替换URL
 				originalVideoURL := resp.VideoURL
 				ossClient := aliyun.GetGlobalClient()
@@ -678,6 +1756,10 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 				// Add video generation tokens to total (if available)
 				if resp.Usage != nil {
 					gen.TotalTokens += resp.Usage.TotalTokens
+					// Record metrics: token consumption for video generation
+					if s.metrics != nil && resp.Usage.TotalTokens > 0 {
+						s.metrics.RecordVideoGenerationTokenConsumed("video", float64(resp.Usage.TotalTokens))
+					}
 				}
 
 				s.logger.Info("scene video generated",
@@ -693,15 +1775,15 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 					zap.String("taskId", resp.TaskID),
 					zap.String("status", resp.Status),
 					zap.String("message", resp.Message))
-				
+
 				// Save taskId and provider name to database for recovery
 				gen.ProviderTaskID = resp.TaskID
 				gen.ProviderName = videoProvider
-				
+
 				// Start background polling goroutine
 				// Keep status as processing, polling will update it when done
 				go s.pollVideoGenerationStatus(context.Background(), gen, videoProvider, resp.TaskID)
-				
+
 				// Don't mark as completed here - let polling update the status
 				// Just update the record to keep it in processing state with taskId saved
 				_ = s.repo.UpdateVideoGeneration(ctx, gen)
@@ -723,50 +1805,131 @@ Keep it concise and suitable for AI video generation. Output ONLY the prompt, no
 		}
 	}
 
+updateGeneration:
 	// Only mark as completed if we have a video URL (synchronous case)
 	// For async tasks, polling will handle completion
 	if gen.GeneratedVideoURL != "" {
+		s.logger.Info("video generation completed synchronously",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("videoURL", gen.GeneratedVideoURL))
 		gen.Status = domain.GenerationStatusCompleted
 		now := time.Now().Unix()
 		gen.CompletedAt = &now
 		if gen.Duration == 0 {
 			gen.Duration = 5 // Default duration if not set
+			s.logger.Debug("setting default video duration",
+				zap.String("generationId", gen.ID),
+				zap.Int("duration", gen.Duration))
 		}
-		_ = s.repo.UpdateVideoGeneration(ctx, gen)
+		if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+			s.logger.Error("failed to update video generation status to completed",
+				zap.String("generationId", gen.ID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("video generation status updated to completed",
+				zap.String("generationId", gen.ID))
+		}
 
+		s.logger.Debug("updating storyboard token consumption",
+			zap.String("storyboardId", gen.StoryboardID))
 		s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
-		// Update workflow status
-		_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusVideoReady, 4)
+		s.syncVideoReadyWorkflowAfterVideoCompletion(ctx, gen.StoryboardID)
 
-		s.logger.Info("video generation process completed",
+		// Record metrics: completed
+		if s.metrics != nil {
+			duration := time.Since(startTime)
+			isSubdivided := gen.IsSubdivided
+			s.metrics.RecordStoryboardVideoGeneration("completed", isSubdivided, duration)
+			s.metrics.RecordVideoGenerationSubdivided(isSubdivided, "completed")
+			// Record AI generation
+			s.metrics.RecordAIGeneration("gemini", "video")
+			if gen.TotalTokens > 0 {
+				s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
+			}
+		}
+
+		s.logger.Info("video generation process completed successfully",
+			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("sceneId", gen.SceneID),
 			zap.String("status", string(gen.Status)),
 			zap.String("videoURL", gen.GeneratedVideoURL),
-			zap.String("generatedPrompt", gen.GeneratedPrompt),
 			zap.Int("duration", gen.Duration),
-			zap.Int("totalTokens", gen.TotalTokens),
-			zap.String("errorMessage", gen.ErrorMessage))
+			zap.Int("totalTokens", gen.TotalTokens))
 	} else {
 		// No video URL and no task ID - mark as failed
-		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = "video generation failed: no video URL or task ID returned"
-		_ = s.repo.UpdateVideoGeneration(ctx, gen)
-		s.logger.Warn("video generation process failed - no video URL or task ID",
+		s.logger.Warn("video generation failed - no video URL or task ID",
+			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("sceneId", gen.SceneID),
-			zap.String("status", string(gen.Status)),
-			zap.String("errorMessage", gen.ErrorMessage))
+			zap.String("providerTaskID", gen.ProviderTaskID))
+		gen.Status = domain.GenerationStatusFailed
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "video generation failed: no video URL or task ID returned")
+		if err := s.repo.UpdateVideoGeneration(ctx, gen); err != nil {
+			s.logger.Error("failed to update video generation status to failed",
+				zap.String("generationId", gen.ID),
+				zap.Error(err))
+		} else {
+			s.logger.Debug("video generation status updated to failed",
+				zap.String("generationId", gen.ID),
+				zap.String("errorMessage", gen.ErrorMessage))
+		}
+		// Record metrics: failed
+		if s.metrics != nil {
+			duration := time.Since(startTime)
+			s.metrics.RecordStoryboardVideoGeneration("failed", gen.IsSubdivided, duration)
+			s.metrics.RecordVideoGenerationError("unknown")
+		}
+		s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
+	}
+}
+
+// syncVideoReadyWorkflowAfterVideoCompletion 单视频成功落库后更新 workflow：批量图后视频模式走聚合 finalize，否则立即 video_ready。
+func (s *Service) syncVideoReadyWorkflowAfterVideoCompletion(ctx context.Context, storyboardID string) {
+	if s.repo == nil {
+		return
+	}
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil || sb == nil {
+		return
+	}
+	if sb.GenerateVideoAfterImages {
+		s.maybeFinalizeBatchVideoWorkflow(ctx, storyboardID)
+		return
+	}
+	if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusVideoReady, 4); err != nil {
+		s.logger.Warn("failed to update storyboard workflow to video ready",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard workflow updated to video ready",
+			zap.String("storyboardId", storyboardID))
+		if s.metrics != nil {
+			s.metrics.RecordStoryboardWorkflowCompleted("video_ready", 0)
+		}
 	}
 }
 
 // GetGenerationProgress returns the complete generation progress for a storyboard
 func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string) (*domain.StoryboardGenerationProgress, error) {
+	s.logger.Info("getting generation progress",
+		zap.String("storyboardId", storyboardID))
+
 	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for generation progress",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
+
+	s.logger.Debug("storyboard retrieved for generation progress",
+		zap.String("storyboardId", storyboardID),
+		zap.String("workflowStatus", storyboard.WorkflowStatus),
+		zap.Int("currentStep", storyboard.CurrentStep))
 
 	progress := &domain.StoryboardGenerationProgress{
 		StoryboardID:   storyboardID,
@@ -776,11 +1939,14 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	}
 
 	// Track generation status
-	var isGenerating, hasPending bool
+	var isGenerating, hasPending, hasFailed bool
 	var statusMessages []string
 
 	// Get content generation
 	if contentGen, err := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID); err == nil {
+		s.logger.Debug("content generation found",
+			zap.String("storyboardId", storyboardID),
+			zap.String("status", string(contentGen.Status)))
 		progress.ContentGeneration = contentGen
 		if contentGen.Status == domain.GenerationStatusProcessing {
 			isGenerating = true
@@ -788,11 +1954,20 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		} else if contentGen.Status == domain.GenerationStatusPending {
 			hasPending = true
 			statusMessages = append(statusMessages, "内容生成待处理")
+		} else if contentGen.Status == domain.GenerationStatusFailed {
+			hasFailed = true
 		}
+	} else {
+		s.logger.Debug("no content generation found",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get scene generations
 	if sceneGens, err := s.repo.ListSceneGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("scene generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(sceneGens)))
 		progress.SceneGenerations = sceneGens
 		for _, gen := range sceneGens {
 			if gen.Status == domain.GenerationStatusProcessing {
@@ -801,42 +1976,82 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 				break
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				hasFailed = true
 			}
 		}
+	} else {
+		s.logger.Debug("failed to list scene generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get image generations
 	if imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("image generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(imageGens)))
 		progress.ImageGenerations = imageGens
 		processingCount := 0
+		failedCount := 0
 		for _, gen := range imageGens {
 			if gen.Status == domain.GenerationStatusProcessing {
 				processingCount++
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				failedCount++
+			} else if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedImageURL == "" {
+				// Strict completion: completed status without image URL is treated as failed.
+				failedCount++
 			}
 		}
 		if processingCount > 0 {
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成图片 (%d)", processingCount))
 		}
+		if failedCount > 0 {
+			hasFailed = true
+			statusMessages = append(statusMessages, fmt.Sprintf("图片生成失败 (%d)", failedCount))
+		}
+	} else {
+		s.logger.Debug("failed to list image generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Get video generations
 	if videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID); err == nil {
+		s.logger.Debug("video generations found",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("count", len(videoGens)))
 		progress.VideoGenerations = videoGens
 		processingCount := 0
+		failedCount := 0
 		for _, gen := range videoGens {
 			if gen.Status == domain.GenerationStatusProcessing {
 				processingCount++
 			} else if gen.Status == domain.GenerationStatusPending {
 				hasPending = true
+			} else if gen.Status == domain.GenerationStatusFailed {
+				failedCount++
+			} else if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL == "" {
+				// Strict completion: completed status without video URL is treated as failed.
+				failedCount++
 			}
 		}
 		if processingCount > 0 {
 			isGenerating = true
 			statusMessages = append(statusMessages, fmt.Sprintf("正在生成视频 (%d)", processingCount))
 		}
+		if failedCount > 0 {
+			hasFailed = true
+			statusMessages = append(statusMessages, fmt.Sprintf("视频生成失败 (%d)", failedCount))
+		}
+	} else {
+		s.logger.Debug("failed to list video generations",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 	}
 
 	// Set final status
@@ -847,6 +2062,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.GenerationMessage = strings.Join(statusMessages, ", ")
 	} else if hasPending {
 		progress.GenerationMessage = "有待处理的生成任务"
+	} else if hasFailed {
+		progress.GenerationMessage = "存在失败的生成任务"
 	} else if progress.ContentGeneration == nil && len(progress.SceneGenerations) == 0 &&
 		len(progress.ImageGenerations) == 0 && len(progress.VideoGenerations) == 0 {
 		progress.GenerationMessage = "无生成任务"
@@ -854,58 +2071,451 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.GenerationMessage = "所有生成任务已完成"
 	}
 
+	// Only log progress retrieval while there is ongoing work.
+	// Once all tasks are completed, this endpoint can be polled frequently by clients;
+	// suppressing the completed-state log reduces noise.
+	if progress.IsGenerating || progress.HasPendingTasks {
+		s.logger.Info("generation progress retrieved",
+			zap.String("storyboardId", storyboardID),
+			zap.Bool("isGenerating", progress.IsGenerating),
+			zap.Bool("hasPendingTasks", progress.HasPendingTasks),
+			zap.String("generationMessage", progress.GenerationMessage),
+			zap.Int("totalTokens", progress.TotalTokens))
+	}
+
+	var sceneRows []*domain.StoryboardScene
+	if s.repo != nil {
+		if rows, err := s.repo.StoryboardScenes(ctx, storyboardID); err == nil {
+			sceneRows = rows
+		} else {
+			s.logger.Debug("StoryboardScenes for pipeline derivation failed",
+				zap.String("storyboardId", storyboardID),
+				zap.Error(err))
+		}
+	}
+	steps, suggested := deriveWizardPipelineSteps(
+		storyboard,
+		sceneRows,
+		progress.ContentGeneration,
+		progress.SceneGenerations,
+		progress.ImageGenerations,
+		isGenerating,
+	)
+	if len(steps) > 0 {
+		progress.PipelineSteps = steps
+	}
+	if suggested != "" && suggested != domain.SuggestedResumeNone {
+		progress.SuggestedResumeAction = suggested
+	}
+
 	return progress, nil
+}
+
+// RetryFailedStoryboardImages retries failed image generations for a storyboard.
+// It starts new generation jobs only for failed scenes and returns retry summary.
+func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string) (retried int, remainingFailed int, err error) {
+	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	latestFailedByScene := make(map[string]*domain.StoryboardImageGeneration)
+	for _, gen := range imageGens {
+		if gen.Status != domain.GenerationStatusFailed {
+			continue
+		}
+		existing, ok := latestFailedByScene[gen.SceneID]
+		if !ok || gen.CreatedAt > existing.CreatedAt {
+			latestFailedByScene[gen.SceneID] = gen
+		}
+	}
+
+	for _, gen := range latestFailedByScene {
+		comicStyle := strings.TrimSpace(gen.ComicStyle)
+		if comicStyle == "" {
+			if sb, sbErr := s.repo.StoryboardByID(ctx, storyboardID); sbErr == nil && sb != nil {
+				comicStyle = strings.TrimSpace(sb.ContinuationComicStyle)
+			}
+		}
+		_, retryErr := s.GenerateSceneImage(ctx, &ImageGenerationRequest{
+			StoryboardID:             storyboardID,
+			SceneID:                  gen.SceneID,
+			SceneTitle:               gen.SceneTitle,
+			SceneDescription:         gen.SceneDescription,
+			ReferenceImages:          gen.ReferenceImages,
+			SceneCharacters:          gen.SceneCharacters,
+			CharacterReferenceImages: gen.CharacterReferenceImages,
+			StoryStyle:               gen.StoryStyle,
+			ComicStyle:               comicStyle,
+		})
+		if retryErr != nil {
+			s.logger.Warn("failed to retry image generation",
+				zap.String("storyboardId", storyboardID),
+				zap.String("sceneId", gen.SceneID),
+				zap.Error(retryErr))
+			continue
+		}
+		retried++
+	}
+
+	latestImageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID)
+	if listErr != nil {
+		return retried, 0, nil
+	}
+	for _, gen := range latestImageGens {
+		if gen.Status == domain.GenerationStatusFailed {
+			remainingFailed++
+		}
+	}
+
+	return retried, remainingFailed, nil
+}
+
+// CancelStoryboardGeneration cancels all in-flight generation tasks for a storyboard.
+func (s *Service) CancelStoryboardGeneration(ctx context.Context, storyboardID, userID string) (cancelledCount int, err error) {
+	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return 0, err
+	}
+	if storyboard.UserID != userID {
+		return 0, fmt.Errorf("permission denied: not the creator")
+	}
+
+	cancelMessage := formatGenerationError(GenerationErrorCancelled, "generation cancelled by user")
+
+	if contentGen, getErr := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID); getErr == nil && contentGen != nil {
+		if contentGen.Status == domain.GenerationStatusPending || contentGen.Status == domain.GenerationStatusProcessing {
+			contentGen.Status = domain.GenerationStatusFailed
+			contentGen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			contentGen.CompletedAt = &now
+			if updateErr := s.repo.UpdateContentGeneration(ctx, contentGen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if sceneGens, listErr := s.repo.ListSceneGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range sceneGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateSceneGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if imageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range imageGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateImageGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	if videoGens, listErr := s.repo.ListVideoGenerations(ctx, storyboardID); listErr == nil {
+		for _, gen := range videoGens {
+			if gen.Status != domain.GenerationStatusPending && gen.Status != domain.GenerationStatusProcessing {
+				continue
+			}
+			gen.Status = domain.GenerationStatusFailed
+			gen.ErrorMessage = cancelMessage
+			now := time.Now().Unix()
+			gen.CompletedAt = &now
+			if updateErr := s.repo.UpdateVideoGeneration(ctx, gen); updateErr == nil {
+				cancelledCount++
+			}
+		}
+	}
+
+	return cancelledCount, nil
 }
 
 // PublishStoryboard publishes a storyboard (Step 5)
 func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) error {
+	s.logger.Info("publishing storyboard",
+		zap.String("storyboardId", storyboardID))
+
 	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
+		s.logger.Error("storyboard not found for publishing",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return fmt.Errorf("storyboard not found: %w", err)
 	}
 
+	s.logger.Debug("storyboard retrieved for publishing",
+		zap.String("storyboardId", storyboardID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.String("currentWorkflowStatus", storyboard.WorkflowStatus),
+		zap.Int("currentStep", storyboard.CurrentStep))
+
 	// Update workflow status to published using the dedicated workflow update method
 	if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusPublished, 5); err != nil {
+		s.logger.Error("failed to publish storyboard",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return fmt.Errorf("failed to publish storyboard: %w", err)
 	}
 
-	s.logger.Info("storyboard published",
+	// Record metrics: workflow completed (published)
+	if s.metrics != nil {
+		// Get storyboard creation time to calculate workflow duration
+		workflowDuration := time.Since(time.Unix(storyboard.CreatedAt, 0))
+		s.metrics.RecordStoryboardWorkflowCompleted("published", workflowDuration)
+	}
+
+	s.logger.Info("storyboard published successfully",
 		zap.String("storyboardId", storyboardID),
 		zap.String("storyId", storyboard.StoryID))
 
 	return nil
 }
 
-// buildGenerationContext builds context string from characters and scenes
-func (s *Service) buildGenerationContext(ctx context.Context, characterIDs, sceneIDs []string, storyID string) string {
-	var context string
+// buildGenerationContext builds comprehensive context string for storyboard generation
+func (s *Service) buildGenerationContext(ctx context.Context, storyboard *domain.Storyboard, characterIDs, sceneIDs []string) string {
+	s.logger.Debug("building generation context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("storyId", storyboard.StoryID),
+		zap.Int("characterCount", len(characterIDs)),
+		zap.Int("sceneCount", len(sceneIDs)))
 
-	// Add character information
-	for _, charID := range characterIDs {
-		if char, err := s.repo.CharacterByID(ctx, charID); err == nil {
-			context += fmt.Sprintf("Character: %s - %s\n", char.Name, char.Description)
+	var parts []string
+
+	// 1. Get ancestor storyboards (up to 5) along the parent chain
+	s.logger.Debug("fetching ancestor storyboards for context",
+		zap.String("storyboardId", storyboard.ID),
+		zap.String("parentId", storyboard.ParentID))
+	ancestors := s.getAncestorStoryboards(ctx, storyboard, 5)
+	s.logger.Debug("ancestor storyboards fetched",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("ancestorCount", len(ancestors)))
+
+	// Get story information for root storyboard
+	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+	if err != nil {
+		s.logger.Warn("failed to get story for context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("story retrieved for context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("storyId", story.ID),
+			zap.String("storyTitle", story.Title))
+	}
+
+	// 2. Add previous storyboard context (chronological order)
+	if len(ancestors) > 0 {
+		parts = append(parts, "## Previous Storyboards Context")
+
+		for i, ancestor := range ancestors {
+			parts = append(parts, fmt.Sprintf("\n### Storyboard %d: %s", i+1, ancestor.Title))
+
+			// If this is the first storyboard (root), add story description
+			if i == 0 {
+				isRoot := ancestor.ParentID == "" || ancestor.ParentID == domain.StoryboardRootMarker
+				if isRoot && story != nil && story.Description != "" {
+					parts = append(parts, fmt.Sprintf("Story Background: %s", story.Description))
+				}
+			}
+
+			// Add storyboard content
+			if ancestor.Content != "" {
+				parts = append(parts, fmt.Sprintf("Content: %s", ancestor.Content))
+			} else if ancestor.RawInput != "" {
+				parts = append(parts, fmt.Sprintf("Raw Input: %s", ancestor.RawInput))
+			}
+
+			// Add characters that participated in this storyboard
+			if len(ancestor.CharacterRefs) > 0 {
+				var charNames []string
+				for _, ref := range ancestor.CharacterRefs {
+					if ref.Character != nil {
+						charNames = append(charNames, ref.Character.Name)
+					} else if ref.CharacterID != "" {
+						// Try to get character name by ID
+						if char, err := s.repo.CharacterByID(ctx, ref.CharacterID); err == nil {
+							charNames = append(charNames, char.Name)
+						} else {
+							s.logger.Debug("failed to get character by ID for ancestor context",
+								zap.String("storyboardId", storyboard.ID),
+								zap.String("characterId", ref.CharacterID),
+								zap.Error(err))
+						}
+					}
+				}
+				if len(charNames) > 0 {
+					parts = append(parts, fmt.Sprintf("Participating Characters: %s", strings.Join(charNames, ", ")))
+				}
+			}
+		}
+	} else if story != nil && story.Description != "" {
+		// If no ancestors, this is the first storyboard - use story description
+		parts = append(parts, "## Story Background")
+		parts = append(parts, story.Description)
+	}
+
+	// 3. Add current storyboard's participating characters with detailed information
+	if len(characterIDs) > 0 {
+		s.logger.Debug("adding current storyboard characters to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("characterCount", len(characterIDs)))
+		parts = append(parts, "\n## Current Storyboard Characters")
+
+		for _, charID := range characterIDs {
+			char, err := s.repo.CharacterByID(ctx, charID)
+			if err != nil {
+				s.logger.Warn("failed to get character for context",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("characterId", charID),
+					zap.Error(err))
+				continue
+			}
+
+			s.logger.Debug("adding character to context",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("characterId", charID),
+				zap.String("characterName", char.Name))
+
+			var charInfo []string
+			charInfo = append(charInfo, fmt.Sprintf("Character ID: %s", char.ID))
+			charInfo = append(charInfo, fmt.Sprintf("Name: %s", char.Name))
+
+			if char.Description != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Description: %s", char.Description))
+			}
+			if char.Personality != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Personality: %s", char.Personality))
+			}
+			if char.Appearance != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Appearance: %s", char.Appearance))
+			}
+			if char.DressPreference != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Dress Preference: %s", char.DressPreference))
+			}
+			if char.Background != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Background: %s", char.Background))
+			}
+			if char.HandlingStyle != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Handling Style: %s", char.HandlingStyle))
+			}
+			if char.CognitionRange != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Cognition Range: %s", char.CognitionRange))
+			}
+			if char.AbilityFeatures != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Ability Features: %s", char.AbilityFeatures))
+			}
+			if char.ShortTermGoal != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Short-term Goal: %s", char.ShortTermGoal))
+			}
+			if char.LongTermGoal != "" {
+				charInfo = append(charInfo, fmt.Sprintf("Long-term Goal: %s", char.LongTermGoal))
+			}
+			if len(char.Traits) > 0 {
+				charInfo = append(charInfo, fmt.Sprintf("Traits: %s", strings.Join(char.Traits, ", ")))
+			}
+			if len(char.Skills) > 0 {
+				charInfo = append(charInfo, fmt.Sprintf("Skills: %s", strings.Join(char.Skills, ", ")))
+			}
+
+			parts = append(parts, strings.Join(charInfo, "\n"))
+			parts = append(parts, "") // Empty line between characters
 		}
 	}
 
-	// Add scene information
-	for _, sceneID := range sceneIDs {
-		if scene, err := s.repo.StorySceneByID(ctx, storyID, sceneID); err == nil {
-			context += fmt.Sprintf("Scene: %s at %s - %s\n", scene.Title, scene.Location, scene.Description)
+	// 4. Add scene information
+	if len(sceneIDs) > 0 {
+		s.logger.Debug("adding scenes to context",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("sceneCount", len(sceneIDs)))
+		parts = append(parts, "\n## Storyboard Scenes")
+
+		for _, sceneID := range sceneIDs {
+			scene, err := s.repo.StorySceneByID(ctx, storyboard.StoryID, sceneID)
+			if err != nil {
+				s.logger.Warn("failed to get scene for context",
+					zap.String("storyboardId", storyboard.ID),
+					zap.String("storyId", storyboard.StoryID),
+					zap.String("sceneId", sceneID),
+					zap.Error(err))
+				continue
+			}
+
+			s.logger.Debug("adding scene to context",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("sceneId", sceneID),
+				zap.String("sceneTitle", scene.Title))
+
+			var sceneInfo []string
+			sceneInfo = append(sceneInfo, fmt.Sprintf("Scene: %s", scene.Title))
+			if scene.Location != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Location: %s", scene.Location))
+			}
+			if scene.TimeOfDay != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Time of Day: %s", scene.TimeOfDay))
+			}
+			if scene.Description != "" {
+				sceneInfo = append(sceneInfo, fmt.Sprintf("Description: %s", scene.Description))
+			}
+
+			parts = append(parts, strings.Join(sceneInfo, "\n"))
+			parts = append(parts, "") // Empty line between scenes
 		}
 	}
 
-	return context
+	contextStr := strings.Join(parts, "\n")
+	s.logger.Debug("generation context built",
+		zap.String("storyboardId", storyboard.ID),
+		zap.Int("contextLength", len(contextStr)),
+		zap.Int("partCount", len(parts)))
+
+	return contextStr
 }
 
 // updateStoryboardTokens aggregates and updates token consumption
 func (s *Service) updateStoryboardTokens(ctx context.Context, storyboardID string) {
+	s.logger.Debug("updating storyboard token consumption",
+		zap.String("storyboardId", storyboardID))
+
 	tokens, err := s.repo.GetStoryboardTotalTokens(ctx, storyboardID)
 	if err != nil {
-		s.logger.Warn("failed to get total tokens", zap.Error(err))
+		s.logger.Warn("failed to get total tokens",
+			zap.String("storyboardId", storyboardID),
+			zap.Error(err))
 		return
 	}
+
+	s.logger.Debug("total tokens retrieved",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("totalTokens", tokens))
+
 	if err := s.repo.UpdateStoryboardTokens(ctx, storyboardID, tokens); err != nil {
-		s.logger.Warn("failed to update storyboard tokens", zap.Error(err))
+		s.logger.Warn("failed to update storyboard tokens",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("tokens", tokens),
+			zap.Error(err))
+	} else {
+		s.logger.Debug("storyboard tokens updated successfully",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("tokens", tokens))
+
+		// Record metrics
+		if s.metrics != nil && tokens > 0 {
+			s.metrics.RecordStoryboardTokenConsumed(storyboardID, float64(tokens))
+		}
 	}
 }
 
@@ -922,8 +2532,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 				zap.Any("panic", r))
 			// Update status to failed
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = fmt.Sprintf("panic: %v", r)
+			gen.ErrorMessage = formatGenerationError(GenerationErrorUnknown, fmt.Sprintf("panic: %v", r))
 			_ = s.repo.UpdateVideoGeneration(context.Background(), gen)
+			s.maybeFinalizeBatchVideoWorkflow(context.Background(), gen.StoryboardID)
 		}
 	}()
 
@@ -945,8 +2556,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 			zap.String("sceneId", gen.SceneID),
 			zap.String("storyboardId", gen.StoryboardID))
 		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = "genAPI is not available"
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "genAPI is not available")
 		_ = s.repo.UpdateVideoGeneration(ctx, gen)
+		s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
 		return
 	}
 
@@ -973,6 +2585,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 	// Custom polling with detailed logging
 	pollCtx, cancel := context.WithTimeout(ctx, maxPollAttempts*pollInterval)
 	defer cancel()
+
+	// Attach usage record metadata for TokenUsageRecorder (GetVideoStatus has no request)
+	pollCtx = s.ctxWithUsageRecordForStoryboard(pollCtx, gen.StoryboardID)
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -1021,8 +2636,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 				zap.Int("attempts", attempt),
 				zap.Error(pollCtx.Err()))
 			gen.Status = domain.GenerationStatusFailed
-			gen.ErrorMessage = fmt.Sprintf("polling cancelled: %v", pollCtx.Err())
+			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled, fmt.Sprintf("polling cancelled: %v", pollCtx.Err()))
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
+			s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
 			return
 
 		case <-ticker.C:
@@ -1069,8 +2685,9 @@ func (s *Service) pollVideoGenerationStatus(ctx context.Context, gen *domain.Sto
 		zap.String("taskId", taskID),
 		zap.Int("attempts", attempt))
 	gen.Status = domain.GenerationStatusFailed
-	gen.ErrorMessage = fmt.Sprintf("polling timeout after %d attempts", attempt)
+	gen.ErrorMessage = formatGenerationError(GenerationErrorTimeout, fmt.Sprintf("polling timeout after %d attempts", attempt))
 	_ = s.repo.UpdateVideoGeneration(ctx, gen)
+	s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
 	return
 
 processResult:
@@ -1085,12 +2702,25 @@ processResult:
 			zap.String("storyboardId", gen.StoryboardID),
 			zap.String("provider", providerName),
 			zap.String("taskId", taskID),
-			zap.String("status", func() string { if resp != nil { return resp.Status } else { return "nil" } }()),
-			zap.String("error", func() string { if resp != nil { return resp.Error } else { return "response is nil" } }()))
+			zap.String("status", func() string {
+				if resp != nil {
+					return resp.Status
+				} else {
+					return "nil"
+				}
+			}()),
+			zap.String("error", func() string {
+				if resp != nil {
+					return resp.Error
+				} else {
+					return "response is nil"
+				}
+			}()))
 
 		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = errMsg
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, errMsg)
 		_ = s.repo.UpdateVideoGeneration(ctx, gen)
+		s.maybeFinalizeBatchVideoWorkflow(ctx, gen.StoryboardID)
 		return
 	}
 
@@ -1168,25 +2798,48 @@ processResult:
 		return
 	}
 
-	// Sync video URL to storyboard scene for easy access
+	// Sync video URL and subdivision info to storyboard scene for easy access
 	if gen.GeneratedVideoURL != "" && gen.SceneID != "" {
-		if err := s.repo.UpdateStoryboardSceneVideo(ctx, gen.SceneID, gen.GeneratedVideoURL); err != nil {
-			s.logger.Warn("failed to sync video URL to storyboard scene",
-				zap.String("sceneId", gen.SceneID),
-				zap.String("videoURL", gen.GeneratedVideoURL),
-				zap.Error(err))
+		if gen.IsSubdivided {
+			// Sync with subdivision info for seamless HLS playback
+			if err := s.repo.UpdateStoryboardSceneVideoWithSubdivision(
+				ctx,
+				gen.SceneID,
+				gen.GeneratedVideoURL,
+				gen.IsSubdivided,
+				gen.VideoSegmentsJSON,
+				gen.MiddleFrameURLsJSON,
+			); err != nil {
+				s.logger.Warn("failed to sync video with subdivision to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Bool("isSubdivided", gen.IsSubdivided),
+					zap.Error(err))
+			} else {
+				s.logger.Info("video with subdivision synced to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Bool("isSubdivided", gen.IsSubdivided))
+			}
 		} else {
-			s.logger.Info("video URL synced to storyboard scene",
-				zap.String("sceneId", gen.SceneID),
-				zap.String("videoURL", gen.GeneratedVideoURL))
+			// Simple video URL update
+			if err := s.repo.UpdateStoryboardSceneVideo(ctx, gen.SceneID, gen.GeneratedVideoURL); err != nil {
+				s.logger.Warn("failed to sync video URL to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL),
+					zap.Error(err))
+			} else {
+				s.logger.Info("video URL synced to storyboard scene",
+					zap.String("sceneId", gen.SceneID),
+					zap.String("videoURL", gen.GeneratedVideoURL))
+			}
 		}
 	}
 
 	// Update storyboard tokens
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
 
-	// Update workflow status
-	_ = s.repo.UpdateStoryboardWorkflow(ctx, gen.StoryboardID, domain.WorkflowStatusVideoReady, 4)
+	s.syncVideoReadyWorkflowAfterVideoCompletion(ctx, gen.StoryboardID)
 
 	s.logger.Info("video generation polling completed successfully",
 		zap.String("storyboardId", gen.StoryboardID),
@@ -1240,4 +2893,434 @@ func (s *Service) RecoverPendingVideoGenerations(ctx context.Context) {
 
 	s.logger.Info("video generation recovery completed",
 		zap.Int("recoveredTasks", len(pendingTasks)))
+}
+
+// ============== Keyframe Subdivision Helper Functions ==============
+
+// serializeVideoSegments converts video segments to JSON string for storage.
+// recordStoryboardTextGeneration records text generation (content/scene/image_prompt/video_prompt) to AIGenerationRecord.
+func (s *Service) recordStoryboardTextGeneration(ctx context.Context, storyboardID, subtype, prompt string, inputTokens, outputTokens int, status domain.AITaskStatus, errorMsg string) {
+	if s.aiGenService == nil {
+		return
+	}
+	meta := s.usageRecordMetadataForStoryboard(ctx, storyboardID)
+	if meta == nil {
+		return
+	}
+	userID, _ := meta["user_id"].(string)
+	relID, _ := meta["related_entity_id"].(string)
+	if relID == "" {
+		relID = storyboardID
+	}
+	s.aiGenService.RecordTextGenerationUsage(ctx, &RecordTextGenerationRequest{
+		UserID:            userID,
+		RelatedEntityID:   relID,
+		RelatedEntityType: "storyboard",
+		Provider:          "gemini",
+		Model:             "",
+		OriginalPrompt:    truncateForLog(prompt, 2000),
+		InputTokens:       inputTokens,
+		OutputTokens:      outputTokens,
+		Status:            status,
+		ErrorMessage:      errorMsg,
+	})
+}
+
+// ctxWithUsageRecordForStoryboard attaches usage record metadata to ctx for GetVideoStatus/GetImageStatus.
+func (s *Service) ctxWithUsageRecordForStoryboard(ctx context.Context, storyboardID string) context.Context {
+	meta := s.usageRecordMetadataForStoryboard(ctx, storyboardID)
+	if meta == nil {
+		return ctx
+	}
+	userID, _ := meta["user_id"].(string)
+	relID, _ := meta["related_entity_id"].(string)
+	relType, _ := meta["related_entity_type"].(string)
+	if relID == "" {
+		relID = storyboardID
+	}
+	if relType == "" {
+		relType = "storyboard"
+	}
+	return genapi.ContextWithUsageRecord(ctx, userID, relID, relType)
+}
+
+// usageRecordMetadataForStoryboard returns metadata for AIGenerationRecord attribution (user, storyboard).
+func (s *Service) usageRecordMetadataForStoryboard(ctx context.Context, storyboardID string) map[string]interface{} {
+	storyboard, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil || storyboard == nil {
+		return nil
+	}
+	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
+	if err != nil || story == nil {
+		return map[string]interface{}{
+			"related_entity_id":   storyboardID,
+			"related_entity_type": "storyboard",
+		}
+	}
+	return map[string]interface{}{
+		"user_id":             story.UserID,
+		"related_entity_id":   storyboardID,
+		"related_entity_type": "storyboard",
+	}
+}
+
+func (s *Service) serializeVideoSegments(segments []genapi.VideoSegment) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	// Convert genapi.VideoSegment to domain.VideoSegmentInfo
+	domainSegments := make([]domain.VideoSegmentInfo, len(segments))
+	for i, seg := range segments {
+		domainSegments[i] = domain.VideoSegmentInfo{
+			Index:        seg.Index,
+			VideoURL:     seg.VideoURL,
+			StartFrame:   seg.StartFrame,
+			EndFrame:     seg.EndFrame,
+			DurationSecs: seg.DurationSecs,
+		}
+	}
+	data, err := json.Marshal(domainSegments)
+	if err != nil {
+		s.logger.Warn("failed to serialize video segments",
+			zap.Error(err))
+		return ""
+	}
+	return string(data)
+}
+
+// serializeMiddleFrames converts middle frame URLs to JSON string for storage.
+func (s *Service) serializeMiddleFrames(urls []string) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(urls)
+	if err != nil {
+		s.logger.Warn("failed to serialize middle frames",
+			zap.Error(err))
+		return ""
+	}
+	return string(data)
+}
+
+// deserializeVideoSegments parses JSON string back to video segments.
+func (s *Service) deserializeVideoSegments(jsonStr string) []domain.VideoSegmentInfo {
+	if jsonStr == "" {
+		return nil
+	}
+	var segments []domain.VideoSegmentInfo
+	if err := json.Unmarshal([]byte(jsonStr), &segments); err != nil {
+		s.logger.Warn("failed to deserialize video segments",
+			zap.Error(err))
+		return nil
+	}
+	return segments
+}
+
+// deserializeMiddleFrames parses JSON string back to middle frame URLs.
+func (s *Service) deserializeMiddleFrames(jsonStr string) []string {
+	if jsonStr == "" {
+		return nil
+	}
+	var urls []string
+	if err := json.Unmarshal([]byte(jsonStr), &urls); err != nil {
+		s.logger.Warn("failed to deserialize middle frames",
+			zap.Error(err))
+		return nil
+	}
+	return urls
+}
+
+// ============== HLS Playlist Support ==============
+
+// GetVideoGenerationBySceneID retrieves video generation info for a specific scene
+func (s *Service) GetVideoGenerationBySceneID(ctx context.Context, storyboardID, sceneID string) (*VideoGenerationInfo, error) {
+	// Get video generation record for this scene
+	videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, gen := range videoGens {
+		if gen.SceneID == sceneID && gen.Status == domain.GenerationStatusCompleted {
+			return s.convertToVideoGenerationInfo(gen), nil
+		}
+	}
+
+	return nil, domain.ErrNotFound
+}
+
+// GetVideoGenerationsByStoryboardID retrieves all video generations for a storyboard
+func (s *Service) GetVideoGenerationsByStoryboardID(ctx context.Context, storyboardID string) ([]*VideoGenerationInfo, error) {
+	videoGens, err := s.repo.ListVideoGenerations(ctx, storyboardID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*VideoGenerationInfo, 0)
+	for _, gen := range videoGens {
+		if gen.Status == domain.GenerationStatusCompleted && gen.GeneratedVideoURL != "" {
+			result = append(result, s.convertToVideoGenerationInfo(gen))
+		}
+	}
+
+	return result, nil
+}
+
+// convertToVideoGenerationInfo converts domain model to service info type
+func (s *Service) convertToVideoGenerationInfo(gen *domain.StoryboardVideoGeneration) *VideoGenerationInfo {
+	info := &VideoGenerationInfo{
+		SceneID:           gen.SceneID,
+		GeneratedVideoURL: gen.GeneratedVideoURL,
+		Duration:          gen.Duration,
+		IsSubdivided:      gen.IsSubdivided,
+	}
+
+	// Convert video segments if available
+	if len(gen.VideoSegments) > 0 {
+		info.VideoSegments = make([]VideoSegmentInfo, len(gen.VideoSegments))
+		for i, seg := range gen.VideoSegments {
+			info.VideoSegments[i] = VideoSegmentInfo{
+				Index:        seg.Index,
+				VideoURL:     seg.VideoURL,
+				StartFrame:   seg.StartFrame,
+				EndFrame:     seg.EndFrame,
+				DurationSecs: seg.DurationSecs,
+			}
+		}
+	} else if gen.VideoSegmentsJSON != "" {
+		// Parse from JSON if not already parsed
+		segments := s.deserializeVideoSegments(gen.VideoSegmentsJSON)
+		info.VideoSegments = make([]VideoSegmentInfo, len(segments))
+		for i, seg := range segments {
+			info.VideoSegments[i] = VideoSegmentInfo{
+				Index:        seg.Index,
+				VideoURL:     seg.VideoURL,
+				StartFrame:   seg.StartFrame,
+				EndFrame:     seg.EndFrame,
+				DurationSecs: seg.DurationSecs,
+			}
+		}
+	}
+
+	return info
+}
+
+// buildImageGenerationPrompt 构建场景图片生成的AI提示词，包含故事风格配置和场景类型信息
+func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGeneration) string {
+	var prompt strings.Builder
+
+	prompt.WriteString(`Create a detailed image generation prompt for the following scene:
+
+`)
+	prompt.WriteString(fmt.Sprintf("Scene Title: %s\n", gen.SceneTitle))
+	prompt.WriteString(fmt.Sprintf("Scene Description: %s\n", gen.SceneDescription))
+
+	// 添加故事风格配置
+	if gen.StoryStyle != nil {
+		prompt.WriteString("\n## Story Style Configuration:\n")
+		prompt.WriteString(fmt.Sprintf("- Style: %s\n", gen.StoryStyle.Style))
+		if gen.StoryStyle.Description != "" {
+			prompt.WriteString(fmt.Sprintf("- Style Description: %s\n", gen.StoryStyle.Description))
+		}
+		prompt.WriteString("\nIMPORTANT: The generated image MUST follow the story's style configuration. ")
+		prompt.WriteString("Use the specified art style and visual elements as the primary guide.\n")
+	}
+
+	if cs := strings.TrimSpace(gen.ComicStyle); cs != "" {
+		prompt.WriteString("\n## Comic / visual style (continuation)\n")
+		prompt.WriteString(fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n", cs))
+		prompt.WriteString("Apply this style consistently with line work, coloring, and overall visual temperament.\n")
+	}
+
+	// 添加场景类型信息
+	if gen.IsTransitionScene {
+		prompt.WriteString("\n## Scene Type: Transition Scene\n")
+		prompt.WriteString("This is a TRANSITION SCENE with no characters appearing. ")
+		prompt.WriteString("Focus on environment, atmosphere, and mood. ")
+		prompt.WriteString("Do NOT include any human figures or characters in the image.\n")
+	} else if len(gen.SceneCharacters) > 0 {
+		// 限制主要角色数量最多5个
+		maxMainCharacters := 5
+		mainCharacters := gen.SceneCharacters
+		if len(mainCharacters) > maxMainCharacters {
+			mainCharacters = mainCharacters[:maxMainCharacters]
+		}
+
+		prompt.WriteString("\n## Scene Characters:\n")
+		prompt.WriteString("MAIN CHARACTERS (limit to maximum 5, must be accurately depicted):\n")
+		for i, charName := range mainCharacters {
+			prompt.WriteString(fmt.Sprintf("- %s\n", charName))
+			if i >= maxMainCharacters-1 {
+				break
+			}
+		}
+
+		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
+		if len(gen.SceneCharacters) > maxMainCharacters {
+			prompt.WriteString(fmt.Sprintf("\nNOTE: There are %d total characters mentioned in the scene. ", len(gen.SceneCharacters)))
+			prompt.WriteString("The above are the MAIN CHARACTERS (maximum 5). ")
+			prompt.WriteString("You may include additional background characters, crowds, bystanders, or passersby as needed for the scene composition. ")
+			prompt.WriteString("These additional characters do not need to match specific reference images.\n")
+		}
+
+		if len(gen.CharacterReferenceImages) > 0 {
+			prompt.WriteString("\nCharacter reference images are provided for the MAIN CHARACTERS listed above. ")
+			prompt.WriteString("The generated image MUST accurately depict these main characters consistent with the reference images. ")
+			prompt.WriteString("Maintain character appearance, clothing style, and overall visual identity for the main characters. ")
+			prompt.WriteString("Background characters, crowds, and other non-main characters can be freely designed.\n")
+		}
+	}
+
+	prompt.WriteString(`
+Please return a structured JSON object (without markdown code blocks) with the following format:
+{
+  "artStyle": "艺术风格和媒介，如 Unreal Engine 5 render, cinematic concept art, photorealistic, 8k resolution（必须遵循故事风格配置）",
+  "lighting": "具体的打光设置，如 volumetric lighting, rim light, chiaroscuro, cinematic soft box, neon glow, harsh dramatic shadows",
+  "colorPalette": "色彩调色板及调光风格，如 teal and orange color grading, muted pastels, high contrast, warm golden hour tones（应与故事风格一致）",
+  "composition": "构图与运镜细节，必须包含镜头毫米数、景别和角度，如 50mm prime lens, anamorphic, low angle extreme close-up, rule of thirds, deep depth of field",
+  "keyElements": ["关键视觉元素1", "关键视觉元素2", "特定服装材质如皮革/丝绸/机甲金属"],
+  "mood": "情绪氛围，如 peaceful tension, mysterious and foggy, melancholic",
+  "additionalNotes": "包含微表情、特定姿态动作、流体动力学表现（如风吹发丝）、尘埃等大气特效（可选）"
+}
+
+Important: Return ONLY the JSON object, no explanations or markdown formatting.
+LENGTH: When the field values are merged into one image prompt, keep the total substantive Chinese text (汉字) within 200 characters — be concise; shorten secondary details first if needed.`)
+
+	return prompt.String()
+}
+
+// parseImagePromptDetails 解析AI返回的结构化提示词JSON
+func (s *Service) parseImagePromptDetails(text string) (*domain.ImagePromptDetails, string) {
+	// Clean the text - remove markdown code blocks if present
+	cleanedText := strings.TrimSpace(text)
+	if strings.HasPrefix(cleanedText, "```") {
+		// Find the end of the first line (skip ```json or ```)
+		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
+			cleanedText = cleanedText[idx+1:]
+		}
+		// Remove trailing ```
+		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
+			cleanedText = strings.TrimSpace(cleanedText[:idx])
+		}
+	}
+
+	// Try to find JSON object in the text
+	startIdx := strings.Index(cleanedText, "{")
+	endIdx := strings.LastIndex(cleanedText, "}")
+	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
+		s.logger.Debug("no JSON object found in prompt response",
+			zap.String("text", truncateForLog(cleanedText, 200)))
+		return nil, ""
+	}
+
+	jsonText := cleanedText[startIdx : endIdx+1]
+	var details domain.ImagePromptDetails
+	if err := json.Unmarshal([]byte(jsonText), &details); err != nil {
+		s.logger.Warn("failed to parse structured prompt JSON",
+			zap.Error(err),
+			zap.String("jsonText", truncateForLog(jsonText, 200)))
+		return nil, ""
+	}
+
+	// Combine structured details into final prompt text
+	combinedPrompt := s.combineImagePrompt(&details)
+
+	return &details, combinedPrompt
+}
+
+// combineImagePrompt 将结构化的提示词详情组合成最终的文本提示词
+func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails) string {
+	var parts []string
+
+	if details.ArtStyle != "" {
+		parts = append(parts, fmt.Sprintf("Art style: %s", details.ArtStyle))
+	}
+	if details.Lighting != "" {
+		parts = append(parts, fmt.Sprintf("Lighting: %s", details.Lighting))
+	}
+	if details.ColorPalette != "" {
+		parts = append(parts, fmt.Sprintf("Color palette: %s", details.ColorPalette))
+	}
+	if details.Composition != "" {
+		parts = append(parts, fmt.Sprintf("Composition: %s", details.Composition))
+	}
+	if len(details.KeyElements) > 0 {
+		parts = append(parts, fmt.Sprintf("Key elements: %s", strings.Join(details.KeyElements, ", ")))
+	}
+	if details.Mood != "" {
+		parts = append(parts, fmt.Sprintf("Mood: %s", details.Mood))
+	}
+	if details.AdditionalNotes != "" {
+		parts = append(parts, details.AdditionalNotes)
+	}
+
+	return strings.Join(parts, ". ")
+}
+
+// parseVideoPromptDetails 解析AI返回的结构化视频提示词JSON
+func (s *Service) parseVideoPromptDetails(text string) (*domain.VideoPromptDetails, string) {
+	// Clean the text - remove markdown code blocks if present
+	cleanedText := strings.TrimSpace(text)
+	if strings.HasPrefix(cleanedText, "```") {
+		// Find the end of the first line (skip ```json or ```)
+		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
+			cleanedText = cleanedText[idx+1:]
+		}
+		// Remove trailing ```
+		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
+			cleanedText = strings.TrimSpace(cleanedText[:idx])
+		}
+	}
+
+	// Try to find JSON object in the text
+	startIdx := strings.Index(cleanedText, "{")
+	endIdx := strings.LastIndex(cleanedText, "}")
+	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
+		s.logger.Debug("no JSON object found in video prompt response",
+			zap.String("text", truncateForLog(cleanedText, 200)))
+		return nil, ""
+	}
+
+	jsonText := cleanedText[startIdx : endIdx+1]
+	var details domain.VideoPromptDetails
+	if err := json.Unmarshal([]byte(jsonText), &details); err != nil {
+		s.logger.Warn("failed to parse structured video prompt JSON",
+			zap.Error(err),
+			zap.String("jsonText", truncateForLog(jsonText, 200)))
+		return nil, ""
+	}
+
+	// Combine structured details into final prompt text
+	combinedPrompt := s.combineVideoPrompt(&details)
+
+	return &details, combinedPrompt
+}
+
+// combineVideoPrompt 将结构化的视频提示词详情组合成最终的文本提示词
+func (s *Service) combineVideoPrompt(details *domain.VideoPromptDetails) string {
+	var parts []string
+
+	if details.CameraMovement != "" {
+		parts = append(parts, fmt.Sprintf("Camera: %s", details.CameraMovement))
+	}
+	if details.SubjectMotion != "" {
+		parts = append(parts, fmt.Sprintf("Action: %s", details.SubjectMotion))
+	}
+	if details.Atmosphere != "" {
+		parts = append(parts, fmt.Sprintf("Atmosphere: %s", details.Atmosphere))
+	}
+	if details.TransitionStyle != "" {
+		parts = append(parts, fmt.Sprintf("Transition: %s", details.TransitionStyle))
+	}
+	if details.Duration != "" {
+		parts = append(parts, fmt.Sprintf("Duration: %s", details.Duration))
+	}
+	if len(details.KeyMoments) > 0 {
+		parts = append(parts, fmt.Sprintf("Key moments: %s", strings.Join(details.KeyMoments, ", ")))
+	}
+	if details.AdditionalNotes != "" {
+		parts = append(parts, details.AdditionalNotes)
+	}
+
+	return strings.Join(parts, ". ")
 }

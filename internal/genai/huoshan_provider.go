@@ -29,6 +29,8 @@ func newHuoshanProvider(cfg *Config) (*huoshanProvider, error) {
 		Timeout:      cfg.Timeout,
 		Workflow:     strings.TrimSpace(cfg.Workflow),
 		ImageModel:   strings.TrimSpace(cfg.ImageModel),
+		VideoModel:   strings.TrimSpace(cfg.VideoModel),
+		TextModel:    strings.TrimSpace(cfg.TextModel),
 	})
 	name := strings.TrimSpace(string(cfg.Provider))
 	if name == "" {
@@ -195,6 +197,7 @@ func (p *huoshanProvider) textToImage(ctx context.Context, req *GenerateRequest)
 	if prompt == "" {
 		return nil, fmt.Errorf("prompt is required for huoshan text to image")
 	}
+	webSearch, _ := boolFromOptions(req.Options, "web_search", "webSearch")
 	payload := &huoshanprovider.ImageGenerationRequest{
 		Model:                            strings.TrimSpace(req.Model),
 		Prompt:                           prompt,
@@ -204,6 +207,9 @@ func (p *huoshanProvider) textToImage(ctx context.Context, req *GenerateRequest)
 		GuidanceScale:                    req.GuidanceScale,
 		ResponseFormat:                   strings.TrimSpace(req.ResponseFormat),
 		Watermark:                        req.Watermark,
+		Mode:                             strings.TrimSpace(stringFromOptions(req.Options, "mode", "image_mode")),
+		MaxImages:                        intFromOptions(req.Options, "max_images", "maxImages"),
+		WebSearch:                        webSearch,
 		SequentialImageGeneration:        strings.TrimSpace(stringFromOptions(req.Options, "sequential_image_generation")),
 		SequentialImageGenerationOptions: toMapOption(req.Options, "sequential_image_generation_options"),
 		OptimizePromptOptions:            toMapOption(req.Options, "optimize_prompt_options"),
@@ -224,6 +230,7 @@ func (p *huoshanProvider) imageToImage(ctx context.Context, req *GenerateRequest
 	if len(references) == 0 {
 		return nil, fmt.Errorf("at least one reference image is required for huoshan image to image")
 	}
+	webSearch, _ := boolFromOptions(req.Options, "web_search", "webSearch")
 	payload := &huoshanprovider.ImageGenerationRequest{
 		Model:                            strings.TrimSpace(req.Model),
 		Prompt:                           prompt,
@@ -233,6 +240,9 @@ func (p *huoshanProvider) imageToImage(ctx context.Context, req *GenerateRequest
 		GuidanceScale:                    req.GuidanceScale,
 		ResponseFormat:                   strings.TrimSpace(req.ResponseFormat),
 		Watermark:                        req.Watermark,
+		Mode:                             strings.TrimSpace(stringFromOptions(req.Options, "mode", "image_mode")),
+		MaxImages:                        intFromOptions(req.Options, "max_images", "maxImages"),
+		WebSearch:                        webSearch,
 		SequentialImageGeneration:        strings.TrimSpace(stringFromOptions(req.Options, "sequential_image_generation")),
 		SequentialImageGenerationOptions: toMapOption(req.Options, "sequential_image_generation_options"),
 		OptimizePromptOptions:            toMapOption(req.Options, "optimize_prompt_options"),

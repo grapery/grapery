@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -14,7 +15,7 @@ func (r *Repository) FollowUser(ctx context.Context, followerID, followeeID stri
 	if followerID == followeeID {
 		return fmt.Errorf("cannot follow yourself")
 	}
-	
+
 	var existing UserFollow
 	err := r.db.WithContext(ctx).Where("follower_id = ? AND followee_id = ?", followerID, followeeID).First(&existing).Error
 	if err == nil {
@@ -24,17 +25,55 @@ func (r *Repository) FollowUser(ctx context.Context, followerID, followeeID stri
 		return fmt.Errorf("failed to check existing follow: %w", err)
 	}
 
+	// 软删行被默认 scope 过滤，但唯一键 (follower_id, followee_id) 仍冲突，应恢复而非 INSERT
+	var soft UserFollow
+	errSoft := r.db.WithContext(ctx).Unscoped().
+		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		First(&soft).Error
+	if errSoft == nil {
+		if soft.DeletedAt.Valid {
+			if err := r.db.WithContext(ctx).Unscoped().Model(&UserFollow{}).
+				Where("id = ?", soft.ID).
+				UpdateColumn("deleted_at", nil).Error; err != nil {
+				return fmt.Errorf("failed to restore follow: %w", err)
+			}
+			r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
+			r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
+		}
+		return nil
+	}
+	if !errors.Is(errSoft, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check soft-deleted follow: %w", errSoft)
+	}
+
 	follow := UserFollow{
 		ID:         uuid.New().String(),
 		FollowerID: followerID,
 		FolloweeID: followeeID,
 	}
-	
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			var dup UserFollow
+			if err2 := r.db.WithContext(ctx).Unscoped().
+				Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+				First(&dup).Error; err2 != nil {
+				return fmt.Errorf("failed to create follow: %w", err)
+			}
+			if dup.DeletedAt.Valid {
+				if err := r.db.WithContext(ctx).Unscoped().Model(&UserFollow{}).
+					Where("id = ?", dup.ID).
+					UpdateColumn("deleted_at", nil).Error; err != nil {
+					return fmt.Errorf("failed to restore follow after duplicate: %w", err)
+				}
+				r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
+				r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to create follow: %w", err)
 	}
 
-	// Update follower/following counts
 	r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followerID).UpdateColumn("following", gorm.Expr("following + ?", 1))
 	r.db.WithContext(ctx).Model(&User{}).Where("id = ?", followeeID).UpdateColumn("followers", gorm.Expr("followers + ?", 1))
 
@@ -101,6 +140,46 @@ func (r *Repository) Following(ctx context.Context, userID string, limit, offset
 	return result, nil
 }
 
+func (r *Repository) CountFollowersOfUser(ctx context.Context, followeeID string) (int64, error) {
+	var c int64
+	if err := r.db.WithContext(ctx).Model(&UserFollow{}).Where("followee_id = ?", followeeID).Count(&c).Error; err != nil {
+		return 0, fmt.Errorf("failed to count user followers: %w", err)
+	}
+	return c, nil
+}
+
+func (r *Repository) CountFollowingOfUser(ctx context.Context, followerID string) (int64, error) {
+	var c int64
+	if err := r.db.WithContext(ctx).Model(&UserFollow{}).Where("follower_id = ?", followerID).Count(&c).Error; err != nil {
+		return 0, fmt.Errorf("failed to count user following: %w", err)
+	}
+	return c, nil
+}
+
+func (r *Repository) ListUserFollowsByFollower(ctx context.Context, followerID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []UserFollow
+	q := r.db.WithContext(ctx).Where("follower_id = ?", followerID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to list user follows: %w", err)
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.FollowerID,
+			FollowableType:       domain.FollowableTypeUser,
+			FollowableID:         row.FolloweeID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
 // ========== Liked Content ==========
 
 func (r *Repository) LikedStories(ctx context.Context, userID string, limit, offset int) ([]*domain.Story, error) {
@@ -110,15 +189,15 @@ func (r *Repository) LikedStories(ctx context.Context, userID string, limit, off
 		Preload("Story.Author").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&likes).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked stories: %w", err)
 	}
-	
+
 	result := make([]*domain.Story, len(likes))
 	for i, like := range likes {
 		story := r.storyToDomain(like.Story)
@@ -134,15 +213,15 @@ func (r *Repository) LikedCharacters(ctx context.Context, userID string, limit, 
 		Preload("Character.Author").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&follows).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked characters: %w", err)
 	}
-	
+
 	result := make([]*domain.Character, len(follows))
 	for i, follow := range follows {
 		character := r.characterToDomain(follow.Character)
@@ -158,15 +237,15 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 		Preload("Storyboard.Creator").
 		Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
-	
+
 	if err := query.Find(&likes).Error; err != nil {
 		return nil, fmt.Errorf("failed to get liked storyboards: %w", err)
 	}
-	
+
 	result := make([]*domain.Storyboard, len(likes))
 	for i, like := range likes {
 		storyboard, err := r.storyboardToDomain(ctx, like.Storyboard)
@@ -178,3 +257,137 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 	return result, nil
 }
 
+// ========== User Block Operations ==========
+
+func (r *Repository) BlockUser(ctx context.Context, blockerID, blockedID string) error {
+	if blockerID == blockedID {
+		return fmt.Errorf("cannot block yourself")
+	}
+
+	var existing UserBlock
+	err := r.db.WithContext(ctx).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).First(&existing).Error
+	if err == nil {
+		return nil // Already blocked
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing block: %w", err)
+	}
+
+	block := UserBlock{
+		ID:        uuid.New().String(),
+		BlockerID: blockerID,
+		BlockedID: blockedID,
+	}
+
+	if err := r.db.WithContext(ctx).Create(&block).Error; err != nil {
+		return fmt.Errorf("failed to create block: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) UnblockUser(ctx context.Context, blockerID, blockedID string) error {
+	result := r.db.WithContext(ctx).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).Delete(&UserBlock{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to unblock: %w", result.Error)
+	}
+	return nil
+}
+
+func (r *Repository) IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&UserBlock{}).Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("failed to check block status: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ========== User Report Operations ==========
+
+func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error {
+	if reporterID == reportedID {
+		return fmt.Errorf("cannot report yourself")
+	}
+
+	report := UserReport{
+		ID:         uuid.New().String(),
+		ReporterID: reporterID,
+		ReportedID: reportedID,
+		Reason:     reason,
+		Status:     "pending",
+	}
+
+	if err := r.db.WithContext(ctx).Create(&report).Error; err != nil {
+		return fmt.Errorf("failed to create report: %w", err)
+	}
+
+	return nil
+}
+
+// ========== Get Liked Content IDs ==========
+
+func (r *Repository) GetLikedStoryIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var likes []StoryLike
+	query := r.db.WithContext(ctx).
+		Select("story_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&likes).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked story IDs: %w", err)
+	}
+
+	ids := make([]string, len(likes))
+	for i, like := range likes {
+		ids[i] = like.StoryID
+	}
+	return ids, nil
+}
+
+func (r *Repository) GetLikedCharacterIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var follows []CharacterFollow
+	query := r.db.WithContext(ctx).
+		Select("character_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&follows).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked character IDs: %w", err)
+	}
+
+	ids := make([]string, len(follows))
+	for i, follow := range follows {
+		ids[i] = follow.CharacterID
+	}
+	return ids, nil
+}
+
+func (r *Repository) GetLikedStoryboardIDs(ctx context.Context, userID string, limit, offset int) ([]string, error) {
+	var likes []StoryboardLike
+	query := r.db.WithContext(ctx).
+		Select("storyboard_id").
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&likes).Error; err != nil {
+		return nil, fmt.Errorf("failed to get liked storyboard IDs: %w", err)
+	}
+
+	ids := make([]string, len(likes))
+	for i, like := range likes {
+		ids[i] = like.StoryboardID
+	}
+	return ids, nil
+}

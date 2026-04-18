@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -14,7 +15,7 @@ import (
 func (r *Repository) GetOrCreateCharacterAnalytics(ctx context.Context, characterID string) (*domain.CharacterAnalytics, error) {
 	var analytics CharacterAnalytics
 	err := r.db.WithContext(ctx).Where("character_id = ?", characterID).First(&analytics).Error
-	
+
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 创建新的分析记录
@@ -103,12 +104,14 @@ func (r *Repository) IncrementCharacterChatters(ctx context.Context, characterID
 // characterAnalyticsToDomain 转换分析数据到 domain
 func (r *Repository) characterAnalyticsToDomain(analytics *CharacterAnalytics) *domain.CharacterAnalytics {
 	return &domain.CharacterAnalytics{
-		ID:                   analytics.ID,
+		BaseModel: common.BaseModel{
+			ID:        analytics.ID,
+			CreatedAt: analytics.UpdatedAt.Unix(), // Use UpdatedAt as CreatedAt since DB doesn't have CreatedAt
+			UpdatedAt: analytics.UpdatedAt.Unix(),
+		},
 		CharacterID:          analytics.CharacterID,
 		UsersWhoChattedCount: analytics.UsersWhoChattedCount,
 		TotalMessagesSent:    analytics.TotalMessagesSent,
 		TotalTokensConsumed:  analytics.TotalTokensConsumed,
-		UpdatedAt:            analytics.UpdatedAt.Unix(),
 	}
 }
-

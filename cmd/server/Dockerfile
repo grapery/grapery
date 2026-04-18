@@ -4,7 +4,7 @@
 # Dockerfile for Grapery Server Service
 # ========================================
 
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /src
 
 # Copy go.mod and go.sum first for better caching
@@ -66,6 +66,10 @@ ENV ALIYUN_SECRET_KEY=
 ENV ALIYUN_ENDPOINT=oss-cn-shanghai.aliyuncs.com
 ENV ALIYUN_BUCKET=grapery-dev
 ENV ALIYUN_ROLE_ARN=
+
+# ========== Aliyun SLS Telemetry Configuration ==========
+ENV ALIYUN_ACCESS_KEY_ID=
+ENV ALIYUN_ACCESS_KEY_SECRET=
 
 EXPOSE 8080
 

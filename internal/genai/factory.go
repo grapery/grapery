@@ -40,6 +40,12 @@ func (f *VideoGeneratorFactory) CreateClient(providerName string, cfg *Config) (
 			return nil, err
 		}
 		return adapter, nil
+	case ProviderKling:
+		adapter, err := newKlingProvider(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return adapter, nil
 	default:
 		return nil, fmt.Errorf("unsupported video provider %s", providerName)
 	}
@@ -59,6 +65,8 @@ func NewProviderFromConfig(cfg *Config) (Provider, error) {
 		return newGeminiProvider(cfg)
 	case ProviderQwen:
 		return newQwenProvider(cfg)
+	case ProviderKling:
+		return newKlingProvider(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported provider %s", cfg.Provider)
 	}

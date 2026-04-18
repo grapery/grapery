@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Grapery VIPPay Service
+  vippay:
+    # 镜像地址从环境变量 IMAGE 获取，如果没有则使用默认值
+    image: ${IMAGE:-grapery-vippay:dev}
+    container_name: ${SERVICE_NAME:-vippay}
+    restart: unless-stopped
+    ports:
+      - "${VIPPAY_PORT:-8081}:8081"
+    env_file:
+      - .env
+    networks:
+      - grapery-network
+    healthcheck:
+      test: ["CMD", "/app/grapery-vippay", "-version"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  # 连接到 ngx 部署创建的 grapery-network 网络
+  grapery-network:
+    external: true

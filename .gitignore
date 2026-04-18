@@ -93,3 +93,6 @@ credentials/
 *.crt
 *.p12
 *.pfx
+
+# Video project (separate repo)
+my-video/

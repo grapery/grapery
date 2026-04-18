@@ -21,7 +21,8 @@ type TextToVideoRequest struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// ImageToVideoRequest handles image-conditioned workflows (including multi-reference and lite mode).
+// ImageToVideoRequest handles image-conditioned workflows.
+// 图生视频-基于首帧（含音频）、图生视频-基于参考图
 type ImageToVideoRequest struct {
 	Model           string                 `json:"model"`
 	Prompt          string                 `json:"prompt,omitempty"`
@@ -31,10 +32,12 @@ type ImageToVideoRequest struct {
 	CallbackURL     string                 `json:"callback_url,omitempty"`
 	ImageURL        string                 `json:"image_url"`
 	ReferenceImages []string               `json:"reference_images,omitempty"`
+	AudioURL        string                 `json:"audio_url,omitempty"` // 图生视频-基于首帧（含音频）
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // KeyframeRequest drives first/last frame workflows.
+// 图生视频-基于首尾帧（含音频）
 type KeyframeRequest struct {
 	Model       string                 `json:"model"`
 	FirstFrame  string                 `json:"first_frame"`
@@ -43,6 +46,7 @@ type KeyframeRequest struct {
 	Workflow    string                 `json:"workflow"`
 	Duration    int                    `json:"duration,omitempty"`
 	CallbackURL string                 `json:"callback_url,omitempty"`
+	AudioURL    string                 `json:"audio_url,omitempty"` // 首尾帧含音频
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -84,7 +88,7 @@ func (c *Client) CreateTextVideo(ctx context.Context, payload *TextToVideoReques
 		return nil, fmt.Errorf("payload cannot be nil")
 	}
 
-	modelName := choose(payload.Model, payload.Workflow, c.config.Workflow, defaultVideoModel)
+	modelName := choose(payload.Model, c.config.VideoModel, payload.Workflow, c.config.Workflow, defaultVideoModel)
 	if strings.TrimSpace(modelName) == "" {
 		return nil, fmt.Errorf("model is required")
 	}
@@ -137,7 +141,7 @@ func (c *Client) CreateImageVideo(ctx context.Context, payload *ImageToVideoRequ
 	if payload == nil {
 		return nil, fmt.Errorf("payload cannot be nil")
 	}
-	modelName := choose(payload.Model, payload.Workflow, c.config.Workflow, defaultVideoModel)
+	modelName := choose(payload.Model, c.config.VideoModel, payload.Workflow, c.config.Workflow, defaultVideoModel)
 	if strings.TrimSpace(modelName) == "" {
 		return nil, fmt.Errorf("model is required")
 	}
@@ -159,14 +163,19 @@ func (c *Client) CreateImageVideo(ctx context.Context, payload *ImageToVideoRequ
 		},
 	}
 
-	role := ptr("reference_image")
+	// 图生视频-基于首帧: 单张图用 first_frame；图生视频-基于参考图: 多张图用 reference_image
+	role := "reference_image"
+	if len(referenceImages) == 1 {
+		role = "first_frame"
+	}
+	rolePtr := ptr(role)
 	for _, imageURL := range referenceImages {
 		items = append(items, &arkmodel.CreateContentGenerationContentItem{
 			Type: arkmodel.ContentGenerationContentItemTypeImage,
 			ImageURL: &arkmodel.ImageURL{
 				URL: imageURL,
 			},
-			Role: role,
+			Role: rolePtr,
 		})
 	}
 
@@ -210,7 +219,7 @@ func (c *Client) CreateKeyframeVideo(ctx context.Context, payload *KeyframeReque
 		return nil, fmt.Errorf("first_frame and last_frame are required")
 	}
 
-	modelName := choose(payload.Model, payload.Workflow, c.config.Workflow, defaultVideoModel)
+	modelName := choose(payload.Model, c.config.VideoModel, payload.Workflow, c.config.Workflow, defaultVideoModel)
 	if strings.TrimSpace(modelName) == "" {
 		return nil, fmt.Errorf("model is required")
 	}
@@ -294,7 +303,7 @@ func (c *Client) GetTaskStatus(ctx context.Context, taskID string) (*StatusRespo
 	metadata["usage"] = resp.Usage
 
 	var usage *VideoUsage
-	if resp.Usage != (arkmodel.Usage{}) {
+	if resp.Usage.CompletionTokens != 0 || resp.Usage.TotalTokens != 0 {
 		usage = &VideoUsage{CompletionTokens: resp.Usage.CompletionTokens}
 	}
 

@@ -2,18 +2,17 @@
 
 # ========================================
 # Multi-service Dockerfile for Grapery
-# Builds: server, chatmcp, vippay
+# Builds: server, vippay
 # ========================================
 
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /src
 COPY grapery/go.mod grapery/go.sum ./
 RUN go mod download
 COPY grapery/ ./
 
-# Build all three services
+# Build services
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/grapery-server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/grapery-chatmcp ./cmd/chatmcp
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/grapery-vippay ./cmd/vippay
 
 # ========================================
@@ -61,41 +60,6 @@ ENV ALIYUN_ROLE_ARN=
 
 EXPOSE 8080
 CMD ["/app/grapery"]
-
-# ========================================
-# Agent Chat Service Image
-# ========================================
-FROM gcr.io/distroless/base-debian12 AS chatmcp
-WORKDIR /app
-COPY --from=builder /bin/grapery-chatmcp /app/grapery-chatmcp
-
-# ========== Server Configuration ==========
-ENV GRAPERY_ENV=production
-ENV GRAPERY_HTTP_PORT=8082
-ENV GRAPERY_LOG_LEVEL=info
-ENV GRAPERY_ALLOW_ORIGIN=*
-
-# ========== Database Configuration ==========
-ENV DB_DATABASE=grapery
-ENV DB_USERNAME=
-ENV DB_PASSWORD=
-ENV DB_ADDRESS=
-
-# ========== Redis Configuration ==========
-ENV REDIS_ADDRESS=
-ENV REDIS_PASSWORD=
-ENV REDIS_DATABASE=0
-
-# ========== AI Configuration (Gemini required for chatmcp) ==========
-ENV GEMINI_API_KEY=
-ENV GEMINI_BASE_URL=
-
-# ========== JWT Configuration ==========
-ENV JWT_SECRET=
-ENV JWT_EXPIRY_HOURS=24
-
-EXPOSE 8082
-CMD ["/app/grapery-chatmcp"]
 
 # ========================================
 # VIP Payment Service Image

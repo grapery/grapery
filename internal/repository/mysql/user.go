@@ -2,8 +2,11 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -146,7 +149,11 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 	}
 
 	return &domain.User{
-		ID:                  user.ID,
+		BaseModel: common.BaseModel{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		},
 		Username:            user.Username,
 		Email:               user.Email,
 		PasswordHash:        user.PasswordHash,
@@ -158,13 +165,16 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 		Website:             user.Website,
 		AIPromptPreferences: user.AIPromptPreferences,
 		DateOfBirth:         dateOfBirth,
-		Followers:           user.Followers,
-		Following:           user.Following,
-		Status:              user.Status,
-		EmailVerified:       user.EmailVerified,
-		LastLoginAt:         lastLoginAt,
-		CreatedAt:           user.CreatedAt,
-		UpdatedAt:           user.UpdatedAt,
+		SocialStats: common.SocialStats{
+			Followers: user.Followers,
+			Following: user.Following,
+		},
+		StoryboardCount: user.StoryboardCount,
+		Status:          user.Status,
+		EmailVerified:   user.EmailVerified,
+		LastLoginAt:     lastLoginAt,
+		Points:          user.Points,
+		ReferralCode:    user.ReferralCode,
 	}
 }
 
@@ -195,9 +205,12 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 		DateOfBirth:         dateOfBirth,
 		Followers:           user.Followers,
 		Following:           user.Following,
+		StoryboardCount:     user.StoryboardCount,
 		Status:              user.Status,
 		EmailVerified:       user.EmailVerified,
 		LastLoginAt:         lastLoginAt,
+		Points:              user.Points,
+		ReferralCode:        user.ReferralCode,
 		CreatedAt:           user.CreatedAt,
 		UpdatedAt:           user.UpdatedAt,
 	}
@@ -205,37 +218,68 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 
 // userSettingsToDomain 转换 UserSettings 到 domain
 func (r *Repository) userSettingsToDomain(settings *UserSettings) *domain.UserSettings {
+	var preferredGenres []string
+	if strings.TrimSpace(settings.PreferredGenresJSON) != "" {
+		_ = json.Unmarshal([]byte(settings.PreferredGenresJSON), &preferredGenres)
+	}
 	return &domain.UserSettings{
-		ID:                 settings.ID,
-		UserID:             settings.UserID,
-		Language:           settings.Language,
-		Theme:              settings.Theme,
-		EmailNotifications: settings.EmailNotifications,
-		PushNotifications:  settings.PushNotifications,
-		ShowAdultContent:   settings.ShowAdultContent,
-		ProfileVisibility:  settings.ProfileVisibility,
-		AllowComments:      settings.AllowComments,
-		AllowMessages:      settings.AllowMessages,
-		ShowOnlineStatus:   settings.ShowOnlineStatus,
-		UpdatedAt:          settings.UpdatedAt.Unix(),
+		BaseModel: common.BaseModel{
+			ID:        settings.ID,
+			CreatedAt: 0, // UserSettings doesn't have CreatedAt in MySQL model
+			UpdatedAt: settings.UpdatedAt,
+		},
+		UserID:                    settings.UserID,
+		Language:                  settings.Language,
+		Theme:                     settings.Theme,
+		FontSize:                  settings.FontSize,
+		DataSaver:                 settings.DataSaver,
+		ProfileVisibility:         settings.ProfileVisibility,
+		DefaultStoryVisibility:    settings.DefaultStoryVisibility,
+		DefaultFragmentVisibility: settings.DefaultFragmentVisibility,
+		AllowFollowFrom:           settings.AllowFollowFrom,
+		AllowCommentsFrom:         settings.AllowCommentsFrom,
+		AllowMessagesFrom:         settings.AllowMessagesFrom,
+		ShowOnlineStatus:          settings.ShowOnlineStatus,
+		ShowReadReceipts:          settings.ShowReadReceipts,
+		ShowPublicStories:         settings.ShowPublicStories,
+		ShowPublicFragments:       settings.ShowPublicFragments,
+		ShowPublicBookmarks:       settings.ShowPublicBookmarks,
+		AIEnabled:                 settings.AIEnabled,
+		AIDataSharing:             settings.AIDataSharing,
+		NotificationSettings:      settings.NotificationSettings,
+		PreferredGenres:           preferredGenres,
 	}
 }
 
 // userSettingsFromDomain 从 domain 转换到 UserSettings
 func (r *Repository) userSettingsFromDomain(settings *domain.UserSettings) *UserSettings {
+	preferredGenresJSON := "[]"
+	if b, err := json.Marshal(settings.PreferredGenres); err == nil {
+		preferredGenresJSON = string(b)
+	}
 	return &UserSettings{
-		ID:                 settings.ID,
-		UserID:             settings.UserID,
-		Language:           settings.Language,
-		Theme:              settings.Theme,
-		EmailNotifications: settings.EmailNotifications,
-		PushNotifications:  settings.PushNotifications,
-		ShowAdultContent:   settings.ShowAdultContent,
-		ProfileVisibility:  settings.ProfileVisibility,
-		AllowComments:      settings.AllowComments,
-		AllowMessages:      settings.AllowMessages,
-		ShowOnlineStatus:   settings.ShowOnlineStatus,
-		UpdatedAt:          time.Unix(settings.UpdatedAt, 0),
+		ID:                        settings.ID,
+		UserID:                    settings.UserID,
+		Language:                  settings.Language,
+		Theme:                     settings.Theme,
+		FontSize:                  settings.FontSize,
+		DataSaver:                 settings.DataSaver,
+		ProfileVisibility:         settings.ProfileVisibility,
+		DefaultStoryVisibility:    settings.DefaultStoryVisibility,
+		DefaultFragmentVisibility: settings.DefaultFragmentVisibility,
+		AllowFollowFrom:           settings.AllowFollowFrom,
+		AllowCommentsFrom:         settings.AllowCommentsFrom,
+		AllowMessagesFrom:         settings.AllowMessagesFrom,
+		ShowOnlineStatus:          settings.ShowOnlineStatus,
+		ShowReadReceipts:          settings.ShowReadReceipts,
+		ShowPublicStories:         settings.ShowPublicStories,
+		ShowPublicFragments:       settings.ShowPublicFragments,
+		ShowPublicBookmarks:       settings.ShowPublicBookmarks,
+		AIEnabled:                 settings.AIEnabled,
+		AIDataSharing:             settings.AIDataSharing,
+		NotificationSettings:      settings.NotificationSettings,
+		PreferredGenresJSON:       preferredGenresJSON,
+		UpdatedAt:                 settings.UpdatedAt,
 	}
 }
 
@@ -291,4 +335,126 @@ func (r *Repository) membershipFromDomain(membership *domain.Membership) *Member
 		CreatedAt:    time.Unix(membership.CreatedAt, 0),
 		UpdatedAt:    time.Unix(membership.UpdatedAt, 0),
 	}
+}
+
+// ========== Referral System (StoryCreationAppUI Design) ==========
+
+// GetUserByReferralCode 根据邀请码获取用户
+func (r *Repository) GetUserByReferralCode(ctx context.Context, referralCode string) (*domain.User, error) {
+	var user User
+	if err := r.db.WithContext(ctx).Where("referral_code = ?", referralCode).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.userToDomainPtr(&user), nil
+}
+
+// CreateUserReferral 创建邀请记录
+func (r *Repository) CreateUserReferral(ctx context.Context, referral *domain.UserReferral) error {
+	dbReferral := &UserReferral{
+		ID:           referral.ID,
+		ReferrerID:   referral.ReferrerID,
+		RefereeID:    referral.RefereeID,
+		ReferralCode: referral.ReferralCode,
+		PointsEarned: referral.PointsEarned,
+		Status:       referral.Status,
+		CreatedAt:    time.Unix(referral.CreatedAt, 0),
+	}
+	if referral.RewardedAt > 0 {
+		rewardedAt := time.Unix(referral.RewardedAt, 0)
+		dbReferral.RewardedAt = &rewardedAt
+	}
+	return r.db.WithContext(ctx).Create(dbReferral).Error
+}
+
+// GetUserReferralByReferee 根据被邀请人ID获取邀请记录
+func (r *Repository) GetUserReferralByReferee(ctx context.Context, refereeID string) (*domain.UserReferral, error) {
+	var referral UserReferral
+	if err := r.db.WithContext(ctx).Where("referee_id = ?", refereeID).First(&referral).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.userReferralToDomain(&referral), nil
+}
+
+// GetReferralsByUser 获取用户的邀请列表
+func (r *Repository) GetReferralsByUser(ctx context.Context, referrerID string, limit, offset int) ([]*domain.UserReferral, error) {
+	var referrals []UserReferral
+	if err := r.db.WithContext(ctx).
+		Where("referrer_id = ?", referrerID).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&referrals).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.UserReferral, len(referrals))
+	for i, ref := range referrals {
+		result[i] = r.userReferralToDomain(&ref)
+	}
+	return result, nil
+}
+
+// GetReferralStats 获取用户邀请统计
+func (r *Repository) GetReferralStats(ctx context.Context, userID string) (*domain.ReferralStats, error) {
+	stats := &domain.ReferralStats{}
+
+	// 总邀请数
+	var totalCount int64
+	if err := r.db.WithContext(ctx).Model(&UserReferral{}).
+		Where("referrer_id = ?", userID).
+		Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+	stats.TotalReferrals = int(totalCount)
+
+	// 通过邀请获得的积分
+	var totalPoints int64
+	if err := r.db.WithContext(ctx).Model(&UserReferral{}).
+		Where("referrer_id = ? AND status = ?", userID, domain.ReferralStatusRewarded).
+		Select("COALESCE(SUM(points_earned), 0)").
+		Scan(&totalPoints).Error; err != nil {
+		return nil, err
+	}
+	stats.PointsEarned = int(totalPoints)
+
+	// 待完成邀请数
+	var pendingCount int64
+	if err := r.db.WithContext(ctx).Model(&UserReferral{}).
+		Where("referrer_id = ? AND status = ?", userID, domain.ReferralStatusPending).
+		Count(&pendingCount).Error; err != nil {
+		return nil, err
+	}
+	stats.PendingReferrals = int(pendingCount)
+
+	return stats, nil
+}
+
+// AddUserPoints 增加用户积分
+func (r *Repository) AddUserPoints(ctx context.Context, userID string, points int) error {
+	return r.db.WithContext(ctx).Model(&User{}).
+		Where("id = ?", userID).
+		UpdateColumn("points", gorm.Expr("points + ?", points)).Error
+}
+
+// userReferralToDomain 转换 UserReferral 到 domain
+func (r *Repository) userReferralToDomain(referral *UserReferral) *domain.UserReferral {
+	result := &domain.UserReferral{
+		ID:           referral.ID,
+		ReferrerID:   referral.ReferrerID,
+		RefereeID:    referral.RefereeID,
+		ReferralCode: referral.ReferralCode,
+		PointsEarned: referral.PointsEarned,
+		Status:       referral.Status,
+		CreatedAt:    referral.CreatedAt.Unix(),
+	}
+	if referral.RewardedAt != nil {
+		result.RewardedAt = referral.RewardedAt.Unix()
+	}
+	return result
 }

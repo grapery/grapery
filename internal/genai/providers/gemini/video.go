@@ -8,7 +8,6 @@ import (
 	"google.golang.org/genai"
 )
 
-const defaultVideoModel = "veo3.1"
 
 // GenerateVideoResponse captures the essential details of a long-running video operation.
 type GenerateVideoResponse struct {
@@ -43,7 +42,7 @@ func (c *Client) GenerateVideo(ctx context.Context, model string, source *genai.
 		if candidate != "" && looksLikeVideoModel(candidate) {
 			resolvedModel = candidate
 		} else {
-			resolvedModel = defaultVideoModel
+			resolvedModel = DefaultVideoModel
 		}
 	}
 	op, err := c.sdk.Models.GenerateVideosFromSource(ctx, resolvedModel, source, config)

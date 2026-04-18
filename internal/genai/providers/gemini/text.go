@@ -8,14 +8,12 @@ import (
 	"google.golang.org/genai"
 )
 
-const defaultTextModel = "gemini-2.5-flash"
-
 // GenerateContent delegates to the official GenAI SDK and returns the structured response.
 func (c *Client) GenerateContent(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 	if len(contents) == 0 {
 		return nil, fmt.Errorf("contents cannot be empty")
 	}
-	resolvedModel := choose(model, c.config.DefaultModel, defaultTextModel)
+	resolvedModel := choose(model, c.config.DefaultModel, DefaultTextModel)
 	return c.sdk.Models.GenerateContent(ctx, resolvedModel, contents, config)
 }
 
@@ -45,14 +43,47 @@ func (c *Client) GenerateText(ctx context.Context, model, prompt string, config 
 	return "", resp, nil
 }
 
+// ThinkingLevel controls the amount of reasoning the model uses.
+// See: https://ai.google.dev/gemini-api/docs/text-generation
+type ThinkingLevel string
+
+const (
+	ThinkingLevelLow     ThinkingLevel = "low"
+	ThinkingLevelHigh    ThinkingLevel = "high"
+	ThinkingLevelMinimal ThinkingLevel = "minimal"
+)
+
+func mapThinkingLevel(l ThinkingLevel) genai.ThinkingLevel {
+	switch strings.ToLower(string(l)) {
+	case "low":
+		return genai.ThinkingLevelLow
+	case "high":
+		return genai.ThinkingLevelHigh
+	case "minimal":
+		return genai.ThinkingLevelMinimal
+	default:
+		return genai.ThinkingLevel(string(l))
+	}
+}
+
+// ThinkingOptions configures Gemini thinking behavior.
+type ThinkingOptions struct {
+	// Level: "low", "high", or "minimal". Empty disables thinking.
+	Level ThinkingLevel
+	// IncludeThoughts: if true, thoughts are returned in the response.
+	IncludeThoughts bool
+	// Budget: token budget for thinking (alternative to Level). If > 0, overrides Level.
+	Budget int32
+}
+
 // GenerateThinkingText enables Gemini "thinking" traces while still returning the final answer text.
-// The thinkingBudget controls how many tokens the model can spend reasoning (0 disables thinking).
+// Use opts to configure thinking level (low/high) and whether to include thoughts in the response.
 // If an optional config is provided it will be shallow-copied before the thinking settings are applied.
 func (c *Client) GenerateThinkingText(
 	ctx context.Context,
 	model string,
 	prompt string,
-	thinkingBudget int32,
+	opts *ThinkingOptions,
 	config *genai.GenerateContentConfig,
 ) (answer string, thoughts []string, resp *genai.GenerateContentResponse, err error) {
 	prompt = strings.TrimSpace(prompt)
@@ -69,14 +100,17 @@ func (c *Client) GenerateThinkingText(
 		cfg = &genai.GenerateContentConfig{}
 	}
 
-	if cfg.ThinkingConfig == nil {
-		cfg.ThinkingConfig = &genai.ThinkingConfig{}
-	}
-	if thinkingBudget < 0 {
-		cfg.ThinkingConfig.ThinkingBudget = nil
-	} else {
-		budget := thinkingBudget
-		cfg.ThinkingConfig.ThinkingBudget = &budget
+	if opts != nil {
+		if cfg.ThinkingConfig == nil {
+			cfg.ThinkingConfig = &genai.ThinkingConfig{}
+		}
+		if opts.Budget > 0 {
+			b := opts.Budget
+			cfg.ThinkingConfig.ThinkingBudget = &b
+		} else if opts.Level != "" {
+			cfg.ThinkingConfig.ThinkingLevel = mapThinkingLevel(opts.Level)
+		}
+		cfg.ThinkingConfig.IncludeThoughts = opts.IncludeThoughts
 	}
 
 	resp, err = c.GenerateContent(ctx, model, genai.Text(prompt), cfg)

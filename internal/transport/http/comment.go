@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -12,7 +13,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	var req struct {
-		TargetType string  `json:"targetType" binding:"required"` // story, storyboard, character
+		TargetType string  `json:"targetType" binding:"required"` // story, fragment, storyboard, character
 		TargetID   string  `json:"targetId" binding:"required"`
 		Content    string  `json:"content" binding:"required"`
 		ParentID   *string `json:"parentId"` // 回复评论时提供
@@ -24,7 +25,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 	}
 
 	comment := &domain.Comment{
-		AuthorID:   userID.(string),
+		UserID:     userID.(string),
 		Content:    req.Content,
 		TargetType: req.TargetType,
 		TargetID:   req.TargetID,
@@ -74,7 +75,9 @@ func (h *Handler) UpdateComment(c *gin.Context) {
 	}
 
 	comment := &domain.Comment{
-		ID:      id,
+		BaseModel: common.BaseModel{
+			ID: id,
+		},
 		Content: req.Content,
 	}
 
@@ -106,7 +109,7 @@ func (h *Handler) ListComments(c *gin.Context) {
 	if targetType == "" {
 		targetType = c.Query("target_type")
 	}
-	
+
 	targetID := c.Query("targetId")
 	if targetID == "" {
 		targetID = c.Query("target_id")

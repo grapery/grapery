@@ -3,11 +3,45 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
+
+// CreateStory creates a new story
+func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error {
+	// Get Author ID from the embedded Author field
+	var authorID string
+	if story.Author.ID != "" {
+		authorID = story.Author.ID
+	}
+
+	dbStory := &Story{
+		ID:                  story.ID,
+		Title:               story.Title,
+		Description:         story.Description,
+		CoverImage:          story.CoverImage,
+		UserID:              authorID,
+		SourceFragmentID:    story.SourceFragmentID,
+		Likes:               story.Likes,
+		Followers:           story.Followers,
+		Panels:              story.PanelCount,
+		StoryboardCount:     story.StoryboardCount,
+		DefaultSceneCount:   story.DefaultSceneCount,
+		Genre:               story.Genre,
+		Style:               styleConfigToJSON(story.Style),
+		Status:              story.Status,
+		IsCollaborationOpen: story.IsCollaborationOpen,
+		UseAI:               story.UseAI,
+		AIAssistanceOptions: aiAssistanceOptionsToJSON(story.AIAssistanceOptions),
+	}
+
+	return r.db.WithContext(ctx).Create(dbStory).Error
+}
 
 // StoryByID retrieves a story by ID
 func (r *Repository) StoryByID(ctx context.Context, id string) (*domain.Story, error) {
@@ -24,23 +58,28 @@ func (r *Repository) StoryByID(ctx context.Context, id string) (*domain.Story, e
 
 // UpdateStory updates an existing story
 func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error {
-	dbStory := Story{
-		ID:          story.ID,
-		Title:       story.Title,
-		Description: story.Description,
-		CoverImage:  story.CoverImage,
-		AuthorID:    story.Author.ID,
-		GroupID:     &story.GroupID,
-		Genre:       story.Genre,
-		Status:      story.Status,
-		Likes:       story.Likes,
-		Followers:   story.Followers,
-		Panels:      story.Panels,
-		UpdatedAt:   time.Now(),
+	// Get Author ID from the embedded Author field
+	var authorID string
+	if story.Author.ID != "" {
+		authorID = story.Author.ID
 	}
-	
-	if story.GroupID == "" {
-		dbStory.GroupID = nil
+
+	dbStory := Story{
+		ID:                  story.ID,
+		Title:               story.Title,
+		Description:         story.Description,
+		CoverImage:          story.CoverImage,
+		UserID:              authorID,
+		Genre:               story.Genre,
+		Style:               styleConfigToJSON(story.Style),
+		Status:              story.Status,
+		Likes:               story.Likes,
+		Followers:           story.Followers,
+		Panels:              story.PanelCount,
+		StoryboardCount:     story.StoryboardCount,
+		DefaultSceneCount:   story.DefaultSceneCount,
+		IsCollaborationOpen: story.IsCollaborationOpen,
+		UpdatedAt:           time.Now(),
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Story{}).Where("id = ?", story.ID).Updates(&dbStory).Error; err != nil {
@@ -80,17 +119,25 @@ func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) erro
 	}
 
 	if count > 0 {
-		return errors.New("already liked")
+		return domain.ErrAlreadyLiked
 	}
 
 	// 创建点赞记录
 	like := StoryLike{
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		StoryID:   storyID,
 		CreatedAt: time.Now(),
 	}
 
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		// This can happen due to race condition between check and insert
+		if strings.Contains(err.Error(), "Error 1062") ||
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyLiked
+		}
 		return err
 	}
 
@@ -116,7 +163,7 @@ func (r *Repository) UnlikeStory(ctx context.Context, userID, storyID string) er
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not liked")
+		return domain.ErrNotFound
 	}
 
 	// 更新故事的点赞数
@@ -140,11 +187,12 @@ func (r *Repository) FollowStory(ctx context.Context, userID, storyID string) er
 	}
 
 	if count > 0 {
-		return errors.New("already following")
+		return domain.ErrAlreadyExists
 	}
 
 	// 创建关注记录
 	follow := StoryFollow{
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		StoryID:   storyID,
 		CreatedAt: time.Now(),
@@ -176,7 +224,7 @@ func (r *Repository) UnfollowStory(ctx context.Context, userID, storyID string) 
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not following")
+		return domain.ErrNotFound
 	}
 
 	// 更新故事的关注数
@@ -187,6 +235,85 @@ func (r *Repository) UnfollowStory(ctx context.Context, userID, storyID string) 
 	}
 
 	return nil
+}
+
+// IsStoryFollowing reports whether userID has an active row in story_follows for storyID.
+func (r *Repository) IsStoryFollowing(ctx context.Context, userID, storyID string) (bool, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// CountFollowersOfStory counts active story_follows rows for the story.
+func (r *Repository) CountFollowersOfStory(ctx context.Context, storyID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).Where("story_id = ?", storyID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListStoryFollowRecordsByStory lists followers (newest first) as domain.Follow for the polymorphic /follows API.
+func (r *Repository) ListStoryFollowRecordsByStory(ctx context.Context, storyID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []StoryFollow
+	q := r.db.WithContext(ctx).Where("story_id = ?", storyID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.UserID,
+			FollowableType:       domain.FollowableTypeStory,
+			FollowableID:         storyID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
+// CountStoriesFollowedByUser counts stories this user follows.
+func (r *Repository) CountStoriesFollowedByUser(ctx context.Context, userID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&StoryFollow{}).Where("user_id = ?", userID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListStoryFollowRecordsByUser lists followed stories (newest first) as domain.Follow.
+func (r *Repository) ListStoryFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []StoryFollow
+	q := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           userID,
+			FollowableType:       domain.FollowableTypeStory,
+			FollowableID:         row.StoryID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
 }
 
 // ========== Story Contributor operations ==========
@@ -304,17 +431,28 @@ func (r *Repository) UpdateStoryContributorRole(ctx context.Context, storyID, us
 // storyContributorToDomain converts a database StoryContributor to domain model
 func (r *Repository) storyContributorToDomain(c StoryContributor) *domain.StoryContributor {
 	contributor := &domain.StoryContributor{
-		ID:        c.ID,
-		StoryID:   c.StoryID,
-		UserID:    c.UserID,
-		Role:      domain.StoryContributorRole(c.Role),
-		InvitedBy: c.InvitedBy,
-		JoinedAt:  c.JoinedAt.Unix(),
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.JoinedAt.Unix(),
+			UpdatedAt: c.JoinedAt.Unix(),
+		},
+		StoryID:    c.StoryID,
+		UserID:     c.UserID,
+		Role:       domain.StoryContributorRole(c.Role),
+		InvitedBy:  c.InvitedBy,
+		JoinedAt:   c.JoinedAt.Unix(),
+		BadgeStyle: domain.StoryContributorRole(c.Role), // 使用 role 作为 badge_style
 	}
 
 	if c.User.ID != "" {
 		user := r.userToDomain(c.User)
 		contributor.User = &user
+		// 填充扁平化字段供客户端显示
+		contributor.Name = user.DisplayName
+		if contributor.Name == "" {
+			contributor.Name = user.Username
+		}
+		contributor.Avatar = user.Avatar
 	}
 
 	if c.Inviter.ID != "" {

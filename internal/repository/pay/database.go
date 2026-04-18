@@ -42,7 +42,7 @@ func Init(uname, pwd, address, dbname string) error {
 			Colorful:      true,
 		},
 	)
-	sqldbUrl := fmt.Sprintf("%s:%s@(%s:3306)/%s?charset=utf8mb4&parseTime=True&loc=Local", uname, pwd, address, dbname)
+	sqldbUrl := fmt.Sprintf("%s:%s@(%s:3306)/%s?charset=utf8mb4&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local", uname, pwd, address, dbname)
 	log.Infof("sqldbUrl: %s", sqldbUrl)
 	sqlDB, err := sql.Open("mysql", sqldbUrl)
 
@@ -61,21 +61,13 @@ func Init(uname, pwd, address, dbname string) error {
 		return err
 	}
 	database.Callback().Update().Before("gorm:update").Register("update_update_at", callbacks.BeforeCreate)
-	database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
-	database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
+	// Note: GORM automatically handles soft delete with DeletedAt field, no need for manual deleteFilter
+	// database.Callback().Update().Before("gorm:update").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
+	// database.Callback().Query().Before("gorm:query").Register("gorm:ignoreSoftDeleteItems", deleteFilter)
 
-	database.AutoMigrate(&PaymentRecord{})
-	database.AutoMigrate(&Subscription{})
-	database.AutoMigrate(&UserSubscription{})
-	database.AutoMigrate(&IAPProduct{})
-	database.AutoMigrate(&AppleReceipt{})
-	database.AutoMigrate(&AppleSubscription{})
-	database.AutoMigrate(&AppleNotification{})
-	database.AutoMigrate(&GooglePurchase{})
-	database.AutoMigrate(&GoogleSubscription{})
-	database.AutoMigrate(&GoogleNotification{})
-	database.AutoMigrate(&IAPReceiptValidation{})
-	database.AutoMigrate(&IAPSubscriptionSync{})
+	// 注意：所有表的迁移现在统一由 migrations 包管理
+	// 迁移步骤在 pay/migrations_register.go 中注册
+	// 迁移执行在应用启动时通过 migrations.GetRegistry().ExecuteAll() 统一调用
 
 	return nil
 }

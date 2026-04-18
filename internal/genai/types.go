@@ -66,6 +66,12 @@ func (op OperationType) MediaType() MediaType {
 	}
 }
 
+// ReferenceImageAsset holds image bytes and MIME type for provider use (e.g. video reference images).
+type ReferenceImageAsset struct {
+	Data     []byte
+	MIMEType string
+}
+
 // GenerateRequest captures the unified request parameters accepted by the proxy layer.
 type GenerateRequest struct {
 	Operation         OperationType
@@ -82,8 +88,15 @@ type GenerateRequest struct {
 	Options           map[string]interface{}
 	ReferenceImageURL string
 	ReferenceImages   []string
-	FirstFrameURL     string
-	LastFrameURL      string
+	// ReferenceImagesData holds inline image bytes for video reference images (up to 3 for Veo 3.1).
+	ReferenceImagesData []ReferenceImageAsset
+	FirstFrameURL       string
+	LastFrameURL        string
+	// FirstFrameData, LastFrameData for keyframe-to-video. When set, used instead of FirstFrameURL/LastFrameURL.
+	FirstFrameData     []byte
+	LastFrameData      []byte
+	FirstFrameMIMEType string
+	LastFrameMIMEType  string
 	Size              string
 	Width             int
 	Height            int
@@ -127,6 +140,21 @@ func (r *GenerateRequest) Clone() *GenerateRequest {
 	}
 	if len(r.VideoData) > 0 {
 		cp.VideoData = append([]byte(nil), r.VideoData...)
+	}
+	if len(r.ReferenceImagesData) > 0 {
+		cp.ReferenceImagesData = make([]ReferenceImageAsset, len(r.ReferenceImagesData))
+		for i, a := range r.ReferenceImagesData {
+			cp.ReferenceImagesData[i] = ReferenceImageAsset{
+				Data:     append([]byte(nil), a.Data...),
+				MIMEType: a.MIMEType,
+			}
+		}
+	}
+	if len(r.FirstFrameData) > 0 {
+		cp.FirstFrameData = append([]byte(nil), r.FirstFrameData...)
+	}
+	if len(r.LastFrameData) > 0 {
+		cp.LastFrameData = append([]byte(nil), r.LastFrameData...)
 	}
 	return &cp
 }
@@ -232,4 +260,51 @@ func (u *Usage) IsEmpty() bool {
 		return false
 	}
 	return len(u.Additional) == 0
+}
+
+// ============== Keyframe Subdivision Types ==============
+
+// VideoSegment represents a single video segment generated from keyframe subdivision.
+type VideoSegment struct {
+	Index        int    `json:"index"`        // Segment sequence number (0-based)
+	VideoURL     string `json:"videoUrl"`     // Video URL
+	StartFrame   string `json:"startFrame"`   // Start keyframe URL
+	EndFrame     string `json:"endFrame"`     // End keyframe URL
+	DurationSecs int    `json:"durationSecs"` // Duration in seconds
+}
+
+// KeyframeSubdivisionResult holds the result of keyframe subdivision video generation.
+type KeyframeSubdivisionResult struct {
+	Segments      []VideoSegment `json:"segments"`      // Video segments in order
+	MiddleFrames  []string       `json:"middleFrames"`  // Generated middle frame URLs
+	TotalDuration int            `json:"totalDuration"` // Total duration in seconds
+	IsSubdivided  bool           `json:"isSubdivided"`  // Whether subdivision was applied
+}
+
+// FrameGapEvaluation holds the VLM evaluation result for frame gap assessment.
+type FrameGapEvaluation struct {
+	Feasible     bool   `json:"feasible"`     // Whether the transition is feasible in one clip
+	Reason       string `json:"reason"`       // Reason for the evaluation
+	MiddleAction string `json:"middleAction"` // Suggested middle action if not feasible
+}
+
+// SubdivisionVideoRequest represents a request for video generation with automatic subdivision.
+type SubdivisionVideoRequest struct {
+	FirstFrameURL   string                 `json:"firstFrameUrl"`   // Start keyframe URL
+	LastFrameURL    string                 `json:"lastFrameUrl"`    // End keyframe URL
+	Prompt          string                 `json:"prompt"`          // Motion/action prompt
+	DurationSeconds int                    `json:"durationSeconds"` // Target duration per segment
+	MaxDepth        int                    `json:"maxDepth"`        // Maximum recursion depth (default 3)
+	Provider        string                 `json:"provider"`        // Video provider name
+	AspectRatio     string                 `json:"aspectRatio"`     // Aspect ratio
+	Metadata        map[string]interface{} `json:"metadata"`        // Additional metadata
+}
+
+// MiddleFrameRequest represents a request to generate a middle frame image.
+type MiddleFrameRequest struct {
+	StartFrameURL string `json:"startFrameUrl"` // Reference start frame
+	EndFrameURL   string `json:"endFrameUrl"`   // Reference end frame (optional)
+	MiddleAction  string `json:"middleAction"`  // Description of the middle state
+	Provider      string `json:"provider"`      // Image provider name
+	AspectRatio   string `json:"aspectRatio"`   // Aspect ratio
 }

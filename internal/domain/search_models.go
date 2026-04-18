@@ -34,7 +34,7 @@ type SearchFilter struct {
 	Type       string   `json:"type"`                 // story, character, user, group, all
 	Categories []string `json:"categories,omitempty"` // 分类
 	Tags       []string `json:"tags,omitempty"`       // 标签
-	AuthorID   string   `json:"authorId,omitempty"`
+	UserID     string   `json:"authorId,omitempty"`   // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	MinViews   int      `json:"minViews,omitempty"`
 	MaxViews   int      `json:"maxViews,omitempty"`
 	MinLikes   int      `json:"minLikes,omitempty"`
@@ -55,7 +55,7 @@ type SearchResult struct {
 	Description string  `json:"description,omitempty"`
 	Cover       string  `json:"cover,omitempty"`
 	Author      string  `json:"author,omitempty"`
-	AuthorID    string  `json:"authorId,omitempty"`
+	UserID      string  `json:"authorId,omitempty"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
 	Views       int     `json:"views,omitempty"`
 	Likes       int     `json:"likes,omitempty"`
 	TagsJSON    string  `json:"-"`
@@ -78,23 +78,4 @@ func (sr *SearchResult) MarshalJSON() ([]byte, error) {
 	}{
 		Alias: (*Alias)(sr),
 	})
-}
-
-// Report 举报
-type Report struct {
-	ID          string `json:"id"`
-	ReporterID  string `json:"reporterId"`
-	EntityType  string `json:"entityType"` // story, comment, user, character
-	EntityID    string `json:"entityId"`
-	Reason      string `json:"reason"` // spam, inappropriate, copyright, other
-	Description string `json:"description"`
-	Status      string `json:"status"` // pending, reviewed, resolved, rejected
-	ReviewerID  string `json:"reviewerId,omitempty"`
-	ReviewNote  string `json:"reviewNote,omitempty"`
-	CreatedAt   int64  `json:"createdAt"`
-	ReviewedAt  *int64 `json:"reviewedAt,omitempty"`
-
-	// Relations
-	Reporter *User `json:"reporter,omitempty"`
-	Reviewer *User `json:"reviewer,omitempty"`
 }

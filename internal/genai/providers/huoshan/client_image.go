@@ -10,7 +10,20 @@ import (
 	arkmodel "github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
 
+// ImageMode defines Seedream generation modes (Seedream 5.0 lite).
+// 文生图、图文生图、多图融合、单张图生组图、文生组图、多参考图生组图、联网搜索生图
+const (
+	ImageModeTextToImage       = "text_to_image"        // 文生图
+	ImageModeImageTextToImage  = "image_text_to_image"  // 图文生图
+	ImageModeMultiImageFusion  = "multi_image_fusion"   // 多图融合（多图输入单图输出）
+	ImageModeSingleToImageSet  = "single_to_image_set"  // 单张图生组图
+	ImageModeTextToImageSet    = "text_to_image_set"    // 文生组图
+	ImageModeMultiRefToImageSet = "multi_ref_to_image_set" // 多参考图生组图
+	ImageModeWebSearchToImage  = "web_search_to_image"  // 联网搜索生图（需启用 optimize_prompt）
+)
+
 // ImageGenerationRequest represents the payload for Doubao Seedream image generation.
+// Supports: 文生图、图文生图、多图融合、单张图生组图、文生组图、多参考图生组图、联网搜索生图
 type ImageGenerationRequest struct {
 	Model                            string                 `json:"model"`
 	Prompt                           string                 `json:"prompt"`
@@ -24,6 +37,10 @@ type ImageGenerationRequest struct {
 	ResponseFormat                   string                 `json:"response_format,omitempty"`
 	Watermark                        *bool                  `json:"watermark,omitempty"`
 	OptimizePromptOptions            map[string]interface{} `json:"optimize_prompt_options,omitempty"`
+	// Mode hints Seedream mode; when set, overrides SequentialImageGeneration/Image logic
+	Mode       string `json:"mode,omitempty"`
+	MaxImages  int    `json:"max_images,omitempty"`  // For image set modes (单张图生组图、文生组图、多参考图生组图)
+	WebSearch  bool   `json:"web_search,omitempty"`  // 联网搜索生图: enable web search for prompt
 }
 
 // ImageGenerationResponse captures the response from the image generation endpoint.
@@ -102,7 +119,40 @@ func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireIma
 		}
 	}
 
+	// Derive SequentialImageGeneration, OptimizePrompt, and requireImage from Mode
 	sequentialMode := strings.TrimSpace(payload.SequentialImageGeneration)
+	mode := strings.TrimSpace(payload.Mode)
+	effectiveRequireImage := requireImage
+	if mode != "" {
+		switch mode {
+		case ImageModeTextToImageSet, ImageModeSingleToImageSet, ImageModeMultiRefToImageSet:
+			sequentialMode = "enabled"
+			if mode == ImageModeSingleToImageSet || mode == ImageModeMultiRefToImageSet {
+				effectiveRequireImage = true // 单张图生组图、多参考图生组图必须提供参考图
+			}
+			if payload.SequentialImageGenerationOptions == nil {
+				payload.SequentialImageGenerationOptions = make(map[string]interface{})
+			}
+			if payload.MaxImages > 0 && payload.SequentialImageGenerationOptions["max_images"] == nil {
+				payload.SequentialImageGenerationOptions["max_images"] = payload.MaxImages
+			} else if payload.MaxImages == 0 && payload.SequentialImageGenerationOptions["max_images"] == nil {
+				// 组图模式未指定时默认 4 张
+				payload.SequentialImageGenerationOptions["max_images"] = 4
+			}
+		case ImageModeImageTextToImage, ImageModeMultiImageFusion:
+			effectiveRequireImage = true // 图文生图、多图融合必须提供图
+			if mode == ImageModeMultiImageFusion {
+				sequentialMode = "disabled"
+			}
+		case ImageModeWebSearchToImage:
+			if payload.OptimizePromptOptions == nil {
+				payload.OptimizePromptOptions = make(map[string]interface{})
+			}
+			payload.OptimizePromptOptions["enable"] = true
+		default:
+			sequentialMode = "disabled"
+		}
+	}
 	if sequentialMode == "" {
 		sequentialMode = "disabled"
 	}
@@ -139,11 +189,16 @@ func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireIma
 	}
 
 	if len(payload.SequentialImageGenerationOptions) > 0 {
-		if opts := toSequentialImageGenerationOptions(payload.SequentialImageGenerationOptions); opts != nil {
+		opts := toSequentialImageGenerationOptions(payload.SequentialImageGenerationOptions)
+		if opts != nil {
 			request.SequentialImageGenerationOptions = opts
 		}
 	}
 
+	if payload.WebSearch {
+		enable := true
+		request.OptimizePrompt = &enable
+	}
 	if len(payload.OptimizePromptOptions) > 0 {
 		if optimize := toBoolPointer(payload.OptimizePromptOptions["enable"]); optimize != nil {
 			request.OptimizePrompt = optimize
@@ -156,7 +211,10 @@ func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireIma
 			return arkmodel.GenerateImagesRequest{}, err
 		}
 		request.Image = normalized
-	} else if requireImage {
+	} else if effectiveRequireImage {
+		if mode != "" {
+			return arkmodel.GenerateImagesRequest{}, fmt.Errorf("image is required for mode %s", mode)
+		}
 		return arkmodel.GenerateImagesRequest{}, fmt.Errorf("image is required")
 	}
 

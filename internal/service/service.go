@@ -3,35 +3,42 @@ package service
 import (
 	"context"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
 
 // Service exposes business logic
 type Service struct {
-	repo          domain.Repository
-	log           *zap.Logger
-	logger        *zap.Logger // 别名，用于新代码
-	cache         interface{} // Cache 接口
-	genAPI        *genapi.GenAPI
-	geminiClient  *gemini.Client
-	aiGenService  *AIGenerationService // AI生成服务（统一管理AI能力使用）
-	imageProvider string               // Provider for image generation (gemini, huoshan)
-	videoProvider string               // Provider for video generation (gemini, huoshan, hailuo)
+	repo             domain.Repository
+	log              *zap.Logger
+	logger           *zap.Logger // 别名，用于新代码
+	cache            interface{} // Cache 接口
+	genAPI           *genapi.GenAPI
+	geminiClient     *gemini.Client
+	aiGenService     *AIGenerationService   // AI生成服务（统一管理AI能力使用）
+	imageProvider    string                 // Provider for image generation (gemini, huoshan)
+	videoProvider    string                 // Provider for video generation (gemini, huoshan, hailuo)
+	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
+	userStatsService *UserStatisticsService // 用户统计服务
+	recoCfg          config.RecommendationConfig
+	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
 }
 
 // New creates a new service instance
-func New(repo domain.Repository, log *zap.Logger) *Service {
+func New(repo domain.Repository, log *zap.Logger, recoCfg config.RecommendationConfig) *Service {
 	return &Service{
 		repo:          repo,
 		log:           log,
 		logger:        log,
-		cache:         nil,      // 稍后通过 SetCache 设置
+		cache:         nil,       // 稍后通过 SetCache 设置
 		imageProvider: "huoshan", // Default image provider
-		videoProvider: "hailuo", // Default video provider
+		videoProvider: "huoshan", // Default video provider (火山优先)
+		recoCfg:       recoCfg,
 	}
 }
 
@@ -48,6 +55,11 @@ func (s *Service) SetAIConfig(cfg config.AIConfig) {
 		zap.String("videoProvider", s.videoProvider))
 }
 
+// SetFragmentComicStyleService 注入碎片风格目录服务（用于预填等按 value 解析展示名）。
+func (s *Service) SetFragmentComicStyleService(svc *FragmentComicStyleService) {
+	s.comicStyleSvc = svc
+}
+
 // SetCache 设置缓存实例
 func (s *Service) SetCache(cache interface{}) {
 	s.cache = cache
@@ -61,16 +73,41 @@ func (s *Service) SetAIClients(genAPI *genapi.GenAPI, geminiClient *gemini.Clien
 	// 初始化AI生成服务
 	if genAPI != nil || geminiClient != nil {
 		s.aiGenService = NewAIGenerationService(s.repo, geminiClient, genAPI, s.logger)
+		// Set metrics if available
+		if s.metrics != nil {
+			s.aiGenService.SetMetrics(s.metrics)
+		}
 		s.logger.Info("AI generation service initialized")
-		
+
 		// 恢复未完成的视频生成任务
 		go s.RecoverPendingVideoGenerations(context.Background())
+	}
+}
+
+// SetMetrics 设置 Prometheus metrics
+func (s *Service) SetMetrics(metrics *telemetry.Metrics) {
+	s.metrics = metrics
+	// 初始化用户统计服务
+	if s.cache != nil {
+		if cache, ok := s.cache.(cache.Cache); ok {
+			s.userStatsService = NewUserStatisticsService(s.repo, cache, s.logger, metrics)
+		}
 	}
 }
 
 // AIGenerationService 获取AI生成服务
 func (s *Service) AIGenerationService() *AIGenerationService {
 	return s.aiGenService
+}
+
+// AIService 获取AI服务（用于 FragmentGenerationService）
+func (s *Service) AIService() *AIService {
+	return NewAIService(s.genAPI, s.geminiClient, s.aiGenService, s.imageProvider, s.videoProvider, s.repo, s.logger)
+}
+
+// UserStatsService 获取用户统计服务
+func (s *Service) UserStatsService() *UserStatisticsService {
+	return s.userStatsService
 }
 
 // Health returns service health status

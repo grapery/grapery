@@ -1,8 +1,10 @@
 package telemetry
 
 import (
+	"context"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -16,7 +18,18 @@ type LoggerConfig struct {
 
 // NewLogger returns a configured zap.Logger instance
 func NewLogger(level string) (*zap.Logger, error) {
-	return NewLoggerWithConfig(LoggerConfig{Level: level})
+	return NewLoggerWithConfig(LoggerConfig{
+		Level: level,
+		SLS: &SLSConfig{
+			Endpoint:        "cn-hangzhou.log.aliyuncs.com",
+			AccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
+			AccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
+			Project:         "grapery-dev",
+			Logstore:        "apiservice",
+			Topic:           "api-backend",
+			Source:          "backend",
+		},
+	})
 }
 
 // NewLoggerWithConfig returns a configured zap.Logger with optional SLS integration
@@ -48,7 +61,6 @@ func NewLoggerWithConfig(config LoggerConfig) (*zap.Logger, error) {
 	)
 
 	cores := []zapcore.Core{consoleCore}
-
 	// Add SLS core if configured
 	if config.SLS != nil && config.SLS.Endpoint != "" {
 		slsCore, err := NewSLSCore(*config.SLS, lvl)
@@ -102,6 +114,7 @@ type TelemetryManager struct {
 	Logger  *zap.Logger
 	Metrics *Metrics
 	SLSCore *SLSCore
+	Tracer  *TracerProvider
 	config  TelemetryManagerConfig
 }
 
@@ -110,6 +123,7 @@ type TelemetryManagerConfig struct {
 	LogLevel   string
 	SLS        *SLSConfig
 	Prometheus *PrometheusConfig
+	Tracing    *TracingConfig
 }
 
 // NewTelemetryManager creates a new telemetry manager
@@ -137,6 +151,16 @@ func NewTelemetryManager(config TelemetryManagerConfig) (*TelemetryManager, erro
 		tm.Metrics = NewMetrics(*config.Prometheus)
 	}
 
+	// Initialize tracing if enabled
+	if config.Tracing != nil {
+		tracer, err := NewTracerProvider(*config.Tracing, logger)
+		if err != nil {
+			logger.Error("Failed to initialize tracer provider", zap.Error(err))
+			return nil, err
+		}
+		tm.Tracer = tracer
+	}
+
 	return tm, nil
 }
 
@@ -150,5 +174,10 @@ func (tm *TelemetryManager) Close() {
 	}
 	if tm.Metrics != nil {
 		tm.Metrics.Stop()
+	}
+	if tm.Tracer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tm.Tracer.Shutdown(ctx)
 	}
 }

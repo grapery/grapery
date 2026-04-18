@@ -2,8 +2,11 @@ package http
 
 import (
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 )
 
 // Response 统一响应格式
@@ -62,6 +65,9 @@ func Error(c *gin.Context, code int, message string) {
 		statusCode = http.StatusInternalServerError
 	}
 
+	// Record error metrics
+	recordHTTPError(c, code)
+
 	c.JSON(statusCode, Response{
 		Code:    code,
 		Message: message,
@@ -71,6 +77,9 @@ func Error(c *gin.Context, code int, message string) {
 
 // ErrorWithData 错误响应（带数据）
 func ErrorWithData(c *gin.Context, code int, message string, data interface{}) {
+	// Record error metrics
+	recordHTTPError(c, code)
+
 	c.JSON(http.StatusOK, Response{
 		Code:    code,
 		Message: message,
@@ -134,4 +143,38 @@ func SuccessPaginated(c *gin.Context, items interface{}, total int64, page, page
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	})
+}
+
+// recordHTTPError 记录 HTTP 错误到 Prometheus metrics
+func recordHTTPError(c *gin.Context, errorCode int) {
+	metrics := telemetry.GetDefaultMetrics()
+	if metrics == nil {
+		return
+	}
+
+	// 获取请求开始时间
+	var duration time.Duration
+	if startTime, exists := c.Get("request_start_time"); exists {
+		if start, ok := startTime.(time.Time); ok {
+			duration = time.Since(start)
+		}
+	}
+
+	// 如果无法获取开始时间，使用当前时间（duration 为 0）
+	if duration == 0 {
+		duration = 0
+	}
+
+	// 获取 HTTP 方法和路径
+	method := c.Request.Method
+	path := c.Request.URL.Path
+	if c.FullPath() != "" {
+		path = c.FullPath()
+	}
+
+	// 将错误码转换为字符串
+	errorCodeStr := strconv.Itoa(errorCode)
+
+	// 记录错误 metrics
+	metrics.RecordHTTPError(errorCodeStr, method, path, duration)
 }

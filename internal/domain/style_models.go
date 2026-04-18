@@ -6,7 +6,6 @@ type StyleConfig struct {
 	Style          string `json:"style"`
 	Description    string `json:"description"`
 	SampleImageURL string `json:"sampleImageUrl,omitempty"` // 示例图片URL
-	GroupID        string `json:"groupId,omitempty"`        // 所属小组ID（私有风格）
 	UserID         string `json:"userId,omitempty"`         // 所属用户ID（私有风格）
 	CreatedAt      int64  `json:"createdAt"`
 	UpdatedAt      int64  `json:"updatedAt"`

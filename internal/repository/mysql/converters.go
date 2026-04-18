@@ -2,8 +2,10 @@ package mysql
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -74,6 +76,56 @@ func stringPtrToString(ptr *string) string {
 	return *ptr
 }
 
+// ========== StyleConfig JSON 转换 ==========
+
+// styleConfigToJSON 将 *domain.StyleConfig 序列化为 JSON 字符串
+func styleConfigToJSON(style *domain.StyleConfig) string {
+	if style == nil {
+		return ""
+	}
+	data, err := json.Marshal(style)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToStyleConfig 将 JSON 字符串反序列化为 *domain.StyleConfig
+func jsonToStyleConfig(jsonStr string) *domain.StyleConfig {
+	if jsonStr == "" {
+		return nil
+	}
+	var style domain.StyleConfig
+	if err := json.Unmarshal([]byte(jsonStr), &style); err != nil {
+		return nil
+	}
+	return &style
+}
+
+// aiAssistanceOptionsToJSON 将 *domain.AIAssistanceOptions 序列化为 JSON 字符串
+func aiAssistanceOptionsToJSON(options *domain.AIAssistanceOptions) string {
+	if options == nil {
+		return ""
+	}
+	data, err := json.Marshal(options)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// jsonToAIAssistanceOptions 将 JSON 字符串反序列化为 *domain.AIAssistanceOptions
+func jsonToAIAssistanceOptions(jsonStr string) *domain.AIAssistanceOptions {
+	if jsonStr == "" {
+		return nil
+	}
+	var options domain.AIAssistanceOptions
+	if err := json.Unmarshal([]byte(jsonStr), &options); err != nil {
+		return nil
+	}
+	return &options
+}
+
 // ========== User 转换 ==========
 
 // UserToModel 将 domain.User 转换为 MySQL User 模型
@@ -111,7 +163,11 @@ func ModelToUser(m *User) *domain.User {
 		return nil
 	}
 	return &domain.User{
-		ID:                  m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: m.CreatedAt,
+			UpdatedAt: m.UpdatedAt,
+		},
 		Username:            m.Username,
 		Email:               m.Email,
 		PasswordHash:        m.PasswordHash,
@@ -123,14 +179,14 @@ func ModelToUser(m *User) *domain.User {
 		Website:             m.Website,
 		AIPromptPreferences: m.AIPromptPreferences,
 		DateOfBirth:         int64ToInt64Ptr(m.DateOfBirth),
-		Followers:           m.Followers,
-		Following:           m.Following,
-		StoryboardCount:     m.StoryboardCount,
-		Status:              m.Status,
-		EmailVerified:       m.EmailVerified,
-		LastLoginAt:         int64ToInt64Ptr(m.LastLoginAt),
-		CreatedAt:           m.CreatedAt,
-		UpdatedAt:           m.UpdatedAt,
+		SocialStats: common.SocialStats{
+			Followers: m.Followers,
+			Following: m.Following,
+		},
+		StoryboardCount: m.StoryboardCount,
+		Status:          m.Status,
+		EmailVerified:   m.EmailVerified,
+		LastLoginAt:     int64ToInt64Ptr(m.LastLoginAt),
 	}
 }
 
@@ -142,21 +198,26 @@ func StoryToModel(d *domain.Story) *Story {
 		return nil
 	}
 	return &Story{
-		ID:                d.ID,
-		Title:             d.Title,
-		Description:       d.Description,
-		CoverImage:        d.CoverImage,
-		AuthorID:          d.AuthorID,
-		GroupID:           stringToStringPtr(d.GroupID),
-		Likes:             d.Likes,
-		Followers:         d.Followers,
-		Panels:            d.Panels,
-		StoryboardCount:   d.StoryboardCount,
-		DefaultSceneCount: d.DefaultSceneCount,
-		Genre:             d.Genre,
-		Status:            d.Status,
-		CreatedAt:         unixToTime(d.CreatedAt),
-		UpdatedAt:         unixToTime(d.UpdatedAt),
+		ID:                  d.ID,
+		Title:               d.Title,
+		Description:         d.Description,
+		CoverImage:          d.CoverImage,
+		UserID:              d.UserID,
+		SourceFragmentID:    d.SourceFragmentID,
+		Likes:               d.Likes,
+		Followers:           d.Followers,
+		Panels:              d.PanelCount,
+		StoryboardCount:     d.StoryboardCount,
+		DefaultSceneCount:   d.DefaultSceneCount,
+		Genre:               d.Genre,
+		Style:               styleConfigToJSON(d.Style),
+		Status:              d.Status,
+		IsCollaborationOpen: d.IsCollaborationOpen,
+		Visibility:          d.Visibility,
+		UseAI:               d.UseAI,
+		AIAssistanceOptions: aiAssistanceOptionsToJSON(d.AIAssistanceOptions),
+		CreatedAt:           unixToTime(d.CreatedAt),
+		UpdatedAt:           unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -166,21 +227,30 @@ func ModelToStory(m *Story) *domain.Story {
 		return nil
 	}
 	d := &domain.Story{
-		ID:                m.ID,
-		Title:             m.Title,
-		Description:       m.Description,
-		CoverImage:        m.CoverImage,
-		AuthorID:          m.AuthorID,
-		GroupID:           stringPtrToString(m.GroupID),
-		Likes:             m.Likes,
-		Followers:         m.Followers,
-		Panels:            m.Panels,
-		StoryboardCount:   m.StoryboardCount,
-		DefaultSceneCount: m.DefaultSceneCount,
-		Genre:             m.Genre,
-		Status:            m.Status,
-		CreatedAt:         timeToUnix(m.CreatedAt),
-		UpdatedAt:         timeToUnix(m.UpdatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
+		Title:            m.Title,
+		Description:      m.Description,
+		CoverImage:       m.CoverImage,
+		UserID:           m.UserID,
+		SourceFragmentID: m.SourceFragmentID,
+		EngagementStats: common.EngagementStats{
+			Likes: m.Likes,
+		},
+		Followers:           m.Followers,
+		PanelCount:          m.Panels,
+		StoryboardCount:     m.StoryboardCount,
+		DefaultSceneCount:   m.DefaultSceneCount,
+		Genre:               m.Genre,
+		Style:               jsonToStyleConfig(m.Style),
+		Status:              m.Status,
+		IsCollaborationOpen: m.IsCollaborationOpen,
+		Visibility:          m.Visibility,
+		UseAI:               m.UseAI,
+		AIAssistanceOptions: jsonToAIAssistanceOptions(m.AIAssistanceOptions),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
@@ -214,7 +284,11 @@ func ModelToPanel(m *Panel) *domain.Panel {
 		return nil
 	}
 	return &domain.Panel{
-		ID:        m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:   m.StoryID,
 		Sequence:  m.Sequence,
 		Title:     m.Title,
@@ -222,7 +296,6 @@ func ModelToPanel(m *Panel) *domain.Panel {
 		Image:     m.Image,
 		Likes:     m.Likes,
 		Published: m.Published,
-		CreatedAt: timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -237,7 +310,7 @@ func StoryboardToModel(d *domain.Storyboard) *Storyboard {
 		ID:               d.ID,
 		StoryID:          d.StoryID,
 		ParentID:         stringToStringPtr(d.ParentID),
-		CreatorID:        d.CreatorID,
+		UserID:           d.UserID,
 		Title:            d.Title,
 		Content:          d.Content,
 		RawInput:         d.RawInput,
@@ -263,28 +336,32 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 		return nil
 	}
 	d := &domain.Storyboard{
-		ID:               m.ID,
-		StoryID:          m.StoryID,
-		ParentID:         stringPtrToString(m.ParentID),
-		CreatorID:        m.CreatorID,
-		CreatorName:      m.Creator.DisplayName,
-		CreatorAvatar:    m.Creator.Avatar,
-		Title:            m.Title,
-		Content:          m.Content,
-		RawInput:         m.RawInput,
-		IsStandalone:     m.IsStandalone,
-		IsAIGenerated:    m.IsAIGenerated,
-		SceneCount:       m.SceneCount,
-		WorkflowStatus:   m.WorkflowStatus,
-		CurrentStep:      m.CurrentStep,
-		Likes:            m.Likes,
-		Comments:         m.Comments,
-		Shares:           m.Shares,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
+		StoryID:        m.StoryID,
+		ParentID:       stringPtrToString(m.ParentID),
+		UserID:         m.UserID,
+		CreatorName:    m.Creator.DisplayName,
+		CreatorAvatar:  m.Creator.Avatar,
+		Title:          m.Title,
+		Content:        m.Content,
+		RawInput:       m.RawInput,
+		IsStandalone:   m.IsStandalone,
+		IsAIGenerated:  m.IsAIGenerated,
+		SceneCount:     m.SceneCount,
+		WorkflowStatus: m.WorkflowStatus,
+		CurrentStep:    m.CurrentStep,
+		EngagementStats: common.EngagementStats{
+			Likes:    m.Likes,
+			Comments: m.Comments,
+			Shares:   m.Shares,
+			Views:    m.Views,
+		},
 		ForkCount:        m.ForkCount,
-		Views:            m.Views,
 		TokenConsumption: m.TokenConsumption,
-		CreatedAt:        timeToUnix(m.CreatedAt),
-		UpdatedAt:        timeToUnix(m.UpdatedAt),
 	}
 	// AfterFind hook will populate transient fields
 	return d
@@ -307,9 +384,9 @@ func modelToStoryScene(m *StoryScene) *domain.StoryScene {
 		SourceImage:  m.SourceImage,
 		CreatedBy:    m.CreatedBy,
 		LastEditedBy: m.LastEditedBy,
-		IsPublic:     m.IsPublic,
 		CreatedAt:    timeToUnix(m.CreatedAt),
 		UpdatedAt:    timeToUnix(m.UpdatedAt),
+		IsPublic:     m.IsPublic,
 	}
 }
 
@@ -342,15 +419,19 @@ func characterLinkToDomain(c *Character) domain.Character {
 		return domain.Character{}
 	}
 	return domain.Character{
-		ID:          c.ID,
-		StoryID:     c.StoryID,
-		Name:        c.Name,
-		Description: c.Description,
-		Avatar:      c.Avatar,
-		Poster:      c.Poster,
-		IsPublic:    c.IsPublic,
-		CreatedAt:   c.CreatedAt.Unix(),
-		UpdatedAt:   c.UpdatedAt.Unix(),
+		BaseModel: common.BaseModel{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt.Unix(),
+			UpdatedAt: c.UpdatedAt.Unix(),
+		},
+		StoryID:                  c.StoryID,
+		Name:                     c.Name,
+		Description:              c.Description,
+		Avatar:                   c.Avatar,
+		Poster:                   c.Poster,
+		Portrait:                 c.Portrait,
+		PortraitGenerationStatus: c.PortraitGenerationStatus,
+		IsPublic:                 c.IsPublic,
 	}
 }
 
@@ -378,31 +459,53 @@ func CharacterToModel(d *domain.Character) *Character {
 	if d == nil {
 		return nil
 	}
-	return &Character{
-		ID:           d.ID,
-		StoryID:      d.StoryID,
-		Name:         d.Name,
-		Description:  d.Description,
-		Avatar:       d.Avatar,
-		Poster:       d.Poster,
-		AuthorID:     d.AuthorID,
-		Personality:  d.Personality,
-		Background:   d.Background,
-		SourceType:   d.SourceType,
-		SourcePrompt: d.SourcePrompt,
-		SourceImage:  d.SourceImage,
-		CreatedBy:    d.CreatedBy,
-		LastEditedBy: d.LastEditedBy,
-		Likes:        d.Likes,
-		Followers:    d.Followers,
-		Stories:      d.Stories,
-		Traits:       d.TraitsJSON,
-		Skills:       d.SkillsJSON,
-		IsPublic:     d.IsPublic,
-		GroupID:      d.GroupID,
-		CreatedAt:    unixToTime(d.CreatedAt),
-		UpdatedAt:    unixToTime(d.UpdatedAt),
+	ch := &Character{
+		ID:                       d.ID,
+		StoryID:                  d.StoryID,
+		Name:                     d.Name,
+		Description:              d.Description,
+		Avatar:                   d.Avatar,
+		Poster:                   d.Poster,
+		Portrait:                 d.Portrait,
+		NeedsPortrait:            d.NeedsPortrait,
+		ReferenceImage:           d.ReferenceImage,
+		PortraitGenerationStatus: d.PortraitGenerationStatus,
+		UserID:                   d.UserID,
+		Personality:              d.Personality,
+		Background:               d.Background,
+		ShortTermGoal:            d.ShortTermGoal,
+		LongTermGoal:             d.LongTermGoal,
+		HandlingStyle:            d.HandlingStyle,
+		CognitionRange:           d.CognitionRange,
+		AbilityFeatures:          d.AbilityFeatures,
+		Appearance:               d.Appearance,
+		DressPreference:          d.DressPreference,
+		Role:                     d.Role,
+		SourceType:               d.SourceType,
+		SourcePrompt:             d.SourcePrompt,
+		SourceImage:              d.SourceImage,
+		CreatedBy:                d.CreatedBy,
+		LastEditedBy:             d.LastEditedBy,
+		Likes:                    d.Likes,
+		Comments:                 d.Comments,
+		Shares:                   d.Shares,
+		Followers:                d.Followers,
+		Stories:                  d.Stories,
+		Traits:                   d.TraitsJSON,
+		Skills:                   d.SkillsJSON,
+		IsPublic:                 d.IsPublic,
+		CreatedAt:                unixToTime(d.CreatedAt),
+		UpdatedAt:                unixToTime(d.UpdatedAt),
 	}
+	if d.Views != nil {
+		if b, err := json.Marshal(d.Views); err == nil && strings.TrimSpace(string(b)) != "" {
+			ch.ViewsJSON = string(b)
+		}
+	}
+	if strings.TrimSpace(ch.ViewsJSON) == "" {
+		ch.ViewsJSON = "{}"
+	}
+	return ch
 }
 
 // ModelToCharacter 将 MySQL Character 模型转换为 domain.Character
@@ -411,78 +514,55 @@ func ModelToCharacter(m *Character) *domain.Character {
 		return nil
 	}
 	d := &domain.Character{
-		ID:           m.ID,
-		StoryID:      m.StoryID,
-		AuthorID:     m.AuthorID,
-		Name:         m.Name,
-		Description:  m.Description,
-		Avatar:       m.Avatar,
-		Poster:       m.Poster,
-		Personality:  m.Personality,
-		Background:   m.Background,
-		TraitsJSON:   m.Traits,
-		SkillsJSON:   m.Skills,
-		IsPublic:     m.IsPublic,
-		SourceType:   m.SourceType,
-		SourcePrompt: m.SourcePrompt,
-		SourceImage:  m.SourceImage,
-		CreatedBy:    m.CreatedBy,
-		LastEditedBy: m.LastEditedBy,
-		GroupID:      m.GroupID,
-		Likes:        m.Likes,
-		Followers:    m.Followers,
-		Stories:      m.Stories,
-		CreatedAt:    timeToUnix(m.CreatedAt),
-		UpdatedAt:    timeToUnix(m.UpdatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
+		StoryID:                  m.StoryID,
+		UserID:                   m.UserID,
+		Name:                     m.Name,
+		Description:              m.Description,
+		Avatar:                   m.Avatar,
+		Poster:                   m.Poster,
+		Portrait:                 m.Portrait,
+		NeedsPortrait:            m.NeedsPortrait,
+		ReferenceImage:           m.ReferenceImage,
+		PortraitGenerationStatus: m.PortraitGenerationStatus,
+		Personality:              m.Personality,
+		Background:               m.Background,
+		ShortTermGoal:            m.ShortTermGoal,
+		LongTermGoal:             m.LongTermGoal,
+		HandlingStyle:            m.HandlingStyle,
+		CognitionRange:           m.CognitionRange,
+		AbilityFeatures:          m.AbilityFeatures,
+		Appearance:               m.Appearance,
+		DressPreference:          m.DressPreference,
+		Role:                     m.Role,
+		TraitsJSON:               m.Traits,
+		SkillsJSON:               m.Skills,
+		IsPublic:                 m.IsPublic,
+		SourceType:               m.SourceType,
+		SourcePrompt:             m.SourcePrompt,
+		SourceImage:              m.SourceImage,
+		CreatedBy:                m.CreatedBy,
+		LastEditedBy:             m.LastEditedBy,
+		Likes:                    m.Likes,
+		Comments:                 m.Comments,
+		Shares:                   m.Shares,
+		Followers:                m.Followers,
+		Stories:                  m.Stories,
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
 	}
+	if strings.TrimSpace(m.ViewsJSON) != "" {
+		var tv domain.CharacterThreeViews
+		if err := json.Unmarshal([]byte(m.ViewsJSON), &tv); err == nil && (tv.Sheet != "" || tv.Front != "" || tv.Side != "" || tv.Back != "") {
+			d.Views = &tv
+		}
+	}
 	// AfterFind hook will populate Traits and Skills
-	return d
-}
-
-// ========== Group 转换 ==========
-
-// GroupToModel 将 domain.Group 转换为 MySQL Group 模型
-func GroupToModel(d *domain.Group) *Group {
-	if d == nil {
-		return nil
-	}
-	return &Group{
-		ID:          d.ID,
-		Name:        d.Name,
-		Description: d.Description,
-		Avatar:      d.Avatar,
-		Members:     d.Members,
-		Stories:     d.Stories,
-		CreatorID:   d.CreatorID,
-		Public:      d.Public,
-		CreatedAt:   unixToTime(d.CreatedAt),
-		UpdatedAt:   unixToTime(d.UpdatedAt),
-	}
-}
-
-// ModelToGroup 将 MySQL Group 模型转换为 domain.Group
-func ModelToGroup(m *Group) *domain.Group {
-	if m == nil {
-		return nil
-	}
-	d := &domain.Group{
-		ID:          m.ID,
-		CreatorID:   m.CreatorID,
-		Name:        m.Name,
-		Description: m.Description,
-		Avatar:      m.Avatar,
-		Members:     m.Members,
-		Stories:     m.Stories,
-		Public:      m.Public,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-		UpdatedAt:   timeToUnix(m.UpdatedAt),
-	}
-	if m.Creator.ID != "" {
-		d.Creator = ModelToUser(&m.Creator)
-	}
 	return d
 }
 
@@ -495,7 +575,7 @@ func CommentToModel(d *domain.Comment) *Comment {
 	}
 	return &Comment{
 		ID:         d.ID,
-		AuthorID:   d.AuthorID,
+		UserID:     d.UserID,
 		Content:    d.Content,
 		TargetType: d.TargetType,
 		TargetID:   d.TargetID,
@@ -515,8 +595,12 @@ func ModelToComment(m *Comment) *domain.Comment {
 		return nil
 	}
 	d := &domain.Comment{
-		ID:         m.ID,
-		AuthorID:   m.AuthorID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
+		UserID:     m.UserID,
 		Content:    m.Content,
 		TargetType: m.TargetType,
 		TargetID:   m.TargetID,
@@ -525,100 +609,11 @@ func ModelToComment(m *Comment) *domain.Comment {
 		Likes:      m.Likes,
 		Dislikes:   m.Dislikes,
 		ReplyCount: m.ReplyCount,
-		CreatedAt:  timeToUnix(m.CreatedAt),
-		UpdatedAt:  timeToUnix(m.UpdatedAt),
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
 	}
 	return d
-}
-
-// ========== ChatThread 转换 ==========
-
-// ChatThreadToModel 将 domain.ChatThread 转换为 MySQL ChatThread 模型
-func ChatThreadToModel(d *domain.ChatThread) *ChatThread {
-	if d == nil {
-		return nil
-	}
-	return &ChatThread{
-		ID:                   d.ID,
-		CharacterID:          d.CharacterID,
-		UserID:               d.UserID,
-		StoryTitle:           d.StoryTitle,
-		LastMessage:          d.LastMessage,
-		LastMessageTime:      unixToTime(d.LastMessageTime),
-		UnreadCount:          d.UnreadCount,
-		MessageCount:         d.MessageCount,
-		InteractionFrequency: d.InteractionFrequency,
-		CreatedAt:            unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToChatThread 将 MySQL ChatThread 模型转换为 domain.ChatThread
-func ModelToChatThread(m *ChatThread) *domain.ChatThread {
-	if m == nil {
-		return nil
-	}
-	d := &domain.ChatThread{
-		ID:                   m.ID,
-		UserID:               m.UserID,
-		CharacterID:          m.CharacterID,
-		CharacterName:        m.Character.Name,
-		CharacterAvatar:      m.Character.Avatar,
-		StoryTitle:           m.StoryTitle,
-		LastMessage:          m.LastMessage,
-		LastMessageTime:      timeToUnix(m.LastMessageTime),
-		UnreadCount:          m.UnreadCount,
-		MessageCount:         m.MessageCount,
-		InteractionFrequency: m.InteractionFrequency,
-		CreatedAt:            timeToUnix(m.CreatedAt),
-	}
-	if m.User.ID != "" {
-		d.User = ModelToUser(&m.User)
-	}
-	if m.Character.ID != "" {
-		d.Character = ModelToCharacter(&m.Character)
-	}
-	return d
-}
-
-// ========== ChatMessage 转换 ==========
-
-// ChatMessageToModel 将 domain.ChatMessage 转换为 MySQL ChatMessage 模型
-func ChatMessageToModel(d *domain.ChatMessage) *ChatMessage {
-	if d == nil {
-		return nil
-	}
-	return &ChatMessage{
-		ID:           d.ID,
-		ThreadID:     d.ThreadID,
-		SenderID:     d.SenderID,
-		SenderName:   d.SenderName,
-		SenderAvatar: d.SenderAvatar,
-		Content:      d.Content,
-		Image:        d.Image,
-		IsUser:       d.IsUser,
-		CreatedAt:    unixToTime(d.Timestamp),
-	}
-}
-
-// ModelToChatMessage 将 MySQL ChatMessage 模型转换为 domain.ChatMessage
-func ModelToChatMessage(m *ChatMessage) *domain.ChatMessage {
-	if m == nil {
-		return nil
-	}
-	return &domain.ChatMessage{
-		ID:           m.ID,
-		ThreadID:     m.ThreadID,
-		SenderID:     m.SenderID,
-		SenderName:   m.SenderName,
-		SenderAvatar: m.SenderAvatar,
-		Content:      m.Content,
-		Image:        m.Image,
-		Timestamp:    timeToUnix(m.CreatedAt),
-		IsUser:       m.IsUser,
-	}
 }
 
 // ========== 关系表转换 ==========
@@ -642,10 +637,12 @@ func ModelToUserFollow(m *UserFollow) *domain.UserFollow {
 		return nil
 	}
 	return &domain.UserFollow{
-		ID:         m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		FollowerID: m.FollowerID,
 		FolloweeID: m.FolloweeID,
-		CreatedAt:  timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -668,10 +665,12 @@ func ModelToStoryLike(m *StoryLike) *domain.StoryLike {
 		return nil
 	}
 	return &domain.StoryLike{
-		ID:        m.ID,
-		UserID:    m.UserID,
-		StoryID:   m.StoryID,
-		CreatedAt: timeToUnix(m.CreatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
+		UserID:  m.UserID,
+		StoryID: m.StoryID,
 	}
 }
 
@@ -694,10 +693,12 @@ func ModelToStoryFollow(m *StoryFollow) *domain.StoryFollow {
 		return nil
 	}
 	return &domain.StoryFollow{
-		ID:        m.ID,
-		UserID:    m.UserID,
-		StoryID:   m.StoryID,
-		CreatedAt: timeToUnix(m.CreatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
+		UserID:  m.UserID,
+		StoryID: m.StoryID,
 	}
 }
 
@@ -720,72 +721,12 @@ func ModelToCharacterFollow(m *CharacterFollow) *domain.CharacterFollow {
 		return nil
 	}
 	return &domain.CharacterFollow{
-		ID:          m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:      m.UserID,
 		CharacterID: m.CharacterID,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-	}
-}
-
-// GroupMemberToModel 将 domain.GroupMember 转换为 MySQL GroupMember 模型
-func GroupMemberToModel(d *domain.GroupMember) *GroupMember {
-	if d == nil {
-		return nil
-	}
-	return &GroupMember{
-		ID:       d.ID,
-		GroupID:  d.GroupID,
-		UserID:   d.UserID,
-		Role:     string(d.Role),
-		JoinedAt: unixToTime(d.JoinedAt),
-	}
-}
-
-// ModelToGroupMember 将 MySQL GroupMember 模型转换为 domain.GroupMember
-func ModelToGroupMember(m *GroupMember) *domain.GroupMember {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupMember{
-		ID:       m.ID,
-		GroupID:  m.GroupID,
-		UserID:   m.UserID,
-		Role:     domain.GroupMemberRole(m.Role),
-		JoinedAt: timeToUnix(m.JoinedAt),
-	}
-}
-
-// GroupInvitationToModel 将 domain.GroupInvitation 转换为 MySQL GroupInvitation 模型
-func GroupInvitationToModel(d *domain.GroupInvitation) *GroupInvitation {
-	if d == nil {
-		return nil
-	}
-	return &GroupInvitation{
-		ID:        d.ID,
-		GroupID:   d.GroupID,
-		InviterID: d.InviterID,
-		InviteeID: d.InviteeID,
-		Status:    d.Status,
-		Message:   d.Message,
-		CreatedAt: unixToTime(d.CreatedAt),
-		ExpiresAt: unixToTime(d.ExpiresAt),
-	}
-}
-
-// ModelToGroupInvitation 将 MySQL GroupInvitation 模型转换为 domain.GroupInvitation
-func ModelToGroupInvitation(m *GroupInvitation) *domain.GroupInvitation {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupInvitation{
-		ID:        m.ID,
-		GroupID:   m.GroupID,
-		InviterID: m.InviterID,
-		InviteeID: m.InviteeID,
-		Status:    m.Status,
-		Message:   m.Message,
-		CreatedAt: timeToUnix(m.CreatedAt),
-		ExpiresAt: timeToUnix(m.ExpiresAt),
 	}
 }
 
@@ -809,11 +750,13 @@ func ModelToCommentLike(m *CommentLike) *domain.CommentLike {
 		return nil
 	}
 	return &domain.CommentLike{
-		ID:        m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:    m.UserID,
 		CommentID: m.CommentID,
 		IsLike:    m.IsLike,
-		CreatedAt: timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -836,10 +779,12 @@ func ModelToStoryboardLike(m *StoryboardLike) *domain.StoryboardLike {
 		return nil
 	}
 	return &domain.StoryboardLike{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:       m.UserID,
 		StoryboardID: m.StoryboardID,
-		CreatedAt:    timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -990,6 +935,7 @@ func StoryboardImageGenerationToModel(d *domain.StoryboardImageGeneration) *Stor
 		SceneDescription:    d.SceneDescription,
 		ReferenceImagesJSON: string(referenceImagesJSON),
 		GeneratedPrompt:     d.GeneratedPrompt,
+		PromptDetailsJSON:   promptDetailsToJSON(d.PromptDetails),
 		GeneratedImageURL:   d.GeneratedImageURL,
 		ImageWidth:          d.ImageWidth,
 		ImageHeight:         d.ImageHeight,
@@ -1017,6 +963,11 @@ func ModelToStoryboardImageGeneration(m *StoryboardImageGeneration) *domain.Stor
 		completedAt = &unix
 	}
 
+	var promptDetails *domain.ImagePromptDetails
+	if m.PromptDetailsJSON != "" {
+		promptDetails = jsonToPromptDetails(m.PromptDetailsJSON)
+	}
+
 	return &domain.StoryboardImageGeneration{
 		ID:                m.ID,
 		StoryboardID:      m.StoryboardID,
@@ -1025,6 +976,7 @@ func ModelToStoryboardImageGeneration(m *StoryboardImageGeneration) *domain.Stor
 		SceneDescription:  m.SceneDescription,
 		ReferenceImages:   referenceImages,
 		GeneratedPrompt:   m.GeneratedPrompt,
+		PromptDetails:     promptDetails,
 		GeneratedImageURL: m.GeneratedImageURL,
 		ImageWidth:        m.ImageWidth,
 		ImageHeight:       m.ImageHeight,
@@ -1050,25 +1002,29 @@ func StoryboardVideoGenerationToModel(d *domain.StoryboardVideoGeneration) *Stor
 	}
 
 	return &StoryboardVideoGeneration{
-		ID:                d.ID,
-		StoryboardID:      d.StoryboardID,
-		SceneID:           d.SceneID,
-		SceneTitle:        d.SceneTitle,
-		InputDescription:  d.InputDescription,
-		ReferenceImageURL: d.ReferenceImageURL,
-		EndFrameURL:       d.EndFrameURL,
-		GeneratedPrompt:   d.GeneratedPrompt,
-		GeneratedVideoURL: d.GeneratedVideoURL,
-		ProviderTaskID:    d.ProviderTaskID,
-		ProviderName:      d.ProviderName,
-		Duration:          d.Duration,
-		Status:            d.Status,
-		InputTokens:       d.InputTokens,
-		OutputTokens:      d.OutputTokens,
-		TotalTokens:       d.TotalTokens,
-		ErrorMessage:      d.ErrorMessage,
-		CreatedAt:         unixToTime(d.CreatedAt),
-		CompletedAt:       completedAt,
+		ID:                  d.ID,
+		StoryboardID:        d.StoryboardID,
+		SceneID:             d.SceneID,
+		SceneTitle:          d.SceneTitle,
+		InputDescription:    d.InputDescription,
+		ReferenceImageURL:   d.ReferenceImageURL,
+		EndFrameURL:         d.EndFrameURL,
+		GeneratedPrompt:     d.GeneratedPrompt,
+		PromptDetailsJSON:   videoPromptDetailsToJSON(d.PromptDetails),
+		GeneratedVideoURL:   d.GeneratedVideoURL,
+		ProviderTaskID:      d.ProviderTaskID,
+		ProviderName:        d.ProviderName,
+		Duration:            d.Duration,
+		Status:              d.Status,
+		InputTokens:         d.InputTokens,
+		OutputTokens:        d.OutputTokens,
+		TotalTokens:         d.TotalTokens,
+		ErrorMessage:        d.ErrorMessage,
+		IsSubdivided:        d.IsSubdivided,
+		VideoSegmentsJSON:   d.VideoSegmentsJSON,
+		MiddleFrameURLsJSON: d.MiddleFrameURLsJSON,
+		CreatedAt:           unixToTime(d.CreatedAt),
+		CompletedAt:         completedAt,
 	}
 }
 
@@ -1083,27 +1039,54 @@ func ModelToStoryboardVideoGeneration(m *StoryboardVideoGeneration) *domain.Stor
 		completedAt = &unix
 	}
 
-	return &domain.StoryboardVideoGeneration{
-		ID:                m.ID,
-		StoryboardID:      m.StoryboardID,
-		SceneID:           m.SceneID,
-		SceneTitle:        m.SceneTitle,
-		InputDescription:  m.InputDescription,
-		ReferenceImageURL: m.ReferenceImageURL,
-		EndFrameURL:       m.EndFrameURL,
-		GeneratedPrompt:   m.GeneratedPrompt,
-		GeneratedVideoURL: m.GeneratedVideoURL,
-		ProviderTaskID:    m.ProviderTaskID,
-		ProviderName:      m.ProviderName,
-		Duration:          m.Duration,
-		Status:            m.Status,
-		InputTokens:       m.InputTokens,
-		OutputTokens:      m.OutputTokens,
-		TotalTokens:       m.TotalTokens,
-		ErrorMessage:      m.ErrorMessage,
-		CreatedAt:         timeToUnix(m.CreatedAt),
-		CompletedAt:       completedAt,
+	var videoPromptDetails *domain.VideoPromptDetails
+	if m.PromptDetailsJSON != "" {
+		videoPromptDetails = jsonToVideoPromptDetails(m.PromptDetailsJSON)
 	}
+
+	result := &domain.StoryboardVideoGeneration{
+		ID:                  m.ID,
+		StoryboardID:        m.StoryboardID,
+		SceneID:             m.SceneID,
+		SceneTitle:          m.SceneTitle,
+		InputDescription:    m.InputDescription,
+		ReferenceImageURL:   m.ReferenceImageURL,
+		EndFrameURL:         m.EndFrameURL,
+		GeneratedPrompt:     m.GeneratedPrompt,
+		PromptDetails:       videoPromptDetails,
+		GeneratedVideoURL:   m.GeneratedVideoURL,
+		ProviderTaskID:      m.ProviderTaskID,
+		ProviderName:        m.ProviderName,
+		Duration:            m.Duration,
+		Status:              m.Status,
+		InputTokens:         m.InputTokens,
+		OutputTokens:        m.OutputTokens,
+		TotalTokens:         m.TotalTokens,
+		ErrorMessage:        m.ErrorMessage,
+		IsSubdivided:        m.IsSubdivided,
+		VideoSegmentsJSON:   m.VideoSegmentsJSON,
+		MiddleFrameURLsJSON: m.MiddleFrameURLsJSON,
+		CreatedAt:           timeToUnix(m.CreatedAt),
+		CompletedAt:         completedAt,
+	}
+
+	// Parse video segments from JSON
+	if m.VideoSegmentsJSON != "" {
+		var segments []domain.VideoSegmentInfo
+		if err := json.Unmarshal([]byte(m.VideoSegmentsJSON), &segments); err == nil {
+			result.VideoSegments = segments
+		}
+	}
+
+	// Parse middle frame URLs from JSON
+	if m.MiddleFrameURLsJSON != "" {
+		var urls []string
+		if err := json.Unmarshal([]byte(m.MiddleFrameURLsJSON), &urls); err == nil {
+			result.MiddleFrameURLs = urls
+		}
+	}
+
+	return result
 }
 
 // ========== Asset 转换 ==========
@@ -1184,7 +1167,10 @@ func ModelToNotification(m *Notification) *domain.Notification {
 		return nil
 	}
 	return &domain.Notification{
-		ID:          m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+		},
 		UserID:      m.UserID,
 		Type:        m.Type,
 		Title:       m.Title,
@@ -1194,7 +1180,6 @@ func ModelToNotification(m *Notification) *domain.Notification {
 		ActorID:     m.ActorID,
 		ActorName:   m.ActorName,
 		ActorAvatar: m.ActorAvatar,
-		CreatedAt:   timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -1205,19 +1190,34 @@ func UserSettingsToModel(d *domain.UserSettings) *UserSettings {
 	if d == nil {
 		return nil
 	}
+	preferredGenresJSON := "[]"
+	if b, err := json.Marshal(d.PreferredGenres); err == nil {
+		preferredGenresJSON = string(b)
+	}
 	return &UserSettings{
-		ID:                 d.ID,
-		UserID:             d.UserID,
-		Language:           d.Language,
-		Theme:              d.Theme,
-		EmailNotifications: d.EmailNotifications,
-		PushNotifications:  d.PushNotifications,
-		ShowAdultContent:   d.ShowAdultContent,
-		ProfileVisibility:  d.ProfileVisibility,
-		AllowComments:      d.AllowComments,
-		AllowMessages:      d.AllowMessages,
-		ShowOnlineStatus:   d.ShowOnlineStatus,
-		UpdatedAt:          unixToTime(d.UpdatedAt),
+		ID:                        d.ID,
+		UserID:                    d.UserID,
+		Language:                  d.Language,
+		Theme:                     d.Theme,
+		FontSize:                  d.FontSize,
+		DataSaver:                 d.DataSaver,
+		ProfileVisibility:         d.ProfileVisibility,
+		DefaultStoryVisibility:    d.DefaultStoryVisibility,
+		DefaultFragmentVisibility: d.DefaultFragmentVisibility,
+		AllowFollowFrom:           d.AllowFollowFrom,
+		AllowCommentsFrom:         d.AllowCommentsFrom,
+		AllowMessagesFrom:         d.AllowMessagesFrom,
+		ShowOnlineStatus:          d.ShowOnlineStatus,
+		ShowReadReceipts:          d.ShowReadReceipts,
+		ShowPublicStories:         d.ShowPublicStories,
+		ShowPublicFragments:       d.ShowPublicFragments,
+		ShowPublicBookmarks:       d.ShowPublicBookmarks,
+		AIEnabled:                 d.AIEnabled,
+		AIDataSharing:             d.AIDataSharing,
+		NotificationSettings:      d.NotificationSettings,
+		PreferredGenresJSON:       preferredGenresJSON,
+		TeenProtectionEnabled:     d.TeenProtectionEnabled,
+		UpdatedAt:                 d.UpdatedAt,
 	}
 }
 
@@ -1226,19 +1226,36 @@ func ModelToUserSettings(m *UserSettings) *domain.UserSettings {
 	if m == nil {
 		return nil
 	}
+	var preferredGenres []string
+	if strings.TrimSpace(m.PreferredGenresJSON) != "" {
+		_ = json.Unmarshal([]byte(m.PreferredGenresJSON), &preferredGenres)
+	}
 	return &domain.UserSettings{
-		ID:                 m.ID,
-		UserID:             m.UserID,
-		Language:           m.Language,
-		Theme:              m.Theme,
-		EmailNotifications: m.EmailNotifications,
-		PushNotifications:  m.PushNotifications,
-		ShowAdultContent:   m.ShowAdultContent,
-		ProfileVisibility:  m.ProfileVisibility,
-		AllowComments:      m.AllowComments,
-		AllowMessages:      m.AllowMessages,
-		ShowOnlineStatus:   m.ShowOnlineStatus,
-		UpdatedAt:          timeToUnix(m.UpdatedAt),
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: m.UpdatedAt,
+		},
+		UserID:                    m.UserID,
+		Language:                  m.Language,
+		Theme:                     m.Theme,
+		FontSize:                  m.FontSize,
+		DataSaver:                 m.DataSaver,
+		ProfileVisibility:         m.ProfileVisibility,
+		DefaultStoryVisibility:    m.DefaultStoryVisibility,
+		DefaultFragmentVisibility: m.DefaultFragmentVisibility,
+		AllowFollowFrom:           m.AllowFollowFrom,
+		AllowCommentsFrom:         m.AllowCommentsFrom,
+		AllowMessagesFrom:         m.AllowMessagesFrom,
+		ShowOnlineStatus:          m.ShowOnlineStatus,
+		ShowReadReceipts:          m.ShowReadReceipts,
+		ShowPublicStories:         m.ShowPublicStories,
+		ShowPublicFragments:       m.ShowPublicFragments,
+		ShowPublicBookmarks:       m.ShowPublicBookmarks,
+		AIEnabled:                 m.AIEnabled,
+		AIDataSharing:             m.AIDataSharing,
+		NotificationSettings:      m.NotificationSettings,
+		PreferredGenres:           preferredGenres,
+		TeenProtectionEnabled:     m.TeenProtectionEnabled,
 	}
 }
 
@@ -1378,12 +1395,24 @@ func AIGenerationRecordToModel(d *domain.AIGenerationRecord) *AIGenerationRecord
 		return nil
 	}
 
-	// 转换 Metadata
+	// 转换 Metadata。MySQL JSON 列不接受 ""（Error 3140: document is empty）；nil/序列化失败时用 "{}".
 	var metadataJSON string
 	if d.Metadata != nil {
-		if data, err := json.Marshal(d.Metadata); err == nil {
+		if data, err := json.Marshal(d.Metadata); err == nil && len(data) > 0 {
 			metadataJSON = string(data)
 		}
+	}
+	if strings.TrimSpace(metadataJSON) == "" {
+		metadataJSON = "{}"
+	}
+
+	inputParams := strings.TrimSpace(d.InputParams)
+	if inputParams == "" {
+		inputParams = "{}"
+	}
+	outputResult := strings.TrimSpace(d.OutputResult)
+	if outputResult == "" {
+		outputResult = "{}"
 	}
 
 	m := &AIGenerationRecord{
@@ -1397,8 +1426,8 @@ func AIGenerationRecordToModel(d *domain.AIGenerationRecord) *AIGenerationRecord
 		OriginalPrompt: d.OriginalPrompt,
 		EnhancedPrompt: d.EnhancedPrompt,
 		SystemPrompt:   d.SystemPrompt,
-		InputParams:    d.InputParams,
-		OutputResult:   d.OutputResult,
+		InputParams:    inputParams,
+		OutputResult:   outputResult,
 
 		// Token 消耗统计
 		InputTokens:  d.InputTokens,
@@ -1681,7 +1710,6 @@ func StyleConfigToModel(d *domain.StyleConfig) *StyleConfig {
 		Style:          d.Style,
 		Description:    d.Description,
 		SampleImageURL: d.SampleImageURL,
-		GroupID:        d.GroupID,
 		UserID:         d.UserID,
 		CreatedAt:      d.CreatedAt,
 		UpdatedAt:      d.UpdatedAt,
@@ -1694,14 +1722,12 @@ func ModelToStyleConfig(m *StyleConfig) *domain.StyleConfig {
 		return nil
 	}
 	return &domain.StyleConfig{
-		ID:             m.ID,
-		Style:          m.Style,
-		Description:    m.Description,
-		SampleImageURL: m.SampleImageURL,
-		GroupID:        m.GroupID,
-		UserID:         m.UserID,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
+		ID:          m.ID,
+		Style:       m.Style,
+		Description: m.Description,
+		UserID:      m.UserID,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
 	}
 }
 
@@ -1769,139 +1795,7 @@ func ModelToViewHistory(m *ViewHistory) *domain.ViewHistory {
 	}
 }
 
-// ========== Report 转换 ==========
-
-// ReportToModel 将 domain.Report 转换为 MySQL Report 模型
-func ReportToModel(d *domain.Report) *Report {
-	if d == nil {
-		return nil
-	}
-	var reviewedAt *time.Time
-	if d.ReviewedAt != nil && *d.ReviewedAt != 0 {
-		t := unixToTime(*d.ReviewedAt)
-		reviewedAt = &t
-	}
-	return &Report{
-		ID:          d.ID,
-		ReporterID:  d.ReporterID,
-		EntityType:  d.EntityType,
-		EntityID:    d.EntityID,
-		Reason:      d.Reason,
-		Description: d.Description,
-		Status:      d.Status,
-		ReviewerID:  d.ReviewerID,
-		ReviewNote:  d.ReviewNote,
-		CreatedAt:   unixToTime(d.CreatedAt),
-		ReviewedAt:  reviewedAt,
-	}
-}
-
-// ModelToReport 将 MySQL Report 模型转换为 domain.Report
-func ModelToReport(m *Report) *domain.Report {
-	if m == nil {
-		return nil
-	}
-	var reviewedAt *int64
-	if m.ReviewedAt != nil && !m.ReviewedAt.IsZero() {
-		unix := timeToUnix(*m.ReviewedAt)
-		reviewedAt = &unix
-	}
-	return &domain.Report{
-		ID:          m.ID,
-		ReporterID:  m.ReporterID,
-		EntityType:  m.EntityType,
-		EntityID:    m.EntityID,
-		Reason:      m.Reason,
-		Description: m.Description,
-		Status:      m.Status,
-		ReviewerID:  m.ReviewerID,
-		ReviewNote:  m.ReviewNote,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-		ReviewedAt:  reviewedAt,
-	}
-}
-
-// ========== UserActivity 转换 ==========
-
-// UserActivityToModel 将 domain.UserActivity 转换为 MySQL UserActivity 模型
-func UserActivityToModel(d *domain.UserActivity) *UserActivity {
-	if d == nil {
-		return nil
-	}
-	return &UserActivity{
-		ID:          d.ID,
-		UserID:      d.UserID,
-		Type:        d.Type,
-		TargetID:    d.TargetID,
-		TargetType:  d.TargetType,
-		TargetTitle: d.TargetTitle,
-		Message:     d.Message,
-		CreatedAt:   unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToUserActivity 将 MySQL UserActivity 模型转换为 domain.UserActivity
-func ModelToUserActivity(m *UserActivity) *domain.UserActivity {
-	if m == nil {
-		return nil
-	}
-	return &domain.UserActivity{
-		ID:          m.ID,
-		UserID:      m.UserID,
-		Type:        m.Type,
-		TargetID:    m.TargetID,
-		TargetType:  m.TargetType,
-		TargetTitle: m.TargetTitle,
-		Message:     m.Message,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-	}
-}
-
-// ========== CharacterPoster 转换 ==========
-
-// CharacterPosterToModel 将 domain.CharacterPoster 转换为 MySQL CharacterPoster 模型
-func CharacterPosterToModel(d *domain.CharacterPoster) *CharacterPoster {
-	if d == nil {
-		return nil
-	}
-	return &CharacterPoster{
-		ID:          d.ID,
-		CharacterID: d.CharacterID,
-		AuthorID:    d.AuthorID,
-		Type:        d.Type,
-		Title:       d.Title,
-		Image:       d.Image,
-		Video:       d.Video,
-		Thumbnail:   d.Thumbnail,
-		Duration:    d.Duration,
-		Prompt:      d.Prompt,
-		Likes:       d.Likes,
-		Shares:      d.Shares,
-		CreatedAt:   unixToTime(d.CreatedAt),
-	}
-}
-
-// ModelToCharacterPoster 将 MySQL CharacterPoster 模型转换为 domain.CharacterPoster
-func ModelToCharacterPoster(m *CharacterPoster) *domain.CharacterPoster {
-	if m == nil {
-		return nil
-	}
-	return &domain.CharacterPoster{
-		ID:          m.ID,
-		CharacterID: m.CharacterID,
-		AuthorID:    m.AuthorID,
-		Type:        m.Type,
-		Title:       m.Title,
-		Image:       m.Image,
-		Video:       m.Video,
-		Thumbnail:   m.Thumbnail,
-		Duration:    m.Duration,
-		Prompt:      m.Prompt,
-		Likes:       m.Likes,
-		Shares:      m.Shares,
-		CreatedAt:   timeToUnix(m.CreatedAt),
-	}
-}
+// REMOVED: CharacterPoster conversion functions - not in StoryCreationAppUI design
 
 // ========== CharacterAnalytics 转换 ==========
 
@@ -1926,49 +1820,14 @@ func ModelToCharacterAnalytics(m *CharacterAnalytics) *domain.CharacterAnalytics
 		return nil
 	}
 	return &domain.CharacterAnalytics{
-		ID:                   m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		CharacterID:          m.CharacterID,
 		UsersWhoChattedCount: m.UsersWhoChattedCount,
 		TotalMessagesSent:    m.TotalMessagesSent,
 		TotalTokensConsumed:  m.TotalTokensConsumed,
-		UpdatedAt:            timeToUnix(m.UpdatedAt),
-	}
-}
-
-// ========== GroupActivity 转换 ==========
-
-// GroupActivityToModel 将 domain.GroupActivity 转换为 MySQL GroupActivity 模型
-func GroupActivityToModel(d *domain.GroupActivity) *GroupActivity {
-	if d == nil {
-		return nil
-	}
-	return &GroupActivity{
-		ID:        d.ID,
-		GroupID:   d.GroupID,
-		Type:      d.Type,
-		UserID:    d.UserID,
-		StoryID:   stringToStringPtr(d.StoryID),
-		Message:   d.Message,
-		CreatedAt: unixToTime(d.Timestamp),
-	}
-}
-
-// ModelToGroupActivity 将 MySQL GroupActivity 模型转换为 domain.GroupActivity
-func ModelToGroupActivity(m *GroupActivity) *domain.GroupActivity {
-	if m == nil {
-		return nil
-	}
-	return &domain.GroupActivity{
-		ID:         m.ID,
-		GroupID:    m.GroupID,
-		Type:       m.Type,
-		UserID:     m.UserID,
-		UserName:   m.User.DisplayName,
-		UserAvatar: m.User.Avatar,
-		StoryID:    stringPtrToString(m.StoryID),
-		StoryTitle: getStoryTitle(m.Story),
-		Message:    m.Message,
-		Timestamp:  timeToUnix(m.CreatedAt),
 	}
 }
 
@@ -2009,15 +1868,6 @@ func ModelsToCharacters(models []Character) []*domain.Character {
 	return characters
 }
 
-// ModelsToGroups 批量转换 Group
-func ModelsToGroups(models []Group) []*domain.Group {
-	groups := make([]*domain.Group, len(models))
-	for i := range models {
-		groups[i] = ModelToGroup(&models[i])
-	}
-	return groups
-}
-
 // ModelsToComments 批量转换 Comment
 func ModelsToComments(models []Comment) []*domain.Comment {
 	comments := make([]*domain.Comment, len(models))
@@ -2034,24 +1884,6 @@ func ModelsToStoryboards(models []Storyboard) []*domain.Storyboard {
 		storyboards[i] = ModelToStoryboard(&models[i])
 	}
 	return storyboards
-}
-
-// ModelsToChatThreads 批量转换 ChatThread
-func ModelsToChatThreads(models []ChatThread) []*domain.ChatThread {
-	threads := make([]*domain.ChatThread, len(models))
-	for i := range models {
-		threads[i] = ModelToChatThread(&models[i])
-	}
-	return threads
-}
-
-// ModelsToChatMessages 批量转换 ChatMessage
-func ModelsToChatMessages(models []ChatMessage) []*domain.ChatMessage {
-	messages := make([]*domain.ChatMessage, len(models))
-	for i := range models {
-		messages[i] = ModelToChatMessage(&models[i])
-	}
-	return messages
 }
 
 // ModelsToNotifications 批量转换 Notification
@@ -2081,23 +1913,7 @@ func ModelsToTags(models []Tag) []*domain.Tag {
 	return tags
 }
 
-// ModelsToUserActivities 批量转换 UserActivity
-func ModelsToUserActivities(models []UserActivity) []*domain.UserActivity {
-	activities := make([]*domain.UserActivity, len(models))
-	for i := range models {
-		activities[i] = ModelToUserActivity(&models[i])
-	}
-	return activities
-}
-
-// ModelsToGroupActivities 批量转换 GroupActivity
-func ModelsToGroupActivities(models []GroupActivity) []*domain.GroupActivity {
-	activities := make([]*domain.GroupActivity, len(models))
-	for i := range models {
-		activities[i] = ModelToGroupActivity(&models[i])
-	}
-	return activities
-}
+// REMOVED: ModelsToUserActivities - not in StoryCreationAppUI design
 
 // ========== Agent 转换 ==========
 
@@ -2105,6 +1921,11 @@ func ModelsToGroupActivities(models []GroupActivity) []*domain.GroupActivity {
 func AgentToModel(d *domain.Agent) *Agent {
 	if d == nil {
 		return nil
+	}
+	// Default to empty JSON object for MySQL JSON column
+	configJSON := d.ConfigJSON
+	if configJSON == "" {
+		configJSON = "{}"
 	}
 	return &Agent{
 		ID:               d.ID,
@@ -2119,7 +1940,7 @@ func AgentToModel(d *domain.Agent) *Agent {
 		MaxTokens:        d.MaxTokens,
 		InteractionCount: d.InteractionCount,
 		SkillCount:       d.SkillCount,
-		Config:           d.ConfigJSON,
+		Config:           configJSON,
 		CreatedAt:        unixToTime(d.CreatedAt),
 		UpdatedAt:        unixToTime(d.UpdatedAt),
 	}
@@ -2485,13 +2306,15 @@ func ModelToStoryPublication(m *StoryPublication) *domain.StoryPublication {
 		return nil
 	}
 	pub := &domain.StoryPublication{
-		ID:           m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		StoryID:      m.StoryID,
 		Version:      m.Version,
 		Status:       m.Status,
 		RenderTaskID: m.RenderTaskID,
 		PublishedAt:  timeToUnix(m.PublishedAt),
-		UpdatedAt:    timeToUnix(m.UpdatedAt),
 	}
 
 	if m.UnpublishedAt != nil && !m.UnpublishedAt.IsZero() {
@@ -2524,19 +2347,22 @@ func SubscriptionPlanToModel(d *domain.SubscriptionPlan) *SubscriptionPlan {
 		return nil
 	}
 	return &SubscriptionPlan{
-		ID:            d.ID,
-		Name:          d.Name,
-		Price:         d.Price,
-		Currency:      d.Currency,
-		TokenQuota:    d.TokenQuota,
-		StorageQuota:  d.StorageQuota,
-		MaxStories:    d.MaxStories,
-		MaxCharacters: d.MaxCharacters,
-		Features:      d.Features,
-		IsActive:      d.IsActive,
-		SortOrder:     d.SortOrder,
-		CreatedAt:     unixToTime(d.CreatedAt),
-		UpdatedAt:     unixToTime(d.UpdatedAt),
+		ID:             d.ID,
+		Name:           d.Name,
+		IAPProductID:   d.IAPProductID,
+		MembershipTier: d.MembershipTier,
+		BillingPeriod:  d.BillingPeriod,
+		Price:          d.Price,
+		Currency:       d.Currency,
+		TokenQuota:     d.TokenQuota,
+		StorageQuota:   d.StorageQuota,
+		MaxStories:     d.MaxStories,
+		MaxCharacters:  d.MaxCharacters,
+		Features:       d.Features,
+		IsActive:       d.IsActive,
+		SortOrder:      d.SortOrder,
+		CreatedAt:      unixToTime(d.CreatedAt),
+		UpdatedAt:      unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -2546,19 +2372,22 @@ func ModelToSubscriptionPlan(m *SubscriptionPlan) *domain.SubscriptionPlan {
 		return nil
 	}
 	return &domain.SubscriptionPlan{
-		ID:            m.ID,
-		Name:          m.Name,
-		Price:         m.Price,
-		Currency:      m.Currency,
-		TokenQuota:    m.TokenQuota,
-		StorageQuota:  m.StorageQuota,
-		MaxStories:    m.MaxStories,
-		MaxCharacters: m.MaxCharacters,
-		Features:      m.Features,
-		IsActive:      m.IsActive,
-		SortOrder:     m.SortOrder,
-		CreatedAt:     timeToUnix(m.CreatedAt),
-		UpdatedAt:     timeToUnix(m.UpdatedAt),
+		ID:             m.ID,
+		Name:           m.Name,
+		IAPProductID:   m.IAPProductID,
+		MembershipTier: m.MembershipTier,
+		BillingPeriod:  m.BillingPeriod,
+		Price:          m.Price,
+		Currency:       m.Currency,
+		TokenQuota:     m.TokenQuota,
+		StorageQuota:   m.StorageQuota,
+		MaxStories:     m.MaxStories,
+		MaxCharacters:  m.MaxCharacters,
+		Features:       m.Features,
+		IsActive:       m.IsActive,
+		SortOrder:      m.SortOrder,
+		CreatedAt:      timeToUnix(m.CreatedAt),
+		UpdatedAt:      timeToUnix(m.UpdatedAt),
 	}
 }
 
@@ -2730,7 +2559,11 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 		return nil
 	}
 	return &domain.StoryComposition{
-		ID:                    m.ID,
+		BaseModel: common.BaseModel{
+			ID:        m.ID,
+			CreatedAt: timeToUnix(m.CreatedAt),
+			UpdatedAt: timeToUnix(m.UpdatedAt),
+		},
 		Title:                 m.Title,
 		CoverImage:            m.CoverImage,
 		BackgroundDescription: m.Background,
@@ -2739,7 +2572,96 @@ func ModelToStoryComposition(m *StoryComposition) *domain.StoryComposition {
 		RootStoryboardID:      m.RootStoryboardID,
 		TotalStoryboards:      m.TotalStoryboards,
 		TotalForks:            m.TotalForks,
-		CreatedAt:             timeToUnix(m.CreatedAt),
-		UpdatedAt:             timeToUnix(m.UpdatedAt),
 	}
+}
+
+// promptDetailsToJSON 将 ImagePromptDetails 转换为 JSON 字符串
+// 返回 "null" 而不是空字符串，因为 MySQL JSON 列不接受空字符串
+func promptDetailsToJSON(details *domain.ImagePromptDetails) string {
+	if details == nil {
+		return "null"
+	}
+	data, err := json.Marshal(details)
+	if err != nil {
+		return "null"
+	}
+	return string(data)
+}
+
+// jsonToPromptDetails 将 JSON 字符串转换为 ImagePromptDetails
+func jsonToPromptDetails(jsonStr string) *domain.ImagePromptDetails {
+	if jsonStr == "" || jsonStr == "null" {
+		return nil
+	}
+	var details domain.ImagePromptDetails
+	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
+		return nil
+	}
+	return &details
+}
+
+// videoPromptDetailsToJSON 将 VideoPromptDetails 转换为 JSON 字符串
+// 返回 "null" 而不是空字符串，因为 MySQL JSON 列不接受空字符串
+func videoPromptDetailsToJSON(details *domain.VideoPromptDetails) string {
+	if details == nil {
+		return "null"
+	}
+	data, err := json.Marshal(details)
+	if err != nil {
+		return "null"
+	}
+	return string(data)
+}
+
+// jsonToVideoPromptDetails 将 JSON 字符串转换为 VideoPromptDetails
+func jsonToVideoPromptDetails(jsonStr string) *domain.VideoPromptDetails {
+	if jsonStr == "" || jsonStr == "null" {
+		return nil
+	}
+	var details domain.VideoPromptDetails
+	if err := json.Unmarshal([]byte(jsonStr), &details); err != nil {
+		return nil
+	}
+	return &details
+}
+
+// REMOVED: posterConceptDetailsToJSON, jsonToPosterConceptDetails - not in StoryCreationAppUI design
+
+// ========== Like 转换 ==========
+
+// LikeToModel 将 domain.Like 转换为 MySQL Like 模型
+func LikeToModel(d *domain.Like) *Like {
+	if d == nil {
+		return nil
+	}
+	return &Like{
+		ID:           d.ID,
+		UserID:       d.UserID,
+		LikeableType: string(d.LikeableType),
+		LikeableID:   d.LikeableID,
+		CreatedAt:    d.CreatedAt,
+	}
+}
+
+// ModelToLike 将 MySQL Like 模型转换为 domain.Like
+func ModelToLike(m *Like) *domain.Like {
+	if m == nil {
+		return nil
+	}
+	return &domain.Like{
+		ID:           m.ID,
+		UserID:       m.UserID,
+		LikeableType: domain.LikeableType(m.LikeableType),
+		LikeableID:   m.LikeableID,
+		CreatedAt:    m.CreatedAt,
+	}
+}
+
+// ModelsToLikes 批量转换 Like
+func ModelsToLikes(models []Like) []*domain.Like {
+	likes := make([]*domain.Like, len(models))
+	for i := range models {
+		likes[i] = ModelToLike(&models[i])
+	}
+	return likes
 }

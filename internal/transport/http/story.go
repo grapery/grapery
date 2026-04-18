@@ -1,29 +1,51 @@
 package http
 
 import (
+	"errors"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
+// GetTrendingStoriesPublic returns top trending stories (guest accessible).
+// Trending is determined by: followers > likes > updated_at.
+// No time range restriction - includes all published stories.
+// GET /api/public/stories/trending?limit=20
+func (h *Handler) GetTrendingStoriesPublic(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	stories, err := h.svc.GetTrendingStories24h(c.Request.Context(), limit)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"stories": stories,
+		"total":   len(stories),
+		"limit":   limit,
+		"offset":  0,
+	})
+}
+
 // CreateStory 创建故事
 func (h *Handler) CreateStory(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
 	var req service.CreateStoryRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	story, err := h.svc.CreateStory(c.Request.Context(), userID, req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -32,19 +54,14 @@ func (h *Handler) CreateStory(c *gin.Context) {
 
 // GetStory 获取故事详情
 func (h *Handler) GetStory(c *gin.Context) {
-	storyID := c.Param("id")
-	if storyID == "" {
-		InvalidParams(c, "story id is required")
+	storyID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	story, err := h.svc.GetStory(c.Request.Context(), storyID)
 	if err != nil {
-		if err.Error() == "story not found" {
-			NotFound(c, "story not found")
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -54,14 +71,13 @@ func (h *Handler) GetStory(c *gin.Context) {
 // ListStories 获取故事列表
 func (h *Handler) ListStories(c *gin.Context) {
 	var req service.StoryListRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindQuery(c, &req) {
 		return
 	}
 
 	stories, total, err := h.svc.ListStories(c.Request.Context(), req)
 	if err != nil {
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -75,35 +91,24 @@ func (h *Handler) ListStories(c *gin.Context) {
 
 // UpdateStory 更新故事
 func (h *Handler) UpdateStory(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	storyID := c.Param("id")
-	if storyID == "" {
-		InvalidParams(c, "story id is required")
+	storyID, ok := RequireParam(c, "id")
+	if !ok {
 		return
 	}
 
 	var req service.UpdateStoryRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		InvalidParams(c, err.Error())
+	if !BindJSON(c, &req) {
 		return
 	}
 
 	story, err := h.svc.UpdateStory(c.Request.Context(), userID, storyID, req)
 	if err != nil {
-		if err.Error() == "unauthorized" {
-			Forbidden(c, "you can only update your own stories")
-			return
-		}
-		if err.Error() == "story not found" {
-			NotFound(c, "story not found")
-			return
-		}
-		Error(c, CodeError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -207,6 +212,10 @@ func (h *Handler) FollowStory(c *gin.Context) {
 
 	err := h.svc.FollowStory(c.Request.Context(), userID, storyID)
 	if err != nil {
+		if errors.Is(err, service.ErrAuthUserNotFound) {
+			Unauthorized(c, "session invalid, please sign in again")
+			return
+		}
 		if err.Error() == "story not found" {
 			NotFound(c, "story not found")
 			return
@@ -234,6 +243,10 @@ func (h *Handler) UnfollowStory(c *gin.Context) {
 
 	err := h.svc.UnfollowStory(c.Request.Context(), userID, storyID)
 	if err != nil {
+		if errors.Is(err, service.ErrAuthUserNotFound) {
+			Unauthorized(c, "session invalid, please sign in again")
+			return
+		}
 		Error(c, CodeError, err.Error())
 		return
 	}
@@ -589,6 +602,257 @@ func (h *Handler) GetStoryContributors(c *gin.Context) {
 	})
 }
 
+// ========== Story Scene Handlers ==========
+
+// CreateStoryScene 创建故事场景
+// POST /api/stories/:id/scenes
+func (h *Handler) CreateStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreateStorySceneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+	req.StoryID = storyID
+
+	scene, err := h.svc.CreateStoryScene(c.Request.Context(), userID, req)
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to create scenes for this story")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, scene)
+}
+
+// ListStoryScenes 获取故事场景列表
+// GET /api/stories/:id/scenes
+func (h *Handler) ListStoryScenes(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	scenes, err := h.svc.ListStoryScenes(c.Request.Context(), storyID, limit, offset)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"scenes": scenes,
+		"count":  len(scenes),
+	})
+}
+
+// UpdateStoryScene 更新故事场景
+// PUT /api/stories/:id/scenes/:sceneId
+func (h *Handler) UpdateStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	sceneID := c.Param("sceneId")
+	if sceneID == "" {
+		InvalidParams(c, "scene id is required")
+		return
+	}
+
+	var req service.UpdateStorySceneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	scene, err := h.svc.UpdateStoryScene(c.Request.Context(), userID, storyID, sceneID, req)
+	if err != nil {
+		if err.Error() == "scene not found" {
+			NotFound(c, "scene not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to update this scene")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, scene)
+}
+
+// DeleteStoryScene 删除故事场景
+// DELETE /api/stories/:id/scenes/:sceneId
+func (h *Handler) DeleteStoryScene(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	sceneID := c.Param("sceneId")
+	if sceneID == "" {
+		InvalidParams(c, "scene id is required")
+		return
+	}
+
+	err := h.svc.DeleteStoryScene(c.Request.Context(), userID, storyID, sceneID)
+	if err != nil {
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to delete this scene")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{"message": "scene deleted successfully"})
+}
+
+// UploadSceneImage 接收场景图片OSS URL
+// POST /api/stories/:id/scenes/register-image
+func (h *Handler) UploadSceneImage(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req struct {
+		ImageURL string `json:"imageUrl" binding:"required,url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	// Verify story ownership
+	if err := h.svc.EnsureStoryOwnership(c.Request.Context(), storyID, userID); err != nil {
+		Forbidden(c, err.Error())
+		return
+	}
+
+	// Return the OSS URL to frontend
+	Success(c, gin.H{
+		"success": true,
+		"url":     req.ImageURL,
+	})
+}
+
+// GenerateSceneImage AI生成场景图片
+// POST /api/stories/:id/scenes/ai-generate-image
+func (h *Handler) GenerateSceneImage(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	// Get sceneId and custom prompt from request (JSON body is optional)
+	var req struct {
+		SceneID *string `json:"sceneId"`
+		Prompt  *string `json:"prompt"`
+	}
+	// Try to bind JSON, but don't fail if body is empty
+	c.ShouldBindJSON(&req)
+
+	// Also check query parameter for sceneId (for backward compatibility)
+	sceneID := ""
+	if req.SceneID != nil && *req.SceneID != "" {
+		sceneID = *req.SceneID
+	} else if querySceneID := c.Query("sceneId"); querySceneID != "" {
+		sceneID = querySceneID
+	}
+
+	customPrompt := ""
+	if req.Prompt != nil && *req.Prompt != "" {
+		customPrompt = *req.Prompt
+	}
+
+	// Call service method to generate image
+	imageURL, filename, err := h.svc.GenerateStorySceneImage(c.Request.Context(), storyID, sceneID, userID, customPrompt)
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "scene not found" {
+			NotFound(c, "scene not found")
+			return
+		}
+		if err.Error() == "permission denied: insufficient rights" {
+			Forbidden(c, "you don't have permission to generate images for this story")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+
+	Success(c, gin.H{
+		"success":  true,
+		"url":      imageURL,
+		"filename": filename,
+	})
+}
+
 // parseInt helper function for parsing integers
 func parseInt(s string) (int, error) {
 	var result int
@@ -599,4 +863,262 @@ func parseInt(s string) (int, error) {
 		result = result*10 + int(c-'0')
 	}
 	return result, nil
+}
+
+// ========== Story Panel Handlers ==========
+
+// ListStoryPanels 列出故事面板
+// GET /api/v1/stories/:id/panels
+func (h *Handler) ListStoryPanels(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	panels, total, err := h.svc.ListStoryPanels(c.Request.Context(), storyID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"panels": panels,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateStoryPanel 创建故事面板
+// POST /api/v1/stories/:id/panels
+func (h *Handler) CreateStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreatePanelRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.StoryID = storyID
+
+	panel, err := h.svc.CreateStoryPanel(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, panel)
+}
+
+// UpdateStoryPanel 更新故事面板
+// PUT /api/v1/stories/:id/panels/:panelId
+func (h *Handler) UpdateStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	panelID := c.Param("panelId")
+	if panelID == "" {
+		InvalidParams(c, "panel id is required")
+		return
+	}
+
+	var req service.UpdatePanelRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	panel, err := h.svc.UpdateStoryPanel(c.Request.Context(), userID, storyID, panelID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, panel)
+}
+
+// DeleteStoryPanel 删除故事面板
+// DELETE /api/v1/stories/:id/panels/:panelId
+func (h *Handler) DeleteStoryPanel(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	panelID := c.Param("panelId")
+	if panelID == "" {
+		InvalidParams(c, "panel id is required")
+		return
+	}
+
+	err := h.svc.DeleteStoryPanel(c.Request.Context(), userID, storyID, panelID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "panel deleted successfully"})
+}
+
+// ReorderStoryPanels 重排故事面板
+// POST /api/v1/stories/:id/panels/reorder
+func (h *Handler) ReorderStoryPanels(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.ReorderPanelsRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	err := h.svc.ReorderStoryPanels(c.Request.Context(), userID, storyID, req.PanelIDs)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "panels reordered successfully"})
+}
+
+// ========== Story Comment Handlers (Enhanced) ==========
+
+// ListStoryComments 列出故事评论及回复
+// GET /api/v1/stories/:id/comments
+func (h *Handler) ListStoryComments(c *gin.Context) {
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	userID := authPkg.GetUserID(c)
+
+	limit := 20
+	offset := 0
+	sortBy := c.DefaultQuery("sort", "newest") // newest, hottest
+
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := parseInt(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := parseInt(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	comments, total, err := h.svc.ListStoryComments(c.Request.Context(), storyID, userID, limit, offset, sortBy)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{
+		"comments": comments,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	})
+}
+
+// CreateStoryComment 创建故事评论
+// POST /api/v1/stories/:id/comments
+func (h *Handler) CreateStoryComment(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	storyID := c.Param("id")
+	if storyID == "" {
+		InvalidParams(c, "story id is required")
+		return
+	}
+
+	var req service.CreateStoryCommentRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.StoryID = storyID
+
+	comment, err := h.svc.CreateStoryComment(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, comment)
+}
+
+// CreateCommentReply 创建评论回复
+// POST /api/v1/comments/:id/replies
+func (h *Handler) CreateCommentReply(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	commentID := c.Param("id")
+	if commentID == "" {
+		InvalidParams(c, "comment id is required")
+		return
+	}
+
+	var req service.CreateReplyRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+	req.CommentID = commentID
+
+	reply, err := h.svc.CreateCommentReply(c.Request.Context(), userID, req)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, reply)
 }

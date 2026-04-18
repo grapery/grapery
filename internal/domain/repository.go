@@ -1,20 +1,28 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // StoryFilter holds story query filters
 type StoryFilter struct {
-	Status   string
-	AuthorID string
-	GroupID  string
-	Search   string
-	Genre    string
-	Limit    int
-	Offset   int
+	Status string
+	UserID string
+	Search string
+	Genre  string
+	Limit  int
+	Offset int
 }
 
 // Repository defines the data access interface
 type Repository interface {
+	// ========== Transaction support ==========
+	// WithTransaction executes a function within a database transaction
+	// If the function returns an error, the transaction is rolled back
+	// If the function returns nil, the transaction is committed
+	WithTransaction(ctx context.Context, fn func(tx Repository) error) error
+
 	// ========== User operations ==========
 	UserByID(ctx context.Context, id string) (*User, error)
 	UserByUsername(ctx context.Context, username string) (*User, error)
@@ -24,13 +32,7 @@ type Repository interface {
 	DeleteUser(ctx context.Context, id string) error
 	ListUsers(ctx context.Context, limit, offset int) ([]*User, error)
 
-	// ========== User Activity operations ==========
-	CreateUserActivity(ctx context.Context, activity *UserActivity) error
-	UserActivitiesByUserID(ctx context.Context, userID string, limit, offset int) ([]*UserActivity, error)
-	UserActivitiesByTimeRange(ctx context.Context, userID string, startTime, endTime int64, limit, offset int) ([]*UserActivity, error)
-	UserActivitiesByDate(ctx context.Context, userID string, date string, limit, offset int) ([]*UserActivity, error)
-	UserActivityHeatmap(ctx context.Context, userID string, startTime, endTime int64) ([]*ActivityHeatmapData, error)
-	DeleteUserActivity(ctx context.Context, id string) error
+	// REMOVED: User Activity operations - not in StoryCreationAppUI design
 
 	// ========== User Settings ==========
 	UserSettings(ctx context.Context, userID string) (*UserSettings, error)
@@ -48,8 +50,17 @@ type Repository interface {
 	CreateStory(ctx context.Context, story *Story) error
 	UpdateStory(ctx context.Context, story *Story) error
 	DeleteStory(ctx context.Context, id string) error
-	StoriesByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*Story, error)
+	StoriesByUser(ctx context.Context, userID string, limit, offset int) ([]*Story, error)
 	TrendingStories(ctx context.Context, limit int) ([]*Story, error)
+
+	// ========== Public Trending ==========
+	// REMOVED: DashboardStoryboards - not in StoryCreationAppUI design
+	// REMOVED: DashboardCharacterStoryboards - not in StoryCreationAppUI design
+	// REMOVED: TrendingStoryboards (authenticated) - not in StoryCreationAppUI design
+	// GetPublicTrendingStoryboards returns published trending storyboards accessible to all users.
+	// If userID is empty (guest), returns globally trending storyboards.
+	// If userID is provided (authenticated), returns personalized trending storyboards.
+	GetPublicTrendingStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 
 	// ========== Story Contributor operations ==========
 	AddStoryContributor(ctx context.Context, contributor *StoryContributor) error
@@ -66,10 +77,14 @@ type Repository interface {
 	UpdatePanel(ctx context.Context, panel *Panel) error
 	DeletePanel(ctx context.Context, id string) error
 
+	// ========== Storyboard Panel operations ==========
+	PanelsByStoryboard(ctx context.Context, storyboardID string) ([]*StoryboardPanel, error)
+	CreateStoryboardPanel(ctx context.Context, panel *StoryboardPanel) error
+
 	// ========== Character operations ==========
 	CharacterByID(ctx context.Context, id string) (*Character, error)
 	ListCharacters(ctx context.Context, limit, offset int) ([]*Character, error)
-	CharactersByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*Character, error)
+	CharactersByUser(ctx context.Context, userID string, limit, offset int) ([]*Character, error)
 	CharactersByStory(ctx context.Context, storyID string) ([]*Character, error)
 	CreateCharacter(ctx context.Context, character *Character) error
 	UpdateCharacter(ctx context.Context, character *Character) error
@@ -92,42 +107,13 @@ type Repository interface {
 	IncrementCharacterTokens(ctx context.Context, characterID string, tokens int64) error
 	IncrementCharacterChatters(ctx context.Context, characterID string) error
 
-	// ========== Character Poster operations ==========
-	CreateCharacterPoster(ctx context.Context, poster *CharacterPoster) error
-	CharacterPosterByID(ctx context.Context, id string) (*CharacterPoster, error)
-	CharacterPostersByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]*CharacterPoster, error)
-	UpdateCharacterPoster(ctx context.Context, poster *CharacterPoster) error
-	DeleteCharacterPoster(ctx context.Context, id string) error
-	IncrementPosterLikes(ctx context.Context, posterID string) error
-	IncrementPosterShares(ctx context.Context, posterID string) error
-
-	// ========== Group basic operations ==========
-	ListGroups(ctx context.Context, limit, offset int) ([]*Group, error)
-	ListMyGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
-	ListPublicGroups(ctx context.Context, userID string, limit, offset int) ([]*Group, error)
-	GroupsByUser(ctx context.Context, userID string) ([]*Group, error)
-	GroupActivities(ctx context.Context, groupID string, limit int) ([]*GroupActivity, error)
-	GroupActivitiesByTimeRange(ctx context.Context, groupID string, startTime, endTime int64, limit, offset int) ([]*GroupActivity, error)
-	GroupActivitiesByDate(ctx context.Context, groupID string, date string, limit, offset int) ([]*GroupActivity, error)
-	GroupActivityHeatmap(ctx context.Context, groupID string, startTime, endTime int64) ([]*ActivityHeatmapData, error)
-	CreateGroupActivity(ctx context.Context, activity *GroupActivity) error
+	// REMOVED: Character Poster operations - not in StoryCreationAppUI design
+	// REMOVED: Character View operations - not in StoryCreationAppUI design
 
 	// ========== Comment operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
 	CommentsByStory(ctx context.Context, storyID string) ([]*Comment, error)
 	CommentsByParent(ctx context.Context, parentID string) ([]*Comment, error)
-
-	// ========== Chat operations ==========
-	ChatThreadByID(ctx context.Context, id string) (*ChatThread, error)
-	ChatThreads(ctx context.Context, userID string) ([]*ChatThread, error)
-	CreateChatThread(ctx context.Context, thread *ChatThread) error
-	UpdateChatThread(ctx context.Context, thread *ChatThread) error
-	DeleteChatThread(ctx context.Context, id string) error
-
-	ChatMessageByID(ctx context.Context, id string) (*ChatMessage, error)
-	ChatMessages(ctx context.Context, threadID string, limit, offset int) ([]*ChatMessage, error)
-	CreateChatMessage(ctx context.Context, msg *ChatMessage) error
-	DeleteChatMessage(ctx context.Context, id string) error
 
 	// ========== Storyboard operations (旧版本，已废弃) ==========
 	// 保留用于兼容性，实际使用下面的新版本
@@ -144,6 +130,22 @@ type Repository interface {
 	IsFollowing(ctx context.Context, followerID, followeeID string) (bool, error)
 	Followers(ctx context.Context, userID string, limit, offset int) ([]*User, error)
 	Following(ctx context.Context, userID string, limit, offset int) ([]*User, error)
+	CountFollowersOfUser(ctx context.Context, followeeID string) (int64, error)
+	CountFollowingOfUser(ctx context.Context, followerID string) (int64, error)
+	ListUserFollowsByFollower(ctx context.Context, followerID string, limit, offset int) ([]*Follow, error)
+
+	// Block/Unblock
+	BlockUser(ctx context.Context, blockerID, blockedID string) error
+	UnblockUser(ctx context.Context, blockerID, blockedID string) error
+	IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error)
+
+	// Report
+	ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error
+
+	// Get Liked Content IDs
+	GetLikedStoryIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
+	GetLikedCharacterIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
+	GetLikedStoryboardIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)
 
 	// Like
 	LikeStory(ctx context.Context, userID, storyID string) error
@@ -152,40 +154,39 @@ type Repository interface {
 
 	LikeStoryboard(ctx context.Context, userID, storyboardID string) error
 	UnlikeStoryboard(ctx context.Context, userID, storyboardID string) error
+	IsStoryboardLiked(ctx context.Context, userID, storyboardID string) (bool, error)
+	// BatchIsStoryboardLiked returns liked=true for IDs present in storyboard_likes for this user.
+	BatchIsStoryboardLiked(ctx context.Context, userID string, storyboardIDs []string) (map[string]bool, error)
+	// ListStoryboardLikers returns users who liked a storyboard (storyboard_likes), newest first.
+	ListStoryboardLikers(ctx context.Context, storyboardID string, limit, offset int) ([]*User, int, error)
 
 	// Follow content
 	FollowStory(ctx context.Context, userID, storyID string) error
 	UnfollowStory(ctx context.Context, userID, storyID string) error
+	IsStoryFollowing(ctx context.Context, userID, storyID string) (bool, error)
+	CountFollowersOfStory(ctx context.Context, storyID string) (int64, error)
+	ListStoryFollowRecordsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Follow, error)
+	CountStoriesFollowedByUser(ctx context.Context, userID string) (int64, error)
+	ListStoryFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*Follow, error)
 
 	FollowCharacter(ctx context.Context, userID, characterID string) error
 	UnfollowCharacter(ctx context.Context, userID, characterID string) error
 	IsCharacterFollowing(ctx context.Context, userID, characterID string) (bool, error)
+	CountFollowersOfCharacter(ctx context.Context, characterID string) (int64, error)
+	ListCharacterFollowRecordsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*Follow, error)
+	CountCharactersFollowedByUser(ctx context.Context, userID string) (int64, error)
+	ListCharacterFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*Follow, error)
 
-	// Liked content
-	LikedStories(ctx context.Context, userID string, limit, offset int) ([]*Story, error)
-	LikedCharacters(ctx context.Context, userID string, limit, offset int) ([]*Character, error)
-	LikedStoryboards(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, error)
+	// ========== User Statistics operations ==========
+	CountAllUsers(ctx context.Context) (int, error)
+	CountNewUsersByDate(ctx context.Context, date time.Time) (int, error)
+	GetUserStatisticsByDate(ctx context.Context, date time.Time) (*UserStatistics, error)
+	SaveUserStatistics(ctx context.Context, stats *UserStatistics) error
 
-	// ========== Group operations ==========
-	GroupByID(ctx context.Context, id string) (*Group, error)
-	CreateGroup(ctx context.Context, group *Group) error
-	UpdateGroup(ctx context.Context, group *Group) error
-	DeleteGroup(ctx context.Context, id string) error
-
-	// Group membership
-	AddGroupMember(ctx context.Context, groupID, userID string, role GroupMemberRole, invitedBy string) error
-	RemoveGroupMember(ctx context.Context, groupID, userID string) error
-	GetGroupMembers(ctx context.Context, groupID string, limit, offset int) ([]*GroupMemberInfo, error)
-	GetMemberRole(ctx context.Context, groupID, userID string) (GroupMemberRole, error)
-	UpdateMemberRole(ctx context.Context, groupID, userID string, role GroupMemberRole) error
-	IsGroupMember(ctx context.Context, groupID, userID string) (bool, error)
-
-	// Group invitations
-	CreateGroupInvitation(ctx context.Context, groupID, inviterID, inviteeID, message string) (*GroupInvitation, error)
-	GetInvitationByID(ctx context.Context, id string) (*GroupInvitation, error)
-	GetPendingInvitation(ctx context.Context, groupID, inviteeID string) (*GroupInvitation, error)
-	GetPendingInvitationsForUser(ctx context.Context, userID string, limit, offset int) ([]*GroupInvitation, error)
-	UpdateInvitationStatus(ctx context.Context, id, status string) error
+	// ========== User Login Record operations ==========
+	CreateUserLoginRecord(ctx context.Context, record *UserLoginRecord) error
+	GetUserLoginRecords(ctx context.Context, userID string, limit, offset int) ([]*UserLoginRecord, error)
+	GetLatestUserLoginRecord(ctx context.Context, userID string) (*UserLoginRecord, error)
 
 	// ========== Storyboard operations ==========
 	StoryboardByID(ctx context.Context, id string) (*Storyboard, error)
@@ -198,11 +199,24 @@ type Repository interface {
 	StoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	DraftStoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	CountStoryboardsByCreator(ctx context.Context, creatorID string) (int64, error)
+	CountStoryboardsByStory(ctx context.Context, storyID string) (int64, error)
+	// CharacterStoryboardCountsByStory returns participation counts keyed by characterID, counting distinct storyboard IDs within the given story.
+	CharacterStoryboardCountsByStory(ctx context.Context, storyID string) (map[string]int64, error)
 	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
 	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
+	// StoryboardFeedFromFollowedStories returns the following tab: reader-visible storyboards on followed stories (story_follows),
+	// on public stories by followed users (user_follows), and on the viewer’s own stories (author match; any story visibility).
+	StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
+	// StoryboardFeedRecommended is the “for you” tab: published storyboards matching onboarding preferred genres, plus a public engagement fallback (guests: trending).
+	// excludeStoryboardIDs may be nil; IDs in the set are omitted from the merged list (oversampling fills the page when possible).
+	StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int, excludeStoryboardIDs map[string]struct{}) ([]*Storyboard, int64, error)
+	// StoryboardFeedDiscover is the discover tab: only published public storyboards whose story genre is in preferredGenres, by updated_at; guests get trending; empty genres => empty.
+	StoryboardFeedDiscover(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *Storyboard) error
 	IncrementStoryboardViews(ctx context.Context, id string) error
+	IncrementStoryStoryboardCount(ctx context.Context, storyID string) error
+	DecrementStoryStoryboardCount(ctx context.Context, storyID string) error
 	UpdateStoryboardTokens(ctx context.Context, storyboardID string, tokens int) error
 	UpdateStoryboardWorkflow(ctx context.Context, storyboardID string, status string, step int) error
 
@@ -213,6 +227,7 @@ type Repository interface {
 	UpdateStoryboardScene(ctx context.Context, scene *StoryboardScene) error
 	UpdateStoryboardSceneImage(ctx context.Context, sceneID, imageURL string) error
 	UpdateStoryboardSceneVideo(ctx context.Context, sceneID, videoURL string) error
+	UpdateStoryboardSceneVideoWithSubdivision(ctx context.Context, sceneID, videoURL string, isSubdivided bool, videoSegmentsJSON, middleFrameURLsJSON string) error
 
 	// ========== Storyboard Generation operations ==========
 	// Content generation (Step 1)
@@ -293,6 +308,7 @@ type Repository interface {
 	ListAIGenerationRecordsByEntity(ctx context.Context, entityType, entityID string, limit, offset int) ([]*AIGenerationRecord, error)
 	AIGenerationRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*AIGenerationRecord, error)
 	GetUserTokenStats(ctx context.Context, userID string, startTime, endTime int64) (map[string]interface{}, error)
+	GetPendingAIGenerationRecords(ctx context.Context, statuses []AITaskStatus, limit int) ([]*AIGenerationRecord, error)
 
 	// ========== Asset operations ==========
 	AssetByID(ctx context.Context, id string) (*Asset, error)
@@ -305,7 +321,6 @@ type Repository interface {
 	SearchStories(ctx context.Context, query string, limit, offset int) ([]*Story, error)
 	SearchCharacters(ctx context.Context, query string, limit, offset int) ([]*Character, error)
 	SearchUsers(ctx context.Context, query string, limit, offset int) ([]*User, error)
-	SearchGroups(ctx context.Context, query string, limit, offset int) ([]*Group, error)
 	CreateSearchHistory(ctx context.Context, history *SearchHistory) error
 
 	// Advanced search
@@ -380,8 +395,8 @@ type Repository interface {
 	CreateStyleConfig(ctx context.Context, styleConfig *StyleConfig) error
 	GetStyleConfigByID(ctx context.Context, id string) (*StyleConfig, error)
 	GetStyleConfigByStyle(ctx context.Context, styleName string) (*StyleConfig, error)
-	ListStyleConfigs(ctx context.Context, groupID string, limit, offset int) ([]*StyleConfig, int64, error)
-	SearchStyleConfigs(ctx context.Context, keyword, groupID string, limit, offset int) ([]*StyleConfig, int64, error)
+	ListStyleConfigs(ctx context.Context, limit, offset int) ([]*StyleConfig, int64, error)
+	SearchStyleConfigs(ctx context.Context, keyword string, limit, offset int) ([]*StyleConfig, int64, error)
 	UpdateStyleConfig(ctx context.Context, styleConfig *StyleConfig) error
 	DeleteStyleConfig(ctx context.Context, id string) error
 	BatchCreateStyleConfigs(ctx context.Context, styleConfigs []*StyleConfig) error
@@ -416,4 +431,118 @@ type Repository interface {
 	UpdateAgentMemory(ctx context.Context, memory *AgentMemory) error
 	DeleteAgentMemory(ctx context.Context, id string) error
 	IncrementMemoryAccess(ctx context.Context, memoryID string) error
+
+	// ========== Invitation Code operations ==========
+	CreateInvitationCode(ctx context.Context, code *InvitationCode) error
+	GetInvitationCodeByCode(ctx context.Context, code string) (*InvitationCode, error)
+	GetInvitationCodeByID(ctx context.Context, id string) (*InvitationCode, error)
+	ListInvitationCodes(ctx context.Context, createdBy string, limit, offset int) ([]*InvitationCode, error)
+	UpdateInvitationCode(ctx context.Context, code *InvitationCode) error
+	DeleteInvitationCode(ctx context.Context, id string) error
+	UseInvitationCode(ctx context.Context, code string, userID string) error
+	ValidateInvitationCode(ctx context.Context, code string) error
+
+	// ========== Referral System operations (StoryCreationAppUI Design) ==========
+	GetUserByReferralCode(ctx context.Context, referralCode string) (*User, error)
+	CreateUserReferral(ctx context.Context, referral *UserReferral) error
+	GetUserReferralByReferee(ctx context.Context, refereeID string) (*UserReferral, error)
+	GetReferralsByUser(ctx context.Context, referrerID string, limit, offset int) ([]*UserReferral, error)
+	GetReferralStats(ctx context.Context, userID string) (*ReferralStats, error)
+	AddUserPoints(ctx context.Context, userID string, points int) error
+
+	// ========== Third Party Login operations ==========
+	// 第三方登录账户关联（支持 Google/Apple 跨设备登录）
+	CreateThirdPartyLogin(ctx context.Context, login *ThirdPartyLogin) error
+	GetThirdPartyLogin(ctx context.Context, id string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginByProviderUserID(ctx context.Context, provider ThirdPartyProvider, providerUserID string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginByEmail(ctx context.Context, provider ThirdPartyProvider, email string) (*ThirdPartyLogin, error)
+	GetThirdPartyLoginsByUserID(ctx context.Context, userID string) ([]*ThirdPartyLogin, error)
+	UpdateThirdPartyLogin(ctx context.Context, login *ThirdPartyLogin) error
+	DeleteThirdPartyLogin(ctx context.Context, id string) error
+	// 通过任意第三方登录（Google 或 Apple）的 email 查找关联的用户
+	GetUserByThirdPartyEmail(ctx context.Context, email string) (*User, error)
+
+	// ========== Fragment operations ==========
+	// FragmentByID retrieves a fragment by ID
+	FragmentByID(ctx context.Context, id string) (*Fragment, error)
+	// ListFragments retrieves fragments with pagination
+	ListFragments(ctx context.Context, limit, offset int, visibility string) ([]*Fragment, int64, error)
+	// ListPublicNonDraftFragments lists public non-draft fragments, newest first (plaza previews, discover fallback).
+	ListPublicNonDraftFragments(ctx context.Context, limit, offset int) ([]*Fragment, int64, error)
+	// ListPublicFragmentsByTopic lists public non-draft fragments with exact topic match (plaza topic rail).
+	ListPublicFragmentsByTopic(ctx context.Context, topic string, limit, offset int) ([]*Fragment, int64, error)
+	// ListTopPublicFragmentTopicLabels returns distinct topic labels from public non-draft fragments with TRIM(topic) non-empty,
+	// grouped by stored topic, HAVING count >= minCount, ordered by count DESC then MAX(created_at) DESC, limited to limit rows.
+	ListTopPublicFragmentTopicLabels(ctx context.Context, minCount, limit int) ([]string, error)
+	// CreateFragment creates a new fragment
+	CreateFragment(ctx context.Context, fragment *Fragment) error
+	// UpdateFragment updates a fragment
+	UpdateFragment(ctx context.Context, fragment *Fragment) error
+	// DeleteFragment deletes a fragment
+	DeleteFragment(ctx context.Context, id string) error
+
+	// ========== User Device operations ==========
+	// 用户设备管理（APNs/FCM 推送通知）
+	CreateUserDevice(ctx context.Context, device *UserDevice) error
+	GetUserDevice(ctx context.Context, id string) (*UserDevice, error)
+	GetUserDeviceByToken(ctx context.Context, deviceToken string) (*UserDevice, error)
+	GetUserDevicesByUserID(ctx context.Context, userID string) ([]*UserDevice, error)
+	GetActiveUserDevicesByUserID(ctx context.Context, userID string) ([]*UserDevice, error)
+	GetUserDevicesByPlatform(ctx context.Context, userID string, platform DevicePlatform) ([]*UserDevice, error)
+	UpdateUserDevice(ctx context.Context, device *UserDevice) error
+	DeleteUserDevice(ctx context.Context, id string) error
+	DeleteUserDeviceByToken(ctx context.Context, deviceToken string) error
+	DeactivateUserDevice(ctx context.Context, deviceToken string) error
+	UpdateUserDeviceLastActive(ctx context.Context, deviceToken string, lastActiveAt int64) error
+
+	// Creator analytics (settings / dashboard; aggregate + top storyboards)
+	CreatorAnalyticsAggregate(ctx context.Context, userID string) (*CreatorAnalyticsAggregate, error)
+	TopCreatorStoryboards(ctx context.Context, userID string, limit int) ([]*CreatorAnalyticsStoryboardRow, error)
+}
+
+// LikeRepository 点赞相关操作（多态关联）
+type LikeRepository interface {
+	CreateLike(ctx context.Context, like *Like) error
+	DeleteLike(ctx context.Context, id string) error
+	GetLikeByID(ctx context.Context, id string) (*Like, error)
+	GetLikesByUser(ctx context.Context, userID string, likeableType LikeableType) ([]*Like, error)
+	GetLikesByLikeable(ctx context.Context, likeableType LikeableType, likeableID string) ([]*Like, error)
+	CheckLikeStatus(ctx context.Context, userID string, likeableType LikeableType, likeableID string) (bool, error)
+	GetLikesCount(ctx context.Context, likeableType LikeableType, likeableID string) (int, error)
+}
+
+// BookmarkRepository 收藏/保存相关操作（多态关联）- StoryCreationAppUI Alignment
+type BookmarkRepository interface {
+	CreateBookmark(ctx context.Context, bookmark *Bookmark) error
+	DeleteBookmark(ctx context.Context, id string) error
+	GetBookmarkByID(ctx context.Context, id string) (*Bookmark, error)
+	GetBookmarksByUser(ctx context.Context, userID string, bookmarkType BookmarkType) ([]*Bookmark, error)
+	GetBookmarksByUserPaginated(ctx context.Context, userID string, bookmarkType BookmarkType, limit, offset int) ([]*Bookmark, int64, error)
+	GetBookmarksByItem(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) ([]*Bookmark, error)
+	CheckBookmarkStatus(ctx context.Context, userID string, bookmarkType BookmarkType, bookmarkID string) (bool, error)
+	GetBookmarksCount(ctx context.Context, bookmarkType BookmarkType, bookmarkID string) (int, error)
+	UpdateBookmarksCount(ctx context.Context, bookmarkType BookmarkType, bookmarkID string, delta int) error
+}
+
+// UserSettingsRepository 用户设置操作
+type UserSettingsRepository interface {
+	GetUserSettings(userID string) (*UserSettings, error)
+	CreateUserSettings(settings *UserSettings) error
+	UpdateUserSettings(settings *UserSettings) error
+}
+
+// GenreCatalogRepository 发现页体裁目录（分页，供客户端「获取更多」与偏好校验）。
+type GenreCatalogRepository interface {
+	ListByPage(pageIndex int) ([]*GenreCatalogEntry, error)
+	InsertBatch(entries []*GenreCatalogEntry) error
+	AllSlugs() ([]string, error)
+	CountByPage(pageIndex int) (int64, error)
+	// WithGenerationLock 在生成某页 AI 内容前串行化（MySQL GET_LOCK）。
+	WithGenerationLock(ctx context.Context, pageIndex int, fn func() error) error
+}
+
+// FeedbackRepository 用户反馈
+type FeedbackRepository interface {
+	CreateFeedback(ctx context.Context, fb *UserFeedback) error
+	ListFeedbackByUserID(ctx context.Context, userID string, limit, offset int) ([]*UserFeedback, int64, error)
 }

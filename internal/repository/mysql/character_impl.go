@@ -2,10 +2,13 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
 )
@@ -23,9 +26,31 @@ func (r *Repository) CharacterByID(ctx context.Context, id string) (*domain.Char
 	return &domainChar, nil
 }
 
+// ListCharacters retrieves all characters with pagination
+func (r *Repository) ListCharacters(ctx context.Context, limit, offset int) ([]*domain.Character, error) {
+	var characters []Character
+	query := r.db.WithContext(ctx).Preload("Author").Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Find(&characters).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Character, len(characters))
+	for i, c := range characters {
+		domainChar := r.characterToDomain(c)
+		result[i] = &domainChar
+	}
+
+	return result, nil
+}
+
 // CreateCharacter creates a new character
 func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Character) error {
-	authorID := character.AuthorID
+	authorID := character.UserID
 	if authorID == "" && character.Author != nil {
 		authorID = character.Author.ID
 	}
@@ -36,35 +61,58 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 	}
 
 	now := time.Now()
+
+	// 设置默认的形象生成状态
+	portraitStatus := character.PortraitGenerationStatus
+	if portraitStatus == "" {
+		if character.NeedsPortrait {
+			portraitStatus = string(common.TaskStatusPending)
+		} else {
+			portraitStatus = "none"
+		}
+	}
+
 	dbCharacter := Character{
-		ID:              uuid.New().String(),
-		StoryID:         character.StoryID,
-		Name:            character.Name,
-		Description:     character.Description,
-		Avatar:          character.Avatar,
-		Poster:          character.Poster,
-		AuthorID:        authorID,
-		Personality:     character.Personality,
-		Background:      character.Background,
-		ShortTermGoal:   character.ShortTermGoal,
-		LongTermGoal:    character.LongTermGoal,
-		HandlingStyle:   character.HandlingStyle,
-		CognitionRange:  character.CognitionRange,
-		AbilityFeatures: character.AbilityFeatures,
-		Appearance:      character.Appearance,
-		DressPreference: character.DressPreference,
-		SourceType:      sourceType,
-		SourcePrompt:    character.SourcePrompt,
-		SourceImage:     character.SourceImage,
-		CreatedBy:       character.CreatedBy,
-		LastEditedBy:    character.LastEditedBy,
-		IsPublic:        character.IsPublic,
-		Traits:          character.TraitsJSON,
-		Skills:          character.SkillsJSON,
-		Followers:       character.Followers,
-		Stories:         character.Stories,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                       uuid.New().String(),
+		StoryID:                  character.StoryID,
+		Name:                     character.Name,
+		Description:              character.Description,
+		Avatar:                   character.Avatar,
+		Poster:                   character.Poster,
+		Portrait:                 character.Portrait,
+		NeedsPortrait:            character.NeedsPortrait,
+		ReferenceImage:           character.ReferenceImage,
+		PortraitGenerationStatus: portraitStatus,
+		UserID:                   authorID,
+		Personality:              character.Personality,
+		Background:               character.Background,
+		ShortTermGoal:            character.ShortTermGoal,
+		LongTermGoal:             character.LongTermGoal,
+		HandlingStyle:            character.HandlingStyle,
+		CognitionRange:           character.CognitionRange,
+		AbilityFeatures:          character.AbilityFeatures,
+		Appearance:               character.Appearance,
+		DressPreference:          character.DressPreference,
+		Role:                     character.Role,
+		SourceType:               sourceType,
+		SourcePrompt:             character.SourcePrompt,
+		SourceImage:              character.SourceImage,
+		CreatedBy:                character.CreatedBy,
+		LastEditedBy:             character.LastEditedBy,
+		IsPublic:                 character.IsPublic,
+		Traits:                   character.TraitsJSON,
+		Skills:                   character.SkillsJSON,
+		Followers:                character.Followers,
+		Stories:                  character.Stories,
+		CreatedAt:                now,
+		UpdatedAt:                now,
+	}
+	// MySQL JSON 列不接受空字符串；无三视图数据时用 "{}"。
+	dbCharacter.ViewsJSON = "{}"
+	if character.Views != nil {
+		if b, err := json.Marshal(character.Views); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			dbCharacter.ViewsJSON = string(b)
+		}
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbCharacter).Error; err != nil {
@@ -80,36 +128,46 @@ func (r *Repository) CreateCharacter(ctx context.Context, character *domain.Char
 
 // UpdateCharacter updates an existing character
 func (r *Repository) UpdateCharacter(ctx context.Context, character *domain.Character) error {
-	authorID := character.AuthorID
+	authorID := character.UserID
 	if authorID == "" && character.Author != nil {
 		authorID = character.Author.ID
 	}
 	updates := map[string]interface{}{
-		"story_id":         character.StoryID,
-		"name":             character.Name,
-		"description":      character.Description,
-		"avatar":           character.Avatar,
-		"poster":           character.Poster,
-		"author_id":        authorID,
-		"personality":      character.Personality,
-		"background":       character.Background,
-		"short_term_goal":  character.ShortTermGoal,
-		"long_term_goal":   character.LongTermGoal,
-		"handling_style":   character.HandlingStyle,
-		"cognition_range":  character.CognitionRange,
-		"ability_features": character.AbilityFeatures,
-		"appearance":       character.Appearance,
-		"dress_preference": character.DressPreference,
-		"source_type":      character.SourceType,
-		"source_prompt":    character.SourcePrompt,
-		"source_image":     character.SourceImage,
-		"last_edited_by":   character.LastEditedBy,
-		"is_public":        character.IsPublic,
-		"traits":           character.TraitsJSON,
-		"skills":           character.SkillsJSON,
-		"followers":        character.Followers,
-		"stories":          character.Stories,
-		"updated_at":       time.Now(),
+		"story_id":                   character.StoryID,
+		"name":                       character.Name,
+		"description":                character.Description,
+		"avatar":                     character.Avatar,
+		"poster":                     character.Poster,
+		"portrait":                   character.Portrait,
+		"needs_portrait":             character.NeedsPortrait,
+		"reference_image":            character.ReferenceImage,
+		"portrait_generation_status": character.PortraitGenerationStatus,
+		"author_id":                  authorID, // DB column is author_id (see models.Character.UserID)
+		"personality":                character.Personality,
+		"background":                 character.Background,
+		"short_term_goal":            character.ShortTermGoal,
+		"long_term_goal":             character.LongTermGoal,
+		"handling_style":             character.HandlingStyle,
+		"cognition_range":            character.CognitionRange,
+		"ability_features":           character.AbilityFeatures,
+		"appearance":                 character.Appearance,
+		"dress_preference":           character.DressPreference,
+		"role":                       character.Role,
+		"source_type":                character.SourceType,
+		"source_prompt":              character.SourcePrompt,
+		"source_image":               character.SourceImage,
+		"last_edited_by":             character.LastEditedBy,
+		"is_public":                  character.IsPublic,
+		"traits":                     character.TraitsJSON,
+		"skills":                     character.SkillsJSON,
+		"followers":                  character.Followers,
+		"stories":                    character.Stories,
+		"updated_at":                 time.Now(),
+	}
+	if character.Views != nil {
+		if b, err := json.Marshal(character.Views); err == nil {
+			updates["views_json"] = string(b)
+		}
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Character{}).
@@ -159,10 +217,10 @@ func (r *Repository) CharactersByStory(ctx context.Context, storyID string) ([]*
 	return result, nil
 }
 
-// CharactersByAuthor retrieves characters by author
-func (r *Repository) CharactersByAuthor(ctx context.Context, authorID string, limit, offset int) ([]*domain.Character, error) {
+// CharactersByUser retrieves characters by user
+func (r *Repository) CharactersByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Character, error) {
 	var characters []Character
-	query := r.db.WithContext(ctx).Preload("Author").Where("author_id = ?", authorID).Order("created_at DESC")
+	query := r.db.WithContext(ctx).Preload("Author").Where("author_id = ?", userID).Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
@@ -191,7 +249,7 @@ func (r *Repository) FollowCharacter(ctx context.Context, userID, characterID st
 	}
 
 	if count > 0 {
-		return errors.New("already following")
+		return domain.ErrAlreadyExists
 	}
 
 	// 创建关注记录
@@ -203,6 +261,12 @@ func (r *Repository) FollowCharacter(ctx context.Context, userID, characterID st
 	}
 
 	if err := r.db.WithContext(ctx).Create(&follow).Error; err != nil {
+		// Handle MySQL duplicate entry error (Error 1062)
+		if strings.Contains(err.Error(), "Error 1062") ||
+			strings.Contains(err.Error(), "Duplicate entry") ||
+			strings.Contains(err.Error(), "23000") {
+			return domain.ErrAlreadyExists
+		}
 		return err
 	}
 
@@ -228,7 +292,7 @@ func (r *Repository) UnfollowCharacter(ctx context.Context, userID, characterID 
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("not following")
+		return domain.ErrNotFound
 	}
 
 	// 更新角色的关注数
@@ -250,6 +314,74 @@ func (r *Repository) IsCharacterFollowing(ctx context.Context, userID, character
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// CountFollowersOfCharacter counts character_follows rows for the character.
+func (r *Repository) CountFollowersOfCharacter(ctx context.Context, characterID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&CharacterFollow{}).Where("character_id = ?", characterID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListCharacterFollowRecordsByCharacter lists followers (newest first) as domain.Follow.
+func (r *Repository) ListCharacterFollowRecordsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []CharacterFollow
+	q := r.db.WithContext(ctx).Where("character_id = ?", characterID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           row.UserID,
+			FollowableType:       domain.FollowableTypeCharacter,
+			FollowableID:         characterID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
+}
+
+// CountCharactersFollowedByUser counts characters this user follows.
+func (r *Repository) CountCharactersFollowedByUser(ctx context.Context, userID string) (int64, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&CharacterFollow{}).Where("user_id = ?", userID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ListCharacterFollowRecordsByUser lists followed characters (newest first) as domain.Follow.
+func (r *Repository) ListCharacterFollowRecordsByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Follow, error) {
+	var rows []CharacterFollow
+	q := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Follow, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out[i] = &domain.Follow{
+			ID:                   row.ID,
+			FollowerID:           userID,
+			FollowableType:       domain.FollowableTypeCharacter,
+			FollowableID:         row.CharacterID,
+			NotificationsEnabled: true,
+			CreatedAt:            row.CreatedAt.Unix(),
+		}
+	}
+	return out, nil
 }
 
 // StoryboardsByCharacter retrieves storyboards that a character participates in

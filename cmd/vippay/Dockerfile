@@ -5,7 +5,7 @@
 # (VIP Payment Service)
 # ========================================
 
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /src
 
 # Copy go.mod and go.sum first for better caching
@@ -31,6 +31,8 @@ FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
 COPY --from=builder /bin/grapery-vippay /app/grapery-vippay
+# Copy config file (optional, service will fall back to env vars if file is missing)
+COPY --from=builder /src/cmd/vippay/vippay.json /app/vippay.json
 
 # ========== Server Configuration ==========
 ENV VIPPAY_PORT=8081
@@ -52,10 +54,45 @@ ENV APPLE_BUNDLE_ID=
 ENV APPLE_ISSUER_ID=
 ENV APPLE_KEY_ID=
 ENV APPLE_PRIVATE_KEY=
+# Apple Sandbox Configuration (optional, falls back to production values)
+ENV APPLE_SANDBOX_BUNDLE_ID=
+ENV APPLE_SANDBOX_ISSUER_ID=
+ENV APPLE_SANDBOX_KEY_ID=
+ENV APPLE_SANDBOX_PRIVATE_KEY=
 
 # ========== Google IAP Configuration ==========
 ENV GOOGLE_PACKAGE_NAME=
 ENV GOOGLE_SERVICE_ACCOUNT_KEY=
+# Google Sandbox Configuration (optional, falls back to production values)
+ENV GOOGLE_SANDBOX_PACKAGE_NAME=
+ENV GOOGLE_SANDBOX_SERVICE_ACCOUNT_KEY=
+
+# ========== Apple OAuth Configuration ==========
+ENV APPLE_OAUTH_CLIENT_ID=
+ENV APPLE_OAUTH_TEAM_ID=
+ENV APPLE_OAUTH_KEY_ID=
+ENV APPLE_OAUTH_PRIVATE_KEY=
+
+# ========== Google OAuth Configuration ==========
+# Note: Code uses GOOGLE_CLIENT_ID (not GOOGLE_OAUTH_CLIENT_ID)
+# Set GOOGLE_CLIENT_ID to Web application Client ID (Server Client ID)
+ENV GOOGLE_CLIENT_ID=
+ENV GOOGLE_OAUTH_CLIENT_SECRET=
+
+# ========== APNs Push Notification Configuration ==========
+ENV APNS_BUNDLE_ID=
+ENV APNS_TEAM_ID=
+ENV APNS_KEY_ID=
+ENV APNS_PRIVATE_KEY=
+ENV APNS_USE_SANDBOX=false
+
+# ========== FCM Push Notification Configuration ==========
+ENV FCM_PROJECT_ID=
+ENV FCM_CREDENTIALS_JSON=
+
+# ========== Aliyun SLS Telemetry Configuration ==========
+ENV ALIYUN_ACCESS_KEY_ID=
+ENV ALIYUN_ACCESS_KEY_SECRET=
 
 EXPOSE 8081
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -9,77 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 )
-
-// SSEChatStream 实时聊天消息流（SSE）
-// GET /api/sse/chat/:threadId
-func (h *Handler) SSEChatStream(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
-		return
-	}
-
-	threadID := c.Param("threadId")
-
-	// 验证用户是否有权限访问该聊天线程
-	_, err := h.svc.GetChatThread(c.Request.Context(), threadID, userID)
-	if err != nil {
-		NotFound(c, "chat thread not found")
-		return
-	}
-
-	// 设置 SSE 响应头
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no") // 禁用 Nginx 缓冲
-
-	// 发送初始连接成功消息
-	fmt.Fprintf(c.Writer, "event: connected\ndata: {\"threadId\":\"%s\",\"status\":\"connected\"}\n\n", threadID)
-	c.Writer.Flush()
-
-	// 创建一个ticker来定期检查新消息
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	// 发送心跳的ticker
-	heartbeat := time.NewTicker(30 * time.Second)
-	defer heartbeat.Stop()
-
-	// 记录最后一条消息的时间
-	var lastMessageTime int64
-	ctx := c.Request.Context()
-
-	for {
-		select {
-		case <-ctx.Done():
-			// 客户端断开连接
-			return
-
-		case <-heartbeat.C:
-			// 发送心跳保持连接
-			fmt.Fprintf(c.Writer, ": heartbeat\n\n")
-			c.Writer.Flush()
-
-		case <-ticker.C:
-			// 检查新消息
-			messages, err := h.svc.ListChatMessages(c.Request.Context(), threadID, userID, 10, 0)
-			if err != nil {
-				continue
-			}
-
-			// 发送新消息
-			for _, msg := range messages {
-				if msg.Timestamp > lastMessageTime {
-					messageData, _ := json.Marshal(msg)
-					fmt.Fprintf(c.Writer, "event: message\ndata: %s\n\n", messageData)
-					c.Writer.Flush()
-					lastMessageTime = msg.Timestamp
-				}
-			}
-		}
-	}
-}
 
 // SSENotificationStream 实时通知流（SSE）
 // GET /api/sse/notifications
@@ -146,56 +74,7 @@ func (h *Handler) SSENotificationStream(c *gin.Context) {
 	}
 }
 
-// SSEActivityStream 活动流（SSE）
-// GET /api/sse/activities
-func (h *Handler) SSEActivityStream(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
-		return
-	}
-
-	// 设置 SSE 响应头
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-
-	fmt.Fprintf(c.Writer, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
-	c.Writer.Flush()
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	heartbeat := time.NewTicker(30 * time.Second)
-	defer heartbeat.Stop()
-
-	ctx := c.Request.Context()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-heartbeat.C:
-			fmt.Fprintf(c.Writer, ": heartbeat\n\n")
-			c.Writer.Flush()
-
-		case <-ticker.C:
-			// 获取最新活动
-			activities, err := h.svc.GetUserActivities(c.Request.Context(), userID, 10)
-			if err != nil {
-				continue
-			}
-
-			if len(activities) > 0 {
-				activitiesData, _ := json.Marshal(activities)
-				fmt.Fprintf(c.Writer, "event: activities\ndata: %s\n\n", activitiesData)
-				c.Writer.Flush()
-			}
-		}
-	}
-}
+// REMOVED: SSEActivityStream - not in StoryCreationAppUI design
 
 // ========== SSE Helper Functions ==========
 
@@ -225,68 +104,14 @@ func SendSSEHeartbeat(c *gin.Context) {
 	c.Writer.Flush()
 }
 
-// ========== HTTP/2 Server Push Support ==========
+// ========== Long Polling Support ==========
 
-// PushChatMessage 使用 HTTP/2 Server Push 推送聊天消息
-func (h *Handler) PushChatMessage(c *gin.Context) {
-	// HTTP/2 Server Push 示例
-	// 这需要在支持 HTTP/2 的服务器上运行
-	if pusher, ok := c.Writer.(gin.ResponseWriter); ok {
-		// 推送相关资源
-		_ = pusher
-		// pusher.Push("/api/chats/:id/messages", nil)
-	}
-}
-
-// ========== Long Polling Fallback ==========
-
-// LongPollChatMessages Long Polling 方式获取新消息（SSE的降级方案）
-// GET /api/poll/chat/:threadId/messages
-func (h *Handler) LongPollChatMessages(c *gin.Context) {
-	userID := authPkg.GetUserID(c)
-	if userID == "" {
-		Unauthorized(c, "not authenticated")
-		return
-	}
-
-	threadID := c.Param("threadId")
-	lastMessageID := c.Query("lastMessageId")
-	timeout := 30 * time.Second
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			// 超时，返回空结果
-			Success(c, gin.H{
-				"messages": []interface{}{},
-				"hasNew":   false,
-			})
-			return
-
-		case <-ticker.C:
-			// 检查新消息
-			messages, err := h.svc.ListChatMessages(c.Request.Context(), threadID, userID, 10, 0)
-			if err != nil {
-				continue
-			}
-
-			// 如果有新消息，立即返回
-			if len(messages) > 0 {
-				latestID := messages[0].ID
-				if latestID != lastMessageID {
-					Success(c, gin.H{
-						"messages": messages,
-						"hasNew":   true,
-					})
-					return
-				}
-			}
-		}
-	}
+// LongPollMessages Long Polling 方式获取新消息（SSE的降级方案）
+// 注意：此功能已废弃，保留作为占位符
+func (h *Handler) LongPollMessages(c *gin.Context) {
+	// 返回空结果，功能已废弃
+	Success(c, gin.H{
+		"messages": []interface{}{},
+		"hasNew":   false,
+	})
 }
