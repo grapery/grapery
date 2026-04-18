@@ -35,15 +35,18 @@ type GenerateFragmentPanelPlanRequest struct {
 
 // GenerateFragmentPanelPlanResult Step1 output + usage.
 type GenerateFragmentPanelPlanResult struct {
-	Plan       []domain.FragmentPanelPlanItem
-	TokensUsed int
-	DurationMs int64
-	Model      string
-	Provider   string // "gemini" | "huoshan"
+	Plan        []domain.FragmentPanelPlanItem
+	VisualBible *domain.FragmentVisualBible
+	TokensUsed  int
+	DurationMs  int64
+	Model       string
+	Provider    string // "gemini" | "huoshan"
 }
 
-type fragmentPanelPlanEnvelope struct {
-	Panels []domain.FragmentPanelPlanItem `json:"panels"`
+// fragmentPanelPlanRoot Step1 完整 JSON（visualBible + panels），与普通碎片方案 B 对齐。
+type fragmentPanelPlanRoot struct {
+	VisualBible *domain.FragmentVisualBible    `json:"visualBible"`
+	Panels      []domain.FragmentPanelPlanItem `json:"panels"`
 }
 
 // GenerateFragmentPanelPlan runs Step1: reference + text → JSON panel plan (Huoshan 或 Gemini).
@@ -169,7 +172,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 	contents := []*genai.Content{{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{
-			genai.NewPartFromText("User reference image. First infer: main subjects/objects, environment, spatial layout, lighting, color palette, mood, and what the user likely cares about. Treat this as a story anchor (world + identity + atmosphere), not as a frame to copy pixel-by-pixel in every panel."),
+			genai.NewPartFromText(fragmentPanelGeminiReferenceImagePreamble),
 			imgPart,
 			genai.NewPartFromText(userText),
 		},
@@ -199,7 +202,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 		return nil, err
 	}
 
-	plan, err := parseFragmentPanelPlanJSON(responseText, req.PanelCount)
+	plan, visualBible, err := parseFragmentPanelPlanJSON(responseText, req.PanelCount)
 	if err != nil {
 		s.failPanelPlanRecord(ctx, record, startTime, err)
 		return nil, err
@@ -238,11 +241,12 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 	}
 
 	return &GenerateFragmentPanelPlanResult{
-		Plan:       plan,
-		TokensUsed: record.TotalTokens,
-		DurationMs: durationMs,
-		Model:      fragmentPanelPlanGeminiModel,
-		Provider:   "gemini",
+		Plan:        plan,
+		VisualBible: visualBible,
+		TokensUsed:  record.TotalTokens,
+		DurationMs:  durationMs,
+		Model:       fragmentPanelPlanGeminiModel,
+		Provider:    "gemini",
 	}, nil
 }
 
@@ -357,7 +361,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 		return nil, err
 	}
 
-	plan, err := parseFragmentPanelPlanJSON(responseText, req.PanelCount)
+	plan, visualBible, err := parseFragmentPanelPlanJSON(responseText, req.PanelCount)
 	if err != nil {
 		s.failPanelPlanRecord(ctx, record, startTime, err)
 		return nil, err
@@ -403,23 +407,29 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	}
 
 	return &GenerateFragmentPanelPlanResult{
-		Plan:       plan,
-		TokensUsed: record.TotalTokens,
-		DurationMs: durationMs,
-		Model:      modelName,
-		Provider:   "huoshan",
+		Plan:        plan,
+		VisualBible: visualBible,
+		TokensUsed:  record.TotalTokens,
+		DurationMs:  durationMs,
+		Model:       modelName,
+		Provider:    "huoshan",
 	}, nil
 }
 
-func parseFragmentPanelPlanJSON(responseText string, panelCount int) ([]domain.FragmentPanelPlanItem, error) {
-	var env fragmentPanelPlanEnvelope
-	if err := json.Unmarshal([]byte(responseText), &env); err != nil {
+func parseFragmentPanelPlanJSON(responseText string, panelCount int) ([]domain.FragmentPanelPlanItem, *domain.FragmentVisualBible, error) {
+	var root fragmentPanelPlanRoot
+	if err := json.Unmarshal([]byte(responseText), &root); err != nil {
 		cleaned := extractJSON(responseText)
-		if err2 := json.Unmarshal([]byte(cleaned), &env); err2 != nil {
-			return nil, fmt.Errorf("parse panel plan JSON: %w", err2)
+		if err2 := json.Unmarshal([]byte(cleaned), &root); err2 != nil {
+			return nil, nil, fmt.Errorf("parse panel plan JSON: %w", err2)
 		}
 	}
-	return normalizeFragmentPanelPlan(env.Panels, panelCount)
+	normalizeFragmentVisualBible(&root.VisualBible)
+	plan, err := normalizeFragmentPanelPlan(root.Panels, panelCount)
+	if err != nil {
+		return nil, root.VisualBible, err
+	}
+	return plan, root.VisualBible, nil
 }
 
 func (s *AIGenerationService) failPanelPlanRecord(ctx context.Context, record *domain.AIGenerationRecord, startTime time.Time, genErr error) {
@@ -429,47 +439,6 @@ func (s *AIGenerationService) failPanelPlanRecord(ctx context.Context, record *d
 	completedUnix := time.Now().Unix()
 	record.CompletedAt = &completedUnix
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
-}
-
-func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int) string {
-	ui := strings.TrimSpace(userInput)
-	st := strings.TrimSpace(style)
-	if st == "" {
-		st = "unspecified"
-	}
-	return fmt.Sprintf(`You are the director for a %d-panel visual story (comic / story fragments). The user attached a reference image AND text. Your job has two phases (do both before writing JSON):
-
-PHASE 1 — UNDERSTAND THE IMAGE (mental checklist, do not output this as prose):
-- Identify concrete entities: people/characters, objects, architecture, nature, props, text/signs if any.
-- Scene: indoor/outdoor, time of day, weather, spatial relationships (foreground/background).
-- Aesthetic signals: palette, lighting, camera feel (wide vs close), mood.
-- What the user probably wants to preserve (e.g. same characters, same trip, same vibe) vs what can vary.
-
-PHASE 2 — PLAN PANELS AROUND IMAGE + USER INTENT:
-- Merge the user's text (Chinese or English) with your scene understanding. The story should EXTEND and DIVERSIFY from the reference: new moments, beats, angles, distances, actions — while keeping thematic continuity (same world, recognizable subjects where relevant).
-- Do NOT treat every panel as "redraw the reference photo with small edits". Later panels should advance the narrative or show different facets of the same story.
-- Panel 0 may establish the situation (can relate closely to the reference) but should still allow creative composition; panels 1..%d should clearly change shot type, action, or story time unless the user explicitly asks for repetition.
-
-Visual style slug for downstream image models: %s
-
-User text:
-%s
-
-Return ONLY valid JSON (no markdown, no commentary) with this exact shape:
-{"panels":[{"index":0,"image_prompt":"English, for the image model: one panel, concrete visual description including camera/composition/lighting; emphasize creative expansion from the anchor image, not slavish duplication","caption":"Short Chinese caption for readers"}, ...]}
-
-Hard rules:
-- Exactly %d items in "panels", index 0..%d in order.
-- image_prompt: English only; specific enough to draw; explicitly call for variation across panels (different framing, focal length, or story beat) where appropriate.
-- caption: one concise Chinese line per panel.
-- image_prompt must NOT instruct to "copy", "duplicate", or "recreate the reference exactly" for every panel; anchor identity/mood, but encourage diverse storytelling visuals.`,
-		panelCount,
-		panelCount-1,
-		st,
-		ui,
-		panelCount,
-		panelCount-1,
-	)
 }
 
 func normalizeFragmentPanelPlan(raw []domain.FragmentPanelPlanItem, want int) ([]domain.FragmentPanelPlanItem, error) {

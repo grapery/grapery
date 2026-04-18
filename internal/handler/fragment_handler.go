@@ -532,7 +532,18 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 		fragment.Content = *req.Content
 	}
 	if req.ImageUrls != nil {
-		fragment.ImageUrls = stringifyArray(*req.ImageUrls)
+		processed := make([]string, 0, len(*req.ImageUrls))
+		for _, u := range *req.ImageUrls {
+			u = strings.TrimSpace(u)
+			if u == "" {
+				continue
+			}
+			if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+				processed = append(processed, u)
+			}
+		}
+		fragment.ImageUrls = stringifyArray(processed)
+		fragment.MediaURLs = append([]string(nil), processed...)
 	}
 	if req.Style != nil {
 		fragment.Style = req.Style

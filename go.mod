@@ -8,18 +8,23 @@ require (
 	github.com/alibabacloud-go/tea v1.3.11
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/aliyun/alibaba-cloud-sdk-go v1.63.103
+	github.com/aliyun/aliyun-log-go-sdk v0.1.113
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aliyun/credentials-go v1.4.5
+	github.com/disintegration/imaging v1.6.2
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/sirupsen/logrus v1.9.3
+	github.com/stripe/stripe-go/v74 v74.30.0
 	github.com/volcengine/volcengine-go-sdk v1.1.52
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
@@ -38,12 +43,10 @@ require (
 )
 
 require (
-	github.com/aliyun/aliyun-log-go-sdk v0.1.113 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
-	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
@@ -51,11 +54,9 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/grafana/regexp v0.0.0-20221005093135-b4c2bcb0a4b6 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
@@ -63,7 +64,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/prometheus v0.40.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/stripe/stripe-go/v74 v74.30.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
 	go.opentelemetry.io/otel/metric v1.42.0 // indirect
@@ -98,7 +98,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
-	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
@@ -129,7 +128,6 @@ require (
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/volcengine/volc-sdk-golang v1.0.23 // indirect
 	go.mongodb.org/mongo-driver v1.17.6 // indirect
-	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/arch v0.8.0 // indirect

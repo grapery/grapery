@@ -863,29 +863,30 @@ func (s *AIService) parseFragmentTextInput(aiTask *domain.AITask) (prompt string
 	return raw, nil, nil
 }
 
-// fragmentImagePayload 碎片配图生成输入（prompt + 可选 aspectRatio）。
+// fragmentImagePayload 碎片配图生成输入（prompt + 可选 aspectRatio + 可选多参考图）。
 type fragmentImagePayload struct {
-	Prompt      string `json:"prompt"`
-	AspectRatio string `json:"aspectRatio,omitempty"`
+	Prompt          string   `json:"prompt"`
+	AspectRatio     string   `json:"aspectRatio,omitempty"`
+	ReferenceImages []string `json:"referenceImages,omitempty"`
 }
 
-func parseFragmentImageInput(aiTask *domain.AITask) (prompt string, aspectRatio string, err error) {
+func parseFragmentImageInput(aiTask *domain.AITask) (prompt string, aspectRatio string, referenceImages []string, err error) {
 	if aiTask == nil {
-		return "", "", fmt.Errorf("ai task is nil")
+		return "", "", nil, fmt.Errorf("ai task is nil")
 	}
 	raw := strings.TrimSpace(aiTask.Input)
 	if raw == "" {
-		return "", "", fmt.Errorf("empty input")
+		return "", "", nil, fmt.Errorf("empty input")
 	}
 	var p fragmentImagePayload
 	if json.Unmarshal([]byte(raw), &p) == nil && strings.TrimSpace(p.Prompt) != "" {
-		return strings.TrimSpace(p.Prompt), strings.TrimSpace(p.AspectRatio), nil
+		return strings.TrimSpace(p.Prompt), strings.TrimSpace(p.AspectRatio), fragmentPrefillHTTPImageURLs(p.ReferenceImages, 12), nil
 	}
 	var single string
 	if json.Unmarshal([]byte(raw), &single) == nil {
-		return strings.TrimSpace(single), "", nil
+		return strings.TrimSpace(single), "", nil, nil
 	}
-	return raw, "", nil
+	return raw, "", nil, nil
 }
 
 func parseFragmentMultimodalStoryJSON(raw string) (content string, inferredAspect string, err error) {
@@ -962,6 +963,160 @@ func (s *AIService) generateFragmentStoryMultimodal(ctx context.Context, prompt 
 		tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
 	}
 	return c, tokensUsed, ar, nil
+}
+
+// generateFragmentExtractionMultimodalRaw 多模态提取：返回完整 JSON 文本（含 visualBible），不裁剪为 content-only。
+func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string) (string, int, error) {
+	hc := s.genAPI.HuoshanInternalClient()
+	if hc != nil {
+		resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+			Prompt:       prompt,
+			ImageURLs:    imageURLs,
+			MaxTokens:    4096,
+			Temperature:  0.55,
+			JSONResponse: true,
+		})
+		if err == nil && resp != nil && strings.TrimSpace(resp.Text) != "" {
+			tok := resp.TotalTokens
+			if tok == 0 {
+				tok = resp.InputTokens + resp.OutputTokens
+			}
+			return strings.TrimSpace(resp.Text), tok, nil
+		}
+		if err != nil {
+			s.logger.Warn("fragment extraction multimodal: huoshan failed", zap.Error(err))
+		}
+	}
+	if s.geminiClient == nil {
+		if hc == nil {
+			return "", 0, fmt.Errorf("no multimodal provider: configure HUOSHAN_API_KEY or GEMINI_API_KEY")
+		}
+		return "", 0, fmt.Errorf("huoshan extraction multimodal failed and gemini is not configured")
+	}
+	s.logger.Warn("fragment extraction: falling back to gemini text-only (reference images not used for structured JSON)")
+	temp := float32(0.55)
+	maxTok := int32(4096)
+	cfg := &genai.GenerateContentConfig{
+		Temperature:     &temp,
+		MaxOutputTokens: maxTok,
+	}
+	text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+	if err != nil {
+		return "", 0, fmt.Errorf("gemini extraction fallback: %w", err)
+	}
+	tokensUsed := 0
+	if gemResp != nil && gemResp.UsageMetadata != nil {
+		tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
+	}
+	return strings.TrimSpace(text), tokensUsed, nil
+}
+
+func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, prompt string) (string, int, error) {
+	if s.genAPI == nil {
+		return "", 0, fmt.Errorf("genAPI not available")
+	}
+	hc := s.genAPI.HuoshanInternalClient()
+	if hc == nil {
+		return "", 0, fmt.Errorf("huoshan client not available")
+	}
+	resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+		Prompt:       prompt,
+		MaxTokens:    4096,
+		Temperature:  0.55,
+		JSONResponse: true,
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("huoshan extraction JSON text failed: %w", err)
+	}
+	if resp == nil {
+		return "", 0, fmt.Errorf("huoshan returned empty response")
+	}
+	tokens := resp.TotalTokens
+	if tokens == 0 {
+		tokens = resp.InputTokens + resp.OutputTokens
+	}
+	return strings.TrimSpace(resp.Text), tokens, nil
+}
+
+// GenerateFragmentExtractionJSON Step1 专用：保留完整结构化 JSON（含 visualBible），供普通碎片链路解析。
+func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *domain.AITask) (raw string, tokens int, err error) {
+	prompt, imageURLs, err := s.parseFragmentTextInput(aiTask)
+	if err != nil {
+		return "", 0, err
+	}
+	if len(imageURLs) > 0 {
+		return s.generateFragmentExtractionMultimodalRaw(ctx, prompt, imageURLs)
+	}
+	if s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
+		if t, tok, err := s.generateFragmentExtractionTextHuoshan(ctx, prompt); err == nil && strings.TrimSpace(t) != "" {
+			return t, tok, nil
+		} else if err != nil {
+			s.logger.Warn("fragment extraction JSON: huoshan failed", zap.Error(err))
+		}
+	}
+	if s.geminiClient != nil {
+		temp := float32(0.55)
+		maxTok := int32(4096)
+		cfg := &genai.GenerateContentConfig{
+			Temperature:     &temp,
+			MaxOutputTokens: maxTok,
+		}
+		text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+		if err != nil {
+			return "", 0, fmt.Errorf("gemini extraction JSON: %w", err)
+		}
+		tokensUsed := 0
+		if gemResp != nil && gemResp.UsageMetadata != nil {
+			tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
+		}
+		return strings.TrimSpace(text), tokensUsed, nil
+	}
+	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
+}
+
+// GenerateFragmentAuxJSON 无参考图的 JSON 模式文本（一致性检查等辅助步骤）。
+func (s *AIService) GenerateFragmentAuxJSON(ctx context.Context, prompt string) (raw string, tokens int, err error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return "", 0, fmt.Errorf("empty prompt")
+	}
+	if s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
+		hc := s.genAPI.HuoshanInternalClient()
+		resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+			Prompt:       prompt,
+			MaxTokens:    2048,
+			Temperature:  0.35,
+			JSONResponse: true,
+		})
+		if err == nil && resp != nil && strings.TrimSpace(resp.Text) != "" {
+			tok := resp.TotalTokens
+			if tok == 0 {
+				tok = resp.InputTokens + resp.OutputTokens
+			}
+			return strings.TrimSpace(resp.Text), tok, nil
+		}
+		if err != nil {
+			s.logger.Warn("fragment aux JSON: huoshan failed", zap.Error(err))
+		}
+	}
+	if s.geminiClient == nil {
+		return "", 0, fmt.Errorf("no provider for fragment aux JSON")
+	}
+	temp := float32(0.35)
+	maxTok := int32(2048)
+	cfg := &genai.GenerateContentConfig{
+		Temperature:     &temp,
+		MaxOutputTokens: maxTok,
+	}
+	text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+	if err != nil {
+		return "", 0, err
+	}
+	tokensUsed := 0
+	if gemResp != nil && gemResp.UsageMetadata != nil {
+		tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
+	}
+	return strings.TrimSpace(text), tokensUsed, nil
 }
 
 // GenerateTextForFragment 生成文本内容（为 FragmentGenerationService 提供简化接口）。
@@ -1146,7 +1301,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 		return "", 0, fmt.Errorf("AI generation service not configured")
 	}
 
-	prompt, aspectIn, err := parseFragmentImageInput(aiTask)
+	prompt, aspectIn, refImgs, err := parseFragmentImageInput(aiTask)
 	if err != nil {
 		return "", 0, err
 	}
@@ -1194,6 +1349,9 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 		imgReq.Size = domain.FragmentImagePixelSizeForAspectRatio(ar)
 	default:
 		imgReq.AspectRatio = ar
+	}
+	if len(refImgs) > 0 {
+		imgReq.ReferenceImages = refImgs
 	}
 
 	imgOut, err := s.aiGen.GenerateImage(ctx, imgReq)

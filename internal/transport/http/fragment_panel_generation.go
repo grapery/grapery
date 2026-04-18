@@ -40,12 +40,13 @@ func NewFragmentPanelGenerationHandler(svc *service.FragmentPanelGenerationServi
 
 // CreatePanelGenerationRequest POST body for /fragment-panels/generate
 type CreatePanelGenerationRequest struct {
-	UserInput          string `json:"userInput" binding:"required,min=1,max=2000"`
-	ReferenceImageURL  string `json:"referenceImageUrl" binding:"required"`
-	Style              string `json:"style"`
-	PanelCount         int    `json:"panelCount"`
-	Visibility         string `json:"visibility"`
-	Topic              string `json:"topic"`
+	UserInput         string `json:"userInput" binding:"required,min=1,max=2000"`
+	ReferenceImageURL string `json:"referenceImageUrl" binding:"required"`
+	Style             string `json:"style"`
+	PanelCount        int    `json:"panelCount"`
+	Visibility        string `json:"visibility"`
+	Topic             string `json:"topic"`
+	AspectRatio       string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 }
 
 // CreatePanelGeneration POST /fragment-panels/generate
@@ -69,6 +70,7 @@ func (h *FragmentPanelGenerationHandler) CreatePanelGeneration(c *gin.Context) {
 		PanelCount:        req.PanelCount,
 		Visibility:        strings.TrimSpace(req.Visibility),
 		Topic:             normalizePanelTopicLabel(req.Topic),
+		AspectRatio:       strings.TrimSpace(req.AspectRatio),
 	}
 
 	task, err := h.svc.StartGeneration(c.Request.Context(), userID, domainReq)
@@ -164,9 +166,9 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 			})
 		}
 		resp["metrics"] = gin.H{
-			"steps":             steps,
-			"totalTokens":       task.Metrics.TotalTokens,
-			"totalDurationMs":   task.Metrics.TotalDurationMs,
+			"steps":           steps,
+			"totalTokens":     task.Metrics.TotalTokens,
+			"totalDurationMs": task.Metrics.TotalDurationMs,
 		}
 	}
 
