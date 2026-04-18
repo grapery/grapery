@@ -1,123 +1,94 @@
 # Privacy Policy
 
-**Last updated: December 19, 2025**
+**Last updated: April 18, 2026**
 
-Grapery Technology ("we," "us," or "our") operates the Grapery application (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
+**Shanghai Rankquantity Technology Co., Ltd.** (上海秩量科技有限公司; "we") operates the **Weize** (未择) service, including the **Weize** mobile app, websites (including **https://www.rankquantity.xyz/**), APIs, and related features. This policy explains how we handle **personal information** and your choices.
 
-## 1. Information We Collect
+**Scope:** This policy applies to information collected through **Weize** and related services. Third parties (app stores, payment processors, sign-in providers, AI infrastructure vendors) have their own practices—please read their policies too.
 
-### Personal Information
+## 1. Information we collect
 
-We collect information that you provide directly to us, including:
+### 1.1 Information you provide
 
-- **Account Information:** Name, email address, username, and password
-- **Profile Information:** Avatar, bio, location, and other profile details
-- **Contact Information:** Email address and phone number (if provided)
+- **Account details**: email, username, display name, avatar, bio; if you use **Apple, Google, WeChat**, or other SSO, we receive identifiers and profile elements they share per your authorization.
+- **Content**: stories, characters, storyboards, **fragments (feed posts)**, comments, messages, likes/follows, and media you upload (images, audio, video) plus related metadata.
+- **AI inputs**: prompts, selections, parameters, and reference materials you submit for generation or editing (needed to provide the feature; you may disable some AI capabilities in settings).
+- **Transactions**: order/subscription identifiers and status; **full payment card numbers** are generally processed by **Apple/Google/payment partners**, not stored by us in full.
+- **Support**: contact details and message content when you reach out.
 
-### Content You Create
+### 1.2 Automatically collected information
 
-- Stories, characters, and storyboards you create
-- Comments, messages, and other communications
-- AI generation prompts and results
-- Media files (images, videos) you upload
+- **Device and logs**: device model, OS version, app version, language/region, IP address, crash/diagnostic logs, coarse network type.
+- **Usage**: feature usage, flows, session metrics, and errors for **operations, security, and product improvement** (often aggregated or de-identified where feasible).
+- **Push notifications**: **device push tokens** and delivery-related signals if you opt in.
+- **Local storage and similar tech**: tokens, preferences, and security signals stored on device or via cookies where applicable.
 
-### Usage Data
+### 1.3 Information from third parties
 
-We automatically collect certain information when you use our Service:
+- **Sign-in and linking**: identifiers and profile fields from identity providers.
+- **Payments**: verification signals from payment partners.
+- **Infrastructure**: storage/CDN identifiers and access logs needed for reliability, billing, and security.
 
-- **Device Information:** Device type, operating system, unique device identifiers
-- **Log Data:** IP address, browser type, access times, pages viewed
-- **Analytics Data:** Usage patterns, feature interactions, performance metrics
-- **Cookies and Similar Technologies:** We use cookies and similar tracking technologies to track activity on our Service
+### 1.4 Sensitive information and minors
 
-## 2. How We Use Your Information
+We do **not** intentionally collect sensitive categories unrelated to providing the Service. The Service is a **general audience** product. **Minors** should use the Service with guardian guidance. Where we offer **teen/young-user controls**, we process related data as described in-product and as required by law. If we learn we collected a child's personal information without proper consent, we will delete it or take other legally required steps.
 
-We use the information we collect for various purposes:
+## 2. How we use information
 
-- **To Provide and Maintain the Service:** Process your requests, manage your account, and deliver the Service
-- **To Improve Our Service:** Analyze usage patterns, identify issues, and enhance user experience
-- **To Communicate with You:** Send service-related notifications, updates, and marketing communications (with your consent)
-- **To Process Transactions:** Handle subscription payments and manage billing
-- **To Ensure Security:** Detect and prevent fraud, abuse, and security threats
-- **To Comply with Legal Obligations:** Meet legal requirements and respond to legal requests
+- **Provide the Service**: authentication, syncing, publishing and displaying stories/storyboards/fragments, social features, search/recommendations, media handling, customer support.
+- **AI features**: send necessary inputs to **our or third-party model services**; detect abuse and unsafe content where permitted.
+- **Safety and compliance**: fraud prevention, security monitoring, legal requests, dispute handling.
+- **Improve the product**: analytics, performance tuning, and experimentation (preferring aggregated/de-identified data where reasonable).
+- **Communications**: service and security notices; **marketing** only with consent or where allowed, with opt-out where required.
+- **Billing**: fulfill purchases and subscriptions.
 
-## 3. Information Sharing and Disclosure
+## 3. Sharing and processors
 
-We do not sell your personal information. We may share your information in the following circumstances:
+We **do not sell** your personal information. We share information or use processors only as needed:
 
-### Service Providers
+- **Service providers**: hosting, object storage, databases, CDN, email/SMS, analytics, support tools, **AI inference and safety**, fraud prevention, and logging—bound by confidentiality and **minimum necessary** processing.
+- **App stores and payments**: **Apple, Google**, and payment partners process IAP/subscriptions under their terms.
+- **Legal and protection of rights**: when required by law or to establish/defend legal claims.
+- **Business transfers**: mergers, acquisitions, or asset sales, with successor obligations or new consent where required.
+- **With your direction**: when you share externally or connect integrations.
 
-We may share your information with third-party service providers who perform services on our behalf, such as:
+**Public content**: Content you set to **public** may be visible to other users or indexed; choose visibility carefully.
 
-- Cloud hosting and storage providers
-- Payment processors
-- Analytics and data analysis services
-- Customer support services
+## 4. International transfers
 
-### Legal Requirements
+Your information may be processed outside your country. We use appropriate safeguards (e.g., contractual clauses or other mechanisms) where required by law.
 
-We may disclose your information if required to do so by law or in response to valid requests by public authorities.
+## 5. Retention
 
-### Business Transfers
+We keep information **as long as needed** for the purposes above, including contracts, disputes, and legal obligations, then **delete or anonymize** it unless a longer period is required.
 
-If we are involved in a merger, acquisition, or asset sale, your information may be transferred as part of that transaction.
+## 6. Your rights
 
-### With Your Consent
+Depending on your jurisdiction, you may have rights to **access**, **rectify**, **delete**, **restrict processing**, **object**, **port** data, **withdraw consent**, and **opt out** of certain processing (including marketing). You may **delete your account** where the product provides that option.
 
-We may share your information with your consent or at your direction.
+**How to exercise**: email **privacy@grapery.xyz** with your request and account identifiers. We may verify identity to prevent fraud and will respond within applicable deadlines.
 
-### Public Information
+## 7. Security
 
-Information you choose to make public (such as public profiles, published stories) will be visible to other users.
+We use reasonable safeguards (encryption in transit, access controls, monitoring). No method is 100% secure; protect your credentials and watch for phishing.
 
-## 4. Data Security
+## 8. Cookies and similar technologies
 
-We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. However, no method of transmission over the Internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your information, we cannot guarantee absolute security.
+You can manage cookies via browser or OS settings. Disabling some technologies may affect login or preferences.
 
-## 5. Your Rights
+## 9. Third-party links
 
-Depending on your location, you may have the following rights regarding your personal information:
+External sites are not covered by this policy; we are not responsible for their practices.
 
-- **Access:** Request access to your personal information
-- **Correction:** Request correction of inaccurate or incomplete information
-- **Deletion:** Request deletion of your personal information
-- **Objection:** Object to processing of your personal information
-- **Data Portability:** Request transfer of your data to another service
-- **Withdrawal of Consent:** Withdraw consent where processing is based on consent
+## 10. Changes
 
-To exercise these rights, please contact us at privacy@grapery.xyz.
+We may update this policy and change the **Last updated** date. For **material** changes, we will provide notice via the app, website, or email as appropriate. Continued use means you acknowledge the update (except where separate consent is required).
 
-## 6. Data Retention
+## 11. Contact
 
-We retain your personal information for as long as necessary to provide the Service and fulfill the purposes outlined in this Privacy Policy, unless a longer retention period is required or permitted by law. When we no longer need your information, we will securely delete or anonymize it.
+**Privacy:** privacy@grapery.xyz  
+**Data protection contact:** dpo@grapery.xyz  
 
-## 7. Children's Privacy
-
-Our Service is not directed to children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
-
-## 8. International Data Transfers
-
-Your information may be transferred to and maintained on computers located outside of your state, province, country, or other governmental jurisdiction where data protection laws may differ. By using our Service, you consent to the transfer of your information to these facilities.
-
-## 9. Cookies and Tracking Technologies
-
-We use cookies and similar tracking technologies to track activity on our Service and hold certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you do not accept cookies, you may not be able to use some portions of our Service.
-
-## 10. Third-Party Services
-
-Our Service may contain links to third-party websites or services that are not owned or controlled by us. We have no control over, and assume no responsibility for, the privacy policies or practices of any third-party sites or services.
-
-## 11. Changes to This Privacy Policy
-
-We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date. You are advised to review this Privacy Policy periodically for any changes.
-
-## 12. Contact Us
-
-If you have any questions about this Privacy Policy, please contact us:
-
-**Email:** privacy@grapery.xyz
-
-**Data Protection Officer:** dpo@grapery.xyz
-
-**Company:** Grapery Technology  
-**Address:** Building C, No. 888, West Second Ring Road, Lingang New Area, Pudong New Area, Shanghai, China
+**Company:** Shanghai Rankquantity Technology Co., Ltd. (上海秩量科技有限公司)  
+**Website:** https://www.rankquantity.xyz/  
+**Address:** Building C, No. 888 Huanhu West 2nd Road, Lingang New Area, Pudong New Area, Shanghai, China

@@ -251,14 +251,15 @@ func (r *Repository) fragmentToModel(f *domain.Fragment) *FragmentDB {
 }
 
 func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
-	// 将 MediaURLs 转换为 JSON 字符串，或使用 ImageUrls（向后兼容）
+	// 持久化优先使用 MediaURLs（内存中的切片是权威来源）。若先更新了 MediaURLs 却未同步 JSON 字符串，
+	// 旧逻辑会写回陈旧的 image_urls 列，导致列表/详情里少图（例如多格生成已 append 第 4 张但字符串仍为 3 条）。
 	imageUrlsJSON := "[]"
-	if f.ImageUrls != "" {
-		imageUrlsJSON = f.ImageUrls
-	} else if len(f.MediaURLs) > 0 {
+	if len(f.MediaURLs) > 0 {
 		if data, err := json.Marshal(f.MediaURLs); err == nil {
 			imageUrlsJSON = string(data)
 		}
+	} else if f.ImageUrls != "" {
+		imageUrlsJSON = f.ImageUrls
 	}
 
 	// 使用主字段

@@ -62,13 +62,67 @@ type FragmentGenerationRequest struct {
 	AspectRatio string `json:"aspectRatio,omitempty"`
 }
 
+// FragmentVisualStyleBible 视觉圣经：全局画风锚点（英文描述为主，便于出图模型对齐）。
+type FragmentVisualStyleBible struct {
+	ArtStyle     string `json:"artStyle,omitempty"`
+	LineQuality  string `json:"lineQuality,omitempty"`
+	Palette      string `json:"palette,omitempty"`
+	LightingMood string `json:"lightingMood,omitempty"`
+}
+
+// FragmentVisualCharacter 角色视觉资产（稳定 key + 不可变特征列表）。
+type FragmentVisualCharacter struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualProp 道具视觉资产。
+type FragmentVisualProp struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualLocation 场景/地点视觉资产。
+type FragmentVisualLocation struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+}
+
+// FragmentVisualBible Step1 结构化视觉设定，用于锚点图、参考图拼接与一致性检查。
+type FragmentVisualBible struct {
+	StyleBible *FragmentVisualStyleBible `json:"styleBible,omitempty"`
+	Characters []FragmentVisualCharacter `json:"characters,omitempty"`
+	Props      []FragmentVisualProp      `json:"props,omitempty"`
+	Locations  []FragmentVisualLocation  `json:"locations,omitempty"`
+}
+
+// FragmentAnchorImage 锚点图记录（referenceKey -> 出图 URL）。
+type FragmentAnchorImage struct {
+	Key      string `json:"key"`
+	Kind     string `json:"kind"` // character | prop | location
+	ImageURL string `json:"imageUrl"`
+}
+
+// FragmentConsistencyIssue 一致性检查问题（仅记录，不阻断任务）。
+type FragmentConsistencyIssue struct {
+	SceneIndex int    `json:"sceneIndex,omitempty"`
+	Severity   string `json:"severity,omitempty"` // low | medium | high
+	Detail     string `json:"detail"`
+}
+
 // FragmentGenerationResult 碎片故事生成结果
 type FragmentGenerationResult struct {
-	Content         string   `json:"content"`                   // 生成的文字内容
-	ImageUrls       []string `json:"imageUrls"`                 // 生成的图片URL列表
-	AspectRatio     string   `json:"aspectRatio,omitempty"`     // 实际使用的配图长宽比
-	TokensUsed      int      `json:"tokensUsed"`                // 使用的token数量
-	DraftFragmentID string   `json:"draftFragmentId,omitempty"` // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	Content           string                     `json:"content"`                     // 生成的文字内容
+	ImageUrls         []string                   `json:"imageUrls"`                   // 生成的图片URL列表
+	AspectRatio       string                     `json:"aspectRatio,omitempty"`       // 实际使用的配图长宽比
+	TokensUsed        int                        `json:"tokensUsed"`                  // 使用的token数量
+	DraftFragmentID   string                     `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	VisualBible       *FragmentVisualBible       `json:"visualBible,omitempty"`       // 结构化视觉设定（方案 B）
+	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`      // 锚点参考图
+	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"` // 一致性检查（best-effort）
 }
 
 // FragmentContentGenerationRequest 碎片故事内容生成请求

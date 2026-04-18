@@ -249,7 +249,7 @@ func main() {
 	logger.Info("fragment generation service initialized")
 
 	panelGenRepo := repository.NewFragmentPanelGenerationRepository(repo.DB())
-	panelGenService := service.NewFragmentPanelGenerationService(panelGenRepo, fragmentRepo, repo, cfg.AI.ImageProvider, svc.AIGenerationService(), logger)
+	panelGenService := service.NewFragmentPanelGenerationService(panelGenRepo, fragmentRepo, repo, cfg.AI.ImageProvider, svc.AIGenerationService(), aiSvc, logger)
 	logger.Info("fragment panel generation service initialized")
 
 	// Initialize Fragment Interaction Service
