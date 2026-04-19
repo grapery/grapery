@@ -10,6 +10,18 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
+// attachStoryViewerState sets isLiked / isFollowing for the authenticated viewer (optional; guests unchanged).
+func (h *Handler) attachStoryViewerState(c *gin.Context, story *domain.Story) {
+	if story == nil {
+		return
+	}
+	uid := GetUserID(c)
+	if uid == "" {
+		return
+	}
+	h.svc.AttachStoryViewerState(c.Request.Context(), uid, story)
+}
+
 // GetTrendingStoriesPublic returns top trending stories (guest accessible).
 // Trending is determined by: followers > likes > updated_at.
 // No time range restriction - includes all published stories.
@@ -49,6 +61,7 @@ func (h *Handler) CreateStory(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryViewerState(c, story)
 	Success(c, story)
 }
 
@@ -65,6 +78,7 @@ func (h *Handler) GetStory(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryViewerState(c, story)
 	Success(c, story)
 }
 
@@ -112,6 +126,7 @@ func (h *Handler) UpdateStory(c *gin.Context) {
 		return
 	}
 
+	h.attachStoryViewerState(c, story)
 	Success(c, story)
 }
 

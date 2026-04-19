@@ -108,47 +108,80 @@ func (r *Repository) DeleteStory(ctx context.Context, id string) error {
 	return nil
 }
 
-// LikeStory adds a like to a story
-func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) error {
-	// 检查是否已经点赞
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&StoryLike{}).
-		Where("user_id = ? AND story_id = ?", userID, storyID).
-		Count(&count).Error; err != nil {
+func isMySQLDuplicateKeyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "Error 1062") ||
+		strings.Contains(s, "Duplicate entry") ||
+		strings.Contains(s, "23000")
+}
+
+// reviveSoftDeletedStoryLike clears deleted_at and bumps story.likes. Caller must ensure row is soft-deleted.
+func (r *Repository) reviveSoftDeletedStoryLike(ctx context.Context, likeID, storyID string) error {
+	if err := r.db.WithContext(ctx).Unscoped().Model(&StoryLike{}).
+		Where("id = ?", likeID).
+		Update("deleted_at", nil).Error; err != nil {
 		return err
 	}
+	return r.db.WithContext(ctx).Model(&Story{}).
+		Where("id = ?", storyID).
+		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error
+}
 
-	if count > 0 {
+// LikeStory adds a like to a story.
+// StoryLike uses GORM soft delete: a soft-deleted row still occupies idx_user_story, so INSERT can fail with 1062
+// while Count/IsStoryLiked see no active row. In that case we revive the row instead of treating it as idempotent no-op.
+func (r *Repository) LikeStory(ctx context.Context, userID, storyID string) error {
+	var active int64
+	if err := r.db.WithContext(ctx).Model(&StoryLike{}).
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		Count(&active).Error; err != nil {
+		return err
+	}
+	if active > 0 {
 		return domain.ErrAlreadyLiked
 	}
 
-	// 创建点赞记录
+	var existing StoryLike
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("user_id = ? AND story_id = ?", userID, storyID).
+		First(&existing).Error
+	if err == nil {
+		if !existing.DeletedAt.Valid {
+			return domain.ErrAlreadyLiked
+		}
+		return r.reviveSoftDeletedStoryLike(ctx, existing.ID, storyID)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
 	like := StoryLike{
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		StoryID:   storyID,
 		CreatedAt: time.Now(),
 	}
-
 	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
-		// Handle MySQL duplicate entry error (Error 1062)
-		// This can happen due to race condition between check and insert
-		if strings.Contains(err.Error(), "Error 1062") ||
-			strings.Contains(err.Error(), "Duplicate entry") ||
-			strings.Contains(err.Error(), "23000") {
-			return domain.ErrAlreadyLiked
+		if isMySQLDuplicateKeyErr(err) {
+			if err := r.db.WithContext(ctx).Unscoped().
+				Where("user_id = ? AND story_id = ?", userID, storyID).
+				First(&existing).Error; err != nil {
+				return domain.ErrAlreadyLiked
+			}
+			if !existing.DeletedAt.Valid {
+				return domain.ErrAlreadyLiked
+			}
+			return r.reviveSoftDeletedStoryLike(ctx, existing.ID, storyID)
 		}
 		return err
 	}
 
-	// 更新故事的点赞数
-	if err := r.db.WithContext(ctx).Model(&Story{}).
+	return r.db.WithContext(ctx).Model(&Story{}).
 		Where("id = ?", storyID).
-		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error; err != nil {
-		return err
-	}
-
-	return nil
+		UpdateColumn("likes", gorm.Expr("likes + ?", 1)).Error
 }
 
 // UnlikeStory removes a like from a story

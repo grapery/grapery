@@ -1407,7 +1407,7 @@ func (s *Service) RecordStoryboardFeedSeen(ctx context.Context, userID, storyboa
 }
 
 // GetStoryboardFeed 获取故事板 feed。
-// tab: discover（默认：仅 onboarding 体裁；未登录 trending）；for_you / recommended 为 discover 别名；following；community（带缓存）。
+// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended 为 discover 别名；following；community（带缓存）。
 func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
 	if tab == "" || tab == "recommended" || tab == "for_you" {

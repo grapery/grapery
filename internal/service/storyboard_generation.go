@@ -799,6 +799,107 @@ func (s *Service) getCharacterImagesForScene(ctx context.Context, storyID string
 	return images
 }
 
+// latestStoryboardImageGenerationByScene keeps the newest row per scene (ties broken by ID).
+func latestStoryboardImageGenerationByScene(list []*domain.StoryboardImageGeneration) map[string]*domain.StoryboardImageGeneration {
+	out := make(map[string]*domain.StoryboardImageGeneration)
+	for _, g := range list {
+		if g == nil || g.SceneID == "" {
+			continue
+		}
+		cur, ok := out[g.SceneID]
+		if !ok || g.CreatedAt > cur.CreatedAt || (g.CreatedAt == cur.CreatedAt && g.ID > cur.ID) {
+			out[g.SceneID] = g
+		}
+	}
+	return out
+}
+
+// storyboardPeerSceneHasLatestFailedImageGen is true when another scene's latest image attempt is failed
+// (or completed without URL). Used to stop the rest of a parallel batch when one panel fails.
+func (s *Service) storyboardPeerSceneHasLatestFailedImageGen(ctx context.Context, storyboardID, excludeSceneID string) bool {
+	if s.repo == nil {
+		return false
+	}
+	list, err := s.repo.ListImageGenerations(ctx, storyboardID)
+	if err != nil || len(list) == 0 {
+		return false
+	}
+	byScene := latestStoryboardImageGenerationByScene(list)
+	for sid, g := range byScene {
+		if sid == excludeSceneID {
+			continue
+		}
+		if g.Status == domain.GenerationStatusFailed {
+			return true
+		}
+		if g.Status == domain.GenerationStatusCompleted && strings.TrimSpace(g.GeneratedImageURL) == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// storyboardImagePhaseHasLatestFailure is true if any scene's latest image generation is in a failed terminal state.
+func (s *Service) storyboardImagePhaseHasLatestFailure(ctx context.Context, storyboardID string) bool {
+	if s.repo == nil {
+		return false
+	}
+	list, err := s.repo.ListImageGenerations(ctx, storyboardID)
+	if err != nil {
+		return false
+	}
+	for _, g := range latestStoryboardImageGenerationByScene(list) {
+		if g.Status == domain.GenerationStatusFailed {
+			return true
+		}
+		if g.Status == domain.GenerationStatusCompleted && strings.TrimSpace(g.GeneratedImageURL) == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// cancelInFlightSiblingStoryboardImageGenerations marks pending/processing image jobs (other than exceptGenID) failed
+// so parallel work stops after one panel fails in the same storyboard batch.
+func (s *Service) cancelInFlightSiblingStoryboardImageGenerations(ctx context.Context, storyboardID, exceptGenID string) int {
+	if s.repo == nil {
+		return 0
+	}
+	list, err := s.repo.ListImageGenerations(ctx, storyboardID)
+	if err != nil {
+		return 0
+	}
+	msg := formatGenerationError(GenerationErrorCancelled, "stopped because another panel image failed in the same batch")
+	now := time.Now().Unix()
+	cancelled := 0
+	for _, g := range list {
+		if g == nil || g.ID == exceptGenID {
+			continue
+		}
+		if g.Status != domain.GenerationStatusPending && g.Status != domain.GenerationStatusProcessing {
+			continue
+		}
+		g.Status = domain.GenerationStatusFailed
+		g.ErrorMessage = msg
+		g.CompletedAt = &now
+		if err := s.repo.UpdateImageGeneration(ctx, g); err != nil {
+			s.logger.Warn("failed to cascade-cancel sibling image generation",
+				zap.String("storyboardId", storyboardID),
+				zap.String("generationId", g.ID),
+				zap.Error(err))
+			continue
+		}
+		cancelled++
+	}
+	if cancelled > 0 {
+		s.logger.Info("cascade-cancelled in-flight sibling image generations after a panel failure",
+			zap.String("storyboardId", storyboardID),
+			zap.String("exceptGenerationId", exceptGenID),
+			zap.Int("cancelledCount", cancelled))
+	}
+	return cancelled
+}
+
 // processImageGeneration processes image generation in background
 func (s *Service) processImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration) {
 	startTime := time.Now()
@@ -842,6 +943,21 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("generationId", gen.ID))
 	}
 
+	// 同批其它分镜已失败时，不再继续调用模型（避免无效消耗与状态撕裂）。
+	if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+		gen.Status = domain.GenerationStatusFailed
+		gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
+			"another panel image failed first; stopping remaining image jobs in this batch")
+		now := time.Now().Unix()
+		gen.CompletedAt = &now
+		if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
+			s.logger.Warn("failed to persist peer-aborted image generation",
+				zap.String("generationId", gen.ID),
+				zap.Error(err))
+		}
+		return
+	}
+
 	// First, generate image prompt using text AI
 	// 直接调用 geminiClient，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
 	if s.geminiClient != nil {
@@ -874,6 +990,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
+			s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
 			// Record metrics: failed
 			if s.metrics != nil {
@@ -1098,6 +1215,22 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		}
 	}
 
+	// 并行任务中：若兄弟任务已先将本行标为失败（级联取消），则不再写入成功。
+	if latest, err := s.repo.GetImageGeneration(ctx, gen.ID); err == nil && latest != nil && latest.Status == domain.GenerationStatusFailed {
+		s.logger.Info("image generation record already failed in DB (cascade), skipping final write",
+			zap.String("generationId", gen.ID),
+			zap.String("storyboardId", gen.StoryboardID))
+		return
+	}
+
+	if gen.GeneratedImageURL != "" {
+		if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+			gen.GeneratedImageURL = ""
+			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
+				"another panel image failed; discarding generated image for this batch")
+		}
+	}
+
 	if gen.GeneratedImageURL == "" {
 		gen.Status = domain.GenerationStatusFailed
 		if gen.ErrorMessage == "" {
@@ -1117,6 +1250,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		s.logger.Debug("image generation final status updated",
 			zap.String("generationId", gen.ID),
 			zap.String("status", gen.Status))
+	}
+
+	if gen.Status == domain.GenerationStatusFailed {
+		s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 	}
 
 	s.logger.Debug("updating storyboard token consumption",
@@ -1309,6 +1446,19 @@ func (s *Service) afterSceneImageWritten(ctx context.Context, gen *domain.Storyb
 	s.maybeStartBatchVideoAfterAllImages(ctx, gen.StoryboardID)
 	if gen.Status != domain.GenerationStatusCompleted {
 		return
+	}
+	// 仍有任一分镜配图失败（按场景最新一条）或任一分镜尚无成图时，不把 workflow 推到 images_ready，避免「部分失败却显示整板就绪」。
+	if s.storyboardImagePhaseHasLatestFailure(ctx, gen.StoryboardID) {
+		return
+	}
+	scenes, err := s.repo.StoryboardScenes(ctx, gen.StoryboardID)
+	if err != nil {
+		return
+	}
+	for _, sc := range scenes {
+		if sc == nil || strings.TrimSpace(sc.Image) == "" {
+			return
+		}
 	}
 	sb, err := s.repo.StoryboardByID(ctx, gen.StoryboardID)
 	if err != nil || sb == nil {
@@ -2140,25 +2290,29 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 }
 
 // RetryFailedStoryboardImages retries failed image generations for a storyboard.
-// It starts new generation jobs only for failed scenes and returns retry summary.
+// It starts new generation jobs only for scenes whose latest image generation row (by time) is failed,
+// so old failed rows after a successful retry do not trigger duplicate work.
 func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string) (retried int, remainingFailed int, err error) {
 	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	latestFailedByScene := make(map[string]*domain.StoryboardImageGeneration)
-	for _, gen := range imageGens {
-		if gen.Status != domain.GenerationStatusFailed {
+	latestByScene := latestStoryboardImageGenerationByScene(imageGens)
+	var toRetry []*domain.StoryboardImageGeneration
+	for _, gen := range latestByScene {
+		if gen == nil {
 			continue
 		}
-		existing, ok := latestFailedByScene[gen.SceneID]
-		if !ok || gen.CreatedAt > existing.CreatedAt {
-			latestFailedByScene[gen.SceneID] = gen
+		needsRetry := gen.Status == domain.GenerationStatusFailed ||
+			(gen.Status == domain.GenerationStatusCompleted && strings.TrimSpace(gen.GeneratedImageURL) == "")
+		if !needsRetry {
+			continue
 		}
+		toRetry = append(toRetry, gen)
 	}
 
-	for _, gen := range latestFailedByScene {
+	for _, gen := range toRetry {
 		comicStyle := strings.TrimSpace(gen.ComicStyle)
 		if comicStyle == "" {
 			if sb, sbErr := s.repo.StoryboardByID(ctx, storyboardID); sbErr == nil && sb != nil {
