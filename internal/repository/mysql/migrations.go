@@ -598,6 +598,19 @@ func (r *Repository) ensureStoryboardContinuationGenerationOptionsSchema() error
 	return nil
 }
 
+// ensureStoryboardContinuationSummarySchema adds continuation_summary for fork/continuation context compression.
+func (r *Repository) ensureStoryboardContinuationSummarySchema() error {
+	migrator := r.db.Migrator()
+	if !migrator.HasColumn(&Storyboard{}, "ContinuationSummary") {
+		r.log.Info("Adding continuation_summary to storyboards")
+		if err := r.db.Exec(`ALTER TABLE storyboards ADD COLUMN continuation_summary TEXT NULL COMMENT 'Lossy narrative summary for continuation/fork context'`).Error; err != nil {
+			r.log.Error("failed to add continuation_summary", zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureCharacterPortraitSchema ensures characters has portrait-related columns
 func (r *Repository) ensureCharacterPortraitSchema() error {
 	migrator := r.db.Migrator()

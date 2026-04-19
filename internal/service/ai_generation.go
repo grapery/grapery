@@ -445,6 +445,11 @@ type GenerateImageResult struct {
 	DurationMs int64
 }
 
+func isImagenImageModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "imagen") || strings.Contains(m, "imagen")
+}
+
 // GenerateImage 使用GenAPI生成图片，并记录AI使用数据
 func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateImageRequest) (*GenerateImageResult, error) {
 	// Check if genAPI client is configured
@@ -582,9 +587,16 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	// 3. 调用GenAPI生成图片 (支持风格和重试)
 	operation := genapi.OperationTextToImage
 	referenceImageURL := ""
-	if len(req.ReferenceImages) > 0 {
+	refURLs := req.ReferenceImages
+	if isImagenImageModel(req.Model) && len(refURLs) > 0 {
+		// Imagen GenerateImages 为纯文生图；URL 参考无法走当前 gemini_provider 的 imageToImage 路径。
+		s.logger.Debug("imagen model: omitting reference image URLs (text-to-image only)",
+			zap.String("model", req.Model),
+			zap.Int("refCount", len(refURLs)))
+		refURLs = nil
+	} else if len(refURLs) > 0 {
 		operation = genapi.OperationImageToImage
-		referenceImageURL = req.ReferenceImages[0]
+		referenceImageURL = refURLs[0]
 	}
 
 	genReq := &genapi.GenerateRequest{
@@ -595,9 +607,42 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		Style:             req.Style, // 生成风格
 		OutputCount:       req.OutputCount,
 		Model:             req.Model,
-		ReferenceImages:   req.ReferenceImages,
+		ReferenceImages:   refURLs,
 		Operation:         operation,
 		ReferenceImageURL: referenceImageURL,
+	}
+
+	// Gemini 对话式多参考合成：需内联字节，否则仅 URL 的 imageToImage 会失败。
+	if strings.EqualFold(strings.TrimSpace(req.Provider), string(genapi.ProviderGemini)) &&
+		len(genReq.ReferenceImages) > 0 &&
+		!isImagenImageModel(req.Model) {
+		var assets []genapi.ReferenceImageAsset
+		for _, rawURL := range genReq.ReferenceImages {
+			u := strings.TrimSpace(rawURL)
+			if u == "" {
+				continue
+			}
+			data, mime, dlErr := downloadImageFromURL(ctx, u)
+			if dlErr != nil {
+				s.logger.Warn("reference image download failed, skipping",
+					zap.String("url", truncateURL(u)),
+					zap.Error(dlErr))
+				continue
+			}
+			if len(data) == 0 {
+				continue
+			}
+			assets = append(assets, genapi.ReferenceImageAsset{Data: data, MIMEType: mime})
+		}
+		if len(assets) > 0 {
+			genReq.ReferenceImagesData = assets
+		} else {
+			s.logger.Warn("no reference images could be loaded; falling back to text-to-image",
+				zap.String("userID", req.UserID))
+			genReq.Operation = genapi.OperationTextToImage
+			genReq.ReferenceImageURL = ""
+			genReq.ReferenceImages = nil
+		}
 	}
 
 	// Retry logic with tracking
@@ -1134,7 +1179,7 @@ func (s *AIGenerationService) RecordTextGenerationUsage(ctx context.Context, req
 		OutputTokens:      req.OutputTokens,
 		TotalTokens:       req.InputTokens + req.OutputTokens,
 		Status:            req.Status,
-		ErrorMessage:     req.ErrorMessage,
+		ErrorMessage:      req.ErrorMessage,
 		RelatedEntityID:   req.RelatedEntityID,
 		RelatedEntityType: req.RelatedEntityType,
 		CreatedAt:         time.Now().Unix(),

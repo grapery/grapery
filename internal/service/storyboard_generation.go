@@ -665,12 +665,36 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 	// 判断是否为过渡场景（没有角色出现）
 	isTransitionScene := len(req.SceneCharacters) == 0 && len(characterRefImages) == 0
 
-	// 合并参考图片：原始参考图片 + 角色参考图片
-	allReferenceImages := make([]string, 0, len(req.ReferenceImages)+len(characterRefImages))
-	allReferenceImages = append(allReferenceImages, req.ReferenceImages...)
-	// 只有非过渡场景才添加角色参考图片
+	panelURL := strings.TrimSpace(s.previousStoryboardScenePanelImageURL(ctx, req.StoryboardID, req.SceneID))
+
+	// 合并参考图：上一格成图（连贯性）→ 客户端 reference → 角色 portrait；去重并限制总数
+	const maxSceneRefURLs = 6
+	allReferenceImages := make([]string, 0, maxSceneRefURLs)
+	seen := make(map[string]struct{})
+	addRef := func(u string) {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			return
+		}
+		if _, ok := seen[u]; ok {
+			return
+		}
+		if len(allReferenceImages) >= maxSceneRefURLs {
+			return
+		}
+		seen[u] = struct{}{}
+		allReferenceImages = append(allReferenceImages, u)
+	}
+	if panelURL != "" {
+		addRef(panelURL)
+	}
+	for _, u := range req.ReferenceImages {
+		addRef(u)
+	}
 	if !isTransitionScene {
-		allReferenceImages = append(allReferenceImages, characterRefImages...)
+		for _, u := range characterRefImages {
+			addRef(u)
+		}
 	}
 
 	// Create generation record
@@ -2067,6 +2091,10 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	} else if progress.ContentGeneration == nil && len(progress.SceneGenerations) == 0 &&
 		len(progress.ImageGenerations) == 0 && len(progress.VideoGenerations) == 0 {
 		progress.GenerationMessage = "无生成任务"
+	} else if storyboard.WorkflowStatus == domain.WorkflowStatusContentReady && len(progress.ImageGenerations) == 0 {
+		// 文案/分镜已就绪但配图任务尚未落库或未开始时，旧逻辑会误报「所有生成任务已完成」。
+		progress.GenerationMessage = "等待配图生成"
+		progress.HasPendingTasks = true
 	} else {
 		progress.GenerationMessage = "所有生成任务已完成"
 	}
@@ -3130,6 +3158,12 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		prompt.WriteString("\n## Comic / visual style (continuation)\n")
 		prompt.WriteString(fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n", cs))
 		prompt.WriteString("Apply this style consistently with line work, coloring, and overall visual temperament.\n")
+	}
+
+	if len(gen.ReferenceImages) > 0 {
+		prompt.WriteString("\n## Reference images (ordered)\n")
+		prompt.WriteString("When multiple reference images are provided, the FIRST image is usually the immediately previous storyboard panel: use it for shot-to-shot continuity (palette, environment, recurring wardrobe) when the scene follows the prior beat.\n")
+		prompt.WriteString("Additional images are character identity references: main cast must match those references.\n")
 	}
 
 	// 添加场景类型信息

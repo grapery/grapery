@@ -192,6 +192,8 @@ type Repository interface {
 	StoryboardByID(ctx context.Context, id string) (*Storyboard, error)
 	CreateStoryboard(ctx context.Context, storyboard *Storyboard) error
 	UpdateStoryboard(ctx context.Context, storyboard *Storyboard) error
+	// UpdateStoryboardContinuationSummary updates only continuation_summary (and updated_at).
+	UpdateStoryboardContinuationSummary(ctx context.Context, storyboardID string, summary string) error
 	DeleteStoryboard(ctx context.Context, id string) error
 	StoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)
 	RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)        // 获取故事的根故事板（ParentID 为空或 "__root__"）

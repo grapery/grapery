@@ -294,6 +294,49 @@ func (h *Handler) UpdateStoryboard(c *gin.Context) {
 	Success(c, updatedStoryboard)
 }
 
+// UpdateStoryboardPlotScene PUT /storyboards/:id/scenes/:sceneId — 更新 AI 分镜叙事字段并失效/重算 continuation summary。
+func (h *Handler) UpdateStoryboardPlotScene(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	uid, _ := userID.(string)
+	if uid == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+
+	storyboardID := c.Param("id")
+	sceneID := c.Param("sceneId")
+	if storyboardID == "" || sceneID == "" {
+		InvalidParams(c, "storyboard id and scene id are required")
+		return
+	}
+
+	var patch service.StoryboardPlotScenePatch
+	if err := c.ShouldBindJSON(&patch); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+
+	scene, err := h.svc.UpdateStoryboardPlotScene(c.Request.Context(), uid, storyboardID, sceneID, patch)
+	if err != nil {
+		if strings.Contains(err.Error(), "permission denied") {
+			Forbidden(c, err.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			NotFound(c, "scene not found")
+			return
+		}
+		InternalError(c, err.Error())
+		return
+	}
+
+	Success(c, scene)
+}
+
 // attachStoryboardIsLiked sets storyboard.IsLiked for the current viewer when authenticated.
 func (h *Handler) attachStoryboardIsLiked(c *gin.Context, storyboard *domain.Storyboard) {
 	if storyboard == nil {

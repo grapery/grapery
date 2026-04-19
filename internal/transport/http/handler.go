@@ -183,6 +183,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// Storyboard 相关
 			authenticated.POST("/storyboards", h.CreateStoryboard)
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
+			authenticated.PUT("/storyboards/:id/scenes/:sceneId", h.UpdateStoryboardPlotScene)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)
 			authenticated.POST("/storyboards/:id/fork", h.ForkStoryboard)
 			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
