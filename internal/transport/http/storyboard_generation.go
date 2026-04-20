@@ -153,6 +153,182 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 	Success(c, gen)
 }
 
+// GenerateStoryboardComicPage generates a multi-panel comic PAGE (single image file) for one scene.
+// POST /api/storyboards/:id/generate/comic-page
+//
+// Separate pipeline from GenerateStoryboardImage: different prompt + default aspect ratio (9:16).
+func (h *Handler) GenerateStoryboardComicPage(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	var req struct {
+		SceneID                  string   `json:"sceneId" binding:"required"`
+		SceneTitle               string   `json:"sceneTitle"`
+		SceneDescription         string   `json:"sceneDescription" binding:"required"`
+		ReferenceImages          []string `json:"referenceImages"`
+		SceneCharacters          []string `json:"sceneCharacters"`
+		CharacterReferenceImages []string `json:"characterReferenceImages"`
+		LayoutPreset             string   `json:"layoutPreset"`
+		PanelCount               int      `json:"panelCount"`
+		PageAspectRatio          string   `json:"pageAspectRatio"`
+		DialogueMode             string   `json:"dialogueMode"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+
+	genReq := &service.ComicPageGenerationRequest{
+		StoryboardID:             storyboardID,
+		SceneID:                  req.SceneID,
+		SceneTitle:               req.SceneTitle,
+		SceneDescription:         req.SceneDescription,
+		ReferenceImages:          req.ReferenceImages,
+		SceneCharacters:          req.SceneCharacters,
+		CharacterReferenceImages: req.CharacterReferenceImages,
+		Pipeline: service.ComicPagePipelineOptions{
+			LayoutPreset:    req.LayoutPreset,
+			PanelCount:      req.PanelCount,
+			PageAspectRatio: req.PageAspectRatio,
+			DialogueMode:    req.DialogueMode,
+		},
+	}
+
+	gen, err := h.svc.GenerateStoryboardComicPage(c.Request.Context(), genReq)
+	if err != nil {
+		Error(c, CodeInternalError, err.Error())
+		return
+	}
+
+	Success(c, gen)
+}
+
+// GenerateAllStoryboardComicPages batch comic-page generation for all scenes.
+// POST /api/storyboards/:id/generate/comic-pages
+func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	var req struct {
+		RegenerateAll     bool   `json:"regenerateAll"`
+		LayoutPreset      string `json:"layoutPreset"`
+		PanelCount        int    `json:"panelCount"`
+		PageAspectRatio   string `json:"pageAspectRatio"`
+		DialogueMode      string `json:"dialogueMode"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req = struct {
+			RegenerateAll     bool   `json:"regenerateAll"`
+			LayoutPreset      string `json:"layoutPreset"`
+			PanelCount        int    `json:"panelCount"`
+			PageAspectRatio   string `json:"pageAspectRatio"`
+			DialogueMode      string `json:"dialogueMode"`
+		}{}
+	}
+
+	pipeline := service.ComicPagePipelineOptions{
+		LayoutPreset:    req.LayoutPreset,
+		PanelCount:      req.PanelCount,
+		PageAspectRatio: req.PageAspectRatio,
+		DialogueMode:    req.DialogueMode,
+	}
+	service.NormalizeComicPagePipeline(&pipeline)
+
+	storyboard, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
+	if err != nil {
+		Error(c, CodeInternalError, err.Error())
+		return
+	}
+	if len(storyboard.StoryboardScenes) == 0 {
+		Error(c, CodeInvalidParams, "no scenes found in storyboard")
+		return
+	}
+
+	type sceneBatchResult struct {
+		SceneID          string                            `json:"sceneId"`
+		SceneTitle       string                            `json:"sceneTitle"`
+		Status           string                            `json:"status"`
+		ErrorMessage     string                            `json:"errorMessage,omitempty"`
+		Generation       *domain.StoryboardImageGeneration `json:"generation,omitempty"`
+		ExistingImageURL string                            `json:"existingImageUrl,omitempty"`
+	}
+
+	results := make([]sceneBatchResult, 0, len(storyboard.StoryboardScenes))
+	successCount := 0
+	failedCount := 0
+
+	for _, scene := range storyboard.StoryboardScenes {
+		if !req.RegenerateAll && scene.Image != "" {
+			results = append(results, sceneBatchResult{
+				SceneID:          scene.ID,
+				SceneTitle:       scene.Title,
+				Status:           "success",
+				ExistingImageURL: scene.Image,
+			})
+			successCount++
+			continue
+		}
+
+		characterPortraitMap := make(map[string]string)
+		for _, charRef := range storyboard.CharacterRefs {
+			if charRef.Character != nil && charRef.Character.Portrait != "" {
+				characterPortraitMap[charRef.Character.Name] = charRef.Character.Portrait
+			}
+		}
+		var referenceImages []string
+		for _, charName := range scene.Characters {
+			if portrait, ok := characterPortraitMap[charName]; ok {
+				referenceImages = append(referenceImages, portrait)
+			}
+		}
+
+		genReq := &service.ComicPageGenerationRequest{
+			StoryboardID:             storyboardID,
+			SceneID:                  scene.ID,
+			SceneTitle:               scene.Title,
+			SceneDescription:         scene.Description,
+			ReferenceImages:          referenceImages,
+			SceneCharacters:          scene.Characters,
+			CharacterReferenceImages: referenceImages,
+			Pipeline:                 pipeline,
+		}
+
+		gen, genErr := h.svc.GenerateStoryboardComicPage(c.Request.Context(), genReq)
+		if genErr != nil {
+			results = append(results, sceneBatchResult{
+				SceneID:      scene.ID,
+				SceneTitle:   scene.Title,
+				Status:       "failed",
+				ErrorMessage: genErr.Error(),
+			})
+			failedCount++
+			continue
+		}
+		results = append(results, sceneBatchResult{
+			SceneID:    scene.ID,
+			SceneTitle: scene.Title,
+			Status:     "success",
+			Generation: gen,
+		})
+		successCount++
+	}
+
+	Success(c, gin.H{
+		"results":      results,
+		"total":        len(results),
+		"successCount": successCount,
+		"failedCount":  failedCount,
+	})
+}
+
 // GenerateAllStoryboardImages generates images for all scenes (Batch operation)
 // POST /api/storyboards/:id/generate/images
 //

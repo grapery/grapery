@@ -47,6 +47,10 @@ type CreatePanelGenerationRequest struct {
 	Visibility        string `json:"visibility"`
 	Topic             string `json:"topic"`
 	AspectRatio       string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	LayoutPreset      string `json:"layoutPreset"`
+	GutterStyle       string `json:"gutterStyle"`
+	DialogueMode      string `json:"dialogueMode"`
+	OutputMode        string `json:"outputMode"`
 }
 
 // CreatePanelGeneration POST /fragment-panels/generate
@@ -71,6 +75,10 @@ func (h *FragmentPanelGenerationHandler) CreatePanelGeneration(c *gin.Context) {
 		Visibility:        strings.TrimSpace(req.Visibility),
 		Topic:             normalizePanelTopicLabel(req.Topic),
 		AspectRatio:       strings.TrimSpace(req.AspectRatio),
+		LayoutPreset:      strings.TrimSpace(req.LayoutPreset),
+		GutterStyle:       strings.TrimSpace(req.GutterStyle),
+		DialogueMode:      strings.TrimSpace(req.DialogueMode),
+		OutputMode:        strings.TrimSpace(req.OutputMode),
 	}
 
 	task, err := h.svc.StartGeneration(c.Request.Context(), userID, domainReq)

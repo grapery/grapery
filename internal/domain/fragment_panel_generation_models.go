@@ -14,6 +14,14 @@ type FragmentPanelGenerationRequest struct {
 	UserRegion string `json:"userRegion,omitempty"`
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空则默认 16:9（与碎片 AI 生成一致）。
 	AspectRatio string `json:"aspectRatio,omitempty"`
+	// LayoutPreset 多格版式提示（仅 fragment-panels 流水线）；如 strip5_top2_middle_wide_bottom2 会强制 panelCount=5。
+	LayoutPreset string `json:"layoutPreset,omitempty"`
+	// GutterStyle 分镜间隔视觉提示：white_thin、black_thin（可选）。
+	GutterStyle string `json:"gutterStyle,omitempty"`
+	// DialogueMode 对白策略：auto、none、from_user_input（可选）。
+	DialogueMode string `json:"dialogueMode,omitempty"`
+	// OutputMode 下游合成策略标记（可选）：per_panel、single_merged（供后续扩展）。
+	OutputMode string `json:"outputMode,omitempty"`
 }
 
 // FragmentPanelPlanItem Step1 输出的单格规划

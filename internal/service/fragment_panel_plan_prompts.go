@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"strings"
+
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // fragmentPanelGeminiReferenceImagePreamble Gemini 多模态：附图前的中文锚点说明（与碎片「参考图理解」语义对齐）。
@@ -25,8 +27,35 @@ func panelPlanNarrativeRhythm(panelCount int) string {
 	}
 }
 
+// fragmentPanelPlanLayoutAddon 将客户端指定的版式/对白选项并入规划提示（仅多格流水线）。
+func fragmentPanelPlanLayoutAddon(req domain.FragmentPanelGenerationRequest) string {
+	var parts []string
+	switch strings.TrimSpace(req.LayoutPreset) {
+	case "strip5_top2_middle_wide_bottom2":
+		parts = append(parts, "版式目标：竖版 5 格条漫节奏——第 1 行两格并排、第 2 行一条全宽横条大格、第 3 行两格并排；分镜顺序与信息递进应符合该阅读流（各格仍是独立插图，构图留出条漫呼吸感）。")
+	}
+	switch strings.TrimSpace(req.GutterStyle) {
+	case "white_thin":
+		parts = append(parts, "格间留白：想象细白 gutter 的现代条漫分隔。")
+	case "black_thin":
+		parts = append(parts, "格间描边：想象细黑线分隔的经典漫画 gutter。")
+	}
+	switch strings.TrimSpace(req.DialogueMode) {
+	case "none":
+		parts = append(parts, "本任务：各格画面不要出现对白气泡或旁白框。")
+	case "auto":
+		parts = append(parts, "在叙事需要时使用椭圆形对白气泡或旁白框；caption 可与气泡文案呼应。")
+	case "from_user_input":
+		parts = append(parts, "对白尽量来自用户文字；caption 使用自然中文并与气泡一致。")
+	}
+	if o := strings.TrimSpace(req.OutputMode); o != "" {
+		parts = append(parts, fmt.Sprintf("输出策略（供规划理解）：%s。", o))
+	}
+	return strings.Join(parts, "\n")
+}
+
 // buildFragmentPanelPlanUserPrompt 分镜规划主提示词：与 fragment_generation_service.expandScenes 方法论同构，输出仍为 panels[].image_prompt + caption JSON。
-func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int) string {
+func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, layoutAddon string) string {
 	ui := strings.TrimSpace(userInput)
 	st := strings.TrimSpace(style)
 	if st == "" {
@@ -35,7 +64,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int) s
 	styleDesc := fragmentStyleDesc(st)
 	narr := panelPlanNarrativeRhythm(panelCount)
 
-	return fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事导演，兼具叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。用户提供了「一张参考图」+「文字意向」。你的任务是规划 %d 个分镜 panel（连环画式故事碎片）：每一格都是一幅能独立抓眼、按顺序读又能连成全片的视觉作品。你不是在「把参考图描 N 遍」，而是在「以参考图为世界锚点，用画面推进故事」。
+	body := fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事导演，兼具叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。用户提供了「一张参考图」+「文字意向」。你的任务是规划 %d 个分镜 panel（连环画式故事碎片）：每一格都是一幅能独立抓眼、按顺序读又能连成全片的视觉作品。你不是在「把参考图描 N 遍」，而是在「以参考图为世界锚点，用画面推进故事」。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 叙事节奏指引
@@ -134,4 +163,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int) s
 		panelCount,
 		panelCount-1,
 	)
+	if a := strings.TrimSpace(layoutAddon); a != "" {
+		body += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n版式与对白（用户指定；须融入分镜规划与 caption）\n" + a + "\n"
+	}
+	return body
 }

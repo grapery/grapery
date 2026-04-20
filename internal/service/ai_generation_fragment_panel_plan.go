@@ -31,6 +31,8 @@ type GenerateFragmentPanelPlanRequest struct {
 	UserRegion string
 	// PlanProvider 显式 "huoshan" 或 "gemini"；默认由服务端归一为火山优先。
 	PlanProvider string
+	// LayoutAddon 由 FragmentPanelGenerationService 从版式/对白选项生成，并入分镜规划提示。
+	LayoutAddon string
 }
 
 // GenerateFragmentPanelPlanResult Step1 output + usage.
@@ -168,7 +170,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 		return nil, fmt.Errorf("encode reference image: %w", err)
 	}
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount)
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, req.LayoutAddon)
 	contents := []*genai.Content{{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{
@@ -333,7 +335,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount)
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, req.LayoutAddon)
 	hresp, err := hc.GenerateText(ctx, &huoshanark.TextGenerationRequest{
 		Prompt:       userText,
 		ImageURLs:    []string{refURL},
