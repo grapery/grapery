@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -70,6 +71,25 @@ func (r *Repository) ListSceneGenerations(ctx context.Context, storyboardID stri
 		result[i] = ModelToStoryboardSceneGeneration(&m)
 	}
 	return result, nil
+}
+
+func (r *Repository) LatestCompletedSceneGenerationByScene(ctx context.Context, storyboardID, sceneID string) (*domain.StoryboardSceneGeneration, error) {
+	var model StoryboardSceneGeneration
+	err := r.db.WithContext(ctx).
+		Where("storyboard_id = ? AND scene_id = ? AND status = ?", storyboardID, sceneID, domain.GenerationStatusCompleted).
+		Order("created_at DESC, id DESC").
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	d := ModelToStoryboardSceneGeneration(&model)
+	if strings.TrimSpace(d.GeneratedDetail) == "" {
+		return nil, domain.ErrNotFound
+	}
+	return d, nil
 }
 
 func (r *Repository) UpdateSceneGeneration(ctx context.Context, gen *domain.StoryboardSceneGeneration) error {

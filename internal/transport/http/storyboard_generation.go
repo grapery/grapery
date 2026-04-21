@@ -217,20 +217,20 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 	}
 
 	var req struct {
-		RegenerateAll     bool   `json:"regenerateAll"`
-		LayoutPreset      string `json:"layoutPreset"`
-		PanelCount        int    `json:"panelCount"`
-		PageAspectRatio   string `json:"pageAspectRatio"`
-		DialogueMode      string `json:"dialogueMode"`
+		RegenerateAll   bool   `json:"regenerateAll"`
+		LayoutPreset    string `json:"layoutPreset"`
+		PanelCount      int    `json:"panelCount"`
+		PageAspectRatio string `json:"pageAspectRatio"`
+		DialogueMode    string `json:"dialogueMode"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req = struct {
-			RegenerateAll     bool   `json:"regenerateAll"`
-			LayoutPreset      string `json:"layoutPreset"`
-			PanelCount        int    `json:"panelCount"`
-			PageAspectRatio   string `json:"pageAspectRatio"`
-			DialogueMode      string `json:"dialogueMode"`
+			RegenerateAll   bool   `json:"regenerateAll"`
+			LayoutPreset    string `json:"layoutPreset"`
+			PanelCount      int    `json:"panelCount"`
+			PageAspectRatio string `json:"pageAspectRatio"`
+			DialogueMode    string `json:"dialogueMode"`
 		}{}
 	}
 
@@ -290,11 +290,12 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 			}
 		}
 
+		mergedDesc := h.svc.MergedStoryboardSceneDescriptionForImage(c.Request.Context(), storyboardID, scene.ID, scene.Description)
 		genReq := &service.ComicPageGenerationRequest{
 			StoryboardID:             storyboardID,
 			SceneID:                  scene.ID,
 			SceneTitle:               scene.Title,
-			SceneDescription:         scene.Description,
+			SceneDescription:         mergedDesc,
 			ReferenceImages:          referenceImages,
 			SceneCharacters:          scene.Characters,
 			CharacterReferenceImages: referenceImages,
@@ -421,11 +422,12 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 			}
 		}
 
+		mergedDesc := h.svc.MergedStoryboardSceneDescriptionForImage(c.Request.Context(), storyboardID, scene.ID, scene.Description)
 		genReq := &service.ImageGenerationRequest{
 			StoryboardID:             storyboardID,
 			SceneID:                  scene.ID,
 			SceneTitle:               scene.Title,
-			SceneDescription:         scene.Description,
+			SceneDescription:         mergedDesc,
 			ReferenceImages:          referenceImages,
 			SceneCharacters:          scene.Characters,
 			CharacterReferenceImages: referenceImages,
