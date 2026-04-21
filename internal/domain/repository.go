@@ -242,6 +242,8 @@ type Repository interface {
 	CreateSceneGeneration(ctx context.Context, gen *StoryboardSceneGeneration) error
 	GetSceneGeneration(ctx context.Context, id string) (*StoryboardSceneGeneration, error)
 	ListSceneGenerations(ctx context.Context, storyboardID string) ([]*StoryboardSceneGeneration, error)
+	// LatestCompletedSceneGenerationByScene returns the most recent completed Step-2 row for a storyboard scene (plot scene id).
+	LatestCompletedSceneGenerationByScene(ctx context.Context, storyboardID, sceneID string) (*StoryboardSceneGeneration, error)
 	UpdateSceneGeneration(ctx context.Context, gen *StoryboardSceneGeneration) error
 
 	// Image generation (Step 3)

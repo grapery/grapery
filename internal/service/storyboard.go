@@ -2647,12 +2647,34 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		if i > 0 {
 			prev = &storyboard.StoryboardScenes[i-1]
 		}
+
+		mergedDesc := strings.TrimSpace(scene.Description)
+		if s.repo != nil && strings.TrimSpace(storyboard.ID) != "" && strings.TrimSpace(scene.ID) != "" {
+			if detailGen, err := s.repo.LatestCompletedSceneGenerationByScene(ctx, storyboard.ID, scene.ID); err == nil && detailGen != nil {
+				mergedDesc = mergeStoryboardSceneDescriptionForImage(scene.Description, detailGen.GeneratedDetail)
+				mergedDesc = strings.TrimSpace(mergedDesc)
+			}
+		}
+		sceneForPrompt := *scene
+		sceneForPrompt.Description = mergedDesc
+
 		// 构建图片提示词（包含故事风格配置）
-		prompt := s.buildStoryboardSceneImagePromptWithStyle(scene, storyStyle, isTransitionScene, prev)
+		prompt := s.buildStoryboardSceneImagePromptWithStyle(&sceneForPrompt, storyStyle, isTransitionScene, prev)
+		refForAPI := referenceImages
+		narrativeRunes := utf8.RuneCountInString(mergedDesc)
+		if !isTransitionScene && narrativeRunes >= storyboardImageT2INarrativeMinRunes {
+			refForAPI = nil
+		}
+		if len(refForAPI) > 0 {
+			prompt = appendStoryboardImageToImageConstraints(prompt, true)
+		}
+		prompt = truncateStringToMaxRunes(strings.TrimSpace(prompt), storyboardImageFinalMaxRunes)
 		s.logger.Debug("scene image prompt built",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("sceneIndex", i),
-			zap.Int("promptLength", len(prompt)))
+			zap.Int("promptLength", len(prompt)),
+			zap.Int("narrativeRunes", narrativeRunes),
+			zap.Int("referenceCountForAPI", len(refForAPI)))
 
 		// 使用AI生成服务生成图片（自动记录AI使用数据）
 		imageReq := &GenerateImageRequest{
@@ -2663,7 +2685,7 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 			AspectRatio:       "16:9",
 			Quality:           "high",
 			OutputCount:       1,
-			ReferenceImages:   referenceImages, // 使用角色参考图片
+			ReferenceImages:   refForAPI,
 			RelatedEntityID:   storyboard.ID,
 			RelatedEntityType: "storyboard_scene",
 			Metadata: map[string]interface{}{

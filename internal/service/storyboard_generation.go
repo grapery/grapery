@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
@@ -633,6 +634,8 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("storyId", storyboard.StoryID))
 
+	mergedSceneDescription := s.MergedStoryboardSceneDescriptionForImage(ctx, req.StoryboardID, req.SceneID, req.SceneDescription)
+
 	// 获取故事信息和风格配置
 	var storyStyle *domain.StyleConfig
 	if req.StoryStyle != nil {
@@ -703,7 +706,7 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		StoryboardID:             req.StoryboardID,
 		SceneID:                  req.SceneID,
 		SceneTitle:               req.SceneTitle,
-		SceneDescription:         req.SceneDescription,
+		SceneDescription:         mergedSceneDescription,
 		ReferenceImages:          allReferenceImages,
 		SceneCharacters:          req.SceneCharacters,
 		CharacterReferenceImages: characterRefImages,
@@ -1005,7 +1008,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		}
 
 		// Parse structured prompt details from AI response
-		promptDetails, combinedPrompt := s.parseImagePromptDetails(text)
+		promptDetails, combinedPrompt := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
 			gen.PromptDetails = promptDetails
 			gen.GeneratedPrompt = combinedPrompt
@@ -1018,8 +1021,9 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				s.metrics.RecordImageGenerationPromptDetails(true)
 			}
 		} else {
-			// Fallback: use raw text as prompt if parsing fails
-			gen.GeneratedPrompt = text
+			// Fallback: use raw text as prompt if parsing fails (still anchor with narrative block)
+			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
+			gen.GeneratedPrompt = prependStoryboardImageNarrativeBlock(nb, capGeminiImageBeautyOutput(strings.TrimSpace(text)))
 			s.logger.Warn("failed to parse structured prompt, using raw text",
 				zap.String("generationId", gen.ID),
 				zap.String("rawText", truncateForLog(text, 200)))
@@ -1058,39 +1062,48 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		s.logger.Warn("no AI client available, using scene description as prompt",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID))
-		gen.GeneratedPrompt = gen.SceneDescription
+		nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
+		if nb != "" {
+			gen.GeneratedPrompt = nb
+		} else {
+			gen.GeneratedPrompt = strings.TrimSpace(gen.SceneDescription)
+		}
 	}
 
 	if gen.GeneratedPrompt != "" {
-		gen.GeneratedPrompt = truncateStringToMaxRunes(strings.TrimSpace(gen.GeneratedPrompt), maxStoryboardAIGeneratedPromptRunes)
+		gen.GeneratedPrompt = finalizeStoryboardImagePromptForAPI(gen)
 	}
+
+	narrativeRunes := utf8.RuneCountInString(strings.TrimSpace(gen.SceneDescription))
+	refURLs, imgOp, refPrimary := selectStoryboardImageRefsAndOperation(gen, narrativeRunes)
+	useRefs := len(refURLs) > 0 && imgOp == genapi.OperationImageToImage
+	finalPrompt := appendStoryboardImageToImageConstraints(strings.TrimSpace(gen.GeneratedPrompt), useRefs)
 
 	// Generate actual image using genAPI directly
 	// TokenUsageRecorder 会自动将 token 消耗和成功/失败记录到 AIGenerationRecord
-	if s.genAPI != nil && gen.GeneratedPrompt != "" {
+	if s.genAPI != nil && finalPrompt != "" {
 		genReq := &genapi.GenerateRequest{
-			Prompt:          gen.GeneratedPrompt,
+			Prompt:          finalPrompt,
 			AspectRatio:     "16:9",
 			Quality:         "high",
 			OutputCount:     1,
-			ReferenceImages: gen.ReferenceImages, // Use character reference images
+			ReferenceImages: refURLs,
 			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
 
-		// Choose operation type based on whether reference images are provided
-		if len(gen.ReferenceImages) > 0 {
-			genReq.Operation = genapi.OperationImageToImage
-			// Use first reference image as the primary reference
-			genReq.ReferenceImageURL = gen.ReferenceImages[0]
+		genReq.Operation = imgOp
+		genReq.ReferenceImageURL = refPrimary
+		if imgOp == genapi.OperationImageToImage {
 			s.logger.Debug("using image-to-image operation",
 				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
-				zap.String("referenceImageURL", genReq.ReferenceImageURL))
+				zap.String("referenceImageURL", genReq.ReferenceImageURL),
+				zap.Int("referenceImageCount", len(refURLs)))
 		} else {
-			genReq.Operation = genapi.OperationTextToImage
 			s.logger.Debug("using text-to-image operation",
 				zap.String("generationId", gen.ID),
-				zap.String("sceneId", gen.SceneID))
+				zap.String("sceneId", gen.SceneID),
+				zap.Int("narrativeRunes", narrativeRunes))
 		}
 
 		// Use configured image provider (default: huoshan)
@@ -1107,7 +1120,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("sceneId", gen.SceneID),
 			zap.String("provider", imageProvider),
 			zap.String("operation", string(genReq.Operation)),
-			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
+			zap.String("prompt", truncateForLog(finalPrompt, 200)))
 
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
@@ -3372,13 +3385,13 @@ Please return a structured JSON object (without markdown code blocks) with the f
 }
 
 Important: Return ONLY the JSON object, no explanations or markdown formatting.
-LENGTH: When the field values are merged into one image prompt, keep the total substantive Chinese text (汉字) within 200 characters — be concise; shorten secondary details first if needed.`)
+LENGTH: Keep each JSON string field concise (roughly one short phrase or clause each). The server will prepend the full scene narrative separately; your JSON supplies cinematography and look only.`)
 
 	return prompt.String()
 }
 
 // parseImagePromptDetails 解析AI返回的结构化提示词JSON
-func (s *Service) parseImagePromptDetails(text string) (*domain.ImagePromptDetails, string) {
+func (s *Service) parseImagePromptDetails(text, sceneTitle, sceneDescription string) (*domain.ImagePromptDetails, string) {
 	// Clean the text - remove markdown code blocks if present
 	cleanedText := strings.TrimSpace(text)
 	if strings.HasPrefix(cleanedText, "```") {
@@ -3411,13 +3424,13 @@ func (s *Service) parseImagePromptDetails(text string) (*domain.ImagePromptDetai
 	}
 
 	// Combine structured details into final prompt text
-	combinedPrompt := s.combineImagePrompt(&details)
+	combinedPrompt := s.combineImagePrompt(&details, sceneTitle, sceneDescription)
 
 	return &details, combinedPrompt
 }
 
 // combineImagePrompt 将结构化的提示词详情组合成最终的文本提示词
-func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails) string {
+func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTitle, sceneDescription string) string {
 	var parts []string
 
 	if details.ArtStyle != "" {
@@ -3442,7 +3455,10 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails) string 
 		parts = append(parts, details.AdditionalNotes)
 	}
 
-	return strings.Join(parts, ". ")
+	beauty := strings.Join(parts, ". ")
+	beauty = capGeminiImageBeautyOutput(beauty)
+	nb := storyboardSceneNarrativeBlock(sceneTitle, sceneDescription)
+	return prependStoryboardImageNarrativeBlock(nb, beauty)
 }
 
 // parseVideoPromptDetails 解析AI返回的结构化视频提示词JSON

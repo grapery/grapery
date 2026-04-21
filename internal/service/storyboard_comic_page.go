@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
@@ -95,6 +96,8 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		characterRefImages = s.getCharacterImagesForScene(ctx, storyboard.StoryID, req.SceneCharacters)
 	}
 
+	mergedSceneDescription := s.MergedStoryboardSceneDescriptionForImage(ctx, req.StoryboardID, req.SceneID, req.SceneDescription)
+
 	isTransitionScene := len(req.SceneCharacters) == 0 && len(characterRefImages) == 0
 
 	panelURL := strings.TrimSpace(s.previousStoryboardScenePanelImageURL(ctx, req.StoryboardID, req.SceneID))
@@ -133,7 +136,7 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		StoryboardID:             req.StoryboardID,
 		SceneID:                  req.SceneID,
 		SceneTitle:               req.SceneTitle,
-		SceneDescription:         req.SceneDescription,
+		SceneDescription:         mergedSceneDescription,
 		ReferenceImages:          allReferenceImages,
 		SceneCharacters:          req.SceneCharacters,
 		CharacterReferenceImages: characterRefImages,
@@ -206,12 +209,13 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			return
 		}
 
-		promptDetails, combinedPrompt := s.parseImagePromptDetails(text)
+		promptDetails, combinedPrompt := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
 			gen.PromptDetails = promptDetails
 			gen.GeneratedPrompt = combinedPrompt
 		} else {
-			gen.GeneratedPrompt = text
+			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
+			gen.GeneratedPrompt = prependStoryboardImageNarrativeBlock(nb, capGeminiImageBeautyOutput(strings.TrimSpace(text)))
 		}
 		if resp != nil && resp.UsageMetadata != nil {
 			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
@@ -220,11 +224,16 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		}
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "comic_page_image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 	} else {
-		gen.GeneratedPrompt = gen.SceneDescription
+		nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
+		if nb != "" {
+			gen.GeneratedPrompt = nb
+		} else {
+			gen.GeneratedPrompt = strings.TrimSpace(gen.SceneDescription)
+		}
 	}
 
 	if gen.GeneratedPrompt != "" {
-		gen.GeneratedPrompt = truncateStringToMaxRunes(strings.TrimSpace(gen.GeneratedPrompt), maxStoryboardAIGeneratedPromptRunes)
+		gen.GeneratedPrompt = finalizeStoryboardImagePromptForAPI(gen)
 	}
 
 	aspect := strings.TrimSpace(opts.PageAspectRatio)
@@ -232,21 +241,22 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		aspect = "9:16"
 	}
 
-	if s.genAPI != nil && gen.GeneratedPrompt != "" {
+	narrativeRunes := utf8.RuneCountInString(strings.TrimSpace(gen.SceneDescription))
+	refURLs, imgOp, refPrimary := selectStoryboardImageRefsAndOperation(gen, narrativeRunes)
+	useRefs := len(refURLs) > 0 && imgOp == genapi.OperationImageToImage
+	finalPrompt := appendStoryboardImageToImageConstraints(strings.TrimSpace(gen.GeneratedPrompt), useRefs)
+
+	if s.genAPI != nil && finalPrompt != "" {
 		genReq := &genapi.GenerateRequest{
-			Prompt:          gen.GeneratedPrompt,
+			Prompt:          finalPrompt,
 			AspectRatio:     aspect,
 			Quality:         "high",
 			OutputCount:     1,
-			ReferenceImages: gen.ReferenceImages,
+			ReferenceImages: refURLs,
 			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
-		if len(gen.ReferenceImages) > 0 {
-			genReq.Operation = genapi.OperationImageToImage
-			genReq.ReferenceImageURL = gen.ReferenceImages[0]
-		} else {
-			genReq.Operation = genapi.OperationTextToImage
-		}
+		genReq.Operation = imgOp
+		genReq.ReferenceImageURL = refPrimary
 		imageProvider := s.imageProvider
 		if imageProvider == "" {
 			imageProvider = "huoshan"
