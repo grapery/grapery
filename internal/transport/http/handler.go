@@ -183,6 +183,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// Storyboard 相关
 			authenticated.POST("/storyboards", h.CreateStoryboard)
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
+			authenticated.PUT("/storyboards/:id/scenes/:sceneId", h.UpdateStoryboardPlotScene)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)
 			authenticated.POST("/storyboards/:id/fork", h.ForkStoryboard)
 			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
@@ -198,6 +199,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
 			authenticated.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
 			authenticated.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)
+			authenticated.POST("/storyboards/:id/generate/comic-page", h.GenerateStoryboardComicPage)
+			authenticated.POST("/storyboards/:id/generate/comic-pages", h.GenerateAllStoryboardComicPages)
 			authenticated.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
 			authenticated.GET("/storyboards/:id/generation-progress", h.GetGenerationProgress)
 			authenticated.POST("/storyboards/:id/cancel-generation", h.CancelStoryboardGeneration)

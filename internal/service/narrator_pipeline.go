@@ -347,7 +347,7 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 			SceneID:          scene.ID,
 			SceneTitle:       scene.Title,
 			SceneDescription: scene.Description,
-			SceneCharacters:  []string{},
+			SceneCharacters:  scene.Characters,
 			ComicStyle:       comicStyle,
 		}
 		go func() {

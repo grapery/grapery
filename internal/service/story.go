@@ -594,6 +594,30 @@ func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, 
 	return story, nil
 }
 
+// AttachStoryViewerState sets story.IsLiked / story.IsFollowing for the current viewer (story_likes / story_follows).
+// Call from HTTP handlers when returning a story to an authenticated client.
+func (s *Service) AttachStoryViewerState(ctx context.Context, viewerUserID string, st *domain.Story) {
+	if st == nil || viewerUserID == "" {
+		return
+	}
+	if liked, err := s.repo.IsStoryLiked(ctx, viewerUserID, st.ID); err == nil {
+		v := liked
+		st.IsLiked = &v
+	} else {
+		s.logger.Debug("AttachStoryViewerState: IsStoryLiked skipped",
+			zap.String("storyID", st.ID),
+			zap.Error(err))
+	}
+	if following, err := s.repo.IsStoryFollowing(ctx, viewerUserID, st.ID); err == nil {
+		v := following
+		st.IsFollowing = &v
+	} else {
+		s.logger.Debug("AttachStoryViewerState: IsStoryFollowing skipped",
+			zap.String("storyID", st.ID),
+			zap.Error(err))
+	}
+}
+
 // ListStories 获取故事列表
 func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*domain.Story, int64, error) {
 	s.logger.Info("listing stories",

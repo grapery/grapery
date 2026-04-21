@@ -80,6 +80,10 @@ type Story struct {
 	Topic            string   `json:"topic,omitempty"`        // 话题标签 (e.g., "灵感来了·非人类的地球生存报告")
 	Forks            int      `json:"forks"`                  // 分支数量
 	ExtraCoverImages []string `json:"extraCoverImages,omitempty" gorm:"type:json;default:'[]'"` // 额外封面缩略图 (用于 StoryCard 显示多个故事板封面)
+
+	// Viewer state（非表字段；由 HTTP 层在已登录请求中根据 viewer 写入）
+	IsLiked     *bool `json:"isLiked,omitempty" gorm:"-"`
+	IsFollowing *bool `json:"isFollowing,omitempty" gorm:"-"`
 }
 
 // AIAssistanceOptions AI辅助选项

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -326,7 +327,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 	}
 
 	// 创建阶段改为快速返回：AI 内容/场景生成在后台异步执行，避免请求长时间阻塞。
-	if s.geminiClient != nil && strings.TrimSpace(storyboard.RawInput) != "" {
+	if s.canGenerateStoryboardText() && strings.TrimSpace(storyboard.RawInput) != "" {
 		contentGen := &domain.StoryboardContentGeneration{
 			ID:           uuid.New().String(),
 			StoryboardID: storyboard.ID,
@@ -407,6 +408,13 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 	contentGen.ErrorMessage = ""
 	_ = s.repo.UpdateContentGeneration(ctx, contentGen)
 	_ = s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusContentReady, 2)
+
+	s.generateOrRefreshStoryboardSummary(ctx, storyboardID)
+
+	if len(storyboard.StoryboardScenes) > 0 {
+		// 与续写流程一致：分镜落库后异步为每格拉起配图，否则仅 content_ready 且无 storyboard_image_generations 记录，轮询永远不会推进。
+		s.startContinuationSceneImageGenerations(storyboardID, storyboard.ContinuationComicStyle, storyboard.StoryboardScenes)
+	}
 
 	s.logger.Info("initial storyboard generation completed",
 		zap.String("storyboardId", storyboardID),
@@ -682,6 +690,15 @@ func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Story
 		}
 	}
 
+	contentChanged := existing.Content != storyboard.Content
+	titleChanged := existing.Title != storyboard.Title
+	storyboard.IsAIGenerated = existing.IsAIGenerated
+	if contentChanged || titleChanged {
+		storyboard.ContinuationSummary = ""
+	} else {
+		storyboard.ContinuationSummary = existing.ContinuationSummary
+	}
+
 	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
 		s.logger.Error("failed to update storyboard in database",
 			zap.String("storyboardId", storyboard.ID),
@@ -719,6 +736,10 @@ func (s *Service) UpdateStoryboard(ctx context.Context, storyboard *domain.Story
 		zap.String("id", storyboard.ID),
 		zap.String("userId", userID),
 		zap.String("title", storyboard.Title))
+
+	if (contentChanged || titleChanged) && strings.TrimSpace(storyboard.Content) != "" && s.canGenerateStoryboardText() {
+		s.regenerateStoryboardContinuationSummaryAsync(storyboard.ID)
+	}
 
 	return nil
 }
@@ -758,7 +779,85 @@ func (s *Service) persistStoryboardScenes(ctx context.Context, storyboard *domai
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("count", len(scenes)))
 
+	// 分镜落库后摘要所依据的镜信息已变：清空 summary 并失效缓存；随后由调用方同步 generateOrRefreshStoryboardSummary（如初始生成）补足。
+	if err := s.repo.UpdateStoryboardContinuationSummary(ctx, storyboard.ID, ""); err != nil {
+		s.logger.Warn("failed to clear continuation summary after persisting scenes",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Error(err))
+	}
+	s.invalidateStoryboardDetailAndListCaches(ctx, storyboard.ID, storyboard.StoryID)
+
 	return nil
+}
+
+// StoryboardPlotScenePatch 用户可改的分镜叙事字段（PUT body；未出现字段保持不变）。
+type StoryboardPlotScenePatch struct {
+	Title        *string  `json:"title"`
+	Description  *string  `json:"description"`
+	Location     *string  `json:"location"`
+	TimeOfDay    *string  `json:"timeOfDay"`
+	Mood         *string  `json:"mood"`
+	Sequence     *int     `json:"sequence"`
+	StorySceneID *string  `json:"storySceneId"`
+	Characters   []string `json:"characters"`
+}
+
+// UpdateStoryboardPlotScene 更新故事板分镜叙事字段并触发 continuation summary 失效与异步重算。
+func (s *Service) UpdateStoryboardPlotScene(ctx context.Context, userID, storyboardID, sceneID string, patch StoryboardPlotScenePatch) (*domain.StoryboardScene, error) {
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return nil, err
+	}
+	if sb.UserID != userID {
+		return nil, fmt.Errorf("permission denied: not the creator")
+	}
+
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil {
+		return nil, fmt.Errorf("load storyboard scenes: %w", err)
+	}
+	var target *domain.StoryboardScene
+	for _, sc := range scenes {
+		if sc != nil && sc.ID == sceneID {
+			target = sc
+			break
+		}
+	}
+	if target == nil {
+		return nil, fmt.Errorf("storyboard scene: %w", domain.ErrNotFound)
+	}
+
+	if patch.Title != nil {
+		target.Title = *patch.Title
+	}
+	if patch.Description != nil {
+		target.Description = *patch.Description
+	}
+	if patch.Location != nil {
+		target.Location = *patch.Location
+	}
+	if patch.TimeOfDay != nil {
+		target.TimeOfDay = *patch.TimeOfDay
+	}
+	if patch.Mood != nil {
+		target.Mood = *patch.Mood
+	}
+	if patch.Sequence != nil {
+		target.Sequence = *patch.Sequence
+	}
+	if patch.StorySceneID != nil {
+		target.StorySceneID = *patch.StorySceneID
+	}
+	if patch.Characters != nil {
+		target.Characters = patch.Characters
+	}
+
+	if err := s.repo.UpdateStoryboardScene(ctx, target); err != nil {
+		return nil, err
+	}
+
+	s.refreshContinuationSummaryAfterScenesChanged(ctx, storyboardID)
+	return target, nil
 }
 
 func (s *Service) validateStoryboardAssets(ctx context.Context, storyboard *domain.Storyboard) error {
@@ -1308,7 +1407,7 @@ func (s *Service) RecordStoryboardFeedSeen(ctx context.Context, userID, storyboa
 }
 
 // GetStoryboardFeed 获取故事板 feed。
-// tab: discover（默认：仅 onboarding 体裁；未登录 trending）；for_you / recommended 为 discover 别名；following；community（带缓存）。
+// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended 为 discover 别名；following；community（带缓存）。
 func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
 	if tab == "" || tab == "recommended" || tab == "for_you" {
@@ -1439,7 +1538,7 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 	newStoryboard.UserID = userID
 
 	// 如果用户提供了新的 rawInput，调用 AI 生成新内容
-	if s.geminiClient != nil && newStoryboard.RawInput != "" {
+	if s.canGenerateStoryboardText() && newStoryboard.RawInput != "" {
 		s.logger.Info("starting AI generation for forked storyboard",
 			zap.String("parentId", parentID),
 			zap.String("newStoryboardId", newStoryboard.ID),
@@ -1530,6 +1629,10 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 		zap.String("newTitle", newStoryboard.Title),
 		zap.String("storyId", newStoryboard.StoryID),
 		zap.Int("sceneCount", len(newStoryboard.StoryboardScenes)))
+
+	if s.canGenerateStoryboardText() && strings.TrimSpace(newStoryboard.Content) != "" {
+		go s.generateOrRefreshStoryboardSummary(context.Background(), newStoryboard.ID)
+	}
 
 	// 创建通知给父节点作者
 	if parent.UserID != userID {
@@ -1709,17 +1812,19 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.String("storyGenre", story.Genre))
 
 	// 2. 构建上下文和提示词
+	continuation := s.isStoryboardContinuation(storyboard)
 	s.logger.Debug("building storyboard context and prompt",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("characterRefs", len(storyboard.CharacterRefs)),
-		zap.Int("sceneRefs", len(storyboard.SceneRefs)))
+		zap.Int("sceneRefs", len(storyboard.SceneRefs)),
+		zap.Bool("continuation", continuation))
 	contextInfo := s.buildStoryboardContext(ctx, storyboard, story)
-	prompt := s.buildStoryboardPrompt(storyboard, story, contextInfo)
+	prompt := s.buildStoryboardPrompt(storyboard, story, contextInfo, continuation)
 	s.logger.Debug("storyboard context and prompt built",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("contextLength", len(contextInfo)),
 		zap.Int("promptLength", len(prompt)))
-	systemPrompt := s.buildStoryboardSystemPrompt(story)
+	systemPrompt := s.buildStoryboardSystemPrompt(story, storyboard, continuation)
 
 	// 3. 使用AI生成服务生成文本（自动记录AI使用数据）
 	if s.aiGenService == nil {
@@ -1748,6 +1853,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 			"storyboardId": storyboard.ID,
 			"storyId":      storyboard.StoryID,
 			"operation":    "generate_storyboard_content",
+			"continuation": continuation,
 		},
 	}
 
@@ -1763,17 +1869,29 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.Int("responseLength", len(result.Text)))
 	storyboardResult := s.parseStoryboardResult(result.Text)
 
-	// 5. 截断保护：确保content字段不超过1024字符
-	const maxContentLength = 1024
-	if len(storyboardResult.Content) > maxContentLength {
-		originalLength := len(storyboardResult.Content)
-		// 截断到1024字符，尽量在完整的句子处截断
-		storyboardResult.Content = truncateAtSentence(storyboardResult.Content, maxContentLength)
-		s.logger.Warn("storyboard content truncated due to length limit",
+	// 5. 截断保护：确保 content 不超过 storyboardContentMaxRunes 个 Unicode 字符
+	if utf8.RuneCountInString(storyboardResult.Content) > storyboardContentMaxRunes {
+		origRunes := utf8.RuneCountInString(storyboardResult.Content)
+		storyboardResult.Content = truncateStoryboardContentToMaxRunes(storyboardResult.Content, storyboardContentMaxRunes)
+		s.logger.Warn("storyboard content truncated due to rune length limit",
 			zap.String("storyboardId", storyboard.ID),
-			zap.Int("originalLength", originalLength),
-			zap.Int("truncatedLength", len(storyboardResult.Content)),
-			zap.Int("maxLength", maxContentLength))
+			zap.Int("originalRunes", origRunes),
+			zap.Int("truncatedRunes", utf8.RuneCountInString(storyboardResult.Content)),
+			zap.Int("maxRunes", storyboardContentMaxRunes))
+	}
+
+	expectedScenes := storyboard.SceneCount
+	if expectedScenes < MinStoryboardSceneCount || expectedScenes > MaxStoryboardSceneCount {
+		expectedScenes = DefaultStoryboardSceneCount
+	}
+	if len(storyboardResult.Scenes) != expectedScenes {
+		s.logger.Warn("storyboard scene count mismatch (observed only, no auto repair)",
+			zap.String("storyboardId", storyboard.ID),
+			zap.Int("expected", expectedScenes),
+			zap.Int("actual", len(storyboardResult.Scenes)))
+		if s.metrics != nil {
+			s.metrics.RecordError("storyboard", "scene_count_mismatch")
+		}
 	}
 
 	// 6. 更新业务数据：storyboard 内容
@@ -1841,7 +1959,7 @@ func (s *Service) GenerateStoryboardWithAI(ctx context.Context, storyboard *doma
 		zap.Int64("durationMs", result.DurationMs))
 
 	// 6. 可选：生成场景图片
-	if storyboardResult.GenerateImages && s.genAPI != nil {
+	if storyboardResult.GenerateImages && s.canGenerateStoryboardSceneImages() {
 		s.logger.Info("starting scene image generation",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
@@ -1906,112 +2024,39 @@ func (s *Service) getAncestorStoryboards(ctx context.Context, storyboard *domain
 	return ancestors
 }
 
-// buildStoryboardContext 构建 storyboard 生成上下文
-// AI 自动从故事的完整角色和场景列表中选择合适的元素
-func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story) string {
-	s.logger.Debug("building storyboard context",
-		zap.String("storyboardId", storyboard.ID),
-		zap.String("storyId", story.ID),
-		zap.Bool("isStandalone", storyboard.IsStandalone))
-
-	var context string
-
-	// 添加故事信息
-	context += fmt.Sprintf("故事标题: %s\n", story.Title)
-	context += fmt.Sprintf("故事简介: %s\n\n", story.Description)
-	s.logger.Debug("added story information to context",
-		zap.String("storyboardId", storyboard.ID),
-		zap.String("storyTitle", story.Title))
-
-	// 如果是独立故事板，不添加父节点内容
-	if storyboard.IsStandalone {
-		context += "（独立故事线，不参考前情）\n\n"
-		s.logger.Debug("storyboard is standalone, skipping ancestor context",
-			zap.String("storyboardId", storyboard.ID))
-	} else if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
-		// 获取最多5级祖先故事板作为上下文
-		ancestors := s.getAncestorStoryboards(ctx, storyboard, 5)
-		if len(ancestors) > 0 {
-			s.logger.Debug("adding ancestor context",
-				zap.String("storyboardId", storyboard.ID),
-				zap.Int("ancestorCount", len(ancestors)))
-			context += "前情提要（按时间顺序）：\n"
-			for i, ancestor := range ancestors {
-				// 限制每个祖先内容长度，避免上下文过长
-				ancestorContent := truncateForLog(ancestor.Content, 300)
-				context += fmt.Sprintf("\n【第%d章 - %s】\n%s\n", i+1, ancestor.Title, ancestorContent)
-			}
-			context += "\n"
-		} else {
-			s.logger.Debug("no ancestors found for context",
-				zap.String("storyboardId", storyboard.ID))
-		}
-	}
-
-	// 获取故事的所有角色供 AI 选择
-	characters, err := s.repo.CharactersByStory(ctx, story.ID)
-	if err == nil && len(characters) > 0 {
-		s.logger.Debug("adding all story characters to context",
-			zap.String("storyboardId", storyboard.ID),
-			zap.Int("characterCount", len(characters)))
-		context += "故事中的可用角色（AI 请根据剧情需要智能选择）：\n"
-		for _, char := range characters {
-			context += fmt.Sprintf("- %s [角色ID: %s]", char.Name, char.ID)
-			if char.Description != "" {
-				context += fmt.Sprintf(": %s", truncateForLog(char.Description, 100))
-			}
-			context += "\n"
-		}
-		context += "\n"
-		context += "重要提示：AI 应根据用户描述的故事情节，智能选择合适的角色。只有确实参与场景的角色才需要包含在characters数组中，每个角色对象必须包含name（角色完整名称）和id（对应的角色ID）。\n\n"
-	}
-
-	// 获取故事的所有场景供 AI 选择
-	scenes, err := s.repo.StoryScenes(ctx, story.ID, 100, 0)
-	if err == nil && len(scenes) > 0 {
-		s.logger.Debug("adding all story scenes to context",
-			zap.String("storyboardId", storyboard.ID),
-			zap.Int("sceneCount", len(scenes)))
-		context += "故事中的可用场景地点（AI 请根据剧情需要智能选择）：\n"
-		for _, scene := range scenes {
-			context += fmt.Sprintf("- %s [场景ID: %s]", scene.Title, scene.ID)
-			if scene.Description != "" {
-				context += fmt.Sprintf(": %s", truncateForLog(scene.Description, 100))
-			}
-			if scene.Location != "" {
-				context += fmt.Sprintf(" (地点: %s)", scene.Location)
-			}
-			context += "\n"
-		}
-		context += "\n"
-		context += "重要提示：AI 应根据用户描述的故事情节，智能选择合适的场景。如果场景地点与剧情相关，应在storySceneId字段中提供对应的场景ID。\n\n"
-	}
-
-	s.logger.Debug("storyboard context built",
-		zap.String("storyboardId", storyboard.ID),
-		zap.Int("contextLength", len(context)))
-
-	return context
-}
-
 // buildStoryboardPrompt 构建 storyboard 生成提示词
-func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *domain.Story, contextInfo string) string {
+func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *domain.Story, contextInfo string, continuation bool) string {
 	s.logger.Debug("building storyboard prompt",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("requestedSceneCount", storyboard.SceneCount))
 
-	prompt := "作为专业的故事创作者，请根据用户的自然语言描述，创作精彩的故事分镜内容。\n\n"
-	prompt += "**创作指南**：\n"
-	prompt += "1. 深入理解用户的描述意图，把握故事的核心情感和情节走向\n"
-	prompt += "2. 从提供的角色列表中选择最适合情节的角色，不必使用所有角色\n"
-	prompt += "3. 从提供的场景列表中选择最适合氛围的地点，或根据描述创造合适的场景\n"
-	prompt += "4. 让情节自然展开，角色互动应符合其性格设定\n\n"
+	var prompt string
+	if continuation {
+		prompt = "你在续写一条故事链上的新故事板。上文中的「续写锚点」及用户指定优先角色/场景，优先于其他可用资源；请紧扣 rawInput 的走向与张力。\n\n"
+		prompt += "**续写原则**：少复述前情；不得推翻锚点中已发生的硬事实；至少在一镜呈现可辨识的抉择或代价，使分叉差异主要体现在行动与后果；避免价值说教与抽象词堆砌。\n\n"
+		prompt += "**创作指南**：\n"
+		prompt += "1. 理解 rawInput 的意图，并与锚点事实、用户选定资产对齐\n"
+		prompt += "2. 从提供的角色列表中选择参与情节的角色；剧情与出场优先围绕用户指定的优先角色/场景\n"
+		prompt += "3. 从提供的场景列表中选择地点，或在不违背锚点的前提下创造合适场景\n"
+		prompt += "4. 场景之间过渡自然，留可延续的关系或代价，避免写死全局终局\n\n"
+	} else {
+		prompt = "作为专业的故事创作者，请根据用户的自然语言描述，创作精彩的故事分镜内容。\n\n"
+		prompt += "**创作指南**：\n"
+		prompt += "1. 深入理解用户的描述意图，把握故事的核心情感和情节走向\n"
+		prompt += "2. 从提供的角色列表中选择最适合情节的角色，不必使用所有角色\n"
+		prompt += "3. 从提供的场景列表中选择最适合氛围的地点，或根据描述创造合适的场景\n"
+		prompt += "4. 让情节自然展开，角色互动应符合其性格设定\n\n"
+	}
 
 	if contextInfo != "" {
 		prompt += contextInfo
 	}
 
-	prompt += fmt.Sprintf("**用户的故事描述**: %s\n\n", storyboard.RawInput)
+	if continuation {
+		prompt += fmt.Sprintf("**用户续写意图（rawInput）**: %s\n\n", storyboard.RawInput)
+	} else {
+		prompt += fmt.Sprintf("**用户的故事描述**: %s\n\n", storyboard.RawInput)
+	}
 
 	// Determine scene count (default to 3 if not set or out of range)
 	sceneCount := storyboard.SceneCount
@@ -2025,11 +2070,11 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 
 	prompt += "请直接返回纯JSON（不要使用```包裹），格式如下：\n"
 	prompt += "{\n"
-	prompt += "  \"content\": \"润色后的故事内容（必须控制在420字以内，建议300-400字）\",\n"
+	prompt += "  \"content\": \"润色后的故事内容（必须控制在约420个Unicode字符以内，建议300-400字量）\",\n"
 	prompt += "  \"scenes\": [\n"
 	prompt += "    {\n"
 	prompt += "      \"title\": \"场景标题（10字以内）\",\n"
-	prompt += "      \"description\": \"场景描述（100-200字）。请使用视觉导向语言，包含：具体的摄影机视角/运镜、光影效果、角色的服装与微表情动作特写、环境的具体质感与氛围。\",\n"
+	prompt += "      \"description\": \"场景描述（100-200字）。请使用视觉导向语言，包含：具体的摄影机视角与运镜、光影效果、角色的服装与微表情动作特写、环境的具体质感与氛围。\",\n"
 	prompt += "      \"location\": \"地点\",\n"
 	prompt += "      \"timeOfDay\": \"时间\",\n"
 	prompt += "      \"storySceneId\": \"场景ID（仅当使用提供的场景时填写）\",\n"
@@ -2045,22 +2090,41 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "  \"generateImages\": false\n"
 	prompt += "}\n"
 	prompt += fmt.Sprintf("\n重要：请生成恰好 %d 个场景，确保JSON格式完整闭合。", sceneCount)
-	prompt += "\n重要：content字段必须严格控制在420字以内。"
+	prompt += "\n重要：content字段必须严格控制在约420个Unicode字符以内；系统硬上限为1024个Unicode字符。"
 	prompt += "\n重要：只在characters数组中包含确实参与该场景的角色，并为每个角色提供正确的ID。"
 	prompt += "\n重要：如果使用了提供的场景地点，请填写对应的storySceneId。"
 
 	s.logger.Debug("storyboard prompt built",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("promptLength", len(prompt)),
-		zap.Int("sceneCount", sceneCount))
+		zap.Int("sceneCount", sceneCount),
+		zap.Bool("continuation", continuation))
 
 	return prompt
 }
 
 // buildStoryboardSystemPrompt 构建 storyboard 生成的系统提示词
-func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
-	// 根据故事类型获取风格指导
+func (s *Service) buildStoryboardSystemPrompt(story *domain.Story, storyboard *domain.Storyboard, continuation bool) string {
 	genreGuidance := s.getGenreStyleGuidance(story.Genre)
+
+	stylePriority := ""
+	if continuation {
+		stylePriority = "# 气质与风格优先级（续写）\n"
+		if strings.TrimSpace(storyboard.ContinuationComicStyle) != "" {
+			stylePriority += fmt.Sprintf("1. 本条续写/分叉在向导中选择的漫画风格 slug：%s（优先）\n", strings.TrimSpace(storyboard.ContinuationComicStyle))
+		}
+		if story.Style != nil && strings.TrimSpace(story.Style.Style) != "" {
+			stylePriority += fmt.Sprintf("2. 故事级气质 reference：%s\n", strings.TrimSpace(story.Style.Style))
+		}
+		stylePriority += "3. 类型片气质（见下文类型指导）\n\n"
+	} else if strings.TrimSpace(storyboard.ContinuationComicStyle) != "" {
+		stylePriority = "# 气质与风格优先级（本条创作）\n"
+		stylePriority += fmt.Sprintf("1. 向导中选择的漫画风格 slug：%s（优先于仅类型片指导时参考）\n", strings.TrimSpace(storyboard.ContinuationComicStyle))
+		if story.Style != nil && strings.TrimSpace(story.Style.Style) != "" {
+			stylePriority += fmt.Sprintf("2. 故事级气质 reference：%s\n", strings.TrimSpace(story.Style.Style))
+		}
+		stylePriority += "3. 类型片气质（见下文类型指导）\n\n"
+	}
 
 	systemPrompt := `# 角色定义
 你是一位专业的故事分镜编剧，擅长将用户的创意构思转化为生动、有画面感的故事分镜脚本。你具备以下专业能力：
@@ -2078,7 +2142,7 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 5. **角色一致性**：使用角色时严格遵循其设定，保持人物行为和性格的连贯
 6. **情感递进**：场景间应有情感的起伏变化，避免单调
 
-` + genreGuidance + `
+` + stylePriority + genreGuidance + `
 
 # 角色和场景选择指南
 - **智能选择**：根据用户描述的故事情节，选择最相关的角色参与场景
@@ -2095,15 +2159,15 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story) string {
 - 不包含注释或多余的逗号
 
 # 内容质量标准
-- content字段：润色后的完整故事概述，**必须严格控制在420字以内**（建议300-400字），语言流畅优美，避免冗长
+- content字段：润色后的完整故事概述，**建议控制在约420个Unicode字符以内**（约300-400字量），语言流畅优美，避免冗长
 - 场景标题：简洁有力，10字以内，体现场景核心
-- 场景描述：100-200字。必须具有清晰的影视画面定格表现力，明确包含：摄影机位（全景/中景/特写极意）、光线分布（逆光/柔光/明暗对比）、人物面部表情/肢体语言服装细节、以及场景中的环境质感。
+- 场景描述：100-200字。必须具有清晰的影视画面定格表现力，明确包含：摄影机位（全景/中景/特写与运镜意图）、光线分布（逆光/柔光/明暗对比）、人物面部表情/肢体语言服装细节、以及场景中的环境质感。
 - 地点和时间：具体明确，与场景内容呼应
 - 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）
 - 角色选择：只在characters数组中包含确实参与该场景的角色
 
 # 长度限制说明
-**极其重要**：content字段长度限制为420字是硬性要求，这是为了避免后续处理时的内容截断问题。系统内部最多可处理1024字符，但为确保质量和完整性，生成内容应控制在420字以内。`
+**极其重要**：content 建议不超过约420个Unicode字符；系统会在超过1024个Unicode字符时截断。`
 
 	return systemPrompt
 }
@@ -2398,6 +2462,9 @@ func truncateForLog(s string, maxLen int) string {
 // (previous-step AI output) at ~200 汉字 when the string is mostly CJK; uses rune count for UTF-8 safety.
 const maxStoryboardAIGeneratedPromptRunes = 200
 
+// maxStoryboardSceneReferenceURLs caps reference URLs per scene (previous panel + character portraits).
+const maxStoryboardSceneReferenceURLs = 6
+
 // truncateStringToMaxRunes returns s with at most maxRunes Unicode code points. The result is always
 // valid UTF-8 (invalid sequences in s become U+FFFD when decoded to runes).
 func truncateStringToMaxRunes(s string, maxRunes int) string {
@@ -2409,6 +2476,50 @@ func truncateStringToMaxRunes(s string, maxRunes int) string {
 		return s
 	}
 	return string(runes[:maxRunes])
+}
+
+// previousStoryboardScenePanelImageURL returns the previous scene's image URL in sequence order, if any.
+func (s *Service) previousStoryboardScenePanelImageURL(ctx context.Context, storyboardID, sceneID string) string {
+	storyboardID = strings.TrimSpace(storyboardID)
+	sceneID = strings.TrimSpace(sceneID)
+	if storyboardID == "" || sceneID == "" {
+		return ""
+	}
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil || len(scenes) == 0 {
+		return ""
+	}
+	sort.Slice(scenes, func(i, j int) bool {
+		a, b := scenes[i], scenes[j]
+		if a == nil && b == nil {
+			return false
+		}
+		if a == nil {
+			return false
+		}
+		if b == nil {
+			return true
+		}
+		if a.Sequence != b.Sequence {
+			return a.Sequence < b.Sequence
+		}
+		return a.ID < b.ID
+	})
+	idx := -1
+	for i := range scenes {
+		if scenes[i] != nil && scenes[i].ID == sceneID {
+			idx = i
+			break
+		}
+	}
+	if idx <= 0 {
+		return ""
+	}
+	prev := scenes[idx-1]
+	if prev == nil {
+		return ""
+	}
+	return strings.TrimSpace(prev.Image)
 }
 
 // generateSceneImages 为故事板场景生成图片（使用AI生成服务记录）
@@ -2456,6 +2567,14 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		zap.Int("totalScenes", len(storyboard.StoryboardScenes)),
 		zap.Bool("hasStoryStyle", storyStyle != nil))
 
+	sort.Slice(storyboard.StoryboardScenes, func(i, j int) bool {
+		a, b := storyboard.StoryboardScenes[i], storyboard.StoryboardScenes[j]
+		if a.Sequence != b.Sequence {
+			return a.Sequence < b.Sequence
+		}
+		return a.ID < b.ID
+	})
+
 	// 为每个故事板场景生成图片
 	for i := range storyboard.StoryboardScenes {
 		scene := &storyboard.StoryboardScenes[i]
@@ -2463,8 +2582,32 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		// 判断是否为过渡场景（没有角色出现）
 		isTransitionScene := len(scene.Characters) == 0
 
-		// 收集场景关联角色的图片（限制最多5个主要角色）
 		var referenceImages []string
+		seenRef := make(map[string]struct{})
+		addSceneRef := func(u string) {
+			u = strings.TrimSpace(u)
+			if u == "" {
+				return
+			}
+			if _, ok := seenRef[u]; ok {
+				return
+			}
+			if len(referenceImages) >= maxStoryboardSceneReferenceURLs {
+				return
+			}
+			seenRef[u] = struct{}{}
+			referenceImages = append(referenceImages, u)
+		}
+
+		// 上一格成图优先作为连贯性参考（与角色参考合并，总数 capped）
+		if i > 0 {
+			prevURL := strings.TrimSpace(storyboard.StoryboardScenes[i-1].Image)
+			if prevURL != "" {
+				addSceneRef(prevURL)
+			}
+		}
+
+		// 收集场景关联角色的图片
 		if !isTransitionScene {
 			maxMainCharacters := 5
 			mainCharacterNames := scene.Characters
@@ -2479,9 +2622,8 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 
 			for _, charName := range mainCharacterNames {
 				if char, ok := charMap[charName]; ok {
-					// 只使用Portrait（完整角色形象图），如果没有Portrait则跳过该角色（该角色只会在文本中描述，不参与图片生成）
 					if char.Portrait != "" {
-						referenceImages = append(referenceImages, char.Portrait)
+						addSceneRef(char.Portrait)
 					} else {
 						s.logger.Debug("character has no portrait, skipping from scene image generation",
 							zap.String("storyboardId", storyboard.ID),
@@ -2501,8 +2643,12 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 			zap.Bool("isTransitionScene", isTransitionScene),
 			zap.Int("characterReferenceCount", len(referenceImages)))
 
+		var prev *domain.StoryboardScene
+		if i > 0 {
+			prev = &storyboard.StoryboardScenes[i-1]
+		}
 		// 构建图片提示词（包含故事风格配置）
-		prompt := s.buildStoryboardSceneImagePromptWithStyle(scene, storyStyle, isTransitionScene)
+		prompt := s.buildStoryboardSceneImagePromptWithStyle(scene, storyStyle, isTransitionScene, prev)
 		s.logger.Debug("scene image prompt built",
 			zap.String("storyboardId", storyboard.ID),
 			zap.Int("sceneIndex", i),
@@ -2596,14 +2742,28 @@ func (s *Service) buildStoryboardSceneImagePrompt(scene *domain.StoryboardScene)
 }
 
 // buildStoryboardSceneImagePromptWithStyle 构建故事板场景图片提示词（包含故事风格配置）
-func (s *Service) buildStoryboardSceneImagePromptWithStyle(scene *domain.StoryboardScene, storyStyle *domain.StyleConfig, isTransitionScene bool) string {
+func (s *Service) buildStoryboardSceneImagePromptWithStyle(scene *domain.StoryboardScene, storyStyle *domain.StyleConfig, isTransitionScene bool, prevScene *domain.StoryboardScene) string {
 	s.logger.Debug("building scene image prompt with style",
 		zap.String("sceneId", scene.ID),
 		zap.String("sceneTitle", scene.Title),
 		zap.Bool("hasStoryStyle", storyStyle != nil),
-		zap.Bool("isTransitionScene", isTransitionScene))
+		zap.Bool("isTransitionScene", isTransitionScene),
+		zap.Bool("hasPrevScene", prevScene != nil))
 
 	var promptBuilder strings.Builder
+
+	if prevScene != nil {
+		promptBuilder.WriteString("[Sequential storyboard panel: this shot follows the previous scene in the same board. ")
+		if t := strings.TrimSpace(prevScene.Title); t != "" {
+			promptBuilder.WriteString(fmt.Sprintf("Previous scene title: %s. ", t))
+		}
+		if loc := strings.TrimSpace(prevScene.Location); loc != "" {
+			promptBuilder.WriteString(fmt.Sprintf("Prior location: %s — keep environment, lighting, and cast wardrobe continuous when the script implies the same setting. ", loc))
+		} else {
+			promptBuilder.WriteString("Preserve lighting, palette, wardrobe, and spatial continuity when the narration implies the same moment or place. ")
+		}
+		promptBuilder.WriteString("] ")
+	}
 
 	// 添加故事风格配置
 	if storyStyle != nil {

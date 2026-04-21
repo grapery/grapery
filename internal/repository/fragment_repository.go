@@ -275,21 +275,8 @@ func (r *FragmentRepository) ListFollowing(ctx context.Context, userID string, l
 	return fragmentDBListToDomain(dbFragments), total, nil
 }
 
-// discoverFragmentsGenreScope selects public non-draft fragments whose linked story genre is in genres
-// (same join semantics as fragmentIDsFromPreferredGenres).
-func (r *FragmentRepository) discoverFragmentsGenreScope(ctx context.Context, genres []string) *gorm.DB {
-	return r.db.WithContext(ctx).Table("fragments f").
-		Joins("LEFT JOIN storyboards sb ON f.source_type = ? AND f.source_id = sb.id", domain.FragmentSourceStoryboardNode).
-		Joins("LEFT JOIN stories st ON ((f.source_type = ? AND f.source_id = st.id) OR (f.source_type = ? AND sb.story_id = st.id))",
-			domain.FragmentSourceStoryExcerpt, domain.FragmentSourceStoryboardNode).
-		Where("f.visibility = ?", domain.FragmentVisibilityPublic).
-		Where("COALESCE(f.is_draft, 0) = ?", 0).
-		Where("st.genre IN ?", genres)
-}
-
-// ListDiscoverFragmentsForUser returns the discover feed: for guests, public fragments by time;
-// for logged-in users, only fragments whose story genre is in preferredGenres (empty genres => empty list).
-// total is the count of matching fragments (not the global public catalog).
+// ListDiscoverFragmentsForUser returns the discover feed: public fragments by time for all users
+// (no onboarding genre filter; userID is ignored for listing).
 func (r *FragmentRepository) ListDiscoverFragmentsForUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Fragment, int64, error) {
 	if limit <= 0 {
 		limit = 20
@@ -300,40 +287,8 @@ func (r *FragmentRepository) ListDiscoverFragmentsForUser(ctx context.Context, u
 	if offset < 0 {
 		offset = 0
 	}
-	if userID == "" {
-		return r.List(ctx, limit, offset, domain.FragmentVisibilityPublic)
-	}
-
-	genres, err := r.preferredGenres(ctx, userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	// 无体裁偏好时退回公开时间序，避免登录用户发现页与广场碎片 Rail 永久空白。
-	if len(genres) == 0 {
-		return r.List(ctx, limit, offset, domain.FragmentVisibilityPublic)
-	}
-
-	q := r.discoverFragmentsGenreScope(ctx, genres)
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	var ids []string
-	if err := r.discoverFragmentsGenreScope(ctx, genres).
-		Select("f.id").
-		Order("f.created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Pluck("f.id", &ids).Error; err != nil {
-		return nil, 0, err
-	}
-
-	fragments, err := r.fragmentsByIDsInOrder(ctx, ids)
-	if err != nil {
-		return nil, 0, err
-	}
-	return fragments, total, nil
+	_ = userID
+	return r.List(ctx, limit, offset, domain.FragmentVisibilityPublic)
 }
 
 type fragmentRecoCachePayload struct {

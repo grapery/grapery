@@ -86,6 +86,14 @@ func (s *FragmentPanelGenerationService) StartGeneration(ctx context.Context, us
 	if strings.TrimSpace(req.UserInput) == "" {
 		return nil, fmt.Errorf("userInput is required")
 	}
+	lp := strings.TrimSpace(req.LayoutPreset)
+	switch lp {
+	case "strip5_top2_middle_wide_bottom2":
+		if req.PanelCount != 0 && req.PanelCount != 5 {
+			return nil, fmt.Errorf("layoutPreset strip5_top2_middle_wide_bottom2 requires panelCount 5 or omit panelCount")
+		}
+		req.PanelCount = 5
+	}
 	pc := req.PanelCount
 	if pc == 0 {
 		pc = 3
@@ -345,6 +353,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		Metadata:          map[string]interface{}{"step": "panel_gen_step1_plan"},
 		UserRegion:        req.UserRegion,
 		PlanProvider:      planProv,
+		LayoutAddon:       fragmentPanelPlanLayoutAddon(req),
 	})
 	if err != nil {
 		s.failTask(ctx, taskID, draftID, fmt.Sprintf("规划分镜失败: %v", err))

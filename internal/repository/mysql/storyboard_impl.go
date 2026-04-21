@@ -102,6 +102,7 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		CurrentStep:              currentStep,
 		GenerateVideoAfterImages: storyboard.GenerateVideoAfterImages,
 		ContinuationComicStyle:   comicStyle,
+		ContinuationSummary:      storyboard.ContinuationSummary,
 		Likes:                    0,
 		Comments:                 0,
 		Shares:                   0,
@@ -142,13 +143,29 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 	return nil
 }
 
+// UpdateStoryboardContinuationSummary updates only the continuation summary column.
+func (r *Repository) UpdateStoryboardContinuationSummary(ctx context.Context, storyboardID string, summary string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		Updates(map[string]interface{}{
+			"continuation_summary": summary,
+			"updated_at":           time.Now().UTC(),
+		}).Error; err != nil {
+		return fmt.Errorf("failed to update storyboard continuation summary: %w", err)
+	}
+	return nil
+}
+
 // UpdateStoryboard updates an existing storyboard
 func (r *Repository) UpdateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
 	updates := map[string]interface{}{
-		"title":      storyboard.Title,
-		"content":    storyboard.Content,
-		"raw_input":  storyboard.RawInput,
-		"updated_at": time.Now().UTC(),
+		"title":                storyboard.Title,
+		"content":              storyboard.Content,
+		"raw_input":            storyboard.RawInput,
+		"is_ai_generated":      storyboard.IsAIGenerated,
+		"continuation_summary": storyboard.ContinuationSummary,
+		"updated_at":           time.Now().UTC(),
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -555,20 +572,25 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		storyRel = &s
 	}
 
+	var fateSnap *string
+	if t := strings.TrimSpace(sb.FateSnapshot); t != "" && t != "{}" {
+		fateSnap = &t
+	}
+
 	return domain.Storyboard{
 		BaseModel: common.BaseModel{
 			ID:        sb.ID,
 			CreatedAt: sb.CreatedAt.Unix(),
 			UpdatedAt: sb.UpdatedAt.Unix(),
 		},
-		StoryID:        sb.StoryID,
-		ParentID:       parentID,
-		UserID:         sb.UserID,
-		CreatorName:    sb.Creator.DisplayName,
-		CreatorAvatar:  sb.Creator.Avatar,
-		Title:          sb.Title,
-		Content:        sb.Content,
-		RawInput:       sb.RawInput,
+		StoryID:                  sb.StoryID,
+		ParentID:                 parentID,
+		UserID:                   sb.UserID,
+		CreatorName:              sb.Creator.DisplayName,
+		CreatorAvatar:            sb.Creator.Avatar,
+		Title:                    sb.Title,
+		Content:                  sb.Content,
+		RawInput:                 sb.RawInput,
 		IsStandalone:             sb.IsStandalone,
 		IsAIGenerated:            sb.IsAIGenerated,
 		SceneCount:               sb.SceneCount,
@@ -576,6 +598,9 @@ func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (dom
 		CurrentStep:              sb.CurrentStep,
 		GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
 		ContinuationComicStyle:   sb.ContinuationComicStyle,
+		ContinuationSummary:      sb.ContinuationSummary,
+		FateSnapshot:             fateSnap,
+		FateSnapshotHash:         sb.FateSnapshotHash,
 		EngagementStats: common.EngagementStats{
 			Likes:    sb.Likes,
 			Comments: sb.Comments,
@@ -797,18 +822,18 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 			CreatedAt: dbScene.CreatedAt.Unix(),
 			UpdatedAt: dbScene.UpdatedAt.Unix(),
 		},
-		StoryboardID:  dbScene.StoryboardID,
-		Sequence:      dbScene.Sequence,
-		Title:         dbScene.Title,
-		Description:   dbScene.Description,
-		Image:         dbScene.Image,
-		VideoUrl:      dbScene.VideoUrl,
-		Location:      dbScene.Location,
-		TimeOfDay:     dbScene.TimeOfDay,
-		Mood:          dbScene.Mood,
-		IsAIGenerated: dbScene.IsAIGenerated,
-		IsSubdivided:      dbScene.IsSubdivided,
-		ContextSnapshot:   dbScene.ContextSnapshot,
+		StoryboardID:    dbScene.StoryboardID,
+		Sequence:        dbScene.Sequence,
+		Title:           dbScene.Title,
+		Description:     dbScene.Description,
+		Image:           dbScene.Image,
+		VideoUrl:        dbScene.VideoUrl,
+		Location:        dbScene.Location,
+		TimeOfDay:       dbScene.TimeOfDay,
+		Mood:            dbScene.Mood,
+		IsAIGenerated:   dbScene.IsAIGenerated,
+		IsSubdivided:    dbScene.IsSubdivided,
+		ContextSnapshot: dbScene.ContextSnapshot,
 	}
 
 	if dbScene.StorySceneID != nil {

@@ -203,57 +203,9 @@ func (r *Repository) StoryboardFeedRecommended(ctx context.Context, userID strin
 	return rows, total, nil
 }
 
-// StoryboardFeedDiscover is the discover tab: only onboarding genres (no fallback, no seen filter); guests get trending.
+// StoryboardFeedDiscover is the discover tab: full public trending feed (no onboarding genre filter).
 func (r *Repository) StoryboardFeedDiscover(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	if userID == "" {
-		return r.GetPublicTrendingStoryboards(ctx, userID, limit, offset)
-	}
-	genres, err := r.preferredGenres(ctx, userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(genres) == 0 {
-		return []*domain.Storyboard{}, 0, nil
-	}
-	publicVis := string(domain.StoryVisibilityPublic)
-	q := r.db.WithContext(ctx).Table("storyboards").
-		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
-		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
-		Where("stories.visibility = ?", publicVis).
-		Where("stories.genre IN ?", genres)
-
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	var ids []string
-	if err := r.db.WithContext(ctx).Table("storyboards").
-		Select("storyboards.id").
-		Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
-		Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
-		Where("stories.visibility = ?", publicVis).
-		Where("stories.genre IN ?", genres).
-		Order("storyboards.updated_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Pluck("storyboards.id", &ids).Error; err != nil {
-		return nil, 0, err
-	}
-	rows, err := r.storyboardsByIDsInOrder(ctx, ids)
-	if err != nil {
-		return nil, 0, err
-	}
-	return rows, total, nil
+	return r.GetPublicTrendingStoryboards(ctx, userID, limit, offset)
 }
 
 // buildStoryboardPreferenceMerged merges onboarding genre matches with a popularity fallback pool only.

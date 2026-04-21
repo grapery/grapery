@@ -793,6 +793,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_storyboard_continuation_summary_schema",
+		Description: "Ensure storyboards has continuation_summary for fork/continuation context",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureStoryboardContinuationSummarySchema()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_character_portrait_schema",
 		Description: "Ensure characters has portrait-related columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
