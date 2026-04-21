@@ -72,6 +72,15 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_account_deletion_blocks",
+		Description: "Create account_deletion_blocks for post-deletion registration cooldown",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AccountDeletionBlock{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_user_settings",
 		Description: "Create and migrate user_settings table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
