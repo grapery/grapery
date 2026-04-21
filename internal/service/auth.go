@@ -382,6 +382,16 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		}
 	}
 
+	emailNorm := normalizeEmailForDeletionBlock(req.Email)
+	blocked, err := s.repo.IsAccountReRegistrationBlocked(ctx, emailNorm, "")
+	if err != nil {
+		s.logger.Warn("registration block check failed", zap.Error(err))
+		return nil, errors.New("registration temporarily unavailable")
+	}
+	if blocked {
+		return nil, errors.New("this email cannot be used to register within 30 days after account deletion")
+	}
+
 	// 检查用户名是否已存在
 	existingUser, err := s.repo.UserByUsername(ctx, req.Username)
 	if err == nil && existingUser != nil {
@@ -413,19 +423,21 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 
 	// 创建用户
 	now := time.Now().Unix()
+	phoneExempt := now
 	user := &domain.User{
 		BaseModel: common.BaseModel{
 			ID:        uuid.New().String(),
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Username:      req.Username,
-		Email:         req.Email,
-		PasswordHash:  passwordHash,
-		DisplayName:   req.DisplayName,
-		DateOfBirth:   dob,
-		Status:        string(common.StatusActive),
-		EmailVerified: false,
+		Username:         req.Username,
+		Email:            req.Email,
+		PasswordHash:     passwordHash,
+		DisplayName:      req.DisplayName,
+		DateOfBirth:      dob,
+		Status:           string(common.StatusActive),
+		EmailVerified:    false,
+		PhoneVerifiedAt:  &phoneExempt,
 		SocialStats: common.SocialStats{
 			Followers: 0,
 			Following: 0,
@@ -518,6 +530,8 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		return nil, errors.New("failed to generate refresh token")
 	}
 
+	_ = s.AttachPhoneVerificationRequirement(ctx, user)
+
 	// 缓存用户信息
 	s.cacheUser(ctx, user)
 
@@ -579,6 +593,8 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, loginInfo *Login
 		s.logger.Warn("failed to update last login time", zap.Error(err))
 		// 不阻塞登录流程
 	}
+
+	_ = s.AttachPhoneVerificationRequirement(ctx, user)
 
 	// 生成 Token
 	accessToken, err := auth.GenerateToken(user.ID, user.Username, user.Email)
@@ -797,6 +813,8 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 	if err != nil {
 		return nil, errors.New("failed to generate refresh token")
 	}
+
+	_ = s.AttachPhoneVerificationRequirement(ctx, user)
 
 	return &LoginResponse{
 		User:         user,

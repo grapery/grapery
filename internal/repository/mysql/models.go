@@ -28,12 +28,30 @@ type User struct {
 	FragmentsCount      int            `gorm:"default:0;index"`                // Number of fragments created by this user
 	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
 	EmailVerified       bool           `gorm:"default:false"`
+	Phone               string         `gorm:"size:20;index"`
+	PhoneVerifiedAt     int64          `gorm:"type:bigint;default:0;index"`
+	PendingOAuthPhoneSMS bool          `gorm:"default:false;index"`
 	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
 	Points              int            `gorm:"default:0;index"`     // StoryCreationAppUI - 未择积分
 	ReferralCode        string         `gorm:"uniqueIndex;size:20"` // StoryCreationAppUI - 用户专属邀请码
 	CreatedAt           int64          `gorm:"type:bigint;autoCreateTime;index"`
 	UpdatedAt           int64          `gorm:"type:bigint;autoUpdateTime"`
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
+}
+
+// AccountDeletionBlock 记录已注销账号的邮箱/手机号，在冷却期内禁止用于注册或绑定（与产品「30 天内无法注册相同账号」一致）。
+type AccountDeletionBlock struct {
+	ID           string `gorm:"primaryKey;size:36"`
+	UserID       string `gorm:"size:36;not null;index"`
+	EmailNorm    string `gorm:"size:255;not null;default:'';index"`
+	PhoneNorm    string `gorm:"size:32;not null;default:'';index"`
+	BlockedUntil int64  `gorm:"type:bigint;not null;index"`
+	CreatedAt    int64  `gorm:"type:bigint;autoCreateTime"`
+}
+
+// TableName 显式表名
+func (AccountDeletionBlock) TableName() string {
+	return "account_deletion_blocks"
 }
 
 // UserReferral 用户邀请记录 (StoryCreationAppUI Design)

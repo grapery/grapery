@@ -84,6 +84,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
 		authenticated.Use(authPkg.AuthMiddleware())
+		authenticated.Use(h.EnsureActiveUser())
 		{
 			// 公开路由迁移（现在需要认证）
 			authenticated.GET("/search", h.Search)
@@ -130,6 +131,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 用户相关
 			authenticated.GET("/auth/me", h.CurrentUser)
+			authenticated.DELETE("/auth/account", h.DeleteMyAccount)
+			authenticated.POST("/auth/phone/send-sms-code", h.SendPhoneSMSVerificationCode)
+			authenticated.POST("/auth/phone/verify-sms-code", h.VerifyPhoneSMSCode)
 			authenticated.GET("/me/creator-analytics", h.GetMyCreatorAnalytics)
 			authenticated.POST("/auth/password/change", h.ChangePassword)
 			authenticated.PUT("/users/:id", h.UpdateUserProfile)

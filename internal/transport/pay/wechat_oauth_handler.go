@@ -152,31 +152,7 @@ func (h *WeChatOAuthHandler) HandleWeChatSignIn(c *gin.Context) {
 
 	expiresIn := int64(24 * 3600) // 24小时
 
-	userResp := &OAuthUserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Avatar:      user.Avatar,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-	}
-
-	data := OAuthSignInData{
-		Token:        jwtToken,
-		RefreshToken: refreshToken,
-		User:         userResp,
-		ExpiresIn:    expiresIn,
-		IsNewUser:    isNewUser,
-
-		UserID:        user.ID,
-		AccessToken:   jwtToken,
-		RefreshToken2: refreshToken,
-		ExpiresIn2:    expiresIn,
-		IsNewUser2:    isNewUser,
-	}
+	data := BuildOAuthSignInData(user, "wechat", isNewUser, jwtToken, refreshToken, expiresIn)
 
 	c.JSON(http.StatusOK, VipPayAPIResponse{
 		Code:    0,
@@ -241,13 +217,14 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 				Followers: 0,
 				Following: 0,
 			},
-			Username:      username,
-			Email:         "", // 微信不一定提供邮箱
-			DisplayName:   displayName,
-			Avatar:        userInfo.HeadImgURL,
-			Status:        "active",
-			EmailVerified: false,
-			LastLoginAt:   &now,
+			Username:               username,
+			Email:                  "", // 微信不一定提供邮箱
+			DisplayName:            displayName,
+			Avatar:                 userInfo.HeadImgURL,
+			Status:                 "active",
+			EmailVerified:          false,
+			PendingOAuthPhoneSMS:   true, // 首次微信注册需短信验证（中国大陆）
+			LastLoginAt:            &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -340,12 +317,13 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			Followers: 0,
 			Following: 0,
 		},
-		Username:      username,
-		DisplayName:   displayName,
-		Avatar:        userInfo.HeadImgURL,
-		Status:        "active",
-		EmailVerified: false,
-		LastLoginAt:   &now,
+		Username:             username,
+		DisplayName:          displayName,
+		Avatar:               userInfo.HeadImgURL,
+		Status:               "active",
+		EmailVerified:        false,
+		PendingOAuthPhoneSMS: true,
+		LastLoginAt:          &now,
 	}, true, nil
 }
 
@@ -539,32 +517,7 @@ func (h *WeChatOAuthHandler) HandleWeChatLink(c *gin.Context) {
 		_ = h.repo.UpdateUser(ctx, user)
 	}
 
-	// 返回用户信息
-	userResp := &OAuthUserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Avatar:      user.Avatar,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-	}
-
-	data := OAuthSignInData{
-		Token:        "", // Link 操作不需要返回新 token
-		RefreshToken: "",
-		User:         userResp,
-		ExpiresIn:    0,
-		IsNewUser:    false,
-
-		UserID:        user.ID,
-		AccessToken:   "",
-		RefreshToken2: "",
-		ExpiresIn2:    0,
-		IsNewUser2:    false,
-	}
+	data := BuildOAuthSignInData(user, "wechat", false, "", "", 0)
 
 	c.JSON(http.StatusOK, VipPayAPIResponse{
 		Code:    0,

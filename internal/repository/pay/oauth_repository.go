@@ -22,7 +22,10 @@ type OAuthUser struct {
 	Bio             string         `gorm:"type:text"`
 	Status          string         `gorm:"size:20;default:'active';index"`
 	EmailVerified   bool           `gorm:"default:false"`
-	LastLoginAt     int64          `gorm:"type:bigint;default:0"`
+	Phone                string         `gorm:"size:20;index"`
+	PhoneVerifiedAt      int64          `gorm:"type:bigint;default:0;index"`
+	PendingOAuthPhoneSMS bool           `gorm:"default:false;index"`
+	LastLoginAt          int64          `gorm:"type:bigint;default:0"`
 	StoryboardCount int            `gorm:"default:0"`
 	Followers       int            `gorm:"default:0"`
 	Following       int            `gorm:"default:0"`
@@ -326,12 +329,37 @@ func (r *OAuthRepository) DeleteThirdPartyLogin(ctx context.Context, userID stri
 		Delete(&OAuthThirdPartyLogin{}).Error
 }
 
+// IsAccountReRegistrationBlocked enforces the same post-deletion cooldown as mysql.Repository (shared table).
+func (r *OAuthRepository) IsAccountReRegistrationBlocked(ctx context.Context, emailNorm, phoneNorm string) (bool, error) {
+	now := time.Now().Unix()
+	q := r.db.WithContext(ctx).Table("account_deletion_blocks").Where("blocked_until > ?", now)
+	if emailNorm != "" && phoneNorm != "" {
+		q = q.Where("(email_norm = ? OR phone_norm = ?)", emailNorm, phoneNorm)
+	} else if emailNorm != "" {
+		q = q.Where("email_norm = ?", emailNorm)
+	} else if phoneNorm != "" {
+		q = q.Where("phone_norm = ?", phoneNorm)
+	} else {
+		return false, nil
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // Helper functions
 
 func (r *OAuthRepository) userModelToDomain(model *OAuthUser) *domain.User {
 	var lastLoginAt *int64
 	if model.LastLoginAt > 0 {
 		lastLoginAt = &model.LastLoginAt
+	}
+	var phoneVerifiedAt *int64
+	if model.PhoneVerifiedAt > 0 {
+		pv := model.PhoneVerifiedAt
+		phoneVerifiedAt = &pv
 	}
 	return &domain.User{
 		BaseModel: common.BaseModel{
@@ -347,7 +375,10 @@ func (r *OAuthRepository) userModelToDomain(model *OAuthUser) *domain.User {
 		Bio:             model.Bio,
 		Status:          model.Status,
 		EmailVerified:   model.EmailVerified,
-		LastLoginAt:     lastLoginAt,
+		Phone:                model.Phone,
+		PhoneVerifiedAt:      phoneVerifiedAt,
+		PendingOAuthPhoneSMS: model.PendingOAuthPhoneSMS,
+		LastLoginAt:          lastLoginAt,
 		StoryboardCount: model.StoryboardCount,
 		SocialStats: common.SocialStats{
 			Followers: model.Followers,
@@ -361,6 +392,10 @@ func (r *OAuthRepository) userDomainToModel(user *domain.User) *OAuthUser {
 	if user.LastLoginAt != nil {
 		lastLoginAt = *user.LastLoginAt
 	}
+	var phoneVerifiedAt int64
+	if user.PhoneVerifiedAt != nil {
+		phoneVerifiedAt = *user.PhoneVerifiedAt
+	}
 	return &OAuthUser{
 		ID:              user.ID,
 		Username:        user.Username,
@@ -371,7 +406,10 @@ func (r *OAuthRepository) userDomainToModel(user *domain.User) *OAuthUser {
 		Bio:             user.Bio,
 		Status:          user.Status,
 		EmailVerified:   user.EmailVerified,
-		LastLoginAt:     lastLoginAt,
+		Phone:                user.Phone,
+		PhoneVerifiedAt:      phoneVerifiedAt,
+		PendingOAuthPhoneSMS: user.PendingOAuthPhoneSMS,
+		LastLoginAt:          lastLoginAt,
 		StoryboardCount: user.StoryboardCount,
 		Followers:       user.Followers,
 		Following:       user.Following,

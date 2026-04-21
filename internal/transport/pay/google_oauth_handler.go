@@ -3,8 +3,10 @@ package pay
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -152,30 +154,7 @@ func (h *GoogleOAuthHandler) HandleGoogleSignIn(c *gin.Context) {
 
 	expiresIn := int64(24 * 3600) // 24小时
 
-	userResp := &OAuthUserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Avatar:      user.Avatar,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-	}
-	data := OAuthSignInData{
-		Token:        jwtToken,
-		RefreshToken: refreshToken,
-		User:         userResp,
-		ExpiresIn:    expiresIn,
-		IsNewUser:    isNewUser,
-
-		UserID:        user.ID,
-		AccessToken:   jwtToken,
-		RefreshToken2: refreshToken,
-		ExpiresIn2:    expiresIn,
-		IsNewUser2:    isNewUser,
-	}
+	data := BuildOAuthSignInData(user, "google", isNewUser, jwtToken, refreshToken, expiresIn)
 
 	c.JSON(http.StatusOK, VipPayAPIResponse{
 		Code:    0,
@@ -217,6 +196,10 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			}
 			if email != "" && emailVerified && !user.EmailVerified {
 				user.EmailVerified = true
+			}
+			if !UserPhoneVerified(user) {
+				pv := now
+				user.PhoneVerifiedAt = &pv
 			}
 			_ = h.repo.UpdateUser(ctx, user)
 
@@ -280,6 +263,10 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			if email != "" && emailVerified && !existingUser.EmailVerified {
 				existingUser.EmailVerified = true
 			}
+			if !UserPhoneVerified(existingUser) {
+				pv := now
+				existingUser.PhoneVerifiedAt = &pv
+			}
 			_ = h.repo.UpdateUser(ctx, existingUser)
 
 			return existingUser, false, nil
@@ -291,6 +278,18 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			displayName = username
 		}
 
+		if email != "" {
+			emailNorm := strings.ToLower(strings.TrimSpace(email))
+			blocked, err := h.repo.IsAccountReRegistrationBlocked(ctx, emailNorm, "")
+			if err != nil {
+				return nil, false, err
+			}
+			if blocked {
+				return nil, false, fmt.Errorf("this email cannot be used within 30 days after account deletion")
+			}
+		}
+
+		phoneExempt := now
 		newUser := &domain.User{
 			BaseModel: common.BaseModel{
 				ID:        uuid.New().String(),
@@ -301,13 +300,14 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 				Followers: 0,
 				Following: 0,
 			},
-			Username:      username,
-			Email:         email,
-			DisplayName:   displayName,
-			Avatar:        avatar,
-			Status:        "active",
-			EmailVerified: email != "" && emailVerified,
-			LastLoginAt:   &now,
+			Username:         username,
+			Email:            email,
+			DisplayName:      displayName,
+			Avatar:           avatar,
+			Status:           "active",
+			EmailVerified:    email != "" && emailVerified,
+			PhoneVerifiedAt:  &phoneExempt,
+			LastLoginAt:      &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -389,6 +389,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 
 	logrus.Warn("OAuth handler has no repository, user data will not be persisted")
 
+	pv := now
 	return &domain.User{
 		BaseModel: common.BaseModel{
 			ID:        providerUserID,
@@ -399,13 +400,14 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 			Followers: 0,
 			Following: 0,
 		},
-		Username:      username,
-		Email:         email,
-		DisplayName:   displayName,
-		Avatar:        avatar,
-		Status:        "active",
-		EmailVerified: email != "" && emailVerified,
-		LastLoginAt:   &now,
+		Username:        username,
+		Email:           email,
+		DisplayName:     displayName,
+		Avatar:          avatar,
+		Status:          "active",
+		EmailVerified:   email != "" && emailVerified,
+		PhoneVerifiedAt: &pv,
+		LastLoginAt:     &now,
 	}, true, nil
 }
 
@@ -597,38 +599,22 @@ func (h *GoogleOAuthHandler) HandleGoogleLink(c *gin.Context) {
 		}
 
 		// 更新用户头像（如果Google提供了且用户还没有头像）
+		now := time.Now().Unix()
+		changed := false
 		if avatar != "" && user.Avatar == "" {
 			user.Avatar = avatar
-			user.UpdatedAt = time.Now().Unix()
+			changed = true
+		}
+		if !UserPhoneVerified(user) {
+			user.PhoneVerifiedAt = &now
+			changed = true
+		}
+		if changed {
+			user.UpdatedAt = now
 			_ = h.repo.UpdateUser(ctx, user)
 		}
 
-		// 返回用户信息（类似 signin 响应）
-		userResp := &OAuthUserResponse{
-			ID:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Avatar:      user.Avatar,
-			Bio:         user.Bio,
-			Status:      user.Status,
-			CreatedAt:   user.CreatedAt,
-			UpdatedAt:   user.UpdatedAt,
-		}
-
-		data := OAuthSignInData{
-			Token:        "", // Link 操作不需要返回新 token
-			RefreshToken: "",
-			User:         userResp,
-			ExpiresIn:    0,
-			IsNewUser:    false,
-
-			UserID:        user.ID,
-			AccessToken:   "",
-			RefreshToken2: "",
-			ExpiresIn2:    0,
-			IsNewUser2:    false,
-		}
+		data := BuildOAuthSignInData(user, "google", false, "", "", 0)
 
 		c.JSON(http.StatusOK, VipPayAPIResponse{
 			Code:    0,

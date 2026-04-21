@@ -464,6 +464,7 @@ func (s *Service) GetUser(ctx context.Context, userID string) (*domain.User, err
 		if err := c.Get(ctx, key, &cachedUser); err == nil {
 			s.logger.Debug("user cache hit",
 				zap.String("userID", userID))
+			_ = s.AttachPhoneVerificationRequirement(ctx, &cachedUser)
 			return &cachedUser, nil
 		} else {
 			s.logger.Debug("user cache miss",
@@ -477,6 +478,11 @@ func (s *Service) GetUser(ctx context.Context, userID string) (*domain.User, err
 	if err != nil {
 		return nil, err
 	}
+	if user == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	_ = s.AttachPhoneVerificationRequirement(ctx, user)
 
 	// 写入缓存
 	s.cacheUser(ctx, user)

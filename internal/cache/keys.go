@@ -38,6 +38,12 @@ const (
 	PrefixEmailVerifySendLimit = "email_verify_send_limit:"
 	PrefixEmailVerifyIPLimit   = "email_verify_ip_limit:"
 
+	// 手机号短信验证码（登录后绑定）
+	PrefixSMSPhoneOTP       = "sms_phone_otp:"
+	PrefixSMSPhoneSendUser  = "sms_phone_send_user:"
+	PrefixSMSPhoneSendPhone = "sms_phone_send_phone:"
+	PrefixSMSPhoneIPLimit   = "sms_phone_ip_limit:"
+
 	// 搜索缓存
 	PrefixSearchStories    = "search:stories:"
 	PrefixSearchCharacters = "search:characters:"
@@ -140,6 +146,22 @@ func EmailVerifySendLimitKey(email string) string {
 
 func EmailVerifyIPLimitKey(ip string) string {
 	return fmt.Sprintf("%s%s", PrefixEmailVerifyIPLimit, ip)
+}
+
+func SMSPhoneOTPKey(userID, normalizedPhone string) string {
+	return fmt.Sprintf("%s%s:%s", PrefixSMSPhoneOTP, userID, normalizedPhone)
+}
+
+func SMSPhoneSendUserKey(userID string) string {
+	return fmt.Sprintf("%s%s", PrefixSMSPhoneSendUser, userID)
+}
+
+func SMSPhoneSendPhoneKey(normalizedPhone string) string {
+	return fmt.Sprintf("%s%s", PrefixSMSPhoneSendPhone, normalizedPhone)
+}
+
+func SMSPhoneIPLimitKey(ip string) string {
+	return fmt.Sprintf("%s%s", PrefixSMSPhoneIPLimit, ip)
 }
 
 // 搜索缓存键生成函数

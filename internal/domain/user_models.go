@@ -27,6 +27,12 @@ type User struct {
 	Status          string `json:"status"`          // active, suspended, deleted
 	EmailVerified   bool   `json:"emailVerified"`
 	LastLoginAt     *int64 `json:"lastLoginAt,omitempty"`
+	Phone           string `json:"phone,omitempty"`
+	PhoneVerifiedAt *int64 `json:"phoneVerifiedAt,omitempty"`
+	// PendingOAuthPhoneSMS: 仅首次通过 Apple/微信注册时置 true，短信验证通过后清零；老用户与其它登录方式均为 false。
+	PendingOAuthPhoneSMS bool `json:"pendingOAuthPhoneSMS,omitempty"`
+	// RequiresPhoneVerification is computed for API responses (mirrors PendingOAuthPhoneSMS for current user).
+	RequiresPhoneVerification bool `json:"requiresPhoneVerification,omitempty" gorm:"-"`
 
 	// StoryCreationAppUI Design - Points system
 	Points       int    `json:"points"`       // 未择积分

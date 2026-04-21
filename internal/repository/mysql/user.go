@@ -37,6 +37,21 @@ func (r *Repository) UserByEmail(ctx context.Context, email string) (*domain.Use
 	return r.userToDomainPtr(&user), nil
 }
 
+// UserByPhone 根据手机号获取用户（规范化后的国内 11 位，不含 +86）
+func (r *Repository) UserByPhone(ctx context.Context, phone string) (*domain.User, error) {
+	if phone == "" {
+		return nil, nil
+	}
+	var user User
+	if err := r.db.WithContext(ctx).Where("phone = ?", phone).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return r.userToDomainPtr(&user), nil
+}
+
 // UserByUsername 根据用户名获取用户
 func (r *Repository) UserByUsername(ctx context.Context, username string) (*domain.User, error) {
 	var user User
@@ -148,6 +163,12 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 		lastLoginAt = &lla
 	}
 
+	var phoneVerifiedAt *int64
+	if user.PhoneVerifiedAt > 0 {
+		pv := user.PhoneVerifiedAt
+		phoneVerifiedAt = &pv
+	}
+
 	return &domain.User{
 		BaseModel: common.BaseModel{
 			ID:        user.ID,
@@ -172,7 +193,10 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 		StoryboardCount: user.StoryboardCount,
 		Status:          user.Status,
 		EmailVerified:   user.EmailVerified,
-		LastLoginAt:     lastLoginAt,
+		Phone:                user.Phone,
+		PhoneVerifiedAt:      phoneVerifiedAt,
+		PendingOAuthPhoneSMS: user.PendingOAuthPhoneSMS,
+		LastLoginAt:          lastLoginAt,
 		Points:          user.Points,
 		ReferralCode:    user.ReferralCode,
 	}
@@ -188,6 +212,11 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 	var lastLoginAt int64
 	if user.LastLoginAt != nil {
 		lastLoginAt = *user.LastLoginAt
+	}
+
+	var phoneVerifiedAt int64
+	if user.PhoneVerifiedAt != nil {
+		phoneVerifiedAt = *user.PhoneVerifiedAt
 	}
 
 	return &User{
@@ -208,7 +237,10 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 		StoryboardCount:     user.StoryboardCount,
 		Status:              user.Status,
 		EmailVerified:       user.EmailVerified,
-		LastLoginAt:         lastLoginAt,
+		Phone:                user.Phone,
+		PhoneVerifiedAt:      phoneVerifiedAt,
+		PendingOAuthPhoneSMS: user.PendingOAuthPhoneSMS,
+		LastLoginAt:          lastLoginAt,
 		Points:              user.Points,
 		ReferralCode:        user.ReferralCode,
 		CreatedAt:           user.CreatedAt,

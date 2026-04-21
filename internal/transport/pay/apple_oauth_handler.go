@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +40,9 @@ type OAuthSignInData struct {
 	User         *OAuthUserResponse `json:"user,omitempty"`
 	ExpiresIn    int64              `json:"expiresIn"`
 	IsNewUser    bool               `json:"isNewUser"`
+	// Apple / WeChat 登录需完成手机号短信验证（邮箱注册与 Google 登录不要求）
+	RequiresPhoneVerification     bool `json:"requiresPhoneVerification"`
+	RequiresPhoneVerificationSnake bool `json:"requires_phone_verification,omitempty"`
 
 	// Android keys (VipPayService.kt OAuthSignInResponse)
 	UserID        string `json:"user_id,omitempty"`
@@ -57,15 +62,19 @@ type AppleSignInRequest struct {
 
 // OAuthUserResponse 用户信息响应 (匹配前端 User model)
 type OAuthUserResponse struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	DisplayName string `json:"displayName"`
-	Avatar      string `json:"avatar,omitempty"`
-	Bio         string `json:"bio,omitempty"`
-	Status      string `json:"status"`
-	CreatedAt   int64  `json:"createdAt"`
-	UpdatedAt   int64  `json:"updatedAt"`
+	ID                          string `json:"id"`
+	Username                    string `json:"username"`
+	Email                       string `json:"email"`
+	DisplayName                 string `json:"displayName"`
+	Avatar                      string `json:"avatar,omitempty"`
+	Bio                         string `json:"bio,omitempty"`
+	Status                      string `json:"status"`
+	Phone                       string `json:"phone,omitempty"`
+	PhoneVerifiedAt             int64  `json:"phoneVerifiedAt,omitempty"`
+	RequiresPhoneVerification   bool   `json:"requiresPhoneVerification"`
+	PendingOAuthPhoneSMS        bool   `json:"pendingOAuthPhoneSMS"`
+	CreatedAt                   int64  `json:"createdAt"`
+	UpdatedAt                   int64  `json:"updatedAt"`
 }
 
 // OAuthResponse 统一的 OAuth 响应结构 (匹配前端 OAuthResponse)
@@ -96,6 +105,7 @@ type OAuthRepository interface {
 	DeleteThirdPartyLogin(ctx context.Context, userID string, provider domain.ThirdPartyProvider) error
 	// 通过任意第三方登录的 email 查找关联的用户
 	GetUserByThirdPartyEmail(ctx context.Context, email string) (*domain.User, error)
+	IsAccountReRegistrationBlocked(ctx context.Context, emailNorm, phoneNorm string) (bool, error)
 }
 
 // AppleOAuthHandler Apple OAuth2 处理器
@@ -280,30 +290,7 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 
 	expiresIn := int64(24 * 3600) // 24小时
 
-	userResp := &OAuthUserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Avatar:      user.Avatar,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-	}
-	data := OAuthSignInData{
-		Token:        jwtToken,
-		RefreshToken: refreshToken,
-		User:         userResp,
-		ExpiresIn:    expiresIn,
-		IsNewUser:    isNewUser,
-
-		UserID:        user.ID,
-		AccessToken:   jwtToken,
-		RefreshToken2: refreshToken,
-		ExpiresIn2:    expiresIn,
-		IsNewUser2:    isNewUser,
-	}
+	data := BuildOAuthSignInData(user, "apple", isNewUser, jwtToken, refreshToken, expiresIn)
 
 	c.JSON(http.StatusOK, VipPayAPIResponse{
 		Code:    0,
@@ -418,6 +405,17 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			displayName = username
 		}
 
+		if email != "" {
+			emailNorm := strings.ToLower(strings.TrimSpace(email))
+			blocked, err := h.repo.IsAccountReRegistrationBlocked(ctx, emailNorm, "")
+			if err != nil {
+				return nil, false, err
+			}
+			if blocked {
+				return nil, false, fmt.Errorf("this email cannot be used within 30 days after account deletion")
+			}
+		}
+
 		newUser := &domain.User{
 			BaseModel: common.BaseModel{
 				ID:        uuid.New().String(),
@@ -428,12 +426,13 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 				Followers: 0,
 				Following: 0,
 			},
-			Username:      username,
-			Email:         email,
-			DisplayName:   displayName,
-			Status:        "active",
-			EmailVerified: true, // OAuth 登录邮箱已验证
-			LastLoginAt:   &now,
+			Username:               username,
+			Email:                  email,
+			DisplayName:            displayName,
+			Status:                 "active",
+			EmailVerified:          true, // OAuth 登录邮箱已验证
+			PendingOAuthPhoneSMS:   true, // 首次 Apple 注册需短信验证（中国大陆）
+			LastLoginAt:            &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
@@ -525,12 +524,13 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			Followers: 0,
 			Following: 0,
 		},
-		Username:      username,
-		Email:         email,
-		DisplayName:   displayName,
-		Status:        "active",
-		EmailVerified: true,
-		LastLoginAt:   &now,
+		Username:             username,
+		Email:                email,
+		DisplayName:          displayName,
+		Status:               "active",
+		EmailVerified:        true,
+		PendingOAuthPhoneSMS: true,
+		LastLoginAt:          &now,
 	}, true, nil
 }
 
@@ -755,32 +755,7 @@ func (h *AppleOAuthHandler) HandleAppleLink(c *gin.Context) {
 			return
 		}
 
-		// 返回用户信息（类似 signin 响应）
-		userResp := &OAuthUserResponse{
-			ID:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Avatar:      user.Avatar,
-			Bio:         user.Bio,
-			Status:      user.Status,
-			CreatedAt:   user.CreatedAt,
-			UpdatedAt:   user.UpdatedAt,
-		}
-
-		data := OAuthSignInData{
-			Token:        "", // Link 操作不需要返回新 token
-			RefreshToken: "",
-			User:         userResp,
-			ExpiresIn:    0,
-			IsNewUser:    false,
-
-			UserID:        user.ID,
-			AccessToken:   "",
-			RefreshToken2: "",
-			ExpiresIn2:    0,
-			IsNewUser2:    false,
-		}
+		data := BuildOAuthSignInData(user, "apple", false, "", "", 0)
 
 		c.JSON(http.StatusOK, VipPayAPIResponse{
 			Code:    0,

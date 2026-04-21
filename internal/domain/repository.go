@@ -27,10 +27,15 @@ type Repository interface {
 	UserByID(ctx context.Context, id string) (*User, error)
 	UserByUsername(ctx context.Context, username string) (*User, error)
 	UserByEmail(ctx context.Context, email string) (*User, error)
+	UserByPhone(ctx context.Context, phone string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	UpdateUser(ctx context.Context, user *User) error
 	DeleteUser(ctx context.Context, id string) error
 	ListUsers(ctx context.Context, limit, offset int) ([]*User, error)
+
+	// AccountDeletionBlock 用于应用内注销后的冷却期（禁止相同邮箱/手机号重新注册或绑定）
+	CreateAccountDeletionBlock(ctx context.Context, userID, emailNorm, phoneNorm string, blockedUntil int64) error
+	IsAccountReRegistrationBlocked(ctx context.Context, emailNorm, phoneNorm string) (bool, error)
 
 	// REMOVED: User Activity operations - not in StoryCreationAppUI design
 
