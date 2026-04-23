@@ -505,6 +505,19 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 		}
 	}
 
+	// Re-read comment to get authoritative likes count (avoid stale value from pre-read)
+	updatedComment, err := s.repo.CommentByID(ctx, commentID)
+	if err != nil {
+		s.logger.Warn("failed to re-read comment after like toggle, using computed value",
+			zap.String("commentID", commentID),
+			zap.Error(err))
+	} else if updatedComment != nil {
+		newLikes = updatedComment.Likes
+		if newLikes < 0 {
+			newLikes = 0
+		}
+	}
+
 	return &ToggleLikeResult{
 		IsLiked: newIsLiked,
 		Likes:   newLikes,

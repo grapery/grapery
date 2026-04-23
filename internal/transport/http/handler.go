@@ -3,6 +3,8 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
+	"github.com/grapestree/fgrapery/grapery/internal/middleware"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
@@ -26,6 +28,7 @@ type HandlerDependencies struct {
 	GenreCatalogService   *service.GenreCatalogService
 	FeedbackService       service.FeedbackService
 	Logger                *zap.Logger
+	Cache                 cache.Cache
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
@@ -53,6 +56,14 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
+	// Rate limiters (nil-safe: if Cache is nil, middleware is not applied)
+	var authLimiter, aiLimiter, apiLimiter gin.HandlerFunc
+	if deps.Cache != nil {
+		authLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitAuth, deps.Logger)
+		aiLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitAIGeneration, deps.Logger)
+		apiLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitGeneral, deps.Logger)
+	}
+
 	// 健康检查
 	router.GET("/health", h.Health)
 
@@ -64,6 +75,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 	{
 		// 认证路由（无需认证）
 		auth := api.Group("/auth")
+			if authLimiter != nil {
+				auth.Use(authLimiter)
+			}
 		{
 			auth.POST("/register", h.Register)
 			auth.POST("/login", h.Login)
@@ -83,8 +97,17 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
+	if apiLimiter != nil {
+		authenticated.Use(apiLimiter)
+	}
 		authenticated.Use(authPkg.AuthMiddleware())
 		authenticated.Use(h.EnsureActiveUser())
+
+		// AI generation rate-limited sub-group
+		aiGen := authenticated.Group("")
+		if aiLimiter != nil {
+			aiGen.Use(aiLimiter)
+		}
 		{
 			// 公开路由迁移（现在需要认证）
 			authenticated.GET("/search", h.Search)
@@ -150,8 +173,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.DELETE("/stories/:id/follow", h.UnfollowStory)
 
 			// 故事渲染和发布
-			authenticated.POST("/stories/:id/render", h.RenderStory)            // AI渲染（同步）- 丰富描述+生成图片
-			authenticated.POST("/stories/:id/render-media", h.RenderStoryMedia) // 媒体渲染（异步）- 视频/图片集/动画
+			aiGen.POST("/stories/:id/render", h.RenderStory)            // AI渲染（同步）- 丰富描述+生成图片
+			aiGen.POST("/stories/:id/render-media", h.RenderStoryMedia) // 媒体渲染（异步）- 视频/图片集/动画
 			authenticated.GET("/stories/:id/render-status", h.GetRenderTaskStatus)
 			authenticated.POST("/stories/:id/publish", h.PublishStory)
 			authenticated.POST("/stories/:id/unpublish", h.UnpublishStory)
@@ -163,7 +186,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/stories/:id/scenes", h.ListStoryScenes)
 			authenticated.POST("/stories/:id/scenes", h.CreateStoryScene)
 			authenticated.POST("/stories/:id/scenes/register-image", h.UploadSceneImage)
-			authenticated.POST("/stories/:id/scenes/ai-generate-image", h.GenerateSceneImage)
+			aiGen.POST("/stories/:id/scenes/ai-generate-image", h.GenerateSceneImage)
 			authenticated.PUT("/stories/:id/scenes/:sceneId", h.UpdateStoryScene)
 			authenticated.DELETE("/stories/:id/scenes/:sceneId", h.DeleteStoryScene)
 
@@ -198,14 +221,14 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/storyboards/:id/panels", h.ListStoryboardPanels)
 			authenticated.POST("/storyboards/:id/panels", h.CreateStoryboardPanel)
 
-			// Storyboard AI Generation 相关
-			authenticated.POST("/storyboards/:id/generate/content", h.GenerateContent)
-			authenticated.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
-			authenticated.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
-			authenticated.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)
-			authenticated.POST("/storyboards/:id/generate/comic-page", h.GenerateStoryboardComicPage)
-			authenticated.POST("/storyboards/:id/generate/comic-pages", h.GenerateAllStoryboardComicPages)
-			authenticated.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
+			// Storyboard AI Generation 相关 (rate-limited)
+			aiGen.POST("/storyboards/:id/generate/content", h.GenerateContent)
+			aiGen.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
+			aiGen.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
+			aiGen.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)
+			aiGen.POST("/storyboards/:id/generate/comic-page", h.GenerateStoryboardComicPage)
+			aiGen.POST("/storyboards/:id/generate/comic-pages", h.GenerateAllStoryboardComicPages)
+			aiGen.POST("/storyboards/:id/generate/video", h.GenerateStoryboardVideo)
 			authenticated.GET("/storyboards/:id/generation-progress", h.GetGenerationProgress)
 			authenticated.POST("/storyboards/:id/cancel-generation", h.CancelStoryboardGeneration)
 			authenticated.POST("/storyboards/:id/retry-failed-images", h.RetryFailedStoryboardImages)
@@ -253,18 +276,18 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 角色相关
 			authenticated.POST("/characters", h.CreateCharacter)
-			authenticated.POST("/characters/generate", h.GenerateCharacterAttributes) // AI生成角色属性
+			aiGen.POST("/characters/generate", h.GenerateCharacterAttributes) // AI生成角色属性
 			authenticated.PUT("/characters/:id", h.UpdateCharacter)
 			authenticated.DELETE("/characters/:id", h.DeleteCharacter)
 			authenticated.POST("/characters/:id/follow", h.FollowCharacter)
 			authenticated.DELETE("/characters/:id/follow", h.UnfollowCharacter)
 			// REMOVED: skills routes - not in StoryCreationAppUI design
-			authenticated.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)     // AI生成角色头像
+			aiGen.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)     // AI生成角色头像
 			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)                 // 更新角色头像
 			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar)   // 使用portrait作为头像
 			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)            // 获取形象生成推荐提示词
-			authenticated.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait)       // AI生成角色完整形象
-			authenticated.POST("/characters/:id/generate-three-views", h.GenerateCharacterThreeViews) // AI 生成/更新三视图
+			aiGen.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait)       // AI生成角色完整形象
+			aiGen.POST("/characters/:id/generate-three-views", h.GenerateCharacterThreeViews) // AI 生成/更新三视图
 			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)              // 从形象图裁剪头像
 			// REMOVED: posters routes - not in StoryCreationAppUI design
 
@@ -300,11 +323,11 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/devices/test-push", h.TestPushNotification)
 
 			// AI 生成功能
-			authenticated.POST("/ai/generate-story", h.GenerateStory)
-			authenticated.POST("/ai/enhance-prompt", h.EnhancePrompt)
-			authenticated.POST("/ai/generate-image", h.GenerateImage)
-			authenticated.POST("/ai/generate-video", h.GenerateVideo)
-			authenticated.POST("/ai/generate-character", h.GenerateCharacter) // iOS兼容端点
+			aiGen.POST("/ai/generate-story", h.GenerateStory)
+			aiGen.POST("/ai/enhance-prompt", h.EnhancePrompt)
+			aiGen.POST("/ai/generate-image", h.GenerateImage)
+			aiGen.POST("/ai/generate-video", h.GenerateVideo)
+			aiGen.POST("/ai/generate-character", h.GenerateCharacter) // iOS兼容端点
 			authenticated.GET("/ai/tasks/:id", h.GetTaskStatus)
 			authenticated.GET("/ai/tasks/:id/result", h.GetTaskResult)
 			authenticated.DELETE("/ai/tasks/:id", h.CancelTask)
@@ -349,8 +372,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			}
 
 			// 碎片相关 (Fragments)
-			authenticated.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
-			authenticated.POST("/fragments/:id/story-prefill-ai", h.ExpandFragmentStoryPrefillAI)
+			aiGen.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
+			aiGen.POST("/fragments/:id/story-prefill-ai", h.ExpandFragmentStoryPrefillAI)
 		}
 
 		// 公开接口（无需认证）

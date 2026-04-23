@@ -251,81 +251,71 @@ func (r *Repository) CommentTree(ctx context.Context, rootID string) ([]*domain.
 	return result, nil
 }
 
-// LikeComment likes or dislikes a comment
+// LikeComment likes or dislikes a comment (transaction-based to prevent race conditions)
 func (r *Repository) LikeComment(ctx context.Context, userID, commentID string, isLike bool) error {
-	// 检查是否已经点赞/踩过
-	var existing CommentLike
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND comment_id = ?", userID, commentID).
-		First(&existing).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 检查是否已经点赞/踩过
+		var existing CommentLike
+		err := tx.Where("user_id = ? AND comment_id = ?", userID, commentID).
+			First(&existing).Error
 
-	if err == nil {
-		// 已存在，更新
-		if existing.IsLike != isLike {
-			// 切换点赞/踩
-			if err := r.db.WithContext(ctx).
-				Model(&CommentLike{}).
-				Where("id = ?", existing.ID).
-				Update("is_like", isLike).Error; err != nil {
-				return fmt.Errorf("failed to update like: %w", err)
-			}
+		if err == nil {
+			// 已存在，更新
+			if existing.IsLike != isLike {
+				if err := tx.Model(&CommentLike{}).
+					Where("id = ?", existing.ID).
+					Update("is_like", isLike).Error; err != nil {
+					return fmt.Errorf("failed to update like: %w", err)
+				}
 
-			// 更新评论的点赞/踩计数
-			if isLike {
-				r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-					UpdateColumn("likes", gorm.Expr("likes + ?", 1))
-				r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-					UpdateColumn("dislikes", gorm.Expr("dislikes - ?", 1))
-			} else {
-				r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-					UpdateColumn("likes", gorm.Expr("likes - ?", 1))
-				r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-					UpdateColumn("dislikes", gorm.Expr("dislikes + ?", 1))
+				// 更新评论的点赞/踩计数（带 GREATEST 防护）
+				if isLike {
+					tx.Model(&Comment{}).Where("id = ?", commentID).
+						UpdateColumn("likes", gorm.Expr("likes + ?", 1))
+					tx.Model(&Comment{}).Where("id = ?", commentID).
+						UpdateColumn("dislikes", gorm.Expr("GREATEST(dislikes - ?, 0)", 1))
+				} else {
+					tx.Model(&Comment{}).Where("id = ?", commentID).
+						UpdateColumn("likes", gorm.Expr("GREATEST(likes - ?, 0)", 1))
+					tx.Model(&Comment{}).Where("id = ?", commentID).
+						UpdateColumn("dislikes", gorm.Expr("dislikes + ?", 1))
+				}
 			}
+			return nil
 		}
-		return nil
-	}
 
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("failed to check existing like: %w", err)
-	}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to check existing like: %w", err)
+		}
 
-	// 不存在，创建新的
-	like := CommentLike{
-		ID:        uuid.New().String(),
-		UserID:    userID,
-		CommentID: commentID,
-		IsLike:    isLike,
-	}
+		// 不存在，创建新的
+		like := CommentLike{
+			ID:        uuid.New().String(),
+			UserID:    userID,
+			CommentID: commentID,
+			IsLike:    isLike,
+		}
 
-	if err := r.db.WithContext(ctx).Create(&like).Error; err != nil {
-		// Handle MySQL duplicate entry error (Error 1062) due to race condition
-		if strings.Contains(err.Error(), "Error 1062") ||
-			strings.Contains(err.Error(), "Duplicate entry") ||
-			strings.Contains(err.Error(), "23000") {
-			// Race condition: another request created the like
-			// Try to update instead
-			if err := r.db.WithContext(ctx).
-				Model(&CommentLike{}).
-				Where("user_id = ? AND comment_id = ?", userID, commentID).
-				Update("is_like", isLike).Error; err != nil {
-				return fmt.Errorf("failed to update like: %w", err)
+		if err := tx.Create(&like).Error; err != nil {
+			if strings.Contains(err.Error(), "Error 1062") ||
+				strings.Contains(err.Error(), "Duplicate entry") {
+				// 并发竞态：另一个请求已创建，幂等返回
+				return nil
 			}
-		} else {
 			return fmt.Errorf("failed to create like: %w", err)
 		}
-	}
 
-	// 更新评论的点赞/踩计数
-	if isLike {
-		r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-			UpdateColumn("likes", gorm.Expr("likes + ?", 1))
-	} else {
-		r.db.WithContext(ctx).Model(&Comment{}).Where("id = ?", commentID).
-			UpdateColumn("dislikes", gorm.Expr("dislikes + ?", 1))
-	}
+		// 更新评论的点赞/踩计数
+		if isLike {
+			tx.Model(&Comment{}).Where("id = ?", commentID).
+				UpdateColumn("likes", gorm.Expr("likes + ?", 1))
+		} else {
+			tx.Model(&Comment{}).Where("id = ?", commentID).
+				UpdateColumn("dislikes", gorm.Expr("dislikes + ?", 1))
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // UnlikeComment removes a like/dislike

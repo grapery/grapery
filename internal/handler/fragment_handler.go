@@ -255,10 +255,14 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 		fragment.IsLiked = &liked
 	}
 
-	// Increment view count
-	go h.fragmentRepo.IncrementViews(c.Request.Context(), id)
+	// Increment view count (fire-and-forget with panic recovery, context.Background to avoid cancel)
+	go func(fragmentID string) {
+		defer func() { _ = recover() }()
+		h.fragmentRepo.IncrementViews(context.Background(), fragmentID)
+	}(id)
 	if userID != "" {
 		go func(uid, fid string) {
+			defer func() { _ = recover() }()
 			h.fragmentRepo.RecordFragmentForYouSeen(context.Background(), uid, fid)
 		}(userID, id)
 	}
@@ -625,6 +629,7 @@ func (h *FragmentHandler) DeleteFragment(c *gin.Context) {
 }
 
 // ToggleLike handles POST /fragments/:id/like
+// Uses atomic delete-first strategy to prevent race conditions under concurrent requests.
 func (h *FragmentHandler) ToggleLike(c *gin.Context) {
 	userID := c.GetString("userID")
 	id := c.Param("id")
@@ -634,41 +639,13 @@ func (h *FragmentHandler) ToggleLike(c *gin.Context) {
 		return
 	}
 
-	// Check if already liked
-	isLiked, err := h.fragmentRepo.IsLiked(c.Request.Context(), id, userID)
+	liked, err := h.fragmentRepo.ToggleLike(c.Request.Context(), id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check like status"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to toggle like"})
 		return
 	}
 
-	if isLiked {
-		// Unlike
-		if err := h.fragmentRepo.DeleteLike(c.Request.Context(), id, userID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unlike"})
-			return
-		}
-		if err := h.fragmentRepo.DecrementLikes(c.Request.Context(), id); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update likes"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"liked": false})
-	} else {
-		// Like
-		like := &domain.FragmentLike{
-			ID:         generateUUID(),
-			FragmentID: id,
-			UserID:     userID,
-		}
-		if err := h.fragmentRepo.CreateLike(c.Request.Context(), like); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to like"})
-			return
-		}
-		if err := h.fragmentRepo.IncrementLikes(c.Request.Context(), id); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update likes"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"liked": true})
-	}
+	c.JSON(http.StatusOK, gin.H{"liked": liked})
 }
 
 // Helper functions

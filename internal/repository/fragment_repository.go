@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -689,7 +690,7 @@ func (r *FragmentRepository) IncrementLikes(ctx context.Context, id string) erro
 func (r *FragmentRepository) DecrementLikes(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
 		Where("id = ?", id).
-		UpdateColumn("likes", gorm.Expr("likes - 1")).
+		UpdateColumn("likes", gorm.Expr("GREATEST(likes - 1, 0)")).
 		Error
 }
 
@@ -730,6 +731,54 @@ func (r *FragmentRepository) IsLiked(ctx context.Context, fragmentID, userID str
 	return count > 0, err
 }
 
+
+// ToggleLike atomically toggles like status for a fragment using delete-first strategy.
+// Returns (true, nil) if liked, (false, nil) if unliked.
+func (r *FragmentRepository) ToggleLike(ctx context.Context, fragmentID, userID string) (bool, error) {
+	// Try to delete an existing like first
+	result := r.db.WithContext(ctx).
+		Where("fragment_id = ? AND user_id = ?", fragmentID, userID).
+		Delete(&domain.FragmentLike{})
+
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	if result.RowsAffected > 0 {
+		// Successfully deleted — this was an unlike
+		_ = r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
+			Where("id = ?", fragmentID).
+			UpdateColumn("likes", gorm.Expr("GREATEST(likes - 1, 0)")).Error
+		return false, nil
+	}
+
+	// No row deleted — try to insert (like)
+	like := &domain.FragmentLike{
+		ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+		FragmentID: fragmentID,
+		UserID:     userID,
+	}
+	if err := r.db.WithContext(ctx).Create(like).Error; err != nil {
+		if isDuplicateKeyError(err) {
+			return true, nil // idempotent: already liked by concurrent request
+		}
+		return false, err
+	}
+
+	// Successfully liked — increment counter
+	_ = r.db.WithContext(ctx).Model(&mysql.FragmentDB{}).
+		Where("id = ?", fragmentID).
+		UpdateColumn("likes", gorm.Expr("likes + 1")).Error
+	return true, nil
+}
+
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Error 1062") || strings.Contains(msg, "Duplicate entry")
+}
 // GetEngagementStats retrieves likes/comments counts and current user's like status.
 // Comments are aggregated from both legacy comments table and fragment_comments table.
 func (r *FragmentRepository) GetEngagementStats(ctx context.Context, fragmentID, userID string) (FragmentEngagement, error) {

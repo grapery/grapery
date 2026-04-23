@@ -38,7 +38,26 @@ func (m *UsageMiddleware) CheckUsageLimit(usageType paymodels.TokenUsageType) gi
 			return
 		}
 
-		userID, ok := userIDInterface.(int64)
+		userIDStr, ok := userIDInterface.(string)
+			if !ok {
+				m.logger.Error("Invalid user ID type in context")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "Invalid user ID",
+				})
+				c.Abort()
+				return
+			}
+			userID, err := strconv.ParseInt(userIDStr, 10, 64)
+			if err != nil {
+				m.logger.WithError(err).Error("Failed to parse user ID")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "Invalid user ID",
+				})
+				c.Abort()
+				return
+			}
 		if !ok {
 			m.logger.Error("Invalid user ID type in context")
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -99,7 +118,26 @@ func (m *UsageMiddleware) RecordUsage(usageType paymodels.TokenUsageType) gin.Ha
 			return
 		}
 
-		userID, ok := userIDInterface.(int64)
+		userIDStr, ok := userIDInterface.(string)
+			if !ok {
+				m.logger.Error("Invalid user ID type in context")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "Invalid user ID",
+				})
+				c.Abort()
+				return
+			}
+			userID, err := strconv.ParseInt(userIDStr, 10, 64)
+			if err != nil {
+				m.logger.WithError(err).Error("Failed to parse user ID")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "Invalid user ID",
+				})
+				c.Abort()
+				return
+			}
 		if !ok {
 			return
 		}
@@ -187,14 +225,18 @@ func (h *UsageLimitHandler) GetUsageStats(c *gin.Context) {
 		return
 	}
 
-	userID, ok := userIDInterface.(int64)
+	userIDStr, ok := userIDInterface.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500,
 			"msg":  "Invalid user ID",
 		})
-		return
-	}
+			}
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Invalid user ID"})
+			return
+		}
 
 	// 获取周期参数
 	periodStr := c.DefaultQuery("period", "monthly")
@@ -244,14 +286,18 @@ func (h *UsageLimitHandler) GetUsageByType(c *gin.Context) {
 		return
 	}
 
-	userID, ok := userIDInterface.(int64)
+	userIDStr, ok := userIDInterface.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500,
 			"msg":  "Invalid user ID",
 		})
-		return
-	}
+			}
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Invalid user ID"})
+			return
+		}
 
 	// 获取周期参数
 	periodStr := c.DefaultQuery("period", "monthly")
@@ -307,14 +353,18 @@ func (h *UsageLimitHandler) CheckUsageLimit(c *gin.Context) {
 		return
 	}
 
-	userID, ok := userIDInterface.(int64)
+	userIDStr, ok := userIDInterface.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500,
 			"msg":  "Invalid user ID",
 		})
-		return
-	}
+			}
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "Invalid user ID"})
+			return
+		}
 
 	// 获取用量类型参数
 	usageTypeStr := c.Param("type")

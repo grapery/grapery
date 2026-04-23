@@ -202,6 +202,11 @@ func main() {
 
 	// 启动服务器
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("VIP pay server goroutine panic recovered", zap.Any("panic", r))
+			}
+		}()
 		logger.Info("VIP payment server listening",
 			zap.String("addr", ":"+port),
 		)

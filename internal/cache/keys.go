@@ -240,3 +240,18 @@ func CreatorAnalyticsKey(userID, rangeKey string) string {
 func PlazaTopFragmentTopicsKeyV1() string {
 	return "plaza:top_fragment_topics:v1"
 }
+
+// 限流 key 前缀
+const (
+	PrefixRateLimitAI   = "ratelimit:ai:"
+	PrefixRateLimitAuth = "ratelimit:auth:"
+	PrefixRateLimitAPI  = "ratelimit:api:"
+)
+
+// RateLimitKey generates a Redis key for fixed-window rate limiting.
+// prefix: one of PrefixRateLimitAI/Auth/API
+// identifier: userID (authenticated) or client IP (unauthenticated)
+// windowBucket: time.Now().Unix() / int64(window.Seconds())
+func RateLimitKey(prefix, identifier string, windowBucket int64) string {
+	return fmt.Sprintf("%s%s:%d", prefix, identifier, windowBucket)
+}

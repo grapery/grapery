@@ -23,6 +23,7 @@ import (
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
 	"github.com/grapestree/fgrapery/grapery/internal/handler"
+	"github.com/grapestree/fgrapery/grapery/internal/middleware"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
@@ -314,11 +315,18 @@ func main() {
 
 	// Register Fragment Generation routes
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
-	fragmentGenHandler.RegisterRoutes(apiGroup.Group("/v1/fragments"), authPkg.AuthMiddleware())
+	// AI rate limiter for fragment generation endpoints
+	fragGenGroup := apiGroup.Group("/v1/fragments")
+	fragGenGroup.Use(authPkg.AuthMiddleware())
+	fragGenGroup.Use(middleware.NewRateLimiter(redisCache, middleware.RateLimitAIGeneration, logger))
+	fragmentGenHandler.RegisterRoutes(fragGenGroup, nil) // auth middleware already applied above
 	logger.Info("fragment generation routes registered")
 
 	panelGenHandler := transport.NewFragmentPanelGenerationHandler(panelGenService, logger)
-	panelGenHandler.RegisterRoutes(apiGroup.Group("/v1/fragment-panels"), authPkg.AuthMiddleware())
+	panelGenGroup := apiGroup.Group("/v1/fragment-panels")
+	panelGenGroup.Use(authPkg.AuthMiddleware())
+	panelGenGroup.Use(middleware.NewRateLimiter(redisCache, middleware.RateLimitAIGeneration, logger))
+	panelGenHandler.RegisterRoutes(panelGenGroup, nil) // auth middleware already applied above
 	logger.Info("fragment panel generation routes registered")
 
 	// Register Fragment Interaction routes (likes, comments, shares)
@@ -392,6 +400,11 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("server goroutine panic recovered", zap.Any("panic", r))
+			}
+		}()
 		logger.Info("server listening", zap.String("addr", cfg.Addr()))
 		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("server error", zap.Error(err))

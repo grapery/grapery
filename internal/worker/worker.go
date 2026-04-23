@@ -1496,6 +1496,11 @@ func (w *Worker) recordTokenUsage(ctx context.Context, task *domain.AITask, inpu
 
 	// 记录 token 使用量（异步，不阻塞）
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				w.logger.Error("token usage recording goroutine panic recovered", zap.Any("panic", r))
+			}
+		}()
 		// 1. 记录到 TokenUsage 表（周期汇总）
 		if w.tokenUsageService != nil {
 			err := w.tokenUsageService.RecordTokenUsage(
