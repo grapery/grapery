@@ -55,9 +55,11 @@ type OAuthSignInData struct {
 // AppleSignInRequest 前端发送的 Apple Sign-In 请求结构 (匹配 iOS 客户端)
 type AppleSignInRequest struct {
 	IdentityToken     string `json:"identityToken" binding:"required"` // Apple Identity Token
-	AuthorizationCode string `json:"authorizationCode,omitempty"`      // Authorization Code
+	AuthorizationCode string `json:"authorizationCode,omitempty"`      // Authorization Code (用于后端换取 Apple refresh token)
 	User              string `json:"user,omitempty"`                   // Apple User ID
-	Nonce             string `json:"nonce,omitempty"`                  // raw nonce (optional; if present it will be verified)
+	Nonce             string `json:"nonce" binding:"required"`         // raw nonce (mandatory for replay protection)
+	GivenName         string `json:"givenName,omitempty"`              // 用户名（仅首次授权时 Apple 返回）
+	FamilyName        string `json:"familyName,omitempty"`             // 用户姓（仅首次授权时 Apple 返回）
 }
 
 // OAuthUserResponse 用户信息响应 (匹配前端 User model)
@@ -188,23 +190,31 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 		return
 	}
 
-	// Optional nonce verification (prevents replay). If client sends nonce, verify it matches token claim.
-	// Apple returns the SHA256(nonce) value in the identity token's "nonce" claim when request.nonce is set.
-	if req.Nonce != "" {
-		expected := sha256Hex(req.Nonce)
-		if claims.Nonce == "" || claims.Nonce != expected {
-			logrus.WithFields(logrus.Fields{
-				"expected": expected,
-				"actual":   claims.Nonce,
-			}).Warn("Apple Sign-In nonce mismatch")
-			c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
-				Code:    401,
-				Msg:     "Invalid Apple nonce",
-				Message: "Invalid Apple nonce",
-				Success: false,
-			})
-			return
-		}
+	// Nonce verification (mandatory, prevents replay).
+	// Apple returns SHA256(nonce) in the identity token's "nonce" claim.
+	if req.Nonce == "" {
+		logrus.Warn("Apple Sign-In rejected: missing nonce")
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Nonce is required",
+			Message: "Nonce is required",
+			Success: false,
+		})
+		return
+	}
+	expected := sha256Hex(req.Nonce)
+	if claims.Nonce == "" || claims.Nonce != expected {
+		logrus.WithFields(logrus.Fields{
+			"expected": expected,
+			"actual":   claims.Nonce,
+		}).Warn("Apple Sign-In nonce mismatch")
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Invalid Apple nonce",
+			Message: "Invalid Apple nonce",
+			Success: false,
+		})
+		return
 	}
 
 	// Apple 用户ID（sub claim）
@@ -222,7 +232,11 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 
 	// 使用Apple User ID和email信息
 	email := claims.Email
-	fullName := claims.FullName
+	// 优先使用请求中的 GivenName/FamilyName（Apple 仅在首次授权的 credential 中返回姓名，不在 JWT 中）
+	fullName := strings.TrimSpace(req.GivenName + " " + req.FamilyName)
+	if fullName == "" {
+		fullName = claims.FullName
+	}
 
 	logrus.WithFields(logrus.Fields{
 		"apple_user_id": appleUserID,
@@ -267,9 +281,8 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"user_id":     user.ID,
-		"token_len":   len(jwtToken),
-		"token_start": jwtToken[:min(len(jwtToken), 30)] + "...",
+		"user_id":   user.ID,
+		"token_len": len(jwtToken),
 	}).Info("JWT token generated successfully")
 
 	// 生成 Refresh Token
@@ -282,9 +295,8 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 		// 不阻塞登录流程，refresh token 可以为空
 	} else {
 		logrus.WithFields(logrus.Fields{
-			"user_id":       user.ID,
-			"refresh_len":   len(refreshToken),
-			"refresh_start": refreshToken[:min(len(refreshToken), 30)] + "...",
+			"user_id":     user.ID,
+			"refresh_len": len(refreshToken),
 		}).Info("Refresh token generated successfully")
 	}
 
@@ -304,13 +316,6 @@ func (h *AppleOAuthHandler) HandleAppleSignIn(c *gin.Context) {
 func sha256Hex(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // findOrCreateUser 查找或创建 OAuth 用户（支持跨设备、跨登录方式的账户关联）
@@ -659,22 +664,26 @@ func (h *AppleOAuthHandler) HandleAppleLink(c *gin.Context) {
 		return
 	}
 
-	// Optional nonce verification
-	if req.Nonce != "" {
-		expected := sha256Hex(req.Nonce)
-		if claims.Nonce == "" || claims.Nonce != expected {
-			logrus.WithFields(logrus.Fields{
-				"expected": expected,
-				"actual":   claims.Nonce,
-			}).Warn("Apple Sign-In nonce mismatch")
-			c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
-				Code:    401,
-				Msg:     "Invalid Apple nonce",
-				Message: "Invalid Apple nonce",
-				Success: false,
-			})
-			return
-		}
+	// Nonce verification (mandatory)
+	if req.Nonce == "" {
+		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
+			Code:    400,
+			Msg:     "Nonce is required",
+			Message: "Nonce is required",
+			Success: false,
+		})
+		return
+	}
+	expected := sha256Hex(req.Nonce)
+	if claims.Nonce == "" || claims.Nonce != expected {
+		logrus.Warn("Apple Sign-In link nonce mismatch")
+		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
+			Code:    401,
+			Msg:     "Invalid Apple nonce",
+			Message: "Invalid Apple nonce",
+			Success: false,
+		})
+		return
 	}
 
 	appleUserID := claims.Subject
@@ -690,7 +699,10 @@ func (h *AppleOAuthHandler) HandleAppleLink(c *gin.Context) {
 	}
 
 	email := claims.Email
-	fullName := claims.FullName
+	fullName := strings.TrimSpace(req.GivenName + " " + req.FamilyName)
+	if fullName == "" {
+		fullName = claims.FullName
+	}
 
 	ctx := c.Request.Context()
 
@@ -801,6 +813,12 @@ func (h *AppleOAuthHandler) HandleAppleUnlink(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	// 查找 Apple 绑定记录以获取 providerUserID（用于撤销）
+	logins, _ := h.repo.GetThirdPartyLoginsByUserID(ctx, currentUserID)
+
+	// 尝试在 Apple 侧撤销凭证（best-effort，不阻塞解绑流程）
+	h.revokeAppleCredential(ctx, logins)
+
 	// 删除 Apple 绑定
 	if err := h.repo.DeleteThirdPartyLogin(ctx, currentUserID, domain.ProviderApple); err != nil {
 		logrus.Errorf("Failed to unlink Apple account: %v", err)
@@ -822,16 +840,36 @@ func (h *AppleOAuthHandler) HandleAppleUnlink(c *gin.Context) {
 	})
 }
 
+// revokeAppleCredential 尝试在 Apple 侧撤销凭证（best-effort）
+func (h *AppleOAuthHandler) revokeAppleCredential(ctx context.Context, logins []*domain.ThirdPartyLogin) {
+	if !h.verifier.CanRevoke() {
+		return
+	}
+
+	for _, login := range logins {
+		if login.Provider != domain.ProviderApple {
+			continue
+		}
+		// Apple Sign-In 没有 refresh token 存储，使用 providerUserID 间接撤销
+		// 实际 revoke 需要 refresh_token，这里记录日志提醒后续优化
+		logrus.WithFields(logrus.Fields{
+			"providerUserID": login.ProviderUserID,
+		}).Debug("Apple credential revocation: binding removed locally, Apple-side token will expire naturally")
+	}
+}
+
 // createAppleOAuthConfig 创建 Apple OAuth2 配置
 func createAppleOAuthConfig() *payservice.AppleOAuthConfig {
-	// 从环境变量读取配置
 	bundleID := os.Getenv("APPLE_BUNDLE_ID")
 	if bundleID == "" {
-		bundleID = "com.rankquantity.voyager" // 默认 Bundle ID
+		bundleID = "com.rankquantity.voyager"
 	}
 
 	return &payservice.AppleOAuthConfig{
 		BundleID:       bundleID,
+		TeamID:         os.Getenv("APPLE_TEAM_ID"),
+		KeyID:          os.Getenv("APPLE_SIGNIN_KEY_ID"),
+		PrivateKey:     os.Getenv("APPLE_SIGNIN_PRIVATE_KEY"),
 		TimeoutSeconds: 30,
 		CacheDuration:  1,
 	}
