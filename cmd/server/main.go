@@ -330,7 +330,7 @@ func main() {
 	logger.Info("fragment panel generation routes registered")
 
 	// Register Fragment Interaction routes (likes, comments, shares)
-	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, logger)
+	fragmentInteractionHandler := transport.NewFragmentInteractionHandler(fragmentInteractionRepo, fragmentRepo, svc, logger)
 	fragmentInteractionHandler.RegisterRoutes(apiGroup.Group("/v1/fragments"), authPkg.AuthMiddleware())
 	logger.Info("fragment interaction routes registered")
 

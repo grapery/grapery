@@ -99,7 +99,7 @@ func (s *Service) GetStoryStats(ctx context.Context, storyID string) (*StoryStat
 	}
 
 	// 获取评论数量
-	comments, _, err := s.repo.CommentsByTarget(ctx, "story", storyID, 0, 0)
+	comments, _, err := s.repo.CommentsByTarget(ctx, "story", storyID, "newest", 0, 0)
 	if err != nil {
 		comments = []*domain.Comment{}
 	}

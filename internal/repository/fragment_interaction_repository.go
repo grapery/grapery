@@ -186,13 +186,13 @@ func (r *FragmentInteractionRepository) GetCommentReplies(ctx context.Context, p
 	return replies, total, nil
 }
 
-// GetCommentsCount 获取评论数
+// GetCommentsCount 获取评论数（统一 comments 表，含回复；与 CreateComment/updateTargetCommentCount 一致）
 func (r *FragmentInteractionRepository) GetCommentsCount(ctx context.Context, fragmentID string) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
-		Model(&domain.FragmentComment{}).
-		Where("fragment_id = ?", fragmentID).
-		Count(&count).Error
+	err := r.db.WithContext(ctx).Raw(
+		`SELECT COUNT(*) FROM comments WHERE deleted_at IS NULL AND target_type = ? AND target_id = ?`,
+		"fragment", fragmentID,
+	).Scan(&count).Error
 	return count, err
 }
 
@@ -273,19 +273,21 @@ func (r *FragmentInteractionRepository) BatchGetFragmentStats(ctx context.Contex
 		return nil, err
 	}
 
-	// 批量获取评论数
+	// 批量获取评论数（统一 comments 表）
 	var commentsStats []struct {
-		FragmentID string
+		FragmentID string `gorm:"column:fragment_id"`
 		Count      int64
 	}
-	err = r.db.WithContext(ctx).
-		Model(&domain.FragmentComment{}).
-		Select("fragment_id, count(*) as count").
-		Where("fragment_id IN ?", fragmentIDs).
-		Group("fragment_id").
-		Find(&commentsStats).Error
-	if err != nil {
-		return nil, err
+	if len(fragmentIDs) > 0 {
+		err = r.db.WithContext(ctx).Raw(`
+			SELECT target_id AS fragment_id, COUNT(*) AS count
+			FROM comments
+			WHERE deleted_at IS NULL AND target_type = 'fragment' AND target_id IN ?
+			GROUP BY target_id
+		`, fragmentIDs).Scan(&commentsStats).Error
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 批量获取分享数

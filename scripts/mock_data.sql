@@ -79,7 +79,10 @@ INSERT INTO users (id, username, email, password_hash, display_name, avatar, bac
 ('user-0001-0000-0000-000000000004', 'newbie_diana', 'diana@test.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.QGhS5ThOy6CxbLWPPm', 'Diana 新手', 'https://picsum.photos/seed/diana/200/200', 'https://picsum.photos/seed/diana-bg/800/400', '刚加入社区，正在学习如何创作故事', '杭州', '', 15, 8, 0, 3, 'active', 0, UNIX_TIMESTAMP() * 1000 - 86400000, 100, 'DIANA2024', FROM_UNIXTIME(UNIX_TIMESTAMP() - 172800), FROM_UNIXTIME(UNIX_TIMESTAMP() - 86400)),
 
 -- 测试用户 5: VIP用户 Eve
-('user-0001-0000-0000-000000000005', 'vip_eve', 'eve@test.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.QGhS5ThOy6CxbLWPPm', 'Eve VIP', 'https://picsum.photos/seed/eve/200/200', 'https://picsum.photos/seed/eve-bg/800/400', '资深创作者，VIP会员，喜欢尝试各种创作风格', '广州', 'https://eve-creates.com', 5600, 420, 45, 128, 'active', 1, UNIX_TIMESTAMP() * 1000 - 600000, 15000, 'EVEVIP24', FROM_UNIXTIME(UNIX_TIMESTAMP() - 5184000), FROM_UNIXTIME(UNIX_TIMESTAMP() - 600));
+('user-0001-0000-0000-000000000005', 'vip_eve', 'eve@test.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.QGhS5ThOy6CxbLWPPm', 'Eve VIP', 'https://picsum.photos/seed/eve/200/200', 'https://picsum.photos/seed/eve-bg/800/400', '资深创作者，VIP会员，喜欢尝试各种创作风格', '广州', 'https://eve-creates.com', 5600, 420, 45, 128, 'active', 1, UNIX_TIMESTAMP() * 1000 - 600000, 15000, 'EVEVIP24', FROM_UNIXTIME(UNIX_TIMESTAMP() - 5184000), FROM_UNIXTIME(UNIX_TIMESTAMP() - 600)),
+
+-- 测试用户 6: TreeTree（用于通知收件箱 mock：作为 actor 出现）
+('user-0001-0000-0000-000000000006', 'TreeTree', 'treetree@test.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.QGhS5ThOy6CxbLWPPm', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', 'https://picsum.photos/seed/treetree-bg/800/400', '喜欢森林系设定与轻奇幻，Mock 数据用户', '成都', '', 48, 21, 1, 6, 'active', 1, UNIX_TIMESTAMP() * 1000 - 3600000, 800, 'TREE2026', FROM_UNIXTIME(UNIX_TIMESTAMP() - 2592000), FROM_UNIXTIME(UNIX_TIMESTAMP() - 3600));
 
 -- ============================================================
 -- 2. User Settings (用户设置)
@@ -90,7 +93,8 @@ INSERT INTO user_settings (id, user_id, language, theme, font_size, data_saver, 
 (UUID(), 'user-0001-0000-0000-000000000002', 'zh-CN', 'system', 'medium', 0, 'public', 'public', 'public', 'everyone', 'everyone', 'everyone', 1, 1, 1, 0, '{"push":true,"email":false,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP()),
 (UUID(), 'user-0001-0000-0000-000000000003', 'zh-CN', 'light', 'large', 0, 'public', 'public', 'followers_only', 'followers', 'followers', 'followers_only', 0, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP()),
 (UUID(), 'user-0001-0000-0000-000000000004', 'zh-CN', 'system', 'medium', 1, 'public', 'public', 'public', 'everyone', 'everyone', 'everyone', 1, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP()),
-(UUID(), 'user-0001-0000-0000-000000000005', 'en-US', 'dark', 'medium', 0, 'public', 'public', 'public', 'everyone', 'everyone', 'everyone', 1, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP());
+(UUID(), 'user-0001-0000-0000-000000000005', 'en-US', 'dark', 'medium', 0, 'public', 'public', 'public', 'everyone', 'everyone', 'everyone', 1, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP()),
+(UUID(), 'user-0001-0000-0000-000000000006', 'zh-CN', 'system', 'medium', 0, 'public', 'public', 'public', 'everyone', 'everyone', 'everyone', 1, 1, 1, 1, '{"push":true,"email":true,"likes":true,"comments":true,"follows":true}', UNIX_TIMESTAMP());
 
 -- ============================================================
 -- 3. Stories (故事表)
@@ -278,7 +282,15 @@ INSERT INTO notifications (id, user_id, type, title, content, link, `read`, acto
 -- Eve 收到的通知
 (UUID(), 'user-0001-0000-0000-000000000005', 'follow', '新粉丝', 'Diana 新手 关注了你', '/user/user-0001-0000-0000-000000000004', 0, 'user-0001-0000-0000-000000000004', 'Diana 新手', 'https://picsum.photos/seed/diana/200/200', NULL, NULL, NULL, NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 86400)),
 (UUID(), 'user-0001-0000-0000-000000000005', 'like', '收到点赞', 'Bob 读者 喜欢了你的故事《咖啡馆邂逅》', '/story/story-0001-0000-0000-000000000005', 0, 'user-0001-0000-0000-000000000002', 'Bob 读者', 'https://picsum.photos/seed/bob/200/200', '咖啡馆邂逅', 'https://picsum.photos/seed/cafe-meet/400/600', 'story-0001-0000-0000-000000000005', NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 43200)),
-(UUID(), 'user-0001-0000-0000-000000000005', 'ai_complete', 'AI 生成完成', '你的碎片「苏晓雨与陌生人对话」已生成完成', '/fragment/frag-0001-0000-0000-000000000007', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'AI 生成完成', '你的碎片已生成完成，快去看看吧', 'sparkles', FROM_UNIXTIME(UNIX_TIMESTAMP() - 345600));
+(UUID(), 'user-0001-0000-0000-000000000005', 'ai_complete', 'AI 生成完成', '你的碎片「苏晓雨与陌生人对话」已生成完成', '/fragment/frag-0001-0000-0000-000000000007', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'AI 生成完成', '你的碎片已生成完成，快去看看吧', 'sparkles', FROM_UNIXTIME(UNIX_TIMESTAMP() - 345600)),
+-- Alice 收到来自用户 TreeTree（user-0001-0000-0000-000000000006，username = TreeTree）的若干条通知
+(UUID(), 'user-0001-0000-0000-000000000001', 'follow', '新粉丝', 'TreeTree 关注了你', '/user/user-0001-0000-0000-000000000006', 0, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', NULL, NULL, NULL, NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 3600)),
+(UUID(), 'user-0001-0000-0000-000000000001', 'like', '收到点赞', 'TreeTree 喜欢了你的故事《龙之谷传说》', '/story/story-0001-0000-0000-000000000001', 0, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', '龙之谷传说', 'https://picsum.photos/seed/dragon-valley/400/600', 'story-0001-0000-0000-000000000001', NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 7200)),
+(UUID(), 'user-0001-0000-0000-000000000001', 'comment', '新评论', 'TreeTree 评论了你的故事《龙之谷传说》：「太期待林间的相遇戏了！」', '/story/story-0001-0000-0000-000000000001', 0, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', '龙之谷传说', 'https://picsum.photos/seed/dragon-valley/400/600', 'story-0001-0000-0000-000000000001', '太期待林间的相遇戏了！', NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 10000)),
+(UUID(), 'user-0001-0000-0000-000000000001', 'mention', '提及了你', 'TreeTree 在评论中@了你', '/fragment/frag-0001-0000-0000-000000000001', 0, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', NULL, NULL, NULL, '来看看我对时间倒流的理解～', NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 86400)),
+(UUID(), 'user-0001-0000-0000-000000000001', 'update', '故事更新', 'TreeTree 关注的《龙之谷传说》有了新章更新', '/story/story-0001-0000-0000-000000000001', 1, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', '龙之谷传说', 'https://picsum.photos/seed/dragon-valley/400/600', 'story-0001-0000-0000-000000000001', NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 172800)),
+-- Bob 也收到一条来自 TreeTree 的互动，便于用 reader_bob 账号联调
+(UUID(), 'user-0001-0000-0000-000000000002', 'like', '收到点赞', 'TreeTree 喜欢了你的故事《午夜列车》', '/story/story-0001-0000-0000-000000000003', 0, 'user-0001-0000-0000-000000000006', 'TreeTree', 'https://picsum.photos/seed/treetree/200/200', '午夜列车', 'https://picsum.photos/seed/midnight-train/400/600', 'story-0001-0000-0000-000000000003', NULL, NULL, NULL, NULL, FROM_UNIXTIME(UNIX_TIMESTAMP() - 5400));
 
 -- ============================================================
 -- 13. Tags (标签) - 使用固定 ID 便于 story_tags/character_tags 引用

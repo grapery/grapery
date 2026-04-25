@@ -215,7 +215,7 @@ func (s *Service) ReorderStoryPanels(ctx context.Context, userID, storyID string
 // ListStoryComments 列出故事评论
 func (s *Service) ListStoryComments(ctx context.Context, storyID, userID string, limit, offset int, sortBy string) ([]domain.StoryComment, int, error) {
 	// 使用现有的 CommentsByTarget 方法
-	comments, total, err := s.repo.CommentsByTarget(ctx, "story", storyID, limit, offset)
+	comments, total, err := s.repo.CommentsByTarget(ctx, "story", storyID, "newest", limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list story comments", zap.Error(err), zap.String("storyId", storyID))
 		return nil, 0, err

@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
@@ -22,6 +23,45 @@ func (r *Repository) SearchStories(ctx context.Context, query string, limit, off
 	for i, s := range stories {
 		ds := r.storyToDomain(s)
 		result[i] = &ds
+	}
+	return result, nil
+}
+
+// SearchStoryboards 按标题/正文/原始输入在已发布故事板中模糊搜索。
+func (r *Repository) SearchStoryboards(ctx context.Context, query string, limit, offset int) ([]*domain.Storyboard, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []*domain.Storyboard{}, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	like := "%" + q + "%"
+
+	var sbs []Storyboard
+	err := r.db.WithContext(ctx).
+		Preload("Creator").
+		Preload("Story").Preload("Story.Author").
+		Where("workflow_status = ?", domain.WorkflowStatusPublished).
+		Where("title LIKE ? OR content LIKE ? OR raw_input LIKE ?", like, like, like).
+		Order("updated_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&sbs).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to search storyboards: %w", err)
+	}
+
+	result := make([]*domain.Storyboard, 0, len(sbs))
+	for i := range sbs {
+		d, err := r.storyboardToDomain(ctx, sbs[i])
+		if err != nil {
+			return nil, err
+		}
+		dCopy := d
+		result = append(result, &dCopy)
 	}
 	return result, nil
 }

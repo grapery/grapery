@@ -131,8 +131,12 @@ func (r *Repository) DeleteComment(ctx context.Context, id string) error {
 	return nil
 }
 
-// CommentsByTarget retrieves comments for a target
-func (r *Repository) CommentsByTarget(ctx context.Context, targetType, targetID string, limit, offset int) ([]*domain.Comment, int64, error) {
+// CommentsByTarget retrieves top-level comments for a target.
+// sort: "newest" (default) or "hot" (likes DESC, then created_at DESC).
+func (r *Repository) CommentsByTarget(ctx context.Context, targetType, targetID, sort string, limit, offset int) ([]*domain.Comment, int64, error) {
+	if sort == "" {
+		sort = "newest"
+	}
 	var comments []Comment
 	var total int64
 
@@ -153,7 +157,13 @@ func (r *Repository) CommentsByTarget(ctx context.Context, targetType, targetID 
 		query = query.Limit(limit).Offset(offset)
 	}
 
-	if err := query.Order("created_at DESC").Find(&comments).Error; err != nil {
+	if sort == "hot" {
+		query = query.Order("likes DESC").Order("created_at DESC")
+	} else {
+		query = query.Order("created_at DESC")
+	}
+
+	if err := query.Find(&comments).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to get comments: %w", err)
 	}
 
@@ -166,8 +176,16 @@ func (r *Repository) CommentsByTarget(ctx context.Context, targetType, targetID 
 	return result, total, nil
 }
 
-// CommentReplies retrieves replies to a comment
-func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit, offset int) ([]*domain.Comment, error) {
+// CommentReplies retrieves replies to a comment (direct children only) and total count of those replies.
+func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit, offset int) ([]*domain.Comment, int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).
+		Model(&Comment{}).
+		Where("parent_id = ?", parentID).
+		Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count replies: %w", err)
+	}
+
 	var comments []Comment
 	query := r.db.WithContext(ctx).
 		Preload("Author").
@@ -179,7 +197,7 @@ func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit,
 	}
 
 	if err := query.Find(&comments).Error; err != nil {
-		return nil, fmt.Errorf("failed to get replies: %w", err)
+		return nil, 0, fmt.Errorf("failed to get replies: %w", err)
 	}
 
 	result := make([]*domain.Comment, len(comments))
@@ -188,7 +206,7 @@ func (r *Repository) CommentReplies(ctx context.Context, parentID string, limit,
 		result[i] = &domainComment
 	}
 
-	return result, nil
+	return result, total, nil
 }
 
 // CommentsByParent retrieves comments by parent ID (alias for CommentReplies)
@@ -406,6 +424,9 @@ func (r *Repository) updateTargetCommentCount(ctx context.Context, targetType, t
 		// 	UpdateColumn("comments", gorm.Expr("comments + ?", delta))
 	case "storyboard":
 		r.db.WithContext(ctx).Model(&Storyboard{}).Where("id = ?", targetID).
+			UpdateColumn("comments", gorm.Expr("comments + ?", delta))
+	case "fragment":
+		r.db.WithContext(ctx).Model(&FragmentDB{}).Where("id = ?", targetID).
 			UpdateColumn("comments", gorm.Expr("comments + ?", delta))
 	case "character":
 		// 更新角色的评论计数（如果有这个字段）

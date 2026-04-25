@@ -36,7 +36,7 @@ func (h *Handler) CreateComment(c *gin.Context) {
 	}
 
 	if err := h.svc.CreateComment(c.Request.Context(), comment); err != nil {
-		InternalError(c, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *Handler) UpdateComment(c *gin.Context) {
 	}
 
 	if err := h.svc.UpdateComment(c.Request.Context(), comment, userID.(string)); err != nil {
-		InternalError(c, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -122,6 +122,10 @@ func (h *Handler) ListComments(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	sort := c.DefaultQuery("sort", "")
+	if sort == "" {
+		sort = c.DefaultQuery("sort_mode", "")
+	}
 
 	// 获取可选的用户ID以填充点赞状态
 	userID := ""
@@ -129,7 +133,7 @@ func (h *Handler) ListComments(c *gin.Context) {
 		userID = uid.(string)
 	}
 
-	comments, total, err := h.svc.ListComments(c.Request.Context(), targetType, targetID, limit, offset, userID)
+	comments, total, err := h.svc.ListComments(c.Request.Context(), targetType, targetID, limit, offset, userID, sort)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -140,6 +144,7 @@ func (h *Handler) ListComments(c *gin.Context) {
 		"total":    total,
 		"limit":    limit,
 		"offset":   offset,
+		"sort":     sort,
 	})
 }
 
@@ -149,7 +154,12 @@ func (h *Handler) GetCommentReplies(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	replies, err := h.svc.GetCommentReplies(c.Request.Context(), parentID, limit, offset)
+	userID := ""
+	if uid, exists := c.Get("userID"); exists {
+		userID = uid.(string)
+	}
+
+	replies, replyTotal, err := h.svc.GetCommentReplies(c.Request.Context(), parentID, limit, offset, userID)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -157,6 +167,7 @@ func (h *Handler) GetCommentReplies(c *gin.Context) {
 
 	Success(c, gin.H{
 		"replies": replies,
+		"total":   replyTotal,
 		"count":   len(replies),
 		"limit":   limit,
 		"offset":  offset,

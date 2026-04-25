@@ -8,24 +8,29 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/repository"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 type FragmentInteractionHandler struct {
 	interactionRepo *repository.FragmentInteractionRepository
 	fragmentRepo    *repository.FragmentRepository
+	svc             *service.Service
 	logger          *zap.Logger
 }
 
 func NewFragmentInteractionHandler(
 	interactionRepo *repository.FragmentInteractionRepository,
 	fragmentRepo *repository.FragmentRepository,
+	svc *service.Service,
 	logger *zap.Logger,
 ) *FragmentInteractionHandler {
 	return &FragmentInteractionHandler{
 		interactionRepo: interactionRepo,
 		fragmentRepo:    fragmentRepo,
+		svc:             svc,
 		logger:          logger,
 	}
 }
@@ -161,7 +166,7 @@ type CreateCommentRequest struct {
 	ParentID *string `json:"parentId,omitempty"` // 如果提供，则是回复评论
 }
 
-// CreateComment 创建评论
+// CreateComment 创建评论（统一 comments 表，与 POST /api/v1/comments 行为一致）
 // POST /api/fragments/:id/comments
 func (h *FragmentInteractionHandler) CreateComment(c *gin.Context) {
 	userID := c.GetString("userID")
@@ -182,49 +187,35 @@ func (h *FragmentInteractionHandler) CreateComment(c *gin.Context) {
 		return
 	}
 
-	// 如果是回复评论，检查父评论是否存在
-	if req.ParentID != nil && *req.ParentID != "" {
-		parentComment, err := h.interactionRepo.GetCommentByID(c.Request.Context(), *req.ParentID)
-		if err != nil || parentComment == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "parent comment not found"})
-			return
-		}
-		// 确保父评论属于同一个碎片
-		if parentComment.FragmentID != fragmentID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "parent comment does not belong to this fragment"})
-			return
-		}
-	}
-
-	comment := &domain.FragmentComment{
-		ID:         uuid.New().String(),
-		FragmentID: fragmentID,
+	comment := &domain.Comment{
 		UserID:     userID,
 		Content:    req.Content,
-		ParentID:   req.ParentID,
+		TargetType: "fragment",
+		TargetID:   fragmentID,
+		ParentID:   "",
+	}
+	if req.ParentID != nil && *req.ParentID != "" {
+		comment.ParentID = *req.ParentID
 	}
 
-	if err := h.interactionRepo.CreateComment(c.Request.Context(), comment); err != nil {
+	if err := h.svc.CreateComment(c.Request.Context(), comment); err != nil {
 		h.logger.Error("Failed to create comment", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create comment"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 获取完整的评论信息（包含用户信息）
-	fullComment, err := h.interactionRepo.GetCommentByID(c.Request.Context(), comment.ID)
-	if err != nil {
-		h.logger.Error("Failed to get created comment", zap.Error(err))
-	} else {
-		comment = fullComment
+	// 返回完整作者信息（与 v1 CreateComment 一致）
+	full, err := h.svc.GetComment(c.Request.Context(), comment.ID)
+	if err == nil && full != nil {
+		comment = full
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"comment": comment,
-	})
+	c.Status(http.StatusCreated)
+	Success(c, comment)
 }
 
-// GetFragmentComments 获取碎片的评论列表
-// GET /api/fragments/:id/comments?page=1&limit=20
+// GetFragmentComments 获取碎片的评论列表（统一 /api/v1/comments?targetType=fragment）
+// GET /api/fragments/:id/comments?offset&limit&page&sort
 func (h *FragmentInteractionHandler) GetFragmentComments(c *gin.Context) {
 	userID := c.GetString("userID")
 	fragmentID := c.Param("id")
@@ -233,27 +224,40 @@ func (h *FragmentInteractionHandler) GetFragmentComments(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset := (page - 1) * limit
+	offset := 0
+	if o := c.Query("offset"); o != "" {
+		offset, _ = strconv.Atoi(o)
+	} else {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		if page < 1 {
+			page = 1
+		}
+		if limit <= 0 {
+			limit = 20
+		}
+		offset = (page - 1) * limit
+	}
+	sort := c.DefaultQuery("sort", "")
 
-	comments, total, err := h.interactionRepo.GetFragmentComments(c.Request.Context(), fragmentID, userID, limit, offset)
+	comments, total, err := h.svc.ListComments(c.Request.Context(), "fragment", fragmentID, limit, offset, userID, sort)
 	if err != nil {
 		h.logger.Error("Failed to get fragment comments", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get comments"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	Success(c, gin.H{
 		"comments": comments,
 		"total":    total,
-		"page":     page,
 		"limit":    limit,
+		"offset":   offset,
+		"sort":     sort,
 	})
 }
 
-// GetCommentReplies 获取评论的回复列表
-// GET /api/fragments/comments/:id/replies?page=1&limit=20
+// GetCommentReplies 获取评论的回复列表（与 GET /api/v1/comments/:id/replies 一致，统一 comments 表）
+// GET /api/fragments/comments/:id/replies?offset&limit&page
 func (h *FragmentInteractionHandler) GetCommentReplies(c *gin.Context) {
 	parentID := c.Param("id")
 	if parentID == "" {
@@ -261,22 +265,35 @@ func (h *FragmentInteractionHandler) GetCommentReplies(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset := (page - 1) * limit
+	offset := 0
+	if o := c.Query("offset"); o != "" {
+		offset, _ = strconv.Atoi(o)
+	} else {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		if page < 1 {
+			page = 1
+		}
+		if limit <= 0 {
+			limit = 20
+		}
+		offset = (page - 1) * limit
+	}
+	userID := c.GetString("userID")
 
-	replies, total, err := h.interactionRepo.GetCommentReplies(c.Request.Context(), parentID, limit, offset)
+	replies, total, err := h.svc.GetCommentReplies(c.Request.Context(), parentID, limit, offset, userID)
 	if err != nil {
 		h.logger.Error("Failed to get comment replies", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get replies"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	Success(c, gin.H{
 		"replies": replies,
 		"total":   total,
-		"page":    page,
+		"count":   len(replies),
 		"limit":   limit,
+		"offset":  offset,
 	})
 }
 
@@ -300,16 +317,13 @@ func (h *FragmentInteractionHandler) UpdateComment(c *gin.Context) {
 		return
 	}
 
-	// 获取现有评论
-	comment, err := h.interactionRepo.GetCommentByID(c.Request.Context(), commentID)
-	if err != nil || comment == nil {
+	existing, err := h.svc.GetComment(c.Request.Context(), commentID)
+	if err != nil || existing == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
 		return
 	}
-
-	// 检查权限：只有评论作者可以修改
-	if comment.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: not the comment author"})
+	if existing.TargetType != "fragment" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not a fragment comment"})
 		return
 	}
 
@@ -319,17 +333,26 @@ func (h *FragmentInteractionHandler) UpdateComment(c *gin.Context) {
 		return
 	}
 
-	comment.Content = req.Content
-
-	if err := h.interactionRepo.UpdateComment(c.Request.Context(), comment); err != nil {
+	comment := &domain.Comment{
+		BaseModel: common.BaseModel{ID: commentID},
+		Content:   req.Content,
+	}
+	if err := h.svc.UpdateComment(c.Request.Context(), comment, userID); err != nil {
 		h.logger.Error("Failed to update comment", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update comment"})
+		if err.Error() == "permission denied: not the author" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"comment": comment,
-	})
+	updated, _ := h.svc.GetComment(c.Request.Context(), commentID)
+	if updated != nil {
+		Success(c, updated)
+		return
+	}
+	Success(c, gin.H{"message": "comment updated successfully"})
 }
 
 // DeleteComment 删除评论
@@ -347,28 +370,27 @@ func (h *FragmentInteractionHandler) DeleteComment(c *gin.Context) {
 		return
 	}
 
-	// 获取评论以检查权限
-	comment, err := h.interactionRepo.GetCommentByID(c.Request.Context(), commentID)
+	comment, err := h.svc.GetComment(c.Request.Context(), commentID)
 	if err != nil || comment == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
 		return
 	}
-
-	// 检查权限：只有评论作者可以删除
-	if comment.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: not the comment author"})
+	if comment.TargetType != "fragment" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not a fragment comment"})
 		return
 	}
 
-	if err := h.interactionRepo.DeleteComment(c.Request.Context(), commentID); err != nil {
+	if err := h.svc.DeleteComment(c.Request.Context(), commentID, userID); err != nil {
 		h.logger.Error("Failed to delete comment", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete comment"})
+		if err.Error() == "permission denied: not the author" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "comment deleted",
-	})
+	Success(c, gin.H{"message": "comment deleted successfully"})
 }
 
 // ============= 分享相关 API =============

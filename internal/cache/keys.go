@@ -211,8 +211,11 @@ func StoryboardsListKey(storyID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixStoryboardsList, storyID, limit, offset)
 }
 
-func CommentsListKey(targetType, targetID string, limit, offset int) string {
-	return fmt.Sprintf("%s%s:%s:%d:%d", PrefixCommentsList, targetType, targetID, limit, offset)
+func CommentsListKey(targetType, targetID, sort string, limit, offset int) string {
+	if sort == "" {
+		sort = "newest"
+	}
+	return fmt.Sprintf("%s%s:%s:%s:%d:%d", PrefixCommentsList, targetType, targetID, sort, limit, offset)
 }
 
 func UserActivitiesKey(userID string, limit, offset int) string {

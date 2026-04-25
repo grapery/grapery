@@ -3,14 +3,51 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
 
+// Business rules (see voyager/docs/FEATURES.md SOC-003 / SOC-004)
+const (
+	maxCommentContentRunes = 500
+	// max comment thread depth: 0 = top-level, 1, 2 => three levels; no 4th level.
+	maxRootThreadDepth = 2
+)
+
+// deleteCommentsListCacheForTarget invalidates list cache for all sort/limit/offset variants we use when caching.
+func deleteCommentsListCacheForTarget(ctx context.Context, c cache.Cache, targetType, targetID string) {
+	if c == nil {
+		return
+	}
+	sorts := []string{"newest", "hot"}
+	for _, sort := range sorts {
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.CommentsListKey(targetType, targetID, sort, limit, offset))
+			}
+		}
+	}
+}
+
+// normalizeCommentListSort returns "newest" or "hot".
+func normalizeCommentListSort(sort string) string {
+	if sort == "hot" {
+		return "hot"
+	}
+	return "newest"
+}
+
 // CreateComment 创建评论
 func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) error {
+	normalized, err := normalizeAndValidateCommentContent(comment.Content)
+	if err != nil {
+		return err
+	}
+	comment.Content = normalized
 	// 验证目标存在
 	if err := s.validateCommentTarget(ctx, comment.TargetType, comment.TargetID); err != nil {
 		return err
@@ -35,6 +72,14 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 		if parentComment.TargetType != comment.TargetType || parentComment.TargetID != comment.TargetID {
 			return fmt.Errorf("parent comment belongs to different target")
 		}
+		depth, err := s.commentThreadDepthFromRoot(ctx, parentComment)
+		if err != nil {
+			return err
+		}
+		// 新评论深度 = parentDepth+1 不得超过 maxRootThreadDepth
+		if depth >= maxRootThreadDepth {
+			return fmt.Errorf("comment would exceed maximum nesting depth (max 3 levels): %w", domain.ErrInvalidInput)
+		}
 	}
 
 	// 创建评论
@@ -48,12 +93,7 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 	// 使相关缓存失效
 	c := s.getCache()
 	if c != nil {
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 		// 清除目标对象的评论计数缓存（如果有）
 		_ = c.Delete(ctx, cache.StoryCommentsKey(comment.TargetID))
 		s.logger.Debug("comment cache invalidated",
@@ -203,6 +243,11 @@ func (s *Service) GetComment(ctx context.Context, id string) (*domain.Comment, e
 
 // UpdateComment 更新评论
 func (s *Service) UpdateComment(ctx context.Context, comment *domain.Comment, userID string) error {
+	normalized, err := normalizeAndValidateCommentContent(comment.Content)
+	if err != nil {
+		return err
+	}
+	comment.Content = normalized
 	// 验证权限
 	existing, err := s.repo.CommentByID(ctx, comment.ID)
 	if err != nil {
@@ -236,12 +281,7 @@ func (s *Service) UpdateComment(ctx context.Context, comment *domain.Comment, us
 				zap.String("commentId", comment.ID),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	s.logger.Info("comment updated",
@@ -280,12 +320,7 @@ func (s *Service) DeleteComment(ctx context.Context, id, userID string) error {
 				zap.String("commentId", id),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	s.logger.Info("comment deleted",
@@ -296,10 +331,12 @@ func (s *Service) DeleteComment(ctx context.Context, id, userID string) error {
 }
 
 // ListComments 获取目标的评论列表（带缓存）
-func (s *Service) ListComments(ctx context.Context, targetType, targetID string, limit, offset int, userID string) ([]*domain.Comment, int64, error) {
+func (s *Service) ListComments(ctx context.Context, targetType, targetID string, limit, offset int, userID, sort string) ([]*domain.Comment, int64, error) {
+	sort = normalizeCommentListSort(sort)
 	s.logger.Debug("listing comments",
 		zap.String("targetType", targetType),
 		zap.String("targetID", targetID),
+		zap.String("sort", sort),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
@@ -314,7 +351,7 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 	c := s.getCache()
 	if c != nil && userID == "" {
 		// 只有未登录用户才使用缓存（因为登录用户的点赞状态不同）
-		cacheKey := cache.CommentsListKey(targetType, targetID, limit, offset)
+		cacheKey := cache.CommentsListKey(targetType, targetID, sort, limit, offset)
 		var cachedComments []*domain.Comment
 		var cachedTotal int64
 		if err := c.Get(ctx, cacheKey, &cachedComments); err == nil {
@@ -326,15 +363,14 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 				zap.String("targetID", targetID),
 				zap.Int("count", len(cachedComments)))
 			return cachedComments, cachedTotal, nil
-		} else {
-			s.logger.Debug("comments list cache miss",
-				zap.String("targetType", targetType),
-				zap.String("targetID", targetID),
-				zap.Error(err))
 		}
+		s.logger.Debug("comments list cache miss",
+			zap.String("targetType", targetType),
+			zap.String("targetID", targetID),
+		)
 	}
 
-	comments, total, err := s.repo.CommentsByTarget(ctx, targetType, targetID, limit, offset)
+	comments, total, err := s.repo.CommentsByTarget(ctx, targetType, targetID, sort, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list comments",
 			zap.String("targetType", targetType),
@@ -356,7 +392,7 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 
 	// 写入缓存（仅未登录用户）
 	if c != nil && userID == "" && len(comments) > 0 {
-		cacheKey := cache.CommentsListKey(targetType, targetID, limit, offset)
+		cacheKey := cache.CommentsListKey(targetType, targetID, sort, limit, offset)
 		if err := c.Set(ctx, cacheKey, comments, commentCacheTTL); err != nil {
 			s.logger.Warn("failed to cache comments list",
 				zap.String("targetType", targetType),
@@ -376,8 +412,8 @@ func (s *Service) ListComments(ctx context.Context, targetType, targetID string,
 	return comments, total, nil
 }
 
-// GetCommentReplies 获取评论的回复
-func (s *Service) GetCommentReplies(ctx context.Context, parentID string, limit, offset int) ([]*domain.Comment, error) {
+// GetCommentReplies 获取评论的回复及该父评论下回复总数
+func (s *Service) GetCommentReplies(ctx context.Context, parentID string, limit, offset int, userID string) ([]*domain.Comment, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -385,12 +421,22 @@ func (s *Service) GetCommentReplies(ctx context.Context, parentID string, limit,
 		limit = 100
 	}
 
-	replies, err := s.repo.CommentReplies(ctx, parentID, limit, offset)
+	replies, total, err := s.repo.CommentReplies(ctx, parentID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get replies: %w", err)
+		return nil, 0, fmt.Errorf("failed to get replies: %w", err)
 	}
 
-	return replies, nil
+	if userID != "" {
+		for _, reply := range replies {
+			hasLiked, isLike, err := s.repo.IsCommentLiked(ctx, userID, reply.ID)
+			if err == nil && hasLiked {
+				reply.IsLiked = isLike
+				reply.IsDisliked = !isLike
+			}
+		}
+	}
+
+	return replies, total, nil
 }
 
 // GetCommentTree 获取完整的评论树
@@ -497,12 +543,7 @@ func (s *Service) ToggleLikeComment(ctx context.Context, userID, commentID strin
 				zap.String("commentID", commentID),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	// Re-read comment to get authoritative likes count (avoid stale value from pre-read)
@@ -550,12 +591,7 @@ func (s *Service) LikeComment(ctx context.Context, userID, commentID string) err
 				zap.String("commentID", commentID),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	s.logger.Info("comment liked",
@@ -617,12 +653,7 @@ func (s *Service) DislikeComment(ctx context.Context, userID, commentID string) 
 				zap.String("commentID", commentID),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	s.logger.Info("comment disliked",
@@ -664,12 +695,7 @@ func (s *Service) UnlikeComment(ctx context.Context, userID, commentID string) e
 				zap.String("commentID", commentID),
 				zap.Error(err))
 		}
-		// 清除评论列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.CommentsListKey(comment.TargetType, comment.TargetID, limit, offset))
-			}
-		}
+		deleteCommentsListCacheForTarget(ctx, c, comment.TargetType, comment.TargetID)
 	}
 
 	s.logger.Info("comment unliked",
@@ -712,4 +738,31 @@ func (s *Service) validateCommentTarget(ctx context.Context, targetType, targetI
 	}
 
 	return nil
+}
+
+func normalizeAndValidateCommentContent(content string) (string, error) {
+	trimmed := strings.TrimSpace(content)
+	if utf8.RuneCountInString(trimmed) == 0 {
+		return "", fmt.Errorf("comment content is empty: %w", domain.ErrInvalidInput)
+	}
+	if utf8.RuneCountInString(trimmed) > maxCommentContentRunes {
+		return "", fmt.Errorf("comment exceeds %d characters: %w", maxCommentContentRunes, domain.ErrInvalidInput)
+	}
+	return trimmed, nil
+}
+
+// commentThreadDepthFromRoot returns 0 for a top-level comment, 1 for a direct reply, 2 for a reply to a reply, etc.
+func (s *Service) commentThreadDepthFromRoot(ctx context.Context, c *domain.Comment) (int, error) {
+	if c == nil || c.ParentID == "" {
+		return 0, nil
+	}
+	parent, err := s.repo.CommentByID(ctx, c.ParentID)
+	if err != nil {
+		return 0, err
+	}
+	pd, err := s.commentThreadDepthFromRoot(ctx, parent)
+	if err != nil {
+		return 0, err
+	}
+	return pd + 1, nil
 }

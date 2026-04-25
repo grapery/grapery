@@ -64,6 +64,17 @@ func (h *Handler) Search(c *gin.Context) {
 			"total":      len(users),
 			"searchMode": mode,
 		})
+	case "storyboard", "storyboards":
+		boards, err := h.svc.SearchStoryboards(c.Request.Context(), query, searchMode, limit, offset)
+		if err != nil {
+			InternalError(c, err.Error())
+			return
+		}
+		Success(c, gin.H{
+			"storyboards": boards,
+			"total":       len(boards),
+			"searchMode":  mode,
+		})
 	case "all":
 		results, err := h.svc.SearchAll(c.Request.Context(), query, searchMode, limit)
 		if err != nil {

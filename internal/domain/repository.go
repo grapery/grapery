@@ -273,8 +273,10 @@ type Repository interface {
 	CreateComment(ctx context.Context, comment *Comment) error
 	UpdateComment(ctx context.Context, comment *Comment) error
 	DeleteComment(ctx context.Context, id string) error
-	CommentsByTarget(ctx context.Context, targetType, targetID string, limit, offset int) ([]*Comment, int64, error)
-	CommentReplies(ctx context.Context, parentID string, limit, offset int) ([]*Comment, error)
+	// sort: "newest" (default) or "hot" (likes desc, then created_at desc)
+	CommentsByTarget(ctx context.Context, targetType, targetID, sort string, limit, offset int) ([]*Comment, int64, error)
+	// CommentReplies returns direct children of parentID ordered by created_at asc, and total count of such replies.
+	CommentReplies(ctx context.Context, parentID string, limit, offset int) ([]*Comment, int64, error)
 	CommentTree(ctx context.Context, rootID string) ([]*Comment, error)
 	LikeComment(ctx context.Context, userID, commentID string, isLike bool) error
 	UnlikeComment(ctx context.Context, userID, commentID string) error
@@ -328,6 +330,7 @@ type Repository interface {
 
 	// ========== Search operations ==========
 	SearchStories(ctx context.Context, query string, limit, offset int) ([]*Story, error)
+	SearchStoryboards(ctx context.Context, query string, limit, offset int) ([]*Storyboard, error)
 	SearchCharacters(ctx context.Context, query string, limit, offset int) ([]*Character, error)
 	SearchUsers(ctx context.Context, query string, limit, offset int) ([]*User, error)
 	CreateSearchHistory(ctx context.Context, history *SearchHistory) error

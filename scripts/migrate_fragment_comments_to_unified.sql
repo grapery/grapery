@@ -1,0 +1,19 @@
+-- One-time migration: copy legacy `fragment_comments` into unified `comments` (target_type=fragment).
+-- Run only after deploy of unified API; use transactions and verify counts before switching traffic.
+-- Adjust timestamp columns if your schema differs (bigint seconds vs datetime).
+
+-- Example (MySQL): insert missing rows; skip if id already exists in `comments`.
+-- INSERT INTO comments (id, author_id, content, target_type, target_id, parent_id, root_id, likes, dislikes, reply_count, created_at, updated_at)
+-- SELECT
+--   fc.id,
+--   fc.user_id,
+--   fc.content,
+--   'fragment',
+--   fc.fragment_id,
+--   fc.parent_id,
+--   NULL,
+--   0, 0, 0,
+--   FROM_UNIXTIME(fc.created_at),
+--   FROM_UNIXTIME(fc.updated_at)
+-- FROM fragment_comments fc
+-- WHERE NOT EXISTS (SELECT 1 FROM comments c WHERE c.id = fc.id);

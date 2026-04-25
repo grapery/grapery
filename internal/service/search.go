@@ -198,6 +198,26 @@ func (s *Service) fuzzySearchStories(ctx context.Context, query string, limit, o
 	return s.repo.SearchStories(ctx, query, limit, offset)
 }
 
+// SearchStoryboards 在已发布故事板中按标题/正文搜索（fuzzy 与 exact 均走库内 LIKE，与 Redis 索引无关）。
+func (s *Service) SearchStoryboards(ctx context.Context, query string, searchType SearchType, limit, offset int) ([]*domain.Storyboard, error) {
+	_ = searchType
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []*domain.Storyboard{}, nil
+	}
+	out, err := s.repo.SearchStoryboards(ctx, q, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search storyboards: %w", err)
+	}
+	return out, nil
+}
+
 // SearchCharacters 搜索角色（支持模糊搜索和精确搜索，带缓存）
 func (s *Service) SearchCharacters(ctx context.Context, query string, searchType SearchType, limit, offset int) ([]*domain.Character, error) {
 	s.logger.Info("searching characters",
