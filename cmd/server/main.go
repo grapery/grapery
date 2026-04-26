@@ -227,6 +227,14 @@ func main() {
 	if apnsKeyErr != nil {
 		logger.Warn("APNs auth key not loaded; remote push disabled", zap.Error(apnsKeyErr))
 	} else if strings.TrimSpace(apnsKeyPEM) != "" {
+		keySource := "APNS_PRIVATE_KEY"
+		if strings.TrimSpace(cfg.APNs.PrivateKey) == "" && strings.TrimSpace(cfg.APNs.PrivateKeyPath) != "" {
+			keySource = "file:" + cfg.APNs.PrivateKeyPath
+		}
+		logger.Info("APNs key material loaded",
+			zap.String("keySource", keySource),
+			zap.String("keyId", cfg.APNs.KeyID),
+			zap.Bool("sandbox", cfg.APNs.UseSandbox))
 		apnsSvc := service.NewAPNsService(&service.APNsConfig{
 			BundleID:   cfg.APNs.BundleID,
 			TeamID:     cfg.APNs.TeamID,
@@ -238,6 +246,8 @@ func main() {
 		if apnsSvc.IsEnabled() {
 			logger.Info("APNs push delivery enabled",
 				zap.String("bundleId", cfg.APNs.BundleID),
+				zap.String("teamId", cfg.APNs.TeamID),
+				zap.String("keyId", cfg.APNs.KeyID),
 				zap.Bool("sandbox", cfg.APNs.UseSandbox),
 			)
 		} else {

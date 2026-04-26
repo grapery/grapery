@@ -45,6 +45,21 @@ type APNsConfig struct {
 	UseSandbox bool   // 是否使用 Sandbox 环境
 }
 
+func apnsHTTPBaseURL(useSandbox bool) string {
+	if useSandbox {
+		return "https://api.sandbox.push.apple.com"
+	}
+	return "https://api.push.apple.com"
+}
+
+func deviceTokenPrefixForLog(token string) string {
+	n := min(12, len(token))
+	if n == 0 {
+		return ""
+	}
+	return token[:n] + "..."
+}
+
 // NewAPNsService 创建 APNs 服务实例
 func NewAPNsService(config *APNsConfig, logger *zap.Logger) *APNsService {
 	svc := &APNsService{
@@ -74,9 +89,17 @@ func NewAPNsService(config *APNsConfig, logger *zap.Logger) *APNsService {
 		svc.enabled = true
 		logger.Info("APNs service initialized",
 			zap.String("bundleId", config.BundleID),
-			zap.Bool("sandbox", config.UseSandbox))
+			zap.String("teamId", config.TeamID),
+			zap.String("keyId", config.KeyID),
+			zap.Bool("sandbox", config.UseSandbox),
+			zap.String("apnsGateway", apnsHTTPBaseURL(config.UseSandbox)))
 	} else {
-		logger.Warn("APNs service not fully configured, push notifications disabled")
+		logger.Warn("APNs service not fully configured, push notifications disabled",
+			zap.String("bundleId", config.BundleID),
+			zap.String("teamId", config.TeamID),
+			zap.String("keyId", config.KeyID),
+			zap.Bool("privateKeyParsed", svc.privateKey != nil),
+			zap.Bool("sandbox", config.UseSandbox))
 	}
 
 	return svc
@@ -371,9 +394,21 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 	}
 	_ = json.Unmarshal(respBody, &errorResp)
 
-	a.logger.Error("APNs request failed",
+	logFields := []zap.Field{
 		zap.Int("status", resp.StatusCode),
-		zap.String("reason", errorResp.Reason))
+		zap.String("reason", errorResp.Reason),
+		zap.String("bundleId", a.bundleID),
+		zap.String("teamId", a.teamID),
+		zap.String("keyId", a.keyID),
+		zap.Bool("sandbox", a.useSandbox),
+		zap.String("apnsGateway", apnsHTTPBaseURL(a.useSandbox)),
+		zap.String("deviceTokenPrefix", deviceTokenPrefixForLog(deviceToken)),
+	}
+	if errorResp.Reason == "BadEnvironmentKeyInToken" {
+		logFields = append(logFields,
+			zap.String("diagnosticHint", "sandbox flag, keyId vs .p8 pair, and deployed PEM must match Apple key; TestFlight/App Store needs sandbox=false and production-capable key"))
+	}
+	a.logger.Error("APNs request failed", logFields...)
 
 	// 记录通知发送失败
 	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
@@ -385,6 +420,8 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 			errorType = "invalid_token"
 		case "TooManyRequests":
 			errorType = "rate_limit"
+		case "BadEnvironmentKeyInToken":
+			errorType = "bad_environment_key"
 		}
 		metrics.RecordNotificationError("push", "apns", errorType)
 	}
