@@ -234,7 +234,9 @@ func (h *FragmentGenerationHandler) CancelGeneration(c *gin.Context) {
 // RegisterRoutes registers the fragment generation routes
 func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	fragmentGenGroup := router.Group("/generate")
-	fragmentGenGroup.Use(authMiddleware)
+	if authMiddleware != nil {
+		fragmentGenGroup.Use(authMiddleware)
+	}
 	{
 		fragmentGenGroup.POST("", h.GenerateFragment)
 		fragmentGenGroup.GET("/:taskId", h.GetGenerationStatus)

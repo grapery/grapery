@@ -238,7 +238,10 @@ func (h *FragmentPanelGenerationHandler) ResumePanelGeneration(c *gin.Context) {
 // RegisterRoutes registers /generate routes under a parent group (e.g. /api/v1/fragment-panels).
 func (h *FragmentPanelGenerationHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	g := router.Group("/generate")
-	g.Use(authMiddleware)
+	// main.go 常在父级已挂 AuthMiddleware 时传入 nil；Gin 的 Use(nil) 会在链上注册空 handler，c.Next() 时 panic。
+	if authMiddleware != nil {
+		g.Use(authMiddleware)
+	}
 	{
 		g.POST("", h.CreatePanelGeneration)
 		g.POST("/:taskId/resume", h.ResumePanelGeneration)
