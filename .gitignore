@@ -88,6 +88,8 @@ junit.xml
 secrets/
 credentials/
 certs/*.p8
+# CI SCP 扁平副本（server-ci / vippay-ci）
+/apns.p8
 AuthKey_*.p8
 *.pem
 *.key

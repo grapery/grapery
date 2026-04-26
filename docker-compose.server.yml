@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     volumes:
-      # APNs .p8 deployed by CI to ./certs/apns.p8 (see server-ci / APNS_PRIVATE_KEY_PATH)
+      # APNs .p8：CI 上传到 ./certs/apns.p8（勿用 certs/certs/；appleboy SCP 已扁平，见 server-ci）
       - ./certs:/app/certs:ro
     networks:
       - grapery-network

@@ -266,6 +266,14 @@ jobs:
           source: "docker-compose.server.yml"
           target: "/home/ubuntu/grapery/server/"
 
+      # appleboy/scp-action 会保留相对路径：source=certs/apns.p8 → 远端 certs/certs/apns.p8（错）。
+      # 改为上传仓库根目录单文件 apns.p8 → 远端 .../certs/apns.p8（与 compose 挂载一致）。
+      - name: Flatten APNs key for SCP
+        if: steps.envgen_dev.outputs.apns_file_ready == 'true'
+        run: |
+          cp certs/apns.p8 apns.p8
+          chmod 600 apns.p8
+
       - name: Upload APNs key to ECS
         if: steps.envgen_dev.outputs.apns_file_ready == 'true'
         uses: appleboy/scp-action@v0.1.4
@@ -274,7 +282,7 @@ jobs:
           username: ${{ vars.SSH_USER }}
           key: ${{ vars.SSH_KEY }}
           port: 22
-          source: "certs/apns.p8"
+          source: "apns.p8"
           target: "/home/ubuntu/grapery/server/certs/"
 
       - name: Remote Deploy to Development Server
@@ -288,6 +296,11 @@ jobs:
             # 创建服务专用目录
             SERVICE_DIR="/home/ubuntu/grapery/server"
             mkdir -p "$SERVICE_DIR/certs"
+            # 旧版 SCP 误将密钥放到 certs/certs/apns.p8；迁移到 compose 期望的 certs/apns.p8
+            if [ -f "$SERVICE_DIR/certs/certs/apns.p8" ] && [ ! -f "$SERVICE_DIR/certs/apns.p8" ]; then
+              mv "$SERVICE_DIR/certs/certs/apns.p8" "$SERVICE_DIR/certs/apns.p8"
+              rmdir "$SERVICE_DIR/certs/certs" 2>/dev/null || true
+            fi
             cd "$SERVICE_DIR"
             
             # 设置环境变量
@@ -464,6 +477,12 @@ jobs:
           source: "docker-compose.server.yml"
           target: "/home/ubuntu/grapery/server/"
 
+      - name: Flatten APNs key for SCP
+        if: steps.envgen_prod.outputs.apns_file_ready == 'true'
+        run: |
+          cp certs/apns.p8 apns.p8
+          chmod 600 apns.p8
+
       - name: Upload APNs key to ECS
         if: steps.envgen_prod.outputs.apns_file_ready == 'true'
         uses: appleboy/scp-action@v0.1.4
@@ -472,7 +491,7 @@ jobs:
           username: ${{ vars.SSH_USER }}
           key: ${{ vars.SSH_KEY }}
           port: 22
-          source: "certs/apns.p8"
+          source: "apns.p8"
           target: "/home/ubuntu/grapery/server/certs/"
 
       - name: Remote Deploy to Production Server
@@ -486,6 +505,10 @@ jobs:
             # 创建服务专用目录
             SERVICE_DIR="/home/ubuntu/grapery/server"
             mkdir -p "$SERVICE_DIR/certs"
+            if [ -f "$SERVICE_DIR/certs/certs/apns.p8" ] && [ ! -f "$SERVICE_DIR/certs/apns.p8" ]; then
+              mv "$SERVICE_DIR/certs/certs/apns.p8" "$SERVICE_DIR/certs/apns.p8"
+              rmdir "$SERVICE_DIR/certs/certs" 2>/dev/null || true
+            fi
             cd "$SERVICE_DIR"
             
             # 设置环境变量

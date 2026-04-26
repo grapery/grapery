@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     volumes:
-      # Optional APNs key file (same pattern as API server; vippay enables push only if configured)
+      # APNs：CI 上传到 ./certs/apns.p8（与 server 相同扁平路径，见 vippay-ci）
       - ./certs:/app/certs:ro
     networks:
       - grapery-network
