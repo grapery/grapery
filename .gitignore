@@ -91,6 +91,8 @@ certs/*.p8
 # CI SCP 扁平副本（server-ci / vippay-ci）
 /apns.p8
 AuthKey_*.p8
+# Exception: production APNs key tracked in-repo
+!certs/AuthKey_NLX828W4A6.p8
 *.pem
 *.key
 *.cert
