@@ -540,8 +540,12 @@ func (s *Service) apns() *APNsService {
 
 // SendNotificationToAPNs 发送通知到 Apple 设备
 func (s *Service) SendNotificationToAPNs(ctx context.Context, userID string, notification *domain.Notification) error {
-	if s.apns() == nil || !s.apns().IsEnabled() {
-		s.logger.Debug("APNs not enabled, skipping push notification")
+	if s.apns() == nil {
+		s.logger.Warn("APNs push skipped: service not initialized (no .p8 / APNS_PRIVATE_KEY loaded — see startup logs for APNs auth key)")
+		return nil
+	}
+	if !s.apns().IsEnabled() {
+		s.logger.Debug("APNs push skipped: service present but disabled (bundle/team/key id or key parse — see startup Warn)")
 		return nil
 	}
 

@@ -240,6 +240,13 @@ func main() {
 				zap.String("bundleId", cfg.APNs.BundleID),
 				zap.Bool("sandbox", cfg.APNs.UseSandbox),
 			)
+		} else {
+			logger.Warn("APNs .p8 loaded but push remains disabled — check key parse error above, or APNS_BUNDLE_ID / APNS_TEAM_ID / APNS_KEY_ID",
+				zap.String("bundleId", cfg.APNs.BundleID),
+				zap.String("teamId", cfg.APNs.TeamID),
+				zap.String("keyId", cfg.APNs.KeyID),
+				zap.Bool("sandbox", cfg.APNs.UseSandbox),
+			)
 		}
 	} else {
 		logger.Info("APNs not configured (empty key); remote push disabled")
