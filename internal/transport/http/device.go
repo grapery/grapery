@@ -1,11 +1,8 @@
 package http
 
 import (
-	"time"
-
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
-	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -126,19 +123,18 @@ func (h *Handler) TestPushNotification(c *gin.Context) {
 		return
 	}
 
-	ts := time.Now()
-	now := ts.Unix()
 	n := &domain.Notification{
-		BaseModel: common.BaseModel{
-			ID:        "test-push-" + userID + "-" + ts.Format("20060102150405"),
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
 		UserID:  userID,
 		Type:    "system",
 		Title:   req.Title,
 		Content: req.Message,
 		Read:    false,
+	}
+
+	// Persist so GET /api/v1/notifications (in-app 消息) shows the same item; push alone does not write DB.
+	if err := h.svc.CreateNotification(c.Request.Context(), n); err != nil {
+		InternalError(c, err.Error())
+		return
 	}
 
 	if err := h.svc.SendNotificationToAPNs(c.Request.Context(), userID, n); err != nil {
