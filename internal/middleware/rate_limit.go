@@ -50,7 +50,8 @@ var (
 // If cacher is nil (e.g. Redis unavailable at startup), returns a no-op middleware
 // so routes still work without panicking — same behavior as "fail open" on Redis errors.
 func NewRateLimiter(cacher cache.Cache, config RateLimitConfig, logger *zap.Logger) gin.HandlerFunc {
-	if cacher == nil {
+	// Plain `cacher == nil` misses Go "typed nil" (e.g. var p *redisCache; var c Cache = p).
+	if cacher == nil || cache.IsEffectivelyNil(cacher) {
 		log := logger
 		if log == nil {
 			log = zap.NewNop()

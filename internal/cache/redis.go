@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -122,6 +123,9 @@ func (r *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 
 // Expire 设置过期时间
 func (r *redisCache) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if r == nil || r.client == nil {
+		return errors.New("redis cache not initialized")
+	}
 	return r.client.Expire(ctx, key, expiration).Err()
 }
 
@@ -217,6 +221,9 @@ func (r *redisCache) HIncrBy(ctx context.Context, key, field string, incr int64)
 
 // Incr 原子递增
 func (r *redisCache) Incr(ctx context.Context, key string) (int64, error) {
+	if r == nil || r.client == nil {
+		return 0, errors.New("redis cache not initialized")
+	}
 	return r.client.Incr(ctx, key).Result()
 }
 
