@@ -6,13 +6,13 @@ import (
 	"strings"
 )
 
-// DefaultAPNsConfig Voyager / graperynotify key defaults (Team ID & Key ID are public identifiers).
+// DefaultAPNsConfig Voyager / graperyproductionapplekey defaults (Team ID & Key ID are public identifiers).
 func DefaultAPNsConfig() APNsConfig {
 	return APNsConfig{
 		BundleID:       "com.rankquantity.voyager",
 		TeamID:         "UZLNTVX73Y",
-		KeyID:          "UWGF4MU37H",
-		PrivateKeyPath: "certs/AuthKey_UWGF4MU37H.p8",
+		KeyID:          "NLX828W4A6",
+		PrivateKeyPath: "certs/AuthKey_NLX828W4A6.p8",
 		UseSandbox:     true,
 	}
 }
