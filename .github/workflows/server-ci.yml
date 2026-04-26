@@ -155,16 +155,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        id: envgen_dev
         env:
-          APNS_PRIVATE_KEY: ${{ vars.APNS_PRIVATE_KEY }}
+          APNS_PRIVATE_KEY_SECRET: ${{ secrets.APNS_PRIVATE_KEY }}
+          APNS_PRIVATE_KEY_VAR: ${{ vars.APNS_PRIVATE_KEY }}
         run: |
           echo "📦 Generating development .env file..."
+          APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_SECRET:-}"
+          if [ -z "$APNS_PRIVATE_KEY" ]; then APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_VAR:-}"; fi
+          export APNS_PRIVATE_KEY
           mkdir -p certs
           APNS_KEY_PATH_LINE=""
           if [ -n "${APNS_PRIVATE_KEY:-}" ]; then
             printf '%s\n' "$APNS_PRIVATE_KEY" > certs/apns.p8
             chmod 600 certs/apns.p8
             APNS_KEY_PATH_LINE="APNS_PRIVATE_KEY_PATH=/app/certs/apns.p8"
+            echo "apns_file_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apns_file_ready=false" >> "$GITHUB_OUTPUT"
           fi
           cat > .env << EOF
           # ========== Environment ==========
@@ -259,7 +267,7 @@ jobs:
           target: "/home/ubuntu/grapery/server/"
 
       - name: Upload APNs key to ECS
-        if: ${{ vars.APNS_PRIVATE_KEY != '' }}
+        if: steps.envgen_dev.outputs.apns_file_ready == 'true'
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ vars.DEV_DEPLOY_HOST }}
@@ -343,16 +351,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        id: envgen_prod
         env:
-          APNS_PRIVATE_KEY: ${{ vars.APNS_PRIVATE_KEY }}
+          APNS_PRIVATE_KEY_SECRET: ${{ secrets.APNS_PRIVATE_KEY }}
+          APNS_PRIVATE_KEY_VAR: ${{ vars.APNS_PRIVATE_KEY }}
         run: |
           echo "📦 Generating production .env file..."
+          APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_SECRET:-}"
+          if [ -z "$APNS_PRIVATE_KEY" ]; then APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_VAR:-}"; fi
+          export APNS_PRIVATE_KEY
           mkdir -p certs
           APNS_KEY_PATH_LINE=""
           if [ -n "${APNS_PRIVATE_KEY:-}" ]; then
             printf '%s\n' "$APNS_PRIVATE_KEY" > certs/apns.p8
             chmod 600 certs/apns.p8
             APNS_KEY_PATH_LINE="APNS_PRIVATE_KEY_PATH=/app/certs/apns.p8"
+            echo "apns_file_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apns_file_ready=false" >> "$GITHUB_OUTPUT"
           fi
           cat > .env << EOF
           # ========== Environment ==========
@@ -449,7 +465,7 @@ jobs:
           target: "/home/ubuntu/grapery/server/"
 
       - name: Upload APNs key to ECS
-        if: ${{ vars.APNS_PRIVATE_KEY != '' }}
+        if: steps.envgen_prod.outputs.apns_file_ready == 'true'
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ vars.PROD_DEPLOY_HOST }}
