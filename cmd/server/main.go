@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -221,6 +222,29 @@ func main() {
 
 	// Initialize service
 	svc := service.New(repo, logger, cfg.Recommendation)
+
+	apnsKeyPEM, apnsKeyErr := config.APNsKeyPEM(cfg.APNs)
+	if apnsKeyErr != nil {
+		logger.Warn("APNs auth key not loaded; remote push disabled", zap.Error(apnsKeyErr))
+	} else if strings.TrimSpace(apnsKeyPEM) != "" {
+		apnsSvc := service.NewAPNsService(&service.APNsConfig{
+			BundleID:   cfg.APNs.BundleID,
+			TeamID:     cfg.APNs.TeamID,
+			KeyID:      cfg.APNs.KeyID,
+			PrivateKey: apnsKeyPEM,
+			UseSandbox: cfg.APNs.UseSandbox,
+		}, logger)
+		svc.SetAPNsService(apnsSvc)
+		if apnsSvc.IsEnabled() {
+			logger.Info("APNs push delivery enabled",
+				zap.String("bundleId", cfg.APNs.BundleID),
+				zap.Bool("sandbox", cfg.APNs.UseSandbox),
+			)
+		}
+	} else {
+		logger.Info("APNs not configured (empty key); remote push disabled")
+	}
+
 	var redisCache cache.Cache
 	redisCache, err = cache.NewRedisCache(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.Database, logger)
 	if err != nil {

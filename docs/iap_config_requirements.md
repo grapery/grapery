@@ -42,7 +42,7 @@
 
 | 环境变量 | 说明 | 示例 |
 |---------|------|------|
-| `APPLE_BUNDLE_ID` | App 的 Bundle ID | `com.grapery.voyager` |
+| `APPLE_BUNDLE_ID` | App 的 Bundle ID | `com.rankquantity.voyager` |
 | `APPLE_ISSUER_ID` | App Store Connect API Issuer ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `APPLE_KEY_ID` | App Store Connect API Key ID | `XXXXXXXXXX` |
 | `APPLE_PRIVATE_KEY` | `.p8` 私钥内容（保留换行符） | `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----` |
@@ -95,7 +95,7 @@
 
 | 环境变量 | 说明 | 示例 |
 |---------|------|------|
-| `GOOGLE_PACKAGE_NAME` | App 的包名 | `com.grapery.voyager` |
+| `GOOGLE_PACKAGE_NAME` | App 的包名（须与 Play 控制台一致） | `com.rankquantity.voyager` |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | 服务账号 JSON 密钥内容 | `{"type":"service_account",...}` |
 
 #### Sandbox 环境配置（可选）
@@ -112,11 +112,11 @@
 
 ```bash
 docker run -d \
-  -e APPLE_BUNDLE_ID="com.grapery.voyager" \
+  -e APPLE_BUNDLE_ID="com.rankquantity.voyager" \
   -e APPLE_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
   -e APPLE_KEY_ID="XXXXXXXXXX" \
   -e APPLE_PRIVATE_KEY="$(cat /path/to/AuthKey.p8)" \
-  -e GOOGLE_PACKAGE_NAME="com.grapery.voyager" \
+  -e GOOGLE_PACKAGE_NAME="com.rankquantity.voyager" \
   -e GOOGLE_SERVICE_ACCOUNT_KEY="$(cat /path/to/service-account.json)" \
   grapery/vippay
 ```

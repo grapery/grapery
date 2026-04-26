@@ -33,7 +33,7 @@
 
 | 环境变量 | 说明 | 示例 |
 |---------|------|------|
-| `APNS_BUNDLE_ID` | App Bundle ID | `com.grapery.voyager` |
+| `APNS_BUNDLE_ID` | App Bundle ID（须与 Xcode / App ID 一致） | `com.rankquantity.voyager` |
 | `APNS_TEAM_ID` | Apple Developer Team ID | `ABCDE12345` |
 | `APNS_KEY_ID` | APNs Auth Key ID | `XXXXXXXXXX` |
 | `APNS_PRIVATE_KEY` | .p8 文件内容 | `-----BEGIN PRIVATE KEY-----\n...` |
@@ -108,7 +108,7 @@ environment:
 
 ```bash
 docker run -d \
-  -e APNS_BUNDLE_ID="com.grapery.voyager" \
+  -e APNS_BUNDLE_ID="com.rankquantity.voyager" \
   -e APNS_TEAM_ID="ABCDE12345" \
   -e APNS_KEY_ID="XXXXXXXXXX" \
   -e APNS_PRIVATE_KEY="$(cat AuthKey.p8)" \

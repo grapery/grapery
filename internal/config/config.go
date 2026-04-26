@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +27,18 @@ type Config struct {
 	AI             AIConfig             `yaml:"ai"`
 	JWT            JWTConfig            `yaml:"jwt"`
 	Aliyun         AliyunConfig         `yaml:"aliyun"`
+	APNs           APNsConfig           `yaml:"apns"`
 	Telemetry      TelemetryConfig      `yaml:"telemetry"`
+}
+
+// APNsConfig Apple Push Notification service (HTTP/2 API, .p8 auth key).
+type APNsConfig struct {
+	BundleID       string `yaml:"bundle_id"`        // apns-topic; must match iOS app Bundle ID
+	TeamID         string `yaml:"team_id"`          // Apple Developer Team ID
+	KeyID          string `yaml:"key_id"`           // APNs Auth Key ID
+	PrivateKey     string `yaml:"private_key"`      // PEM contents (optional; prefer file in deployment)
+	PrivateKeyPath string `yaml:"private_key_path"` // Path to AuthKey_xxx.p8
+	UseSandbox     bool   `yaml:"use_sandbox"`      // true → api.sandbox.push.apple.com
 }
 
 // DatabaseConfig holds MySQL database configuration
@@ -68,14 +80,14 @@ type AIConfig struct {
 	HuoshanImageModel string `yaml:"huoshan_image_model"` // Image model for Huoshan
 	// HuoshanTextModel 火山方舟对话/多模态接入点 ID（如 ep-xxxx），用于国内用户文本与分镜规划。
 	HuoshanTextModel string `yaml:"huoshan_text_model"`
-	GeminiAPIKey      string `yaml:"gemini_api_key"`
-	GeminiBaseURL     string `yaml:"gemini_base_url"`
-	KlingAccessKey    string `yaml:"kling_access_key"`
-	KlingSecretKey    string `yaml:"kling_secret_key"`
-	KlingBaseURL      string `yaml:"kling_base_url"`
-	DefaultProvider   string `yaml:"default_provider"` // Default provider for text generation
-	ImageProvider     string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
-	VideoProvider     string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
+	GeminiAPIKey     string `yaml:"gemini_api_key"`
+	GeminiBaseURL    string `yaml:"gemini_base_url"`
+	KlingAccessKey   string `yaml:"kling_access_key"`
+	KlingSecretKey   string `yaml:"kling_secret_key"`
+	KlingBaseURL     string `yaml:"kling_base_url"`
+	DefaultProvider  string `yaml:"default_provider"` // Default provider for text generation
+	ImageProvider    string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
+	VideoProvider    string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
 	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
 	// (Gemini, Huoshan, Kling). 0 or negative means default 120.
 	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`
@@ -171,6 +183,12 @@ func LoadFromFile(configPath string, app string) (Config, error) {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return cfg, fmt.Errorf("failed to parse config file: %w", err)
 		}
+
+		if cfg.APNs.PrivateKeyPath != "" && !filepath.IsAbs(cfg.APNs.PrivateKeyPath) {
+			if absConfig, err := filepath.Abs(configPath); err == nil {
+				cfg.APNs.PrivateKeyPath = filepath.Join(filepath.Dir(absConfig), cfg.APNs.PrivateKeyPath)
+			}
+		}
 	}
 
 	// Override with environment variables
@@ -221,17 +239,17 @@ func Load(app string) Config {
 			SeenTTLDays:             getEnvInt("RECO_SEEN_TTL_DAYS", 30),
 		},
 		AI: AIConfig{
-			HuoshanAPIKey:     getEnv("HUOSHAN_API_KEY", ""),
-			HuoshanBaseURL:    getEnv("HUOSHAN_BASE_URL", ""),
-			HuoshanImageModel: getEnv("HUOSHAN_IMAGE_MODEL", ""),
-			HuoshanTextModel:  getEnv("HUOSHAN_TEXT_MODEL", ""),
-			GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
-			GeminiBaseURL:     getEnv("GEMINI_BASE_URL", ""),
-			KlingAccessKey:    getEnv("KLING_ACCESS_KEY", ""),
-			KlingSecretKey:    getEnv("KLING_SECRET_KEY", ""),
-			KlingBaseURL:      getEnv("KLING_BASE_URL", ""),
-			DefaultProvider:   getEnv("AI_DEFAULT_PROVIDER", "huoshan"),
-			ImageProvider:     getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
+			HuoshanAPIKey:         getEnv("HUOSHAN_API_KEY", ""),
+			HuoshanBaseURL:        getEnv("HUOSHAN_BASE_URL", ""),
+			HuoshanImageModel:     getEnv("HUOSHAN_IMAGE_MODEL", ""),
+			HuoshanTextModel:      getEnv("HUOSHAN_TEXT_MODEL", ""),
+			GeminiAPIKey:          getEnv("GEMINI_API_KEY", ""),
+			GeminiBaseURL:         getEnv("GEMINI_BASE_URL", ""),
+			KlingAccessKey:        getEnv("KLING_ACCESS_KEY", ""),
+			KlingSecretKey:        getEnv("KLING_SECRET_KEY", ""),
+			KlingBaseURL:          getEnv("KLING_BASE_URL", ""),
+			DefaultProvider:       getEnv("AI_DEFAULT_PROVIDER", "huoshan"),
+			ImageProvider:         getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
 			VideoProvider:         getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
 			RequestTimeoutSeconds: normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", 120)),
 		},
@@ -250,6 +268,14 @@ func Load(app string) Config {
 			OSSAccessKeySecret: getEnv("ALIYUN_OSS_ACCESS_KEY_SECRET", ""),
 			OSSRoleARN:         getEnv("ALIYUN_OSS_ROLE_ARN", ""),
 		},
+		APNs: mergeAPNsEmptyFields(APNsConfig{
+			BundleID:       getEnv("APNS_BUNDLE_ID", ""),
+			TeamID:         getEnv("APNS_TEAM_ID", ""),
+			KeyID:          getEnv("APNS_KEY_ID", ""),
+			PrivateKey:     getEnv("APNS_PRIVATE_KEY", ""),
+			PrivateKeyPath: getEnv("APNS_PRIVATE_KEY_PATH", ""),
+			UseSandbox:     true,
+		}),
 		Telemetry: TelemetryConfig{
 			SLS: SLSConfig{
 				Enabled:         true,
@@ -278,6 +304,10 @@ func Load(app string) Config {
 				SamplingRatio:  getEnvFloat("TELEMETRY_TRACING_SAMPLING_RATIO", 1.0),
 			},
 		},
+	}
+
+	if _, ok := os.LookupEnv("APNS_USE_SANDBOX"); ok {
+		cfg.APNs.UseSandbox = getEnvBool("APNS_USE_SANDBOX", cfg.APNs.UseSandbox)
 	}
 
 	return cfg
@@ -379,8 +409,8 @@ func getDefaultConfig() Config {
 			StoryboardFallbackRatio: 2,
 			CandidateMultiplier:     4,
 			CacheTTLSeconds:         180,
-			SeenMaxEntries:            5000,
-			SeenTTLDays:               30,
+			SeenMaxEntries:          5000,
+			SeenTTLDays:             30,
 		},
 		AI: AIConfig{
 			HuoshanAPIKey:         "",
@@ -401,6 +431,7 @@ func getDefaultConfig() Config {
 			Bucket:    "grapery-dev",
 			RoleARN:   "",
 		},
+		APNs: mergeAPNsEmptyFields(APNsConfig{}),
 		Telemetry: TelemetryConfig{
 			SLS: SLSConfig{
 				Enabled:         false,
@@ -509,6 +540,20 @@ func overrideWithEnv(cfg Config, app string) Config {
 	cfg.Aliyun.OSSAccessKeyID = getEnv("ALIYUN_OSS_ACCESS_KEY_ID", cfg.Aliyun.OSSAccessKeyID)
 	cfg.Aliyun.OSSAccessKeySecret = getEnv("ALIYUN_OSS_ACCESS_KEY_SECRET", cfg.Aliyun.OSSAccessKeySecret)
 	cfg.Aliyun.OSSRoleARN = getEnv("ALIYUN_OSS_ROLE_ARN", cfg.Aliyun.OSSRoleARN)
+
+	// APNs push
+	cfg.APNs.BundleID = getEnv("APNS_BUNDLE_ID", cfg.APNs.BundleID)
+	cfg.APNs.TeamID = getEnv("APNS_TEAM_ID", cfg.APNs.TeamID)
+	cfg.APNs.KeyID = getEnv("APNS_KEY_ID", cfg.APNs.KeyID)
+	if v := getEnv("APNS_PRIVATE_KEY", ""); v != "" {
+		cfg.APNs.PrivateKey = v
+	}
+	cfg.APNs.PrivateKeyPath = getEnv("APNS_PRIVATE_KEY_PATH", cfg.APNs.PrivateKeyPath)
+	if _, ok := os.LookupEnv("APNS_USE_SANDBOX"); ok {
+		cfg.APNs.UseSandbox = getEnvBool("APNS_USE_SANDBOX", cfg.APNs.UseSandbox)
+	}
+
+	cfg.APNs = mergeAPNsEmptyFields(cfg.APNs)
 
 	// Telemetry SLS config
 	cfg.Telemetry.SLS.Enabled = getEnvBool("TELEMETRY_SLS_ENABLED", cfg.Telemetry.SLS.Enabled)

@@ -1,8 +1,12 @@
 package http
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
+	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
 // RegisterDevice 注册设备（用于接收 APNs 推送）
@@ -122,28 +126,27 @@ func (h *Handler) TestPushNotification(c *gin.Context) {
 		return
 	}
 
-	// 创建测试通知
-	notification := &struct {
-		ID      string
-		UserID  string
-		Type    string
-		Title   string
-		Content string
-		Link    string
-	}{
-		ID:      "test",
+	ts := time.Now()
+	now := ts.Unix()
+	n := &domain.Notification{
+		BaseModel: common.BaseModel{
+			ID:        "test-push-" + userID + "-" + ts.Format("20060102150405"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 		UserID:  userID,
 		Type:    "system",
 		Title:   req.Title,
 		Content: req.Message,
-		Link:    "",
+		Read:    false,
 	}
 
-	// 发送推送（这里需要实现实际的推送逻辑）
-	// err := h.svc.SendNotificationToAPNs(c.Request.Context(), userID, notification)
+	if err := h.svc.SendNotificationToAPNs(c.Request.Context(), userID, n); err != nil {
+		InternalError(c, err.Error())
+		return
+	}
 
-	Success(c, gin.H{
-		"message":      "test notification sent",
-		"notification": notification,
+	SuccessWithMessage(c, "test push dispatched (requires registered iOS device token)", gin.H{
+		"notificationId": n.ID,
 	})
 }

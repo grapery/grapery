@@ -11,6 +11,9 @@ services:
       - "${GRAPERY_HTTP_PORT:-8080}:8080"
     env_file:
       - .env
+    volumes:
+      # APNs .p8 deployed by CI to ./certs/apns.p8 (see server-ci / APNS_PRIVATE_KEY_PATH)
+      - ./certs:/app/certs:ro
     networks:
       - grapery-network
     healthcheck:

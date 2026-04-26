@@ -87,6 +87,8 @@ junit.xml
 # Secrets
 secrets/
 credentials/
+certs/*.p8
+AuthKey_*.p8
 *.pem
 *.key
 *.cert

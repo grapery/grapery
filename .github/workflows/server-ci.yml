@@ -155,8 +155,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        env:
+          APNS_PRIVATE_KEY: ${{ vars.APNS_PRIVATE_KEY }}
         run: |
           echo "📦 Generating development .env file..."
+          mkdir -p certs
+          APNS_KEY_PATH_LINE=""
+          if [ -n "${APNS_PRIVATE_KEY:-}" ]; then
+            printf '%s\n' "$APNS_PRIVATE_KEY" > certs/apns.p8
+            chmod 600 certs/apns.p8
+            APNS_KEY_PATH_LINE="APNS_PRIVATE_KEY_PATH=/app/certs/apns.p8"
+          fi
           cat > .env << EOF
           # ========== Environment ==========
           ENVIRONMENT=development
@@ -190,6 +199,13 @@ jobs:
           # ========== JWT Configuration ==========
           JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
+          
+          # ========== Apple Push (APNs) — Repository Variables ==========
+          APNS_BUNDLE_ID=${{ vars.APNS_BUNDLE_ID }}
+          APNS_TEAM_ID=${{ vars.APNS_TEAM_ID }}
+          APNS_KEY_ID=${{ vars.APNS_KEY_ID }}
+          APNS_USE_SANDBOX=${{ vars.APNS_USE_SANDBOX || 'true' }}
+          $APNS_KEY_PATH_LINE
           
           # ========== Aliyun OSS Configuration ==========
           ALIYUN_API_KEY=${{ vars.ALIYUN_API_KEY }}
@@ -242,6 +258,17 @@ jobs:
           source: "docker-compose.server.yml"
           target: "/home/ubuntu/grapery/server/"
 
+      - name: Upload APNs key to ECS
+        if: ${{ vars.APNS_PRIVATE_KEY != '' }}
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.DEV_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: "certs/apns.p8"
+          target: "/home/ubuntu/grapery/server/certs/"
+
       - name: Remote Deploy to Development Server
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -252,7 +279,7 @@ jobs:
           script: |
             # 创建服务专用目录
             SERVICE_DIR="/home/ubuntu/grapery/server"
-            mkdir -p "$SERVICE_DIR"
+            mkdir -p "$SERVICE_DIR/certs"
             cd "$SERVICE_DIR"
             
             # 设置环境变量
@@ -293,6 +320,7 @@ jobs:
                 --restart unless-stopped \
                 --network grapery-network \
                 -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
+                -v "$SERVICE_DIR/certs:/app/certs:ro" \
                 --env-file .env \
                 ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
             fi
@@ -315,8 +343,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        env:
+          APNS_PRIVATE_KEY: ${{ vars.APNS_PRIVATE_KEY }}
         run: |
           echo "📦 Generating production .env file..."
+          mkdir -p certs
+          APNS_KEY_PATH_LINE=""
+          if [ -n "${APNS_PRIVATE_KEY:-}" ]; then
+            printf '%s\n' "$APNS_PRIVATE_KEY" > certs/apns.p8
+            chmod 600 certs/apns.p8
+            APNS_KEY_PATH_LINE="APNS_PRIVATE_KEY_PATH=/app/certs/apns.p8"
+          fi
           cat > .env << EOF
           # ========== Environment ==========
           ENVIRONMENT=production
@@ -351,6 +388,13 @@ jobs:
           # ========== JWT Configuration ==========
           JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
+          
+          # ========== Apple Push (APNs) — Repository Variables ==========
+          APNS_BUNDLE_ID=${{ vars.APNS_BUNDLE_ID }}
+          APNS_TEAM_ID=${{ vars.APNS_TEAM_ID }}
+          APNS_KEY_ID=${{ vars.APNS_KEY_ID }}
+          APNS_USE_SANDBOX=${{ vars.APNS_USE_SANDBOX_PROD || vars.APNS_USE_SANDBOX || 'false' }}
+          $APNS_KEY_PATH_LINE
           
           # ========== Aliyun OSS Configuration ==========
           ALIYUN_API_KEY=${{ vars.ALIYUN_API_KEY }}
@@ -404,6 +448,17 @@ jobs:
           source: "docker-compose.server.yml"
           target: "/home/ubuntu/grapery/server/"
 
+      - name: Upload APNs key to ECS
+        if: ${{ vars.APNS_PRIVATE_KEY != '' }}
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ vars.SSH_KEY }}
+          port: 22
+          source: "certs/apns.p8"
+          target: "/home/ubuntu/grapery/server/certs/"
+
       - name: Remote Deploy to Production Server
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -414,7 +469,7 @@ jobs:
           script: |
             # 创建服务专用目录
             SERVICE_DIR="/home/ubuntu/grapery/server"
-            mkdir -p "$SERVICE_DIR"
+            mkdir -p "$SERVICE_DIR/certs"
             cd "$SERVICE_DIR"
             
             # 设置环境变量
@@ -455,6 +510,7 @@ jobs:
                 --restart unless-stopped \
                 --network grapery-network \
                 -p ${{ env.SERVICE_PORT }}:${{ env.SERVICE_PORT }} \
+                -v "$SERVICE_DIR/certs:/app/certs:ro" \
                 --env-file .env \
                 ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
             fi
