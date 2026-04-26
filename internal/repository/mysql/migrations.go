@@ -528,6 +528,7 @@ func (r *Repository) ensureAIGenerationRecordsSchema() error {
 	r.log.Warn("ai_generation_records CONVERT TO utf8mb4 failed, applying remaining per-column MODIFY",
 		zap.Error(convertErr))
 
+	// 仅旧版表存在 prompt / negative_prompt；当前模型已用 original_prompt 等，缺列则跳过以免 1054 噪音
 	legacy := []struct {
 		column string
 		def    string
@@ -536,6 +537,18 @@ func (r *Repository) ensureAIGenerationRecordsSchema() error {
 		{"negative_prompt", "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"},
 	}
 	for _, col := range legacy {
+		var n int64
+		if err := r.db.Raw(`
+SELECT COUNT(*) FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_generation_records' AND COLUMN_NAME = ?
+`, col.column).Scan(&n).Error; err != nil {
+			r.log.Warn("legacy ai_generation_records column check failed",
+				zap.String("column", col.column), zap.Error(err))
+			continue
+		}
+		if n == 0 {
+			continue
+		}
 		q := fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN `%s` %s", table, col.column, col.def)
 		if err := r.db.Exec(q).Error; err != nil {
 			r.log.Warn("failed to modify column to utf8mb4",

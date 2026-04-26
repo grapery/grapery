@@ -10,7 +10,8 @@ import (
 
 // User database model
 type User struct {
-	ID                  string         `gorm:"primaryKey;size:36"`
+	// 显式 utf8mb4，与所有 user_id 外键列一致，避免 CONVERT TABLE / 外键报 ER 3780
+	ID                  string         `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
 	Username            string         `gorm:"uniqueIndex;size:50;not null"`
 	Email               string         `gorm:"uniqueIndex;size:100;not null"`
 	PasswordHash        string         `gorm:"size:255;not null"`
@@ -739,9 +740,9 @@ type Membership struct {
 
 // AIGenerationRecord AI 生成记录 - 记录AI能力使用数据（任务管理、Token计费）
 type AIGenerationRecord struct {
-	ID       string `gorm:"primaryKey;size:36"`
-	UserID   string `gorm:"size:36;not null;index"`
-	User     User   `gorm:"foreignKey:UserID"`
+	ID     string `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
+	UserID string `gorm:"type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;not null;index"`
+	User   User   `gorm:"foreignKey:UserID"`
 	Type     string `gorm:"size:20;not null;index"` // text, image, video, audio
 	Provider string `gorm:"size:50;not null;index"` // gemini, hailuo, huoshan, qwen
 	Model    string `gorm:"size:100"`
@@ -750,8 +751,8 @@ type AIGenerationRecord struct {
 	OriginalPrompt string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 原始提示词
 	EnhancedPrompt string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 增强后的提示词
 	SystemPrompt   string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 系统提示词
-	InputParams  string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 完整的输入参数（JSON 文本）
-	OutputResult string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`  // 完整的输出结果（JSON 文本）
+	InputParams    string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 完整的输入参数（JSON 文本）
+	OutputResult   string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 完整的输出结果（JSON 文本）
 
 	// Token 消耗统计
 	InputTokens  int `gorm:"default:0"`       // 输入 token 数
@@ -771,9 +772,9 @@ type AIGenerationRecord struct {
 	QueueTimeMs   int64 `gorm:"default:0"` // 排队时间
 	ProcessTimeMs int64 `gorm:"default:0"` // 处理时间
 
-	// 关联的业务实体
-	RelatedEntityID   string `gorm:"size:36;index"` // 关联实体ID
-	RelatedEntityType string `gorm:"size:50;index"` // story, storyboard, character, poster
+	// 关联的业务实体（ID 列为 UUID 字符串，与 user_id 同 charset 便于统一）
+	RelatedEntityID   string `gorm:"type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;index"` // 关联实体ID
+	RelatedEntityType string `gorm:"size:50;index"`                                                           // story, storyboard, character, poster
 
 	// 时间戳
 	CreatedAt   time.Time  `gorm:"autoCreateTime;index"` // 创建时间

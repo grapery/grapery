@@ -13,6 +13,10 @@ import (
 // storiesSourceFragmentUniqueIndex is the GORM default name for Story.SourceFragmentID uniqueIndex.
 const storiesSourceFragmentUniqueIndex = "idx_stories_source_fragment_id"
 
+// mysqlTableOptionsUTF8MB4 is appended to every CREATE TABLE from AutoMigrate so new tables default to
+// utf8mb4; varchar FK columns then match users.id and avoid MySQL ER 3780 (incompatible referencing columns).
+const mysqlTableOptionsUTF8MB4 = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+
 func isDuplicateMySQLIndex(err error, indexName string) bool {
 	if err == nil {
 		return false
@@ -28,7 +32,8 @@ func isDuplicateMySQLIndex(err error, indexName string) bool {
 // Story when migrating models that declare a Story relation (FK), repeating CREATE UNIQUE INDEX on
 // source_fragment_id; MySQL ER_DUP_KEYNAME (1061) is then treated as success for idempotent startup.
 func autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db *gorm.DB, log *zap.Logger, dst ...interface{}) error {
-	err := db.AutoMigrate(dst...)
+	session := db.Session(&gorm.Session{}).Set("gorm:table_options", mysqlTableOptionsUTF8MB4)
+	err := session.AutoMigrate(dst...)
 	if err == nil {
 		return nil
 	}

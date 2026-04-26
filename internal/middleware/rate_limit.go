@@ -46,7 +46,23 @@ var (
 // NewRateLimiter creates a Gin middleware that enforces fixed-window rate limits
 // using Redis atomic increment. For authenticated routes it limits per userID;
 // for unauthenticated routes it falls back to client IP.
+//
+// If cacher is nil (e.g. Redis unavailable at startup), returns a no-op middleware
+// so routes still work without panicking — same behavior as "fail open" on Redis errors.
 func NewRateLimiter(cacher cache.Cache, config RateLimitConfig, logger *zap.Logger) gin.HandlerFunc {
+	if cacher == nil {
+		log := logger
+		if log == nil {
+			log = zap.NewNop()
+		}
+		log.Warn("rate limiter disabled: redis cache is nil")
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return func(c *gin.Context) {
 		identifier := c.GetString("userID")
 		if identifier == "" {
