@@ -21,6 +21,13 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
 		logrus.WithField("token_length", len(tokenStr)).Debug("AuthMiddleware: processing token")
 
+		// TEMP(通知联调): 打印完整 Bearer JWT，测试完成后删除本段日志。
+		logrus.WithFields(logrus.Fields{
+			"method":       c.Request.Method,
+			"path":         c.Request.URL.Path,
+			"bearer_token": tokenStr,
+		}).Info("TEMP debug bearer token (vippay) — remove this log block after tests")
+
 		claims, err := auth.ParseToken(tokenStr)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "invalid token"})
