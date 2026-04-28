@@ -34,6 +34,15 @@ type StoryboardScene struct {
 	// 平行宇宙系统字段
 	ContextSnapshot string `json:"contextSnapshot,omitempty"` // 该场景结束后的角色状态增量 (JSON)
 
+	// Storyboard generation redesign metadata
+	GenerationRunID string   `json:"generationRunId,omitempty"`
+	BeatIndex       int      `json:"beatIndex,omitempty"`
+	BeatPurpose     string   `json:"beatPurpose,omitempty"`
+	ContinuityNote  string   `json:"continuityNote,omitempty"`
+	ReferenceKeys   []string `json:"referenceKeys,omitempty"`
+	ImagePrompt     string   `json:"imagePrompt,omitempty"`
+	VisualStateJSON string   `json:"visualState,omitempty"`
+
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`
 }

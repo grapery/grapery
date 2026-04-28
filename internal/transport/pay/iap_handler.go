@@ -1,9 +1,14 @@
 package pay
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"hash/fnv"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +16,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // IAPHandler IAP 处理器
@@ -147,8 +153,9 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 }
 
 // GetAppleSubscriptionStatusRequest 获取 Apple 订阅状态请求
+// original_transaction_id 可选：空则按当前登录用户在 apple_subscriptions 中查找最近一条
 type GetAppleSubscriptionStatusRequest struct {
-	OriginalTransactionID string `json:"original_transaction_id" binding:"required"`
+	OriginalTransactionID string `json:"original_transaction_id"`
 }
 
 // GetAppleSubscriptionStatusResponse 获取 Apple 订阅状态响应
@@ -174,31 +181,83 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 		return
 	}
 
-	var req GetAppleSubscriptionStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	b, errRead := io.ReadAll(c.Request.Body)
+	if errRead != nil {
 		h.logger.WithFields(logrus.Fields{
 			"user_id":  userID,
-			"error":    err.Error(),
+			"error":    errRead.Error(),
 			"endpoint": "GetAppleSubscriptionStatus",
-		}).Error("Invalid request parameters for Apple subscription status")
+		}).Error("Failed to read Apple subscription status request body")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "invalid request parameters",
+			"msg":  "invalid request body",
 		})
 		return
 	}
+	b = bytes.TrimSpace(b)
+	var req GetAppleSubscriptionStatusRequest
+	if len(b) > 0 {
+		if err := json.Unmarshal(b, &req); err != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":  userID,
+				"error":    err.Error(),
+				"endpoint": "GetAppleSubscriptionStatus",
+			}).Error("Invalid request parameters for Apple subscription status")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "invalid request parameters",
+			})
+			return
+		}
+	}
+
+	originalID := strings.TrimSpace(req.OriginalTransactionID)
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id":        userID,
-		"transaction_id": req.OriginalTransactionID,
+		"transaction_id": originalID,
 		"endpoint":       "GetAppleSubscriptionStatus",
 	}).Info("Starting Apple subscription status query")
 
-	subscription, err := h.iapService.GetSubscription(ctx, req.OriginalTransactionID)
+	var subscription *pay.IAPSubscription
+	var err error
+	if originalID != "" {
+		subscription, err = h.iapService.GetSubscription(ctx, originalID)
+	} else {
+		var appleSub paymodels.AppleSubscription
+		err = paymodels.DataBase().WithContext(ctx).
+			Where("user_id = ?", userID).
+			Order("updated_at DESC").
+			First(&appleSub).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusOK, gin.H{
+					"code": 0,
+					"msg":  "success",
+					"data": GetAppleSubscriptionStatusResponse{
+						Success:        true,
+						Subscription: nil,
+					},
+				})
+				return
+			}
+			h.logger.WithFields(logrus.Fields{
+				"user_id":  userID,
+				"endpoint": "GetAppleSubscriptionStatus",
+				"error":    err.Error(),
+			}).Error("Failed to look up Apple subscription for user")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "failed to get subscription status",
+			})
+			return
+		}
+		subscription = iapSubscriptionFromAppleRow(&appleSub)
+	}
 	if err != nil {
 		h.logger.WithFields(logrus.Fields{
 			"user_id":        userID,
-			"transaction_id": req.OriginalTransactionID,
+			"transaction_id": originalID,
 			"endpoint":       "GetAppleSubscriptionStatus",
 			"error":          err.Error(),
 		}).Error("Failed to get Apple subscription status")
@@ -211,7 +270,7 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id":             userID,
-		"transaction_id":      req.OriginalTransactionID,
+		"transaction_id":      originalID,
 		"subscription_status": subscription.Status,
 		"endpoint":            "GetAppleSubscriptionStatus",
 	}).Info("Apple subscription status retrieved successfully")
@@ -1000,15 +1059,18 @@ func (h *IAPHandler) GetProducts(c *gin.Context) {
 func (h *IAPHandler) GetProductDetail(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	productID := c.Param("product_id")
+	productID := c.Param("id")
+	if productID == "" {
+		productID = c.Param("product_id")
+	}
 	if productID == "" {
 		h.logger.WithFields(logrus.Fields{
 			"endpoint": "GetProductDetail",
 			"ip":       c.ClientIP(),
-		}).Error("Missing product_id parameter for product detail query")
+		}).Error("Missing id parameter for product detail query")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "product_id is required",
+			"msg":  "product id is required",
 		})
 		return
 	}
@@ -1180,4 +1242,31 @@ func (h *IAPHandler) GetProductStats(c *gin.Context) {
 			"stats":    stats,
 		},
 	})
+}
+
+// iapSubscriptionFromAppleRow 将本地库中的 Apple 订阅行转为与 GetSubscription 一致的结构
+func iapSubscriptionFromAppleRow(a *paymodels.AppleSubscription) *pay.IAPSubscription {
+	if a == nil {
+		return nil
+	}
+	return &pay.IAPSubscription{
+		ID:                     a.ID,
+		UserID:                 a.UserID,
+		Platform:               pay.IAPPlatformApple,
+		SubscriptionID:         a.OriginalTransactionID,
+		ProductID:              a.ProductID,
+		PurchaseDate:           a.PurchaseDate,
+		ExpiresDate:            a.ExpiresDate,
+		Status:                 a.Status,
+		AutoRenewStatus:        a.AutoRenewStatus,
+		IsInIntroOfferPeriod:   a.IsInIntroOfferPeriod,
+		IsInGracePeriod:        a.IsInGracePeriod,
+		GracePeriodExpiresDate: a.GracePeriodExpiresDate,
+		OfferType:              a.OfferType,
+		PriceIncreaseStatus:    a.PriceIncreaseStatus,
+		LastNotificationType:   a.LastNotificationType,
+		LastNotificationDate:   a.LastNotificationDate,
+		CreatedAt:              a.CreatedAt,
+		UpdatedAt:              a.UpdatedAt,
+	}
 }

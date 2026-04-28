@@ -645,6 +645,16 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 		if contextSnapshot == "" || !json.Valid([]byte(contextSnapshot)) {
 			contextSnapshot = "{}"
 		}
+		referenceKeysJSON := "[]"
+		if len(scene.ReferenceKeys) > 0 {
+			if jsonBytes, err := json.Marshal(scene.ReferenceKeys); err == nil {
+				referenceKeysJSON = string(jsonBytes)
+			}
+		}
+		visualStateJSON := scene.VisualStateJSON
+		if visualStateJSON == "" || !json.Valid([]byte(visualStateJSON)) {
+			visualStateJSON = "{}"
+		}
 
 		dbScenes[i] = StoryboardScene{
 			ID:              uuid.NewString(),
@@ -660,6 +670,13 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 			Mood:            scene.Mood,
 			IsAIGenerated:   scene.IsAIGenerated,
 			ContextSnapshot: contextSnapshot,
+			GenerationRunID: scene.GenerationRunID,
+			BeatIndex:       scene.BeatIndex,
+			BeatPurpose:     scene.BeatPurpose,
+			ContinuityNote:  scene.ContinuityNote,
+			ReferenceKeys:   referenceKeysJSON,
+			ImagePrompt:     scene.ImagePrompt,
+			VisualStateJSON: visualStateJSON,
 		}
 		// Also update the domain object with the generated ID
 		scenes[i].ID = dbScenes[i].ID
@@ -735,6 +752,16 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 			middleFrameURLsJSON = string(jsonBytes)
 		}
 	}
+	referenceKeysJSON := "[]"
+	if len(scene.ReferenceKeys) > 0 {
+		if jsonBytes, err := json.Marshal(scene.ReferenceKeys); err == nil {
+			referenceKeysJSON = string(jsonBytes)
+		}
+	}
+	visualStateJSON := scene.VisualStateJSON
+	if visualStateJSON == "" || !json.Valid([]byte(visualStateJSON)) {
+		visualStateJSON = "{}"
+	}
 
 	updates := map[string]interface{}{
 		"story_scene_id":      storySceneID,
@@ -749,6 +776,13 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 		"is_subdivided":       scene.IsSubdivided,
 		"video_segments_json": videoSegmentsJSON,
 		"middle_frame_urls":   middleFrameURLsJSON,
+		"generation_run_id":   scene.GenerationRunID,
+		"beat_index":          scene.BeatIndex,
+		"beat_purpose":        scene.BeatPurpose,
+		"continuity_note":     scene.ContinuityNote,
+		"reference_keys_json": referenceKeysJSON,
+		"image_prompt":        scene.ImagePrompt,
+		"visual_state_json":   visualStateJSON,
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -834,6 +868,12 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		IsAIGenerated:   dbScene.IsAIGenerated,
 		IsSubdivided:    dbScene.IsSubdivided,
 		ContextSnapshot: dbScene.ContextSnapshot,
+		GenerationRunID: dbScene.GenerationRunID,
+		BeatIndex:       dbScene.BeatIndex,
+		BeatPurpose:     dbScene.BeatPurpose,
+		ContinuityNote:  dbScene.ContinuityNote,
+		ImagePrompt:     dbScene.ImagePrompt,
+		VisualStateJSON: dbScene.VisualStateJSON,
 	}
 
 	if dbScene.StorySceneID != nil {
@@ -861,6 +901,12 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		var urls []string
 		if err := json.Unmarshal([]byte(dbScene.MiddleFrameURLs), &urls); err == nil {
 			scene.MiddleFrameURLs = urls
+		}
+	}
+	if dbScene.ReferenceKeys != "" && dbScene.ReferenceKeys != "[]" {
+		var keys []string
+		if err := json.Unmarshal([]byte(dbScene.ReferenceKeys), &keys); err == nil {
+			scene.ReferenceKeys = keys
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -145,15 +146,15 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		StoryID:        parentStoryboard.StoryID,
-		ParentID:       req.ParentStoryboardID,
-		UserID:         userID,
-		Title:          generateContinuationTitle(parentStoryboard),
-		Content:        "", // Will be filled by AI
-		RawInput:       req.UserPrompt,
-		IsStandalone:   false,
-		IsAIGenerated:  true,
-		SceneCount:     req.SceneCount,
+		StoryID:                  parentStoryboard.StoryID,
+		ParentID:                 req.ParentStoryboardID,
+		UserID:                   userID,
+		Title:                    generateContinuationTitle(parentStoryboard),
+		Content:                  "", // Will be filled by AI
+		RawInput:                 req.UserPrompt,
+		IsStandalone:             false,
+		IsAIGenerated:            true,
+		SceneCount:               req.SceneCount,
 		WorkflowStatus:           domain.WorkflowStatusDraft,
 		CurrentStep:              1,
 		GenerateVideoAfterImages: req.GenerateVideo,
@@ -350,12 +351,17 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 
 	for _, scene := range scenes {
 		scene := scene
+		description := scene.Description
+		if strings.TrimSpace(scene.ImagePrompt) != "" {
+			description = strings.TrimSpace(scene.ImagePrompt) + "\n\nContinuity note: " + strings.TrimSpace(scene.ContinuityNote)
+		}
 		imageReq := &ImageGenerationRequest{
 			StoryboardID:     storyboardID,
 			SceneID:          scene.ID,
 			SceneTitle:       scene.Title,
-			SceneDescription: scene.Description,
+			SceneDescription: description,
 			SceneCharacters:  scene.Characters,
+			ReferenceImages:  s.storyboardSceneReferenceImages(context.Background(), scene),
 			ComicStyle:       comicStyle,
 		}
 		go func() {
@@ -381,6 +387,72 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 				zap.String("generationId", gen.ID))
 		}()
 	}
+}
+
+func (s *Service) storyboardSceneReferenceImages(ctx context.Context, scene domain.StoryboardScene) []string {
+	if strings.TrimSpace(scene.GenerationRunID) == "" || len(scene.ReferenceKeys) == 0 {
+		return nil
+	}
+	assets, err := s.repo.ListStoryboardGenerationAssets(ctx, scene.GenerationRunID)
+	if err != nil || len(assets) == 0 {
+		return nil
+	}
+	keyAllowed := make(map[string]struct{}, len(scene.ReferenceKeys))
+	for _, key := range scene.ReferenceKeys {
+		keyAllowed[strings.TrimSpace(key)] = struct{}{}
+	}
+	priority := map[string]int{
+		domain.StoryboardGenerationAssetCharacterTurnaround: 0,
+		domain.StoryboardGenerationAssetCharacterAnchor:     1,
+		domain.StoryboardGenerationAssetPreviousScene:       2,
+		domain.StoryboardGenerationAssetParentTailScene:     3,
+		domain.StoryboardGenerationAssetLocationAnchor:      4,
+		domain.StoryboardGenerationAssetPropAnchor:          5,
+	}
+	filtered := make([]*domain.StoryboardGenerationAsset, 0, len(assets))
+	for _, asset := range assets {
+		if asset == nil {
+			continue
+		}
+		if _, ok := keyAllowed[asset.AssetKey]; ok {
+			filtered = append(filtered, asset)
+			continue
+		}
+		if asset.Kind == domain.StoryboardGenerationAssetParentTailScene {
+			filtered = append(filtered, asset)
+		}
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		pi, ok := priority[filtered[i].Kind]
+		if !ok {
+			pi = 99
+		}
+		pj, ok := priority[filtered[j].Kind]
+		if !ok {
+			pj = 99
+		}
+		if pi != pj {
+			return pi < pj
+		}
+		return filtered[i].Source < filtered[j].Source
+	})
+	out := make([]string, 0, len(filtered))
+	seen := map[string]struct{}{}
+	for _, asset := range filtered {
+		u := strings.TrimSpace(asset.ImageURL)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+		if len(out) >= 6 {
+			break
+		}
+	}
+	return out
 }
 
 // generateStoryboardContent 生成故事板的叙述内容

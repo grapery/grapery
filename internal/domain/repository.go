@@ -268,6 +268,17 @@ type Repository interface {
 	// Aggregate token consumption
 	GetStoryboardTotalTokens(ctx context.Context, storyboardID string) (int, error)
 
+	// Storyboard generation redesign run/audit operations
+	CreateStoryboardGenerationRun(ctx context.Context, run *StoryboardGenerationRun) error
+	UpdateStoryboardGenerationRun(ctx context.Context, run *StoryboardGenerationRun) error
+	GetStoryboardGenerationRun(ctx context.Context, runID string) (*StoryboardGenerationRun, error)
+	LatestStoryboardGenerationRun(ctx context.Context, storyboardID string) (*StoryboardGenerationRun, error)
+	CreateStoryboardGenerationAsset(ctx context.Context, asset *StoryboardGenerationAsset) error
+	CreateStoryboardGenerationAssets(ctx context.Context, assets []*StoryboardGenerationAsset) error
+	ListStoryboardGenerationAssets(ctx context.Context, runID string) ([]*StoryboardGenerationAsset, error)
+	CreateAIPromptAuditRecord(ctx context.Context, record *AIPromptAuditRecord) error
+	ListAIPromptAuditRecords(ctx context.Context, runID string) ([]*AIPromptAuditRecord, error)
+
 	// ========== Comment operations ==========
 	CommentByID(ctx context.Context, id string) (*Comment, error)
 	CreateComment(ctx context.Context, comment *Comment) error

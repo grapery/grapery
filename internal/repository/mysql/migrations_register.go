@@ -284,6 +284,33 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_storyboard_generation_runs",
+		Description: "Create and migrate storyboard_generation_runs table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardGenerationRun{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_storyboard_generation_assets",
+		Description: "Create and migrate storyboard_generation_assets table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardGenerationAsset{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_ai_prompt_audit_records",
+		Description: "Create and migrate ai_prompt_audit_records table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AIPromptAuditRecord{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_storyboard_likes",
 		Description: "Create and migrate storyboard_likes table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

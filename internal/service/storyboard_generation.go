@@ -670,7 +670,7 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 
 	panelURL := strings.TrimSpace(s.previousStoryboardScenePanelImageURL(ctx, req.StoryboardID, req.SceneID))
 
-	// 合并参考图：上一格成图（连贯性）→ 客户端 reference → 角色 portrait；去重并限制总数
+	// 合并参考图：显式 identity references（三视图优先）→ 上一格成图（连贯性）→ 角色 portrait；去重并限制总数
 	const maxSceneRefURLs = 6
 	allReferenceImages := make([]string, 0, maxSceneRefURLs)
 	seen := make(map[string]struct{})
@@ -688,11 +688,11 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		seen[u] = struct{}{}
 		allReferenceImages = append(allReferenceImages, u)
 	}
-	if panelURL != "" {
-		addRef(panelURL)
-	}
 	for _, u := range req.ReferenceImages {
 		addRef(u)
+	}
+	if panelURL != "" {
+		addRef(panelURL)
 	}
 	if !isTransitionScene {
 		for _, u := range characterRefImages {
@@ -2297,6 +2297,18 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	}
 	if suggested != "" && suggested != domain.SuggestedResumeNone {
 		progress.SuggestedResumeAction = suggested
+	}
+	if run, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboardID); err == nil && run != nil {
+		progress.LatestRun = run
+		progress.ConsistencyIssuesJSON = run.ConsistencyIssuesJSON
+		if audits, auditErr := s.repo.ListAIPromptAuditRecords(ctx, run.ID); auditErr == nil {
+			progress.PromptAuditRecordIDs = make([]string, 0, len(audits))
+			for _, audit := range audits {
+				if audit != nil {
+					progress.PromptAuditRecordIDs = append(progress.PromptAuditRecordIDs, audit.ID)
+				}
+			}
+		}
 	}
 
 	return progress, nil

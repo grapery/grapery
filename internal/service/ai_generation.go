@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -97,15 +98,21 @@ func (s *AIGenerationService) GetAsyncVideoCompletionService() *AsyncVideoComple
 
 // GenerateTextRequest 文本生成请求
 type GenerateTextRequest struct {
-	UserID            string
-	OriginalPrompt    string
-	SystemPrompt      string
-	Model             string
-	Temperature       float32
-	MaxTokens         int32
-	RelatedEntityID   string
-	RelatedEntityType string
-	Metadata          map[string]interface{}
+	UserID                string
+	OriginalPrompt        string
+	SystemPrompt          string
+	Model                 string
+	Temperature           float32
+	MaxTokens             int32
+	RelatedEntityID       string
+	RelatedEntityType     string
+	Metadata              map[string]interface{}
+	RunID                 string
+	Step                  string
+	PromptKind            string
+	PromptTemplateVersion string
+	AlignmentPrompt       string
+	ReferencePreamble     string
 }
 
 // GenerateTextResult 文本生成结果
@@ -339,6 +346,7 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 		completedUnix := completedTime.Unix()
 		record.CompletedAt = &completedUnix
 		_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+		s.recordTextPromptAudit(ctx, req, record, "", map[string]any{"error": errMsg})
 
 		s.logger.Error("AI text generation failed",
 			zap.String("recordId", record.ID),
@@ -372,6 +380,7 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
 		s.logger.Warn("failed to update AI generation record", zap.Error(err))
 	}
+	s.recordTextPromptAudit(ctx, req, record, text, nil)
 
 	// ============== 确认配额预留 ==============
 	// 如果启用了配额预留，确认实际使用量
@@ -418,6 +427,69 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 		TokensUsed: record.TotalTokens,
 		DurationMs: durationMs,
 	}, nil
+}
+
+func (s *AIGenerationService) recordTextPromptAudit(ctx context.Context, req *GenerateTextRequest, record *domain.AIGenerationRecord, output string, extra map[string]any) {
+	if req == nil || record == nil || strings.TrimSpace(req.PromptKind) == "" {
+		return
+	}
+	templateVersion := strings.TrimSpace(req.PromptTemplateVersion)
+	if templateVersion == "" {
+		templateVersion = storyboardPromptTemplateVersion
+	}
+	tokenUsage := map[string]any{
+		"inputTokens":  record.InputTokens,
+		"outputTokens": record.OutputTokens,
+		"totalTokens":  record.TotalTokens,
+	}
+	metadata := map[string]any{
+		"aiGenerationRecordId": record.ID,
+	}
+	for k, v := range req.Metadata {
+		metadata[k] = v
+	}
+	for k, v := range extra {
+		metadata[k] = v
+	}
+	fullPrompt := strings.Join([]string{
+		req.SystemPrompt,
+		req.AlignmentPrompt,
+		req.ReferencePreamble,
+		req.OriginalPrompt,
+	}, "\n\n")
+	refURLs, _ := metadata["referenceImageUrls"].([]string)
+	audit := &domain.AIPromptAuditRecord{
+		ID:                    uuid.NewString(),
+		RunID:                 req.RunID,
+		RelatedEntityType:     req.RelatedEntityType,
+		RelatedEntityID:       req.RelatedEntityID,
+		Step:                  req.Step,
+		PromptKind:            req.PromptKind,
+		PromptTemplateVersion: templateVersion,
+		AlignmentSnapshotHash: stableSHA256(req.AlignmentPrompt),
+		FullPromptHash:        stableSHA256(fullPrompt),
+		Provider:              record.Provider,
+		Model:                 record.Model,
+		Temperature:           float64(req.Temperature),
+		MaxTokens:             int(req.MaxTokens),
+		SystemPrompt:          req.SystemPrompt,
+		UserPrompt:            req.OriginalPrompt,
+		AlignmentPrompt:       req.AlignmentPrompt,
+		ReferencePreamble:     req.ReferencePreamble,
+		FinalPrompt:           req.OriginalPrompt,
+		ReferenceImageURLs:    refURLs,
+		Output:                output,
+		TokenUsageJSON:        mustJSON(tokenUsage, "{}"),
+		MetadataJSON:          mustJSON(metadata, "{}"),
+		CreatedAt:             time.Now().Unix(),
+	}
+	if err := s.repo.CreateAIPromptAuditRecord(ctx, audit); err != nil {
+		s.logger.Warn("failed to create text prompt audit record",
+			zap.String("recordId", record.ID),
+			zap.String("runId", req.RunID),
+			zap.String("promptKind", req.PromptKind),
+			zap.Error(err))
+	}
 }
 
 // GenerateImageRequest 图片生成请求

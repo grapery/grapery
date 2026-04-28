@@ -11,33 +11,33 @@ import (
 // User database model
 type User struct {
 	// 显式 utf8mb4，与所有 user_id 外键列一致，避免 CONVERT TABLE / 外键报 ER 3780
-	ID                  string         `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
-	Username            string         `gorm:"uniqueIndex;size:50;not null"`
-	Email               string         `gorm:"uniqueIndex;size:100;not null"`
-	PasswordHash        string         `gorm:"size:255;not null"`
-	DisplayName         string         `gorm:"size:100;not null"`
-	Avatar              string         `gorm:"size:500"`
-	Background          string         `gorm:"size:500"`
-	Bio                 string         `gorm:"type:text"`
-	Location            string         `gorm:"size:100"`
-	Website             string         `gorm:"size:255"`
-	AIPromptPreferences string         `gorm:"type:text"`
-	DateOfBirth         int64          `gorm:"type:bigint;default:0"`
-	Followers           int            `gorm:"default:0;index"`
-	Following           int            `gorm:"default:0"`
-	StoryboardCount     int            `gorm:"default:0;index"`                // Number of storyboards created by this user
-	FragmentsCount      int            `gorm:"default:0;index"`                // Number of fragments created by this user
-	Status              string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
-	EmailVerified       bool           `gorm:"default:false"`
-	Phone               string         `gorm:"size:20;index"`
-	PhoneVerifiedAt     int64          `gorm:"type:bigint;default:0;index"`
-	PendingOAuthPhoneSMS bool          `gorm:"default:false;index"`
-	LastLoginAt         int64          `gorm:"type:bigint;default:0;index"`
-	Points              int            `gorm:"default:0;index"`     // StoryCreationAppUI - 未择积分
-	ReferralCode        string         `gorm:"uniqueIndex;size:20"` // StoryCreationAppUI - 用户专属邀请码
-	CreatedAt           int64          `gorm:"type:bigint;autoCreateTime;index"`
-	UpdatedAt           int64          `gorm:"type:bigint;autoUpdateTime"`
-	DeletedAt           gorm.DeletedAt `gorm:"index"`
+	ID                   string         `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
+	Username             string         `gorm:"uniqueIndex;size:50;not null"`
+	Email                string         `gorm:"uniqueIndex;size:100;not null"`
+	PasswordHash         string         `gorm:"size:255;not null"`
+	DisplayName          string         `gorm:"size:100;not null"`
+	Avatar               string         `gorm:"size:500"`
+	Background           string         `gorm:"size:500"`
+	Bio                  string         `gorm:"type:text"`
+	Location             string         `gorm:"size:100"`
+	Website              string         `gorm:"size:255"`
+	AIPromptPreferences  string         `gorm:"type:text"`
+	DateOfBirth          int64          `gorm:"type:bigint;default:0"`
+	Followers            int            `gorm:"default:0;index"`
+	Following            int            `gorm:"default:0"`
+	StoryboardCount      int            `gorm:"default:0;index"`                // Number of storyboards created by this user
+	FragmentsCount       int            `gorm:"default:0;index"`                // Number of fragments created by this user
+	Status               string         `gorm:"size:20;default:'active';index"` // active, suspended, deleted
+	EmailVerified        bool           `gorm:"default:false"`
+	Phone                string         `gorm:"size:20;index"`
+	PhoneVerifiedAt      int64          `gorm:"type:bigint;default:0;index"`
+	PendingOAuthPhoneSMS bool           `gorm:"default:false;index"`
+	LastLoginAt          int64          `gorm:"type:bigint;default:0;index"`
+	Points               int            `gorm:"default:0;index"`     // StoryCreationAppUI - 未择积分
+	ReferralCode         string         `gorm:"uniqueIndex;size:20"` // StoryCreationAppUI - 用户专属邀请码
+	CreatedAt            int64          `gorm:"type:bigint;autoCreateTime;index"`
+	UpdatedAt            int64          `gorm:"type:bigint;autoUpdateTime"`
+	DeletedAt            gorm.DeletedAt `gorm:"index"`
 }
 
 // AccountDeletionBlock 记录已注销账号的邮箱/手机号，在冷却期内禁止用于注册或绑定（与产品「30 天内无法注册相同账号」一致）。
@@ -144,30 +144,30 @@ type Panel struct {
 
 // Storyboard database model (树状结构)
 type Storyboard struct {
-	ID               string      `gorm:"primaryKey;size:36"`
-	StoryID          string      `gorm:"size:36;not null;index:idx_storyboard_story;index:idx_storyboard_story_parent"`
-	Story            Story       `gorm:"foreignKey:StoryID"`
-	ParentID         *string     `gorm:"size:36;index;index:idx_storyboard_story_parent"` // NULL or "__root__" for root storyboard
-	Parent           *Storyboard `gorm:"foreignKey:ParentID"`
-	UserID           string      `gorm:"column:creator_id;size:36;not null;index"` // 保持数据库列名为 creator_id
-	Creator          User        `gorm:"foreignKey:UserID"`
-	Title            string      `gorm:"size:200;not null"`
-	Content          string      `gorm:"type:text;not null"`            // AI-polished narrative
-	RawInput         string      `gorm:"type:text;not null"`            // Original user input/prompt
-	IsStandalone     bool        `gorm:"default:false;index"`           // Independent plot, AI won't reference parent context
-	IsAIGenerated    bool        `gorm:"default:false;index"`           // Content was generated by AI
-	SceneCount       int         `gorm:"default:3"`                     // Requested number of scenes to generate (2-5)
-	WorkflowStatus   string      `gorm:"size:20;default:'draft';index"` // draft, content_ready, images_ready, video_ready, published
-	CurrentStep      int         `gorm:"default:1"`                     // 1-5 (setup, create, images, video, publish)
-	GenerateVideoAfterImages bool   `gorm:"column:generate_video_after_images;default:false;index"`
-	ContinuationComicStyle   string `gorm:"column:continuation_comic_style;size:80;default:''"`
-	ContinuationSummary      string `gorm:"column:continuation_summary;type:text"`
-	Likes            int         `gorm:"default:0;index"`
-	Comments         int         `gorm:"default:0"`
-	Shares           int         `gorm:"default:0"`
-	ForkCount        int         `gorm:"default:0;index"`
-	Views            int         `gorm:"default:0;index"`
-	TokenConsumption int         `gorm:"default:0"` // Aggregated from all generation records
+	ID                       string      `gorm:"primaryKey;size:36"`
+	StoryID                  string      `gorm:"size:36;not null;index:idx_storyboard_story;index:idx_storyboard_story_parent"`
+	Story                    Story       `gorm:"foreignKey:StoryID"`
+	ParentID                 *string     `gorm:"size:36;index;index:idx_storyboard_story_parent"` // NULL or "__root__" for root storyboard
+	Parent                   *Storyboard `gorm:"foreignKey:ParentID"`
+	UserID                   string      `gorm:"column:creator_id;size:36;not null;index"` // 保持数据库列名为 creator_id
+	Creator                  User        `gorm:"foreignKey:UserID"`
+	Title                    string      `gorm:"size:200;not null"`
+	Content                  string      `gorm:"type:text;not null"`            // AI-polished narrative
+	RawInput                 string      `gorm:"type:text;not null"`            // Original user input/prompt
+	IsStandalone             bool        `gorm:"default:false;index"`           // Independent plot, AI won't reference parent context
+	IsAIGenerated            bool        `gorm:"default:false;index"`           // Content was generated by AI
+	SceneCount               int         `gorm:"default:3"`                     // Requested number of scenes to generate (2-5)
+	WorkflowStatus           string      `gorm:"size:20;default:'draft';index"` // draft, content_ready, images_ready, video_ready, published
+	CurrentStep              int         `gorm:"default:1"`                     // 1-5 (setup, create, images, video, publish)
+	GenerateVideoAfterImages bool        `gorm:"column:generate_video_after_images;default:false;index"`
+	ContinuationComicStyle   string      `gorm:"column:continuation_comic_style;size:80;default:''"`
+	ContinuationSummary      string      `gorm:"column:continuation_summary;type:text"`
+	Likes                    int         `gorm:"default:0;index"`
+	Comments                 int         `gorm:"default:0"`
+	Shares                   int         `gorm:"default:0"`
+	ForkCount                int         `gorm:"default:0;index"`
+	Views                    int         `gorm:"default:0;index"`
+	TokenConsumption         int         `gorm:"default:0"` // Aggregated from all generation records
 
 	// 平行宇宙系统字段
 	FateSnapshot     string  `gorm:"type:json"`     // 分叉时刻所有角色的状态快照 (JSON)
@@ -373,6 +373,15 @@ type StoryboardScene struct {
 
 	// 平行宇宙系统字段
 	ContextSnapshot string `gorm:"type:json"` // 该场景结束后的角色状态增量 (JSON)
+
+	// Storyboard generation redesign metadata
+	GenerationRunID string `gorm:"column:generation_run_id;size:36;index"`
+	BeatIndex       int    `gorm:"column:beat_index;default:0;index"`
+	BeatPurpose     string `gorm:"column:beat_purpose;type:text"`
+	ContinuityNote  string `gorm:"column:continuity_note;type:text"`
+	ReferenceKeys   string `gorm:"column:reference_keys_json;type:json"`
+	ImagePrompt     string `gorm:"column:image_prompt;type:longtext"`
+	VisualStateJSON string `gorm:"column:visual_state_json;type:json"`
 
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
@@ -740,9 +749,9 @@ type Membership struct {
 
 // AIGenerationRecord AI 生成记录 - 记录AI能力使用数据（任务管理、Token计费）
 type AIGenerationRecord struct {
-	ID     string `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
-	UserID string `gorm:"type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;not null;index"`
-	User   User   `gorm:"foreignKey:UserID"`
+	ID       string `gorm:"primaryKey;type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"`
+	UserID   string `gorm:"type:varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;not null;index"`
+	User     User   `gorm:"foreignKey:UserID"`
 	Type     string `gorm:"size:20;not null;index"` // text, image, video, audio
 	Provider string `gorm:"size:50;not null;index"` // gemini, hailuo, huoshan, qwen
 	Model    string `gorm:"size:100"`
@@ -762,10 +771,10 @@ type AIGenerationRecord struct {
 	VideoCount   int `gorm:"default:0"`       // 生成视频数量
 
 	// 任务状态
-	Status       string `gorm:"size:20;not null;index"` // pending, processing, completed, failed
-	Progress     int    `gorm:"default:0"`              // 0-100
+	Status       string `gorm:"size:20;not null;index"`                                         // pending, processing, completed, failed
+	Progress     int    `gorm:"default:0"`                                                      // 0-100
 	ErrorMessage string `gorm:"type:longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` // 错误信息
-	ErrorCode    string `gorm:"size:50"`                // 错误码
+	ErrorCode    string `gorm:"size:50"`                                                        // 错误码
 
 	// 时间统计（毫秒）
 	DurationMs    int64 `gorm:"default:0"` // 总耗时

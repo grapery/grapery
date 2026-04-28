@@ -157,6 +157,7 @@ const (
 	PipelinePhaseContent = "content"
 	PipelinePhaseScenes  = "scenes"
 	PipelinePhaseImages  = "images"
+	PipelinePhaseAudit   = "audit"
 
 	PipelineStepPending   = "pending"
 	PipelineStepRunning   = "running"
@@ -164,11 +165,177 @@ const (
 	PipelineStepFailed    = "failed"
 	PipelineStepSkipped   = "skipped"
 
-	SuggestedResumeNone = "none"
-	SuggestedResumeRetryFailedImages  = "retry_failed_images"
-	SuggestedResumeRegenerateContent  = "regenerate_content"
-	SuggestedResumeRegenerateScenes   = "regenerate_scenes"
+	SuggestedResumeNone              = "none"
+	SuggestedResumeRetryFailedImages = "retry_failed_images"
+	SuggestedResumeRegenerateContent = "regenerate_content"
+	SuggestedResumeRegenerateScenes  = "regenerate_scenes"
 )
+
+const (
+	StoryboardGenerationStepContext     = "context"
+	StoryboardGenerationStepBiblePlan   = "bible_plan"
+	StoryboardGenerationStepScenePlan   = "scene_plan"
+	StoryboardGenerationStepImage       = "image"
+	StoryboardGenerationStepConsistency = "consistency_audit"
+
+	StoryboardGenerationAssetCharacterTurnaround = "character_turnaround"
+	StoryboardGenerationAssetCharacterAnchor     = "character_anchor"
+	StoryboardGenerationAssetLocationAnchor      = "location_anchor"
+	StoryboardGenerationAssetPropAnchor          = "prop_anchor"
+	StoryboardGenerationAssetPreviousScene       = "previous_scene"
+	StoryboardGenerationAssetParentTailScene     = "parent_tail_scene"
+
+	PromptKindContext           = "context_prompt"
+	PromptKindBiblePlanSystem   = "bible_plan_system_prompt"
+	PromptKindBiblePlanUser     = "bible_plan_user_prompt"
+	PromptKindSceneWriterSystem = "scene_writer_system_prompt"
+	PromptKindSceneWriterUser   = "scene_writer_user_prompt"
+	PromptKindImagePrompt       = "image_prompt"
+	PromptKindConsistencyAudit  = "consistency_audit_prompt"
+)
+
+// StoryboardGenerationRun is the durable envelope for one storyboard AI pipeline execution.
+type StoryboardGenerationRun struct {
+	ID                    string                       `json:"id"`
+	StoryboardID          string                       `json:"storyboardId"`
+	StoryID               string                       `json:"storyId"`
+	UserID                string                       `json:"userId"`
+	Status                string                       `json:"status"`
+	Progress              int                          `json:"progress"`
+	CurrentStep           string                       `json:"currentStep"`
+	RequestJSON           string                       `json:"requestJson,omitempty"`
+	ContextSnapshotJSON   string                       `json:"contextSnapshotJson,omitempty"`
+	AlignmentSnapshotJSON string                       `json:"alignmentSnapshotJson,omitempty"`
+	StoryboardBibleJSON   string                       `json:"storyboardBibleJson,omitempty"`
+	BeatsJSON             string                       `json:"beatsJson,omitempty"`
+	ScenePlanJSON         string                       `json:"scenePlanJson,omitempty"`
+	ConsistencyIssuesJSON string                       `json:"consistencyIssuesJson,omitempty"`
+	MetricsJSON           string                       `json:"metricsJson,omitempty"`
+	ErrorCode             string                       `json:"errorCode,omitempty"`
+	ErrorMessage          string                       `json:"errorMessage,omitempty"`
+	CreatedAt             int64                        `json:"createdAt"`
+	UpdatedAt             int64                        `json:"updatedAt"`
+	CompletedAt           *int64                       `json:"completedAt,omitempty"`
+	Assets                []*StoryboardGenerationAsset `json:"assets,omitempty"`
+	PromptAuditRecords    []*AIPromptAuditRecord       `json:"promptAuditRecords,omitempty"`
+}
+
+type StoryboardGenerationAsset struct {
+	ID           string `json:"id"`
+	RunID        string `json:"runId"`
+	Kind         string `json:"kind"`
+	AssetKey     string `json:"assetKey"`
+	EntityID     string `json:"entityId,omitempty"`
+	ImageURL     string `json:"imageUrl"`
+	Source       string `json:"source,omitempty"`
+	MetadataJSON string `json:"metadataJson,omitempty"`
+	CreatedAt    int64  `json:"createdAt"`
+}
+
+type AIPromptAuditRecord struct {
+	ID                    string   `json:"id"`
+	RunID                 string   `json:"runId,omitempty"`
+	RelatedEntityType     string   `json:"relatedEntityType,omitempty"`
+	RelatedEntityID       string   `json:"relatedEntityId,omitempty"`
+	Step                  string   `json:"step"`
+	PromptKind            string   `json:"promptKind"`
+	PromptTemplateVersion string   `json:"promptTemplateVersion"`
+	AlignmentSnapshotHash string   `json:"alignmentSnapshotHash,omitempty"`
+	FullPromptHash        string   `json:"fullPromptHash,omitempty"`
+	Provider              string   `json:"provider,omitempty"`
+	Model                 string   `json:"model,omitempty"`
+	Temperature           float64  `json:"temperature,omitempty"`
+	MaxTokens             int      `json:"maxTokens,omitempty"`
+	SystemPrompt          string   `json:"systemPrompt,omitempty"`
+	UserPrompt            string   `json:"userPrompt,omitempty"`
+	AlignmentPrompt       string   `json:"alignmentPrompt,omitempty"`
+	ReferencePreamble     string   `json:"referencePreamble,omitempty"`
+	FinalPrompt           string   `json:"finalPrompt,omitempty"`
+	ReferenceImageURLs    []string `json:"referenceImageUrls,omitempty"`
+	Output                string   `json:"output,omitempty"`
+	TokenUsageJSON        string   `json:"tokenUsageJson,omitempty"`
+	MetadataJSON          string   `json:"metadataJson,omitempty"`
+	CreatedAt             int64    `json:"createdAt"`
+}
+
+type StoryboardVisualStyleBible struct {
+	ArtStyle      string `json:"artStyle,omitempty"`
+	LineQuality   string `json:"lineQuality,omitempty"`
+	Palette       string `json:"palette,omitempty"`
+	LightingMood  string `json:"lightingMood,omitempty"`
+	CameraGrammar string `json:"cameraGrammar,omitempty"`
+}
+
+type StoryboardVisualCharacter struct {
+	Key                  string               `json:"key"`
+	ID                   string               `json:"id,omitempty"`
+	Name                 string               `json:"name,omitempty"`
+	NarrativeRole        string               `json:"narrativeRole,omitempty"`
+	ImmutableTraits      []string             `json:"immutableTraits,omitempty"`
+	CurrentState         string               `json:"currentState,omitempty"`
+	TurnaroundAssetKeys  []string             `json:"turnaroundAssetKeys,omitempty"`
+	TurnaroundImageURLs  *CharacterThreeViews `json:"turnaroundImageUrls,omitempty"`
+	PrimaryIdentityImage string               `json:"primaryIdentityImage,omitempty"`
+}
+
+type StoryboardVisualLocation struct {
+	Key             string   `json:"key"`
+	ID              string   `json:"id,omitempty"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+	CurrentState    string   `json:"currentState,omitempty"`
+}
+
+type StoryboardVisualProp struct {
+	Key             string   `json:"key"`
+	Name            string   `json:"name,omitempty"`
+	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+	CurrentState    string   `json:"currentState,omitempty"`
+}
+
+type StoryboardVisualBible struct {
+	StyleBible      *StoryboardVisualStyleBible `json:"styleBible,omitempty"`
+	Characters      []StoryboardVisualCharacter `json:"characters,omitempty"`
+	Locations       []StoryboardVisualLocation  `json:"locations,omitempty"`
+	Props           []StoryboardVisualProp      `json:"props,omitempty"`
+	ContinuityRules []string                    `json:"continuityRules,omitempty"`
+}
+
+type StoryboardBeat struct {
+	Index          int      `json:"index"`
+	BeatID         string   `json:"beatId,omitempty"`
+	Purpose        string   `json:"purpose"`
+	Summary        string   `json:"summary"`
+	Characters     []string `json:"characters,omitempty"`
+	LocationKey    string   `json:"locationKey,omitempty"`
+	ReferenceKeys  []string `json:"referenceKeys,omitempty"`
+	ContinuityNote string   `json:"continuityNote,omitempty"`
+}
+
+type StoryboardBiblePlan struct {
+	StoryboardBible StoryboardVisualBible `json:"storyboardBible"`
+	Beats           []StoryboardBeat      `json:"beats"`
+}
+
+type StoryboardScenePlanItem struct {
+	Sequence       int            `json:"sequence"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	Location       string         `json:"location,omitempty"`
+	TimeOfDay      string         `json:"timeOfDay,omitempty"`
+	Characters     []string       `json:"characters,omitempty"`
+	Mood           string         `json:"mood,omitempty"`
+	ReferenceKeys  []string       `json:"referenceKeys,omitempty"`
+	ContinuityNote string         `json:"continuityNote,omitempty"`
+	BeatPurpose    string         `json:"beatPurpose,omitempty"`
+	ImagePrompt    string         `json:"imagePrompt,omitempty"`
+	VisualState    map[string]any `json:"visualState,omitempty"`
+}
+
+type StoryboardScenePlan struct {
+	Content string                    `json:"content"`
+	Scenes  []StoryboardScenePlanItem `json:"scenes"`
+}
 
 // GenerationPipelineSceneItem is per-scene status within a pipeline step (e.g. image failures).
 type GenerationPipelineSceneItem struct {
@@ -205,5 +372,8 @@ type StoryboardGenerationProgress struct {
 	// PipelineSteps 面向客户端「生成步骤详情」；由服务端从现有记录派生。
 	PipelineSteps []GenerationPipelineStep `json:"pipelineSteps,omitempty"`
 	// SuggestedResumeAction 建议的下一步恢复动作（与现有 POST 接口对齐）。
-	SuggestedResumeAction string `json:"suggestedResumeAction,omitempty"`
+	SuggestedResumeAction string                   `json:"suggestedResumeAction,omitempty"`
+	LatestRun             *StoryboardGenerationRun `json:"latestRun,omitempty"`
+	ConsistencyIssuesJSON string                   `json:"consistencyIssuesJson,omitempty"`
+	PromptAuditRecordIDs  []string                 `json:"promptAuditRecordIds,omitempty"`
 }
