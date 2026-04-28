@@ -55,6 +55,7 @@ type FragmentPanelGenerationService struct {
 	aiGen                *AIGenerationService
 	aiService            *AIService // 锚点图、多参考出图包装、一致性检查（与普通碎片方案 B 对齐）；可为 nil 则跳过锚点与检查
 	logger               *zap.Logger
+	notify               *Service // optional: push + in-app when panel generation completes
 }
 
 // NewFragmentPanelGenerationService constructs the service.
@@ -76,6 +77,11 @@ func NewFragmentPanelGenerationService(
 		aiService:            aiService,
 		logger:               logger,
 	}
+}
+
+// SetNotify wires main Service for completion notifications (nil-safe).
+func (s *FragmentPanelGenerationService) SetNotify(svc *Service) {
+	s.notify = svc
 }
 
 // StartGeneration validates input, creates DB task + draft fragment, and runs the pipeline async.
@@ -907,6 +913,16 @@ func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Con
 		zap.String("task_id", taskID),
 		zap.String("draft_id", draftID),
 		zap.Int("panels", n))
+
+	if s.notify != nil && strings.TrimSpace(draftID) != "" && strings.TrimSpace(task.UserID) != "" {
+		preview := strings.TrimSpace(caption)
+		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, draftID, preview); err != nil {
+			s.logger.Warn("panel fragment generation completion notify failed",
+				zap.Error(err),
+				zap.String("task_id", taskID),
+				zap.String("draft_id", draftID))
+		}
+	}
 }
 
 func appendPanelMetric(t *domain.FragmentPanelGenerationTask, name string, tokens int, durationMs int64, provider, model string) {

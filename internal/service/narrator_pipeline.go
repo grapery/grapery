@@ -215,6 +215,14 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		return nil, err
 	}
 
+	if len(generatedScenes) > 0 || strings.TrimSpace(newStoryboard.Content) != "" {
+		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID); err != nil {
+			s.logger.Warn("continuation storyboard completion notify failed",
+				zap.Error(err),
+				zap.String("storyboardId", newStoryboard.ID))
+		}
+	}
+
 	s.startContinuationSceneImageGenerations(newStoryboard.ID, newStoryboard.ContinuationComicStyle, generatedScenes)
 
 	// Update parent storyboard's fork count

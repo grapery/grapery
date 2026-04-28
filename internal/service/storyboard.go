@@ -419,6 +419,12 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 	s.logger.Info("initial storyboard generation completed",
 		zap.String("storyboardId", storyboardID),
 		zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
+
+	if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, storyboard.UserID, storyboardID, storyboard.StoryID); err != nil {
+		s.logger.Warn("initial storyboard generation completion notify failed",
+			zap.Error(err),
+			zap.String("storyboardId", storyboardID))
+	}
 }
 
 // GetStoryboard 获取 storyboard 详情（带缓存）
@@ -1600,6 +1606,14 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 			zap.String("newStoryboardId", newStoryboard.ID),
 			zap.Error(err))
 		return fmt.Errorf("failed to fork storyboard: %w", err)
+	}
+
+	if len(newStoryboard.StoryboardScenes) > 0 || strings.TrimSpace(newStoryboard.Content) != "" {
+		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID); err != nil {
+			s.logger.Warn("fork storyboard initial generation completion notify failed",
+				zap.Error(err),
+				zap.String("storyboardId", newStoryboard.ID))
+		}
 	}
 
 	// 缓存新创建的 fork storyboard

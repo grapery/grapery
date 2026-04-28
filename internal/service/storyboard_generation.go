@@ -2476,6 +2476,48 @@ func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) er
 		zap.String("storyboardId", storyboardID),
 		zap.String("storyId", storyboard.StoryID))
 
+	storyTitle := ""
+	if st, err := s.repo.StoryByID(ctx, storyboard.StoryID); err == nil && st != nil {
+		storyTitle = st.Title
+	} else if err != nil {
+		s.logger.Warn("publish notify: failed to load story title",
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
+	}
+
+	pubName, pubAvatar := "", ""
+	if pu, err := s.repo.UserByID(ctx, storyboard.UserID); err == nil && pu != nil {
+		pubName = pu.DisplayName
+		pubAvatar = pu.Avatar
+	}
+
+	const followPageSize = 200
+	for offset := 0; ; offset += followPageSize {
+		follows, ferr := s.repo.ListStoryFollowRecordsByStory(ctx, storyboard.StoryID, followPageSize, offset)
+		if ferr != nil {
+			s.logger.Warn("publish notify: list story follows failed",
+				zap.String("storyId", storyboard.StoryID),
+				zap.Error(ferr))
+			break
+		}
+		if len(follows) == 0 {
+			break
+		}
+		for _, f := range follows {
+			if f == nil || f.FollowerID == "" || f.FollowerID == storyboard.UserID {
+				continue
+			}
+			if err := s.NotifyFollowedStoryPublishedStoryboard(ctx, f.FollowerID, storyboard.StoryID, storyboardID, storyboard.UserID, pubName, pubAvatar, storyTitle); err != nil {
+				s.logger.Warn("publish notify: follower notification failed",
+					zap.Error(err),
+					zap.String("followerId", f.FollowerID))
+			}
+		}
+		if len(follows) < followPageSize {
+			break
+		}
+	}
+
 	return nil
 }
 

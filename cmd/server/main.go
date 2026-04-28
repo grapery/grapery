@@ -288,10 +288,12 @@ func main() {
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
 	fragmentRepo := repository.NewFragmentRepository(repo.DB(), cfg.Recommendation, redisCache, logger)
 	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, aiSvc, logger)
+	fragmentGenService.SetNotify(svc)
 	logger.Info("fragment generation service initialized")
 
 	panelGenRepo := repository.NewFragmentPanelGenerationRepository(repo.DB())
 	panelGenService := service.NewFragmentPanelGenerationService(panelGenRepo, fragmentRepo, repo, cfg.AI.ImageProvider, svc.AIGenerationService(), aiSvc, logger)
+	panelGenService.SetNotify(svc)
 	logger.Info("fragment panel generation service initialized")
 
 	// Initialize Fragment Interaction Service
@@ -323,7 +325,7 @@ func main() {
 	logger.Info("bookmark repository initialized")
 
 	// Initialize Interaction Service
-	interactionService := service.NewInteractionService(likeRepo, bookmarkRepo, repo, svc, logger)
+	interactionService := service.NewInteractionService(likeRepo, bookmarkRepo, repo, svc, fragmentInteractionRepo, logger)
 	logger.Info("interaction service initialized")
 
 	// Initialize User Settings Service

@@ -147,7 +147,7 @@ type APNsPayload struct {
 func pushNotificationDataMap(n *domain.Notification) map[string]string {
 	data := map[string]string{
 		"notificationId": n.ID,
-		"type":           n.Type,
+		"type":           VoyagerNotificationType(n.Type),
 		"link":           n.Link,
 	}
 	if n.StoryID != "" {

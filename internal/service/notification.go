@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
@@ -69,11 +70,11 @@ func (s *Service) userAllowsPushForNotificationType(ctx context.Context, userID,
 		return ns.Push.NewComment
 	case "follow":
 		return ns.Push.NewFollower
-	case "storyboard", "fork":
+	case "storyboard", "fork", "story_follow_storyboard", "storyboard_generation_complete":
 		return ns.Push.StoryUpdate
 	case "group_invite":
 		return ns.Push.SystemAnnouncement
-	case "system":
+	case "system", "fragment_generation_complete":
 		return ns.Push.SystemAnnouncement
 	default:
 		return true
@@ -121,8 +122,10 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 		switch notification.Type {
 		case "comment", "like", "follow", "reply", "mention":
 			category = "social"
-		case "storyboard", "fork":
+		case "storyboard", "fork", "story_follow_storyboard", "storyboard_generation_complete":
 			category = "transactional"
+		case "fragment_generation_complete":
+			category = "system"
 		}
 		metrics.RecordNotificationByCategory(category)
 	}
@@ -298,6 +301,61 @@ func (s *Service) NotifyGroupInvitation(ctx context.Context, inviteeID, inviterI
 		ActorID:     inviterID,
 		ActorName:   inviterName,
 		ActorAvatar: inviterAvatar,
+	}
+	return s.CreateNotificationWithPush(ctx, notification)
+}
+
+// NotifyFragmentGenerationCompleted AI 故事碎片生成完成（通知作者本人）
+func (s *Service) NotifyFragmentGenerationCompleted(ctx context.Context, userID, fragmentID, previewTitle string) error {
+	title := strings.TrimSpace(previewTitle)
+	if title == "" {
+		title = "你的故事碎片"
+	}
+	if utf8.RuneCountInString(title) > 48 {
+		title = string([]rune(title)[:48]) + "…"
+	}
+	notification := &domain.Notification{
+		UserID:  userID,
+		Type:    "fragment_generation_complete",
+		Title:   "碎片生成完成",
+		Content: fmt.Sprintf("「%s」已生成完成，可前往查看与编辑", title),
+		Link:    fmt.Sprintf("/fragments/%s", fragmentID),
+	}
+	return s.CreateNotificationWithPush(ctx, notification)
+}
+
+// NotifyStoryboardInitialGenerationCompleted 分镜初版 AI 生成完成（内容+分镜落库，通知创建者）
+func (s *Service) NotifyStoryboardInitialGenerationCompleted(ctx context.Context, userID, storyboardID, storyID string) error {
+	notification := &domain.Notification{
+		UserID:  userID,
+		Type:    "storyboard_generation_complete",
+		Title:   "分镜生成完成",
+		Content: "AI 已生成分镜内容与场景，可继续编辑或生成配图",
+		Link:    fmt.Sprintf("/stories/%s/storyboards/%s", storyID, storyboardID),
+		StoryID: storyID,
+	}
+	return s.CreateNotificationWithPush(ctx, notification)
+}
+
+// NotifyFollowedStoryPublishedStoryboard 关注的故事发布了新分镜（通知单个关注者）
+func (s *Service) NotifyFollowedStoryPublishedStoryboard(ctx context.Context, followerUserID, storyID, storyboardID, publisherID, publisherName, publisherAvatar, storyTitle string) error {
+	st := strings.TrimSpace(storyTitle)
+	if st == "" {
+		st = "故事"
+	}
+	if utf8.RuneCountInString(st) > 36 {
+		st = string([]rune(st)[:36]) + "…"
+	}
+	notification := &domain.Notification{
+		UserID:      followerUserID,
+		Type:        "story_follow_storyboard",
+		Title:       "关注的故事更新了",
+		Content:     fmt.Sprintf("你关注的「%s」发布了新分镜", st),
+		Link:        fmt.Sprintf("/stories/%s/storyboards/%s", storyID, storyboardID),
+		ActorID:     publisherID,
+		ActorName:   publisherName,
+		ActorAvatar: publisherAvatar,
+		StoryID:     storyID,
 	}
 	return s.CreateNotificationWithPush(ctx, notification)
 }

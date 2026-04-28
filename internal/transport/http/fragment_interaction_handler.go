@@ -90,6 +90,24 @@ func (h *FragmentInteractionHandler) LikeFragment(c *gin.Context) {
 		return
 	}
 
+	if fragment.UserID != "" && fragment.UserID != userID {
+		liker, err := h.svc.GetUser(c.Request.Context(), userID)
+		if err == nil && liker != nil {
+			if err := h.svc.NotifyLike(c.Request.Context(),
+				fragment.UserID,
+				userID,
+				liker.DisplayName,
+				liker.Avatar,
+				"fragment",
+				fragmentID,
+				""); err != nil {
+				h.logger.Warn("fragment like notification failed", zap.Error(err), zap.String("fragmentId", fragmentID))
+			}
+		} else if err != nil {
+			h.logger.Warn("failed to get liker for fragment like notification", zap.Error(err), zap.String("userId", userID))
+		}
+	}
+
 	// 获取更新后的统计信息
 	stats, _ := h.interactionRepo.GetFragmentStats(c.Request.Context(), fragmentID, userID)
 

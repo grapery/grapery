@@ -20,6 +20,7 @@ type FragmentGenerationService struct {
 	fragmentRepo    *repository.FragmentRepository
 	aiService       *AIService
 	logger          *zap.Logger
+	notify          *Service // optional: push + in-app when generation completes
 }
 
 func NewFragmentGenerationService(
@@ -34,6 +35,11 @@ func NewFragmentGenerationService(
 		aiService:       aiService,
 		logger:          logger,
 	}
+}
+
+// SetNotify wires main Service for completion notifications (nil-safe).
+func (s *FragmentGenerationService) SetNotify(svc *Service) {
+	s.notify = svc
 }
 
 // GenerateFragment 创建生成任务并立即落库占位草稿（与多格参考图流程对齐），返回 task 与 draftFragmentId。
@@ -255,6 +261,19 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		zap.Int("image_count", len(result.ImageUrls)),
 		zap.Int("scenes", len(scenesResult.Scenes)),
 		zap.Int("anchor_images", len(anchorRecords)))
+
+	if s.notify != nil && strings.TrimSpace(result.DraftFragmentID) != "" {
+		preview := captionFromGenerationContent(result.Content)
+		if preview == "" && len(result.ImageUrls) > 0 {
+			preview = "新碎片"
+		}
+		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, result.DraftFragmentID, preview); err != nil {
+			s.logger.Warn("fragment generation completion notify failed",
+				zap.Error(err),
+				zap.String("task_id", taskID),
+				zap.String("fragment_id", result.DraftFragmentID))
+		}
+	}
 }
 
 func stringifyGenerationImageURLs(urls []string) string {

@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
 )
@@ -47,11 +49,12 @@ type InteractionService interface {
 
 // interactionService 互动服务实现
 type interactionService struct {
-	likeRepo     domain.LikeRepository
-	bookmarkRepo domain.BookmarkRepository
-	repo         domain.Repository
-	social       *Service
-	logger       *zap.Logger
+	likeRepo          domain.LikeRepository
+	bookmarkRepo      domain.BookmarkRepository
+	repo              domain.Repository
+	social            *Service
+	fragmentLikeRepo  *repository.FragmentInteractionRepository
+	logger            *zap.Logger
 }
 
 // NewInteractionService 创建互动服务
@@ -60,14 +63,16 @@ func NewInteractionService(
 	bookmarkRepo domain.BookmarkRepository,
 	repo domain.Repository,
 	social *Service,
+	fragmentLikeRepo *repository.FragmentInteractionRepository,
 	logger *zap.Logger,
 ) InteractionService {
 	return &interactionService{
-		likeRepo:     likeRepo,
-		bookmarkRepo: bookmarkRepo,
-		repo:         repo,
-		social:       social,
-		logger:       logger,
+		likeRepo:         likeRepo,
+		bookmarkRepo:     bookmarkRepo,
+		repo:             repo,
+		social:           social,
+		fragmentLikeRepo: fragmentLikeRepo,
+		logger:           logger,
 	}
 }
 
@@ -380,6 +385,50 @@ func (s *interactionService) Like(ctx context.Context, userID string, likeableTy
 		return nil
 	}
 
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return fmt.Errorf("interaction service: fragment like requires FragmentInteractionRepository")
+		}
+		frag, err := s.repo.FragmentByID(ctx, likeableID)
+		if err != nil || frag == nil {
+			return fmt.Errorf("fragment not found: %w", err)
+		}
+		exists, err := s.fragmentLikeRepo.IsLiked(ctx, likeableID, userID)
+		if err != nil {
+			return fmt.Errorf("failed to check fragment like status: %w", err)
+		}
+		if exists {
+			s.logger.Info("already liked fragment (idempotent)",
+				zap.String("userID", userID),
+				zap.String("likeableID", likeableID))
+			return nil
+		}
+		fl := &domain.FragmentLike{
+			ID:         uuid.New().String(),
+			FragmentID: likeableID,
+			UserID:     userID,
+		}
+		if err := s.fragmentLikeRepo.CreateLike(ctx, fl); err != nil {
+			errL := strings.ToLower(err.Error())
+			if strings.Contains(errL, "duplicate") || strings.Contains(errL, "unique") {
+				return nil
+			}
+			return fmt.Errorf("failed to like fragment: %w", err)
+		}
+		if s.social != nil && frag.UserID != "" && frag.UserID != userID {
+			liker, uerr := s.social.GetUser(ctx, userID)
+			if uerr == nil && liker != nil {
+				if nerr := s.social.NotifyLike(ctx, frag.UserID, userID, liker.DisplayName, liker.Avatar, "fragment", likeableID, ""); nerr != nil {
+					s.logger.Warn("fragment polymorphic like notification failed", zap.Error(nerr), zap.String("fragmentId", likeableID))
+				}
+			}
+		}
+		s.logger.Info("liked fragment via interaction service",
+			zap.String("userID", userID),
+			zap.String("likeableID", likeableID))
+		return nil
+	}
+
 	// 1. 检查是否已点赞
 	exists, err := s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, likeableID)
 	if err != nil {
@@ -455,6 +504,19 @@ func (s *interactionService) Unlike(ctx context.Context, userID string, likeable
 		return nil
 	}
 
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return fmt.Errorf("interaction service: fragment unlike requires FragmentInteractionRepository")
+		}
+		if err := s.fragmentLikeRepo.DeleteLike(ctx, likeableID, userID); err != nil {
+			return fmt.Errorf("failed to unlike fragment: %w", err)
+		}
+		s.logger.Info("unliked fragment via interaction service",
+			zap.String("userID", userID),
+			zap.String("likeableID", likeableID))
+		return nil
+	}
+
 	// 获取点赞记录
 	likes, err := s.likeRepo.GetLikesByUser(ctx, userID, likeableType)
 	if err != nil {
@@ -491,6 +553,12 @@ func (s *interactionService) CheckLikeStatus(ctx context.Context, userID string,
 	if likeableType == domain.LikeableTypeStoryboardNode {
 		return s.repo.IsStoryboardLiked(ctx, userID, likeableID)
 	}
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return false, fmt.Errorf("interaction service: fragment like check requires FragmentInteractionRepository")
+		}
+		return s.fragmentLikeRepo.IsLiked(ctx, likeableID, userID)
+	}
 	return s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, likeableID)
 }
 
@@ -517,6 +585,30 @@ func (s *interactionService) GetLikes(ctx context.Context, likeableType domain.L
 			return nil, 0, fmt.Errorf("failed to get likes: %w", err)
 		}
 		return users, total, nil
+	}
+
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return nil, 0, fmt.Errorf("interaction service: fragment likes list requires FragmentInteractionRepository")
+		}
+		flikes, total, err := s.fragmentLikeRepo.GetFragmentLikes(ctx, likeableID, pageSize, offset)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get fragment likes: %w", err)
+		}
+		users := make([]*domain.User, 0, len(flikes))
+		for _, l := range flikes {
+			u, uerr := s.repo.UserByID(ctx, l.UserID)
+			if uerr != nil {
+				s.logger.Warn("failed to get fragment liker user",
+					zap.Error(uerr),
+					zap.String("userID", l.UserID))
+				continue
+			}
+			if u != nil {
+				users = append(users, u)
+			}
+		}
+		return users, int(total), nil
 	}
 
 	// 获取点赞记录
@@ -566,6 +658,16 @@ func (s *interactionService) GetLikesCount(ctx context.Context, likeableType dom
 			return 0, err
 		}
 		return sb.Likes, nil
+	}
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return 0, fmt.Errorf("interaction service: fragment likes count requires FragmentInteractionRepository")
+		}
+		n, err := s.fragmentLikeRepo.GetLikesCount(ctx, likeableID)
+		if err != nil {
+			return 0, err
+		}
+		return int(n), nil
 	}
 	return s.likeRepo.GetLikesCount(ctx, likeableType, likeableID)
 }
@@ -635,6 +737,21 @@ func (s *interactionService) BatchCheckLikeStatus(ctx context.Context, userID st
 		return result, nil
 	}
 
+	if likeableType == domain.LikeableTypeFragment {
+		if s.fragmentLikeRepo == nil {
+			return nil, fmt.Errorf("interaction service: fragment batch like requires FragmentInteractionRepository")
+		}
+		for _, id := range likeableIDs {
+			ok, err := s.fragmentLikeRepo.IsLiked(ctx, id, userID)
+			if err != nil {
+				result[id] = false
+				continue
+			}
+			result[id] = ok
+		}
+		return result, nil
+	}
+
 	for _, id := range likeableIDs {
 		status, err := s.likeRepo.CheckLikeStatus(ctx, userID, likeableType, id)
 		if err != nil {
@@ -694,8 +811,10 @@ func (s *interactionService) checkLikeableExists(ctx context.Context, likeableTy
 			return fmt.Errorf("storyboard not found: %w", err)
 		}
 	case domain.LikeableTypeFragment:
-		// Fragment 检查需要额外的 repo 方法，这里先跳过具体检查
-		// 实际项目中应该添加 FragmentRepository
+		frag, err := s.repo.FragmentByID(ctx, likeableID)
+		if err != nil || frag == nil {
+			return fmt.Errorf("fragment not found: %w", err)
+		}
 		return nil
 	case domain.LikeableTypeCharacterPoster:
 		// CharacterPoster 检查

@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 func (h *Handler) ListNotifications(c *gin.Context) {
@@ -17,7 +18,8 @@ func (h *Handler) ListNotifications(c *gin.Context) {
 		return
 	}
 
-	Success(c, gin.H{"notifications": notifications, "count": len(notifications)})
+	out := service.CloneNotificationsWithVoyagerTypes(notifications)
+	Success(c, gin.H{"notifications": out, "count": len(out)})
 }
 
 func (h *Handler) UnreadCount(c *gin.Context) {

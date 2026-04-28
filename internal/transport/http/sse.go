@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 // SSENotificationStream 实时通知流（SSE）
@@ -57,7 +58,9 @@ func (h *Handler) SSENotificationStream(c *gin.Context) {
 			// 发送新通知
 			for _, notif := range notifications {
 				if notif.CreatedAt > lastCheckTime {
-					notifData, _ := json.Marshal(notif)
+					copied := *notif
+					copied.Type = service.VoyagerNotificationType(notif.Type)
+					notifData, _ := json.Marshal(&copied)
 					fmt.Fprintf(c.Writer, "event: notification\ndata: %s\n\n", notifData)
 					c.Writer.Flush()
 				}
