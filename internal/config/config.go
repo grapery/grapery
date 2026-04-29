@@ -91,6 +91,9 @@ type AIConfig struct {
 	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
 	// (Gemini, Huoshan, Kling). 0 or negative means default 120.
 	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`
+	// TextMaxConcurrent caps simultaneous outbound text-LLM calls cluster-wide (in-flight until response completes).
+	// Implemented via Redis; 0 disables the gate. Typical value matches provider throughput (e.g. 5).
+	TextMaxConcurrent int `yaml:"text_max_concurrent"`
 }
 
 // NormalizeAITextDefaultProvider coerces default_provider / AI_DEFAULT_PROVIDER to a text-LLM-capable name (huoshan or gemini).
@@ -252,6 +255,7 @@ func Load(app string) Config {
 			ImageProvider:         getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
 			VideoProvider:         getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
 			RequestTimeoutSeconds: normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", 120)),
+			TextMaxConcurrent:     normalizeAITextMaxConcurrent(getEnvInt("AI_TEXT_MAX_CONCURRENT", 5)),
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", ""), // SECURITY: No default - must be set via env
@@ -356,6 +360,14 @@ func getEnvFloat(key string, fallback float64) float64 {
 	return fallback
 }
 
+// normalizeAITextMaxConcurrent returns n if non-negative; negative values are treated as 0 (admission gate off).
+func normalizeAITextMaxConcurrent(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
 // normalizeAIRequestTimeoutSeconds returns sec if positive, otherwise default 120 (seconds per AI HTTP call).
 func normalizeAIRequestTimeoutSeconds(sec int) int {
 	if sec <= 0 {
@@ -419,6 +431,7 @@ func getDefaultConfig() Config {
 			GeminiBaseURL:         "",
 			DefaultProvider:       "huoshan",
 			RequestTimeoutSeconds: 120,
+			TextMaxConcurrent:     5,
 		},
 		JWT: JWTConfig{
 			Secret: "", // SECURITY: No default secret - must be set via JWT_SECRET env var
@@ -523,6 +536,7 @@ func overrideWithEnv(cfg Config, app string) Config {
 	cfg.AI.ImageProvider = getEnv("AI_IMAGE_PROVIDER", cfg.AI.ImageProvider)
 	cfg.AI.VideoProvider = getEnv("AI_VIDEO_PROVIDER", cfg.AI.VideoProvider)
 	cfg.AI.RequestTimeoutSeconds = normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", cfg.AI.RequestTimeoutSeconds))
+	cfg.AI.TextMaxConcurrent = normalizeAITextMaxConcurrent(getEnvInt("AI_TEXT_MAX_CONCURRENT", cfg.AI.TextMaxConcurrent))
 
 	// JWT config
 	cfg.JWT.Secret = getEnv("JWT_SECRET", cfg.JWT.Secret)

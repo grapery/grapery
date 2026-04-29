@@ -181,6 +181,9 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		s.logger.Error("failed to generate continuation storyboard",
 			zap.String("newStoryboardId", newStoryboardID),
 			zap.Error(err))
+		if nerr := s.NotifyStoryboardGenerationFailed(ctx, userID, parentStoryboard.StoryID, req.ParentStoryboardID, err.Error()); nerr != nil {
+			s.logger.Warn("continuation storyboard generation failure notify failed", zap.Error(nerr))
+		}
 		return nil, fmt.Errorf("failed to generate storyboard: %w", err)
 	}
 
@@ -213,11 +216,14 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		}
 		return nil
 	}); err != nil {
+		if nerr := s.NotifyStoryboardGenerationFailed(ctx, userID, parentStoryboard.StoryID, req.ParentStoryboardID, "续写保存失败："+err.Error()); nerr != nil {
+			s.logger.Warn("continuation persist failure notify failed", zap.Error(nerr))
+		}
 		return nil, err
 	}
 
 	if len(generatedScenes) > 0 || strings.TrimSpace(newStoryboard.Content) != "" {
-		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID); err != nil {
+		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID, tokensUsed); err != nil {
 			s.logger.Warn("continuation storyboard completion notify failed",
 				zap.Error(err),
 				zap.String("storyboardId", newStoryboard.ID))

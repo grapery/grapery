@@ -26,7 +26,8 @@ type Service struct {
 	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
 	userStatsService *UserStatisticsService // 用户统计服务
 	recoCfg          config.RecommendationConfig
-	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
+	comicStyleSvc       *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
+	aiTextAdmission *AITextAdmissionGate        // optional: global outbound LLM text concurrency (Redis)
 }
 
 // New creates a new service instance
@@ -60,6 +61,25 @@ func (s *Service) SetFragmentComicStyleService(svc *FragmentComicStyleService) {
 	s.comicStyleSvc = svc
 }
 
+// ConfigureAITextAdmission sets the global outbound text LLM concurrency gate (shared by AIGenerationService and AIService).
+// maxConcurrent <= 0 disables the gate (fail-open).
+func (s *Service) ConfigureAITextAdmission(c cache.Cache, maxConcurrent int) {
+	var gate *AITextAdmissionGate
+	if maxConcurrent > 0 && !cache.IsEffectivelyNil(c) {
+		gate = NewAITextAdmissionGate(c, maxConcurrent, s.logger)
+		s.logger.Info("AI text admission gate configured",
+			zap.Int("maxConcurrent", maxConcurrent),
+			zap.Bool("disabled", gate == nil))
+	} else {
+		s.logger.Info("AI text admission gate disabled (maxConcurrent<=0 or redis nil)",
+			zap.Int("maxConcurrent", maxConcurrent))
+	}
+	s.aiTextAdmission = gate
+	if s.aiGenService != nil {
+		s.aiGenService.SetAITextAdmission(gate)
+	}
+}
+
 // SetCache 设置缓存实例
 func (s *Service) SetCache(cache interface{}) {
 	s.cache = cache
@@ -76,6 +96,9 @@ func (s *Service) SetAIClients(genAPI *genapi.GenAPI, geminiClient *gemini.Clien
 		// Set metrics if available
 		if s.metrics != nil {
 			s.aiGenService.SetMetrics(s.metrics)
+		}
+		if s.aiTextAdmission != nil {
+			s.aiGenService.SetAITextAdmission(s.aiTextAdmission)
 		}
 		s.logger.Info("AI generation service initialized")
 
@@ -102,7 +125,7 @@ func (s *Service) AIGenerationService() *AIGenerationService {
 
 // AIService 获取AI服务（用于 FragmentGenerationService）
 func (s *Service) AIService() *AIService {
-	return NewAIService(s.genAPI, s.geminiClient, s.aiGenService, s.imageProvider, s.videoProvider, s.repo, s.logger)
+	return NewAIService(s.genAPI, s.geminiClient, s.aiGenService, s.imageProvider, s.videoProvider, s.repo, s.logger, s.aiTextAdmission)
 }
 
 // UserStatsService 获取用户统计服务

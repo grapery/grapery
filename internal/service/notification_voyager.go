@@ -8,7 +8,8 @@ func VoyagerNotificationType(server string) string {
 	switch server {
 	case "follow", "like", "comment", "mention", "system", "update", "story_update", "announcement", "ai_complete":
 		return server
-	case "fragment_generation_complete", "storyboard_generation_complete":
+	case "fragment_generation_complete", "storyboard_generation_complete",
+		"fragment_generation_failed", "storyboard_generation_failed":
 		return "ai_complete"
 	case "story_follow_storyboard", "storyboard", "fork":
 		return "story_update"

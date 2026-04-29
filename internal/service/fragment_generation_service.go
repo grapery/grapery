@@ -123,6 +123,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, task.Request)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Element extraction failed: %v", err))
+		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("元素提取失败：%v", err))
 		return
 	}
 
@@ -146,6 +147,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	scenesResult, err := s.expandScenes(ctx, task.UserID, task.Request, elemResult, sceneCount, resolvedAR)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Scene expansion failed: %v", err))
+		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("场景扩展失败：%v", err))
 		return
 	}
 	totalTokens += scenesResult.TokensUsed
@@ -161,6 +163,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, scenesResult.Scenes, anchorMap, userRefs)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
+		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("配图生成失败：%v", err))
 		return
 	}
 	totalTokens += imageResult.TokensUsed
@@ -267,12 +270,32 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		if preview == "" && len(result.ImageUrls) > 0 {
 			preview = "新碎片"
 		}
-		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, result.DraftFragmentID, preview); err != nil {
+		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, result.DraftFragmentID, preview, result.TokensUsed); err != nil {
 			s.logger.Warn("fragment generation completion notify failed",
 				zap.Error(err),
 				zap.String("task_id", taskID),
 				zap.String("fragment_id", result.DraftFragmentID))
 		}
+	}
+}
+
+func (s *FragmentGenerationService) notifyFragmentGenFailed(ctx context.Context, task *domain.FragmentGenerationTask, taskID, userFacingReason string) {
+	if s.notify == nil || task == nil {
+		return
+	}
+	frag, err := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID)
+	if err != nil || frag == nil {
+		return
+	}
+	draftID := strings.TrimSpace(frag.ID)
+	if draftID == "" || strings.TrimSpace(task.UserID) == "" {
+		return
+	}
+	if err := s.notify.NotifyFragmentGenerationFailed(ctx, task.UserID, draftID, userFacingReason); err != nil {
+		s.logger.Warn("fragment generation failure notify failed",
+			zap.Error(err),
+			zap.String("task_id", taskID),
+			zap.String("draft_id", draftID))
 	}
 }
 

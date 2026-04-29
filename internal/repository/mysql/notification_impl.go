@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
@@ -19,9 +18,8 @@ func (r *Repository) NotificationsByUser(ctx context.Context, userID string, lim
 		return nil, fmt.Errorf("failed to get notifications: %w", err)
 	}
 	result := make([]*domain.Notification, len(notifications))
-	for i, n := range notifications {
-		dn := r.notificationToDomain(n)
-		result[i] = &dn
+	for i := range notifications {
+		result[i] = ModelToNotification(&notifications[i])
 	}
 	return result, nil
 }
@@ -51,6 +49,11 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 		StoryCover:  notification.StoryCover,
 		StoryID:     notification.StoryID,
 		CommentText: notification.CommentText,
+		RelatedCommentID: notification.RelatedCommentID,
+		StoryboardID:    notification.StoryboardID,
+		StoryboardTitle: notification.StoryboardTitle,
+		FragmentID:      notification.FragmentID,
+		TokensUsed:      notification.TokensUsed,
 		// System notification
 		SysTitle: notification.SysTitle,
 		SysBody:  notification.SysBody,
@@ -85,29 +88,3 @@ func (r *Repository) DeleteNotification(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *Repository) notificationToDomain(n Notification) domain.Notification {
-	return domain.Notification{
-		BaseModel: common.BaseModel{
-			ID:        n.ID,
-			CreatedAt: n.CreatedAt.Unix(),
-		},
-		UserID:      n.UserID,
-		Type:        n.Type,
-		Title:       n.Title,
-		Content:     n.Content,
-		Link:        n.Link,
-		Read:        n.Read,
-		ActorID:     n.ActorID,
-		ActorName:   n.ActorName,
-		ActorAvatar: n.ActorAvatar,
-		// Story context
-		StoryTitle:  n.StoryTitle,
-		StoryCover:  n.StoryCover,
-		StoryID:     n.StoryID,
-		CommentText: n.CommentText,
-		// System notification
-		SysTitle: n.SysTitle,
-		SysBody:  n.SysBody,
-		SysIcon:  n.SysIcon,
-	}
-}

@@ -270,6 +270,9 @@ func main() {
 		svc.SetCache(redisCache)
 	}
 
+	// Global outbound text-LLM concurrency (Redis-backed; disables if Redis unavailable or text_max_concurrent=0).
+	svc.ConfigureAITextAdmission(redisCache, cfg.AI.TextMaxConcurrent)
+
 	// Set metrics if enabled
 	if telemetryManager.Metrics != nil {
 		svc.SetMetrics(telemetryManager.Metrics)

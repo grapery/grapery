@@ -50,6 +50,9 @@ type Cache interface {
 	Decr(ctx context.Context, key string) (int64, error)
 	IncrBy(ctx context.Context, key string, value int64) (int64, error)
 
+	// Eval evaluates a Redis Lua script (Redis-backed cache only; other implementations return an error).
+	Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error)
+
 	Close() error
 }
 
@@ -235,6 +238,14 @@ func (r *redisCache) Decr(ctx context.Context, key string) (int64, error) {
 // IncrBy 原子增加指定值
 func (r *redisCache) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
 	return r.client.IncrBy(ctx, key, value).Result()
+}
+
+// Eval runs a Lua script (see go-redis Eval).
+func (r *redisCache) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+	if r == nil || r.client == nil {
+		return nil, errors.New("redis cache not initialized")
+	}
+	return r.client.Eval(ctx, script, keys, args...).Result()
 }
 
 // Close 关闭连接

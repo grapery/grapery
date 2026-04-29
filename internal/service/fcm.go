@@ -382,7 +382,7 @@ func (s *Service) SendNotificationToFCM(ctx context.Context, userID string, noti
 
 	payload := &domain.PushNotificationPayload{
 		Title:    notification.Title,
-		Body:     notification.Content,
+		Body:     notificationPushBody(notification),
 		Sound:    "default",
 		Category: notification.Type,
 		Badge:    badge,

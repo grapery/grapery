@@ -27,10 +27,11 @@ type AIService struct {
 	defaultVideoProvider string               // 与 cfg.AI.VideoProvider 对齐
 	repo                 domain.Repository
 	logger               *zap.Logger
+	textAdmission        *AITextAdmissionGate // global text LLM concurrency (optional; shared with AIGenerationService)
 }
 
 // NewAIService 创建 AI 服务
-func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIGenerationService, defaultImageProvider, defaultVideoProvider string, repo domain.Repository, logger *zap.Logger) *AIService {
+func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIGenerationService, defaultImageProvider, defaultVideoProvider string, repo domain.Repository, logger *zap.Logger, admission *AITextAdmissionGate) *AIService {
 	dp := strings.TrimSpace(defaultImageProvider)
 	if dp == "" {
 		dp = "huoshan"
@@ -47,7 +48,15 @@ func NewAIService(genAPI *genapi.GenAPI, geminiClient *gemini.Client, aiGen *AIG
 		defaultVideoProvider: vp,
 		repo:                 repo,
 		logger:               logger,
+		textAdmission:        admission,
 	}
+}
+
+func (s *AIService) acquireTextAdmission(ctx context.Context) (func(), error) {
+	if s == nil || s.textAdmission == nil {
+		return func() {}, nil
+	}
+	return s.textAdmission.Acquire(ctx)
 }
 
 // ============== 故事生成 ==============
@@ -1040,6 +1049,14 @@ func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, p
 
 // GenerateFragmentExtractionJSON Step1 专用：保留完整结构化 JSON（含 visualBible），供普通碎片链路解析。
 func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *domain.AITask) (raw string, tokens int, err error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return "", 0, admErr
+	}
+	if rel != nil {
+		defer rel()
+	}
+
 	prompt, imageURLs, err := s.parseFragmentTextInput(aiTask)
 	if err != nil {
 		return "", 0, err
@@ -1076,6 +1093,14 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 
 // GenerateFragmentAuxJSON 无参考图的 JSON 模式文本（一致性检查等辅助步骤）。
 func (s *AIService) GenerateFragmentAuxJSON(ctx context.Context, prompt string) (raw string, tokens int, err error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return "", 0, admErr
+	}
+	if rel != nil {
+		defer rel()
+	}
+
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return "", 0, fmt.Errorf("empty prompt")
@@ -1123,6 +1148,14 @@ func (s *AIService) GenerateFragmentAuxJSON(ctx context.Context, prompt string) 
 // 有参考图时使用多模态 + JSON（content + aspectRatio）；否则纯文本。
 // inferredAspect 仅在有参考图且模型成功返回 JSON 时可能非空；需由调用方与用户指定比例合并。
 func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.AITask) (string, int, string, error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return "", 0, "", admErr
+	}
+	if rel != nil {
+		defer rel()
+	}
+
 	prompt, imageURLs, err := s.parseFragmentTextInput(aiTask)
 	if err != nil {
 		return "", 0, "", err
@@ -1239,6 +1272,14 @@ func fragmentPrefillHTTPImageURLs(urls []string, maxN int) []string {
 
 // GenerateTextForFragmentStoryPrefill 碎片「生成故事」预填：优先火山方舟（JSON 模式 + 可选参考图），失败回退 Gemini。
 func (s *AIService) GenerateTextForFragmentStoryPrefill(ctx context.Context, prompt string, referenceImageURLs []string) (string, error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return "", admErr
+	}
+	if rel != nil {
+		defer rel()
+	}
+
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return "", fmt.Errorf("prompt is required")

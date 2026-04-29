@@ -630,6 +630,11 @@ type Notification struct {
 	StoryCover  string `gorm:"size:500"`
 	StoryID     string `gorm:"size:36;index"`
 	CommentText string `gorm:"type:text"` // 评论内容摘要
+	RelatedCommentID string `gorm:"size:36;index"`
+	StoryboardID    string `gorm:"size:36;index"`
+	StoryboardTitle string `gorm:"size:200"`
+	FragmentID      string `gorm:"size:36;index"`
+	TokensUsed      int    `gorm:"default:0"`
 	// System notification fields (for system type)
 	SysTitle  string         `gorm:"size:200"`
 	SysBody   string         `gorm:"type:text"`

@@ -34,6 +34,7 @@ type AIGenerationService struct {
 	redisDistributedLock   *RedisDistributedLock
 	asyncVideoCompletion   *AsyncVideoCompletionService // 异步视频完成处理服务
 	enableQuotaReservation bool                         // 是否启用配额预留（默认关闭，逐步迁移）
+	textAdmission          *AITextAdmissionGate         // optional: global LLM text concurrency (Redis)
 }
 
 // NewAIGenerationService 创建AI生成服务
@@ -71,6 +72,18 @@ func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
 	s.enableQuotaReservation = enabled
 	s.logger.Info("quota reservation mechanism updated",
 		zap.Bool("enabled", enabled))
+}
+
+// SetAITextAdmission wires the global text-provider concurrency gate (nil disables).
+func (s *AIGenerationService) SetAITextAdmission(g *AITextAdmissionGate) {
+	s.textAdmission = g
+}
+
+func (s *AIGenerationService) acquireTextGate(ctx context.Context) (func(), error) {
+	if s == nil || s.textAdmission == nil {
+		return func() {}, nil
+	}
+	return s.textAdmission.Acquire(ctx)
 }
 
 // GeminiAvailable 是否已注册 Gemini（显式指定 planProvider=gemini 时使用）。
@@ -246,11 +259,29 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 		return nil, fmt.Errorf("failed to create AI record: %w", err)
 	}
 
-	// 2. 更新状态为processing
+	enqueueAt := time.Now()
+
+	// 全局文本推理槽（Redis 计数）：在等待槽位期间的耗时计入 QueueTimeMs，不等同于「任务总时长上限」。
+	releaseGate, gateErr := s.acquireTextGate(ctx)
+	if gateErr != nil {
+		record.Status = domain.AITaskStatusFailed
+		record.ErrorMessage = gateErr.Error()
+		completedUnix := time.Now().Unix()
+		record.CompletedAt = &completedUnix
+		record.DurationMs = time.Since(enqueueAt).Milliseconds()
+		_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+		return nil, fmt.Errorf("text admission: %w", gateErr)
+	}
+	defer releaseGate()
+
+	// 2. 更新状态为 processing（真正开始调用供应商）
 	processingTime := time.Now().Unix()
 	record.Status = domain.AITaskStatusProcessing
 	record.StartedAt = &processingTime
+	record.QueueTimeMs = time.Since(enqueueAt).Milliseconds()
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+
+	providerStart := time.Now()
 
 	// 3. 调用 AI：优先火山，再 Gemini
 	var text string
@@ -332,7 +363,8 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	}
 
 	completedTime := time.Now()
-	durationMs := completedTime.Sub(startTime).Milliseconds()
+	providerMs := completedTime.Sub(providerStart).Milliseconds()
+	wallMs := completedTime.Sub(enqueueAt).Milliseconds()
 
 	if text == "" {
 		errMsg := "text generation failed (huoshan and/or gemini returned no usable text)"
@@ -342,7 +374,8 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 
 		record.Status = domain.AITaskStatusFailed
 		record.ErrorMessage = errMsg
-		record.DurationMs = durationMs
+		record.ProcessTimeMs = providerMs
+		record.DurationMs = wallMs
 		completedUnix := completedTime.Unix()
 		record.CompletedAt = &completedUnix
 		_ = s.repo.UpdateAIGenerationRecord(ctx, record)
@@ -358,7 +391,8 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 	// 生成成功
 	record.Status = domain.AITaskStatusCompleted
 	record.Progress = 100
-	record.DurationMs = durationMs
+	record.ProcessTimeMs = providerMs
+	record.DurationMs = wallMs
 	completedUnix := completedTime.Unix()
 	record.CompletedAt = &completedUnix
 
@@ -419,13 +453,15 @@ func (s *AIGenerationService) GenerateText(ctx context.Context, req *GenerateTex
 		zap.String("recordId", record.ID),
 		zap.String("provider", usedProvider),
 		zap.Int("tokensUsed", record.TotalTokens),
-		zap.Int64("durationMs", durationMs))
+		zap.Int64("queueMs", record.QueueTimeMs),
+		zap.Int64("processMs", record.ProcessTimeMs),
+		zap.Int64("durationMs", record.DurationMs))
 
 	return &GenerateTextResult{
 		Text:       text,
 		RecordID:   record.ID,
 		TokensUsed: record.TotalTokens,
-		DurationMs: durationMs,
+		DurationMs: wallMs,
 	}, nil
 }
 

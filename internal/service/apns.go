@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -152,6 +153,15 @@ func pushNotificationDataMap(n *domain.Notification) map[string]string {
 	}
 	if n.StoryID != "" {
 		data["story_id"] = n.StoryID
+	}
+	if strings.TrimSpace(n.StoryboardID) != "" {
+		data["storyboard_id"] = strings.TrimSpace(n.StoryboardID)
+	}
+	if strings.TrimSpace(n.FragmentID) != "" {
+		data["fragment_id"] = strings.TrimSpace(n.FragmentID)
+	}
+	if n.TokensUsed > 0 {
+		data["tokens_used"] = strconv.Itoa(n.TokensUsed)
 	}
 	if n.ActorID != "" {
 		data["user_id"] = n.ActorID
@@ -613,7 +623,7 @@ func (s *Service) SendNotificationToAPNs(ctx context.Context, userID string, not
 
 	payload := &domain.PushNotificationPayload{
 		Title:    notification.Title,
-		Body:     notification.Content,
+		Body:     notificationPushBody(notification),
 		Sound:    "default",
 		Category: notification.Type,
 		Badge:    badge,

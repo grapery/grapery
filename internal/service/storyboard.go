@@ -378,6 +378,9 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 		s.logger.Warn("initial storyboard generation failed",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
+		if nerr := s.NotifyStoryboardGenerationFailed(ctx, storyboard.UserID, storyboard.StoryID, storyboardID, err.Error()); nerr != nil {
+			s.logger.Warn("initial storyboard generation failure notify failed", zap.Error(nerr), zap.String("storyboardId", storyboardID))
+		}
 		return
 	}
 
@@ -388,6 +391,9 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 		s.logger.Warn("failed to update storyboard after initial generation",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
+		if nerr := s.NotifyStoryboardGenerationFailed(ctx, storyboard.UserID, storyboard.StoryID, storyboardID, err.Error()); nerr != nil {
+			s.logger.Warn("storyboard save failure notify failed", zap.Error(nerr), zap.String("storyboardId", storyboardID))
+		}
 		return
 	}
 
@@ -398,6 +404,9 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 		s.logger.Warn("failed to persist scenes after initial generation",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
+		if nerr := s.NotifyStoryboardGenerationFailed(ctx, storyboard.UserID, storyboard.StoryID, storyboardID, err.Error()); nerr != nil {
+			s.logger.Warn("storyboard scenes persist failure notify failed", zap.Error(nerr), zap.String("storyboardId", storyboardID))
+		}
 		return
 	}
 
@@ -420,7 +429,11 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 		zap.String("storyboardId", storyboardID),
 		zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 
-	if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, storyboard.UserID, storyboardID, storyboard.StoryID); err != nil {
+	tokenTotal := 0
+	if t, err := s.repo.GetStoryboardTotalTokens(ctx, storyboardID); err == nil {
+		tokenTotal = t
+	}
+	if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, storyboard.UserID, storyboardID, storyboard.StoryID, tokenTotal); err != nil {
 		s.logger.Warn("initial storyboard generation completion notify failed",
 			zap.Error(err),
 			zap.String("storyboardId", storyboardID))
@@ -1554,6 +1567,9 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 				zap.String("parentId", parentID),
 				zap.String("newStoryboardId", newStoryboard.ID),
 				zap.Error(err))
+			if nerr := s.NotifyStoryboardGenerationFailed(context.Background(), userID, parent.StoryID, parentID, fmt.Sprintf("Fork 时 AI 生成失败：%v", err)); nerr != nil {
+				s.logger.Warn("fork AI failure notify failed", zap.Error(nerr), zap.String("newStoryboardId", newStoryboard.ID))
+			}
 		} else {
 			s.logger.Info("AI generation completed for forked storyboard",
 				zap.String("newStoryboardId", newStoryboard.ID),
@@ -1609,7 +1625,11 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 	}
 
 	if len(newStoryboard.StoryboardScenes) > 0 || strings.TrimSpace(newStoryboard.Content) != "" {
-		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID); err != nil {
+		tok := 0
+		if t, err := s.repo.GetStoryboardTotalTokens(ctx, newStoryboard.ID); err == nil {
+			tok = t
+		}
+		if err := s.NotifyStoryboardInitialGenerationCompleted(ctx, newStoryboard.UserID, newStoryboard.ID, newStoryboard.StoryID, tok); err != nil {
 			s.logger.Warn("fork storyboard initial generation completion notify failed",
 				zap.Error(err),
 				zap.String("storyboardId", newStoryboard.ID))

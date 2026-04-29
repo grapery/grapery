@@ -916,7 +916,11 @@ func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Con
 
 	if s.notify != nil && strings.TrimSpace(draftID) != "" && strings.TrimSpace(task.UserID) != "" {
 		preview := strings.TrimSpace(caption)
-		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, draftID, preview); err != nil {
+		tokens := 0
+		if task.Metrics != nil {
+			tokens = task.Metrics.TotalTokens
+		}
+		if err := s.notify.NotifyFragmentGenerationCompleted(context.Background(), task.UserID, draftID, preview, tokens); err != nil {
 			s.logger.Warn("panel fragment generation completion notify failed",
 				zap.Error(err),
 				zap.String("task_id", taskID),
@@ -992,18 +996,28 @@ func (s *FragmentPanelGenerationService) finalizeDraft(ctx context.Context, draf
 
 func (s *FragmentPanelGenerationService) failTask(ctx context.Context, taskID, draftID, msg string) {
 	s.logger.Warn("panel gen failed", zap.String("task_id", taskID), zap.String("msg", msg))
+	userID := ""
 	t, err := s.panelRepo.GetByID(ctx, taskID)
-	if err == nil {
+	if err == nil && t != nil {
 		t.Status = "failed"
 		t.ErrorMessage = msg
 		now := time.Now().Unix()
 		t.CompletedAt = &now
 		t.UpdatedAt = now
+		userID = strings.TrimSpace(t.UserID)
 		_ = s.panelRepo.Save(ctx, t)
 	} else {
 		_ = s.panelRepo.UpdateError(ctx, taskID, msg)
 	}
 	s.markDraftFailed(ctx, draftID, truncatePanelErr(msg, 240))
+	if s.notify != nil && strings.TrimSpace(draftID) != "" && userID != "" {
+		if nerr := s.notify.NotifyFragmentGenerationFailed(context.Background(), userID, draftID, strings.TrimSpace(msg)); nerr != nil {
+			s.logger.Warn("panel fragment generation failure notify failed",
+				zap.Error(nerr),
+				zap.String("task_id", taskID),
+				zap.String("draft_id", draftID))
+		}
+	}
 }
 
 func (s *FragmentPanelGenerationService) markDraftFailed(ctx context.Context, draftID, shortMsg string) {
