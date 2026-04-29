@@ -254,6 +254,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		AIAssistanceOptions: req.AIAssistanceOptions, // AI辅助选项
 	}
 
+	if story.Style == nil && fragmentToMark != nil {
+		if cfg := s.styleConfigFromFragmentImageStyle(ctx, fragmentToMark); cfg != nil {
+			story.Style = cfg
+		}
+	}
+
 	// 保存故事到数据库（先创建，后续更新AI丰富的内容）
 	s.logger.Debug("saving story to database",
 		zap.String("storyID", story.ID),
@@ -3087,6 +3093,24 @@ func (s *Service) GetStoryContributors(ctx context.Context, storyID string, limi
 
 // ========== 碎片转故事功能 ==========
 
+// styleConfigFromFragmentImageStyle 将碎片记录的图片/漫画风格 slug（与 fragment_comic_styles.value 一致）转为故事落库的 StyleConfig。
+func (s *Service) styleConfigFromFragmentImageStyle(ctx context.Context, fragment *domain.Fragment) *domain.StyleConfig {
+	if fragment == nil {
+		return nil
+	}
+	slug := ""
+	if fragment.Style != nil {
+		slug = strings.TrimSpace(*fragment.Style)
+	}
+	if slug == "" {
+		return nil
+	}
+	if cfg, err := s.GetStyleConfigByStyle(ctx, slug); err == nil && cfg != nil {
+		return cfg
+	}
+	return &domain.StyleConfig{Style: slug}
+}
+
 // ConvertFragmentToStory 将碎片转换为故事
 func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fragmentID string, req domain.ConvertFragmentRequest) (*domain.ConvertFragmentResponse, error) {
 	s.logger.Info("converting fragment to story",
@@ -3167,6 +3191,10 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		},
 		Followers:  0,
 		PanelCount: 0,
+	}
+
+	if cfg := s.styleConfigFromFragmentImageStyle(ctx, fragment); cfg != nil {
+		story.Style = cfg
 	}
 
 	// 获取作者信息

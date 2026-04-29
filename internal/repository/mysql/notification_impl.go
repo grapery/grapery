@@ -45,15 +45,16 @@ func (r *Repository) CreateNotification(ctx context.Context, notification *domai
 		ActorName:   notification.ActorName,
 		ActorAvatar: notification.ActorAvatar,
 		// Story context
-		StoryTitle:  notification.StoryTitle,
-		StoryCover:  notification.StoryCover,
-		StoryID:     notification.StoryID,
-		CommentText: notification.CommentText,
-		RelatedCommentID: notification.RelatedCommentID,
-		StoryboardID:    notification.StoryboardID,
-		StoryboardTitle: notification.StoryboardTitle,
-		FragmentID:      notification.FragmentID,
-		TokensUsed:      notification.TokensUsed,
+		StoryTitle:         notification.StoryTitle,
+		StoryCover:         notification.StoryCover,
+		StoryID:            notification.StoryID,
+		CommentText:        notification.CommentText,
+		RelatedCommentID:   notification.RelatedCommentID,
+		StoryboardID:       notification.StoryboardID,
+		StoryboardTitle:    notification.StoryboardTitle,
+		FragmentID:         notification.FragmentID,
+		RelatedCharacterID: notification.RelatedCharacterID,
+		TokensUsed:         notification.TokensUsed,
 		// System notification
 		SysTitle: notification.SysTitle,
 		SysBody:  notification.SysBody,
@@ -87,4 +88,3 @@ func (r *Repository) DeleteNotification(ctx context.Context, id string) error {
 	}
 	return nil
 }
-

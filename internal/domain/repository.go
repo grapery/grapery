@@ -96,6 +96,11 @@ type Repository interface {
 	DeleteCharacter(ctx context.Context, id string) error
 	PopularCharacters(ctx context.Context, limit int) ([]*Character, error)
 	StoryboardsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*Storyboard, int64, error)
+	CreateCharacterGenerationTask(ctx context.Context, task *CharacterGenerationTask) error
+	UpdateCharacterGenerationTask(ctx context.Context, task *CharacterGenerationTask) error
+	CharacterGenerationTaskByID(ctx context.Context, id string) (*CharacterGenerationTask, error)
+	LatestCharacterGenerationTaskByFragmentKey(ctx context.Context, storyID, fragmentID, fragmentCharacterKey string) (*CharacterGenerationTask, error)
+	ListCharacterGenerationTasks(ctx context.Context, userID, status string, limit, offset int) ([]*CharacterGenerationTask, error)
 
 	// ========== Story asset operations ==========
 	StorySceneByID(ctx context.Context, storyID, sceneID string) (*StoryScene, error)

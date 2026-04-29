@@ -10,32 +10,34 @@ type Character struct {
 	StoryID string `json:"storyId"`
 	// UserID 角色创建者ID
 	// 核心规则：只有故事创作者可以创建角色，所以 UserID 应该等于 Story.UserID
-	UserID                   string `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
-	Name                     string `json:"name"`
-	Description              string `json:"description"`
-	Avatar                   string `json:"avatar,omitempty"`
-	Poster                   string `json:"poster,omitempty"`
-	Portrait                 string `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
-	NeedsPortrait            bool   `json:"needsPortrait"`                      // 是否需要生成形象
-	ReferenceImage           string `json:"referenceImage,omitempty"`           // 参考图URL
-	PortraitGenerationStatus string `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
-	Personality              string `json:"personality,omitempty"`
-	Background               string `json:"background,omitempty"`
-	ShortTermGoal            string `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
-	LongTermGoal             string `json:"longTermGoal,omitempty"`    // Overarching ambitions
-	HandlingStyle            string `json:"handlingStyle,omitempty"`   // Approach to handling situations
-	CognitionRange           string `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
-	AbilityFeatures          string `json:"abilityFeatures,omitempty"` // Special skills and capabilities
-	Appearance               string `json:"appearance,omitempty"`      // Physical appearance and features
-	DressPreference          string `json:"dressPreference,omitempty"` // Clothing preferences and style
-	TraitsJSON               string `json:"-"`                         // Internal storage for DB conversion
-	SkillsJSON               string `json:"-"`                         // Internal storage for DB conversion
-	IsPublic                 bool   `json:"isPublic"`
-	SourceType               string `json:"sourceType,omitempty"`
-	SourcePrompt             string `json:"sourcePrompt,omitempty"`
-	SourceImage              string `json:"sourceImage,omitempty"`
-	CreatedBy                string `json:"createdBy,omitempty"`
-	LastEditedBy             string `json:"lastEditedBy,omitempty"`
+	UserID                     string `json:"authorId"` // 保持 JSON 标签为 authorId 以保持 API 兼容性
+	Name                       string `json:"name"`
+	Description                string `json:"description"`
+	Avatar                     string `json:"avatar,omitempty"`
+	Poster                     string `json:"poster,omitempty"`
+	Portrait                   string `json:"portrait,omitempty"`                 // 完整角色形象图URL（AI生成）
+	NeedsPortrait              bool   `json:"needsPortrait"`                      // 是否需要生成形象
+	ReferenceImage             string `json:"referenceImage,omitempty"`           // 参考图URL
+	PortraitGenerationStatus   string `json:"portraitGenerationStatus,omitempty"` // none/pending/generating/generated/failed
+	Personality                string `json:"personality,omitempty"`
+	Background                 string `json:"background,omitempty"`
+	ShortTermGoal              string `json:"shortTermGoal,omitempty"`   // Immediate objectives in current story arc
+	LongTermGoal               string `json:"longTermGoal,omitempty"`    // Overarching ambitions
+	HandlingStyle              string `json:"handlingStyle,omitempty"`   // Approach to handling situations
+	CognitionRange             string `json:"cognitionRange,omitempty"`  // Knowledge and awareness of their world
+	AbilityFeatures            string `json:"abilityFeatures,omitempty"` // Special skills and capabilities
+	Appearance                 string `json:"appearance,omitempty"`      // Physical appearance and features
+	DressPreference            string `json:"dressPreference,omitempty"` // Clothing preferences and style
+	TraitsJSON                 string `json:"-"`                         // Internal storage for DB conversion
+	SkillsJSON                 string `json:"-"`                         // Internal storage for DB conversion
+	IsPublic                   bool   `json:"isPublic"`
+	SourceType                 string `json:"sourceType,omitempty"`
+	SourcePrompt               string `json:"sourcePrompt,omitempty"`
+	SourceImage                string `json:"sourceImage,omitempty"`
+	SourceFragmentID           string `json:"sourceFragmentId,omitempty"`           // 来源故事碎片（用于碎片转故事后补齐角色）
+	SourceFragmentCharacterKey string `json:"sourceFragmentCharacterKey,omitempty"` // 碎片内人物稳定 key，用于防重复创建
+	CreatedBy                  string `json:"createdBy,omitempty"`
+	LastEditedBy               string `json:"lastEditedBy,omitempty"`
 
 	// Engagement stats fields (partial - using Likes, Followers, Stories)
 	// Note: We use individual fields instead of embedding EngagementStats
@@ -99,4 +101,62 @@ type CharacterThreeViews struct {
 	Front string `json:"front,omitempty"`
 	Side  string `json:"side,omitempty"`
 	Back  string `json:"back,omitempty"`
+}
+
+const (
+	CharacterGenerationStatusPending    = "pending"
+	CharacterGenerationStatusProcessing = "processing"
+	CharacterGenerationStatusCompleted  = "completed"
+	CharacterGenerationStatusFailed     = "failed"
+)
+
+const (
+	CharacterGenerationSourceManualPrompt = "manual_prompt"
+	CharacterGenerationSourceManualForm   = "manual_form"
+	CharacterGenerationSourceFragment     = "fragment"
+)
+
+const (
+	CharacterGenerationStepQueued     = "queued"
+	CharacterGenerationStepExtract    = "extract_attributes"
+	CharacterGenerationStepCreate     = "create_character"
+	CharacterGenerationStepPortrait   = "generate_portrait"
+	CharacterGenerationStepThreeViews = "generate_three_views"
+	CharacterGenerationStepNotify     = "notify"
+)
+
+// CharacterGenerationTask is the durable draft/progress record for async story-character creation.
+type CharacterGenerationTask struct {
+	ID                         string `json:"id"`
+	UserID                     string `json:"userId"`
+	StoryID                    string `json:"storyId"`
+	CharacterID                string `json:"characterId,omitempty"`
+	SourceType                 string `json:"sourceType"`
+	SourceFragmentID           string `json:"sourceFragmentId,omitempty"`
+	SourceFragmentCharacterKey string `json:"sourceFragmentCharacterKey,omitempty"`
+	Status                     string `json:"status"`
+	Progress                   int    `json:"progress"`
+	CurrentStep                string `json:"currentStep,omitempty"`
+	RequestJSON                string `json:"requestJson,omitempty"`
+	ResultJSON                 string `json:"resultJson,omitempty"`
+	ErrorMessage               string `json:"errorMessage,omitempty"`
+	CreatedAt                  int64  `json:"createdAt"`
+	UpdatedAt                  int64  `json:"updatedAt"`
+	CompletedAt                *int64 `json:"completedAt,omitempty"`
+
+	Character *Character `json:"character,omitempty"`
+}
+
+// FragmentCharacterSuggestion describes a character that can be materialized from a source fragment.
+type FragmentCharacterSuggestion struct {
+	Key                 string `json:"key"`
+	Name                string `json:"name"`
+	Role                string `json:"role,omitempty"`
+	Description         string `json:"description,omitempty"`
+	Background          string `json:"background,omitempty"`
+	Appearance          string `json:"appearance,omitempty"`
+	ReferenceImage      string `json:"referenceImage,omitempty"`
+	SourcePanelIndex    int    `json:"sourcePanelIndex,omitempty"`
+	AlreadyCreated      bool   `json:"alreadyCreated,omitempty"`
+	ExistingCharacterID string `json:"existingCharacterId,omitempty"`
 }

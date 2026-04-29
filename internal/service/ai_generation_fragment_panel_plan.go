@@ -182,6 +182,10 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 
 	temp := float32(0.35)
 	maxTok := int32(8192)
+	// 5 格条漫版式时 JSON 体量大，8192 输出易被截断导致 panels 数量不足或 JSON 残缺。
+	if req.PanelCount >= 5 {
+		maxTok = 16384
+	}
 	config := &genai.GenerateContentConfig{
 		Temperature:      &temp,
 		MaxOutputTokens:  maxTok,
@@ -336,11 +340,15 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
 	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, req.LayoutAddon)
+	maxHuoshanTok := 8192
+	if req.PanelCount >= 5 {
+		maxHuoshanTok = 16384
+	}
 	hresp, err := hc.GenerateText(ctx, &huoshanark.TextGenerationRequest{
 		Prompt:       userText,
 		ImageURLs:    []string{refURL},
 		JSONResponse: true,
-		MaxTokens:    8192,
+		MaxTokens:    maxHuoshanTok,
 		Temperature:  0.35,
 	})
 	completedTime := time.Now()
@@ -444,11 +452,14 @@ func (s *AIGenerationService) failPanelPlanRecord(ctx context.Context, record *d
 }
 
 func normalizeFragmentPanelPlan(raw []domain.FragmentPanelPlanItem, want int) ([]domain.FragmentPanelPlanItem, error) {
-	if len(raw) != want {
-		return nil, fmt.Errorf("plan has %d panels, want %d", len(raw), want)
-	}
 	panels := append([]domain.FragmentPanelPlanItem(nil), raw...)
 	sort.Slice(panels, func(i, j int) bool { return panels[i].Index < panels[j].Index })
+	if len(panels) > want {
+		panels = panels[:want]
+	}
+	if len(panels) != want {
+		return nil, fmt.Errorf("plan has %d panels, want %d", len(panels), want)
+	}
 	out := make([]domain.FragmentPanelPlanItem, want)
 	for i := 0; i < want; i++ {
 		p := panels[i]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -212,6 +213,7 @@ func fragmentDBToDomainInternal(f FragmentDB) domain.Fragment {
 		SourceID:   f.SourceID,
 		Topic:      f.Topic,
 		Caption:    f.Caption,
+		Style:      cloneTrimmedStringPtr(f.Style),
 		Status:     string(common.StatusActive), // 默认状态
 		EngagementStats: common.EngagementStats{
 			Likes:    f.Likes,
@@ -279,6 +281,7 @@ func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
 		SourceID:           f.SourceID,
 		Topic:              f.Topic,
 		Caption:            f.Caption,
+		Style:              f.Style,
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
 		IsDraft:            f.IsDraft,
@@ -289,4 +292,16 @@ func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
 		CreatedAt:          f.CreatedAt,
 		UpdatedAt:          f.UpdatedAt,
 	}
+}
+
+func cloneTrimmedStringPtr(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*p)
+	if s == "" {
+		return nil
+	}
+	out := s
+	return &out
 }

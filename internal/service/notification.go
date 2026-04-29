@@ -89,7 +89,7 @@ func (s *Service) userAllowsPushForNotificationType(ctx context.Context, userID,
 		return ns.Push.StoryUpdate
 	case "group_invite":
 		return ns.Push.SystemAnnouncement
-	case "system", "fragment_generation_complete", "fragment_generation_failed":
+	case "system", "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed":
 		return ns.Push.SystemAnnouncement
 	default:
 		return true
@@ -139,7 +139,7 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 			category = "social"
 		case "storyboard", "fork", "story_follow_storyboard", "storyboard_generation_complete", "storyboard_generation_failed":
 			category = "transactional"
-		case "fragment_generation_complete", "fragment_generation_failed":
+		case "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed":
 			category = "system"
 		}
 		metrics.RecordNotificationByCategory(category)
@@ -152,12 +152,12 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 func (s *Service) NotifyComment(ctx context.Context, targetUserID, actorID, actorName, actorAvatar, targetTypeKey, targetID, commentID string) error {
 	seg := targetPathSegment(targetTypeKey)
 	n := &domain.Notification{
-		UserID:      targetUserID,
-		Type:        "comment",
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
-		ActorID:     actorID,
-		ActorName:   actorName,
-		ActorAvatar: actorAvatar,
+		UserID:           targetUserID,
+		Type:             "comment",
+		Link:             fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
+		ActorID:          actorID,
+		ActorName:        actorName,
+		ActorAvatar:      actorAvatar,
 		RelatedCommentID: commentID,
 	}
 	s.populateTargetRichContext(ctx, n, targetTypeKey, targetID)
@@ -217,6 +217,43 @@ func (s *Service) NotifyFollow(ctx context.Context, targetUserID, actorID, actor
 	return s.CreateNotificationWithPush(ctx, n)
 }
 
+func (s *Service) NotifyCharacterGenerationComplete(ctx context.Context, userID, storyID, characterID, characterName string) error {
+	title := "角色生成完成"
+	name := strings.TrimSpace(characterName)
+	if name == "" {
+		name = "故事角色"
+	}
+	n := &domain.Notification{
+		UserID:             userID,
+		Type:               "character_generation_complete",
+		Title:              title,
+		Content:            fmt.Sprintf("「%s」已完成资料、立绘和三视图生成。", name),
+		Link:               fmt.Sprintf("/characters/%s", characterID),
+		StoryID:            storyID,
+		RelatedCharacterID: characterID,
+	}
+	return s.CreateNotificationWithPush(ctx, n)
+}
+
+func (s *Service) NotifyCharacterGenerationFailed(ctx context.Context, userID, storyID, taskID, reason string) error {
+	msg := strings.TrimSpace(reason)
+	if msg == "" {
+		msg = "请稍后在草稿箱重试。"
+	}
+	n := &domain.Notification{
+		UserID:  userID,
+		Type:    "character_generation_failed",
+		Title:   "角色生成失败",
+		Content: msg,
+		Link:    "/drafts",
+		StoryID: storyID,
+	}
+	if strings.TrimSpace(taskID) != "" {
+		n.Link = fmt.Sprintf("/drafts?characterTaskId=%s", taskID)
+	}
+	return s.CreateNotificationWithPush(ctx, n)
+}
+
 // NotifyStoryboardCreated 新 storyboard 创建通知
 func (s *Service) NotifyStoryboardCreated(ctx context.Context, storyOwnerID, creatorID, creatorName, creatorAvatar, storyID, storyboardID string) error {
 	// 如果创建者是故事作者本人，不需要通知
@@ -225,13 +262,13 @@ func (s *Service) NotifyStoryboardCreated(ctx context.Context, storyOwnerID, cre
 	}
 
 	n := &domain.Notification{
-		UserID:      storyOwnerID,
-		Type:        "storyboard",
-		Link:        fmt.Sprintf("/stories/%s/storyboards/%s", storyID, storyboardID),
-		ActorID:     creatorID,
-		ActorName:   creatorName,
-		ActorAvatar: creatorAvatar,
-		StoryID:     storyID,
+		UserID:       storyOwnerID,
+		Type:         "storyboard",
+		Link:         fmt.Sprintf("/stories/%s/storyboards/%s", storyID, storyboardID),
+		ActorID:      creatorID,
+		ActorName:    creatorName,
+		ActorAvatar:  creatorAvatar,
+		StoryID:      storyID,
 		StoryboardID: storyboardID,
 	}
 	s.populateTargetRichContext(ctx, n, "storyboard", storyboardID)
@@ -257,13 +294,13 @@ func (s *Service) NotifyStoryboardForked(ctx context.Context, parentCreatorID, f
 	}
 
 	n := &domain.Notification{
-		UserID:      parentCreatorID,
-		Type:        "fork",
-		Link:        fmt.Sprintf("/stories/%s/storyboards/%s", storyID, newStoryboardID),
-		ActorID:     forkerID,
-		ActorName:   forkerName,
-		ActorAvatar: forkerAvatar,
-		StoryID:     storyID,
+		UserID:       parentCreatorID,
+		Type:         "fork",
+		Link:         fmt.Sprintf("/stories/%s/storyboards/%s", storyID, newStoryboardID),
+		ActorID:      forkerID,
+		ActorName:    forkerName,
+		ActorAvatar:  forkerAvatar,
+		StoryID:      storyID,
 		StoryboardID: newStoryboardID,
 	}
 	s.populateTargetRichContext(ctx, n, "storyboard", newStoryboardID)
@@ -289,12 +326,12 @@ func (s *Service) NotifyCommentReply(ctx context.Context, targetUserID, actorID,
 
 	seg := targetPathSegment(targetTypeKey)
 	n := &domain.Notification{
-		UserID:      targetUserID,
-		Type:        "reply",
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
-		ActorID:     actorID,
-		ActorName:   actorName,
-		ActorAvatar: actorAvatar,
+		UserID:           targetUserID,
+		Type:             "reply",
+		Link:             fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
+		ActorID:          actorID,
+		ActorName:        actorName,
+		ActorAvatar:      actorAvatar,
 		RelatedCommentID: commentID,
 	}
 	s.populateTargetRichContext(ctx, n, targetTypeKey, targetID)
@@ -326,12 +363,12 @@ func (s *Service) NotifyCommentLike(ctx context.Context, targetUserID, actorID, 
 
 	seg := targetPathSegment(targetTypeKey)
 	n := &domain.Notification{
-		UserID:      targetUserID,
-		Type:        "like",
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
-		ActorID:     actorID,
-		ActorName:   actorName,
-		ActorAvatar: actorAvatar,
+		UserID:           targetUserID,
+		Type:             "like",
+		Link:             fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
+		ActorID:          actorID,
+		ActorName:        actorName,
+		ActorAvatar:      actorAvatar,
 		RelatedCommentID: commentID,
 	}
 	s.populateTargetRichContext(ctx, n, targetTypeKey, targetID)
@@ -353,12 +390,12 @@ func (s *Service) NotifyMention(ctx context.Context, targetUserID, actorID, acto
 
 	seg := targetPathSegment(targetTypeKey)
 	n := &domain.Notification{
-		UserID:      targetUserID,
-		Type:        "mention",
-		Link:        fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
-		ActorID:     actorID,
-		ActorName:   actorName,
-		ActorAvatar: actorAvatar,
+		UserID:           targetUserID,
+		Type:             "mention",
+		Link:             fmt.Sprintf("/%s/%s#comment-%s", seg, targetID, commentID),
+		ActorID:          actorID,
+		ActorName:        actorName,
+		ActorAvatar:      actorAvatar,
 		RelatedCommentID: commentID,
 	}
 	s.populateTargetRichContext(ctx, n, targetTypeKey, targetID)

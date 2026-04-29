@@ -75,9 +75,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 	{
 		// 认证路由（无需认证）
 		auth := api.Group("/auth")
-			if authLimiter != nil {
-				auth.Use(authLimiter)
-			}
+		if authLimiter != nil {
+			auth.Use(authLimiter)
+		}
 		{
 			auth.POST("/register", h.Register)
 			auth.POST("/login", h.Login)
@@ -97,9 +97,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
-	if apiLimiter != nil {
-		authenticated.Use(apiLimiter)
-	}
+		if apiLimiter != nil {
+			authenticated.Use(apiLimiter)
+		}
 		authenticated.Use(authPkg.AuthMiddleware())
 		authenticated.Use(h.EnsureActiveUser())
 
@@ -276,19 +276,24 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 角色相关
 			authenticated.POST("/characters", h.CreateCharacter)
+			authenticated.POST("/character-generation-tasks", h.StartCharacterGenerationTask)
+			authenticated.GET("/character-generation-tasks", h.ListCharacterGenerationTasks)
+			authenticated.GET("/character-generation-tasks/:taskId", h.GetCharacterGenerationTask)
+			authenticated.POST("/character-generation-tasks/:taskId/retry", h.RetryCharacterGenerationTask)
+			authenticated.GET("/stories/:id/fragment-character-suggestions", h.PreviewFragmentCharactersForStory)
 			aiGen.POST("/characters/generate", h.GenerateCharacterAttributes) // AI生成角色属性
 			authenticated.PUT("/characters/:id", h.UpdateCharacter)
 			authenticated.DELETE("/characters/:id", h.DeleteCharacter)
 			authenticated.POST("/characters/:id/follow", h.FollowCharacter)
 			authenticated.DELETE("/characters/:id/follow", h.UnfollowCharacter)
 			// REMOVED: skills routes - not in StoryCreationAppUI design
-			aiGen.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)     // AI生成角色头像
-			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)                 // 更新角色头像
-			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar)   // 使用portrait作为头像
-			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)            // 获取形象生成推荐提示词
+			aiGen.POST("/characters/:id/generate-avatar", h.GenerateCharacterAvatar)           // AI生成角色头像
+			authenticated.PUT("/characters/:id/avatar", h.UpdateCharacterAvatar)               // 更新角色头像
+			authenticated.PUT("/characters/:id/use-portrait-as-avatar", h.UsePortraitAsAvatar) // 使用portrait作为头像
+			authenticated.GET("/characters/:id/portrait-prompt", h.GetPortraitPrompt)          // 获取形象生成推荐提示词
 			aiGen.POST("/characters/:id/generate-portrait", h.GenerateCharacterPortrait)       // AI生成角色完整形象
-			aiGen.POST("/characters/:id/generate-three-views", h.GenerateCharacterThreeViews) // AI 生成/更新三视图
-			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)              // 从形象图裁剪头像
+			aiGen.POST("/characters/:id/generate-three-views", h.GenerateCharacterThreeViews)  // AI 生成/更新三视图
+			authenticated.POST("/characters/:id/crop-avatar", h.CropAvatarFromPortrait)        // 从形象图裁剪头像
 			// REMOVED: posters routes - not in StoryCreationAppUI design
 
 			// 文件上传相关

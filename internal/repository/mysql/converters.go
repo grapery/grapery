@@ -9,6 +9,21 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
+func optionalStringPtr(v string) *string {
+	t := strings.TrimSpace(v)
+	if t == "" {
+		return nil
+	}
+	return &t
+}
+
+func optionalStringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
 // ========== 时间转换辅助函数 ==========
 
 // timeToUnix 将 time.Time 转换为 Unix 时间戳（秒）
@@ -307,27 +322,27 @@ func StoryboardToModel(d *domain.Storyboard) *Storyboard {
 		return nil
 	}
 	return &Storyboard{
-		ID:               d.ID,
-		StoryID:          d.StoryID,
-		ParentID:         stringToStringPtr(d.ParentID),
-		UserID:           d.UserID,
-		Title:            d.Title,
-		Content:          d.Content,
-		RawInput:         d.RawInput,
-		IsStandalone:     d.IsStandalone,
+		ID:                  d.ID,
+		StoryID:             d.StoryID,
+		ParentID:            stringToStringPtr(d.ParentID),
+		UserID:              d.UserID,
+		Title:               d.Title,
+		Content:             d.Content,
+		RawInput:            d.RawInput,
+		IsStandalone:        d.IsStandalone,
 		IsAIGenerated:       d.IsAIGenerated,
 		SceneCount:          d.SceneCount,
 		WorkflowStatus:      d.WorkflowStatus,
 		CurrentStep:         d.CurrentStep,
 		ContinuationSummary: d.ContinuationSummary,
-		Likes:            d.Likes,
-		Comments:         d.Comments,
-		Shares:           d.Shares,
-		ForkCount:        d.ForkCount,
-		Views:            d.Views,
-		TokenConsumption: d.TokenConsumption,
-		CreatedAt:        unixToTime(d.CreatedAt),
-		UpdatedAt:        unixToTime(d.UpdatedAt),
+		Likes:               d.Likes,
+		Comments:            d.Comments,
+		Shares:              d.Shares,
+		ForkCount:           d.ForkCount,
+		Views:               d.Views,
+		TokenConsumption:    d.TokenConsumption,
+		CreatedAt:           unixToTime(d.CreatedAt),
+		UpdatedAt:           unixToTime(d.UpdatedAt),
 	}
 }
 
@@ -342,15 +357,15 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 			CreatedAt: timeToUnix(m.CreatedAt),
 			UpdatedAt: timeToUnix(m.UpdatedAt),
 		},
-		StoryID:        m.StoryID,
-		ParentID:       stringPtrToString(m.ParentID),
-		UserID:         m.UserID,
-		CreatorName:    m.Creator.DisplayName,
-		CreatorAvatar:  m.Creator.Avatar,
-		Title:          m.Title,
-		Content:        m.Content,
-		RawInput:       m.RawInput,
-		IsStandalone:   m.IsStandalone,
+		StoryID:             m.StoryID,
+		ParentID:            stringPtrToString(m.ParentID),
+		UserID:              m.UserID,
+		CreatorName:         m.Creator.DisplayName,
+		CreatorAvatar:       m.Creator.Avatar,
+		Title:               m.Title,
+		Content:             m.Content,
+		RawInput:            m.RawInput,
+		IsStandalone:        m.IsStandalone,
 		IsAIGenerated:       m.IsAIGenerated,
 		SceneCount:          m.SceneCount,
 		WorkflowStatus:      m.WorkflowStatus,
@@ -462,42 +477,44 @@ func CharacterToModel(d *domain.Character) *Character {
 		return nil
 	}
 	ch := &Character{
-		ID:                       d.ID,
-		StoryID:                  d.StoryID,
-		Name:                     d.Name,
-		Description:              d.Description,
-		Avatar:                   d.Avatar,
-		Poster:                   d.Poster,
-		Portrait:                 d.Portrait,
-		NeedsPortrait:            d.NeedsPortrait,
-		ReferenceImage:           d.ReferenceImage,
-		PortraitGenerationStatus: d.PortraitGenerationStatus,
-		UserID:                   d.UserID,
-		Personality:              d.Personality,
-		Background:               d.Background,
-		ShortTermGoal:            d.ShortTermGoal,
-		LongTermGoal:             d.LongTermGoal,
-		HandlingStyle:            d.HandlingStyle,
-		CognitionRange:           d.CognitionRange,
-		AbilityFeatures:          d.AbilityFeatures,
-		Appearance:               d.Appearance,
-		DressPreference:          d.DressPreference,
-		Role:                     d.Role,
-		SourceType:               d.SourceType,
-		SourcePrompt:             d.SourcePrompt,
-		SourceImage:              d.SourceImage,
-		CreatedBy:                d.CreatedBy,
-		LastEditedBy:             d.LastEditedBy,
-		Likes:                    d.Likes,
-		Comments:                 d.Comments,
-		Shares:                   d.Shares,
-		Followers:                d.Followers,
-		Stories:                  d.Stories,
-		Traits:                   d.TraitsJSON,
-		Skills:                   d.SkillsJSON,
-		IsPublic:                 d.IsPublic,
-		CreatedAt:                unixToTime(d.CreatedAt),
-		UpdatedAt:                unixToTime(d.UpdatedAt),
+		ID:                         d.ID,
+		StoryID:                    d.StoryID,
+		Name:                       d.Name,
+		Description:                d.Description,
+		Avatar:                     d.Avatar,
+		Poster:                     d.Poster,
+		Portrait:                   d.Portrait,
+		NeedsPortrait:              d.NeedsPortrait,
+		ReferenceImage:             d.ReferenceImage,
+		PortraitGenerationStatus:   d.PortraitGenerationStatus,
+		UserID:                     d.UserID,
+		Personality:                d.Personality,
+		Background:                 d.Background,
+		ShortTermGoal:              d.ShortTermGoal,
+		LongTermGoal:               d.LongTermGoal,
+		HandlingStyle:              d.HandlingStyle,
+		CognitionRange:             d.CognitionRange,
+		AbilityFeatures:            d.AbilityFeatures,
+		Appearance:                 d.Appearance,
+		DressPreference:            d.DressPreference,
+		Role:                       d.Role,
+		SourceType:                 d.SourceType,
+		SourcePrompt:               d.SourcePrompt,
+		SourceImage:                d.SourceImage,
+		SourceFragmentID:           optionalStringPtr(d.SourceFragmentID),
+		SourceFragmentCharacterKey: optionalStringPtr(d.SourceFragmentCharacterKey),
+		CreatedBy:                  d.CreatedBy,
+		LastEditedBy:               d.LastEditedBy,
+		Likes:                      d.Likes,
+		Comments:                   d.Comments,
+		Shares:                     d.Shares,
+		Followers:                  d.Followers,
+		Stories:                    d.Stories,
+		Traits:                     d.TraitsJSON,
+		Skills:                     d.SkillsJSON,
+		IsPublic:                   d.IsPublic,
+		CreatedAt:                  unixToTime(d.CreatedAt),
+		UpdatedAt:                  unixToTime(d.UpdatedAt),
 	}
 	if d.Views != nil {
 		if b, err := json.Marshal(d.Views); err == nil && strings.TrimSpace(string(b)) != "" {
@@ -521,39 +538,41 @@ func ModelToCharacter(m *Character) *domain.Character {
 			CreatedAt: timeToUnix(m.CreatedAt),
 			UpdatedAt: timeToUnix(m.UpdatedAt),
 		},
-		StoryID:                  m.StoryID,
-		UserID:                   m.UserID,
-		Name:                     m.Name,
-		Description:              m.Description,
-		Avatar:                   m.Avatar,
-		Poster:                   m.Poster,
-		Portrait:                 m.Portrait,
-		NeedsPortrait:            m.NeedsPortrait,
-		ReferenceImage:           m.ReferenceImage,
-		PortraitGenerationStatus: m.PortraitGenerationStatus,
-		Personality:              m.Personality,
-		Background:               m.Background,
-		ShortTermGoal:            m.ShortTermGoal,
-		LongTermGoal:             m.LongTermGoal,
-		HandlingStyle:            m.HandlingStyle,
-		CognitionRange:           m.CognitionRange,
-		AbilityFeatures:          m.AbilityFeatures,
-		Appearance:               m.Appearance,
-		DressPreference:          m.DressPreference,
-		Role:                     m.Role,
-		TraitsJSON:               m.Traits,
-		SkillsJSON:               m.Skills,
-		IsPublic:                 m.IsPublic,
-		SourceType:               m.SourceType,
-		SourcePrompt:             m.SourcePrompt,
-		SourceImage:              m.SourceImage,
-		CreatedBy:                m.CreatedBy,
-		LastEditedBy:             m.LastEditedBy,
-		Likes:                    m.Likes,
-		Comments:                 m.Comments,
-		Shares:                   m.Shares,
-		Followers:                m.Followers,
-		Stories:                  m.Stories,
+		StoryID:                    m.StoryID,
+		UserID:                     m.UserID,
+		Name:                       m.Name,
+		Description:                m.Description,
+		Avatar:                     m.Avatar,
+		Poster:                     m.Poster,
+		Portrait:                   m.Portrait,
+		NeedsPortrait:              m.NeedsPortrait,
+		ReferenceImage:             m.ReferenceImage,
+		PortraitGenerationStatus:   m.PortraitGenerationStatus,
+		Personality:                m.Personality,
+		Background:                 m.Background,
+		ShortTermGoal:              m.ShortTermGoal,
+		LongTermGoal:               m.LongTermGoal,
+		HandlingStyle:              m.HandlingStyle,
+		CognitionRange:             m.CognitionRange,
+		AbilityFeatures:            m.AbilityFeatures,
+		Appearance:                 m.Appearance,
+		DressPreference:            m.DressPreference,
+		Role:                       m.Role,
+		TraitsJSON:                 m.Traits,
+		SkillsJSON:                 m.Skills,
+		IsPublic:                   m.IsPublic,
+		SourceType:                 m.SourceType,
+		SourcePrompt:               m.SourcePrompt,
+		SourceImage:                m.SourceImage,
+		SourceFragmentID:           optionalStringValue(m.SourceFragmentID),
+		SourceFragmentCharacterKey: optionalStringValue(m.SourceFragmentCharacterKey),
+		CreatedBy:                  m.CreatedBy,
+		LastEditedBy:               m.LastEditedBy,
+		Likes:                      m.Likes,
+		Comments:                   m.Comments,
+		Shares:                     m.Shares,
+		Followers:                  m.Followers,
+		Stories:                    m.Stories,
 	}
 	if m.Author.ID != "" {
 		d.Author = ModelToUser(&m.Author)
@@ -566,6 +585,68 @@ func ModelToCharacter(m *Character) *domain.Character {
 	}
 	// AfterFind hook will populate Traits and Skills
 	return d
+}
+
+func CharacterGenerationTaskToModel(d *domain.CharacterGenerationTask) *CharacterGenerationTask {
+	if d == nil {
+		return nil
+	}
+	var completedAt *time.Time
+	if d.CompletedAt != nil && *d.CompletedAt > 0 {
+		t := unixToTime(*d.CompletedAt)
+		completedAt = &t
+	}
+	return &CharacterGenerationTask{
+		ID:                         d.ID,
+		UserID:                     d.UserID,
+		StoryID:                    d.StoryID,
+		CharacterID:                d.CharacterID,
+		SourceType:                 d.SourceType,
+		SourceFragmentID:           optionalStringPtr(d.SourceFragmentID),
+		SourceFragmentCharacterKey: optionalStringPtr(d.SourceFragmentCharacterKey),
+		Status:                     d.Status,
+		Progress:                   d.Progress,
+		CurrentStep:                d.CurrentStep,
+		RequestJSON:                d.RequestJSON,
+		ResultJSON:                 d.ResultJSON,
+		ErrorMessage:               d.ErrorMessage,
+		CreatedAt:                  unixToTime(d.CreatedAt),
+		UpdatedAt:                  unixToTime(d.UpdatedAt),
+		CompletedAt:                completedAt,
+	}
+}
+
+func ModelToCharacterGenerationTask(m *CharacterGenerationTask) *domain.CharacterGenerationTask {
+	if m == nil {
+		return nil
+	}
+	var completedAt *int64
+	if m.CompletedAt != nil {
+		v := timeToUnix(*m.CompletedAt)
+		completedAt = &v
+	}
+	task := &domain.CharacterGenerationTask{
+		ID:                         m.ID,
+		UserID:                     m.UserID,
+		StoryID:                    m.StoryID,
+		CharacterID:                m.CharacterID,
+		SourceType:                 m.SourceType,
+		SourceFragmentID:           optionalStringValue(m.SourceFragmentID),
+		SourceFragmentCharacterKey: optionalStringValue(m.SourceFragmentCharacterKey),
+		Status:                     m.Status,
+		Progress:                   m.Progress,
+		CurrentStep:                m.CurrentStep,
+		RequestJSON:                m.RequestJSON,
+		ResultJSON:                 m.ResultJSON,
+		ErrorMessage:               m.ErrorMessage,
+		CreatedAt:                  timeToUnix(m.CreatedAt),
+		UpdatedAt:                  timeToUnix(m.UpdatedAt),
+		CompletedAt:                completedAt,
+	}
+	if m.Character != nil && m.Character.ID != "" {
+		task.Character = ModelToCharacter(m.Character)
+	}
+	return task
 }
 
 // ========== Comment 转换 ==========
@@ -1149,29 +1230,30 @@ func NotificationToModel(d *domain.Notification) *Notification {
 		return nil
 	}
 	return &Notification{
-		ID:          d.ID,
-		UserID:      d.UserID,
-		Type:        d.Type,
-		Title:       d.Title,
-		Content:     d.Content,
-		Link:        d.Link,
-		Read:        d.Read,
-		ActorID:     d.ActorID,
-		ActorName:   d.ActorName,
-		ActorAvatar: d.ActorAvatar,
-		CreatedAt:   unixToTime(d.CreatedAt),
-		StoryTitle:      d.StoryTitle,
-		StoryCover:      d.StoryCover,
-		StoryID:         d.StoryID,
-		CommentText:     d.CommentText,
-		RelatedCommentID: d.RelatedCommentID,
-		SysTitle:        d.SysTitle,
-		SysBody:         d.SysBody,
-		SysIcon:         d.SysIcon,
-		StoryboardID:    d.StoryboardID,
-		StoryboardTitle: d.StoryboardTitle,
-		FragmentID:      d.FragmentID,
-		TokensUsed:      d.TokensUsed,
+		ID:                 d.ID,
+		UserID:             d.UserID,
+		Type:               d.Type,
+		Title:              d.Title,
+		Content:            d.Content,
+		Link:               d.Link,
+		Read:               d.Read,
+		ActorID:            d.ActorID,
+		ActorName:          d.ActorName,
+		ActorAvatar:        d.ActorAvatar,
+		CreatedAt:          unixToTime(d.CreatedAt),
+		StoryTitle:         d.StoryTitle,
+		StoryCover:         d.StoryCover,
+		StoryID:            d.StoryID,
+		CommentText:        d.CommentText,
+		RelatedCommentID:   d.RelatedCommentID,
+		SysTitle:           d.SysTitle,
+		SysBody:            d.SysBody,
+		SysIcon:            d.SysIcon,
+		StoryboardID:       d.StoryboardID,
+		StoryboardTitle:    d.StoryboardTitle,
+		FragmentID:         d.FragmentID,
+		RelatedCharacterID: d.RelatedCharacterID,
+		TokensUsed:         d.TokensUsed,
 	}
 }
 
@@ -1185,27 +1267,28 @@ func ModelToNotification(m *Notification) *domain.Notification {
 			ID:        m.ID,
 			CreatedAt: timeToUnix(m.CreatedAt),
 		},
-		UserID:          m.UserID,
-		Type:            m.Type,
-		Title:           m.Title,
-		Content:         m.Content,
-		Link:            m.Link,
-		Read:            m.Read,
-		ActorID:         m.ActorID,
-		ActorName:       m.ActorName,
-		ActorAvatar:     m.ActorAvatar,
-		StoryTitle:      m.StoryTitle,
-		StoryCover:      m.StoryCover,
-		StoryID:         m.StoryID,
-		CommentText:     m.CommentText,
-		RelatedCommentID: m.RelatedCommentID,
-		SysTitle:        m.SysTitle,
-		SysBody:         m.SysBody,
-		SysIcon:         m.SysIcon,
-		StoryboardID:    m.StoryboardID,
-		StoryboardTitle: m.StoryboardTitle,
-		FragmentID:      m.FragmentID,
-		TokensUsed:      m.TokensUsed,
+		UserID:             m.UserID,
+		Type:               m.Type,
+		Title:              m.Title,
+		Content:            m.Content,
+		Link:               m.Link,
+		Read:               m.Read,
+		ActorID:            m.ActorID,
+		ActorName:          m.ActorName,
+		ActorAvatar:        m.ActorAvatar,
+		StoryTitle:         m.StoryTitle,
+		StoryCover:         m.StoryCover,
+		StoryID:            m.StoryID,
+		CommentText:        m.CommentText,
+		RelatedCommentID:   m.RelatedCommentID,
+		SysTitle:           m.SysTitle,
+		SysBody:            m.SysBody,
+		SysIcon:            m.SysIcon,
+		StoryboardID:       m.StoryboardID,
+		StoryboardTitle:    m.StoryboardTitle,
+		FragmentID:         m.FragmentID,
+		RelatedCharacterID: m.RelatedCharacterID,
+		TokensUsed:         m.TokensUsed,
 	}
 }
 

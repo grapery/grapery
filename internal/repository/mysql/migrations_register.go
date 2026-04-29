@@ -329,6 +329,15 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_character_generation_tasks",
+		Description: "Create and migrate character_generation_tasks table",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CharacterGenerationTask{})
+		},
+		Required: true,
+	})
+
 	// REMOVED: migrate_character_posters - not in StoryCreationAppUI design
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
@@ -958,6 +967,15 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_fragments_converted_columns",
 		Description: "Ensure fragments has converted_to_story_id and is_converted columns",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{})
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_fragments_style_column",
+		Description: "Ensure fragments has style column (comic/image slug for convert-to-story inheritance)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{})
 		},

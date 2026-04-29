@@ -277,44 +277,46 @@ type StoryboardVideoGeneration struct {
 
 // Character database model
 type Character struct {
-	ID                       string `gorm:"primaryKey;size:36"`
-	StoryID                  string `gorm:"size:36;not null;index"`
-	Story                    Story  `gorm:"foreignKey:StoryID"`
-	Name                     string `gorm:"size:100;not null;index"`
-	Description              string `gorm:"type:text"`
-	Avatar                   string `gorm:"size:500"`
-	Poster                   string `gorm:"size:500"`
-	Portrait                 string `gorm:"size:500"`                                // 完整角色形象图URL（AI生成）
-	NeedsPortrait            bool   `gorm:"default:false"`                           // 是否需要生成形象
-	ReferenceImage           string `gorm:"size:500"`                                // 参考图URL
-	PortraitGenerationStatus string `gorm:"size:20;default:'none';index"`            // none/pending/generating/generated/failed
-	ViewsJSON                string `gorm:"column:views_json;type:json"`             // {"sheet"} 或 {"front","side","back"} 三视图 URL
-	UserID                   string `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
-	Author                   User   `gorm:"foreignKey:UserID"`
-	Personality              string `gorm:"type:text"`
-	Background               string `gorm:"type:text"`
-	ShortTermGoal            string `gorm:"type:text"` // Immediate objectives in current story arc
-	LongTermGoal             string `gorm:"type:text"` // Overarching ambitions
-	HandlingStyle            string `gorm:"type:text"` // Approach to handling situations
-	CognitionRange           string `gorm:"type:text"` // Knowledge and awareness of their world
-	AbilityFeatures          string `gorm:"type:text"` // Special skills and capabilities
-	Appearance               string `gorm:"type:text"` // Physical appearance and features
-	DressPreference          string `gorm:"type:text"` // Clothing preferences and style
-	Role                     string `gorm:"size:100"`  // 故事内角色定位（主角/配角等），与 API role 对齐
-	SourceType               string `gorm:"size:20;not null;default:'manual';index"`
-	SourcePrompt             string `gorm:"type:text"`
-	SourceImage              string `gorm:"size:500"`
-	CreatedBy                string `gorm:"size:36;not null;index"`
-	LastEditedBy             string `gorm:"size:36;index"`
-	Likes                    int    `gorm:"default:0;index"`
-	Comments                 int    `gorm:"default:0"`
-	Shares                   int    `gorm:"default:0"`
-	Followers                int    `gorm:"default:0"`
-	Stories                  int    `gorm:"default:0"`
-	Traits                   string `gorm:"type:text"` // JSON array
-	Skills                   string `gorm:"type:text"` // JSON array
-	IsPublic                 bool   `gorm:"default:true;index"`
-	PosterCreationPermission string `gorm:"size:50;default:'creator_only'"` // 海报创建权限: creator_only, anyone
+	ID                         string  `gorm:"primaryKey;size:36"`
+	StoryID                    string  `gorm:"size:36;not null;index;index:idx_character_fragment_source,unique"`
+	Story                      Story   `gorm:"foreignKey:StoryID"`
+	Name                       string  `gorm:"size:100;not null;index"`
+	Description                string  `gorm:"type:text"`
+	Avatar                     string  `gorm:"size:500"`
+	Poster                     string  `gorm:"size:500"`
+	Portrait                   string  `gorm:"size:500"`                                // 完整角色形象图URL（AI生成）
+	NeedsPortrait              bool    `gorm:"default:false"`                           // 是否需要生成形象
+	ReferenceImage             string  `gorm:"size:500"`                                // 参考图URL
+	PortraitGenerationStatus   string  `gorm:"size:20;default:'none';index"`            // none/pending/generating/generated/failed
+	ViewsJSON                  string  `gorm:"column:views_json;type:json"`             // {"sheet"} 或 {"front","side","back"} 三视图 URL
+	UserID                     string  `gorm:"column:author_id;size:36;not null;index"` // 保持数据库列名为 author_id
+	Author                     User    `gorm:"foreignKey:UserID"`
+	Personality                string  `gorm:"type:text"`
+	Background                 string  `gorm:"type:text"`
+	ShortTermGoal              string  `gorm:"type:text"` // Immediate objectives in current story arc
+	LongTermGoal               string  `gorm:"type:text"` // Overarching ambitions
+	HandlingStyle              string  `gorm:"type:text"` // Approach to handling situations
+	CognitionRange             string  `gorm:"type:text"` // Knowledge and awareness of their world
+	AbilityFeatures            string  `gorm:"type:text"` // Special skills and capabilities
+	Appearance                 string  `gorm:"type:text"` // Physical appearance and features
+	DressPreference            string  `gorm:"type:text"` // Clothing preferences and style
+	Role                       string  `gorm:"size:100"`  // 故事内角色定位（主角/配角等），与 API role 对齐
+	SourceType                 string  `gorm:"size:20;not null;default:'manual';index"`
+	SourcePrompt               string  `gorm:"type:text"`
+	SourceImage                string  `gorm:"size:500"`
+	SourceFragmentID           *string `gorm:"size:36;index:idx_character_fragment_source,unique"`
+	SourceFragmentCharacterKey *string `gorm:"size:120;index:idx_character_fragment_source,unique"`
+	CreatedBy                  string  `gorm:"size:36;not null;index"`
+	LastEditedBy               string  `gorm:"size:36;index"`
+	Likes                      int     `gorm:"default:0;index"`
+	Comments                   int     `gorm:"default:0"`
+	Shares                     int     `gorm:"default:0"`
+	Followers                  int     `gorm:"default:0"`
+	Stories                    int     `gorm:"default:0"`
+	Traits                     string  `gorm:"type:text"` // JSON array
+	Skills                     string  `gorm:"type:text"` // JSON array
+	IsPublic                   bool    `gorm:"default:true;index"`
+	PosterCreationPermission   string  `gorm:"size:50;default:'creator_only'"` // 海报创建权限: creator_only, anyone
 
 	// 客串角色系统字段
 	OriginStoryID *string `gorm:"size:36;index"`       // 原始故事ID，用于客串角色
@@ -323,6 +325,30 @@ type Character struct {
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+// CharacterGenerationTask database model for async story-character creation drafts.
+type CharacterGenerationTask struct {
+	ID                         string         `gorm:"primaryKey;size:36"`
+	UserID                     string         `gorm:"size:36;not null;index:idx_char_gen_user"`
+	User                       User           `gorm:"foreignKey:UserID"`
+	StoryID                    string         `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
+	Story                      Story          `gorm:"foreignKey:StoryID"`
+	CharacterID                string         `gorm:"size:36;index"`
+	Character                  *Character     `gorm:"foreignKey:CharacterID"`
+	SourceType                 string         `gorm:"size:32;not null;index:idx_char_gen_source_type"`
+	SourceFragmentID           *string        `gorm:"size:36;index:idx_char_gen_fragment_key,unique"`
+	SourceFragmentCharacterKey *string        `gorm:"size:120;index:idx_char_gen_fragment_key,unique"`
+	Status                     string         `gorm:"size:24;not null;default:'pending';index:idx_char_gen_status"`
+	Progress                   int            `gorm:"default:0"`
+	CurrentStep                string         `gorm:"size:80"`
+	RequestJSON                string         `gorm:"type:longtext"`
+	ResultJSON                 string         `gorm:"type:longtext"`
+	ErrorMessage               string         `gorm:"type:text"`
+	CreatedAt                  time.Time      `gorm:"autoCreateTime;index"`
+	UpdatedAt                  time.Time      `gorm:"autoUpdateTime;index"`
+	CompletedAt                *time.Time     `gorm:"index"`
+	DeletedAt                  gorm.DeletedAt `gorm:"index"`
 }
 
 // StoryScene database model (story-scoped scene assets - static locations)
@@ -626,15 +652,16 @@ type Notification struct {
 	ActorName   string `gorm:"size:100"`
 	ActorAvatar string `gorm:"size:500"`
 	// Story context (for like, comment, story_update types)
-	StoryTitle  string `gorm:"size:200"`
-	StoryCover  string `gorm:"size:500"`
-	StoryID     string `gorm:"size:36;index"`
-	CommentText string `gorm:"type:text"` // 评论内容摘要
-	RelatedCommentID string `gorm:"size:36;index"`
-	StoryboardID    string `gorm:"size:36;index"`
-	StoryboardTitle string `gorm:"size:200"`
-	FragmentID      string `gorm:"size:36;index"`
-	TokensUsed      int    `gorm:"default:0"`
+	StoryTitle         string `gorm:"size:200"`
+	StoryCover         string `gorm:"size:500"`
+	StoryID            string `gorm:"size:36;index"`
+	CommentText        string `gorm:"type:text"` // 评论内容摘要
+	RelatedCommentID   string `gorm:"size:36;index"`
+	StoryboardID       string `gorm:"size:36;index"`
+	StoryboardTitle    string `gorm:"size:200"`
+	FragmentID         string `gorm:"size:36;index"`
+	RelatedCharacterID string `gorm:"size:36;index"`
+	TokensUsed         int    `gorm:"default:0"`
 	// System notification fields (for system type)
 	SysTitle  string         `gorm:"size:200"`
 	SysBody   string         `gorm:"type:text"`
@@ -1197,6 +1224,7 @@ type FragmentDB struct {
 	SourceID           string  `gorm:"size:36;index:idx_fragment_source_id"`                      // 来源ID
 	Topic              string  `gorm:"size:200;index:idx_fragment_topic"`                         // 话题标签 (StoryCreationAppUI)
 	Caption            string  `gorm:"type:text"`                                                 // 标题/简介文字 (StoryCreationAppUI)
+	Style              *string `gorm:"column:style;size:80;index:idx_fragment_style"`             // 图片/漫画风格 slug，与 fragment_comic_styles.value、故事 style_configs 对齐
 	ConvertedToStoryID *string `gorm:"size:36;index"`                                             // 转换为的故事ID
 	IsConverted        bool    `gorm:"default:false;index"`                                       // 是否已转换
 	IsDraft            bool    `gorm:"column:is_draft;type:tinyint(1);default:0;index"`           // 草稿（AI 生成落库等）

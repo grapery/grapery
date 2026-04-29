@@ -18,15 +18,16 @@ type Notification struct {
 	ActorAvatar string `json:"actorAvatar,omitempty"`
 
 	// Story context (for like, comment, story_update types)
-	StoryTitle   string `json:"storyTitle,omitempty"`
-	StoryCover   string `json:"storyCover,omitempty"`
-	StoryID      string `json:"storyId,omitempty"`
-	CommentText  string `json:"commentText,omitempty"` // 评论内容摘要
+	StoryTitle       string `json:"storyTitle,omitempty"`
+	StoryCover       string `json:"storyCover,omitempty"`
+	StoryID          string `json:"storyId,omitempty"`
+	CommentText      string `json:"commentText,omitempty"` // 评论内容摘要
 	RelatedCommentID string `json:"relatedCommentId,omitempty"`
-	StoryboardID string `json:"storyboardId,omitempty"`
+	StoryboardID     string `json:"storyboardId,omitempty"`
 	// StoryboardTitle 分镜标题（用于站内信/推送展示，可与 StoryTitle 并存）
-	StoryboardTitle string `json:"storyboardTitle,omitempty"`
-	FragmentID string `json:"fragmentId,omitempty"`
+	StoryboardTitle    string `json:"storyboardTitle,omitempty"`
+	FragmentID         string `json:"fragmentId,omitempty"`
+	RelatedCharacterID string `json:"relatedCharacterId,omitempty"`
 	// TokensUsed AI 生成类通知的 token 消耗（约），0 表示未统计或不展示
 	TokensUsed int `json:"tokensUsed,omitempty"`
 

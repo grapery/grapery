@@ -104,6 +104,29 @@ type GenerateCharacterThreeViewsResult struct {
 	Views domain.CharacterThreeViews `json:"views"`
 }
 
+type CharacterGenerationTaskRequest struct {
+	StoryID                    string                              `json:"storyId" binding:"required"`
+	SourceType                 string                              `json:"sourceType" binding:"required"`
+	Name                       string                              `json:"name,omitempty"`
+	Prompt                     string                              `json:"prompt,omitempty"`
+	Description                string                              `json:"description,omitempty"`
+	Role                       string                              `json:"role,omitempty"`
+	Background                 string                              `json:"background,omitempty"`
+	Personality                string                              `json:"personality,omitempty"`
+	Appearance                 string                              `json:"appearance,omitempty"`
+	ReferenceImage             string                              `json:"referenceImage,omitempty"`
+	SourceFragmentID           string                              `json:"sourceFragmentId,omitempty"`
+	SourceFragmentCharacterKey string                              `json:"sourceFragmentCharacterKey,omitempty"`
+	Suggestion                 *domain.FragmentCharacterSuggestion `json:"suggestion,omitempty"`
+}
+
+type FragmentCharacterSuggestionsResponse struct {
+	StoryID      string                               `json:"storyId"`
+	FragmentID   string                               `json:"fragmentId"`
+	Suggestions  []domain.FragmentCharacterSuggestion `json:"suggestions"`
+	ExistingTask *domain.CharacterGenerationTask      `json:"existingTask,omitempty"`
+}
+
 // GeneratedCharacterAttributes AI生成的角色属性（键名与 domain.Character / 客户端 / DB 叙事字段一一对应）
 type GeneratedCharacterAttributes struct {
 	Description     string `json:"description"`
@@ -186,38 +209,40 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		StoryID:                  req.StoryID,
-		UserID:                   author.ID,
-		Name:                     req.Name,
-		Description:              req.Description,
-		Avatar:                   req.Avatar,
-		Poster:                   "",
-		Portrait:                 "",
-		NeedsPortrait:            req.NeedsPortrait,
-		ReferenceImage:           req.ReferenceImage,
-		PortraitGenerationStatus: portraitStatus,
-		Author:                   author,
-		Personality:              req.Personality,
-		Background:               req.Background,
-		ShortTermGoal:            req.ShortTermGoal,
-		LongTermGoal:             req.LongTermGoal,
-		HandlingStyle:            req.HandlingStyle,
-		CognitionRange:           req.CognitionRange,
-		AbilityFeatures:          req.AbilityFeatures,
-		Appearance:               req.Appearance,
-		DressPreference:          req.DressPreference,
-		Role:                     req.Role,
-		IsPublic:                 req.IsPublic,
-		SourceType:               sourceType,
-		SourcePrompt:             req.SourcePrompt,
-		SourceImage:              req.SourceImage,
-		CreatedBy:                userID,
-		LastEditedBy:             userID,
-		Likes:                    0,
-		Comments:                 0,
-		Shares:                   0,
-		Followers:                0,
-		Stories:                  0,
+		StoryID:                    req.StoryID,
+		UserID:                     author.ID,
+		Name:                       req.Name,
+		Description:                req.Description,
+		Avatar:                     req.Avatar,
+		Poster:                     "",
+		Portrait:                   "",
+		NeedsPortrait:              req.NeedsPortrait,
+		ReferenceImage:             req.ReferenceImage,
+		PortraitGenerationStatus:   portraitStatus,
+		Author:                     author,
+		Personality:                req.Personality,
+		Background:                 req.Background,
+		ShortTermGoal:              req.ShortTermGoal,
+		LongTermGoal:               req.LongTermGoal,
+		HandlingStyle:              req.HandlingStyle,
+		CognitionRange:             req.CognitionRange,
+		AbilityFeatures:            req.AbilityFeatures,
+		Appearance:                 req.Appearance,
+		DressPreference:            req.DressPreference,
+		Role:                       req.Role,
+		IsPublic:                   req.IsPublic,
+		SourceType:                 sourceType,
+		SourcePrompt:               req.SourcePrompt,
+		SourceImage:                req.SourceImage,
+		SourceFragmentID:           "",
+		SourceFragmentCharacterKey: "",
+		CreatedBy:                  userID,
+		LastEditedBy:               userID,
+		Likes:                      0,
+		Comments:                   0,
+		Shares:                     0,
+		Followers:                  0,
+		Stories:                    0,
 	}
 	s.logger.Info("character created", zap.String("characterID", character.ID))
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
@@ -281,6 +306,339 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 	// REMOVED: RecordCharacterCreated - not in StoryCreationAppUI design
 
 	return character, nil
+}
+
+func (s *Service) PreviewFragmentCharactersForStory(ctx context.Context, userID, storyID string) (*FragmentCharacterSuggestionsResponse, error) {
+	story, err := s.repo.StoryByID(ctx, storyID)
+	if err != nil || story == nil {
+		return nil, errors.New("story not found")
+	}
+	if story.UserID != userID {
+		return nil, errors.New("you can only generate characters for your own stories")
+	}
+	if story.SourceFragmentID == nil || strings.TrimSpace(*story.SourceFragmentID) == "" {
+		return &FragmentCharacterSuggestionsResponse{StoryID: storyID}, nil
+	}
+	fragmentID := strings.TrimSpace(*story.SourceFragmentID)
+	fragment, err := s.repo.FragmentByID(ctx, fragmentID)
+	if err != nil || fragment == nil {
+		return nil, errors.New("fragment not found")
+	}
+	suggestions := s.fragmentCharacterSuggestionsFromContent(fragment)
+	for i := range suggestions {
+		if existing, err := s.repo.LatestCharacterGenerationTaskByFragmentKey(ctx, storyID, fragmentID, suggestions[i].Key); err == nil && existing != nil {
+			if existing.CharacterID != "" {
+				suggestions[i].AlreadyCreated = existing.Status == domain.CharacterGenerationStatusCompleted
+				suggestions[i].ExistingCharacterID = existing.CharacterID
+			}
+		}
+	}
+	var existingTask *domain.CharacterGenerationTask
+	if len(suggestions) > 0 {
+		existingTask, _ = s.repo.LatestCharacterGenerationTaskByFragmentKey(ctx, storyID, fragmentID, suggestions[0].Key)
+	}
+	return &FragmentCharacterSuggestionsResponse{
+		StoryID:      storyID,
+		FragmentID:   fragmentID,
+		Suggestions:  suggestions,
+		ExistingTask: existingTask,
+	}, nil
+}
+
+func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID string, req CharacterGenerationTaskRequest) (*domain.CharacterGenerationTask, error) {
+	story, err := s.repo.StoryByID(ctx, req.StoryID)
+	if err != nil || story == nil {
+		return nil, errors.New("story not found")
+	}
+	if story.UserID != userID {
+		return nil, errors.New("you can only generate characters for your own stories")
+	}
+	sourceType := strings.TrimSpace(req.SourceType)
+	if sourceType == "" {
+		sourceType = domain.CharacterGenerationSourceManualForm
+	}
+	if sourceType == domain.CharacterGenerationSourceFragment {
+		key := strings.TrimSpace(req.SourceFragmentCharacterKey)
+		if key == "" && req.Suggestion != nil {
+			key = req.Suggestion.Key
+		}
+		if key == "" {
+			key = stableCharacterKey(req.Name)
+		}
+		fragmentID := strings.TrimSpace(req.SourceFragmentID)
+		if fragmentID == "" && story.SourceFragmentID != nil {
+			fragmentID = strings.TrimSpace(*story.SourceFragmentID)
+		}
+		if fragmentID == "" {
+			return nil, errors.New("source fragment id is required")
+		}
+		if existing, err := s.repo.LatestCharacterGenerationTaskByFragmentKey(ctx, req.StoryID, fragmentID, key); err == nil && existing != nil {
+			return existing, nil
+		}
+		req.SourceFragmentID = fragmentID
+		req.SourceFragmentCharacterKey = key
+	}
+	requestBytes, _ := json.Marshal(req)
+	task := &domain.CharacterGenerationTask{
+		UserID:                     userID,
+		StoryID:                    req.StoryID,
+		SourceType:                 sourceType,
+		SourceFragmentID:           strings.TrimSpace(req.SourceFragmentID),
+		SourceFragmentCharacterKey: strings.TrimSpace(req.SourceFragmentCharacterKey),
+		Status:                     domain.CharacterGenerationStatusPending,
+		Progress:                   0,
+		CurrentStep:                domain.CharacterGenerationStepQueued,
+		RequestJSON:                string(requestBytes),
+	}
+	if err := s.repo.CreateCharacterGenerationTask(ctx, task); err != nil {
+		return nil, errors.New("failed to create character generation task: " + err.Error())
+	}
+	go s.runCharacterGenerationTask(context.Background(), task.ID)
+	return task, nil
+}
+
+func (s *Service) GetCharacterGenerationTask(ctx context.Context, userID, taskID string) (*domain.CharacterGenerationTask, error) {
+	task, err := s.repo.CharacterGenerationTaskByID(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task.UserID != userID {
+		return nil, errors.New("unauthorized")
+	}
+	return task, nil
+}
+
+func (s *Service) ListCharacterGenerationTasks(ctx context.Context, userID, status string, limit, offset int) ([]*domain.CharacterGenerationTask, error) {
+	return s.repo.ListCharacterGenerationTasks(ctx, userID, status, limit, offset)
+}
+
+func (s *Service) RetryCharacterGenerationTask(ctx context.Context, userID, taskID string) (*domain.CharacterGenerationTask, error) {
+	task, err := s.GetCharacterGenerationTask(ctx, userID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task.Status != domain.CharacterGenerationStatusFailed {
+		return task, nil
+	}
+	task.Status = domain.CharacterGenerationStatusPending
+	task.Progress = 0
+	task.CurrentStep = domain.CharacterGenerationStepQueued
+	task.ErrorMessage = ""
+	task.CompletedAt = nil
+	if err := s.repo.UpdateCharacterGenerationTask(ctx, task); err != nil {
+		return nil, err
+	}
+	go s.runCharacterGenerationTask(context.Background(), task.ID)
+	return task, nil
+}
+
+func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string) {
+	task, err := s.repo.CharacterGenerationTaskByID(ctx, taskID)
+	if err != nil || task == nil {
+		return
+	}
+	var req CharacterGenerationTaskRequest
+	_ = json.Unmarshal([]byte(task.RequestJSON), &req)
+	if err := s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepExtract, 12, ""); err != nil {
+		s.logger.Warn("failed to mark character task processing", zap.Error(err))
+	}
+	attrs := GeneratedCharacterAttributes{
+		Description: strings.TrimSpace(req.Description),
+		Personality: strings.TrimSpace(req.Personality),
+		Background:  strings.TrimSpace(req.Background),
+		Appearance:  strings.TrimSpace(req.Appearance),
+		Role:        strings.TrimSpace(req.Role),
+	}
+	name := strings.TrimSpace(req.Name)
+	if req.Suggestion != nil {
+		if name == "" {
+			name = strings.TrimSpace(req.Suggestion.Name)
+		}
+		if attrs.Role == "" {
+			attrs.Role = strings.TrimSpace(req.Suggestion.Role)
+		}
+		if attrs.Description == "" {
+			attrs.Description = strings.TrimSpace(req.Suggestion.Description)
+		}
+		if attrs.Background == "" {
+			attrs.Background = strings.TrimSpace(req.Suggestion.Background)
+		}
+		if attrs.Appearance == "" {
+			attrs.Appearance = strings.TrimSpace(req.Suggestion.Appearance)
+		}
+	}
+	if name == "" {
+		name = "未命名角色"
+	}
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		prompt = strings.TrimSpace(strings.Join([]string{name, attrs.Description, attrs.Background, attrs.Appearance}, "\n"))
+	}
+	if prompt != "" {
+		if generated, genErr := s.GenerateCharacterWithAI(ctx, task.UserID, GenerateCharacterRequest{Prompt: prompt, Name: name}); genErr == nil && generated != nil {
+			mergeGeneratedCharacterAttributes(&attrs, generated)
+		} else if genErr != nil {
+			s.logger.Warn("character task attribute generation failed; continuing with provided fields", zap.String("taskID", taskID), zap.Error(genErr))
+		}
+	}
+	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepCreate, 35, "")
+	characterReq := CreateCharacterRequest{
+		Name:            name,
+		Description:     attrs.Description,
+		Personality:     attrs.Personality,
+		Background:      attrs.Background,
+		ShortTermGoal:   attrs.ShortTermGoal,
+		LongTermGoal:    attrs.LongTermGoal,
+		HandlingStyle:   attrs.HandlingStyle,
+		CognitionRange:  attrs.CognitionRange,
+		AbilityFeatures: attrs.AbilityFeatures,
+		Appearance:      attrs.Appearance,
+		DressPreference: attrs.DressPreference,
+		Role:            attrs.Role,
+		StoryID:         task.StoryID,
+		IsPublic:        false,
+		SourceType:      "ai",
+		SourcePrompt:    prompt,
+		ReferenceImage:  strings.TrimSpace(req.ReferenceImage),
+		NeedsPortrait:   true,
+	}
+	var character *domain.Character
+	if strings.TrimSpace(task.CharacterID) != "" {
+		character, err = s.repo.CharacterByID(ctx, task.CharacterID)
+	} else {
+		character, err = s.CreateCharacter(ctx, task.UserID, characterReq)
+		if err == nil && character != nil {
+			character.SourceFragmentID = task.SourceFragmentID
+			character.SourceFragmentCharacterKey = task.SourceFragmentCharacterKey
+			character.AIGenerated = true
+			_ = s.repo.UpdateCharacter(ctx, character)
+			task.CharacterID = character.ID
+		}
+	}
+	if err != nil || character == nil {
+		if err == nil {
+			err = errors.New("failed to create character")
+		}
+		s.failCharacterGenerationTask(ctx, task, err)
+		return
+	}
+	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepPortrait, 55, "")
+	_, portraitErr := s.GenerateCharacterPortrait(ctx, task.UserID, character.ID, GenerateCharacterPortraitRequest{ReferenceImage: strings.TrimSpace(req.ReferenceImage)})
+	if portraitErr != nil {
+		s.logger.Warn("character task portrait generation failed", zap.String("taskID", taskID), zap.Error(portraitErr))
+	}
+	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepThreeViews, 78, "")
+	_, viewsErr := s.GenerateCharacterThreeViews(ctx, task.UserID, character.ID, GenerateCharacterThreeViewsRequest{RegenerateAll: false})
+	if viewsErr != nil {
+		s.logger.Warn("character task three views generation failed", zap.String("taskID", taskID), zap.Error(viewsErr))
+	}
+	result := map[string]string{"characterId": character.ID}
+	resultBytes, _ := json.Marshal(result)
+	now := time.Now().Unix()
+	task.Status = domain.CharacterGenerationStatusCompleted
+	task.Progress = 100
+	task.CurrentStep = domain.CharacterGenerationStepNotify
+	task.ResultJSON = string(resultBytes)
+	task.ErrorMessage = ""
+	task.CompletedAt = &now
+	_ = s.repo.UpdateCharacterGenerationTask(ctx, task)
+	_ = s.NotifyCharacterGenerationComplete(ctx, task.UserID, task.StoryID, character.ID, name)
+}
+
+func (s *Service) updateCharacterGenerationTask(ctx context.Context, task *domain.CharacterGenerationTask, status, step string, progress int, errMsg string) error {
+	task.Status = status
+	task.CurrentStep = step
+	task.Progress = progress
+	task.ErrorMessage = errMsg
+	task.UpdatedAt = time.Now().Unix()
+	return s.repo.UpdateCharacterGenerationTask(ctx, task)
+}
+
+func (s *Service) failCharacterGenerationTask(ctx context.Context, task *domain.CharacterGenerationTask, cause error) {
+	now := time.Now().Unix()
+	task.Status = domain.CharacterGenerationStatusFailed
+	task.Progress = 100
+	task.ErrorMessage = cause.Error()
+	task.CompletedAt = &now
+	_ = s.repo.UpdateCharacterGenerationTask(ctx, task)
+	_ = s.NotifyCharacterGenerationFailed(ctx, task.UserID, task.StoryID, task.ID, cause.Error())
+}
+
+func (s *Service) fragmentCharacterSuggestionsFromContent(fragment *domain.Fragment) []domain.FragmentCharacterSuggestion {
+	if fragment == nil {
+		return nil
+	}
+	content := strings.TrimSpace(fragment.Content)
+	caption := strings.TrimSpace(fragment.Caption)
+	if content == "" && caption == "" {
+		return nil
+	}
+	name := "碎片主角"
+	if caption != "" {
+		name = truncateRunes(caption, 12)
+	}
+	key := stableCharacterKey(name)
+	ref := ""
+	media := fragment.MediaURLs
+	if len(media) == 0 && strings.TrimSpace(fragment.ImageUrls) != "" {
+		_ = json.Unmarshal([]byte(fragment.ImageUrls), &media)
+	}
+	if len(media) > 0 {
+		ref = media[0]
+	}
+	return []domain.FragmentCharacterSuggestion{{
+		Key:            key,
+		Name:           name,
+		Role:           "主角",
+		Description:    truncateRunes(content, 160),
+		Background:     truncateRunes(strings.TrimSpace(caption+"\n"+content), 240),
+		ReferenceImage: ref,
+	}}
+}
+
+func stableCharacterKey(name string) string {
+	k := strings.ToLower(strings.TrimSpace(name))
+	k = strings.ReplaceAll(k, " ", "-")
+	if k == "" {
+		return "fragment-character"
+	}
+	return truncateRunes(k, 64)
+}
+
+func mergeGeneratedCharacterAttributes(dst *GeneratedCharacterAttributes, src *GeneratedCharacterAttributes) {
+	if dst.Description == "" {
+		dst.Description = src.Description
+	}
+	if dst.Personality == "" {
+		dst.Personality = src.Personality
+	}
+	if dst.Background == "" {
+		dst.Background = src.Background
+	}
+	if dst.ShortTermGoal == "" {
+		dst.ShortTermGoal = src.ShortTermGoal
+	}
+	if dst.LongTermGoal == "" {
+		dst.LongTermGoal = src.LongTermGoal
+	}
+	if dst.HandlingStyle == "" {
+		dst.HandlingStyle = src.HandlingStyle
+	}
+	if dst.CognitionRange == "" {
+		dst.CognitionRange = src.CognitionRange
+	}
+	if dst.AbilityFeatures == "" {
+		dst.AbilityFeatures = src.AbilityFeatures
+	}
+	if dst.Appearance == "" {
+		dst.Appearance = src.Appearance
+	}
+	if dst.DressPreference == "" {
+		dst.DressPreference = src.DressPreference
+	}
+	if dst.Role == "" {
+		dst.Role = src.Role
+	}
 }
 
 // GetCharacter 获取角色详情（带缓存）

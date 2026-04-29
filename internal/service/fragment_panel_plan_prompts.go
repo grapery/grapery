@@ -63,6 +63,11 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 	}
 	styleDesc := fragmentStyleDesc(st)
 	narr := panelPlanNarrativeRhythm(panelCount)
+	minWords := 70
+	if panelCount >= 5 {
+		// 5 格（含竖版条漫版式）单行 image_prompt 更长，压低下限以减少输出被截断、panels 数量不足。
+		minWords = 52
+	}
 
 	body := fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事导演，兼具叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。用户提供了「一张参考图」+「文字意向」。你的任务是规划 %d 个分镜 panel（连环画式故事碎片）：每一格都是一幅能独立抓眼、按顺序读又能连成全片的视觉作品。你不是在「把参考图描 N 遍」，而是在「以参考图为世界锚点，用画面推进故事」。
 
@@ -121,7 +126,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - 每格 caption 为一句简洁中文，让读者一眼明白这一格在故事中的画面感（谁在做什么、何种氛围），不要写成剧情提纲或章回标题。
 
 【六、image_prompt 写法（英文，给文生图/参考生图模型）】
-- 必须按以下 8 层依次写成一个连贯英文段落，层与层之间用句号分隔；至少 70 个英文单词，覆盖全部 8 层，禁止空泛词。
+- 必须按以下 8 层依次写成一个连贯英文段落，层与层之间用句号分隔；至少 %d 个英文单词，覆盖全部 8 层，禁止空泛词。
   (1) artStyle — 具体技法混合，勿只写 "anime" / "illustration"。
   (2) subject — 谁/什么在画中，外貌、姿态、表情、手持物。
   (3) environment — 完整空间与层次。
@@ -145,12 +150,12 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 输出格式（仅此 JSON，不要 markdown 围栏、不要前后解释）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min 70 words","caption":"一句中文","reference_keys":["char_main"]}, ...]}
+{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min %d words","caption":"一句中文","reference_keys":["char_main"]}, ...]}
 
 硬性规则：
 - visualBible 必须存在且包含 styleBible.artStyle；characters、props、locations 可为空数组但键必须存在。
 - "panels" 数组恰好 %d 项，index 依次为 0 到 %d。
-- image_prompt：仅英文；每格至少 70 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
+- image_prompt：仅英文；每格至少 %d 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
 - caption：仅中文，每格一行，无 # 号、无 markdown。
 - 相邻两格 image_prompt 中的 composition（景别+角度）必须明显不同。
 - 不要输出 JSON 之外的任何字符。`,
@@ -160,8 +165,11 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 		st,
 		styleDesc,
 		ui,
+		minWords,
+		minWords,
 		panelCount,
 		panelCount-1,
+		minWords,
 	)
 	if a := strings.TrimSpace(layoutAddon); a != "" {
 		body += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n版式与对白（用户指定；须融入分镜规划与 caption）\n" + a + "\n"

@@ -44,6 +44,107 @@ func (h *Handler) CreateCharacter(c *gin.Context) {
 	Success(c, character)
 }
 
+func (h *Handler) StartCharacterGenerationTask(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	var req service.CharacterGenerationTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+	task, err := h.svc.StartCharacterGenerationTask(c.Request.Context(), userID, req)
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "you can only generate characters for your own stories" {
+			Forbidden(c, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, task)
+}
+
+func (h *Handler) GetCharacterGenerationTask(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	task, err := h.svc.GetCharacterGenerationTask(c.Request.Context(), userID, c.Param("taskId"))
+	if err != nil {
+		if err == domain.ErrNotFound || err.Error() == "record not found" {
+			NotFound(c, "task not found")
+			return
+		}
+		if err.Error() == "unauthorized" {
+			Forbidden(c, "unauthorized")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, task)
+}
+
+func (h *Handler) ListCharacterGenerationTasks(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	tasks, err := h.svc.ListCharacterGenerationTasks(c.Request.Context(), userID, c.Query("status"), limit, offset)
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, gin.H{"tasks": tasks, "count": len(tasks), "limit": limit, "offset": offset})
+}
+
+func (h *Handler) RetryCharacterGenerationTask(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	task, err := h.svc.RetryCharacterGenerationTask(c.Request.Context(), userID, c.Param("taskId"))
+	if err != nil {
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, task)
+}
+
+func (h *Handler) PreviewFragmentCharactersForStory(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	resp, err := h.svc.PreviewFragmentCharactersForStory(c.Request.Context(), userID, c.Param("id"))
+	if err != nil {
+		if err.Error() == "story not found" {
+			NotFound(c, "story not found")
+			return
+		}
+		if err.Error() == "you can only generate characters for your own stories" {
+			Forbidden(c, err.Error())
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, resp)
+}
+
 // GetCharacter 获取角色详情
 func (h *Handler) GetCharacter(c *gin.Context) {
 	characterID := c.Param("id")
