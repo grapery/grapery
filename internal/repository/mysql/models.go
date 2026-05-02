@@ -335,7 +335,8 @@ type CharacterGenerationTask struct {
 	User                       User           `gorm:"foreignKey:UserID"`
 	StoryID                    string         `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
 	Story                      Story          `gorm:"foreignKey:StoryID"`
-	CharacterID                string         `gorm:"size:36;index"`
+	// Nullable until runCharacterGenerationTask creates the character; empty string would violate FK on characters.id.
+	CharacterID                *string        `gorm:"size:36;index"`
 	Character                  *Character     `gorm:"foreignKey:CharacterID"`
 	SourceType                 string         `gorm:"size:32;not null;index:idx_char_gen_source_type"`
 	SourceFragmentID           *string        `gorm:"size:36;index:idx_char_gen_fragment_key,unique"`

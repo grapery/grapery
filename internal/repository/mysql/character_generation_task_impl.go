@@ -34,8 +34,14 @@ func (r *Repository) CreateCharacterGenerationTask(ctx context.Context, task *do
 
 func (r *Repository) UpdateCharacterGenerationTask(ctx context.Context, task *domain.CharacterGenerationTask) error {
 	model := CharacterGenerationTaskToModel(task)
+	var characterID any
+	if model.CharacterID != nil && strings.TrimSpace(*model.CharacterID) != "" {
+		characterID = strings.TrimSpace(*model.CharacterID)
+	} else {
+		characterID = nil
+	}
 	updates := map[string]interface{}{
-		"character_id":  model.CharacterID,
+		"character_id":  characterID,
 		"status":        model.Status,
 		"progress":      model.Progress,
 		"current_step":  model.CurrentStep,

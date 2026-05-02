@@ -338,6 +338,25 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "fix_character_generation_tasks_empty_character_id",
+		Description: "Set character_id to NULL where empty so FK fk_character_generation_tasks_character allows pending tasks",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			if err := db.WithContext(ctx).Exec(
+				"UPDATE character_generation_tasks SET character_id = NULL WHERE character_id = ''",
+			).Error; err != nil {
+				return err
+			}
+			if err := db.WithContext(ctx).Exec(
+				"ALTER TABLE character_generation_tasks MODIFY COLUMN character_id VARCHAR(36) NULL",
+			).Error; err != nil {
+				log.Warn("character_generation_tasks.character_id nullable alter skipped", zap.Error(err))
+			}
+			return nil
+		},
+		Required: true,
+	})
+
 	// REMOVED: migrate_character_posters - not in StoryCreationAppUI design
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
