@@ -50,6 +50,14 @@ type ImageGenerationRequest struct {
 	StoryStyle *domain.StyleConfig `json:"storyStyle,omitempty"`
 	// ComicStyle 漫画/视觉风格 slug（如续写 continuation_comic_style）
 	ComicStyle string `json:"comicStyle,omitempty"`
+	// SkipPeerFailureGate 为 true 时跳过「同批其他分镜已失败则放弃」（用于用户主动重试）。
+	SkipPeerFailureGate bool `json:"-"`
+}
+
+// RetryFailedStoryboardImageOptions optional flags for POST retry-failed-images.
+type RetryFailedStoryboardImageOptions struct {
+	// ForceComicPagePipeline 为 true 时对失败分镜使用漫画页管线（兼容历史行未写入 pipeline_kind）。
+	ForceComicPagePipeline bool `json:"forceComicPagePipeline"`
 }
 
 // VideoGenerationRequest represents a request to generate scene videos
@@ -268,15 +276,15 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 			zap.String("style", style))
 	}
 
-	// Generate content using AI
-	// 直接调用 geminiClient，将结果记录到 StoryboardContentGeneration 表，不创建 AIGenerationRecord
-	if s.geminiClient != nil {
-		s.logger.Info("generating content with AI",
+	// Generate content using AI — 火山优先，失败再 Gemini（重试/继续走同一逻辑）
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if !huoshanOK && !geminiOK {
+		s.logger.Warn("no AI client available, using raw input as content",
 			zap.String("generationId", gen.ID),
-			zap.String("style", style),
-			zap.Int("contextLength", len(contextStr)),
-			zap.Int("rawInputLength", len(gen.RawInput)))
-		// Fallback to direct gemini client if aiGenService not available
+			zap.String("storyboardId", gen.StoryboardID))
+		gen.GeneratedContent = gen.RawInput
+	} else {
 		prompt := fmt.Sprintf(`You are a creative story writer. Based on the following context and user input, generate an engaging story chapter.
 
 Context:
@@ -287,15 +295,16 @@ Style: %s
 
 Generate a compelling narrative that continues the story naturally. Keep the tone consistent with the style requested.`, contextStr, gen.RawInput, style)
 
-		s.logger.Debug("calling gemini client for content generation",
+		s.logger.Debug("calling storyboard content text LLM (huoshan then gemini)",
 			zap.String("generationId", gen.ID),
 			zap.Int("promptLength", len(prompt)))
 
-		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
+		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "content", 8192, 0.7, false, 0.7, 8192)
 		if err != nil {
 			s.logger.Error("AI content generation failed",
 				zap.String("generationId", gen.ID),
 				zap.String("storyboardId", gen.StoryboardID),
+				zap.String("lastProvider", prov),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorUnknown), err.Error())
@@ -305,42 +314,42 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 					zap.Error(updateErr))
 			}
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
-			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardContentGeneration("failed", duration)
-				s.metrics.RecordAIGenerationRetry("content", "gemini", 0) // 0 means no retry, just failed
+				metricProv := prov
+				if metricProv == "" {
+					metricProv = "text_llm"
+				}
+				s.metrics.RecordAIGenerationRetry("content", metricProv, 0)
 			}
 			return
 		}
 
 		gen.GeneratedContent = text
-		if resp != nil && resp.UsageMetadata != nil {
-			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
-			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
-			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+		gen.InputTokens = inTok
+		gen.OutputTokens = outTok
+		gen.TotalTokens = totTok
+		if totTok > 0 {
 			s.logger.Debug("content generation token usage recorded",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.Int("inputTokens", gen.InputTokens),
 				zap.Int("outputTokens", gen.OutputTokens),
 				zap.Int("totalTokens", gen.TotalTokens))
 		} else {
-			s.logger.Warn("no usage metadata in AI response",
-				zap.String("generationId", gen.ID))
+			s.logger.Warn("no token usage recorded for content generation",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", prov))
 		}
 
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("content generated successfully",
 			zap.String("generationId", gen.ID),
+			zap.String("provider", prov),
 			zap.Int("contentLength", len(gen.GeneratedContent)),
 			zap.Int("totalTokens", gen.TotalTokens))
-	} else {
-		// If no AI client, use raw input as content
-		s.logger.Warn("no AI client available, using raw input as content",
-			zap.String("generationId", gen.ID),
-			zap.String("storyboardId", gen.StoryboardID))
-		gen.GeneratedContent = gen.RawInput
 	}
 
 	// Update status to completed
@@ -497,13 +506,15 @@ func (s *Service) processSceneGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("generationId", gen.ID))
 	}
 
-	// 直接调用 geminiClient，将结果记录到 StoryboardSceneGeneration 表，不创建 AIGenerationRecord
-	if s.geminiClient != nil {
-		s.logger.Info("generating scene details with AI",
+	// 分镜扩写：火山优先，失败再 Gemini（重试同路径）
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if !huoshanOK && !geminiOK {
+		s.logger.Warn("no AI client available, using input description as generated detail",
 			zap.String("generationId", gen.ID),
-			zap.String("sceneId", gen.SceneID),
-			zap.String("sceneTitle", gen.SceneTitle))
-		// Fallback to direct gemini client if aiGenService not available
+			zap.String("sceneId", gen.SceneID))
+		gen.GeneratedDetail = gen.InputDescription
+	} else {
 		prompt := fmt.Sprintf(`Transform the following scene description into a highly detailed, cinematic script ideal for high-end text-to-video or text-to-image AI generators:
 
 Scene Title: %s
@@ -519,11 +530,11 @@ You must enrich the scene using the following exhaustive dimensions:
 
 Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not use bullet points in the final output.`, gen.SceneTitle, gen.SceneLocation, gen.InputDescription)
 
-		s.logger.Debug("calling gemini client for scene detail generation",
+		s.logger.Debug("calling storyboard scene detail text LLM (huoshan then gemini)",
 			zap.String("generationId", gen.ID),
 			zap.Int("promptLength", len(prompt)))
 
-		text, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
+		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "scene", 8192, 0.5, false, 0.5, 8192)
 		if err != nil {
 			s.logger.Error("AI scene detail generation failed",
 				zap.String("generationId", gen.ID),
@@ -538,7 +549,6 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 					zap.Error(updateErr))
 			}
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
-			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardSceneGeneration("failed", duration)
@@ -547,18 +557,20 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 		}
 
 		gen.GeneratedDetail = text
-		if resp != nil && resp.UsageMetadata != nil {
-			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
-			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
-			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+		gen.InputTokens = inTok
+		gen.OutputTokens = outTok
+		gen.TotalTokens = totTok
+		if totTok > 0 {
 			s.logger.Debug("scene generation token usage recorded",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.Int("inputTokens", gen.InputTokens),
 				zap.Int("outputTokens", gen.OutputTokens),
 				zap.Int("totalTokens", gen.TotalTokens))
 		} else {
-			s.logger.Warn("no usage metadata in AI response",
-				zap.String("generationId", gen.ID))
+			s.logger.Warn("no token usage recorded for scene generation",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", prov))
 		}
 
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
@@ -566,13 +578,9 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 		s.logger.Info("scene details generated successfully",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
+			zap.String("provider", prov),
 			zap.Int("detailLength", len(gen.GeneratedDetail)),
 			zap.Int("totalTokens", gen.TotalTokens))
-	} else {
-		s.logger.Warn("no AI client available, using input description as generated detail",
-			zap.String("generationId", gen.ID),
-			zap.String("sceneId", gen.SceneID))
-		gen.GeneratedDetail = gen.InputDescription
 	}
 
 	gen.Status = domain.GenerationStatusCompleted
@@ -713,6 +721,8 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		StoryStyle:               storyStyle,
 		IsTransitionScene:        isTransitionScene,
 		ComicStyle:               strings.TrimSpace(req.ComicStyle),
+		PipelineKind:             domain.StoryboardImagePipelineScene,
+		SkipPeerFailureGate:      req.SkipPeerFailureGate,
 		Status:                   domain.GenerationStatusPending,
 		CreatedAt:                time.Now().Unix(),
 	}
@@ -863,6 +873,8 @@ func (s *Service) storyboardImagePhaseHasLatestFailure(ctx context.Context, stor
 }
 
 // cancelInFlightSiblingStoryboardImageGenerations marks pending/processing image jobs (other than exceptGenID) failed
+// when one panel fails in the same storyboard batch. Skipped for user-driven retries (SkipPeerFailureGate on the failing gen)
+// so parallel retry jobs are not torn down when one scene fails.
 // so parallel work stops after one panel fails in the same storyboard batch.
 func (s *Service) cancelInFlightSiblingStoryboardImageGenerations(ctx context.Context, storyboardID, exceptGenID string) int {
 	if s.repo == nil {
@@ -946,8 +958,8 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("generationId", gen.ID))
 	}
 
-	// 同批其它分镜已失败时，不再继续调用模型（避免无效消耗与状态撕裂）。
-	if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+	// 同批其它分镜仍显示失败、但属于用户主动「重试失败项」时置为 true，避免误杀新任务。
+	if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
 		gen.Status = domain.GenerationStatusFailed
 		gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
 			"another panel image failed first; stopping remaining image jobs in this batch")
@@ -961,9 +973,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		return
 	}
 
-	// First, generate image prompt using text AI
-	// 直接调用 geminiClient，将结果记录到 StoryboardImageGeneration 表，不创建 AIGenerationRecord
-	if s.geminiClient != nil {
+	// First, generate image prompt using text AI — 火山优先，失败再 Gemini（JSON 提示词）
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if huoshanOK || geminiOK {
 		s.logger.Info("generating image prompt with AI",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
@@ -972,14 +985,13 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.Bool("isTransitionScene", gen.IsTransitionScene),
 			zap.Int("characterCount", len(gen.SceneCharacters)))
 
-		// 构建提示词，包含故事风格配置和场景类型信息
 		promptGen := s.buildImageGenerationPrompt(gen)
 
-		s.logger.Debug("calling gemini client for image prompt generation",
+		s.logger.Debug("calling storyboard image prompt LLM (huoshan then gemini)",
 			zap.String("generationId", gen.ID),
 			zap.Int("promptLength", len(promptGen)))
 
-		text, resp, err := s.geminiClient.GenerateText(ctx, "", promptGen, nil)
+		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, promptGen, "image_prompt", 4096, 0.35, true, 0.35, 4096)
 		if err != nil {
 			s.logger.Error("AI image prompt generation failed",
 				zap.String("generationId", gen.ID),
@@ -993,9 +1005,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
-			s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
+			if !gen.SkipPeerFailureGate {
+				s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
+			}
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
-			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardImageGeneration("failed", sceneType, duration)
@@ -1007,48 +1020,47 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			return
 		}
 
-		// Parse structured prompt details from AI response
 		promptDetails, combinedPrompt := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
 			gen.PromptDetails = promptDetails
 			gen.GeneratedPrompt = combinedPrompt
 			s.logger.Debug("structured prompt details parsed successfully",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.String("artStyle", promptDetails.ArtStyle),
 				zap.String("mood", promptDetails.Mood))
-			// Record metrics: structured prompt details used
 			if s.metrics != nil {
 				s.metrics.RecordImageGenerationPromptDetails(true)
 			}
 		} else {
-			// Fallback: use raw text as prompt if parsing fails (still anchor with narrative block)
 			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
 			gen.GeneratedPrompt = prependStoryboardImageNarrativeBlock(nb, capGeminiImageBeautyOutput(strings.TrimSpace(text)))
 			s.logger.Warn("failed to parse structured prompt, using raw text",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.String("rawText", truncateForLog(text, 200)))
-			// Record metrics: parsing error
 			if s.metrics != nil {
 				s.metrics.RecordImageGenerationError("parsing_error")
 				s.metrics.RecordImageGenerationPromptDetails(false)
 			}
 		}
-		if resp != nil && resp.UsageMetadata != nil {
-			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
-			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
-			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+		gen.InputTokens = inTok
+		gen.OutputTokens = outTok
+		gen.TotalTokens = totTok
+		if totTok > 0 {
 			s.logger.Debug("image prompt generation token usage recorded",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.Int("inputTokens", gen.InputTokens),
 				zap.Int("outputTokens", gen.OutputTokens),
 				zap.Int("totalTokens", gen.TotalTokens))
-			// Record metrics: token consumption for prompt generation
-			if s.metrics != nil && gen.TotalTokens > 0 {
+			if s.metrics != nil {
 				s.metrics.RecordImageGenerationTokenConsumed("prompt", sceneType, float64(gen.TotalTokens))
 			}
 		} else {
-			s.logger.Warn("no usage metadata in AI response",
-				zap.String("generationId", gen.ID))
+			s.logger.Warn("no token usage recorded for image prompt",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", prov))
 		}
 
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
@@ -1056,6 +1068,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		s.logger.Info("image prompt generated successfully",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
+			zap.String("provider", prov),
 			zap.String("prompt", truncateForLog(gen.GeneratedPrompt, 200)))
 	} else {
 		// If no AI client, use scene description as prompt
@@ -1237,7 +1250,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 	}
 
 	if gen.GeneratedImageURL != "" {
-		if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+		if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
 			gen.GeneratedImageURL = ""
 			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
 				"another panel image failed; discarding generated image for this batch")
@@ -1265,7 +1278,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("status", gen.Status))
 	}
 
-	if gen.Status == domain.GenerationStatusFailed {
+	if gen.Status == domain.GenerationStatusFailed && !gen.SkipPeerFailureGate {
 		s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 	}
 
@@ -1648,10 +1661,10 @@ func (s *Service) processVideoGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("generationId", gen.ID))
 	}
 
-	// Generate video prompt using text AI
-	// 直接调用 geminiClient，将结果记录到 StoryboardVideoGeneration 表，不创建 AIGenerationRecord
-	if s.geminiClient != nil {
-		// Fallback to direct gemini client if aiGenService not available
+	// Generate video prompt using text AI — 火山优先，失败再 Gemini（JSON）
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if huoshanOK || geminiOK {
 		promptGen := fmt.Sprintf(`Create a video generation prompt for the following scene:
 
 Scene Title: %s
@@ -1676,16 +1689,16 @@ LENGTH: When merged into one video prompt, keep the total substantive Chinese te
 			zap.String("sceneTitle", gen.SceneTitle),
 			zap.String("inputDescription", gen.InputDescription))
 
-		text, resp, err := s.geminiClient.GenerateText(ctx, "", promptGen, nil)
+		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, promptGen, "video_prompt", 2048, 0.35, true, 0.35, 2048)
 		if err != nil {
 			s.logger.Error("failed to generate video prompt",
 				zap.String("sceneId", gen.SceneID),
+				zap.String("provider", prov),
 				zap.Error(err))
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
-			// Record metrics: failed
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardVideoGeneration("failed", false, duration)
@@ -1695,36 +1708,34 @@ LENGTH: When merged into one video prompt, keep the total substantive Chinese te
 			return
 		}
 
-		// Parse structured prompt details from AI response
 		videoPromptDetails, combinedPrompt := s.parseVideoPromptDetails(text)
 		if videoPromptDetails != nil {
 			gen.PromptDetails = videoPromptDetails
 			gen.GeneratedPrompt = combinedPrompt
 			s.logger.Debug("structured video prompt details parsed successfully",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.String("cameraMovement", videoPromptDetails.CameraMovement),
 				zap.String("atmosphere", videoPromptDetails.Atmosphere))
 		} else {
-			// Fallback: use raw text as prompt if parsing fails
 			gen.GeneratedPrompt = text
 			s.logger.Warn("failed to parse structured video prompt, using raw text",
 				zap.String("generationId", gen.ID),
+				zap.String("provider", prov),
 				zap.String("rawText", truncateForLog(text, 200)))
 		}
-		if resp != nil && resp.UsageMetadata != nil {
-			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
-			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
-			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
-			// Record metrics: token consumption for prompt generation
-			if s.metrics != nil && gen.TotalTokens > 0 {
-				s.metrics.RecordVideoGenerationTokenConsumed("prompt", float64(gen.TotalTokens))
-			}
+		gen.InputTokens = inTok
+		gen.OutputTokens = outTok
+		gen.TotalTokens = totTok
+		if totTok > 0 && s.metrics != nil {
+			s.metrics.RecordVideoGenerationTokenConsumed("prompt", float64(gen.TotalTokens))
 		}
 
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("video prompt generated successfully",
 			zap.String("sceneId", gen.SceneID),
+			zap.String("provider", prov),
 			zap.String("generatedPrompt", gen.GeneratedPrompt),
 			zap.Int("inputTokens", gen.InputTokens),
 			zap.Int("outputTokens", gen.OutputTokens),
@@ -2173,15 +2184,22 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			zap.Error(err))
 	}
 
-	// Get image generations
+	// Get image generations — deduplicate to latest per scene so that old failed records
+	// from previous attempts don't shadow active retry/pending records after RetryFailedImages.
 	if imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID); err == nil {
 		s.logger.Debug("image generations found",
 			zap.String("storyboardId", storyboardID),
 			zap.Int("count", len(imageGens)))
-		progress.ImageGenerations = imageGens
+		// Keep only the latest record per scene (same logic used by RetryFailedStoryboardImages).
+		latestByScene := latestStoryboardImageGenerationByScene(imageGens)
+		latestImageGens := make([]*domain.StoryboardImageGeneration, 0, len(latestByScene))
+		for _, g := range latestByScene {
+			latestImageGens = append(latestImageGens, g)
+		}
+		progress.ImageGenerations = latestImageGens
 		processingCount := 0
 		failedCount := 0
-		for _, gen := range imageGens {
+		for _, gen := range latestImageGens {
 			if gen.Status == domain.GenerationStatusProcessing {
 				processingCount++
 			} else if gen.Status == domain.GenerationStatusPending {
@@ -2317,7 +2335,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 // RetryFailedStoryboardImages retries failed image generations for a storyboard.
 // It starts new generation jobs only for scenes whose latest image generation row (by time) is failed,
 // so old failed rows after a successful retry do not trigger duplicate work.
-func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string) (retried int, remainingFailed int, err error) {
+func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string, opts *RetryFailedStoryboardImageOptions) (retried int, remainingFailed int, err error) {
+	forceComic := opts != nil && opts.ForceComicPagePipeline
 	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
 	if err != nil {
 		return 0, 0, err
@@ -2344,33 +2363,56 @@ func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID 
 				comicStyle = strings.TrimSpace(sb.ContinuationComicStyle)
 			}
 		}
-		_, retryErr := s.GenerateSceneImage(ctx, &ImageGenerationRequest{
-			StoryboardID:             storyboardID,
-			SceneID:                  gen.SceneID,
-			SceneTitle:               gen.SceneTitle,
-			SceneDescription:         gen.SceneDescription,
-			ReferenceImages:          gen.ReferenceImages,
-			SceneCharacters:          gen.SceneCharacters,
-			CharacterReferenceImages: gen.CharacterReferenceImages,
-			StoryStyle:               gen.StoryStyle,
-			ComicStyle:               comicStyle,
-		})
+		useComic := forceComic || strings.TrimSpace(gen.PipelineKind) == domain.StoryboardImagePipelineComicPage
+		var retryErr error
+		if useComic {
+			_, retryErr = s.GenerateStoryboardComicPage(ctx, &ComicPageGenerationRequest{
+				StoryboardID:             storyboardID,
+				SceneID:                  gen.SceneID,
+				SceneTitle:               gen.SceneTitle,
+				SceneDescription:         gen.SceneDescription,
+				ReferenceImages:          gen.ReferenceImages,
+				SceneCharacters:          gen.SceneCharacters,
+				CharacterReferenceImages: gen.CharacterReferenceImages,
+				StoryStyle:               gen.StoryStyle,
+				ComicStyle:               comicStyle,
+				SkipPeerFailureGate:      true,
+				Pipeline:                 ComicPagePipelineOptions{},
+			})
+		} else {
+			_, retryErr = s.GenerateSceneImage(ctx, &ImageGenerationRequest{
+				StoryboardID:             storyboardID,
+				SceneID:                  gen.SceneID,
+				SceneTitle:               gen.SceneTitle,
+				SceneDescription:         gen.SceneDescription,
+				ReferenceImages:          gen.ReferenceImages,
+				SceneCharacters:          gen.SceneCharacters,
+				CharacterReferenceImages: gen.CharacterReferenceImages,
+				StoryStyle:               gen.StoryStyle,
+				ComicStyle:               comicStyle,
+				SkipPeerFailureGate:      true,
+			})
+		}
 		if retryErr != nil {
 			s.logger.Warn("failed to retry image generation",
 				zap.String("storyboardId", storyboardID),
 				zap.String("sceneId", gen.SceneID),
+				zap.Bool("comicPage", useComic),
 				zap.Error(retryErr))
 			continue
 		}
 		retried++
 	}
 
-	latestImageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID)
+	// Count remaining failed based on latest record per scene only,
+	// so newly-created pending retry records don't get masked by the old failed rows.
+	allImageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID)
 	if listErr != nil {
 		return retried, 0, nil
 	}
-	for _, gen := range latestImageGens {
-		if gen.Status == domain.GenerationStatusFailed {
+	postRetryLatest := latestStoryboardImageGenerationByScene(allImageGens)
+	for _, gen := range postRetryLatest {
+		if gen != nil && gen.Status == domain.GenerationStatusFailed {
 			remainingFailed++
 		}
 	}

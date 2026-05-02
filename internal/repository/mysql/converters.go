@@ -1027,6 +1027,7 @@ func StoryboardImageGenerationToModel(d *domain.StoryboardImageGeneration) *Stor
 		OutputTokens:        d.OutputTokens,
 		TotalTokens:         d.TotalTokens,
 		ErrorMessage:        d.ErrorMessage,
+		PipelineKind:        d.PipelineKind,
 		CreatedAt:           unixToTime(d.CreatedAt),
 		CompletedAt:         completedAt,
 	}
@@ -1068,6 +1069,7 @@ func ModelToStoryboardImageGeneration(m *StoryboardImageGeneration) *domain.Stor
 		OutputTokens:      m.OutputTokens,
 		TotalTokens:       m.TotalTokens,
 		ErrorMessage:      m.ErrorMessage,
+		PipelineKind:      m.PipelineKind,
 		CreatedAt:         timeToUnix(m.CreatedAt),
 		CompletedAt:       completedAt,
 	}

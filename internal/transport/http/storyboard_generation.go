@@ -1,7 +1,9 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -539,7 +541,20 @@ func (h *Handler) RetryFailedStoryboardImages(c *gin.Context) {
 		return
 	}
 
-	retried, remainingFailed, err := h.svc.RetryFailedStoryboardImages(c.Request.Context(), storyboardID)
+	var opts service.RetryFailedStoryboardImageOptions
+	raw, readErr := io.ReadAll(c.Request.Body)
+	if readErr != nil {
+		Error(c, CodeInvalidParams, readErr.Error())
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) > 0 {
+		if err := json.Unmarshal(raw, &opts); err != nil {
+			Error(c, CodeInvalidParams, err.Error())
+			return
+		}
+	}
+
+	retried, remainingFailed, err := h.svc.RetryFailedStoryboardImages(c.Request.Context(), storyboardID, &opts)
 	if err != nil {
 		Error(c, CodeInternalError, err.Error())
 		return

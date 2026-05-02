@@ -34,6 +34,8 @@ type ComicPageGenerationRequest struct {
 	StoryStyle               *domain.StyleConfig
 	ComicStyle               string
 	Pipeline                 ComicPagePipelineOptions
+	// SkipPeerFailureGate 用户重试时跳过同批兄弟分镜失败闸门
+	SkipPeerFailureGate bool
 }
 
 // NormalizeComicPagePipeline applies defaults and validates panel count for known layouts.
@@ -143,6 +145,8 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		StoryStyle:               storyStyle,
 		IsTransitionScene:        isTransitionScene,
 		ComicStyle:               strings.TrimSpace(req.ComicStyle),
+		PipelineKind:             domain.StoryboardImagePipelineComicPage,
+		SkipPeerFailureGate:      req.SkipPeerFailureGate,
 		Status:                   domain.GenerationStatusPending,
 		CreatedAt:                time.Now().Unix(),
 	}
@@ -184,7 +188,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			zap.Error(err))
 	}
 
-	if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+	if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
 		gen.Status = domain.GenerationStatusFailed
 		gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
 			"another panel image failed first; stopping remaining image jobs in this batch")
@@ -194,14 +198,18 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		return
 	}
 
-	if s.geminiClient != nil {
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if huoshanOK || geminiOK {
 		promptGen := s.buildComicPageImageGenerationLLMPrompt(gen, opts)
-		text, resp, err := s.geminiClient.GenerateText(ctx, "", promptGen, nil)
+		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, promptGen, "comic_page_image_prompt", 4096, 0.35, true, 0.35, 4096)
 		if err != nil {
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			_ = s.repo.UpdateImageGeneration(ctx, gen)
-			s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
+			if !gen.SkipPeerFailureGate {
+				s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
+			}
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "comic_page_image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				s.metrics.RecordStoryboardImageGeneration("failed", sceneType, time.Since(startTime))
@@ -217,11 +225,12 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
 			gen.GeneratedPrompt = prependStoryboardImageNarrativeBlock(nb, capGeminiImageBeautyOutput(strings.TrimSpace(text)))
 		}
-		if resp != nil && resp.UsageMetadata != nil {
-			gen.InputTokens = int(resp.UsageMetadata.PromptTokenCount)
-			gen.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
-			gen.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
-		}
+		gen.InputTokens = inTok
+		gen.OutputTokens = outTok
+		gen.TotalTokens = totTok
+		s.logger.Debug("comic page image prompt LLM done",
+			zap.String("generationId", gen.ID),
+			zap.String("provider", prov))
 		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "comic_page_image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 	} else {
 		nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
@@ -279,7 +288,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 	}
 
 	if gen.GeneratedImageURL != "" {
-		if s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
+		if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
 			gen.GeneratedImageURL = ""
 			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
 				"another panel image failed; discarding generated image for this batch")
@@ -303,7 +312,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			zap.Error(err))
 	}
 
-	if gen.Status == domain.GenerationStatusFailed {
+	if gen.Status == domain.GenerationStatusFailed && !gen.SkipPeerFailureGate {
 		s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 	}
 

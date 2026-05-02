@@ -814,7 +814,7 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_storyboard_image_generation_schema",
-		Description: "Ensure storyboard_image_generations has prompt_details_json column",
+		Description: "Ensure storyboard_image_generations has prompt_details_json and pipeline_kind columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			repo := &Repository{db: db, log: log}
 			return repo.ensureStoryboardImageGenerationSchema()

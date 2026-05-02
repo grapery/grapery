@@ -239,6 +239,7 @@ type StoryboardImageGeneration struct {
 	OutputTokens        int            `gorm:"default:0"`
 	TotalTokens         int            `gorm:"default:0;index"`
 	ErrorMessage        string         `gorm:"type:text"`
+	PipelineKind        string         `gorm:"column:pipeline_kind;size:24;not null;default:'';index"` // scene | comic_page
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`
 	CompletedAt         *time.Time     `gorm:"index"`
 	UpdatedAt           time.Time      `gorm:"autoUpdateTime"`

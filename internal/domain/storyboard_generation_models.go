@@ -8,6 +8,12 @@ const (
 	GenerationStatusFailed     = "failed"
 )
 
+// Storyboard image pipeline kind (persisted on storyboard_image_generations.pipeline_kind).
+const (
+	StoryboardImagePipelineScene     = "scene"
+	StoryboardImagePipelineComicPage = "comic_page"
+)
+
 // Workflow status constants
 const (
 	WorkflowStatusDraft        = "draft"
@@ -101,6 +107,10 @@ type StoryboardImageGeneration struct {
 	IsTransitionScene        bool         `json:"isTransitionScene"`                  // 是否为过渡场景（无角色出现）
 	// ComicStyle 续写或请求指定的漫画/视觉风格 slug（不入库列，仅随当次生成记录传递）
 	ComicStyle string `json:"comicStyle,omitempty"`
+	// PipelineKind scene vs comic_page（单图插画 vs 多格漫画页）；空为历史数据。
+	PipelineKind string `json:"pipelineKind,omitempty"`
+	// SkipPeerFailureGate 用户主动重试时跳过「兄弟分镜已失败则本任务放弃」闸门（仅内存传递，不入库）。
+	SkipPeerFailureGate bool `json:"-"`
 
 	// Relations
 	Storyboard *Storyboard `json:"storyboard,omitempty"`

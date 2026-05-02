@@ -474,8 +474,10 @@ func (s *Service) generateStoryboardContent(
 		zap.Int("ancestorScenes", len(ancestorScenes)),
 		zap.Int("characterCount", len(fateSnapshot)))
 
-	// Check if Gemini client is available
-	if s.geminiClient == nil {
+	// Check text LLM availability — 火山优先，失败再 Gemini
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if !huoshanOK && !geminiOK {
 		s.logger.Warn("no AI client available, using placeholder content",
 			zap.String("storyboardId", newStoryboard.ID))
 		placeholderContent := fmt.Sprintf("基于用户输入「%s」生成的故事叙述内容。\n\n"+
@@ -554,30 +556,22 @@ func (s *Service) generateStoryboardContent(
 
 请开始创作:`, contextBuilder.String(), comicStyleBlock, userPrompt)
 
-	s.logger.Debug("calling gemini for storyboard content generation",
+	s.logger.Debug("calling storyboard continuation content LLM (huoshan then gemini)",
 		zap.String("storyboardId", newStoryboard.ID),
 		zap.Int("promptLength", len(prompt)))
 
-	// Call Gemini to generate content
-	content, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
+	content, _, _, totalTokens, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "narrator_content", 8192, 0.7, false, 0.7, 8192)
 	if err != nil {
 		s.logger.Error("AI content generation failed",
 			zap.String("storyboardId", newStoryboard.ID),
+			zap.String("lastProvider", prov),
 			zap.Error(err))
 		return "", 0, fmt.Errorf("AI content generation failed: %w", err)
 	}
 
-	// Extract token usage
-	totalTokens := 0
-	if resp != nil && resp.UsageMetadata != nil {
-		totalTokens = int(resp.UsageMetadata.TotalTokenCount)
-		s.logger.Debug("storyboard content generation token usage",
-			zap.String("storyboardId", newStoryboard.ID),
-			zap.Int("totalTokens", totalTokens))
-	}
-
 	s.logger.Info("storyboard content generated successfully",
 		zap.String("storyboardId", newStoryboard.ID),
+		zap.String("provider", prov),
 		zap.Int("contentLength", len(content)),
 		zap.Int("totalTokens", totalTokens))
 
@@ -603,8 +597,10 @@ func (s *Service) generateScenesFromContent(
 		contentForPrompt = truncateLog(content, maxContentLength) + "\n\n(内容已截断，仅供参考)"
 	}
 
-	// Check if Gemini client is available
-	if s.geminiClient == nil {
+	// Text LLM：火山优先，失败再 Gemini
+	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
+	geminiOK := s.geminiClient != nil
+	if !huoshanOK && !geminiOK {
 		s.logger.Warn("no AI client available, using placeholder scenes",
 			zap.String("storyboardId", storyboardID))
 		return s.generatePlaceholderScenes(storyboardID, sceneCount), 0, nil
@@ -647,18 +643,16 @@ func (s *Service) generateScenesFromContent(
 
 请生成场景信息:`, sceneCount, contentForPrompt, comicHint, sceneCount)
 
-	s.logger.Debug("calling gemini for scene generation",
+	s.logger.Debug("calling narrator scene plan LLM (huoshan then gemini)",
 		zap.String("storyboardId", storyboardID),
 		zap.Int("sceneCount", sceneCount),
 		zap.Int("promptLength", len(prompt)))
 
-	// Call Gemini to generate structured scene data
-	// Note: For structured output, we'll need to use GenerateContent with proper schema
-	// For now, use simple text generation and parse JSON
-	generatedText, resp, err := s.geminiClient.GenerateText(ctx, "", prompt, nil)
+	generatedText, _, _, totalTokens, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "narrator_scenes", 8192, 0.35, true, 0.35, 8192)
 	if err != nil {
 		s.logger.Warn("AI scene generation failed, using placeholder scenes",
 			zap.String("storyboardId", storyboardID),
+			zap.String("lastProvider", prov),
 			zap.Error(err))
 		return s.generatePlaceholderScenes(storyboardID, sceneCount), 0, nil
 	}
@@ -672,14 +666,9 @@ func (s *Service) generateScenesFromContent(
 		return s.generatePlaceholderScenes(storyboardID, sceneCount), 0, nil
 	}
 
-	// Extract token usage
-	totalTokens := 0
-	if resp != nil && resp.UsageMetadata != nil {
-		totalTokens = int(resp.UsageMetadata.TotalTokenCount)
-	}
-
 	s.logger.Info("scenes generated successfully",
 		zap.String("storyboardId", storyboardID),
+		zap.String("provider", prov),
 		zap.Int("sceneCount", len(scenes)),
 		zap.Int("totalTokens", totalTokens))
 

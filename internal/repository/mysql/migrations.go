@@ -571,6 +571,13 @@ func (r *Repository) ensureStoryboardImageGenerationSchema() error {
 			return err
 		}
 	}
+	if !migrator.HasColumn(&StoryboardImageGeneration{}, "PipelineKind") {
+		r.log.Info("Adding pipeline_kind column to storyboard_image_generations")
+		if err := r.db.Exec("ALTER TABLE storyboard_image_generations ADD COLUMN pipeline_kind VARCHAR(24) NOT NULL DEFAULT '' COMMENT 'scene | comic_page'").Error; err != nil {
+			r.log.Error("failed to add pipeline_kind column", zap.Error(err))
+			return err
+		}
+	}
 
 	return nil
 }
