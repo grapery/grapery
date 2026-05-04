@@ -14,22 +14,26 @@ type FragmentPanelGenerationRequest struct {
 	UserRegion string `json:"userRegion,omitempty"`
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空则默认 16:9（与碎片 AI 生成一致）。
 	AspectRatio string `json:"aspectRatio,omitempty"`
-	// LayoutPreset 多格版式提示（仅 fragment-panels 流水线）；如 strip5_top2_middle_wide_bottom2 会强制 panelCount=5。
-	LayoutPreset string `json:"layoutPreset,omitempty"`
-	// GutterStyle 分镜间隔视觉提示：white_thin、black_thin（可选）。
-	GutterStyle string `json:"gutterStyle,omitempty"`
 	// DialogueMode 对白策略：auto、none、from_user_input（可选）。
 	DialogueMode string `json:"dialogueMode,omitempty"`
-	// OutputMode 下游合成策略标记（可选）：per_panel、single_merged（供后续扩展）。
-	OutputMode string `json:"outputMode,omitempty"`
+	// ConsistencyLevel 一致性策略：off、standard、strong；空则 standard。
+	ConsistencyLevel string `json:"consistencyLevel,omitempty"`
+	// EnableReferenceAssets 是否生成额外参考资产；nil 时由 consistencyLevel 和分镜复杂度决定。
+	EnableReferenceAssets *bool `json:"enableReferenceAssets,omitempty"`
+	// IncludeGenerationTrace 是否在查询接口返回完整多模态 trace。
+	IncludeGenerationTrace bool `json:"includeGenerationTrace,omitempty"`
 }
 
 // FragmentPanelPlanItem Step1 输出的单格规划
 type FragmentPanelPlanItem struct {
-	Index         int      `json:"index"`
-	ImagePrompt   string   `json:"image_prompt"`
-	Caption       string   `json:"caption"`
-	ReferenceKeys []string `json:"reference_keys,omitempty"` // 引用 visualBible 锚点 key（与普通碎片 expandScenes 对齐）
+	Index           int      `json:"index"`
+	ImagePrompt     string   `json:"image_prompt"`
+	Caption         string   `json:"caption"`
+	ReferenceKeys   []string `json:"reference_keys,omitempty"` // 引用 visualBible 锚点 key（与普通碎片 expandScenes 对齐）
+	LayoutIntent    string   `json:"layout_intent,omitempty"`
+	CompositionPlan string   `json:"composition_plan,omitempty"`
+	ShotType        string   `json:"shot_type,omitempty"`
+	VisualHierarchy string   `json:"visual_hierarchy,omitempty"`
 }
 
 // FragmentPanelResultItem 最终每格结果
@@ -44,7 +48,9 @@ type FragmentPanelResultData struct {
 	Panels            []FragmentPanelResultItem  `json:"panels"`
 	CombinedContent   string                     `json:"combinedContent,omitempty"`
 	VisualBible       *FragmentVisualBible       `json:"visualBible,omitempty"`
+	VisualEvidence    []FragmentVisualEvidence   `json:"visualEvidence,omitempty"`
 	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`
+	GenerationTrace   *FragmentGenerationTrace   `json:"generationTrace,omitempty"`
 	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"`
 }
 
@@ -75,6 +81,7 @@ type FragmentPanelGenerationTask struct {
 	Plan        []FragmentPanelPlanItem        `json:"plan,omitempty"`
 	// VisualBible / AnchorImages 由 Step1+锚点阶段写入；与 Plan 一并持久化在 plan_json（见 repository包装格式）。
 	VisualBible     *FragmentVisualBible      `json:"visualBible,omitempty"`
+	VisualEvidence  []FragmentVisualEvidence  `json:"visualEvidence,omitempty"`
 	AnchorImages    []FragmentAnchorImage     `json:"anchorImages,omitempty"`
 	Result          *FragmentPanelResultData  `json:"result,omitempty"`
 	Metrics         *FragmentPanelMetricsData `json:"metrics,omitempty"`

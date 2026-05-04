@@ -59,7 +59,10 @@ type FragmentGenerationRequest struct {
 	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
 	Visibility string   `json:"visibility"` // 可见性：public, followers, private
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
-	AspectRatio string `json:"aspectRatio,omitempty"`
+	AspectRatio            string `json:"aspectRatio,omitempty"`
+	ConsistencyLevel       string `json:"consistencyLevel,omitempty"`       // off | standard | strong
+	EnableReferenceAssets  *bool  `json:"enableReferenceAssets,omitempty"`  // nil 时由 consistencyLevel 决定
+	IncludeGenerationTrace bool   `json:"includeGenerationTrace,omitempty"` // 返回完整生成 trace
 }
 
 // FragmentVisualStyleBible 视觉圣经：全局画风锚点（英文描述为主，便于出图模型对齐）。
@@ -75,6 +78,9 @@ type FragmentVisualCharacter struct {
 	Key             string   `json:"key"`
 	Name            string   `json:"name,omitempty"`
 	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+	NegativeTraits  []string `json:"negativeTraits,omitempty"`
+	Ownership       []string `json:"ownership,omitempty"`
+	RoleImportance  string   `json:"roleImportance,omitempty"` // core | supporting | background
 }
 
 // FragmentVisualProp 道具视觉资产。
@@ -82,6 +88,9 @@ type FragmentVisualProp struct {
 	Key             string   `json:"key"`
 	Name            string   `json:"name,omitempty"`
 	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+	NegativeTraits  []string `json:"negativeTraits,omitempty"`
+	Ownership       string   `json:"ownership,omitempty"`      // owning/associated character key, if any
+	RoleImportance  string   `json:"roleImportance,omitempty"` // core | supporting | background
 }
 
 // FragmentVisualLocation 场景/地点视觉资产。
@@ -89,14 +98,43 @@ type FragmentVisualLocation struct {
 	Key             string   `json:"key"`
 	Name            string   `json:"name,omitempty"`
 	ImmutableTraits []string `json:"immutableTraits,omitempty"`
+	NegativeTraits  []string `json:"negativeTraits,omitempty"`
+	RoleImportance  string   `json:"roleImportance,omitempty"` // core | supporting | background
+}
+
+// FragmentVisualEvidenceEntity 是多模态模型从参考图中直接观察到的实体证据。
+type FragmentVisualEvidenceEntity struct {
+	Key        string   `json:"key,omitempty"`
+	Kind       string   `json:"kind,omitempty"` // character | prop | location
+	Name       string   `json:"name,omitempty"`
+	Traits     []string `json:"traits,omitempty"`
+	Position   string   `json:"position,omitempty"`
+	OwnerKey   string   `json:"ownerKey,omitempty"`
+	Confidence float64  `json:"confidence,omitempty"`
+}
+
+// FragmentVisualEvidence 保存一张参考图的视觉事实，避免把创作想象写成不可变特征。
+type FragmentVisualEvidence struct {
+	ImageURL        string                         `json:"imageUrl,omitempty"`
+	Summary         string                         `json:"summary,omitempty"`
+	Subjects        []string                       `json:"subjects,omitempty"`
+	Entities        []FragmentVisualEvidenceEntity `json:"entities,omitempty"`
+	Palette         []string                       `json:"palette,omitempty"`
+	Lighting        string                         `json:"lighting,omitempty"`
+	Composition     string                         `json:"composition,omitempty"`
+	ImmutableTraits []string                       `json:"immutableTraits,omitempty"`
+	Confidence      float64                        `json:"confidence,omitempty"`
+	Provider        string                         `json:"provider,omitempty"`
+	Model           string                         `json:"model,omitempty"`
 }
 
 // FragmentVisualBible Step1 结构化视觉设定，用于锚点图、参考图拼接与一致性检查。
 type FragmentVisualBible struct {
-	StyleBible *FragmentVisualStyleBible `json:"styleBible,omitempty"`
-	Characters []FragmentVisualCharacter `json:"characters,omitempty"`
-	Props      []FragmentVisualProp      `json:"props,omitempty"`
-	Locations  []FragmentVisualLocation  `json:"locations,omitempty"`
+	StyleBible     *FragmentVisualStyleBible `json:"styleBible,omitempty"`
+	Characters     []FragmentVisualCharacter `json:"characters,omitempty"`
+	Props          []FragmentVisualProp      `json:"props,omitempty"`
+	Locations      []FragmentVisualLocation  `json:"locations,omitempty"`
+	SourceEvidence []FragmentVisualEvidence  `json:"sourceEvidence,omitempty"`
 }
 
 // FragmentAnchorImage 锚点图记录（referenceKey -> 出图 URL）。
@@ -106,11 +144,90 @@ type FragmentAnchorImage struct {
 	ImageURL string `json:"imageUrl"`
 }
 
+// FragmentReferenceAsset 是按策略生成或复用的实体参考资产。
+type FragmentReferenceAsset struct {
+	Key               string `json:"key"`
+	Kind              string `json:"kind"` // character | prop | location | user_reference
+	ImageURL          string `json:"imageUrl"`
+	Source            string `json:"source,omitempty"` // generated | user | reused
+	UsageCount        int    `json:"usageCount,omitempty"`
+	GeneratedByPolicy bool   `json:"generatedByPolicy,omitempty"`
+	TraitsHash        string `json:"traitsHash,omitempty"`
+	TokensUsed        int    `json:"tokensUsed,omitempty"`
+}
+
+// FragmentEntityBinding 描述单格中实体的关系绑定，避免多人/多物品串位。
+type FragmentEntityBinding struct {
+	Key             string `json:"key"`
+	Kind            string `json:"kind"` // character | prop | location
+	Role            string `json:"role,omitempty"`
+	Position        string `json:"position,omitempty"`
+	Action          string `json:"action,omitempty"`
+	OwnerKey        string `json:"ownerKey,omitempty"`
+	ConsistencyNote string `json:"consistencyNote,omitempty"`
+}
+
+// FragmentScenePlan 是可持久化的单格生成计划。
+type FragmentScenePlan struct {
+	Index             int                     `json:"index"`
+	SceneDesc         string                  `json:"sceneDesc"`
+	ImagePrompt       string                  `json:"imagePrompt"`
+	FinalImagePrompt  string                  `json:"finalImagePrompt,omitempty"`
+	ReferenceKeys     []string                `json:"referenceKeys,omitempty"`
+	EntityBindings    []FragmentEntityBinding `json:"entityBindings,omitempty"`
+	Seed              int                     `json:"seed,omitempty"`
+	ProviderOptions   map[string]interface{}  `json:"providerOptions,omitempty"`
+	GeneratedImageURL string                  `json:"generatedImageUrl,omitempty"`
+}
+
+// FragmentConsistencyPolicy 记录一次任务实际采用的一致性策略。
+type FragmentConsistencyPolicy struct {
+	Level                 string                 `json:"level"` // off | standard | strong
+	SeriesSeed            int                    `json:"seriesSeed,omitempty"`
+	EnableReferenceAssets bool                   `json:"enableReferenceAssets"`
+	MaxCharacterAssets    int                    `json:"maxCharacterAssets,omitempty"`
+	MaxPropAssets         int                    `json:"maxPropAssets,omitempty"`
+	MaxLocationAssets     int                    `json:"maxLocationAssets,omitempty"`
+	ProviderOptions       map[string]interface{} `json:"providerOptions,omitempty"`
+	Capabilities          []string               `json:"capabilities,omitempty"`
+}
+
+// FragmentGenerationStepMetric 记录各阶段成本与耗时。
+type FragmentGenerationStepMetric struct {
+	Name       string `json:"name"`
+	Tokens     int    `json:"tokens,omitempty"`
+	DurationMs int64  `json:"durationMs,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
 // FragmentConsistencyIssue 一致性检查问题（仅记录，不阻断任务）。
 type FragmentConsistencyIssue struct {
-	SceneIndex int    `json:"sceneIndex,omitempty"`
-	Severity   string `json:"severity,omitempty"` // low | medium | high
-	Detail     string `json:"detail"`
+	SceneIndex int     `json:"sceneIndex,omitempty"`
+	Severity   string  `json:"severity,omitempty"` // low | medium | high
+	Detail     string  `json:"detail"`
+	EntityKey  string  `json:"entityKey,omitempty"`
+	ImageURL   string  `json:"imageUrl,omitempty"`
+	Expected   string  `json:"expected,omitempty"`
+	Observed   string  `json:"observed,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+}
+
+// FragmentGenerationTrace 保存完整生成计划、策略、成本和审计信息。
+type FragmentGenerationTrace struct {
+	VisualBible         *FragmentVisualBible           `json:"visualBible,omitempty"`
+	VisualEvidence      []FragmentVisualEvidence       `json:"visualEvidence,omitempty"`
+	Scenes              []FragmentScenePlan            `json:"scenes,omitempty"`
+	EntityUsage         map[string]int                 `json:"entityUsage,omitempty"`
+	ConsistencyPolicy   *FragmentConsistencyPolicy     `json:"consistencyPolicy,omitempty"`
+	ProviderOptions     map[string]interface{}         `json:"providerOptions,omitempty"`
+	ReferenceAssets     []FragmentReferenceAsset       `json:"referenceAssets,omitempty"`
+	ConsistencyIssues   []FragmentConsistencyIssue     `json:"consistencyIssues,omitempty"`
+	VisionAuditProvider string                         `json:"visionAuditProvider,omitempty"`
+	AuditedImageCount   int                            `json:"auditedImageCount,omitempty"`
+	SkippedAuditReason  string                         `json:"skippedAuditReason,omitempty"`
+	Metrics             []FragmentGenerationStepMetric `json:"metrics,omitempty"`
 }
 
 // FragmentGenerationResult 碎片故事生成结果
@@ -121,7 +238,12 @@ type FragmentGenerationResult struct {
 	TokensUsed        int                        `json:"tokensUsed"`                  // 使用的token数量
 	DraftFragmentID   string                     `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
 	VisualBible       *FragmentVisualBible       `json:"visualBible,omitempty"`       // 结构化视觉设定（方案 B）
+	VisualEvidence    []FragmentVisualEvidence   `json:"visualEvidence,omitempty"`    // 多模态参考图事实
 	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`      // 锚点参考图
+	ReferenceAssets   []FragmentReferenceAsset   `json:"referenceAssets,omitempty"`   // 按需参考资产
+	ScenePlan         []FragmentScenePlan        `json:"scenePlan,omitempty"`         // 可追踪场景计划
+	ConsistencyPolicy *FragmentConsistencyPolicy `json:"consistencyPolicy,omitempty"` // 一致性策略
+	GenerationTrace   *FragmentGenerationTrace   `json:"generationTrace,omitempty"`   // 完整生成 trace
 	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"` // 一致性检查（best-effort）
 }
 

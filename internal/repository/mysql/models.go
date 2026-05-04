@@ -330,11 +330,11 @@ type Character struct {
 
 // CharacterGenerationTask database model for async story-character creation drafts.
 type CharacterGenerationTask struct {
-	ID                         string         `gorm:"primaryKey;size:36"`
-	UserID                     string         `gorm:"size:36;not null;index:idx_char_gen_user"`
-	User                       User           `gorm:"foreignKey:UserID"`
-	StoryID                    string         `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
-	Story                      Story          `gorm:"foreignKey:StoryID"`
+	ID      string `gorm:"primaryKey;size:36"`
+	UserID  string `gorm:"size:36;not null;index:idx_char_gen_user"`
+	User    User   `gorm:"foreignKey:UserID"`
+	StoryID string `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
+	Story   Story  `gorm:"foreignKey:StoryID"`
 	// Nullable until runCharacterGenerationTask creates the character; empty string would violate FK on characters.id.
 	CharacterID                *string        `gorm:"size:36;index"`
 	Character                  *Character     `gorm:"foreignKey:CharacterID"`
@@ -1230,6 +1230,8 @@ type FragmentDB struct {
 	ConvertedToStoryID *string `gorm:"size:36;index"`                                             // 转换为的故事ID
 	IsConverted        bool    `gorm:"default:false;index"`                                       // 是否已转换
 	IsDraft            bool    `gorm:"column:is_draft;type:tinyint(1);default:0;index"`           // 草稿（AI 生成落库等）
+	GenerationTaskID   string  `gorm:"column:generation_task_id;size:36;index"`                   // AI 碎片生成任务 ID
+	GenerationMetadata string  `gorm:"column:generation_metadata;type:longtext"`                  // 生成 trace/策略等 JSON
 	Likes              int     `gorm:"type:int;default:0"`                                        // 点赞数
 	Comments           int     `gorm:"type:int;default:0"`                                        // 评论数
 	Shares             int     `gorm:"type:int;default:0"`                                        // 分享数
@@ -1253,7 +1255,7 @@ type FragmentGenerationTaskDB struct {
 	UserID       string `gorm:"size:36;not null;index:idx_fragment_gen_user"`
 	Status       string `gorm:"size:20;not null;default:'pending';index:idx_fragment_gen_status"`
 	RequestJSON  string `gorm:"type:text;not null"` // JSON encoded FragmentGenerationRequest
-	ResultJSON   string `gorm:"type:text"`          // JSON encoded FragmentGenerationResult
+	ResultJSON   string `gorm:"type:longtext"`      // JSON encoded FragmentGenerationResult
 	Progress     int    `gorm:"type:int;default:0"`
 	CurrentStep  string `gorm:"size:50"`
 	ErrorMessage string `gorm:"type:text"`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
@@ -152,26 +153,72 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	}
 	totalTokens += scenesResult.TokensUsed
 
-	// ── Step 3: 锚点图 ──
-	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 45, "generating_anchor_images")
-	anchorMap, anchorRecords, anchorTok := s.generateAnchorImages(ctx, task.UserID, taskID, task.Request, elemResult.VisualBible, resolvedAR)
-	totalTokens += anchorTok
+	scenePlans := fragmentScenesToPlans(scenesResult.Scenes)
+	entityUsage := analyzeFragmentSceneEntityUsage(scenePlans)
+	policy := s.resolveFragmentConsistencyPolicy(task, elemResult.VisualBible, resolvedAR, scenePlans, entityUsage)
+	trace := &domain.FragmentGenerationTrace{
+		VisualBible:       elemResult.VisualBible,
+		VisualEvidence:    elemResult.VisualEvidence,
+		Scenes:            scenePlans,
+		EntityUsage:       entityUsage,
+		ConsistencyPolicy: policy,
+		ProviderOptions:   policy.ProviderOptions,
+		Metrics: []domain.FragmentGenerationStepMetric{
+			{Name: "extracting_elements", Tokens: elemResult.TokensUsed},
+			{Name: "expanding_scenes", Tokens: scenesResult.TokensUsed},
+		},
+	}
+	partial := &domain.FragmentGenerationResult{
+		Content:           elemResult.Content,
+		AspectRatio:       resolvedAR,
+		TokensUsed:        totalTokens,
+		VisualBible:       elemResult.VisualBible,
+		VisualEvidence:    elemResult.VisualEvidence,
+		ScenePlan:         append([]domain.FragmentScenePlan(nil), scenePlans...),
+		ConsistencyPolicy: policy,
+		GenerationTrace:   trace,
+	}
+	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
+		s.logger.Warn("failed to persist fragment generation trace after planning", zap.Error(err))
+	}
+
+	// ── Step 3: 按需参考资产 ──
+	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 45, "generating_reference_assets")
+	assetStart := time.Now()
+	referenceAssets, refTok := s.generateReferenceAssets(ctx, task.UserID, taskID, task.Request, elemResult.VisualBible, elemResult.VisualEvidence, resolvedAR, scenePlans, policy)
+	totalTokens += refTok
+	trace.ReferenceAssets = referenceAssets
+	trace.Metrics = append(trace.Metrics, domain.FragmentGenerationStepMetric{Name: "reference_assets", Tokens: refTok, DurationMs: time.Since(assetStart).Milliseconds()})
+	partial.TokensUsed = totalTokens
+	partial.ReferenceAssets = referenceAssets
+	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
+		s.logger.Warn("failed to persist fragment generation trace after reference assets", zap.Error(err))
+	}
 
 	// ── Step 4: 逐场景生成图片 ──
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 62, "generating_images")
 	userRefs := fragmentPrefillHTTPImageURLs(task.Request.ImageUrls, 2)
-	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, scenesResult.Scenes, anchorMap, userRefs)
+	imageStart := time.Now()
+	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("配图生成失败：%v", err))
 		return
 	}
 	totalTokens += imageResult.TokensUsed
+	trace.Scenes = scenePlans
+	trace.Metrics = append(trace.Metrics, domain.FragmentGenerationStepMetric{Name: "scene_images", Tokens: imageResult.TokensUsed, DurationMs: time.Since(imageStart).Milliseconds()})
 
 	// ── Step 5: 一致性检查（不阻断） ──
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 82, "checking_consistency")
-	issues, checkTok := s.checkFragmentConsistency(ctx, elemResult.VisualBible, scenesResult.Scenes, imageResult.ImageUrls)
+	checkStart := time.Now()
+	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, imageResult.ImageUrls, policy)
 	totalTokens += checkTok
+	trace.ConsistencyIssues = issues
+	trace.VisionAuditProvider = auditProvider
+	trace.AuditedImageCount = auditedCount
+	trace.SkippedAuditReason = skippedAuditReason
+	trace.Metrics = append(trace.Metrics, domain.FragmentGenerationStepMetric{Name: "checking_consistency", Tokens: checkTok, DurationMs: time.Since(checkStart).Milliseconds()})
 	if len(issues) > 0 {
 		for _, iss := range issues {
 			s.logger.Info("fragment consistency issue",
@@ -188,7 +235,11 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		AspectRatio:       resolvedAR,
 		TokensUsed:        totalTokens,
 		VisualBible:       elemResult.VisualBible,
-		AnchorImages:      anchorRecords,
+		VisualEvidence:    elemResult.VisualEvidence,
+		ReferenceAssets:   referenceAssets,
+		ScenePlan:         scenePlans,
+		ConsistencyPolicy: policy,
+		GenerationTrace:   trace,
 		ConsistencyIssues: issues,
 	}
 
@@ -200,6 +251,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	}
 	style := task.Request.Style
 	caption := captionFromGenerationContent(result.Content)
+	generationMetadata := marshalFragmentGenerationMetadata(result.GenerationTrace)
 
 	existing, gerr := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID)
 	if gerr == nil && existing != nil {
@@ -208,6 +260,8 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		existing.ImageUrls = stringifyGenerationImageURLs(result.ImageUrls)
 		existing.Style = &style
 		existing.FragmentCount = &imgCount
+		existing.GenerationTaskID = taskID
+		existing.GenerationMetadata = generationMetadata
 		existing.UpdatedAt = now
 		if caption != "" {
 			existing.Caption = caption
@@ -227,18 +281,20 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
-			UserID:          task.UserID,
-			CreatorID:       task.UserID,
-			Content:         result.Content,
-			MediaURLs:       append([]string(nil), result.ImageUrls...),
-			ImageUrls:       stringifyGenerationImageURLs(result.ImageUrls),
-			Style:           &style,
-			FragmentCount:   &imgCount,
-			Visibility:      domain.FragmentVisibilityPrivate,
-			IsDraft:         true,
-			SourceType:      string(domain.FragmentSourceOriginal),
-			SourceID:        taskID,
-			EngagementStats: common.EngagementStats{},
+			UserID:             task.UserID,
+			CreatorID:          task.UserID,
+			Content:            result.Content,
+			MediaURLs:          append([]string(nil), result.ImageUrls...),
+			ImageUrls:          stringifyGenerationImageURLs(result.ImageUrls),
+			Style:              &style,
+			FragmentCount:      &imgCount,
+			Visibility:         domain.FragmentVisibilityPrivate,
+			IsDraft:            true,
+			SourceType:         string(domain.FragmentSourceAIGeneration),
+			SourceID:           taskID,
+			GenerationTaskID:   taskID,
+			GenerationMetadata: generationMetadata,
+			EngagementStats:    common.EngagementStats{},
 		}
 		if caption != "" {
 			fragment.Caption = caption
@@ -263,7 +319,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		zap.Int("tokens_used", result.TokensUsed),
 		zap.Int("image_count", len(result.ImageUrls)),
 		zap.Int("scenes", len(scenesResult.Scenes)),
-		zap.Int("anchor_images", len(anchorRecords)))
+		zap.Int("reference_assets", len(referenceAssets)))
 
 	if s.notify != nil && strings.TrimSpace(result.DraftFragmentID) != "" {
 		preview := captionFromGenerationContent(result.Content)
@@ -310,6 +366,17 @@ func stringifyGenerationImageURLs(urls []string) string {
 	return string(b)
 }
 
+func marshalFragmentGenerationMetadata(trace *domain.FragmentGenerationTrace) string {
+	if trace == nil {
+		return "{}"
+	}
+	b, err := json.Marshal(trace)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
 func captionFromGenerationContent(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -326,11 +393,12 @@ func captionFromGenerationContent(s string) string {
 
 // fragmentElementExtractionResult 元素提取 + 文案生成的输出。
 type fragmentElementExtractionResult struct {
-	Elements    fragmentStoryElements       `json:"elements"`
-	VisualBible *domain.FragmentVisualBible `json:"visualBible,omitempty"`
-	Content     string                      `json:"content"`
-	AspectRatio string                      `json:"aspectRatio"`
-	TokensUsed  int
+	Elements       fragmentStoryElements           `json:"elements"`
+	VisualBible    *domain.FragmentVisualBible     `json:"visualBible,omitempty"`
+	VisualEvidence []domain.FragmentVisualEvidence `json:"visualEvidence,omitempty"`
+	Content        string                          `json:"content"`
+	AspectRatio    string                          `json:"aspectRatio"`
+	TokensUsed     int
 }
 
 // fragmentStoryElements 从用户输入和参考图中提取的结构化元素。
@@ -345,12 +413,27 @@ type fragmentStoryElements struct {
 }
 
 func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
-	hasImages := len(fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)) > 0
+	imageURLs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10)
+	hasImages := len(imageURLs) > 0
+	var visualEvidence []domain.FragmentVisualEvidence
+	visionTokens := 0
+	if hasImages {
+		evidence, tokens, err := s.analyzeFragmentVisualEvidence(ctx, imageURLs, req.UserInput, req.Style, "")
+		if err != nil {
+			s.logger.Warn("fragment visual evidence analysis failed; falling back to legacy multimodal extraction", zap.Error(err))
+		} else {
+			visualEvidence = evidence
+			visionTokens = tokens
+		}
+	}
 	prompt := s.buildExtractionAndStoryPrompt(req, hasImages)
+	if len(visualEvidence) > 0 {
+		prompt = prompt + "\n\n" + formatFragmentVisualEvidenceForPrompt(visualEvidence)
+	}
 
 	payload := map[string]interface{}{"prompt": prompt}
-	if imgs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10); len(imgs) > 0 {
-		payload["imageUrls"] = imgs
+	if len(visualEvidence) == 0 && len(imageURLs) > 0 {
+		payload["imageUrls"] = imageURLs
 	}
 	inputBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -392,7 +475,11 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 			result.AspectRatio = ar
 		}
 	}
-	result.TokensUsed = tokensUsed
+	result.VisualEvidence = visualEvidence
+	if result.VisualBible != nil && len(result.VisualBible.SourceEvidence) == 0 {
+		result.VisualBible.SourceEvidence = visualEvidence
+	}
+	result.TokensUsed = tokensUsed + visionTokens
 	return result, nil
 }
 
@@ -593,11 +680,14 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 句子长度本身就是情绪的呼吸——全篇匀速的文字是没有生命力的
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-第三件事：视觉圣经 visualBible（多图一致性锚点，必须输出）
+第三件事：视觉圣经 visualBible（多实体一致性锚点，必须输出）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - visualBible 必须与 elements、content 自洽；immutableTraits 使用与 elements/content 相同的自然语言（由上方 language 决定）。
 - characters最多 3 项，props 最多 5 项，locations 1–2 项；每项必须有全局唯一 key（小写英文+下划线，如 char_main、prop_umbrella、loc_station）。
 - immutableTraits 为字符串数组：每条描述一个不可随意更改的视觉事实（发色、服装剪裁与主色、道具外形、建筑特征等）。
+- negativeTraits 为字符串数组：写出该实体绝对不能和其他实体混淆的特征（例如“不要穿 char_child 的红雨衣”）。
+- ownership 用来表达归属关系：角色可以列出随身物，道具写关联角色 key；无法判断则留空。
+- roleImportance 必须是 core / supporting / background，用于后续决定是否生成 reference asset。
 - styleBible.artStyle 必须用英文写出可执行的总体画法（媒介、线稿/渲染、时代感、参考流派），供后续所有配图 prompt 对齐；其他 styleBible 字段可选。
 
 请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
@@ -619,13 +709,13 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
       "lightingMood": "optional English"
     },
     "characters": [
-      { "key": "char_main", "name": "optional", "immutableTraits": ["trait1", "trait2"] }
+      { "key": "char_main", "name": "optional", "immutableTraits": ["trait1", "trait2"], "negativeTraits": ["must not share traits with char_other"], "ownership": ["prop_key"], "roleImportance": "core" }
     ],
     "props": [
-      { "key": "prop_key", "immutableTraits": ["..."] }
+      { "key": "prop_key", "immutableTraits": ["..."], "negativeTraits": ["..."], "ownership": "char_main", "roleImportance": "core" }
     ],
     "locations": [
-      { "key": "loc_key", "immutableTraits": ["..."] }
+      { "key": "loc_key", "immutableTraits": ["..."], "negativeTraits": ["..."], "roleImportance": "supporting" }
     ]
   },
   "content": "碎片故事正文（与上方语言要求一致），直接可读，不要标题，不要前缀说明",
@@ -633,6 +723,113 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 }`,
 		imgNote,
 		req.UserInput, styleDesc, moodDesc, lengthDesc, language)
+}
+
+type fragmentVisualEvidenceRoot struct {
+	Evidence []domain.FragmentVisualEvidence `json:"evidence"`
+	Images   []domain.FragmentVisualEvidence `json:"images"`
+}
+
+func (s *FragmentGenerationService) analyzeFragmentVisualEvidence(ctx context.Context, imageURLs []string, userInput, style, providerHint string) ([]domain.FragmentVisualEvidence, int, error) {
+	imageURLs = fragmentPrefillHTTPImageURLs(imageURLs, 10)
+	if len(imageURLs) == 0 || s.aiService == nil {
+		return nil, 0, nil
+	}
+	prompt := buildFragmentVisualEvidencePrompt(userInput, style, imageURLs)
+	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
+		Prompt:            prompt,
+		ImageURLs:         imageURLs,
+		ProviderHint:      providerHint,
+		MaxTokens:         4096,
+		Temperature:       0.25,
+		RelatedEntityType: "fragment_generation",
+		Step:              "visual_evidence",
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	evidence, err := parseFragmentVisualEvidence(resp.Raw, imageURLs)
+	if err != nil {
+		return nil, resp.TokensUsed, err
+	}
+	for i := range evidence {
+		if evidence[i].Provider == "" {
+			evidence[i].Provider = resp.Provider
+		}
+		if evidence[i].Model == "" {
+			evidence[i].Model = resp.Model
+		}
+	}
+	return evidence, resp.TokensUsed, nil
+}
+
+func buildFragmentVisualEvidencePrompt(userInput, style string, imageURLs []string) string {
+	return fmt.Sprintf(`你是视觉事实分析员。请只描述图片中能直接观察到的视觉事实，不要编故事，不要把用户文字里的设定当成图片事实。
+
+用户文字（仅用于理解用户关注点，不可当作图片事实）：
+%s
+
+风格倾向：%s
+
+请逐张图片输出 JSON，格式必须是：
+{"evidence":[{"imageUrl":"对应图片URL","summary":"一句话视觉概括","subjects":["主体"],"entities":[{"key":"char_0|prop_0|loc_0","kind":"character|prop|location","name":"可为空","traits":["稳定可见特征"],"position":"画面位置","ownerKey":"可为空","confidence":0.0}],"palette":["主色"],"lighting":"光线事实","composition":"构图事实","immutableTraits":["最应保持的不可变视觉事实"],"confidence":0.0}]}
+
+要求：
+- traits 和 immutableTraits 只能写可见事实，例如发型、服装颜色材质、体型轮廓、标志物、建筑/空间特征、主色、光源方向。
+- 对不确定信息降低 confidence，不要补全不可见的脸、衣服或背景。
+- key 要稳定，人物用 char_0/char_1，道具用 prop_0/prop_1，地点用 loc_0/loc_1。
+- imageUrl 必须从以下 URL 中选择：%s`, strings.TrimSpace(userInput), strings.TrimSpace(style), strings.Join(imageURLs, ", "))
+}
+
+func parseFragmentVisualEvidence(raw string, fallbackURLs []string) ([]domain.FragmentVisualEvidence, error) {
+	s := strings.TrimSpace(raw)
+	if m := jsonFenceRE.FindStringSubmatch(s); len(m) > 1 {
+		s = strings.TrimSpace(m[1])
+	}
+	s = extractJSON(s)
+	var root fragmentVisualEvidenceRoot
+	if err := json.Unmarshal([]byte(s), &root); err != nil {
+		var arr []domain.FragmentVisualEvidence
+		if err2 := json.Unmarshal([]byte(s), &arr); err2 != nil {
+			return nil, fmt.Errorf("parse visual evidence JSON: %w", err)
+		}
+		root.Evidence = arr
+	}
+	out := root.Evidence
+	if len(out) == 0 {
+		out = root.Images
+	}
+	for i := range out {
+		if strings.TrimSpace(out[i].ImageURL) == "" && i < len(fallbackURLs) {
+			out[i].ImageURL = fallbackURLs[i]
+		}
+		if out[i].Confidence < 0 {
+			out[i].Confidence = 0
+		}
+		if out[i].Confidence > 1 {
+			out[i].Confidence = 1
+		}
+		for j := range out[i].Entities {
+			if out[i].Entities[j].Confidence < 0 {
+				out[i].Entities[j].Confidence = 0
+			}
+			if out[i].Entities[j].Confidence > 1 {
+				out[i].Entities[j].Confidence = 1
+			}
+		}
+	}
+	return out, nil
+}
+
+func formatFragmentVisualEvidenceForPrompt(evidence []domain.FragmentVisualEvidence) string {
+	if len(evidence) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(evidence)
+	if err != nil {
+		return ""
+	}
+	return "【多模态视觉事实】以下 JSON 是模型对参考图的直接观察。生成 visualBible 时，immutableTraits 必须优先来自这些可见事实；若需要创作补充，不能写入不可变特征。\n" + string(b)
 }
 
 // parseExtractionResult 解析元素提取 + 文案的 JSON 输出。
@@ -751,6 +948,342 @@ func mergeFragmentSceneReferenceImages(userURLs []string, scene fragmentExpanded
 	return out
 }
 
+func fragmentScenesToPlans(scenes []fragmentExpandedScene) []domain.FragmentScenePlan {
+	out := make([]domain.FragmentScenePlan, 0, len(scenes))
+	for i, sc := range scenes {
+		idx := sc.Index
+		if idx < 0 {
+			idx = i
+		}
+		out = append(out, domain.FragmentScenePlan{
+			Index:          idx,
+			SceneDesc:      strings.TrimSpace(sc.SceneDesc),
+			ImagePrompt:    strings.TrimSpace(sc.ImagePrompt),
+			ReferenceKeys:  normalizeFragmentKeyList(sc.ReferenceKeys),
+			EntityBindings: sc.EntityBindings,
+		})
+	}
+	return out
+}
+
+func normalizeFragmentKeyList(keys []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, k := range keys {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
+}
+
+func analyzeFragmentSceneEntityUsage(scenes []domain.FragmentScenePlan) map[string]int {
+	usage := make(map[string]int)
+	for _, sc := range scenes {
+		for _, k := range normalizeFragmentKeyList(sc.ReferenceKeys) {
+			usage[k]++
+		}
+	}
+	return usage
+}
+
+func (s *FragmentGenerationService) resolveFragmentConsistencyPolicy(task *domain.FragmentGenerationTask, bible *domain.FragmentVisualBible, aspectRatio string, scenes []domain.FragmentScenePlan, usage map[string]int) *domain.FragmentConsistencyPolicy {
+	level := normalizeFragmentConsistencyLevel(task.Request.ConsistencyLevel)
+	enableRefs := level != "off"
+	if task.Request.EnableReferenceAssets != nil {
+		enableRefs = *task.Request.EnableReferenceAssets
+	}
+	if len(scenes) <= 2 && countRepeatedFragmentCharacters(bible, usage) <= 1 && level == "standard" {
+		enableRefs = false
+	}
+	maxChars, maxProps, maxLocs := 2, 0, 0
+	if level == "strong" {
+		maxChars, maxProps, maxLocs = 3, 1, 1
+	}
+	seriesSeed := fragmentStableSeed(task.ID, task.Request.Style, aspectRatio)
+	options := map[string]interface{}{
+		"consistency_group_id": task.ID,
+		"series_seed":          seriesSeed,
+		"style_consistency":    true,
+	}
+	if len(scenes) > 1 {
+		options["sequential_image_generation"] = "auto"
+		options["sequential_image_generation_options"] = map[string]interface{}{
+			"consistency": level,
+			"scene_count": len(scenes),
+		}
+	}
+	return &domain.FragmentConsistencyPolicy{
+		Level:                 level,
+		SeriesSeed:            seriesSeed,
+		EnableReferenceAssets: enableRefs,
+		MaxCharacterAssets:    maxChars,
+		MaxPropAssets:         maxProps,
+		MaxLocationAssets:     maxLocs,
+		ProviderOptions:       options,
+		Capabilities:          []string{"seed", "provider_options", "entity_bindings", "reference_assets"},
+	}
+}
+
+func normalizeFragmentConsistencyLevel(level string) string {
+	switch strings.TrimSpace(strings.ToLower(level)) {
+	case "off", "none":
+		return "off"
+	case "strong", "high":
+		return "strong"
+	default:
+		return "standard"
+	}
+}
+
+func fragmentStableSeed(parts ...string) int {
+	h := fnv.New32a()
+	for _, p := range parts {
+		_, _ = h.Write([]byte(strings.TrimSpace(p)))
+		_, _ = h.Write([]byte{0})
+	}
+	v := int(h.Sum32() & 0x7fffffff)
+	if v == 0 {
+		return 1
+	}
+	return v
+}
+
+// fragmentStoryImageSeed is the RNG seed shared by every image in one fragment task (same as provider options.series_seed).
+func fragmentStoryImageSeed(policy *domain.FragmentConsistencyPolicy) int {
+	if policy == nil {
+		return 0
+	}
+	if policy.SeriesSeed > 0 {
+		return policy.SeriesSeed
+	}
+	return 1
+}
+
+func countRepeatedFragmentCharacters(bible *domain.FragmentVisualBible, usage map[string]int) int {
+	if bible == nil {
+		n := 0
+		for k, c := range usage {
+			if strings.HasPrefix(k, "char_") && c > 1 {
+				n++
+			}
+		}
+		return n
+	}
+	n := 0
+	for _, ch := range bible.Characters {
+		if usage[strings.TrimSpace(ch.Key)] > 1 {
+			n++
+		}
+	}
+	return n
+}
+
+type fragmentReferenceAssetCandidate struct {
+	Key        string
+	Kind       string
+	Name       string
+	Traits     []string
+	UsageCount int
+}
+
+func (s *FragmentGenerationService) generateReferenceAssets(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, aspectRatio string, scenes []domain.FragmentScenePlan, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentReferenceAsset, int) {
+	if bible == nil || policy == nil || !policy.EnableReferenceAssets {
+		return nil, 0
+	}
+	candidates := selectFragmentReferenceAssetCandidatesWithEvidence(bible, evidence, scenes, policy)
+	if len(candidates) == 0 {
+		return nil, 0
+	}
+	ar := domain.NormalizeFragmentAspectRatio(aspectRatio)
+	if ar == "" {
+		ar = domain.FragmentAspectDefault
+	}
+	styleEN := ""
+	if bible.StyleBible != nil {
+		styleEN = strings.TrimSpace(bible.StyleBible.ArtStyle)
+	}
+	styleZH := fragmentStyleDesc(req.Style)
+	moodZH := fragmentMoodDesc(req.Mood)
+	userRef := fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)
+	firstChar := true
+	totalTok := 0
+	assets := make([]domain.FragmentReferenceAsset, 0, len(candidates))
+	for _, c := range candidates {
+		prompt := buildFragmentReferenceAssetPrompt(c, styleEN, styleZH, moodZH)
+		var refs []string
+		if c.Kind == "character" && firstChar && len(userRef) > 0 {
+			refs = append(refs, userRef...)
+			firstChar = false
+		}
+		seed := fragmentStableSeed(genTaskID, c.Kind, c.Key, strings.Join(c.Traits, "|"))
+		url, tok, err := s.generateOneFragmentImageWithOptions(ctx, userID, genTaskID, prompt, ar, refs, seed, policy.ProviderOptions, 0)
+		if err != nil {
+			s.logger.Warn("fragment reference asset generation failed", zap.String("key", c.Key), zap.String("kind", c.Kind), zap.Error(err))
+			continue
+		}
+		assets = append(assets, domain.FragmentReferenceAsset{
+			Key:               c.Key,
+			Kind:              c.Kind,
+			ImageURL:          url,
+			Source:            "generated",
+			UsageCount:        c.UsageCount,
+			GeneratedByPolicy: true,
+			TraitsHash:        fragmentTraitsHash(c.Kind, c.Key, c.Traits, req.Style, ar),
+			TokensUsed:        tok,
+		})
+		totalTok += tok
+	}
+	return assets, totalTok
+}
+
+func selectFragmentReferenceAssetCandidates(bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, policy *domain.FragmentConsistencyPolicy) []fragmentReferenceAssetCandidate {
+	return selectFragmentReferenceAssetCandidatesWithEvidence(bible, nil, scenes, policy)
+}
+
+func selectFragmentReferenceAssetCandidatesWithEvidence(bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, policy *domain.FragmentConsistencyPolicy) []fragmentReferenceAssetCandidate {
+	usage := analyzeFragmentSceneEntityUsage(scenes)
+	var out []fragmentReferenceAssetCandidate
+	charLimit := policy.MaxCharacterAssets
+	for _, ch := range bible.Characters {
+		if charLimit <= 0 {
+			break
+		}
+		key := strings.TrimSpace(ch.Key)
+		if key == "" {
+			continue
+		}
+		u := usage[key]
+		core := strings.EqualFold(strings.TrimSpace(ch.RoleImportance), "core")
+		if u > 1 || (policy.Level == "strong" && core && u > 0) {
+			out = append(out, fragmentReferenceAssetCandidate{Key: key, Kind: "character", Name: ch.Name, Traits: mergeFragmentCandidateTraits(ch.ImmutableTraits, fragmentVisualEvidenceTraits(evidence, key, "character")), UsageCount: u})
+			charLimit--
+		}
+	}
+	propLimit := policy.MaxPropAssets
+	for _, p := range bible.Props {
+		if propLimit <= 0 {
+			break
+		}
+		key := strings.TrimSpace(p.Key)
+		if key == "" {
+			continue
+		}
+		u := usage[key]
+		if u > 1 && strings.EqualFold(strings.TrimSpace(p.RoleImportance), "core") {
+			out = append(out, fragmentReferenceAssetCandidate{Key: key, Kind: "prop", Name: p.Name, Traits: mergeFragmentCandidateTraits(p.ImmutableTraits, fragmentVisualEvidenceTraits(evidence, key, "prop")), UsageCount: u})
+			propLimit--
+		}
+	}
+	locLimit := policy.MaxLocationAssets
+	for _, loc := range bible.Locations {
+		if locLimit <= 0 {
+			break
+		}
+		key := strings.TrimSpace(loc.Key)
+		if key == "" {
+			continue
+		}
+		u := usage[key]
+		if u > 1 && policy.Level == "strong" {
+			out = append(out, fragmentReferenceAssetCandidate{Key: key, Kind: "location", Name: loc.Name, Traits: mergeFragmentCandidateTraits(loc.ImmutableTraits, fragmentVisualEvidenceTraits(evidence, key, "location")), UsageCount: u})
+			locLimit--
+		}
+	}
+	return out
+}
+
+func fragmentVisualEvidenceTraits(evidence []domain.FragmentVisualEvidence, key, kind string) []string {
+	key = strings.TrimSpace(key)
+	kind = strings.TrimSpace(kind)
+	var out []string
+	for _, ev := range evidence {
+		for _, ent := range ev.Entities {
+			if strings.EqualFold(strings.TrimSpace(ent.Kind), kind) && strings.TrimSpace(ent.Key) == key {
+				out = append(out, ent.Traits...)
+			}
+		}
+		if kind == "location" {
+			out = append(out, ev.Lighting, ev.Composition)
+		}
+	}
+	return normalizeFragmentKeyList(out)
+}
+
+func mergeFragmentCandidateTraits(base, evidence []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		k := strings.ToLower(v)
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		out = append(out, v)
+	}
+	for _, v := range evidence {
+		add(v)
+	}
+	for _, v := range base {
+		add(v)
+	}
+	return out
+}
+
+func buildFragmentReferenceAssetPrompt(c fragmentReferenceAssetCandidate, styleEN, styleZH, moodZH string) string {
+	traits := strings.Join(c.Traits, "; ")
+	prefix := strings.TrimSpace(c.Name)
+	if prefix != "" {
+		prefix += ". "
+	}
+	switch c.Kind {
+	case "character":
+		return fmt.Sprintf("%s%s Character design reference, single person, neutral standing pose facing camera, full body visible, clean simple studio background, high detail concept art. Immutable traits: %s. Overall mood reference: %s. Style tag: %s.", prefix, styleEN, traits, moodZH, styleZH)
+	case "prop":
+		return fmt.Sprintf("%s%s Single hero prop object on neutral surface, studio product shot, sharp focus, no people. Object immutable traits: %s. Style: %s.", prefix, styleEN, traits, styleZH)
+	default:
+		return fmt.Sprintf("%s%s Wide environmental establishing shot, empty of people, architectural or landscape concept art, clear readable space. Location immutable traits: %s. Style: %s.", prefix, styleEN, traits, styleZH)
+	}
+}
+
+func fragmentTraitsHash(parts ...interface{}) string {
+	h := fnv.New32a()
+	for _, p := range parts {
+		switch v := p.(type) {
+		case string:
+			_, _ = h.Write([]byte(v))
+		case []string:
+			_, _ = h.Write([]byte(strings.Join(v, "|")))
+		}
+		_, _ = h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%08x", h.Sum32())
+}
+
+func fragmentReferenceAssetMap(assets []domain.FragmentReferenceAsset) map[string]string {
+	out := make(map[string]string)
+	for _, a := range assets {
+		if k := strings.TrimSpace(a.Key); k != "" && strings.TrimSpace(a.ImageURL) != "" {
+			out[k] = strings.TrimSpace(a.ImageURL)
+		}
+	}
+	return out
+}
+
+func mergeFragmentSceneReferenceAssets(userURLs []string, scene domain.FragmentScenePlan, assets []domain.FragmentReferenceAsset, maxTotal int) []string {
+	return mergeFragmentSceneReferenceImages(userURLs, fragmentExpandedScene{ReferenceKeys: scene.ReferenceKeys}, fragmentReferenceAssetMap(assets), maxTotal)
+}
+
 func (s *FragmentGenerationService) generateAnchorImages(ctx context.Context, userID, genTaskID string, req domain.FragmentGenerationRequest, bible *domain.FragmentVisualBible, aspectRatio string) (map[string]string, []domain.FragmentAnchorImage, int) {
 	outMap := make(map[string]string)
 	if bible == nil {
@@ -850,12 +1383,25 @@ func (s *FragmentGenerationService) generateAnchorImages(ctx context.Context, us
 }
 
 func (s *FragmentGenerationService) generateOneFragmentImage(ctx context.Context, userID, genTaskID, prompt, aspectRatio string, refURLs []string) (string, int, error) {
+	return s.generateOneFragmentImageWithOptions(ctx, userID, genTaskID, prompt, aspectRatio, refURLs, 0, nil, 0)
+}
+
+func (s *FragmentGenerationService) generateOneFragmentImageWithOptions(ctx context.Context, userID, genTaskID, prompt, aspectRatio string, refURLs []string, seed int, options map[string]interface{}, guidanceScale float64) (string, int, error) {
 	payload := map[string]interface{}{
 		"prompt":      prompt,
 		"aspectRatio": aspectRatio,
 	}
 	if len(refURLs) > 0 {
 		payload["referenceImages"] = refURLs
+	}
+	if seed > 0 {
+		payload["seed"] = seed
+	}
+	if len(options) > 0 {
+		payload["options"] = options
+	}
+	if guidanceScale > 0 {
+		payload["guidanceScale"] = guidanceScale
 	}
 	imgInput, err := json.Marshal(payload)
 	if err != nil {
@@ -874,38 +1420,56 @@ func (s *FragmentGenerationService) generateOneFragmentImage(ctx context.Context
 	return s.aiService.GenerateImageForFragment(ctx, &aiReq)
 }
 
-func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, bible *domain.FragmentVisualBible, scenes []fragmentExpandedScene, imageURLs []string) ([]domain.FragmentConsistencyIssue, int) {
+func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
+	auditURLs, skipped := selectFragmentAuditImageURLs(imageURLs, scenes, policy)
+	if len(auditURLs) == 0 {
+		return nil, 0, "", 0, skipped
+	}
 	vbBytes, _ := json.Marshal(bible)
+	evidenceBytes, _ := json.Marshal(evidence)
 	scenesBytes, _ := json.Marshal(scenes)
+	assetBytes, _ := json.Marshal(referenceAssets)
 	var urlLines strings.Builder
-	for i, u := range imageURLs {
+	for i, u := range auditURLs {
 		fmt.Fprintf(&urlLines, "%d: %s\n", i, u)
 	}
-	prompt := fmt.Sprintf(`你是视觉一致性审计员。基于「视觉圣经」、各格场景描述与最终配图 URL 列表，列出可能的不一致（角色外观漂移、关键道具缺失、环境与圣经矛盾等）。若无法访问图片，仅依据文字推断；无问题时 issues 为空数组。
+	prompt := fmt.Sprintf(`你是视觉一致性审计员。请直接查看最终配图，基于「视觉圣经」、入口视觉事实、各格场景描述与参考资产，列出可能的不一致（角色外观漂移、关键道具缺失、环境与圣经矛盾等）。无问题时 issues 为空数组。
 
 视觉圣经 JSON：
+%s
+
+入口视觉事实 JSON：
 %s
 
 场景 JSON（含 sceneDesc、referenceKeys、index）：
 %s
 
+参考资产 JSON（按需生成，可能为空）：
+%s
+
 最终图片 URL（按生成顺序排列；尽量与场景 index 对应）：
 %s
 
-只输出 JSON：{"issues":[{"sceneIndex":0,"severity":"low|medium|high","detail":"中文简述"}]}`,
-		string(vbBytes), string(scenesBytes), urlLines.String())
+只输出 JSON：{"issues":[{"sceneIndex":0,"entityKey":"可为空","imageUrl":"问题图片URL","severity":"low|medium|high","expected":"应保持的视觉事实","observed":"实际观察","confidence":0.0,"detail":"中文简述"}]}`,
+		string(vbBytes), string(evidenceBytes), string(scenesBytes), string(assetBytes), urlLines.String())
 
-	raw, tokens, err := s.aiService.GenerateFragmentAuxJSON(ctx, prompt)
+	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
+		Prompt:      prompt,
+		ImageURLs:   auditURLs,
+		MaxTokens:   2048,
+		Temperature: 0.25,
+		Step:        "fragment_consistency_audit",
+	})
 	if err != nil {
 		s.logger.Warn("fragment consistency check request failed", zap.Error(err))
-		return nil, 0
+		return nil, 0, "", len(auditURLs), err.Error()
 	}
-	issues, perr := parseFragmentConsistencyIssues(raw)
+	issues, perr := parseFragmentConsistencyIssues(resp.Raw)
 	if perr != nil {
-		s.logger.Warn("fragment consistency check parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(raw, 200)))
-		return nil, tokens
+		s.logger.Warn("fragment consistency check parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(resp.Raw, 200)))
+		return nil, resp.TokensUsed, resp.Provider, len(auditURLs), "parse_failed"
 	}
-	return issues, tokens
+	return issues, resp.TokensUsed, resp.Provider, len(auditURLs), skipped
 }
 
 func parseFragmentConsistencyIssues(raw string) ([]domain.FragmentConsistencyIssue, error) {
@@ -922,6 +1486,45 @@ func parseFragmentConsistencyIssues(raw string) ([]domain.FragmentConsistencyIss
 	return env.Issues, nil
 }
 
+func selectFragmentAuditImageURLs(imageURLs []string, scenes []domain.FragmentScenePlan, policy *domain.FragmentConsistencyPolicy) ([]string, string) {
+	if len(imageURLs) == 0 {
+		return nil, "no_images"
+	}
+	if policy != nil && policy.Level == "off" {
+		return nil, "consistency_off"
+	}
+	if policy != nil && policy.Level == "strong" {
+		return append([]string(nil), imageURLs...), ""
+	}
+	seen := map[int]struct{}{}
+	var idxs []int
+	add := func(i int) {
+		if i < 0 || i >= len(imageURLs) {
+			return
+		}
+		if _, ok := seen[i]; ok {
+			return
+		}
+		seen[i] = struct{}{}
+		idxs = append(idxs, i)
+	}
+	add(0)
+	add(len(imageURLs) - 1)
+	for i, scene := range scenes {
+		if len(idxs) >= 3 {
+			break
+		}
+		if len(scene.ReferenceKeys) > 1 || len(scene.EntityBindings) > 1 {
+			add(i)
+		}
+	}
+	out := make([]string, 0, len(idxs))
+	for _, i := range idxs {
+		out = append(out, imageURLs[i])
+	}
+	return out, ""
+}
+
 // ────────────────────── Step 2: 场景扩展 ──────────────────────
 
 // fragmentSceneExpansionResult 场景扩展输出。
@@ -930,12 +1533,13 @@ type fragmentSceneExpansionResult struct {
 	TokensUsed int
 }
 
-// fragmentExpandedScene 扩展出的单个场景，含中文描述和英文图片提示词。
+// fragmentExpandedScene 扩展出的单个场景，含中文描述、实体绑定和英文图片提示词。
 type fragmentExpandedScene struct {
-	Index         int      `json:"index"`
-	SceneDesc     string   `json:"sceneDesc"`               // 中文场景描述（面向读者）
-	ImagePrompt   string   `json:"imagePrompt"`             // 英文图片生成提示词（面向图片模型）
-	ReferenceKeys []string `json:"referenceKeys,omitempty"` // 引用 visualBible / 锚点图的 key
+	Index          int                            `json:"index"`
+	SceneDesc      string                         `json:"sceneDesc"`               // 中文场景描述（面向读者）
+	ImagePrompt    string                         `json:"imagePrompt"`             // 英文图片生成提示词（面向图片模型）
+	ReferenceKeys  []string                       `json:"referenceKeys,omitempty"` // 引用 visualBible / 参考资产的 key
+	EntityBindings []domain.FragmentEntityBinding `json:"entityBindings,omitempty"`
 }
 
 func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
@@ -1128,6 +1732,12 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
   好的示例："dust particles drifting through the beams of neon light, faint blurry reflection of the carousel lights on the glossy floor, shallow depth of field with bokeh balls on the background neon signs, a single old ticket caught mid-air as if just dropped"
   差的示例："some dust"（太简单）
 
+【七、entityBindings 写法——多人物/多物品一致性的结构化约束】
+- 每格必须列出 referenceKeys 中实际出现的实体绑定。不要只写 key，要写清楚该实体在本格的角色、画面位置、动作、道具归属。
+- 多人物同框时必须区分位置与外观归属，例如 char_a 在左侧拿 prop_key，char_b 在右侧，不要交换服装/发型/道具。
+- 物品必须写 ownerKey；地点写空间作用（background / main location / memory location）。
+- consistencyNote 要明确“不能和谁混淆、哪些特征必须保持”。
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 输出格式
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1139,7 +1749,11 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
       "index": 0,
       "sceneDesc": "中文：这格画面的内容描述，1-2句，让读者脑中浮现画面",
       "imagePrompt": "English: (1) artStyle. (2) subject. (3) environment. (4) composition. (5) lighting. (6) colorPalette. (7) mood. (8) extra details. At least 70 words total. Be specific and concrete — every word should help the image model make a visual decision. Do not use vague terms.",
-      "referenceKeys": ["char_main", "prop_laptop", "loc_office"]
+      "referenceKeys": ["char_main", "prop_laptop", "loc_office"],
+      "entityBindings": [
+        { "key": "char_main", "kind": "character", "role": "main subject", "position": "left foreground", "action": "holding prop_laptop", "ownerKey": "", "consistencyNote": "keep all immutableTraits; do not swap clothing or facial traits with other characters" },
+        { "key": "prop_laptop", "kind": "prop", "role": "story clue", "position": "in char_main hands", "action": "screen glowing", "ownerKey": "char_main", "consistencyNote": "belongs only to char_main" }
+      ]
     }
   ]
 }
@@ -1156,6 +1770,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - 相邻两格的 composition 必须有明显差异（不同景别或不同角度，不能连续两格正面中景）
 - 每一格必须引用至少 2 个可追溯锚点（来自 elements 或故事正文的具体角色/物品/场景细节），禁止无依据“硬反转”
 - 每一格必须包含 referenceKeys：1–5 个字符串，且必须是上方「稳定 key 列表」中的 key；若列表为空则 referenceKeys 为 []
+- 每一格必须包含 entityBindings；其 key 必须来自本格 referenceKeys，不允许自造实体
 - imagePrompt 中绝对不要出现"copy the reference image"或"exactly like the reference"——每格都应该是原创的视觉创作
 - sceneDesc 中不要出现格式化标记（不要 #、不要 **、不要列表符号）
 - 不要在 JSON 之外输出任何文字（包括开头和结尾的说明）`,
@@ -1232,7 +1847,71 @@ func parseSceneExpansion(raw string, want int) ([]fragmentExpandedScene, error) 
 
 // ────────────────────── Step 4: 逐场景生成图片（多参考图） ──────────────────────
 
-func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, scenes []fragmentExpandedScene, anchorMap map[string]string, userRefURLs []string) (*domain.FragmentImageGenerationResult, error) {
+func cloneFragmentProviderOptions(policy *domain.FragmentConsistencyPolicy) map[string]interface{} {
+	if policy == nil || len(policy.ProviderOptions) == 0 {
+		return nil
+	}
+	out := make(map[string]interface{}, len(policy.ProviderOptions))
+	for k, v := range policy.ProviderOptions {
+		out[k] = v
+	}
+	return out
+}
+
+func buildFragmentSceneImagePrompt(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) string {
+	var b strings.Builder
+	if bible != nil && bible.StyleBible != nil && strings.TrimSpace(bible.StyleBible.ArtStyle) != "" {
+		fmt.Fprintf(&b, "Global art style: %s.\n", strings.TrimSpace(bible.StyleBible.ArtStyle))
+	}
+	fmt.Fprintf(&b, "Scene: %s.\n", strings.TrimSpace(scene.ImagePrompt))
+	writeFragmentActiveEntities(&b, bible, scene.ReferenceKeys)
+	if len(scene.EntityBindings) > 0 {
+		b.WriteString("Entity binding rules:\n")
+		for _, bind := range scene.EntityBindings {
+			fmt.Fprintf(&b, "- %s (%s): role=%s; position=%s; action=%s; owner=%s; consistency=%s.\n",
+				bind.Key, bind.Kind, bind.Role, bind.Position, bind.Action, bind.OwnerKey, bind.ConsistencyNote)
+		}
+	}
+	if len(scene.ReferenceKeys) > 1 {
+		b.WriteString("Do not merge or swap identities, clothing, props, positions, or ownership between the listed entities.\n")
+	}
+	b.WriteString("Keep immutable traits exactly consistent across the whole image series while still creating an original scene.\n")
+	return strings.TrimSpace(b.String())
+}
+
+func writeFragmentActiveEntities(b *strings.Builder, bible *domain.FragmentVisualBible, keys []string) {
+	if bible == nil || len(keys) == 0 {
+		return
+	}
+	keySet := map[string]struct{}{}
+	for _, k := range keys {
+		keySet[strings.TrimSpace(k)] = struct{}{}
+	}
+	b.WriteString("Active visual bible entities:\n")
+	for _, ch := range bible.Characters {
+		if _, ok := keySet[strings.TrimSpace(ch.Key)]; !ok {
+			continue
+		}
+		fmt.Fprintf(b, "- %s character %s immutable traits: %s. Avoid: %s.\n",
+			ch.Key, ch.Name, strings.Join(ch.ImmutableTraits, "; "), strings.Join(ch.NegativeTraits, "; "))
+	}
+	for _, p := range bible.Props {
+		if _, ok := keySet[strings.TrimSpace(p.Key)]; !ok {
+			continue
+		}
+		fmt.Fprintf(b, "- %s prop %s immutable traits: %s. Owner: %s. Avoid: %s.\n",
+			p.Key, p.Name, strings.Join(p.ImmutableTraits, "; "), p.Ownership, strings.Join(p.NegativeTraits, "; "))
+	}
+	for _, loc := range bible.Locations {
+		if _, ok := keySet[strings.TrimSpace(loc.Key)]; !ok {
+			continue
+		}
+		fmt.Fprintf(b, "- %s location %s immutable traits: %s. Avoid: %s.\n",
+			loc.Key, loc.Name, strings.Join(loc.ImmutableTraits, "; "), strings.Join(loc.NegativeTraits, "; "))
+	}
+}
+
+func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy) (*domain.FragmentImageGenerationResult, error) {
 	if len(scenes) == 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
@@ -1248,11 +1927,19 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 	var allImageUrls []string
 	totalTokens := 0
 
-	for _, scene := range scenes {
-		refImgs := mergeFragmentSceneReferenceImages(userRefURLs, scene, anchorMap, fragmentMaxSceneReferenceImages)
+	for i := range scenes {
+		scene := &scenes[i]
+		scene.Seed = fragmentStoryImageSeed(policy)
+		scene.ProviderOptions = cloneFragmentProviderOptions(policy)
+		scene.FinalImagePrompt = buildFragmentSceneImagePrompt(bible, *scene)
+		refImgs := mergeFragmentSceneReferenceAssets(userRefURLs, *scene, referenceAssets, fragmentMaxSceneReferenceImages)
 		payload := map[string]interface{}{
-			"prompt":      scene.ImagePrompt,
+			"prompt":      scene.FinalImagePrompt,
 			"aspectRatio": ar,
+			"seed":        scene.Seed,
+		}
+		if len(scene.ProviderOptions) > 0 {
+			payload["options"] = scene.ProviderOptions
 		}
 		if len(refImgs) > 0 {
 			payload["referenceImages"] = refImgs
@@ -1277,6 +1964,7 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 				zap.Int("scene_index", scene.Index))
 			continue
 		}
+		scene.GeneratedImageURL = imageURL
 		allImageUrls = append(allImageUrls, imageURL)
 		totalTokens += tokens
 	}

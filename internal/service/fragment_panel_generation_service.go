@@ -92,14 +92,6 @@ func (s *FragmentPanelGenerationService) StartGeneration(ctx context.Context, us
 	if strings.TrimSpace(req.UserInput) == "" {
 		return nil, fmt.Errorf("userInput is required")
 	}
-	lp := strings.TrimSpace(req.LayoutPreset)
-	switch lp {
-	case "strip5_top2_middle_wide_bottom2":
-		if req.PanelCount != 0 && req.PanelCount != 5 {
-			return nil, fmt.Errorf("layoutPreset strip5_top2_middle_wide_bottom2 requires panelCount 5 or omit panelCount")
-		}
-		req.PanelCount = 5
-	}
 	pc := req.PanelCount
 	if pc == 0 {
 		pc = 3
@@ -347,6 +339,14 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		return
 	}
 
+	visualEvidence, visionTok, visionDur := s.analyzePanelVisualEvidence(ctx, req)
+	if len(visualEvidence) > 0 {
+		task.VisualEvidence = visualEvidence
+		appendPanelMetric(task, "visual_evidence", visionTok, visionDur, visualEvidence[0].Provider, visualEvidence[0].Model)
+		task.UpdatedAt = time.Now().Unix()
+		_ = s.panelRepo.Save(ctx, task)
+	}
+
 	// Step 1 — plan
 	planRes, err := s.aiGen.GenerateFragmentPanelPlan(ctx, &GenerateFragmentPanelPlanRequest{
 		UserID:            task.UserID,
@@ -360,6 +360,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		UserRegion:        req.UserRegion,
 		PlanProvider:      planProv,
 		LayoutAddon:       fragmentPanelPlanLayoutAddon(req),
+		VisualEvidence:    visualEvidence,
 	})
 	if err != nil {
 		s.failTask(ctx, taskID, draftID, fmt.Sprintf("规划分镜失败: %v", err))
@@ -372,6 +373,9 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 	appendPanelMetric(task, "understanding_reference", planRes.TokensUsed, planRes.DurationMs, provLabel, planRes.Model)
 	task.Plan = planRes.Plan
 	task.VisualBible = planRes.VisualBible
+	if task.VisualBible != nil && len(task.VisualBible.SourceEvidence) == 0 {
+		task.VisualBible.SourceEvidence = visualEvidence
+	}
 	task.Progress = 28
 	task.CurrentStep = "plan_ready"
 	task.UpdatedAt = time.Now().Unix()
@@ -382,34 +386,72 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 	n := len(task.Plan)
 	task.Result = &domain.FragmentPanelResultData{Panels: make([]domain.FragmentPanelResultItem, 0, n)}
 
+	policy := resolvePanelConsistencyPolicy(task, req)
 	anchorMap := make(map[string]string)
-	if task.VisualBible != nil && s.aiService != nil {
-		task.CurrentStep = "generating_anchor_images"
+	if task.VisualBible != nil && s.aiService != nil && policy.EnableReferenceAssets {
+		task.CurrentStep = "generating_reference_assets"
 		task.Progress = 32
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 		anchorStart := time.Now()
-		m, recs, anchorTok := s.generatePanelAnchorImages(ctx, task, req)
+		m, recs, anchorTok := s.generatePanelAnchorImages(ctx, task, req, policy)
 		anchorMap = m
 		task.AnchorImages = recs
-		appendPanelMetric(task, "generating_anchor_images", anchorTok, time.Since(anchorStart).Milliseconds(), imgProv, "")
+		appendPanelMetric(task, "generating_reference_assets", anchorTok, time.Since(anchorStart).Milliseconds(), imgProv, "")
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 	}
 
-	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, 0, n, anchorMap); err != nil {
+	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, 0, n, anchorMap, policy); err != nil {
 		s.failTask(ctx, taskID, draftID, err.Error())
 		return
 	}
 
-	checkTok, checkDur := s.runPanelConsistencyCheck(ctx, task)
+	checkTok, checkDur, checkProvider := s.runPanelConsistencyCheck(ctx, task, policy)
 	if checkTok > 0 {
-		appendPanelMetric(task, "checking_consistency", checkTok, checkDur, provLabel, "")
+		if checkProvider == "" {
+			checkProvider = provLabel
+		}
+		appendPanelMetric(task, "checking_consistency", checkTok, checkDur, checkProvider, "")
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 	}
 
 	s.completePanelGeneration(ctx, task, taskID, draftID, n)
+}
+
+func (s *FragmentPanelGenerationService) analyzePanelVisualEvidence(ctx context.Context, req domain.FragmentPanelGenerationRequest) ([]domain.FragmentVisualEvidence, int, int64) {
+	if s.aiService == nil {
+		return nil, 0, 0
+	}
+	imageURLs := fragmentPrefillHTTPImageURLs([]string{req.ReferenceImageURL}, 1)
+	if len(imageURLs) == 0 {
+		return nil, 0, 0
+	}
+	start := time.Now()
+	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
+		Prompt:       buildFragmentVisualEvidencePrompt(req.UserInput, req.Style, imageURLs),
+		ImageURLs:    imageURLs,
+		ProviderHint: NormalizeTextPlanProvider("", req.UserRegion, s.aiGen),
+		MaxTokens:    4096,
+		Temperature:  0.25,
+		Step:         "panel_visual_evidence",
+	})
+	dur := time.Since(start).Milliseconds()
+	if err != nil {
+		s.logger.Warn("panel visual evidence failed", zap.Error(err))
+		return nil, 0, dur
+	}
+	evidence, perr := parseFragmentVisualEvidence(resp.Raw, imageURLs)
+	if perr != nil {
+		s.logger.Warn("panel visual evidence parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(resp.Raw, 200)))
+		return nil, resp.TokensUsed, dur
+	}
+	for i := range evidence {
+		evidence[i].Provider = resp.Provider
+		evidence[i].Model = resp.Model
+	}
+	return evidence, resp.TokensUsed, resp.DurationMs
 }
 
 func (s *FragmentPanelGenerationService) processResume(ctx context.Context, taskID string, startIdx int) {
@@ -440,15 +482,19 @@ func (s *FragmentPanelGenerationService) processResume(ctx context.Context, task
 		return
 	}
 
+	policy := resolvePanelConsistencyPolicy(task, req)
 	if startIdx >= n {
 		if task.Result == nil || len(task.Result.Panels) != n {
 			s.failTask(ctx, taskID, draftID, "任务数据不完整，无法完成")
 			return
 		}
-		checkTok, checkDur := s.runPanelConsistencyCheck(ctx, task)
+		checkTok, checkDur, checkProvider := s.runPanelConsistencyCheck(ctx, task, policy)
 		if checkTok > 0 {
 			planProv, _ := ResolvePanelGenerationAIProviders(req.UserRegion, s.defaultImageProvider, s.aiGen)
-			appendPanelMetric(task, "checking_consistency", checkTok, checkDur, planProv, "")
+			if checkProvider == "" {
+				checkProvider = planProv
+			}
+			appendPanelMetric(task, "checking_consistency", checkTok, checkDur, checkProvider, "")
 			_ = s.panelRepo.Save(ctx, task)
 		}
 		s.completePanelGeneration(ctx, task, taskID, draftID, n)
@@ -464,28 +510,31 @@ func (s *FragmentPanelGenerationService) processResume(ctx context.Context, task
 	}
 
 	anchorMap := anchorMapFromPanelRecords(task.AnchorImages)
-	if task.VisualBible != nil && len(anchorMap) == 0 && s.aiService != nil {
-		task.CurrentStep = "generating_anchor_images"
+	if task.VisualBible != nil && len(anchorMap) == 0 && s.aiService != nil && policy.EnableReferenceAssets {
+		task.CurrentStep = "generating_reference_assets"
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 		anchorStart := time.Now()
-		m, recs, anchorTok := s.generatePanelAnchorImages(ctx, task, req)
+		m, recs, anchorTok := s.generatePanelAnchorImages(ctx, task, req, policy)
 		anchorMap = m
 		task.AnchorImages = recs
-		appendPanelMetric(task, "generating_anchor_images", anchorTok, time.Since(anchorStart).Milliseconds(), imgProv, "")
+		appendPanelMetric(task, "generating_reference_assets", anchorTok, time.Since(anchorStart).Milliseconds(), imgProv, "")
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 	}
 
-	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, startIdx, n, anchorMap); err != nil {
+	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, startIdx, n, anchorMap, policy); err != nil {
 		s.failTask(ctx, taskID, draftID, err.Error())
 		return
 	}
 
-	checkTok, checkDur := s.runPanelConsistencyCheck(ctx, task)
+	checkTok, checkDur, checkProvider := s.runPanelConsistencyCheck(ctx, task, policy)
 	if checkTok > 0 {
 		planProv, _ := ResolvePanelGenerationAIProviders(req.UserRegion, s.defaultImageProvider, s.aiGen)
-		appendPanelMetric(task, "checking_consistency", checkTok, checkDur, planProv, "")
+		if checkProvider == "" {
+			checkProvider = planProv
+		}
+		appendPanelMetric(task, "checking_consistency", checkTok, checkDur, checkProvider, "")
 		task.UpdatedAt = time.Now().Unix()
 		_ = s.panelRepo.Save(ctx, task)
 	}
@@ -493,8 +542,9 @@ func (s *FragmentPanelGenerationService) processResume(ctx context.Context, task
 	s.completePanelGeneration(ctx, task, taskID, draftID, n)
 }
 
-// buildPanelFinalImagePrompt 将规划模型产出的英文 image_prompt 与风格、长宽比、格角色说明拼装为最终文生图/参考生图提示（与碎片配图表述方式对齐）。
-func buildPanelFinalImagePrompt(planImagePrompt, styleSlug, aspectRatio string, panelIndex, totalPanels int) string {
+// buildPanelFinalImagePrompt 将规划模型产出的英文 image_prompt 与风格、长宽比、AI 布局计划拼装为最终文生图/参考生图提示。
+func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug, aspectRatio string, panelIndex, totalPanels int) string {
+	planImagePrompt := strings.TrimSpace(planItem.ImagePrompt)
 	base := strings.TrimSpace(planImagePrompt)
 	ar := domain.NormalizeFragmentAspectRatio(aspectRatio)
 	if ar == "" {
@@ -519,7 +569,28 @@ func buildPanelFinalImagePrompt(planImagePrompt, styleSlug, aspectRatio string, 
 		totalPanels = 1
 	}
 	order := fmt.Sprintf("Panel %d of %d.", panelIndex+1, totalPanels)
-	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role))
+	layout := buildPanelLayoutDirective(planItem)
+	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout))
+}
+
+func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
+	var parts []string
+	if v := strings.TrimSpace(planItem.LayoutIntent); v != "" {
+		parts = append(parts, "layout_intent="+v)
+	}
+	if v := strings.TrimSpace(planItem.ShotType); v != "" {
+		parts = append(parts, "shot_type="+v)
+	}
+	if v := strings.TrimSpace(planItem.CompositionPlan); v != "" {
+		parts = append(parts, "composition_plan="+v)
+	}
+	if v := strings.TrimSpace(planItem.VisualHierarchy); v != "" {
+		parts = append(parts, "visual_hierarchy="+v)
+	}
+	if len(parts) == 0 {
+		return "Layout directive: one output image. Use either a unified continuous illustration or multiple clearly separated intra-image regions/sub-panels (comic-style zones with gutters / spacing) when the story beat gains clarity; prioritize readable order (e.g. top-to-bottom or left-to-right within the canvas). Maintain one consistent art treatment across zones."
+	}
+	return "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible separation/gutters; if it implies one integrated scene, avoid unnecessary outer panel borders."
 }
 
 func anchorMapFromPanelRecords(records []domain.FragmentAnchorImage) map[string]string {
@@ -581,9 +652,72 @@ func mergePanelReferenceImages(userHTTPRef string, keys []string, anchorMap map[
 	return out
 }
 
-func (s *FragmentPanelGenerationService) generatePanelAnchorImages(ctx context.Context, task *domain.FragmentPanelGenerationTask, req domain.FragmentPanelGenerationRequest) (map[string]string, []domain.FragmentAnchorImage, int) {
+func resolvePanelConsistencyPolicy(task *domain.FragmentPanelGenerationTask, req domain.FragmentPanelGenerationRequest) *domain.FragmentConsistencyPolicy {
+	level := normalizeFragmentConsistencyLevel(req.ConsistencyLevel)
+	if level == "off" {
+		return &domain.FragmentConsistencyPolicy{
+			Level:                 "off",
+			EnableReferenceAssets: false,
+			Capabilities:          []string{},
+		}
+	}
+	seriesSeed := fragmentStableSeed(task.ID, req.Style, req.AspectRatio)
+	scenePlans := panelPlanItemsToScenePlans(task.Plan)
+	usage := analyzeFragmentSceneEntityUsage(scenePlans)
+	enableRefs := len(scenePlans) > 2 || countRepeatedFragmentCharacters(task.VisualBible, usage) > 1
+	if req.EnableReferenceAssets != nil {
+		enableRefs = *req.EnableReferenceAssets
+	}
+	maxChars := 2
+	maxProps := 0
+	maxLocs := 0
+	if level == "strong" {
+		maxChars = 3
+		maxProps = 1
+		maxLocs = 1
+		enableRefs = true
+	}
+	options := map[string]interface{}{
+		"consistency_group_id": task.ID,
+		"series_seed":          seriesSeed,
+		"style_consistency":    true,
+	}
+	return &domain.FragmentConsistencyPolicy{
+		Level:                 level,
+		SeriesSeed:            seriesSeed,
+		EnableReferenceAssets: enableRefs,
+		MaxCharacterAssets:    maxChars,
+		MaxPropAssets:         maxProps,
+		MaxLocationAssets:     maxLocs,
+		ProviderOptions:       options,
+		Capabilities:          []string{"seed", "provider_options", "entity_bindings", "reference_assets"},
+	}
+}
+
+func panelPlanItemsToScenePlans(plan []domain.FragmentPanelPlanItem) []domain.FragmentScenePlan {
+	out := make([]domain.FragmentScenePlan, 0, len(plan))
+	for i, p := range plan {
+		idx := p.Index
+		if idx < 0 {
+			idx = i
+		}
+		out = append(out, domain.FragmentScenePlan{
+			Index:         idx,
+			ImagePrompt:   strings.TrimSpace(p.ImagePrompt),
+			SceneDesc:     strings.TrimSpace(p.Caption),
+			ReferenceKeys: normalizeFragmentKeyList(p.ReferenceKeys),
+		})
+	}
+	return out
+}
+
+func panelSeed(policy *domain.FragmentConsistencyPolicy, _ int, _ []string) int {
+	return fragmentStoryImageSeed(policy)
+}
+
+func (s *FragmentPanelGenerationService) generatePanelAnchorImages(ctx context.Context, task *domain.FragmentPanelGenerationTask, req domain.FragmentPanelGenerationRequest, policy *domain.FragmentConsistencyPolicy) (map[string]string, []domain.FragmentAnchorImage, int) {
 	outMap := make(map[string]string)
-	if task.VisualBible == nil || s.aiService == nil {
+	if task.VisualBible == nil || s.aiService == nil || policy == nil || !policy.EnableReferenceAssets {
 		return outMap, nil, 0
 	}
 	bible := task.VisualBible
@@ -605,94 +739,48 @@ func (s *FragmentPanelGenerationService) generatePanelAnchorImages(ctx context.C
 		}
 	}
 
+	scenePlans := panelPlanItemsToScenePlans(task.Plan)
+	candidates := selectFragmentReferenceAssetCandidatesWithEvidence(bible, task.VisualEvidence, scenePlans, policy)
+	if len(candidates) == 0 {
+		return outMap, nil, 0
+	}
+	firstChar := true
 	totalTok := 0
 	var records []domain.FragmentAnchorImage
-	firstChar := true
-
-	for i, ch := range bible.Characters {
-		if i >= fragmentMaxAnchorCharacters {
-			break
-		}
-		key := strings.TrimSpace(ch.Key)
-		if key == "" {
-			continue
-		}
-		traits := strings.Join(ch.ImmutableTraits, "; ")
-		prompt := fmt.Sprintf(
-			"%s Character design reference, single person, neutral standing pose facing camera, full body visible, clean simple studio background, high detail concept art. Immutable traits: %s. Overall mood (reference): %s. Style tag: %s.",
-			styleEN, traits, moodZH, styleZH)
-		if n := strings.TrimSpace(ch.Name); n != "" {
-			prompt = n + ". " + prompt
-		}
+	for _, c := range candidates {
+		prompt := buildFragmentReferenceAssetPrompt(c, styleEN, styleZH, moodZH)
 		var refs []string
-		if firstChar && len(userRef) > 0 {
+		if c.Kind == "character" && firstChar && len(userRef) > 0 {
 			refs = append(refs, userRef...)
 			firstChar = false
 		}
-		url, tok, err := s.generateOnePanelAnchorImage(ctx, task.UserID, task.ID, prompt, ar, refs)
+		seed := fragmentStableSeed(task.ID, c.Kind, c.Key, strings.Join(c.Traits, "|"))
+		url, tok, err := s.generateOnePanelAnchorImage(ctx, task.UserID, task.ID, prompt, ar, refs, seed, policy.ProviderOptions)
 		if err != nil {
-			s.logger.Warn("panel anchor character failed", zap.String("key", key), zap.Error(err))
+			s.logger.Warn("panel reference asset failed", zap.String("key", c.Key), zap.String("kind", c.Kind), zap.Error(err))
 			continue
 		}
-		outMap[key] = url
-		records = append(records, domain.FragmentAnchorImage{Key: key, Kind: "character", ImageURL: url})
-		totalTok += tok
-	}
-
-	for i, p := range bible.Props {
-		if i >= fragmentMaxAnchorProps {
-			break
-		}
-		key := strings.TrimSpace(p.Key)
-		if key == "" {
-			continue
-		}
-		traits := strings.Join(p.ImmutableTraits, "; ")
-		prompt := fmt.Sprintf(
-			"%s Single hero prop object on neutral surface, studio product shot, sharp focus, no people. Object traits: %s. Style: %s.",
-			styleEN, traits, styleZH)
-		url, tok, err := s.generateOnePanelAnchorImage(ctx, task.UserID, task.ID, prompt, ar, nil)
-		if err != nil {
-			s.logger.Warn("panel anchor prop failed", zap.String("key", key), zap.Error(err))
-			continue
-		}
-		outMap[key] = url
-		records = append(records, domain.FragmentAnchorImage{Key: key, Kind: "prop", ImageURL: url})
-		totalTok += tok
-	}
-
-	for i, loc := range bible.Locations {
-		if i >= fragmentMaxAnchorLocations {
-			break
-		}
-		key := strings.TrimSpace(loc.Key)
-		if key == "" {
-			continue
-		}
-		traits := strings.Join(loc.ImmutableTraits, "; ")
-		prompt := fmt.Sprintf(
-			"%s Wide environmental establishing shot, empty of people, architectural or landscape concept art, clear readable space. Location: %s. Style: %s.",
-			styleEN, traits, styleZH)
-		url, tok, err := s.generateOnePanelAnchorImage(ctx, task.UserID, task.ID, prompt, ar, nil)
-		if err != nil {
-			s.logger.Warn("panel anchor location failed", zap.String("key", key), zap.Error(err))
-			continue
-		}
-		outMap[key] = url
-		records = append(records, domain.FragmentAnchorImage{Key: key, Kind: "location", ImageURL: url})
+		outMap[c.Key] = url
+		records = append(records, domain.FragmentAnchorImage{Key: c.Key, Kind: c.Kind, ImageURL: url})
 		totalTok += tok
 	}
 
 	return outMap, records, totalTok
 }
 
-func (s *FragmentPanelGenerationService) generateOnePanelAnchorImage(ctx context.Context, userID, panelTaskID, prompt, aspectRatio string, refURLs []string) (string, int, error) {
+func (s *FragmentPanelGenerationService) generateOnePanelAnchorImage(ctx context.Context, userID, panelTaskID, prompt, aspectRatio string, refURLs []string, seed int, options map[string]interface{}) (string, int, error) {
 	payload := map[string]interface{}{
 		"prompt":      prompt,
 		"aspectRatio": aspectRatio,
 	}
 	if len(refURLs) > 0 {
 		payload["referenceImages"] = fragmentPrefillHTTPImageURLs(refURLs, 4)
+	}
+	if seed > 0 {
+		payload["seed"] = seed
+	}
+	if len(options) > 0 {
+		payload["options"] = options
 	}
 	imgInput, err := json.Marshal(payload)
 	if err != nil {
@@ -711,21 +799,38 @@ func (s *FragmentPanelGenerationService) generateOnePanelAnchorImage(ctx context
 	return s.aiService.GenerateImageForFragment(ctx, &aiReq)
 }
 
-// runPanelConsistencyCheck best-effort，与普通碎片 checkFragmentConsistency 对齐；返回 token 与耗时(ms)。
-func (s *FragmentPanelGenerationService) runPanelConsistencyCheck(ctx context.Context, task *domain.FragmentPanelGenerationTask) (int, int64) {
+// runPanelConsistencyCheck best-effort，与普通碎片 checkFragmentConsistency 对齐；返回 token、耗时(ms) 与 provider。
+func (s *FragmentPanelGenerationService) runPanelConsistencyCheck(ctx context.Context, task *domain.FragmentPanelGenerationTask, policy *domain.FragmentConsistencyPolicy) (int, int64, string) {
 	if s.aiService == nil || task.VisualBible == nil || task.Result == nil || len(task.Result.Panels) == 0 {
-		return 0, 0
+		return 0, 0, ""
+	}
+	scenes := panelPlanItemsToScenePlans(task.Plan)
+	imageURLs := make([]string, 0, len(task.Result.Panels))
+	for _, p := range task.Result.Panels {
+		imageURLs = append(imageURLs, strings.TrimSpace(p.ImageURL))
+	}
+	auditURLs, skipped := selectFragmentAuditImageURLs(imageURLs, scenes, policy)
+	if len(auditURLs) == 0 {
+		if task.Result.GenerationTrace == nil {
+			task.Result.GenerationTrace = &domain.FragmentGenerationTrace{}
+		}
+		task.Result.GenerationTrace.SkippedAuditReason = skipped
+		return 0, 0, ""
 	}
 	start := time.Now()
 	vbBytes, _ := json.Marshal(task.VisualBible)
+	evidenceBytes, _ := json.Marshal(task.VisualEvidence)
 	planBytes, _ := json.Marshal(task.Plan)
 	var urlLines strings.Builder
-	for _, p := range task.Result.Panels {
-		fmt.Fprintf(&urlLines, "%d: %s\n", p.Index, p.ImageURL)
+	for i, u := range auditURLs {
+		fmt.Fprintf(&urlLines, "%d: %s\n", i, u)
 	}
-	prompt := fmt.Sprintf(`你是视觉一致性审计员。基于「视觉圣经」、分镜规划（含 caption、reference_keys、image_prompt）与最终配图 URL，列出可能的不一致。若无法访问图片仅依据文字推断；无问题时 issues 为空数组。
+	prompt := fmt.Sprintf(`你是视觉一致性审计员。请直接查看最终配图，基于「视觉圣经」、入口视觉事实、分镜规划（含 caption、reference_keys、image_prompt）与最终配图 URL，列出可能的不一致。无问题时 issues 为空数组。
 
 视觉圣经 JSON：
+%s
+
+入口视觉事实 JSON：
 %s
 
 分镜规划 JSON：
@@ -734,22 +839,46 @@ func (s *FragmentPanelGenerationService) runPanelConsistencyCheck(ctx context.Co
 最终图片 URL（与 index 对应）：
 %s
 
-只输出 JSON：{"issues":[{"sceneIndex":0,"severity":"low|medium|high","detail":"中文简述"}]}`,
-		string(vbBytes), string(planBytes), urlLines.String())
+只输出 JSON：{"issues":[{"sceneIndex":0,"entityKey":"可为空","imageUrl":"问题图片URL","severity":"low|medium|high","expected":"应保持的视觉事实","observed":"实际观察","confidence":0.0,"detail":"中文简述"}]}`,
+		string(vbBytes), string(evidenceBytes), string(planBytes), urlLines.String())
 
-	raw, tokens, err := s.aiService.GenerateFragmentAuxJSON(ctx, prompt)
+	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
+		Prompt:      prompt,
+		ImageURLs:   auditURLs,
+		MaxTokens:   2048,
+		Temperature: 0.25,
+		Step:        "panel_consistency_audit",
+	})
 	dur := time.Since(start).Milliseconds()
 	if err != nil {
 		s.logger.Warn("panel consistency check failed", zap.Error(err))
-		return 0, dur
+		if task.Result.GenerationTrace == nil {
+			task.Result.GenerationTrace = &domain.FragmentGenerationTrace{}
+		}
+		task.Result.GenerationTrace.SkippedAuditReason = err.Error()
+		task.Result.GenerationTrace.AuditedImageCount = len(auditURLs)
+		return 0, dur, ""
 	}
-	issues, perr := parseFragmentConsistencyIssues(raw)
+	if resp.DurationMs > 0 {
+		dur = resp.DurationMs
+	}
+	issues, perr := parseFragmentConsistencyIssues(resp.Raw)
 	if perr != nil {
-		s.logger.Warn("panel consistency parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(raw, 200)))
-		return tokens, dur
+		s.logger.Warn("panel consistency parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(resp.Raw, 200)))
+		return resp.TokensUsed, dur, resp.Provider
 	}
 	if task.Result != nil {
 		task.Result.ConsistencyIssues = issues
+		task.Result.GenerationTrace = &domain.FragmentGenerationTrace{
+			VisualBible:         task.VisualBible,
+			VisualEvidence:      task.VisualEvidence,
+			Scenes:              scenes,
+			ConsistencyPolicy:   policy,
+			ConsistencyIssues:   issues,
+			VisionAuditProvider: resp.Provider,
+			AuditedImageCount:   len(auditURLs),
+			SkippedAuditReason:  skipped,
+		}
 	}
 	if len(issues) > 0 {
 		for _, iss := range issues {
@@ -759,10 +888,10 @@ func (s *FragmentPanelGenerationService) runPanelConsistencyCheck(ctx context.Co
 				zap.String("detail", iss.Detail))
 		}
 	}
-	return tokens, dur
+	return resp.TokensUsed, dur, resp.Provider
 }
 
-func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, task *domain.FragmentPanelGenerationTask, taskID, draftID string, req domain.FragmentPanelGenerationRequest, imgProv string, startIdx, n int, anchorMap map[string]string) error {
+func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, task *domain.FragmentPanelGenerationTask, taskID, draftID string, req domain.FragmentPanelGenerationRequest, imgProv string, startIdx, n int, anchorMap map[string]string, policy *domain.FragmentConsistencyPolicy) error {
 	den := n
 	if den < 1 {
 		den = 1
@@ -775,8 +904,7 @@ func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, 
 		_ = s.panelRepo.Save(ctx, task)
 
 		planItem := task.Plan[i]
-		base := strings.TrimSpace(planItem.ImagePrompt)
-		prompt := buildPanelFinalImagePrompt(base, req.Style, req.AspectRatio, i, n)
+		prompt := buildPanelFinalImagePrompt(planItem, req.Style, req.AspectRatio, i, n)
 
 		prevURL := ""
 		if i > 0 && len(task.Result.Panels) > 0 && i-1 < len(task.Result.Panels) {
@@ -805,6 +933,8 @@ func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, 
 		if ar == "" {
 			ar = domain.FragmentAspectDefault
 		}
+		seed := panelSeed(policy, i, planItem.ReferenceKeys)
+		options := cloneFragmentProviderOptions(policy)
 		imgReq := &GenerateImageRequest{
 			UserID:            task.UserID,
 			Prompt:            prompt,
@@ -813,6 +943,8 @@ func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, 
 			Style:             req.Style,
 			OutputCount:       1,
 			ReferenceImages:   refURLs,
+			Seed:              seed,
+			Options:           options,
 			RelatedEntityID:   taskID,
 			RelatedEntityType: "fragment_panel_generation",
 			Metadata: map[string]interface{}{
@@ -821,6 +953,7 @@ func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, 
 				"reference_kind":  refKind,
 				"aspectRatio":     ar,
 				"reference_count": len(refURLs),
+				"seed":            seed,
 			},
 		}
 		switch imgProv {
@@ -879,7 +1012,16 @@ func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Con
 	}
 	task.Result.CombinedContent = strings.Join(captions, "\n\n")
 	task.Result.VisualBible = task.VisualBible
+	task.Result.VisualEvidence = task.VisualEvidence
 	task.Result.AnchorImages = task.AnchorImages
+	if task.Result.GenerationTrace == nil {
+		task.Result.GenerationTrace = &domain.FragmentGenerationTrace{
+			VisualBible:       task.VisualBible,
+			VisualEvidence:    task.VisualEvidence,
+			Scenes:            panelPlanItemsToScenePlans(task.Plan),
+			ConsistencyPolicy: resolvePanelConsistencyPolicy(task, req),
+		}
+	}
 
 	task.CurrentStep = "persisting"
 	task.Progress = 97

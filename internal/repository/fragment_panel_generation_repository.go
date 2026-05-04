@@ -44,15 +44,17 @@ func panelTaskToDB(t *domain.FragmentPanelGenerationTask) (*mysql.FragmentPanelG
 		CompletedAt:     t.CompletedAt,
 		UpdatedAt:       t.UpdatedAt,
 	}
-	if len(t.Plan) > 0 || t.VisualBible != nil || len(t.AnchorImages) > 0 {
+	if len(t.Plan) > 0 || t.VisualBible != nil || len(t.VisualEvidence) > 0 || len(t.AnchorImages) > 0 {
 		blob := struct {
-			VisualBible  *domain.FragmentVisualBible    `json:"visualBible,omitempty"`
-			AnchorImages []domain.FragmentAnchorImage   `json:"anchorImages,omitempty"`
-			Panels       []domain.FragmentPanelPlanItem `json:"panels"`
+			VisualBible    *domain.FragmentVisualBible     `json:"visualBible,omitempty"`
+			VisualEvidence []domain.FragmentVisualEvidence `json:"visualEvidence,omitempty"`
+			AnchorImages   []domain.FragmentAnchorImage    `json:"anchorImages,omitempty"`
+			Panels         []domain.FragmentPanelPlanItem  `json:"panels"`
 		}{
-			VisualBible:  t.VisualBible,
-			AnchorImages: t.AnchorImages,
-			Panels:       t.Plan,
+			VisualBible:    t.VisualBible,
+			VisualEvidence: t.VisualEvidence,
+			AnchorImages:   t.AnchorImages,
+			Panels:         t.Plan,
 		}
 		b, err := json.Marshal(blob)
 		if err != nil {
@@ -97,12 +99,13 @@ func panelTaskFromDB(row *mysql.FragmentPanelGenerationTaskDB) (*domain.Fragment
 		}
 	}
 	if row.PlanJSON != "" {
-		panels, vb, anchors, err := unmarshalFragmentPanelPlanJSON(row.PlanJSON)
+		panels, vb, evidence, anchors, err := unmarshalFragmentPanelPlanJSON(row.PlanJSON)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal plan: %w", err)
 		}
 		t.Plan = panels
 		t.VisualBible = vb
+		t.VisualEvidence = evidence
 		t.AnchorImages = anchors
 	}
 	if row.ResultJSON != "" {
@@ -218,22 +221,23 @@ func (r *FragmentPanelGenerationRepository) RevertProcessingToFailed(ctx context
 }
 
 // unmarshalFragmentPanelPlanJSON 兼容 v2 对象 { panels, visualBible, anchorImages } 与旧版纯 panels 数组。
-func unmarshalFragmentPanelPlanJSON(raw string) ([]domain.FragmentPanelPlanItem, *domain.FragmentVisualBible, []domain.FragmentAnchorImage, error) {
+func unmarshalFragmentPanelPlanJSON(raw string) ([]domain.FragmentPanelPlanItem, *domain.FragmentVisualBible, []domain.FragmentVisualEvidence, []domain.FragmentAnchorImage, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
 	var blob struct {
-		VisualBible  *domain.FragmentVisualBible    `json:"visualBible,omitempty"`
-		AnchorImages []domain.FragmentAnchorImage   `json:"anchorImages,omitempty"`
-		Panels       []domain.FragmentPanelPlanItem `json:"panels"`
+		VisualBible    *domain.FragmentVisualBible     `json:"visualBible,omitempty"`
+		VisualEvidence []domain.FragmentVisualEvidence `json:"visualEvidence,omitempty"`
+		AnchorImages   []domain.FragmentAnchorImage    `json:"anchorImages,omitempty"`
+		Panels         []domain.FragmentPanelPlanItem  `json:"panels"`
 	}
 	if err := json.Unmarshal([]byte(raw), &blob); err == nil && (len(blob.Panels) > 0 || blob.VisualBible != nil) {
-		return blob.Panels, blob.VisualBible, blob.AnchorImages, nil
+		return blob.Panels, blob.VisualBible, blob.VisualEvidence, blob.AnchorImages, nil
 	}
 	var legacy []domain.FragmentPanelPlanItem
 	if err := json.Unmarshal([]byte(raw), &legacy); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return legacy, nil, nil, nil
+	return legacy, nil, nil, nil, nil
 }

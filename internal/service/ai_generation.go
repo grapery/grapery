@@ -540,6 +540,9 @@ type GenerateImageRequest struct {
 	Style             string // 生成风格
 	OutputCount       int
 	ReferenceImages   []string // Character or scene reference images for image-to-image generation
+	Seed              int
+	Options           map[string]interface{}
+	GuidanceScale     float64
 	RelatedEntityID   string
 	RelatedEntityType string
 	Metadata          map[string]interface{}
@@ -676,6 +679,9 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		"quality":         req.Quality,
 		"outputCount":     req.OutputCount,
 		"referenceImages": req.ReferenceImages,
+		"seed":            req.Seed,
+		"options":         req.Options,
+		"guidanceScale":   req.GuidanceScale,
 	}
 	if inputJSON, err := json.Marshal(inputParams); err == nil {
 		record.InputParams = string(inputJSON)
@@ -718,6 +724,9 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		ReferenceImages:   refURLs,
 		Operation:         operation,
 		ReferenceImageURL: referenceImageURL,
+		Seed:              req.Seed,
+		Options:           req.Options,
+		GuidanceScale:     req.GuidanceScale,
 	}
 
 	// Gemini 对话式多参考合成：需内联字节，否则仅 URL 的 imageToImage 会失败。

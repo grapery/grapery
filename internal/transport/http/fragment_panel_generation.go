@@ -40,17 +40,17 @@ func NewFragmentPanelGenerationHandler(svc *service.FragmentPanelGenerationServi
 
 // CreatePanelGenerationRequest POST body for /fragment-panels/generate
 type CreatePanelGenerationRequest struct {
-	UserInput         string `json:"userInput" binding:"required,min=1,max=2000"`
-	ReferenceImageURL string `json:"referenceImageUrl" binding:"required"`
-	Style             string `json:"style"`
-	PanelCount        int    `json:"panelCount"`
-	Visibility        string `json:"visibility"`
-	Topic             string `json:"topic"`
-	AspectRatio       string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
-	LayoutPreset      string `json:"layoutPreset"`
-	GutterStyle       string `json:"gutterStyle"`
-	DialogueMode      string `json:"dialogueMode"`
-	OutputMode        string `json:"outputMode"`
+	UserInput              string `json:"userInput" binding:"required,min=1,max=2000"`
+	ReferenceImageURL      string `json:"referenceImageUrl" binding:"required"`
+	Style                  string `json:"style"`
+	PanelCount             int    `json:"panelCount"`
+	Visibility             string `json:"visibility"`
+	Topic                  string `json:"topic"`
+	AspectRatio            string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	DialogueMode           string `json:"dialogueMode"`
+	ConsistencyLevel       string `json:"consistencyLevel"`
+	EnableReferenceAssets  *bool  `json:"enableReferenceAssets"`
+	IncludeGenerationTrace bool   `json:"includeGenerationTrace"`
 }
 
 // CreatePanelGeneration POST /fragment-panels/generate
@@ -68,17 +68,17 @@ func (h *FragmentPanelGenerationHandler) CreatePanelGeneration(c *gin.Context) {
 	}
 
 	domainReq := domain.FragmentPanelGenerationRequest{
-		UserInput:         strings.TrimSpace(req.UserInput),
-		ReferenceImageURL: strings.TrimSpace(req.ReferenceImageURL),
-		Style:             strings.TrimSpace(req.Style),
-		PanelCount:        req.PanelCount,
-		Visibility:        strings.TrimSpace(req.Visibility),
-		Topic:             normalizePanelTopicLabel(req.Topic),
-		AspectRatio:       strings.TrimSpace(req.AspectRatio),
-		LayoutPreset:      strings.TrimSpace(req.LayoutPreset),
-		GutterStyle:       strings.TrimSpace(req.GutterStyle),
-		DialogueMode:      strings.TrimSpace(req.DialogueMode),
-		OutputMode:        strings.TrimSpace(req.OutputMode),
+		UserInput:              strings.TrimSpace(req.UserInput),
+		ReferenceImageURL:      strings.TrimSpace(req.ReferenceImageURL),
+		Style:                  strings.TrimSpace(req.Style),
+		PanelCount:             req.PanelCount,
+		Visibility:             strings.TrimSpace(req.Visibility),
+		Topic:                  normalizePanelTopicLabel(req.Topic),
+		AspectRatio:            strings.TrimSpace(req.AspectRatio),
+		DialogueMode:           strings.TrimSpace(req.DialogueMode),
+		ConsistencyLevel:       strings.TrimSpace(req.ConsistencyLevel),
+		EnableReferenceAssets:  req.EnableReferenceAssets,
+		IncludeGenerationTrace: req.IncludeGenerationTrace,
 	}
 
 	task, err := h.svc.StartGeneration(c.Request.Context(), userID, domainReq)
@@ -134,12 +134,14 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 		"completedAt":     task.CompletedAt,
 		// 客户端生成记录页展示原始提示词与风格等（来自任务表 request_json）
 		"request": gin.H{
-			"userInput":         task.Request.UserInput,
-			"referenceImageUrl": task.Request.ReferenceImageURL,
-			"style":             task.Request.Style,
-			"panelCount":        task.Request.PanelCount,
-			"visibility":        task.Request.Visibility,
-			"topic":             task.Request.Topic,
+			"userInput":             task.Request.UserInput,
+			"referenceImageUrl":     task.Request.ReferenceImageURL,
+			"style":                 task.Request.Style,
+			"panelCount":            task.Request.PanelCount,
+			"visibility":            task.Request.Visibility,
+			"topic":                 task.Request.Topic,
+			"consistencyLevel":      task.Request.ConsistencyLevel,
+			"enableReferenceAssets": task.Request.EnableReferenceAssets,
 		},
 	}
 
@@ -159,6 +161,13 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 		resp["panels"] = panels
 		if task.Result.CombinedContent != "" {
 			resp["combinedContent"] = task.Result.CombinedContent
+		}
+		resp["visualBible"] = task.Result.VisualBible
+		resp["anchorImages"] = task.Result.AnchorImages
+		resp["consistencyIssues"] = task.Result.ConsistencyIssues
+		if task.Request.IncludeGenerationTrace {
+			resp["visualEvidence"] = task.Result.VisualEvidence
+			resp["generationTrace"] = task.Result.GenerationTrace
 		}
 	}
 

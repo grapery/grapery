@@ -42,7 +42,10 @@ type GenerateFragmentRequest struct {
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
 	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	// AspectRatio 配图长宽比；空表示由多模态（有参考图时）推断，否则默认 16:9
-	AspectRatio string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	AspectRatio            string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	ConsistencyLevel       string `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
+	EnableReferenceAssets  *bool  `json:"enableReferenceAssets"`
+	IncludeGenerationTrace bool   `json:"includeGenerationTrace"`
 }
 
 // GenerateFragment handles POST /fragments/generate
@@ -66,15 +69,18 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 
 	// 转换为领域模型
 	domainReq := domain.FragmentGenerationRequest{
-		UserInput:   req.UserInput,
-		ImageUrls:   req.ImageUrls,
-		ImageCount:  req.ImageCount,
-		Style:       style,
-		Mood:        req.Mood,
-		Length:      req.Length,
-		Language:    req.Language,
-		Visibility:  domain.NormalizeFragmentVisibility(req.Visibility),
-		AspectRatio: strings.TrimSpace(req.AspectRatio),
+		UserInput:              req.UserInput,
+		ImageUrls:              req.ImageUrls,
+		ImageCount:             req.ImageCount,
+		Style:                  style,
+		Mood:                   req.Mood,
+		Length:                 req.Length,
+		Language:               req.Language,
+		Visibility:             domain.NormalizeFragmentVisibility(req.Visibility),
+		AspectRatio:            strings.TrimSpace(req.AspectRatio),
+		ConsistencyLevel:       strings.TrimSpace(req.ConsistencyLevel),
+		EnableReferenceAssets:  req.EnableReferenceAssets,
+		IncludeGenerationTrace: req.IncludeGenerationTrace,
 	}
 
 	// 如果用户没有指定图片数量，默认生成1张
@@ -122,15 +128,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 	}
 
 	if task.Result != nil {
-		res := gin.H{
-			"content":    task.Result.Content,
-			"imageUrls":  task.Result.ImageUrls,
-			"tokensUsed": task.Result.TokensUsed,
-		}
-		if task.Result.AspectRatio != "" {
-			res["aspectRatio"] = task.Result.AspectRatio
-		}
-		response["result"] = res
+		response["result"] = fragmentGenerationResultResponse(task)
 	}
 
 	if task.ErrorMessage != "" {
@@ -178,15 +176,7 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 			"createdAt":   task.CreatedAt,
 		}
 		if task.Result != nil {
-			r := gin.H{
-				"content":    task.Result.Content,
-				"imageUrls":  task.Result.ImageUrls,
-				"tokensUsed": task.Result.TokensUsed,
-			}
-			if task.Result.AspectRatio != "" {
-				r["aspectRatio"] = task.Result.AspectRatio
-			}
-			taskResponses[i]["result"] = r
+			taskResponses[i]["result"] = fragmentGenerationResultResponse(task)
 		}
 	}
 
@@ -196,6 +186,27 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 		"page":  page,
 		"limit": limit,
 	})
+}
+
+func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H {
+	res := gin.H{
+		"content":           task.Result.Content,
+		"imageUrls":         task.Result.ImageUrls,
+		"tokensUsed":        task.Result.TokensUsed,
+		"draftFragmentId":   task.Result.DraftFragmentID,
+		"visualBible":       task.Result.VisualBible,
+		"scenePlan":         task.Result.ScenePlan,
+		"referenceAssets":   task.Result.ReferenceAssets,
+		"consistencyPolicy": task.Result.ConsistencyPolicy,
+		"consistencyIssues": task.Result.ConsistencyIssues,
+	}
+	if task.Result.AspectRatio != "" {
+		res["aspectRatio"] = task.Result.AspectRatio
+	}
+	if task.Request.IncludeGenerationTrace {
+		res["generationTrace"] = task.Result.GenerationTrace
+	}
+	return res
 }
 
 // CancelGeneration handles DELETE /fragments/generate/:taskId

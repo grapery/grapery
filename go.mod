@@ -25,7 +25,7 @@ require (
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stripe/stripe-go/v74 v74.30.0
-	github.com/volcengine/volcengine-go-sdk v1.1.52
+	github.com/volcengine/volcengine-go-sdk v1.2.23
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0
@@ -35,7 +35,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.34.0
-	google.golang.org/genai v1.49.0
+	google.golang.org/genai v1.53.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.5.7

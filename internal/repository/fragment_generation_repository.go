@@ -177,7 +177,7 @@ func (r *FragmentGenerationRepository) UpdateResult(ctx context.Context, id stri
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"result_json": string(resultJSON),
-			"tokens_used": gorm.Expr("tokens_used + ?", result.TokensUsed),
+			"tokens_used": result.TokensUsed,
 			"updated_at":  time.Now().Unix(),
 		}).Error
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -27,19 +28,9 @@ func panelPlanNarrativeRhythm(panelCount int) string {
 	}
 }
 
-// fragmentPanelPlanLayoutAddon 将客户端指定的版式/对白选项并入规划提示（仅多格流水线）。
+// fragmentPanelPlanLayoutAddon 将客户端指定的对白选项并入规划提示（仅多格流水线）。
 func fragmentPanelPlanLayoutAddon(req domain.FragmentPanelGenerationRequest) string {
 	var parts []string
-	switch strings.TrimSpace(req.LayoutPreset) {
-	case "strip5_top2_middle_wide_bottom2":
-		parts = append(parts, "版式目标：竖版 5 格条漫节奏——第 1 行两格并排、第 2 行一条全宽横条大格、第 3 行两格并排；分镜顺序与信息递进应符合该阅读流（各格仍是独立插图，构图留出条漫呼吸感）。")
-	}
-	switch strings.TrimSpace(req.GutterStyle) {
-	case "white_thin":
-		parts = append(parts, "格间留白：想象细白 gutter 的现代条漫分隔。")
-	case "black_thin":
-		parts = append(parts, "格间描边：想象细黑线分隔的经典漫画 gutter。")
-	}
 	switch strings.TrimSpace(req.DialogueMode) {
 	case "none":
 		parts = append(parts, "本任务：各格画面不要出现对白气泡或旁白框。")
@@ -48,10 +39,20 @@ func fragmentPanelPlanLayoutAddon(req domain.FragmentPanelGenerationRequest) str
 	case "from_user_input":
 		parts = append(parts, "对白尽量来自用户文字；caption 使用自然中文并与气泡一致。")
 	}
-	if o := strings.TrimSpace(req.OutputMode); o != "" {
-		parts = append(parts, fmt.Sprintf("输出策略（供规划理解）：%s。", o))
-	}
 	return strings.Join(parts, "\n")
+}
+
+func panelPlanLayoutWithVisualEvidence(layoutAddon string, evidence []domain.FragmentVisualEvidence) string {
+	if len(evidence) == 0 {
+		return layoutAddon
+	}
+	b, err := json.Marshal(evidence)
+	if err != nil {
+		return layoutAddon
+	}
+	parts := []string{strings.TrimSpace(layoutAddon)}
+	parts = append(parts, "参考图多模态视觉事实 JSON：\n"+string(b)+"\n分镜规划必须优先沿用这些可见事实；若创作补充未在图片中出现，不得写入 visualBible 的 immutableTraits。")
+	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
 // buildFragmentPanelPlanUserPrompt 分镜规划主提示词：与 fragment_generation_service.expandScenes 方法论同构，输出仍为 panels[].image_prompt + caption JSON。
@@ -65,7 +66,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 	narr := panelPlanNarrativeRhythm(panelCount)
 	minWords := 70
 	if panelCount >= 5 {
-		// 5 格（含竖版条漫版式）单行 image_prompt 更长，压低下限以减少输出被截断、panels 数量不足。
+		// 多格输出 JSON 体量更大，压低单格下限以减少输出被截断、panels 数量不足。
 		minWords = 52
 	}
 
@@ -119,30 +120,39 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - 相邻两格不得使用相同「景别+角度」组合；理想情况是连续三格内不重复。
 - 景别与角度工具：特写/近景/中景/全景/远景、平视/俯拍/仰拍/Dutch angle/鸟瞰/虫视角等；可从非人类视角制造惊喜。
 
-【四、光影与色彩】
+【四、自动布局决策（每格必须独立判断）】
+- 每一格仍是「一次文生图得到的一张图」，但图片内部可以是：(A) 单一连续场景；或 (B) 多个区域/子格（条漫式分区、上下分镜、左右对照、2×2 等），用留白、粗线或清晰边界分隔，并交待阅读顺序。按剧情选 A 或 B，不要为每格机械重复同一种版式。
+- 每格必须输出 layout_intent、composition_plan、shot_type、visual_hierarchy。
+- layout_intent 使用简短英文 snake_case，例如：single_subject_focus、split_foreground_background、wide_establishing、diagonal_motion、symmetrical_faceoff、detail_insert、layered_depth、negative_space_tension、intra_image_multi_panel、stacked_vertical_zones、split_screen_two_beat、grid_four_beat。
+- composition_plan 用中文或英文自然语言写清「区域怎么分、每块放什么」：若多区域，说明上下/左右/网格位置、每区主体与动作、gutter/间距、阅读顺序；若单场景，说明主体位置、前中后景、留白、引导线、视觉重心。
+- visual_hierarchy 说明主视觉、次视觉、背景信息的优先级，避免所有元素平均铺开。
+- shot_type 使用英文短语，例如 close_up、medium_shot、wide_shot、overhead、low_angle、dutch_angle、detail_insert；多区域时可用 wide_shot 概括整图或注明 per-zone。
+- 布局必须服务该格剧情功能（例如铺垫+反转可在一张图内用上下两区完成）。
+
+【五、光影与色彩】
 - 格间可改变光型以配合情绪，但要可解释；色温与饱和度变化应服务于叙事走向。
 
-【五、caption 写法】
+【六、caption 写法】
 - 每格 caption 为一句简洁中文，让读者一眼明白这一格在故事中的画面感（谁在做什么、何种氛围），不要写成剧情提纲或章回标题。
 
-【六、image_prompt 写法（英文，给文生图/参考生图模型）】
+【七、image_prompt 写法（英文，给文生图/参考生图模型）】
 - 必须按以下 8 层依次写成一个连贯英文段落，层与层之间用句号分隔；至少 %d 个英文单词，覆盖全部 8 层，禁止空泛词。
   (1) artStyle — 具体技法混合，勿只写 "anime" / "illustration"。
   (2) subject — 谁/什么在画中，外貌、姿态、表情、手持物。
   (3) environment — 完整空间与层次。
-  (4) composition — 景别+角度+重心+引导线。
+  (4) composition — 景别+角度+重心+引导线；若为单图多区域，则说明分区方式、各区内容与阅读顺序。
   (5) lighting — 光源方向、类型、色温、阴影与高光。
   (6) colorPalette — 主色、点缀、对比、分布。
   (7) mood — 复合情绪，勿单一形容词。
   (8) extra details — 微粒、反光、景深、材质、天气等提升质感的细节。
 
-【七、视觉圣经 visualBible（与普通故事碎片 Step1 JSON 字段名一致，必须输出）】
+【八、视觉圣经 visualBible（与普通故事碎片 Step1 JSON 字段名一致，必须输出）】
 - visualBible 与 panels、参考图、用户文字必须自洽；immutableTraits 使用与用户文字相同的自然语言（中文或英文，与用户输入一致）。
 - characters 最多 3 项，props 最多 5 项，locations 1–2 项；每项必须有全局唯一 key（小写英文+下划线，如 char_main、prop_bag、loc_cafe）。
 - immutableTraits 为字符串数组：每条描述一个不可随意更改的视觉事实。
 - styleBible.artStyle 必须用英文写出可执行的总体画法（媒介、线稿/渲染、时代感），供各格 image_prompt 的 artStyle 层对齐；其他 styleBible 字段可选。
 
-【八、reference_keys（每格）】
+【九、reference_keys（每格）】
 - 每一格必须包含 reference_keys：1–5 个字符串，且必须来自 visualBible 中已声明的 key；若无任何资产 key 可引用（极少见）则该格 reference_keys 为 []。
 - 禁止自造不在 visualBible 中出现的 key。
 
@@ -150,12 +160,14 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 输出格式（仅此 JSON，不要 markdown 围栏、不要前后解释）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min %d words","caption":"一句中文","reference_keys":["char_main"]}, ...]}
+{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min %d words","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"wide_establishing","composition_plan":"主体在左下三分之一，远处环境占据右上区域，前景物形成遮挡和纵深。","shot_type":"wide_shot","visual_hierarchy":"主视觉：角色轮廓；次视觉：关键道具；背景：地点氛围"},{"index":1,"image_prompt":"...","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"stacked_vertical_zones","composition_plan":"单图垂直分为上下两区：上区特写手部与钥匙；下区中景同一角色推门，中区 gutter 隔开，先读上再读下。","shot_type":"wide_shot","visual_hierarchy":"上区手部第一；下区全身动作第二"}, ...]}
 
 硬性规则：
 - visualBible 必须存在且包含 styleBible.artStyle；characters、props、locations 可为空数组但键必须存在。
 - "panels" 数组恰好 %d 项，index 依次为 0 到 %d。
 - image_prompt：仅英文；每格至少 %d 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
+- layout_intent、composition_plan、shot_type、visual_hierarchy 必须存在且服务当前格剧情，不得所有格重复。
+- 若某一格采用单图内多区域/子格，composition_plan 与 image_prompt 的 composition 层须一致写出分区、gutter、阅读顺序。
 - caption：仅中文，每格一行，无 # 号、无 markdown。
 - 相邻两格 image_prompt 中的 composition（景别+角度）必须明显不同。
 - 不要输出 JSON 之外的任何字符。`,

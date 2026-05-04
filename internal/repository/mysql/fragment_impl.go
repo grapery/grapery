@@ -224,6 +224,8 @@ func fragmentDBToDomainInternal(f FragmentDB) domain.Fragment {
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
 		IsDraft:            f.IsDraft,
+		GenerationTaskID:   f.GenerationTaskID,
+		GenerationMetadata: f.GenerationMetadata,
 		// 兼容字段
 		CreatorID: f.UserID,
 		ImageUrls: f.ImageUrls,
@@ -285,6 +287,8 @@ func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
 		ConvertedToStoryID: f.ConvertedToStoryID,
 		IsConverted:        f.IsConverted,
 		IsDraft:            f.IsDraft,
+		GenerationTaskID:   f.GenerationTaskID,
+		GenerationMetadata: f.GenerationMetadata,
 		Likes:              f.Likes,
 		Comments:           f.Comments,
 		Shares:             f.Shares,

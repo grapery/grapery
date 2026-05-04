@@ -874,28 +874,31 @@ func (s *AIService) parseFragmentTextInput(aiTask *domain.AITask) (prompt string
 
 // fragmentImagePayload 碎片配图生成输入（prompt + 可选 aspectRatio + 可选多参考图）。
 type fragmentImagePayload struct {
-	Prompt          string   `json:"prompt"`
-	AspectRatio     string   `json:"aspectRatio,omitempty"`
-	ReferenceImages []string `json:"referenceImages,omitempty"`
+	Prompt          string                 `json:"prompt"`
+	AspectRatio     string                 `json:"aspectRatio,omitempty"`
+	ReferenceImages []string               `json:"referenceImages,omitempty"`
+	Seed            int                    `json:"seed,omitempty"`
+	Options         map[string]interface{} `json:"options,omitempty"`
+	GuidanceScale   float64                `json:"guidanceScale,omitempty"`
 }
 
-func parseFragmentImageInput(aiTask *domain.AITask) (prompt string, aspectRatio string, referenceImages []string, err error) {
+func parseFragmentImageInput(aiTask *domain.AITask) (prompt string, aspectRatio string, referenceImages []string, seed int, options map[string]interface{}, guidanceScale float64, err error) {
 	if aiTask == nil {
-		return "", "", nil, fmt.Errorf("ai task is nil")
+		return "", "", nil, 0, nil, 0, fmt.Errorf("ai task is nil")
 	}
 	raw := strings.TrimSpace(aiTask.Input)
 	if raw == "" {
-		return "", "", nil, fmt.Errorf("empty input")
+		return "", "", nil, 0, nil, 0, fmt.Errorf("empty input")
 	}
 	var p fragmentImagePayload
 	if json.Unmarshal([]byte(raw), &p) == nil && strings.TrimSpace(p.Prompt) != "" {
-		return strings.TrimSpace(p.Prompt), strings.TrimSpace(p.AspectRatio), fragmentPrefillHTTPImageURLs(p.ReferenceImages, 12), nil
+		return strings.TrimSpace(p.Prompt), strings.TrimSpace(p.AspectRatio), fragmentPrefillHTTPImageURLs(p.ReferenceImages, 12), p.Seed, p.Options, p.GuidanceScale, nil
 	}
 	var single string
 	if json.Unmarshal([]byte(raw), &single) == nil {
-		return strings.TrimSpace(single), "", nil, nil
+		return strings.TrimSpace(single), "", nil, 0, nil, 0, nil
 	}
-	return raw, "", nil, nil
+	return raw, "", nil, 0, nil, 0, nil
 }
 
 func parseFragmentMultimodalStoryJSON(raw string) (content string, inferredAspect string, err error) {
@@ -976,48 +979,170 @@ func (s *AIService) generateFragmentStoryMultimodal(ctx context.Context, prompt 
 
 // generateFragmentExtractionMultimodalRaw 多模态提取：返回完整 JSON 文本（含 visualBible），不裁剪为 content-only。
 func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string) (string, int, error) {
-	hc := s.genAPI.HuoshanInternalClient()
-	if hc != nil {
-		resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
-			Prompt:       prompt,
-			ImageURLs:    imageURLs,
-			MaxTokens:    4096,
-			Temperature:  0.55,
-			JSONResponse: true,
-		})
-		if err == nil && resp != nil && strings.TrimSpace(resp.Text) != "" {
-			tok := resp.TotalTokens
-			if tok == 0 {
-				tok = resp.InputTokens + resp.OutputTokens
-			}
-			return strings.TrimSpace(resp.Text), tok, nil
-		}
-		if err != nil {
-			s.logger.Warn("fragment extraction multimodal: huoshan failed", zap.Error(err))
-		}
-	}
-	if s.geminiClient == nil {
-		if hc == nil {
-			return "", 0, fmt.Errorf("no multimodal provider: configure HUOSHAN_API_KEY or GEMINI_API_KEY")
-		}
-		return "", 0, fmt.Errorf("huoshan extraction multimodal failed and gemini is not configured")
-	}
-	s.logger.Warn("fragment extraction: falling back to gemini text-only (reference images not used for structured JSON)")
-	temp := float32(0.55)
-	maxTok := int32(4096)
-	cfg := &genai.GenerateContentConfig{
-		Temperature:     &temp,
-		MaxOutputTokens: maxTok,
-	}
-	text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+	resp, err := s.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
+		Prompt:      prompt,
+		ImageURLs:   imageURLs,
+		MaxTokens:   4096,
+		Temperature: 0.55,
+		Step:        "fragment_extraction",
+	})
 	if err != nil {
-		return "", 0, fmt.Errorf("gemini extraction fallback: %w", err)
+		return "", 0, err
 	}
-	tokensUsed := 0
-	if gemResp != nil && gemResp.UsageMetadata != nil {
-		tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
+	return resp.Raw, resp.TokensUsed, nil
+}
+
+// FragmentVisionJSONRequest describes a multimodal JSON helper call used by fragment generation.
+type FragmentVisionJSONRequest struct {
+	Prompt            string
+	ImageURLs         []string
+	ProviderHint      string
+	MaxTokens         int32
+	Temperature       float32
+	RelatedEntityID   string
+	RelatedEntityType string
+	Step              string
+}
+
+type FragmentVisionJSONResult struct {
+	Raw        string
+	TokensUsed int
+	DurationMs int64
+	Provider   string
+	Model      string
+}
+
+// GenerateFragmentVisionJSON runs a JSON-mode multimodal analysis/audit with Huoshan or Gemini.
+func (s *AIService) GenerateFragmentVisionJSON(ctx context.Context, req *FragmentVisionJSONRequest) (*FragmentVisionJSONResult, error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return nil, admErr
 	}
-	return strings.TrimSpace(text), tokensUsed, nil
+	if rel != nil {
+		defer rel()
+	}
+	if req == nil || strings.TrimSpace(req.Prompt) == "" {
+		return nil, fmt.Errorf("empty vision prompt")
+	}
+	imageURLs := fragmentPrefillHTTPImageURLs(req.ImageURLs, 12)
+	if len(imageURLs) == 0 {
+		return nil, fmt.Errorf("vision JSON requires at least one image URL")
+	}
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	temp := req.Temperature
+	if temp == 0 {
+		temp = 0.35
+	}
+	providers := fragmentVisionProviderOrder(req.ProviderHint)
+	var lastErr error
+	for _, p := range providers {
+		start := time.Now()
+		switch p {
+		case "huoshan":
+			raw, tokens, model, err := s.generateFragmentVisionJSONHuoshan(ctx, req.Prompt, imageURLs, maxTokens, temp)
+			if err == nil && strings.TrimSpace(raw) != "" {
+				return &FragmentVisionJSONResult{Raw: strings.TrimSpace(raw), TokensUsed: tokens, DurationMs: time.Since(start).Milliseconds(), Provider: "huoshan", Model: model}, nil
+			}
+			if err != nil {
+				lastErr = err
+				s.logger.Warn("fragment vision JSON: huoshan failed", zap.String("step", req.Step), zap.Error(err))
+			}
+		case "gemini":
+			raw, tokens, model, err := s.generateFragmentVisionJSONGemini(ctx, req.Prompt, imageURLs, maxTokens, temp)
+			if err == nil && strings.TrimSpace(raw) != "" {
+				return &FragmentVisionJSONResult{Raw: strings.TrimSpace(raw), TokensUsed: tokens, DurationMs: time.Since(start).Milliseconds(), Provider: "gemini", Model: model}, nil
+			}
+			if err != nil {
+				lastErr = err
+				s.logger.Warn("fragment vision JSON: gemini failed", zap.String("step", req.Step), zap.Error(err))
+			}
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("no multimodal provider available")
+}
+
+func fragmentVisionProviderOrder(hint string) []string {
+	switch strings.ToLower(strings.TrimSpace(hint)) {
+	case "gemini":
+		return []string{"gemini", "huoshan"}
+	case "huoshan":
+		return []string{"huoshan", "gemini"}
+	default:
+		return []string{"huoshan", "gemini"}
+	}
+}
+
+func (s *AIService) generateFragmentVisionJSONHuoshan(ctx context.Context, prompt string, imageURLs []string, maxTokens int32, temp float32) (string, int, string, error) {
+	if s.genAPI == nil || s.genAPI.HuoshanInternalClient() == nil {
+		return "", 0, "", fmt.Errorf("huoshan client not available")
+	}
+	resp, err := s.genAPI.HuoshanInternalClient().GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+		Prompt:       prompt,
+		ImageURLs:    imageURLs,
+		MaxTokens:    int(maxTokens),
+		Temperature:  temp,
+		JSONResponse: true,
+	})
+	if err != nil {
+		return "", 0, "", err
+	}
+	if resp == nil || strings.TrimSpace(resp.Text) == "" {
+		return "", 0, "", fmt.Errorf("huoshan returned empty vision response")
+	}
+	tok := resp.TotalTokens
+	if tok == 0 {
+		tok = resp.InputTokens + resp.OutputTokens
+	}
+	model := strings.TrimSpace(resp.Model)
+	if model == "" {
+		model = "huoshan-ark"
+	}
+	return strings.TrimSpace(resp.Text), tok, model, nil
+}
+
+func (s *AIService) generateFragmentVisionJSONGemini(ctx context.Context, prompt string, imageURLs []string, maxTokens int32, temp float32) (string, int, string, error) {
+	if s.geminiClient == nil {
+		return "", 0, "", fmt.Errorf("gemini client not configured")
+	}
+	parts := make([]*genai.Part, 0, len(imageURLs)+1)
+	parts = append(parts, genai.NewPartFromText(prompt))
+	for _, u := range imageURLs {
+		data, mime, err := downloadImageFromURL(ctx, u)
+		if err != nil {
+			return "", 0, "", fmt.Errorf("download image for gemini vision: %w", err)
+		}
+		part, err := encodeImagePart(data, mime)
+		if err != nil {
+			return "", 0, "", fmt.Errorf("encode image for gemini vision: %w", err)
+		}
+		parts = append(parts, part)
+	}
+	contents := []*genai.Content{{Role: genai.RoleUser, Parts: parts}}
+	cfg := &genai.GenerateContentConfig{
+		Temperature:      &temp,
+		MaxOutputTokens:  maxTokens,
+		ResponseMIMEType: "application/json",
+	}
+	const model = "gemini-2.5-flash"
+	resp, err := s.geminiClient.SDK().Models.GenerateContent(ctx, model, contents, cfg)
+	if err != nil {
+		return "", 0, "", err
+	}
+	text := strings.TrimSpace(resp.Text())
+	if text == "" {
+		return "", 0, "", fmt.Errorf("gemini returned empty vision response")
+	}
+	tokens := 0
+	if resp != nil && resp.UsageMetadata != nil {
+		tokens = int(resp.UsageMetadata.TotalTokenCount)
+	}
+	return text, tokens, model, nil
 }
 
 func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, prompt string) (string, int, error) {
@@ -1342,7 +1467,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 		return "", 0, fmt.Errorf("AI generation service not configured")
 	}
 
-	prompt, aspectIn, refImgs, err := parseFragmentImageInput(aiTask)
+	prompt, aspectIn, refImgs, seed, options, guidanceScale, err := parseFragmentImageInput(aiTask)
 	if err != nil {
 		return "", 0, err
 	}
@@ -1380,9 +1505,13 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 		OutputCount:       1,
 		RelatedEntityID:   relatedID,
 		RelatedEntityType: relatedType,
+		Seed:              seed,
+		Options:           options,
+		GuidanceScale:     guidanceScale,
 		Metadata: map[string]interface{}{
 			"source":      "fragment_generation_image",
 			"aspectRatio": ar,
+			"seed":        seed,
 		},
 	}
 	switch provider {

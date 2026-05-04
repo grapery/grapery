@@ -1001,6 +1001,15 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		Required: false,
 	})
 
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_fragment_generation_trace_schema",
+		Description: "Ensure fragments and fragment_generation_tasks can store generation trace metadata",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{}, &FragmentGenerationTaskDB{})
+		},
+		Required: false,
+	})
+
 	// ========== Migration 009: Add user points and referral system (StoryCreationAppUI) ==========
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_user_points_referral_columns",

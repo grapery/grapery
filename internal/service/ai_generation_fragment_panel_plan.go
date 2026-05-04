@@ -33,6 +33,8 @@ type GenerateFragmentPanelPlanRequest struct {
 	PlanProvider string
 	// LayoutAddon 由 FragmentPanelGenerationService 从版式/对白选项生成，并入分镜规划提示。
 	LayoutAddon string
+	// VisualEvidence 是入口多模态视觉事实分析结果，用于避免分镜阶段重新臆测参考图。
+	VisualEvidence []domain.FragmentVisualEvidence
 }
 
 // GenerateFragmentPanelPlanResult Step1 output + usage.
@@ -170,7 +172,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 		return nil, fmt.Errorf("encode reference image: %w", err)
 	}
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, req.LayoutAddon)
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
 	contents := []*genai.Content{{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{
@@ -339,7 +341,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, req.LayoutAddon)
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
 	maxHuoshanTok := 8192
 	if req.PanelCount >= 5 {
 		maxHuoshanTok = 16384
@@ -467,6 +469,18 @@ func normalizeFragmentPanelPlan(raw []domain.FragmentPanelPlanItem, want int) ([
 			return nil, fmt.Errorf("panel %d has empty image_prompt", i)
 		}
 		p.Index = i
+		if strings.TrimSpace(p.LayoutIntent) == "" {
+			p.LayoutIntent = "single_image_story_composition"
+		}
+		if strings.TrimSpace(p.CompositionPlan) == "" {
+			p.CompositionPlan = "Lay out this panel beat in one generated image—either one continuous scene or, when clearer storytelling, multiple clearly separated intra-image zones/sub-panels (gutters, reading order). Describe foreground, subject, background or each zone distinctly."
+		}
+		if strings.TrimSpace(p.ShotType) == "" {
+			p.ShotType = "medium_shot"
+		}
+		if strings.TrimSpace(p.VisualHierarchy) == "" {
+			p.VisualHierarchy = "Primary subject first, key story prop or action second, environment mood third."
+		}
 		out[i] = p
 	}
 	return out, nil

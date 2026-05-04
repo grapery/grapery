@@ -33,7 +33,7 @@ const (
 	FragmentVisibilityFollowers = "followers"
 	// FragmentVisibilityFollowersLegacy 保留兼容旧数据/旧客户端
 	FragmentVisibilityFollowersLegacy = "followers_only"
-	FragmentVisibilityPrivate   = "private"
+	FragmentVisibilityPrivate         = "private"
 )
 
 // Fragment represents a fragment story - short, complete stories shared by users
@@ -53,14 +53,16 @@ type Fragment struct {
 	common.EngagementStats
 
 	// MARK: - StoryCreationAppUI Alignment Fields
-	Saves      int    `json:"saves"`                // 收藏/保存数
-	Topic      string `json:"topic,omitempty"`      // 话题标签
-	Caption    string `json:"caption,omitempty"`    // 标题/简介文字
-	IsDraft    bool   `json:"isDraft" gorm:"column:is_draft;type:tinyint(1);default:0;index"`       // 是否为草稿 (StoryCreationAppUI alignment)
-	DraftCount int    `json:"draftCount" gorm:"column:draft_count;type:int;default:0"`             // 草稿数量 (StoryCreationAppUI alignment)
+	Saves      int    `json:"saves"`                                                          // 收藏/保存数
+	Topic      string `json:"topic,omitempty"`                                                // 话题标签
+	Caption    string `json:"caption,omitempty"`                                              // 标题/简介文字
+	IsDraft    bool   `json:"isDraft" gorm:"column:is_draft;type:tinyint(1);default:0;index"` // 是否为草稿 (StoryCreationAppUI alignment)
+	DraftCount int    `json:"draftCount" gorm:"column:draft_count;type:int;default:0"`        // 草稿数量 (StoryCreationAppUI alignment)
 
 	ConvertedToStoryID *string `json:"convertedToStoryId,omitempty" gorm:"column:converted_to_story_id;type:varchar(36);index"` // 转换为的故事ID
 	IsConverted        bool    `json:"isConverted" gorm:"column:is_converted;type:tinyint(1);default:0;index"`                  // 是否已转换为故事
+	GenerationTaskID   string  `json:"generationTaskId,omitempty" gorm:"column:generation_task_id;type:varchar(36);index"`      // 来源生成任务 ID
+	GenerationMetadata string  `json:"generationMetadata,omitempty" gorm:"column:generation_metadata;type:longtext"`            // 生成 trace/策略等元数据 JSON
 
 	// 向后兼容字段（内部使用）
 	CreatorID     string    `json:"-" gorm:"column:creator_id;type:varchar(36);not null;index"`              // 兼容旧代码 - 不在 JSON 中暴露
@@ -101,11 +103,11 @@ func (f *Fragment) MarshalJSON() ([]byte, error) {
 		CreatorAvatar string   `json:"creatorAvatar,omitempty"`
 		ImageUrls     []string `json:"imageUrls"`
 	}{
-		fragmentAlias:  (*fragmentAlias)(f),
-		CreatorID:      f.UserID,
-		CreatorName:    creatorName,
-		CreatorAvatar:  creatorAvatar,
-		ImageUrls:      imageUrls,
+		fragmentAlias: (*fragmentAlias)(f),
+		CreatorID:     f.UserID,
+		CreatorName:   creatorName,
+		CreatorAvatar: creatorAvatar,
+		ImageUrls:     imageUrls,
 	})
 }
 
@@ -171,7 +173,7 @@ type ConvertFragmentRequest struct {
 // ConvertFragmentResponse 碎片转故事响应
 // 故事板由用户在故事内自行创建；转换接口仅创建 Story，不再自动创建根故事板。
 type ConvertFragmentResponse struct {
-	Story      *Story      `json:"story"`                 // 创建的故事
+	Story      *Story      `json:"story"`                // 创建的故事
 	Storyboard *Storyboard `json:"storyboard,omitempty"` // 已废弃：始终为空，保留字段仅兼容旧客户端
 	FragmentID string      `json:"fragmentId"`           // 原碎片ID
 }
