@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -25,6 +26,13 @@ type ConvertFragmentToStoryResponse struct {
 	FragmentID string             `json:"fragmentId"`
 }
 
+// GetFragmentAssetsRequest query for fragment image assets.
+type GetFragmentAssetsRequest struct {
+	Kind       string `form:"kind"`
+	EntityKind string `form:"entityKind"`
+	EntityKey  string `form:"entityKey"`
+}
+
 // ConvertFragmentToStory 碎片转故事
 // POST /api/fragments/:id/convert-to-story
 func (h *Handler) ConvertFragmentToStory(c *gin.Context) {
@@ -39,7 +47,6 @@ func (h *Handler) ConvertFragmentToStory(c *gin.Context) {
 	if !BindJSON(c, &req) {
 		return
 	}
-
 	// 验证场景数量
 	if req.SceneCount < 2 || req.SceneCount > 8 {
 		req.SceneCount = 3
@@ -69,7 +76,6 @@ func (h *Handler) ExpandFragmentStoryPrefillAI(c *gin.Context) {
 
 	var req domain.FragmentStoryPrefillAIRequest
 	_ = c.ShouldBindJSON(&req) // 允许空 body
-
 	if req.SceneCount < 2 || req.SceneCount > 8 {
 		req.SceneCount = 3
 	}
@@ -85,4 +91,33 @@ func (h *Handler) ExpandFragmentStoryPrefillAI(c *gin.Context) {
 	}
 
 	Success(c, resp)
+}
+
+// GetFragmentGenerationAssets 查询碎片生成图片资产（含一致性辅助图）。
+// GET /api/v1/fragments/:id/assets
+func (h *Handler) GetFragmentGenerationAssets(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	fragmentID := c.Param("id")
+	if fragmentID == "" {
+		InvalidParams(c, "fragment id is required")
+		return
+	}
+	var req GetFragmentAssetsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		InvalidParams(c, "invalid query")
+		return
+	}
+	items, err := h.svc.ListFragmentGenerationAssets(c.Request.Context(), userID, fragmentID, service.FragmentAssetQuery{
+		Kind:       req.Kind,
+		EntityKind: req.EntityKind,
+		EntityKey:  req.EntityKey,
+	})
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"fragmentId": fragmentID, "items": items})
 }

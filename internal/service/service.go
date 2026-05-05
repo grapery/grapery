@@ -26,8 +26,14 @@ type Service struct {
 	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
 	userStatsService *UserStatisticsService // 用户统计服务
 	recoCfg          config.RecommendationConfig
-	comicStyleSvc       *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
-	aiTextAdmission *AITextAdmissionGate        // optional: global outbound LLM text concurrency (Redis)
+	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
+	aiTextAdmission  *AITextAdmissionGate       // optional: global outbound LLM text concurrency (Redis)
+}
+
+type FragmentAssetQuery struct {
+	Kind       string
+	EntityKind string
+	EntityKey  string
 }
 
 // New creates a new service instance

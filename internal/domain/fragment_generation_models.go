@@ -144,6 +144,14 @@ type FragmentAnchorImage struct {
 	ImageURL string `json:"imageUrl"`
 }
 
+// FragmentComicText 描述单格漫画文字层，供图片 prompt 与客户端精确叠字复用。
+type FragmentComicText struct {
+	Type     string `json:"type"` // narration | dialogue | thought | sfx
+	Text     string `json:"text"`
+	Speaker  string `json:"speaker,omitempty"`
+	Position string `json:"position,omitempty"`
+}
+
 // FragmentReferenceAsset 是按策略生成或复用的实体参考资产。
 type FragmentReferenceAsset struct {
 	Key               string `json:"key"`
@@ -175,6 +183,7 @@ type FragmentScenePlan struct {
 	FinalImagePrompt  string                  `json:"finalImagePrompt,omitempty"`
 	ReferenceKeys     []string                `json:"referenceKeys,omitempty"`
 	EntityBindings    []FragmentEntityBinding `json:"entityBindings,omitempty"`
+	ComicTexts        []FragmentComicText     `json:"comicTexts,omitempty"`
 	Seed              int                     `json:"seed,omitempty"`
 	ProviderOptions   map[string]interface{}  `json:"providerOptions,omitempty"`
 	GeneratedImageURL string                  `json:"generatedImageUrl,omitempty"`

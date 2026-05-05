@@ -290,7 +290,7 @@ func main() {
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
 	fragmentRepo := repository.NewFragmentRepository(repo.DB(), cfg.Recommendation, redisCache, logger)
-	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, aiSvc, logger)
+	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, repo, aiSvc, logger)
 	fragmentGenService.SetNotify(svc)
 	logger.Info("fragment generation service initialized")
 
@@ -528,7 +528,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 
 	aiReqSec := cfg.AI.RequestTimeoutSeconds
 	if aiReqSec <= 0 {
-		aiReqSec = 120
+		aiReqSec = 180
 	}
 	aiHTTPTimeout := time.Duration(aiReqSec) * time.Second
 	logger.Info("AI outbound HTTP client timeout",

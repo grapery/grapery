@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -29,7 +31,6 @@ type CreateCharacterRequest struct {
 	AbilityFeatures string   `json:"abilityFeatures" binding:"max=1000"`
 	Appearance      string   `json:"appearance" binding:"max=1000"`
 	DressPreference string   `json:"dressPreference" binding:"max=1000"`
-	Role            string   `json:"role" binding:"omitempty,max=100"` // 故事内定位，与 characters.role、编辑器一致
 	StoryID         string   `json:"storyId" binding:"required"`
 	IsPublic        bool     `json:"isPublic"`
 	SourceType      string   `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
@@ -57,7 +58,6 @@ type UpdateCharacterRequest struct {
 	AbilityFeatures *string `json:"abilityFeatures" binding:"omitempty,max=1000"`
 	Appearance      *string `json:"appearance" binding:"omitempty,max=1000"`
 	DressPreference *string `json:"dressPreference" binding:"omitempty,max=1000"`
-	Role            *string `json:"role" binding:"omitempty,max=100"`
 	IsPublic        *bool   `json:"isPublic"`
 	SourceType      *string `json:"sourceType" binding:"omitempty,oneof=manual upload ai"`
 	SourcePrompt    *string `json:"sourcePrompt"`
@@ -96,7 +96,8 @@ type GenerateCharacterPortraitResult struct {
 
 // GenerateCharacterThreeViewsRequest 生成单张三视图合一参考图（正·侧·背横向排列）
 type GenerateCharacterThreeViewsRequest struct {
-	RegenerateAll bool `json:"regenerateAll"` // true：清空并重绘 sheet；false：若已有 sheet（或旧版三张分图齐全）则跳过
+	RegenerateAll  bool   `json:"regenerateAll"`  // true：清空并重绘 sheet；false：若已有 sheet 则跳过
+	ReferenceImage string `json:"referenceImage"` // 可选；优先于角色已存 Portrait 作为参考图（碎片任务等）
 }
 
 // GenerateCharacterThreeViewsResult 三视图结果（views.sheet 为单图 URL）
@@ -110,10 +111,15 @@ type CharacterGenerationTaskRequest struct {
 	Name                       string                              `json:"name,omitempty"`
 	Prompt                     string                              `json:"prompt,omitempty"`
 	Description                string                              `json:"description,omitempty"`
-	Role                       string                              `json:"role,omitempty"`
 	Background                 string                              `json:"background,omitempty"`
 	Personality                string                              `json:"personality,omitempty"`
 	Appearance                 string                              `json:"appearance,omitempty"`
+	ShortTermGoal              string                              `json:"shortTermGoal,omitempty"`
+	LongTermGoal               string                              `json:"longTermGoal,omitempty"`
+	HandlingStyle              string                              `json:"handlingStyle,omitempty"`
+	CognitionRange             string                              `json:"cognitionRange,omitempty"`
+	AbilityFeatures            string                              `json:"abilityFeatures,omitempty"`
+	DressPreference            string                              `json:"dressPreference,omitempty"`
 	ReferenceImage             string                              `json:"referenceImage,omitempty"`
 	SourceFragmentID           string                              `json:"sourceFragmentId,omitempty"`
 	SourceFragmentCharacterKey string                              `json:"sourceFragmentCharacterKey,omitempty"`
@@ -139,10 +145,8 @@ type GeneratedCharacterAttributes struct {
 	AbilityFeatures string `json:"abilityFeatures"`
 	Appearance      string `json:"appearance"`
 	DressPreference string `json:"dressPreference"`
-	Role            string `json:"role"`
 }
 
-// CharacterListRequest 角色列表请求
 type CharacterListRequest struct {
 	UserID  string `form:"authorId"`
 	StoryID string `form:"storyId"`
@@ -229,7 +233,7 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		AbilityFeatures:            req.AbilityFeatures,
 		Appearance:                 req.Appearance,
 		DressPreference:            req.DressPreference,
-		Role:                       req.Role,
+		Role:                       "",
 		IsPublic:                   req.IsPublic,
 		SourceType:                 sourceType,
 		SourcePrompt:               req.SourcePrompt,
@@ -324,7 +328,10 @@ func (s *Service) PreviewFragmentCharactersForStory(ctx context.Context, userID,
 	if err != nil || fragment == nil {
 		return nil, errors.New("fragment not found")
 	}
-	suggestions := s.fragmentCharacterSuggestionsFromContent(fragment)
+	suggestions := s.fragmentCharacterSuggestionsFromAssets(ctx, fragment)
+	if len(suggestions) == 0 {
+		suggestions = s.fragmentCharacterSuggestionsFromContent(fragment)
+	}
 	for i := range suggestions {
 		if existing, err := s.repo.LatestCharacterGenerationTaskByFragmentKey(ctx, storyID, fragmentID, suggestions[i].Key); err == nil && existing != nil {
 			if existing.CharacterID != "" {
@@ -343,6 +350,48 @@ func (s *Service) PreviewFragmentCharactersForStory(ctx context.Context, userID,
 		Suggestions:  suggestions,
 		ExistingTask: existingTask,
 	}, nil
+}
+
+// validateCharacterGenerationTaskRequest requires a usable name plus at least one narrative / goals-tab field, or non-empty merged prompt (fragment / manual_form).
+func validateCharacterGenerationTaskRequest(req CharacterGenerationTaskRequest) error {
+	effectiveName := strings.TrimSpace(req.Name)
+	if req.Suggestion != nil {
+		if sn := strings.TrimSpace(req.Suggestion.Name); sn != "" && (effectiveName == "" || legacyFragmentPlaceholderCharacterName(effectiveName)) {
+			effectiveName = sn
+		}
+	}
+	if effectiveName == "" || legacyFragmentPlaceholderCharacterName(effectiveName) {
+		return errors.New("character name is required")
+	}
+	desc := strings.TrimSpace(req.Description)
+	pers := strings.TrimSpace(req.Personality)
+	app := strings.TrimSpace(req.Appearance)
+	bg := strings.TrimSpace(req.Background)
+	if req.Suggestion != nil {
+		if desc == "" {
+			desc = strings.TrimSpace(req.Suggestion.Description)
+		}
+		if bg == "" {
+			bg = strings.TrimSpace(req.Suggestion.Background)
+		}
+		if app == "" {
+			app = strings.TrimSpace(req.Suggestion.Appearance)
+		}
+	}
+	stg := strings.TrimSpace(req.ShortTermGoal)
+	ltg := strings.TrimSpace(req.LongTermGoal)
+	hand := strings.TrimSpace(req.HandlingStyle)
+	cog := strings.TrimSpace(req.CognitionRange)
+	abil := strings.TrimSpace(req.AbilityFeatures)
+	dress := strings.TrimSpace(req.DressPreference)
+	prompt := strings.TrimSpace(req.Prompt)
+
+	if desc != "" || pers != "" || app != "" || bg != "" ||
+		stg != "" || ltg != "" || hand != "" || cog != "" || abil != "" || dress != "" ||
+		prompt != "" {
+		return nil
+	}
+	return errors.New("provide story-relevant detail: narrative fields, appearance/goals tab fields, or a combined prompt")
 }
 
 func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID string, req CharacterGenerationTaskRequest) (*domain.CharacterGenerationTask, error) {
@@ -377,6 +426,9 @@ func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID strin
 		}
 		req.SourceFragmentID = fragmentID
 		req.SourceFragmentCharacterKey = key
+	}
+	if err := validateCharacterGenerationTaskRequest(req); err != nil {
+		return nil, err
 	}
 	requestBytes, _ := json.Marshal(req)
 	task := &domain.CharacterGenerationTask{
@@ -443,19 +495,26 @@ func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string)
 		s.logger.Warn("failed to mark character task processing", zap.Error(err))
 	}
 	attrs := GeneratedCharacterAttributes{
-		Description: strings.TrimSpace(req.Description),
-		Personality: strings.TrimSpace(req.Personality),
-		Background:  strings.TrimSpace(req.Background),
-		Appearance:  strings.TrimSpace(req.Appearance),
-		Role:        strings.TrimSpace(req.Role),
+		Description:     strings.TrimSpace(req.Description),
+		Personality:     strings.TrimSpace(req.Personality),
+		Background:      strings.TrimSpace(req.Background),
+		Appearance:      strings.TrimSpace(req.Appearance),
+		ShortTermGoal:   strings.TrimSpace(req.ShortTermGoal),
+		LongTermGoal:    strings.TrimSpace(req.LongTermGoal),
+		HandlingStyle:   strings.TrimSpace(req.HandlingStyle),
+		CognitionRange:  strings.TrimSpace(req.CognitionRange),
+		AbilityFeatures: strings.TrimSpace(req.AbilityFeatures),
+		DressPreference: strings.TrimSpace(req.DressPreference),
 	}
 	name := strings.TrimSpace(req.Name)
 	if req.Suggestion != nil {
-		if name == "" {
-			name = strings.TrimSpace(req.Suggestion.Name)
+		if name == "" || legacyFragmentPlaceholderCharacterName(name) {
+			if sn := strings.TrimSpace(req.Suggestion.Name); sn != "" && !legacyFragmentPlaceholderCharacterName(sn) {
+				name = sn
+			}
 		}
-		if attrs.Role == "" {
-			attrs.Role = strings.TrimSpace(req.Suggestion.Role)
+		if req.ReferenceImage == "" {
+			req.ReferenceImage = firstNonEmpty(req.Suggestion.ReferenceImage, req.Suggestion.ReferenceImageURL)
 		}
 		if attrs.Description == "" {
 			attrs.Description = strings.TrimSpace(req.Suggestion.Description)
@@ -465,6 +524,11 @@ func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string)
 		}
 		if attrs.Appearance == "" {
 			attrs.Appearance = strings.TrimSpace(req.Suggestion.Appearance)
+		}
+	}
+	if name == "" || legacyFragmentPlaceholderCharacterName(name) {
+		if resolved := s.resolveFragmentCharacterSuggestionName(ctx, strings.TrimSpace(task.SourceFragmentID), strings.TrimSpace(task.SourceFragmentCharacterKey)); resolved != "" {
+			name = resolved
 		}
 	}
 	if name == "" {
@@ -494,7 +558,6 @@ func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string)
 		AbilityFeatures: attrs.AbilityFeatures,
 		Appearance:      attrs.Appearance,
 		DressPreference: attrs.DressPreference,
-		Role:            attrs.Role,
 		StoryID:         task.StoryID,
 		IsPublic:        false,
 		SourceType:      "ai",
@@ -522,15 +585,55 @@ func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string)
 		s.failCharacterGenerationTask(ctx, task, err)
 		return
 	}
-	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepPortrait, 55, "")
-	_, portraitErr := s.GenerateCharacterPortrait(ctx, task.UserID, character.ID, GenerateCharacterPortraitRequest{ReferenceImage: strings.TrimSpace(req.ReferenceImage)})
-	if portraitErr != nil {
-		s.logger.Warn("character task portrait generation failed", zap.String("taskID", taskID), zap.Error(portraitErr))
+	refImg := strings.TrimSpace(req.ReferenceImage)
+	if refImg == "" && req.Suggestion != nil {
+		refImg = strings.TrimSpace(firstNonEmpty(req.Suggestion.ReferenceImage, req.Suggestion.ReferenceImageURL))
 	}
+
+	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepPortrait, 55, "")
+	// 有碎片参考图时跳过独立「立绘」生图（省一次出图/token），Portrait 直接使用参考图；三视图仍为单张正侧背合一 sheet。
+	if refImg != "" {
+		character, reloadErr := s.repo.CharacterByID(ctx, character.ID)
+		if reloadErr == nil && character != nil {
+			character.Portrait = refImg
+			character.PortraitGenerationStatus = "generated"
+			character.UpdatedAt = time.Now().Unix()
+			_ = s.repo.UpdateCharacter(ctx, character)
+		}
+	} else {
+		_, portraitErr := s.GenerateCharacterPortrait(ctx, task.UserID, character.ID, GenerateCharacterPortraitRequest{ReferenceImage: ""})
+		if portraitErr != nil {
+			s.logger.Warn("character task portrait generation failed", zap.String("taskID", taskID), zap.Error(portraitErr))
+		}
+	}
+
 	_ = s.updateCharacterGenerationTask(ctx, task, domain.CharacterGenerationStatusProcessing, domain.CharacterGenerationStepThreeViews, 78, "")
-	_, viewsErr := s.GenerateCharacterThreeViews(ctx, task.UserID, character.ID, GenerateCharacterThreeViewsRequest{RegenerateAll: false})
-	if viewsErr != nil {
-		s.logger.Warn("character task three views generation failed", zap.String("taskID", taskID), zap.Error(viewsErr))
+	character, chReloadErr := s.repo.CharacterByID(ctx, task.CharacterID)
+	if chReloadErr != nil || character == nil {
+		s.logger.Warn("character task reload failed before three-views",
+			zap.String("taskID", taskID), zap.Error(chReloadErr))
+		msg := "character reload failed before three-views"
+		if chReloadErr != nil {
+			msg = chReloadErr.Error()
+		}
+		s.failCharacterGenerationTask(ctx, task, errors.New(msg))
+		return
+	}
+	if req.Suggestion != nil && strings.TrimSpace(req.Suggestion.ThreeViewSheetURL) != "" {
+		sheet := strings.TrimSpace(req.Suggestion.ThreeViewSheetURL)
+		character.Views = &domain.CharacterThreeViews{Sheet: sheet, Front: "", Side: "", Back: ""}
+		if err := s.repo.UpdateCharacter(ctx, character); err != nil {
+			s.logger.Warn("character task reuse fragment three-view failed", zap.String("taskID", taskID), zap.Error(err))
+		}
+	} else {
+		tvRef := refImg
+		if strings.TrimSpace(tvRef) == "" {
+			tvRef = strings.TrimSpace(character.Portrait)
+		}
+		_, viewsErr := s.GenerateCharacterThreeViews(ctx, task.UserID, character.ID, GenerateCharacterThreeViewsRequest{RegenerateAll: false, ReferenceImage: tvRef})
+		if viewsErr != nil {
+			s.logger.Warn("character task three views generation failed", zap.String("taskID", taskID), zap.Error(viewsErr))
+		}
 	}
 	result := map[string]string{"characterId": character.ID}
 	resultBytes, _ := json.Marshal(result)
@@ -569,14 +672,10 @@ func (s *Service) fragmentCharacterSuggestionsFromContent(fragment *domain.Fragm
 		return nil
 	}
 	content := strings.TrimSpace(fragment.Content)
-	caption := strings.TrimSpace(fragment.Caption)
-	if content == "" && caption == "" {
+	if content == "" {
 		return nil
 	}
 	name := "碎片主角"
-	if caption != "" {
-		name = truncateRunes(caption, 12)
-	}
 	key := stableCharacterKey(name)
 	ref := ""
 	media := fragment.MediaURLs
@@ -587,13 +686,262 @@ func (s *Service) fragmentCharacterSuggestionsFromContent(fragment *domain.Fragm
 		ref = media[0]
 	}
 	return []domain.FragmentCharacterSuggestion{{
-		Key:            key,
-		Name:           name,
-		Role:           "主角",
-		Description:    truncateRunes(content, 160),
-		Background:     truncateRunes(strings.TrimSpace(caption+"\n"+content), 240),
-		ReferenceImage: ref,
+		Key:               key,
+		Name:              name,
+		Description:       truncateRunes(content, 160),
+		Background:        truncateRunes(content, 240),
+		ReferenceImage:    ref,
+		ReferenceImageURL: ref,
 	}}
+}
+
+func legacyFragmentPlaceholderCharacterName(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "", "碎片角色":
+		return true
+	default:
+		return false
+	}
+}
+
+func parseFragmentGenerationTraceMetadata(raw string) *domain.FragmentGenerationTrace {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var trace domain.FragmentGenerationTrace
+	if err := json.Unmarshal([]byte(raw), &trace); err != nil {
+		return nil
+	}
+	return &trace
+}
+
+func mergeFragmentEvidenceCharacterNames(evs []domain.FragmentVisualEvidence, out map[string]string) {
+	for _, ev := range evs {
+		for _, ent := range ev.Entities {
+			if !strings.EqualFold(strings.TrimSpace(ent.Kind), "character") {
+				continue
+			}
+			k := strings.TrimSpace(ent.Key)
+			n := strings.TrimSpace(ent.Name)
+			if k == "" || n == "" {
+				continue
+			}
+			if prev, ok := out[k]; !ok || strings.TrimSpace(prev) == "" {
+				out[k] = n
+			}
+		}
+	}
+}
+
+func fragmentTraceCharacterDisplayNames(trace *domain.FragmentGenerationTrace) map[string]string {
+	if trace == nil {
+		return nil
+	}
+	out := make(map[string]string)
+	if vb := trace.VisualBible; vb != nil {
+		for _, ch := range vb.Characters {
+			k := strings.TrimSpace(ch.Key)
+			n := strings.TrimSpace(ch.Name)
+			if k == "" || n == "" {
+				continue
+			}
+			out[k] = n
+		}
+		mergeFragmentEvidenceCharacterNames(vb.SourceEvidence, out)
+	}
+	mergeFragmentEvidenceCharacterNames(trace.VisualEvidence, out)
+	return out
+}
+
+func displayNameFromStableCharacterKey(key string) string {
+	k := strings.TrimSpace(key)
+	if k == "" {
+		return ""
+	}
+	k = strings.ReplaceAll(k, "_", "-")
+	parts := strings.Split(k, "-")
+	var b strings.Builder
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		r, size := utf8.DecodeRuneInString(p)
+		if r == utf8.RuneError || size == 0 {
+			b.WriteString(p)
+			continue
+		}
+		if unicode.Is(unicode.Han, r) {
+			b.WriteString(p)
+			continue
+		}
+		if unicode.IsLetter(r) {
+			lowered := strings.ToLower(p)
+			r2, sz2 := utf8.DecodeRuneInString(lowered)
+			b.WriteRune(unicode.ToUpper(r2))
+			b.WriteString(lowered[sz2:])
+		} else {
+			b.WriteString(p)
+		}
+	}
+	return truncateRunes(strings.TrimSpace(b.String()), 32)
+}
+
+func (s *Service) resolveFragmentCharacterSuggestionName(ctx context.Context, fragmentID, characterKey string) string {
+	if s == nil || s.repo == nil {
+		return ""
+	}
+	fragmentID = strings.TrimSpace(fragmentID)
+	characterKey = strings.TrimSpace(characterKey)
+	if fragmentID == "" || characterKey == "" {
+		return ""
+	}
+	frag, err := s.repo.FragmentByID(ctx, fragmentID)
+	if err != nil || frag == nil {
+		return ""
+	}
+	for _, sug := range s.fragmentCharacterSuggestionsFromAssets(ctx, frag) {
+		if strings.TrimSpace(sug.Key) != characterKey {
+			continue
+		}
+		n := strings.TrimSpace(sug.Name)
+		if n != "" && !legacyFragmentPlaceholderCharacterName(n) {
+			return n
+		}
+	}
+	return ""
+}
+
+func (s *Service) fragmentCharacterSuggestionsFromAssets(ctx context.Context, fragment *domain.Fragment) []domain.FragmentCharacterSuggestion {
+	if fragment == nil {
+		return nil
+	}
+	bibleChars := fragmentVisualBibleCharacters(fragment.GenerationMetadata)
+	trace := parseFragmentGenerationTraceMetadata(fragment.GenerationMetadata)
+	displayNames := fragmentTraceCharacterDisplayNames(trace)
+	byKey := make(map[string]*domain.FragmentCharacterSuggestion)
+	var order []string
+	addOrGet := func(key string) *domain.FragmentCharacterSuggestion {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return nil
+		}
+		if existing := byKey[key]; existing != nil {
+			return existing
+		}
+		ch := bibleChars[key]
+		name := strings.TrimSpace(ch.Name)
+		if name == "" {
+			name = strings.TrimSpace(displayNames[key])
+		}
+		if name == "" {
+			name = displayNameFromStableCharacterKey(key)
+		}
+		traits := strings.Join(ch.ImmutableTraits, "；")
+		sug := &domain.FragmentCharacterSuggestion{
+			Key:         key,
+			Name:        truncateRunes(strings.TrimSpace(name), 32),
+			Description: traits,
+			Appearance:  traits,
+		}
+		byKey[key] = sug
+		order = append(order, key)
+		return sug
+	}
+	for key := range bibleChars {
+		addOrGet(key)
+	}
+	assets, err := s.repo.ListFragmentGenerationAssets(ctx, fragment.ID)
+	if err != nil {
+		s.logger.Warn("list fragment generation assets failed", zap.String("fragmentID", fragment.ID), zap.Error(err))
+	}
+	if len(assets) == 0 {
+		backfilled, backfillErr := s.backfillFragmentGenerationAssets(ctx, fragment)
+		if backfillErr != nil {
+			s.logger.Warn("legacy fragment assets backfill failed", zap.String("fragmentID", fragment.ID), zap.Error(backfillErr))
+		} else if len(backfilled) > 0 {
+			assets = backfilled
+		}
+	}
+	for _, asset := range assets {
+		if asset == nil || strings.TrimSpace(asset.EntityKind) != domain.FragmentGenerationAssetEntityCharacter {
+			continue
+		}
+		key := strings.TrimSpace(asset.EntityKey)
+		if key == "" {
+			continue
+		}
+		sug := addOrGet(key)
+		if sug == nil {
+			continue
+		}
+		if metaName, metaTraits := fragmentAssetCharacterMetadata(asset.MetadataJSON); metaName != "" || len(metaTraits) > 0 {
+			if metaName != "" && (legacyFragmentPlaceholderCharacterName(sug.Name) || strings.TrimSpace(sug.Name) == "") {
+				sug.Name = truncateRunes(metaName, 32)
+			}
+			traits := strings.Join(metaTraits, "；")
+			if traits != "" && sug.Appearance == "" {
+				sug.Appearance = traits
+			}
+			if traits != "" && sug.Description == "" {
+				sug.Description = traits
+			}
+		}
+		switch strings.TrimSpace(asset.Kind) {
+		case domain.FragmentGenerationAssetKindReferenceAsset, domain.FragmentGenerationAssetKindAnchorImage:
+			if sug.ReferenceImage == "" {
+				sug.ReferenceImage = strings.TrimSpace(asset.URL)
+				sug.ReferenceImageURL = strings.TrimSpace(asset.URL)
+			}
+		case domain.FragmentGenerationAssetKindCharacterTurnaround:
+			if sug.ThreeViewSheetURL == "" {
+				sug.ThreeViewSheetURL = strings.TrimSpace(asset.URL)
+			}
+		}
+	}
+	out := make([]domain.FragmentCharacterSuggestion, 0, len(order))
+	for _, key := range order {
+		if sug := byKey[key]; sug != nil {
+			if sug.ReferenceImageURL == "" {
+				sug.ReferenceImageURL = sug.ReferenceImage
+			}
+			out = append(out, *sug)
+		}
+	}
+	return out
+}
+
+func fragmentVisualBibleCharacters(raw string) map[string]domain.FragmentVisualCharacter {
+	out := make(map[string]domain.FragmentVisualCharacter)
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return out
+	}
+	var trace domain.FragmentGenerationTrace
+	if err := json.Unmarshal([]byte(raw), &trace); err != nil || trace.VisualBible == nil {
+		return out
+	}
+	for _, ch := range trace.VisualBible.Characters {
+		if key := strings.TrimSpace(ch.Key); key != "" {
+			out[key] = ch
+		}
+	}
+	return out
+}
+
+func fragmentAssetCharacterMetadata(raw string) (string, []string) {
+	var meta struct {
+		Name            string   `json:"name"`
+		ImmutableTraits []string `json:"immutableTraits"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &meta); err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(meta.Name), meta.ImmutableTraits
 }
 
 func stableCharacterKey(name string) string {
@@ -635,9 +983,6 @@ func mergeGeneratedCharacterAttributes(dst *GeneratedCharacterAttributes, src *G
 	}
 	if dst.DressPreference == "" {
 		dst.DressPreference = src.DressPreference
-	}
-	if dst.Role == "" {
-		dst.Role = src.Role
 	}
 }
 
@@ -833,9 +1178,7 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 	if req.DressPreference != nil {
 		character.DressPreference = *req.DressPreference
 	}
-	if req.Role != nil {
-		character.Role = *req.Role
-	}
+	character.Role = ""
 	if req.SourceType != nil {
 		character.SourceType = strings.ToLower(*req.SourceType)
 	}
@@ -1098,9 +1441,9 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 
 硬性要求：
 1. 只输出一个 JSON 对象，不要 markdown 代码块，不要多余说明文字。
-2. 必须包含以下全部 11 个键，键名与下表完全一致（camelCase），不要省略任何键：description, personality, background, shortTermGoal, longTermGoal, handlingStyle, cognitionRange, abilityFeatures, appearance, dressPreference, role。
+2. 必须包含以下全部 10 个键，键名与下表完全一致（camelCase），不要省略任何键：description, personality, background, shortTermGoal, longTermGoal, handlingStyle, cognitionRange, abilityFeatures, appearance, dressPreference。
 3. 每个键的值必须是字符串；若无内容可写简短占位如「未特别设定」，禁止省略键或设为 null。
-4. description 为角色整体概要，总长不超过 400 字；background、personality 可略长；其余字段各约 80–200 字中文（role 为短标签即可，见下）。
+4. description 为角色整体概要，总长不超过 400 字；background、personality 可略长；其余字段各约 80–200 字中文。
 5. 确保 JSON 语法完整（引号、逗号、大括号闭合）。
 
 各键含义（须按此语义撰写，便于写入数据库与客户端表单）：
@@ -1114,7 +1457,6 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
 - abilityFeatures：特长、技能与突出能力。
 - appearance：不仅写相貌，必须包含物理质感极其丰富的发丝（形态、光泽）、皮肤细节（纹理/疤痕/色泽）、具体的面部骨骼特征（眼型/下颌线）、以及身高体型比例。
 - dressPreference：日常着装风格与偏好，必须提供细致的材质明细（如天鹅绒/破损皮革/重麻布）、层次感混搭习惯、标志性的色彩搭配，以及穿戴磨损痕迹和特征配饰。
-- role：在本故事中的功能定位，用简短中文短语（例如：主角、配角、反派、导师、神秘人、NPC 等），不超过 20 字。
 
 示例结构：
 {
@@ -1127,8 +1469,7 @@ func (s *Service) GenerateCharacterWithAI(ctx context.Context, userID string, re
   "cognitionRange": "...",
   "abilityFeatures": "...",
   "appearance": "...",
-  "dressPreference": "...",
-  "role": "..."
+  "dressPreference": "..."
 }`
 
 	prompt := "请为以下角色生成详细属性：\n\n"
@@ -1236,7 +1577,6 @@ func (s *Service) extractAttributesFromText(text string) GeneratedCharacterAttri
 		"abilityFeatures": &attributes.AbilityFeatures,
 		"appearance":      &attributes.Appearance,
 		"dressPreference": &attributes.DressPreference,
-		"role":            &attributes.Role,
 	}
 
 	for fieldName, fieldPtr := range fieldExtractors {
@@ -1751,9 +2091,6 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 		if strings.TrimSpace(v.Sheet) != "" {
 			return &GenerateCharacterThreeViewsResult{Views: v}, nil
 		}
-		if strings.TrimSpace(v.Front) != "" && strings.TrimSpace(v.Side) != "" && strings.TrimSpace(v.Back) != "" {
-			return &GenerateCharacterThreeViewsResult{Views: v}, nil
-		}
 	}
 
 	bal, balErr := s.repo.GetTokenBalance(ctx, userID)
@@ -1791,7 +2128,9 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 	)
 
 	var refImages []string
-	if strings.TrimSpace(character.Portrait) != "" {
+	if r := strings.TrimSpace(req.ReferenceImage); r != "" {
+		refImages = []string{r}
+	} else if strings.TrimSpace(character.Portrait) != "" {
 		refImages = []string{character.Portrait}
 	}
 

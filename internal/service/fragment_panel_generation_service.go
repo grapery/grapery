@@ -239,8 +239,32 @@ func (s *FragmentPanelGenerationService) ResumeGeneration(ctx context.Context, u
 		return out, nil
 	}
 
+	// 规划阶段即失败（如 Ark 超时）时 Plan 为空，与 stuck pending 同理：允许整段重启，不要求用户重新发起创作。
 	if task.Status == "failed" && len(task.Plan) == 0 {
-		return nil, fmt.Errorf("%w: 无分镜规划，请重新创作", ErrPanelGenerationNotResumable)
+		acquired, err := s.panelRepo.TryAcquireResumeProcessing(ctx, taskID, userID, 5, "understanding_reference")
+		if err != nil {
+			return nil, fmt.Errorf("acquire resume lock: %w", err)
+		}
+		if !acquired {
+			return nil, ErrPanelGenerationResumeConflict
+		}
+		if err := s.resetDraftGeneratingContent(ctx, task.DraftFragmentID); err != nil {
+			_ = s.panelRepo.RevertProcessingToFailed(ctx, taskID, userID, fmt.Sprintf("恢复草稿失败: %v", err))
+			return nil, fmt.Errorf("%w: %v", ErrPanelGenerationDraftResetFailed, err)
+		}
+		s.logger.Info("panel_generation_resume",
+			zap.String("task_id", taskID),
+			zap.String("user_id", userID),
+			zap.String("mode", "full_restart_failed_empty_plan"),
+			zap.Int("plan_len", 0),
+			zap.Int("start_panel", 0),
+		)
+		go s.process(context.Background(), taskID)
+		out, err := s.panelRepo.GetByID(ctx, taskID)
+		if err != nil {
+			return task, nil
+		}
+		return out, nil
 	}
 
 	n := len(task.Plan)
@@ -570,7 +594,8 @@ func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug
 	}
 	order := fmt.Sprintf("Panel %d of %d.", panelIndex+1, totalPanels)
 	layout := buildPanelLayoutDirective(planItem)
-	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout))
+	comic := buildPanelComicTextDirective(planItem)
+	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout, comic))
 }
 
 func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
@@ -590,7 +615,56 @@ func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
 	if len(parts) == 0 {
 		return "Layout directive: one output image. Use either a unified continuous illustration or multiple clearly separated intra-image regions/sub-panels (comic-style zones with gutters / spacing) when the story beat gains clarity; prioritize readable order (e.g. top-to-bottom or left-to-right within the canvas). Maintain one consistent art treatment across zones."
 	}
-	return "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible separation/gutters; if it implies one integrated scene, avoid unnecessary outer panel borders."
+	out := "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible separation/gutters; if it implies one integrated scene, avoid unnecessary outer panel borders."
+	if panelPlanWantsComicLayout(planItem) {
+		out += " Full comic panel rendering: bold black panel borders, gutter spacing between sub-panels, sequential reading order (left-to-right, top-to-bottom), and reserved speech bubble/caption box areas. Any comic text must be painted directly into the final image, not left as placeholders for app overlay. Keep text count tight (<=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble), use large legible Chinese lettering, and do not add random extra words."
+	}
+	return out
+}
+
+func panelPlanWantsComicLayout(planItem domain.FragmentPanelPlanItem) bool {
+	if len(planItem.ComicTexts) > 0 {
+		return true
+	}
+	probe := strings.ToLower(strings.Join([]string{
+		planItem.LayoutIntent,
+		planItem.CompositionPlan,
+		planItem.VisualHierarchy,
+		planItem.ImagePrompt,
+	}, " "))
+	return strings.Contains(probe, "comic") || strings.Contains(probe, "manga") || strings.Contains(probe, "manhua") || strings.Contains(probe, "漫画")
+}
+
+func buildPanelComicTextDirective(planItem domain.FragmentPanelPlanItem) string {
+	if !panelPlanWantsComicLayout(planItem) {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Comic text directive: include manga/comic speech bubbles, narration boxes, thought bubbles, and stylized SFX lettering only where they improve readability; paint the exact Chinese text directly into the generated image; leave clean space and avoid covering faces or important props; do not add any random extra words.")
+	if len(planItem.ComicTexts) == 0 {
+		b.WriteString(" Limit count to <=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble; each Chinese phrase should usually be <=12 characters and clearly legible.")
+		return b.String()
+	}
+	b.WriteString("\nComic text elements:\n")
+	for _, item := range normalizeFragmentComicTexts(planItem.ComicTexts) {
+		text := sanitizeComicPromptText(item.Text)
+		position := strings.TrimSpace(item.Position)
+		if position == "" {
+			position = "auto"
+		}
+		speaker := strings.TrimSpace(item.Speaker)
+		switch item.Type {
+		case "narration":
+			fmt.Fprintf(&b, "- Caption/narration box at %s, paint the exact Chinese text %q inside the box.\n", position, text)
+		case "dialogue":
+			fmt.Fprintf(&b, "- Speech bubble for %s at %s, paint the exact Chinese dialogue %q inside the bubble, tail pointing to the speaker.\n", speaker, position, text)
+		case "thought":
+			fmt.Fprintf(&b, "- Thought bubble for %s at %s, paint the exact Chinese inner monologue %q inside the bubble.\n", speaker, position, text)
+		case "sfx":
+			fmt.Fprintf(&b, "- Bold stylized comic SFX lettering at %s, paint the exact Chinese SFX text %q.\n", position, text)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func anchorMapFromPanelRecords(records []domain.FragmentAnchorImage) map[string]string {
@@ -706,6 +780,7 @@ func panelPlanItemsToScenePlans(plan []domain.FragmentPanelPlanItem) []domain.Fr
 			ImagePrompt:   strings.TrimSpace(p.ImagePrompt),
 			SceneDesc:     strings.TrimSpace(p.Caption),
 			ReferenceKeys: normalizeFragmentKeyList(p.ReferenceKeys),
+			ComicTexts:    normalizeFragmentComicTexts(p.ComicTexts),
 		})
 	}
 	return out
@@ -1040,6 +1115,7 @@ func (s *FragmentPanelGenerationService) completePanelGeneration(ctx context.Con
 		s.failTask(ctx, taskID, draftID, fmt.Sprintf("保存草稿失败: %v", err))
 		return
 	}
+	s.persistPanelGenerationAssets(ctx, draftID, task, req.AspectRatio, resolvePanelConsistencyPolicy(task, req))
 
 	completed := time.Now().Unix()
 	task.Status = "completed"

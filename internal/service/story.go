@@ -3155,11 +3155,8 @@ func (s *Service) ConvertFragmentToStory(ctx context.Context, userID string, fra
 		zap.String("content", fragment.Content),
 		zap.Int("mediaCount", len(fragment.MediaURLs)))
 
-	// 3. 设置默认值
-	sceneCount := req.SceneCount
-	if sceneCount < 2 || sceneCount > 8 {
-		sceneCount = 3 // 默认3个场景
-	}
+	// 3. 默认值：故事板格数改为在「新建故事」页设置；碎片转故事流程不再携带 sceneCount。
+	sceneCount := 3
 
 	isCollaborationOpen := req.CollaborationType == "open"
 

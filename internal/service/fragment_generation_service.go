@@ -19,6 +19,7 @@ import (
 type FragmentGenerationService struct {
 	fragmentGenRepo *repository.FragmentGenerationRepository
 	fragmentRepo    *repository.FragmentRepository
+	repo            domain.Repository
 	aiService       *AIService
 	logger          *zap.Logger
 	notify          *Service // optional: push + in-app when generation completes
@@ -27,12 +28,14 @@ type FragmentGenerationService struct {
 func NewFragmentGenerationService(
 	fragmentGenRepo *repository.FragmentGenerationRepository,
 	fragmentRepo *repository.FragmentRepository,
+	repo domain.Repository,
 	aiService *AIService,
 	logger *zap.Logger,
 ) *FragmentGenerationService {
 	return &FragmentGenerationService{
 		fragmentGenRepo: fragmentGenRepo,
 		fragmentRepo:    fragmentRepo,
+		repo:            repo,
 		aiService:       aiService,
 		logger:          logger,
 	}
@@ -306,6 +309,9 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		} else {
 			result.DraftFragmentID = fragment.ID
 		}
+	}
+	if result.DraftFragmentID != "" {
+		s.persistFragmentGenerationAssets(ctx, result.DraftFragmentID, taskID, task.Request, result)
 	}
 
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
@@ -601,6 +607,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 
 6. characters（人物）—— 视觉身份卡（最多 3 个）
    想象你在给一位从未见过这个角色的画师做口头描述。包含：体型轮廓、穿着（款式+颜色+材质）、标志性视觉特征、当前在做的事情和表情。
+   **若用户输入或正文中已有姓名、昵称或稳定称呼，描述开头须用括号注明（如「（阿明）」），且须与 visualBible 中对应角色的 name 字段完全一致，不得另起别名。**
    好的示例："瘦高的女生，穿oversized黑卫衣帽子压得很低，露出一截染了蓝色的发尾，手里攥着一杯已经凉透的拿铁，站在斑马线中间像在犹豫要不要过去"
    好的示例："中年男人，头发灰白但梳得整齐，穿着一件洗到发白的蓝色工装外套，右手插在口袋里，左手拎着一个系着红绳的旧皮箱"
    差的示例："一个女生" / "一个男人"
@@ -684,6 +691,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - visualBible 必须与 elements、content 自洽；immutableTraits 使用与 elements/content 相同的自然语言（由上方 language 决定）。
 - characters最多 3 项，props 最多 5 项，locations 1–2 项；每项必须有全局唯一 key（小写英文+下划线，如 char_main、prop_umbrella、loc_station）。
+- **每个 visualBible.characters[] 条目必须填写 name（必填，不得省略或留空）：**表示故事中用于展示与下游「故事角色」物料的稳定称呼。**优先与用户输入、正文里对已出现人物的称呼完全一致**（真名、昵称、职务称呼均可）；若全文未命名，则用与 language 一致的**简短识别名**（如中文 2～8 个字：概括外貌/身份，如「戴帽少年」「工装店员」）；**禁止**输出「角色一」「无名氏」或与正文无关的泛称。**同一角色在正文中的称呼必须与该项 name 一致。** props / locations 的 name 若字段存在则需同理可称呼，可选用简短物体名或地点名。
 - immutableTraits 为字符串数组：每条描述一个不可随意更改的视觉事实（发色、服装剪裁与主色、道具外形、建筑特征等）。
 - negativeTraits 为字符串数组：写出该实体绝对不能和其他实体混淆的特征（例如“不要穿 char_child 的红雨衣”）。
 - ownership 用来表达归属关系：角色可以列出随身物，道具写关联角色 key；无法判断则留空。
@@ -709,7 +717,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
       "lightingMood": "optional English"
     },
     "characters": [
-      { "key": "char_main", "name": "optional", "immutableTraits": ["trait1", "trait2"], "negativeTraits": ["must not share traits with char_other"], "ownership": ["prop_key"], "roleImportance": "core" }
+      { "key": "char_main", "name": "与正文及用户输入一致的故事角色名或简短识别名（必填）", "immutableTraits": ["trait1", "trait2"], "negativeTraits": ["must not share traits with char_other"], "ownership": ["prop_key"], "roleImportance": "core" }
     ],
     "props": [
       { "key": "prop_key", "immutableTraits": ["..."], "negativeTraits": ["..."], "ownership": "char_main", "roleImportance": "core" }
@@ -772,9 +780,10 @@ func buildFragmentVisualEvidencePrompt(userInput, style string, imageURLs []stri
 风格倾向：%s
 
 请逐张图片输出 JSON，格式必须是：
-{"evidence":[{"imageUrl":"对应图片URL","summary":"一句话视觉概括","subjects":["主体"],"entities":[{"key":"char_0|prop_0|loc_0","kind":"character|prop|location","name":"可为空","traits":["稳定可见特征"],"position":"画面位置","ownerKey":"可为空","confidence":0.0}],"palette":["主色"],"lighting":"光线事实","composition":"构图事实","immutableTraits":["最应保持的不可变视觉事实"],"confidence":0.0}]}
+{"evidence":[{"imageUrl":"对应图片URL","summary":"一句话视觉概括","subjects":["主体"],"entities":[{"key":"char_0|prop_0|loc_0","kind":"character|prop|location","name":"若为 character 必填：可被读者称呼的简短名字或识别名","traits":["稳定可见特征"],"position":"画面位置","ownerKey":"可为空","confidence":0.0}],"palette":["主色"],"lighting":"光线事实","composition":"构图事实","immutableTraits":["最应保持的不可变视觉事实"],"confidence":0.0}]}
 
 要求：
+- **kind 为 character 时，实体 name 字段必填**：结合用户文字中已给出的称呼优先使用（用户文字虽未当作图片事实，但可用于命名）；若没有明确姓名则根据可见外观写与 language 一致的简短识别名（中文建议 2～8 字，如「棒球帽男子」），便于后续生成「故事角色」标题。**禁止**对人像留空或使用「人物1」类占位。**kind 非 character 时** name 可用简短道具/地点称谓或简述。
 - traits 和 immutableTraits 只能写可见事实，例如发型、服装颜色材质、体型轮廓、标志物、建筑/空间特征、主色、光源方向。
 - 对不确定信息降低 confidence，不要补全不可见的脸、衣服或背景。
 - key 要稳定，人物用 char_0/char_1，道具用 prop_0/prop_1，地点用 loc_0/loc_1。
@@ -961,6 +970,7 @@ func fragmentScenesToPlans(scenes []fragmentExpandedScene) []domain.FragmentScen
 			ImagePrompt:    strings.TrimSpace(sc.ImagePrompt),
 			ReferenceKeys:  normalizeFragmentKeyList(sc.ReferenceKeys),
 			EntityBindings: sc.EntityBindings,
+			ComicTexts:     normalizeFragmentComicTexts(sc.ComicTexts),
 		})
 	}
 	return out
@@ -979,6 +989,35 @@ func normalizeFragmentKeyList(keys []string) []string {
 		}
 		seen[k] = struct{}{}
 		out = append(out, k)
+	}
+	return out
+}
+
+func normalizeFragmentComicTexts(texts []domain.FragmentComicText) []domain.FragmentComicText {
+	if len(texts) == 0 {
+		return nil
+	}
+	out := make([]domain.FragmentComicText, 0, len(texts))
+	for _, item := range texts {
+		typ := strings.TrimSpace(strings.ToLower(item.Type))
+		switch typ {
+		case "narration", "dialogue", "thought", "sfx":
+		default:
+			continue
+		}
+		text := strings.TrimSpace(item.Text)
+		if text == "" {
+			continue
+		}
+		out = append(out, domain.FragmentComicText{
+			Type:     typ,
+			Text:     truncateRunes(text, 40),
+			Speaker:  strings.TrimSpace(item.Speaker),
+			Position: strings.TrimSpace(item.Position),
+		})
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
@@ -1540,6 +1579,7 @@ type fragmentExpandedScene struct {
 	ImagePrompt    string                         `json:"imagePrompt"`             // 英文图片生成提示词（面向图片模型）
 	ReferenceKeys  []string                       `json:"referenceKeys,omitempty"` // 引用 visualBible / 参考资产的 key
 	EntityBindings []domain.FragmentEntityBinding `json:"entityBindings,omitempty"`
+	ComicTexts     []domain.FragmentComicText     `json:"comicTexts,omitempty"`
 }
 
 func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
@@ -1601,6 +1641,13 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - 空间设定（室内布局、城市天际线、自然地貌）保持可辨识的连续性——读者应该感觉这些格发生在同一个世界里
 - artStyle（艺术风格）全程统一——如果第一格是"水彩插画风"，最后一格也必须是水彩插画风。风格是故事的视觉签名
 - 色彩基调可以随情绪渐变，但不要突然跳到完全不同的色彩体系
+
+【一补、漫画版式与文字层——让画面像真实漫画】
+- 如果风格、故事或用户输入适合漫画表达，imagePrompt 必须描述 manga/comic panel layout：清晰格框、粗墨线边框、gutter 间距、从左到右/从上到下的阅读顺序。
+- 每一格可以包含漫画文字元素，但必须分类：旁白 narration 放在 caption box；角色台词 dialogue 放在 speech bubble，气泡尾巴指向 speaker；内心独白 thought 放在 thought bubble；语气词/拟声词 sfx 用夸张音效字。
+- 文字数量必须严格受限：每格最多 1 个 narration、1-2 个 dialogue、最多 1 个 sfx；thought 仅在必要时出现且最多 1 个。单条中文建议不超过 12 个汉字，不要把整段 sceneDesc 塞进气泡。
+- imagePrompt 中应给气泡/旁白框预留干净空间，避免遮挡人物脸部和关键道具。
+- 漫画文字必须由图片模型直接画进最终图片中，不能依赖 App 后续叠加；imagePrompt 要明确要求 render the exact Chinese text inside the image，字体清晰、可读、与漫画风格一致；禁止额外随机文字或英文假字。
 
 【二、叙事自由度——打破常规才是你的常规】
 - 允许并且鼓励：
@@ -1753,6 +1800,11 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
       "entityBindings": [
         { "key": "char_main", "kind": "character", "role": "main subject", "position": "left foreground", "action": "holding prop_laptop", "ownerKey": "", "consistencyNote": "keep all immutableTraits; do not swap clothing or facial traits with other characters" },
         { "key": "prop_laptop", "kind": "prop", "role": "story clue", "position": "in char_main hands", "action": "screen glowing", "ownerKey": "char_main", "consistencyNote": "belongs only to char_main" }
+      ],
+      "comicTexts": [
+        { "type": "narration", "text": "三分钟前，一切还很安静。", "position": "top-left" },
+        { "type": "dialogue", "text": "你听见了吗？", "speaker": "char_main", "position": "speech-bubble" },
+        { "type": "sfx", "text": "砰！", "position": "mid-frame" }
       ]
     }
   ]
@@ -1771,6 +1823,8 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - 每一格必须引用至少 2 个可追溯锚点（来自 elements 或故事正文的具体角色/物品/场景细节），禁止无依据“硬反转”
 - 每一格必须包含 referenceKeys：1–5 个字符串，且必须是上方「稳定 key 列表」中的 key；若列表为空则 referenceKeys 为 []
 - 每一格必须包含 entityBindings；其 key 必须来自本格 referenceKeys，不允许自造实体
+- comicTexts 可为空数组；若有 dialogue/thought，speaker 必须来自本格 referenceKeys 中的角色 key；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought，单条中文建议 <=12 汉字
+- imagePrompt 必须把 comicTexts 对应的旁白框、对话气泡、思想气泡、拟声词版式写成英文视觉指令；不要只在 JSON 里列文字而不影响画面
 - imagePrompt 中绝对不要出现"copy the reference image"或"exactly like the reference"——每格都应该是原创的视觉创作
 - sceneDesc 中不要出现格式化标记（不要 #、不要 **、不要列表符号）
 - 不要在 JSON 之外输出任何文字（包括开头和结尾的说明）`,
@@ -1865,6 +1919,7 @@ func buildFragmentSceneImagePrompt(bible *domain.FragmentVisualBible, scene doma
 	}
 	fmt.Fprintf(&b, "Scene: %s.\n", strings.TrimSpace(scene.ImagePrompt))
 	writeFragmentActiveEntities(&b, bible, scene.ReferenceKeys)
+	writeFragmentComicLayoutDirective(&b, bible, scene)
 	if len(scene.EntityBindings) > 0 {
 		b.WriteString("Entity binding rules:\n")
 		for _, bind := range scene.EntityBindings {
@@ -1909,6 +1964,71 @@ func writeFragmentActiveEntities(b *strings.Builder, bible *domain.FragmentVisua
 		fmt.Fprintf(b, "- %s location %s immutable traits: %s. Avoid: %s.\n",
 			loc.Key, loc.Name, strings.Join(loc.ImmutableTraits, "; "), strings.Join(loc.NegativeTraits, "; "))
 	}
+}
+
+func writeFragmentComicLayoutDirective(b *strings.Builder, bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) {
+	if b == nil {
+		return
+	}
+	if !fragmentSceneWantsComicLayout(bible, scene) {
+		return
+	}
+	b.WriteString("Comic layout directive: render the image as a manga/comic panel with bold ink panel borders, clear gutters or internal comic-style zones when useful, and a readable left-to-right/top-to-bottom flow. Paint all comic text directly into the final image, not as placeholders and not for app overlay. Render the exact Chinese characters inside bubbles/caption boxes/SFX lettering as clearly as possible with large legible hand-lettered glyphs. Reserve clean negative space for text elements; do not cover faces, hands, or key props with bubbles. Do not add random extra words.\n")
+	if len(scene.ComicTexts) == 0 {
+		b.WriteString("Include at most 1 narration box, 1-2 dialogue bubbles, and at most 1 SFX lettering. If text appears, it must be drawn directly in-image, each Chinese phrase short (about <=12 characters), legible, and visually readable.\n")
+		return
+	}
+	b.WriteString("Comic text elements:\n")
+	for _, item := range normalizeFragmentComicTexts(scene.ComicTexts) {
+		text := sanitizeComicPromptText(item.Text)
+		speaker := strings.TrimSpace(item.Speaker)
+		position := strings.TrimSpace(item.Position)
+		if position == "" {
+			position = "auto"
+		}
+		switch item.Type {
+		case "narration":
+			fmt.Fprintf(b, "- Caption/narration box at %s: rectangular comic caption box, paint the exact Chinese text %q inside the box.\n", position, text)
+		case "dialogue":
+			if speaker == "" {
+				fmt.Fprintf(b, "- Speech bubble at %s: oval white bubble, paint the exact Chinese dialogue %q inside the bubble, tail pointing to the speaking character.\n", position, text)
+			} else {
+				fmt.Fprintf(b, "- Speech bubble for %s at %s: oval white bubble, paint the exact Chinese dialogue %q inside the bubble, tail pointing to entity key %s.\n", speaker, position, text, speaker)
+			}
+		case "thought":
+			if speaker == "" {
+				fmt.Fprintf(b, "- Thought bubble at %s: cloud-shaped bubble, paint the exact Chinese inner monologue %q inside the bubble.\n", position, text)
+			} else {
+				fmt.Fprintf(b, "- Thought bubble for %s at %s: cloud-shaped bubble, paint the exact Chinese inner monologue %q inside the bubble, linked to entity key %s.\n", speaker, position, text, speaker)
+			}
+		case "sfx":
+			fmt.Fprintf(b, "- Sound effect lettering at %s: paint the exact Chinese SFX text %q as bold stylized comic lettering, integrated into the action without a speech bubble.\n", position, text)
+		}
+	}
+}
+
+func fragmentSceneWantsComicLayout(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) bool {
+	if len(scene.ComicTexts) > 0 {
+		return true
+	}
+	var probes []string
+	probes = append(probes, scene.ImagePrompt, scene.SceneDesc)
+	if bible != nil && bible.StyleBible != nil {
+		probes = append(probes, bible.StyleBible.ArtStyle)
+	}
+	for _, p := range probes {
+		low := strings.ToLower(strings.TrimSpace(p))
+		if strings.Contains(low, "comic") || strings.Contains(low, "manga") || strings.Contains(low, "manhua") || strings.Contains(low, "漫画") {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeComicPromptText(text string) string {
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\n", " ")
+	text = strings.ReplaceAll(text, "\r", " ")
+	return truncateRunes(text, 40)
 }
 
 func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy) (*domain.FragmentImageGenerationResult, error) {

@@ -128,7 +128,6 @@ func (s *Service) ExpandFragmentStoryPrefillAI(ctx context.Context, userID, frag
 	if !hasHuoshan && s.geminiClient == nil {
 		return nil, errors.New("AI text generation is not configured")
 	}
-
 	sc := req.SceneCount
 	if sc < 2 || sc > 8 {
 		sc = 3
@@ -178,7 +177,7 @@ func (s *Service) ExpandFragmentStoryPrefillAI(ctx context.Context, userID, frag
   "style": "字符串：遵守上文对「碎片创作风格」的说明",
   "genre": "必须从以下择一：%s",
   "tags": ["标签1","标签2"],
-  "suggestedCharacters": [{"name":"角色名","role":"在故事中的定位","background":"可选，一句人设"}]
+  "suggestedCharacters": [{"name":"角色名","background":"可选，一句人设"}]
 }
 
 约束：
@@ -243,7 +242,6 @@ func (s *Service) ExpandFragmentStoryPrefillAI(ctx context.Context, userID, frag
 		}
 		chars = append(chars, domain.FragmentStoryPrefillCharacter{
 			Name:       truncateRunes(n, 32),
-			Role:       strings.TrimSpace(c.Role),
 			Background: strings.TrimSpace(c.Background),
 		})
 	}

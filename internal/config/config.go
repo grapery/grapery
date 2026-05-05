@@ -89,7 +89,7 @@ type AIConfig struct {
 	ImageProvider    string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
 	VideoProvider    string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
 	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
-	// (Gemini, Huoshan, Kling). 0 or negative means default 120.
+	// (Gemini, Huoshan, Kling). 0 or negative means default 180 (multimodal / 分镜规划常需更久).
 	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`
 	// TextMaxConcurrent caps simultaneous outbound text-LLM calls cluster-wide (in-flight until response completes).
 	// Implemented via Redis; 0 disables the gate. Typical value matches provider throughput (e.g. 5).
@@ -254,7 +254,7 @@ func Load(app string) Config {
 			DefaultProvider:       getEnv("AI_DEFAULT_PROVIDER", "huoshan"),
 			ImageProvider:         getEnv("AI_IMAGE_PROVIDER", "huoshan"), // Default to huoshan for image generation
 			VideoProvider:         getEnv("AI_VIDEO_PROVIDER", "huoshan"), // Default to huoshan for video generation
-			RequestTimeoutSeconds: normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", 120)),
+			RequestTimeoutSeconds: normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", 180)),
 			TextMaxConcurrent:     normalizeAITextMaxConcurrent(getEnvInt("AI_TEXT_MAX_CONCURRENT", 5)),
 		},
 		JWT: JWTConfig{
@@ -368,10 +368,10 @@ func normalizeAITextMaxConcurrent(n int) int {
 	return n
 }
 
-// normalizeAIRequestTimeoutSeconds returns sec if positive, otherwise default 120 (seconds per AI HTTP call).
+// normalizeAIRequestTimeoutSeconds returns sec if positive, otherwise default 180 (seconds per AI HTTP call).
 func normalizeAIRequestTimeoutSeconds(sec int) int {
 	if sec <= 0 {
-		return 120
+		return 180
 	}
 	return sec
 }

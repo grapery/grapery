@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -346,13 +348,36 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	if req.PanelCount >= 5 {
 		maxHuoshanTok = 16384
 	}
-	hresp, err := hc.GenerateText(ctx, &huoshanark.TextGenerationRequest{
-		Prompt:       userText,
-		ImageURLs:    []string{refURL},
-		JSONResponse: true,
-		MaxTokens:    maxHuoshanTok,
-		Temperature:  0.35,
-	})
+	var hresp *huoshanark.TextGenerationResponse
+	var err error
+	const panelPlanHuoshanMaxAttempts = 3
+retryHuoshanPanelPlan:
+	for attempt := 1; attempt <= panelPlanHuoshanMaxAttempts; attempt++ {
+		hresp, err = hc.GenerateText(ctx, &huoshanark.TextGenerationRequest{
+			Prompt:       userText,
+			ImageURLs:    []string{refURL},
+			JSONResponse: true,
+			MaxTokens:    maxHuoshanTok,
+			Temperature:  0.35,
+		})
+		if err == nil || !isHuoshanPanelPlanTimeoutLike(err) {
+			break retryHuoshanPanelPlan
+		}
+		if attempt < panelPlanHuoshanMaxAttempts {
+			if s.logger != nil {
+				s.logger.Warn("Huoshan panel plan request timed out, retrying",
+					zap.Int("attempt", attempt),
+					zap.Int("maxAttempts", panelPlanHuoshanMaxAttempts),
+					zap.Error(err))
+			}
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+				break retryHuoshanPanelPlan
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+	}
 	completedTime := time.Now()
 	durationMs := completedTime.Sub(startTime).Milliseconds()
 
@@ -484,4 +509,24 @@ func normalizeFragmentPanelPlan(raw []domain.FragmentPanelPlanItem, want int) ([
 		out[i] = p
 	}
 	return out, nil
+}
+
+// isHuoshanPanelPlanTimeoutLike returns true when the error is a client-side wait timeout
+// (e.g. http.Client.Timeout before response headers) or context deadline — worth one or more retries.
+func isHuoshanPanelPlanTimeoutLike(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "timeout exceeded while awaiting headers") ||
+		strings.Contains(msg, "client.timeout") ||
+		(strings.Contains(msg, "timeout") && strings.Contains(msg, "deadline"))
 }

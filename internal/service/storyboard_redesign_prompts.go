@@ -33,10 +33,10 @@ func buildStoryboardBiblePlanUserPrompt(story *domain.Story, storyboard *domain.
 	b.WriteString(snapshot.ContextText)
 	b.WriteString("\n\nCharacters with identity references:\n")
 	if len(snapshot.Characters) == 0 {
-		b.WriteString("- none explicitly selected; infer lightweight roles only when necessary.\n")
+		b.WriteString("- none explicitly selected; infer relationships only when necessary.\n")
 	}
 	for _, ch := range snapshot.Characters {
-		b.WriteString(fmt.Sprintf("- key=%s id=%s name=%s role=%s\n", ch.Key, ch.ID, ch.Name, ch.Role))
+		b.WriteString(fmt.Sprintf("- key=%s id=%s name=%s\n", ch.Key, ch.ID, ch.Name))
 		b.WriteString(fmt.Sprintf("  description=%s\n  personality=%s\n  appearance=%s\n", ch.Description, ch.Personality, ch.Appearance))
 		if ch.Views != nil {
 			b.WriteString(fmt.Sprintf("  threeViewSheet=%s front=%s side=%s back=%s\n", ch.Views.Sheet, ch.Views.Front, ch.Views.Side, ch.Views.Back))

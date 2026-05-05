@@ -123,11 +123,14 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 【四、自动布局决策（每格必须独立判断）】
 - 每一格仍是「一次文生图得到的一张图」，但图片内部可以是：(A) 单一连续场景；或 (B) 多个区域/子格（条漫式分区、上下分镜、左右对照、2×2 等），用留白、粗线或清晰边界分隔，并交待阅读顺序。按剧情选 A 或 B，不要为每格机械重复同一种版式。
 - 每格必须输出 layout_intent、composition_plan、shot_type、visual_hierarchy。
-- layout_intent 使用简短英文 snake_case，例如：single_subject_focus、split_foreground_background、wide_establishing、diagonal_motion、symmetrical_faceoff、detail_insert、layered_depth、negative_space_tension、intra_image_multi_panel、stacked_vertical_zones、split_screen_two_beat、grid_four_beat。
+- layout_intent 使用简短英文 snake_case，例如：single_subject_focus、split_foreground_background、wide_establishing、diagonal_motion、symmetrical_faceoff、detail_insert、layered_depth、negative_space_tension、comic_single_panel、comic_two_panel_grid、comic_strip、intra_image_multi_panel、stacked_vertical_zones、split_screen_two_beat、grid_four_beat。
 - composition_plan 用中文或英文自然语言写清「区域怎么分、每块放什么」：若多区域，说明上下/左右/网格位置、每区主体与动作、gutter/间距、阅读顺序；若单场景，说明主体位置、前中后景、留白、引导线、视觉重心。
 - visual_hierarchy 说明主视觉、次视觉、背景信息的优先级，避免所有元素平均铺开。
 - shot_type 使用英文短语，例如 close_up、medium_shot、wide_shot、overhead、low_angle、dutch_angle、detail_insert；多区域时可用 wide_shot 概括整图或注明 per-zone。
 - 布局必须服务该格剧情功能（例如铺垫+反转可在一张图内用上下两区完成）。
+- 如该格适合漫画表达，必须在 composition_plan / image_prompt 中写清漫画格框、gutter、气泡预留位置，并输出 comic_texts：narration=旁白框、dialogue=角色对白气泡、thought=内心气泡、sfx=拟声/语气音效字。
+- comic_texts 中的中文文字是最终图片中要直接画出来的文字，不是给 App 叠加的占位数据；image_prompt 必须明确要求图片模型 render the exact Chinese text inside the image。
+- 数量上限：每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；每条中文建议不超过 12 个汉字；禁止额外随机文字。
 
 【五、光影与色彩】
 - 格间可改变光型以配合情绪，但要可解释；色温与饱和度变化应服务于叙事走向。
@@ -149,6 +152,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 【八、视觉圣经 visualBible（与普通故事碎片 Step1 JSON 字段名一致，必须输出）】
 - visualBible 与 panels、参考图、用户文字必须自洽；immutableTraits 使用与用户文字相同的自然语言（中文或英文，与用户输入一致）。
 - characters 最多 3 项，props 最多 5 项，locations 1–2 项；每项必须有全局唯一 key（小写英文+下划线，如 char_main、prop_bag、loc_cafe）。
+- **每个 characters[] 条目必须包含非空 name：**与 captions、用户文字中出现的称呼保持一致优先；若无姓名则用与用户语言一致的简短识别名（如中文 2～8 字），供下游「故事角色」展示。**禁止不写 name，或仅占位符号。** locations / props 若包含 name 字段也需可称呼的简称。
 - immutableTraits 为字符串数组：每条描述一个不可随意更改的视觉事实。
 - styleBible.artStyle 必须用英文写出可执行的总体画法（媒介、线稿/渲染、时代感），供各格 image_prompt 的 artStyle 层对齐；其他 styleBible 字段可选。
 
@@ -160,14 +164,15 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 输出格式（仅此 JSON，不要 markdown 围栏、不要前后解释）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min %d words","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"wide_establishing","composition_plan":"主体在左下三分之一，远处环境占据右上区域，前景物形成遮挡和纵深。","shot_type":"wide_shot","visual_hierarchy":"主视觉：角色轮廓；次视觉：关键道具；背景：地点氛围"},{"index":1,"image_prompt":"...","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"stacked_vertical_zones","composition_plan":"单图垂直分为上下两区：上区特写手部与钥匙；下区中景同一角色推门，中区 gutter 隔开，先读上再读下。","shot_type":"wide_shot","visual_hierarchy":"上区手部第一；下区全身动作第二"}, ...]}
+{"visualBible":{"styleBible":{"artStyle":"English overall art direction"},"characters":[{"key":"char_main","name":"与 captions/用户一致的称呼","immutableTraits":["..."]}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"English eight-layer description as one paragraph, min %d words","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"wide_establishing","composition_plan":"主体在左下三分之一，远处环境占据右上区域，前景物形成遮挡和纵深。","shot_type":"wide_shot","visual_hierarchy":"主视觉：角色轮廓；次视觉：关键道具；背景：地点氛围","comic_texts":[{"type":"narration","text":"旁白短句","position":"top-left"},{"type":"dialogue","text":"角色台词","speaker":"char_main","position":"speech-bubble"},{"type":"sfx","text":"砰！","position":"mid-frame"}]},{"index":1,"image_prompt":"...","caption":"一句中文","reference_keys":["char_main"],"layout_intent":"comic_two_panel_grid","composition_plan":"单图垂直分为上下两区：上区特写手部与钥匙；下区中景同一角色推门，中区 gutter 隔开，先读上再读下，并在下区右上角预留对白气泡。","shot_type":"wide_shot","visual_hierarchy":"上区手部第一；下区全身动作第二","comic_texts":[]}, ...]}
 
 硬性规则：
-- visualBible 必须存在且包含 styleBible.artStyle；characters、props、locations 可为空数组但键必须存在。
+- visualBible 必须存在且包含 styleBible.artStyle；characters、props、locations 可为空数组但键必须存在；若有任何 character 条目，该项 **必须包含非空的 name 字段**。
 - "panels" 数组恰好 %d 项，index 依次为 0 到 %d。
 - image_prompt：仅英文；每格至少 %d 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
 - layout_intent、composition_plan、shot_type、visual_hierarchy 必须存在且服务当前格剧情，不得所有格重复。
 - 若某一格采用单图内多区域/子格，composition_plan 与 image_prompt 的 composition 层须一致写出分区、gutter、阅读顺序。
+- comic_texts 可为空数组；若 dialogue/thought 存在，speaker 必须是该格 reference_keys 中的角色 key；文字必须短（建议 <=12 汉字），不要把整段 caption 放入气泡；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；所有 comic_texts 都必须作为图中文字直接绘制在最终图片内，且不允许额外随机文字。
 - caption：仅中文，每格一行，无 # 号、无 markdown。
 - 相邻两格 image_prompt 中的 composition（景别+角度）必须明显不同。
 - 不要输出 JSON 之外的任何字符。`,

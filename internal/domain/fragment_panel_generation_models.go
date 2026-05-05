@@ -26,14 +26,15 @@ type FragmentPanelGenerationRequest struct {
 
 // FragmentPanelPlanItem Step1 输出的单格规划
 type FragmentPanelPlanItem struct {
-	Index           int      `json:"index"`
-	ImagePrompt     string   `json:"image_prompt"`
-	Caption         string   `json:"caption"`
-	ReferenceKeys   []string `json:"reference_keys,omitempty"` // 引用 visualBible 锚点 key（与普通碎片 expandScenes 对齐）
-	LayoutIntent    string   `json:"layout_intent,omitempty"`
-	CompositionPlan string   `json:"composition_plan,omitempty"`
-	ShotType        string   `json:"shot_type,omitempty"`
-	VisualHierarchy string   `json:"visual_hierarchy,omitempty"`
+	Index           int                 `json:"index"`
+	ImagePrompt     string              `json:"image_prompt"`
+	Caption         string              `json:"caption"`
+	ReferenceKeys   []string            `json:"reference_keys,omitempty"` // 引用 visualBible 锚点 key（与普通碎片 expandScenes 对齐）
+	LayoutIntent    string              `json:"layout_intent,omitempty"`
+	CompositionPlan string              `json:"composition_plan,omitempty"`
+	ShotType        string              `json:"shot_type,omitempty"`
+	VisualHierarchy string              `json:"visual_hierarchy,omitempty"`
+	ComicTexts      []FragmentComicText `json:"comic_texts,omitempty"`
 }
 
 // FragmentPanelResultItem 最终每格结果

@@ -49,12 +49,12 @@ type Character struct {
 	Stories   int `json:"stories"` // Custom field: number of stories this character appears in
 
 	// StoryCreationAppUI alignment fields
-	Role        string               `json:"role,omitempty"`      // 角色定位 (主角/配角/反派/导师/神秘人)
+	Role        string               `json:"role,omitempty"`      // 已废弃：故事角色不再区分主次；仅解码旧 JSON/DB，新建与更新均不再写入语义
 	AIStyle     string               `json:"aiStyle,omitempty"`   // AI 生成风格
 	AIPrompt    string               `json:"aiPrompt,omitempty"`  // AI 生成提示词
 	AIGenerated bool                 `json:"aiGenerated"`         // 是否由 AI 生成
 	Backstory   string               `json:"backstory,omitempty"` // 角色背景故事 (alias for Background)
-	Views       *CharacterThreeViews `json:"views,omitempty"`     // 三视图：sheet=单张合成图，或 front/side/back 分图（旧）
+	Views       *CharacterThreeViews `json:"views,omitempty"`     // 三视图：**仅使用 sheet**（单张正·侧·背合一）；front/side/back 仅供解码旧数据
 
 	// Business fields
 	Traits      []string `json:"traits,omitempty"`
@@ -95,7 +95,7 @@ type CharacterAnalytics struct {
 
 // REMOVED: PosterCreationPermissionType - not in StoryCreationAppUI design
 
-// CharacterThreeViews 角色三视图 URL（与客户端 CharacterThreeViews 对齐）
+// CharacterThreeViews 角色三视图：以 sheet 单张横向正/侧/背合一图为唯一真源；front/side/back 已废弃保留兼容旧 JSON。
 type CharacterThreeViews struct {
 	Sheet string `json:"sheet,omitempty"` // 单张横向正/侧/背合一参考图（优先）
 	Front string `json:"front,omitempty"`
@@ -151,11 +151,13 @@ type CharacterGenerationTask struct {
 type FragmentCharacterSuggestion struct {
 	Key                 string `json:"key"`
 	Name                string `json:"name"`
-	Role                string `json:"role,omitempty"`
+	Role                string `json:"role,omitempty"` // 已废弃展示字段；服务端不再用于写入 characters.role
 	Description         string `json:"description,omitempty"`
 	Background          string `json:"background,omitempty"`
 	Appearance          string `json:"appearance,omitempty"`
 	ReferenceImage      string `json:"referenceImage,omitempty"`
+	ReferenceImageURL   string `json:"referenceImageUrl,omitempty"`
+	ThreeViewSheetURL   string `json:"threeViewSheetUrl,omitempty"`
 	SourcePanelIndex    int    `json:"sourcePanelIndex,omitempty"`
 	AlreadyCreated      bool   `json:"alreadyCreated,omitempty"`
 	ExistingCharacterID string `json:"existingCharacterId,omitempty"`

@@ -309,10 +309,12 @@ func (s *Service) storyboardGenerationAssetsFromContext(runID string, snapshot s
 		if ch.Views == nil {
 			continue
 		}
-		add(domain.StoryboardGenerationAssetCharacterTurnaround, ch.Key, ch.ID, ch.Views.Sheet, "sheet")
-		add(domain.StoryboardGenerationAssetCharacterTurnaround, ch.Key, ch.ID, ch.Views.Front, "front")
-		add(domain.StoryboardGenerationAssetCharacterTurnaround, ch.Key, ch.ID, ch.Views.Side, "side")
-		add(domain.StoryboardGenerationAssetCharacterTurnaround, ch.Key, ch.ID, ch.Views.Back, "back")
+		turnURL := strings.TrimSpace(ch.Views.Sheet)
+		if turnURL == "" {
+			// Legacy: fallback to第一个可用分图，避免旧数据无端缺失
+			turnURL = strings.TrimSpace(firstNonEmpty(ch.Views.Front, ch.Views.Side, ch.Views.Back))
+		}
+		add(domain.StoryboardGenerationAssetCharacterTurnaround, ch.Key, ch.ID, turnURL, "sheet")
 	}
 	for _, scene := range snapshot.ParentTail {
 		add(domain.StoryboardGenerationAssetParentTailScene, "parent_tail_"+scene.ID, scene.ID, scene.Image, "parent_tail_scene")

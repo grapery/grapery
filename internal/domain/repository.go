@@ -508,6 +508,10 @@ type Repository interface {
 	UpdateFragment(ctx context.Context, fragment *Fragment) error
 	// DeleteFragment deletes a fragment
 	DeleteFragment(ctx context.Context, id string) error
+	// CreateFragmentGenerationAssets stores generated/reused image assets for a fragment.
+	CreateFragmentGenerationAssets(ctx context.Context, assets []*FragmentGenerationAsset) error
+	// ListFragmentGenerationAssets lists all stored image assets for a fragment.
+	ListFragmentGenerationAssets(ctx context.Context, fragmentID string) ([]*FragmentGenerationAsset, error)
 
 	// ========== User Device operations ==========
 	// 用户设备管理（APNs/FCM 推送通知）

@@ -377,6 +377,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			}
 
 			// 碎片相关 (Fragments)
+			authenticated.GET("/fragments/:id/assets", h.GetFragmentGenerationAssets)
 			aiGen.POST("/fragments/:id/convert-to-story", h.ConvertFragmentToStory)
 			aiGen.POST("/fragments/:id/story-prefill-ai", h.ExpandFragmentStoryPrefillAI)
 		}
