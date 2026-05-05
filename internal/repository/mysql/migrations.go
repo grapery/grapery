@@ -618,6 +618,19 @@ func (r *Repository) ensureStoryboardContinuationGenerationOptionsSchema() error
 	return nil
 }
 
+// ensureStoryboardUseComicPagePipelineSchema adds use_comic_page_pipeline (向导「多格漫画页」配菜策略).
+func (r *Repository) ensureStoryboardUseComicPagePipelineSchema() error {
+	migrator := r.db.Migrator()
+	if !migrator.HasColumn(&Storyboard{}, "UseComicPagePipeline") {
+		r.log.Info("Adding use_comic_page_pipeline to storyboards")
+		if err := r.db.Exec(`ALTER TABLE storyboards ADD COLUMN use_comic_page_pipeline TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Skip auto GenerateSceneImage; client uses comic-page pipeline'`).Error; err != nil {
+			r.log.Error("failed to add use_comic_page_pipeline", zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureStoryboardContinuationSummarySchema adds continuation_summary for fork/continuation context compression.
 func (r *Repository) ensureStoryboardContinuationSummarySchema() error {
 	migrator := r.db.Migrator()

@@ -889,6 +889,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_storyboard_use_comic_page_pipeline_schema",
+		Description: "Ensure storyboards has use_comic_page_pipeline for comic-page vs auto scene image",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureStoryboardUseComicPagePipelineSchema()
+		},
+		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_character_portrait_schema",
 		Description: "Ensure characters has portrait-related columns",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

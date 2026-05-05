@@ -161,6 +161,7 @@ type Storyboard struct {
 	CurrentStep              int         `gorm:"default:1"`                     // 1-5 (setup, create, images, video, publish)
 	GenerateVideoAfterImages bool        `gorm:"column:generate_video_after_images;default:false;index"`
 	ContinuationComicStyle   string      `gorm:"column:continuation_comic_style;size:80;default:''"`
+	UseComicPagePipeline     bool        `gorm:"column:use_comic_page_pipeline;default:false;index"`
 	ContinuationSummary      string      `gorm:"column:continuation_summary;type:text"`
 	Likes                    int         `gorm:"default:0;index"`
 	Comments                 int         `gorm:"default:0"`

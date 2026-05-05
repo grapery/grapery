@@ -420,9 +420,14 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 
 	s.generateOrRefreshStoryboardSummary(ctx, storyboardID)
 
-	if len(storyboard.StoryboardScenes) > 0 {
+	if len(storyboard.StoryboardScenes) > 0 && !storyboard.UseComicPagePipeline {
 		// 与续写流程一致：分镜落库后异步为每格拉起配图，否则仅 content_ready 且无 storyboard_image_generations 记录，轮询永远不会推进。
+		// 若客户端选择多格漫画页管线（POST generate/comic-pages），此处必须跳过，否则单图 GenerateSceneImage 会先写入 scene.Image，漫画批量会因 regenerateAll=false而跳过。
 		s.startContinuationSceneImageGenerations(storyboardID, storyboard.ContinuationComicStyle, storyboard.StoryboardScenes)
+	} else if len(storyboard.StoryboardScenes) > 0 && storyboard.UseComicPagePipeline {
+		s.logger.Info("skipping auto scene image generation; comic page pipeline selected by client",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("sceneCount", len(storyboard.StoryboardScenes)))
 	}
 
 	s.logger.Info("initial storyboard generation completed",

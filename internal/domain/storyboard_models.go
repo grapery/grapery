@@ -88,6 +88,8 @@ type Storyboard struct {
 	// 续写 / 创作选项（持久化；默认仅生图，勾选后生图完成再基于首帧图生视频）
 	GenerateVideoAfterImages bool   `json:"generateVideoAfterImages"` // 默认 false
 	ContinuationComicStyle   string `json:"comicStyle,omitempty"`     // 漫画风格 slug（如日系动漫），可选
+	// UseComicPagePipeline 为 true 时：分镜就绪后不自动拉 GenerateSceneImage，由客户端走 generate/comic-page(s)，避免单图抢跑导致漫画管线被 skip
+	UseComicPagePipeline bool `json:"useComicPagePipeline,omitempty"`
 
 	// Engagement stats fields
 	common.EngagementStats
