@@ -342,6 +342,14 @@ func init() {
 		Name:        "fix_character_generation_tasks_empty_character_id",
 		Description: "Set character_id to NULL where empty so FK fk_character_generation_tasks_character allows pending tasks",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			mig := db.WithContext(ctx).Migrator()
+			if !mig.HasTable(&CharacterGenerationTask{}) {
+				// 部分环境仅执行到本步或前置 AutoMigrate 未落表时，先补建表再执行数据修正。
+				log.Warn("character_generation_tasks table missing before fix step; running AutoMigrate for CharacterGenerationTask")
+				if err := autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &CharacterGenerationTask{}); err != nil {
+					return fmt.Errorf("ensure character_generation_tasks exists: %w", err)
+				}
+			}
 			if err := db.WithContext(ctx).Exec(
 				"UPDATE character_generation_tasks SET character_id = NULL WHERE character_id = ''",
 			).Error; err != nil {
