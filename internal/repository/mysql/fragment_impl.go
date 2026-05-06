@@ -226,6 +226,7 @@ func fragmentDBToDomainInternal(f FragmentDB) domain.Fragment {
 		IsDraft:            f.IsDraft,
 		GenerationTaskID:   f.GenerationTaskID,
 		GenerationMetadata: f.GenerationMetadata,
+		AspectRatio:        strings.TrimSpace(f.ImageAspectRatio),
 		// 兼容字段
 		CreatorID: f.UserID,
 		ImageUrls: f.ImageUrls,
@@ -289,6 +290,7 @@ func domainToFragmentDBInternal(f *domain.Fragment) *FragmentDB {
 		IsDraft:            f.IsDraft,
 		GenerationTaskID:   f.GenerationTaskID,
 		GenerationMetadata: f.GenerationMetadata,
+		ImageAspectRatio:   strings.TrimSpace(f.AspectRatio),
 		Likes:              f.Likes,
 		Comments:           f.Comments,
 		Shares:             f.Shares,

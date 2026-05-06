@@ -596,6 +596,11 @@ func CharacterGenerationTaskToModel(d *domain.CharacterGenerationTask) *Characte
 		t := unixToTime(*d.CompletedAt)
 		completedAt = &t
 	}
+	var draftDismissedAt *time.Time
+	if d.DraftDismissedAt != nil && *d.DraftDismissedAt > 0 {
+		t := unixToTime(*d.DraftDismissedAt)
+		draftDismissedAt = &t
+	}
 	return &CharacterGenerationTask{
 		ID:                         d.ID,
 		UserID:                     d.UserID,
@@ -613,6 +618,7 @@ func CharacterGenerationTaskToModel(d *domain.CharacterGenerationTask) *Characte
 		CreatedAt:                  unixToTime(d.CreatedAt),
 		UpdatedAt:                  unixToTime(d.UpdatedAt),
 		CompletedAt:                completedAt,
+		DraftDismissedAt:           draftDismissedAt,
 	}
 }
 
@@ -624,6 +630,11 @@ func ModelToCharacterGenerationTask(m *CharacterGenerationTask) *domain.Characte
 	if m.CompletedAt != nil {
 		v := timeToUnix(*m.CompletedAt)
 		completedAt = &v
+	}
+	var draftDismissedAt *int64
+	if m.DraftDismissedAt != nil {
+		v := timeToUnix(*m.DraftDismissedAt)
+		draftDismissedAt = &v
 	}
 	task := &domain.CharacterGenerationTask{
 		ID:                         m.ID,
@@ -642,6 +653,7 @@ func ModelToCharacterGenerationTask(m *CharacterGenerationTask) *domain.Characte
 		CreatedAt:                  timeToUnix(m.CreatedAt),
 		UpdatedAt:                  timeToUnix(m.UpdatedAt),
 		CompletedAt:                completedAt,
+		DraftDismissedAt:           draftDismissedAt,
 	}
 	if m.Character != nil && m.Character.ID != "" {
 		task.Character = ModelToCharacter(m.Character)

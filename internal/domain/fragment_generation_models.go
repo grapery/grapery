@@ -30,6 +30,7 @@ func NormalizeFragmentAspectRatio(s string) string {
 }
 
 // FragmentImagePixelSizeForAspectRatio 将比例映射为火山等使用像素尺寸时的字符串（与角色立绘逻辑对齐）。
+// 方舟文生图/图生图要求总像素不小于 921600（约 960×960）；1024×768 与 768×1024 不满足，故 4:3 / 3:4 使用更大一档。
 func FragmentImagePixelSizeForAspectRatio(ar string) string {
 	switch NormalizeFragmentAspectRatio(ar) {
 	case FragmentAspect1x1:
@@ -39,9 +40,9 @@ func FragmentImagePixelSizeForAspectRatio(ar string) string {
 	case FragmentAspect9x16:
 		return "1080x1920"
 	case FragmentAspect4x3:
-		return "1024x768"
+		return "1280x960"
 	case FragmentAspect3x4:
-		return "768x1024"
+		return "960x1280"
 	default:
 		return "1920x1080"
 	}

@@ -3421,6 +3421,7 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		prompt.WriteString("\n## Comic / visual style (continuation)\n")
 		prompt.WriteString(fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n", cs))
 		prompt.WriteString("Apply this style consistently with line work, coloring, and overall visual temperament.\n")
+		prompt.WriteString("This slug implies manga/comic panels: favor readable speech balloons, thought bubbles, and SFX where the scene calls for dialogue or reaction beats; render short on-image text in a matching comic hand.\n")
 	}
 
 	if len(gen.ReferenceImages) > 0 {
@@ -3468,6 +3469,21 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		}
 	}
 
+	if gen.IsTransitionScene {
+		prompt.WriteString("\n## On-image text (transition scene)\n")
+		prompt.WriteString("Do NOT add speech bubbles, dialogue, thought bubbles, or comic SFX unless the scene description explicitly mentions environmental text (sign, poster, screen UI). Keep the frame atmospheric.\n")
+	} else {
+		prompt.WriteString(`
+## Comic typography & on-image text (align with story-fragment image prompts)
+When the scene description, story style, or comic-style slug suggests manga/comic/strip panels — or when characters speak, react with interjections, or have a salient inner thought — you MUST carry that into the JSON so the image model paints text inside the picture (no reliance on app overlays):
+- In keyElements and/or additionalNotes: specify speech balloons with tails to the correct speaker; thought bubbles / cloud outlines for inner monologue; bold SFX or short interjections (e.g. Chinese 啊？ / 砰) where they add punch; optional rectangular narration captions for time/place or a beat of omniscient voice.
+- Reserve negative space for lettering; avoid covering eyes or story-critical props.
+- Keep embedded language snippets short (about ≤12 Chinese characters per balloon or caption where applicable); state the exact string that must appear in-image (the renderer should draw it legibly in a comic-appropriate hand).
+- Cap density per panel: at most about 1 narration box, 1–2 dialogue balloons, at most 1 SFX, at most 1 thought bubble — omit if the beat is silent or purely atmospheric.
+- If the scene is wordless, state explicitly "no on-image dialogue" and rely on acting and composition.
+`)
+	}
+
 	prompt.WriteString(`
 Please return a structured JSON object (without markdown code blocks) with the following format:
 {
@@ -3475,13 +3491,25 @@ Please return a structured JSON object (without markdown code blocks) with the f
   "lighting": "具体的打光设置，如 volumetric lighting, rim light, chiaroscuro, cinematic soft box, neon glow, harsh dramatic shadows",
   "colorPalette": "色彩调色板及调光风格，如 teal and orange color grading, muted pastels, high contrast, warm golden hour tones（应与故事风格一致）",
   "composition": "构图与运镜细节，必须包含镜头毫米数、景别和角度，如 50mm prime lens, anamorphic, low angle extreme close-up, rule of thirds, deep depth of field",
-  "keyElements": ["关键视觉元素1", "关键视觉元素2", "特定服装材质如皮革/丝绸/机甲金属"],
+  "keyElements": ["关键视觉元素1", "关键视觉元素2", "服装材质/道具细节"],
   "mood": "情绪氛围，如 peaceful tension, mysterious and foggy, melancholic",
-  "additionalNotes": "包含微表情、特定姿态动作、流体动力学表现（如风吹发丝）、尘埃等大气特效（可选）"
+  "additionalNotes": "微表情、姿态、大气与流体特效；若画面有漫画字须在此用英文写明气泡排版/尾巴/字体处理，以便图片模型在画中渲染",
+  "comicTexts": [
+    {"type":"narration|dialogue|thought|sfx","text":"画面内的精确中文短句（≤12字）","speaker":"dialogue/thought时填角色名，其余留空","position":"top-left|top-right|bottom-left|bottom-right|mid-frame|speech-bubble|thought-bubble"}
+  ]
 }
 
+comicTexts rules:
+- narration = rectangular caption box (time/place/omniscient voice), usually top or bottom of panel.
+- dialogue = speech balloon with pointed tail toward speaker; specify tail direction in additionalNotes.
+- thought = cloud/bubble chain balloon; speaker is the character whose inner voice it is.
+- sfx = oversized onomatopoeia / interjection drawn directly on image (e.g. 砰！ 啊？ ……), no fixed balloon shape.
+- Each text <= 12 Chinese characters. Per-panel cap: ~1 narration, 1-2 dialogue, 1 sfx, 1 thought.
+- For silent/atmospheric/transition scenes output "comicTexts": [].
+- The image model must render the exact Chinese text inside the image (legible comic hand); do NOT rely on app-side overlay.
+
 Important: Return ONLY the JSON object, no explanations or markdown formatting.
-LENGTH: Keep each JSON string field concise (roughly one short phrase or clause each). The server will prepend the full scene narrative separately; your JSON supplies cinematography and look only.`)
+LENGTH: Keep each JSON string field concise (roughly one short phrase or clause each). The server will prepend the full scene narrative separately.`)
 
 	return prompt.String()
 }
@@ -3549,6 +3577,49 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 	}
 	if details.AdditionalNotes != "" {
 		parts = append(parts, details.AdditionalNotes)
+	}
+	// Inject structured comic text instructions so the image model renders them in-picture.
+	if len(details.ComicTexts) > 0 {
+		var letteringLines []string
+		for _, ct := range details.ComicTexts {
+			switch ct.Type {
+			case "narration":
+				pos := ct.Position
+				if pos == "" {
+					pos = "top of panel"
+				}
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a rectangular narration caption box at %s with the exact Chinese text 「%s」 in clean comic font", pos, ct.Text))
+			case "dialogue":
+				pos := ct.Position
+				if pos == "" {
+					pos = "speech-bubble"
+				}
+				speaker := ct.Speaker
+				if speaker == "" {
+					speaker = "the character"
+				}
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a speech balloon (oval with pointed tail toward %s) at %s containing the exact Chinese text 「%s」", speaker, pos, ct.Text))
+			case "thought":
+				pos := ct.Position
+				if pos == "" {
+					pos = "thought-bubble"
+				}
+				speaker := ct.Speaker
+				if speaker == "" {
+					speaker = "the character"
+				}
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a thought cloud (bubble-chain outline) near %s at %s with the exact Chinese text 「%s」", speaker, pos, ct.Text))
+			case "sfx":
+				pos := ct.Position
+				if pos == "" {
+					pos = "mid-frame"
+				}
+				letteringLines = append(letteringLines, fmt.Sprintf("Render bold oversized SFX text 「%s」 at %s in dynamic comic lettering style", ct.Text, pos))
+			}
+		}
+		if len(letteringLines) > 0 {
+			parts = append(parts, "Comic lettering (render in-image, legible): "+strings.Join(letteringLines, "; "))
+		}
 	}
 
 	beauty := strings.Join(parts, ". ")

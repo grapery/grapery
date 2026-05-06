@@ -63,6 +63,10 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	}
 
 	nowMs := time.Now().UnixMilli()
+	ar := domain.NormalizeFragmentAspectRatio(strings.TrimSpace(req.AspectRatio))
+	if ar == "" {
+		ar = domain.FragmentAspectDefault
+	}
 	draft := &domain.Fragment{
 		BaseModel: common.BaseModel{
 			ID:        uuid.New().String(),
@@ -78,6 +82,7 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		IsDraft:         true,
 		SourceType:      string(domain.FragmentSourceAIGeneration),
 		SourceID:        taskID,
+		AspectRatio:     ar,
 		EngagementStats: common.EngagementStats{},
 	}
 	if err := s.fragmentRepo.Create(ctx, draft); err != nil {
@@ -266,6 +271,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		existing.GenerationTaskID = taskID
 		existing.GenerationMetadata = generationMetadata
 		existing.UpdatedAt = now
+		existing.AspectRatio = resolvedAR
 		if caption != "" {
 			existing.Caption = caption
 		}
@@ -297,6 +303,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			SourceID:           taskID,
 			GenerationTaskID:   taskID,
 			GenerationMetadata: generationMetadata,
+			AspectRatio:        resolvedAR,
 			EngagementStats:    common.EngagementStats{},
 		}
 		if caption != "" {

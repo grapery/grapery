@@ -484,6 +484,25 @@ func (s *Service) RetryCharacterGenerationTask(ctx context.Context, userID, task
 	return task, nil
 }
 
+func (s *Service) DismissCharacterGenerationTaskFromDrafts(ctx context.Context, userID, taskID string) (*domain.CharacterGenerationTask, error) {
+	task, err := s.GetCharacterGenerationTask(ctx, userID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task.Status != domain.CharacterGenerationStatusCompleted {
+		return nil, errors.New("only completed tasks can be removed from drafts")
+	}
+	if task.DraftDismissedAt != nil {
+		return task, nil
+	}
+	now := time.Now().Unix()
+	task.DraftDismissedAt = &now
+	if err := s.repo.UpdateCharacterGenerationTask(ctx, task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
 func (s *Service) runCharacterGenerationTask(ctx context.Context, taskID string) {
 	task, err := s.repo.CharacterGenerationTaskByID(ctx, taskID)
 	if err != nil || task == nil {
@@ -2237,7 +2256,7 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 	return avatarURL, nil
 }
 
-// aspectRatioToSize converts aspect ratio string to image size
+// aspectRatioToSize converts aspect ratio string to image size（火山方舟等要求总像素 ≥ 921600，4:3/3:4 不可用 1024×768）。
 func aspectRatioToSize(aspectRatio string) string {
 	switch aspectRatio {
 	case "1:1":
@@ -2247,9 +2266,9 @@ func aspectRatioToSize(aspectRatio string) string {
 	case "9:16":
 		return "1080x1920"
 	case "4:3":
-		return "1024x768"
+		return "1280x960"
 	case "3:4":
-		return "768x1024"
+		return "960x1280"
 	default:
 		return "1024x1024"
 	}

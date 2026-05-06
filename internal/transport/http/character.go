@@ -123,6 +123,28 @@ func (h *Handler) RetryCharacterGenerationTask(c *gin.Context) {
 	Success(c, task)
 }
 
+func (h *Handler) DismissCharacterGenerationTaskFromDrafts(c *gin.Context) {
+	userID := authPkg.GetUserID(c)
+	if userID == "" {
+		Unauthorized(c, "not authenticated")
+		return
+	}
+	task, err := h.svc.DismissCharacterGenerationTaskFromDrafts(c.Request.Context(), userID, c.Param("taskId"))
+	if err != nil {
+		if err == domain.ErrNotFound || err.Error() == "record not found" {
+			NotFound(c, "task not found")
+			return
+		}
+		if err.Error() == "unauthorized" {
+			Forbidden(c, "unauthorized")
+			return
+		}
+		Error(c, CodeError, err.Error())
+		return
+	}
+	Success(c, task)
+}
+
 func (h *Handler) PreviewFragmentCharactersForStory(c *gin.Context) {
 	userID := authPkg.GetUserID(c)
 	if userID == "" {

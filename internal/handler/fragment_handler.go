@@ -143,6 +143,7 @@ type CreateFragmentRequest struct {
 	Visibility    string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	Topic         *string  `json:"topic" binding:"omitempty,max=200"`
 	Caption       *string  `json:"caption" binding:"omitempty,max=500"`
+	AspectRatio   string   `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 }
 
 // UpdateFragmentRequest represents the request to update a fragment
@@ -155,6 +156,7 @@ type UpdateFragmentRequest struct {
 	Caption       *string   `json:"caption" binding:"omitempty,max=500"`
 	Visibility    *string   `json:"visibility" binding:"omitempty,oneof=public followers followers_only private"`
 	IsDraft       *bool     `json:"isDraft,omitempty"`
+	AspectRatio   *string   `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 }
 
 // CreateFragment handles POST /fragments
@@ -223,6 +225,9 @@ func (h *FragmentHandler) CreateFragment(c *gin.Context) {
 		Caption:       strings.TrimSpace(stringPtrValue(req.Caption)),
 		SourceType:    string(domain.FragmentSourceOriginal), // 用户手动创建的碎片为原创
 		SourceID:      "",                                    // 原创碎片无来源ID
+	}
+	if ar := domain.NormalizeFragmentAspectRatio(strings.TrimSpace(req.AspectRatio)); ar != "" {
+		fragment.AspectRatio = ar
 	}
 
 	if err := h.fragmentRepo.Create(c.Request.Context(), fragment); err != nil {
@@ -572,6 +577,11 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 	wasDraft := fragment.IsDraft
 	if req.IsDraft != nil {
 		fragment.IsDraft = *req.IsDraft
+	}
+	if req.AspectRatio != nil {
+		if ar := domain.NormalizeFragmentAspectRatio(strings.TrimSpace(*req.AspectRatio)); ar != "" {
+			fragment.AspectRatio = ar
+		}
 	}
 
 	if err := h.fragmentRepo.Update(c.Request.Context(), fragment); err != nil {

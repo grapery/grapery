@@ -361,65 +361,109 @@ func (s *Service) uploadStoryboardSceneImageOSS(gen *domain.StoryboardImageGener
 	return originalImageURL
 }
 
-// buildComicPageImageGenerationLLMPrompt 让文本模型产出与单图流水线相同 JSON 形状，但语义强制「一页多格漫画」。
+// buildComicPageImageGenerationLLMPrompt 让文本模型为「一页多格漫画」输出结构化 JSON，
+// 包含每格分镜描述、漫画文字层（对白/思想泡/拟声/旁白）及整页视觉参数。
 func (s *Service) buildComicPageImageGenerationLLMPrompt(gen *domain.StoryboardImageGeneration, opts ComicPagePipelineOptions) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`Create a detailed image generation prompt for a SINGLE OUTPUT IMAGE that is a multi-panel comic page (one file containing %d sequential panels), not a single full-bleed illustration.
 
-Layout preset: %s
-Target output aspect ratio: %s
-Dialogue mode: %s — if "auto" or "from_user_input", include speech balloons where appropriate; if "none", no dialogue bubbles.
+	dialogueMode := strings.TrimSpace(opts.DialogueMode)
+	dialogueModeDesc := "include speech balloons and comic lettering where the scene calls for it"
+	if dialogueMode == "none" {
+		dialogueModeDesc = "no speech balloons or dialogue text — purely atmospheric / visual storytelling"
+	}
 
-The page must have clear gutters/spacing between panels (modern webtoon / graphic novel). Maintain consistent character design across all panels. Use cinematic lighting and readable comic typography for any text in balloons.
+	b.WriteString(fmt.Sprintf(`You are a professional manga/webtoon panel director and image prompt engineer.
+Create a detailed prompt for a SINGLE OUTPUT IMAGE that is one multi-panel comic page containing exactly %d sequential panels.
+
+Layout preset  : %s
+Output ratio   : %s
+Dialogue mode  : %s (%s)
+
+Page-level rules:
+- Clear gutters between panels (2–4%% of page width, dark or white).
+- Consistent character design, palette, and line quality across all panels.
+- Reading order: left-to-right, top-to-bottom (webtoon / manga right-to-left only if style demands).
+- Lettering must be drawn inside the image by the image model — NO app-side overlay.
 
 `,
 		opts.PanelCount,
 		strings.TrimSpace(opts.LayoutPreset),
 		strings.TrimSpace(opts.PageAspectRatio),
-		strings.TrimSpace(opts.DialogueMode),
+		dialogueMode,
+		dialogueModeDesc,
 	))
 
-	b.WriteString(fmt.Sprintf("Scene Title: %s\n", gen.SceneTitle))
-	b.WriteString(fmt.Sprintf("Scene Description / beats: %s\n", gen.SceneDescription))
+	b.WriteString(fmt.Sprintf("## Scene narrative\nTitle: %s\nDescription: %s\n", gen.SceneTitle, gen.SceneDescription))
 
 	if gen.StoryStyle != nil {
-		b.WriteString("\n## Story Style Configuration:\n")
-		b.WriteString(fmt.Sprintf("- Style: %s\n", gen.StoryStyle.Style))
+		b.WriteString("\n## Story style\n")
+		b.WriteString(fmt.Sprintf("- Slug : %s\n", gen.StoryStyle.Style))
 		if gen.StoryStyle.Description != "" {
-			b.WriteString(fmt.Sprintf("- Style Description: %s\n", gen.StoryStyle.Description))
+			b.WriteString(fmt.Sprintf("- Notes: %s\n", gen.StoryStyle.Description))
 		}
-		b.WriteString("\nThe comic page MUST follow the story's style configuration.\n")
+		b.WriteString("The entire comic page MUST match this style for art direction, palette, and line quality.\n")
 	}
 
 	if len(gen.ReferenceImages) > 0 {
-		b.WriteString("\n## Reference images\n")
-		b.WriteString("Use references for character identity and continuity across panels.\n")
+		b.WriteString("\n## Reference images (character identity anchors)\n")
+		b.WriteString("Use the provided reference images to maintain exact character appearance (face, hair, costume) across every panel.\n")
 	}
 
 	if gen.IsTransitionScene {
-		b.WriteString("\n## Scene Type: Transition\n")
-		b.WriteString("No main characters; environment-focused panels only.\n")
+		b.WriteString("\n## Scene type: atmospheric transition\n")
+		b.WriteString("No main characters appear. All panels are environment/atmosphere shots. Do NOT add dialogue, thought bubbles, or SFX.\n")
 	} else if len(gen.SceneCharacters) > 0 {
-		b.WriteString("\n## Characters:\n")
+		b.WriteString("\n## Characters in this scene\n")
 		for _, n := range gen.SceneCharacters {
 			b.WriteString(fmt.Sprintf("- %s\n", n))
 		}
 	}
 
-	b.WriteString(`
-Please return a structured JSON object (without markdown code blocks) with the following format:
+	if dialogueMode != "none" && !gen.IsTransitionScene {
+		b.WriteString(`
+## Comic lettering guide (per-panel)
+For any panel where a character speaks, reacts, or has a salient inner thought, include the corresponding entry in that panel's "comicTexts" array.
+Lettering types and rendering rules:
+  narration  → rectangular caption box, usually top or bottom of panel; use for time/place cues or omniscient narration.
+  dialogue   → speech balloon (oval) with a pointed tail toward the speaker's mouth; note tail direction in additionalNotes.
+  thought    → cloud/bubble-chain outline balloon; tail is a chain of small circles toward the thinker.
+  sfx        → bold, oversized onomatopoeia drawn directly on the image (e.g. 砰！ 啊？ ……); no fixed bubble shape.
+Text constraints: each "text" value ≤ 12 Chinese characters. Per-panel cap: ~1 narration, 1–2 dialogue, 1 sfx, 1 thought.
+Reserve negative space near balloons; do not cover eyes or key props.
+Silent / purely atmospheric panels → comicTexts: [].
+`)
+	}
+
+	b.WriteString(fmt.Sprintf(`
+## Output format
+Return ONLY a JSON object (no markdown, no commentary). Schema:
 {
-  "artStyle": "Overall art style for the entire comic page (must match story style)",
-  "lighting": "Lighting across panels; may vary slightly per panel but stay coherent",
-  "colorPalette": "Palette for the page",
-  "composition": "Describe the multi-panel grid: rows/columns, which panel is wide, reading order, gutters",
-  "keyElements": ["panel-specific beats", "speech bubbles if any", "props"],
-  "mood": "Overall mood",
-  "additionalNotes": "Speech bubble text language, panel borders, any SFX"
+  "artStyle": "Executable English art-direction string covering medium, line quality, rendering technique — must match story style.",
+  "lighting": "Lighting brief for the whole page; note if it shifts between panels.",
+  "colorPalette": "Palette and color-grading descriptor.",
+  "composition": "Describe the %d-panel grid: which rows/columns each panel occupies, which panel is wide/spotlight, gutter style.",
+  "keyElements": [
+    "Panel 1: [shot type + character action + setting + any key prop]",
+    "Panel 2: ...",
+    "... (one entry per panel)"
+  ],
+  "mood": "Overall emotional tone of the page.",
+  "additionalNotes": "Panel border style, reading order note, balloon tail directions, SFX font treatment, any special rendering instructions.",
+  "comicTexts": [
+    {
+      "panelIndex": 0,
+      "type": "narration | dialogue | thought | sfx",
+      "text": "精确中文短句（≤12字）",
+      "speaker": "dialogue/thought时填角色名；其余留空",
+      "position": "top-left | top-right | bottom-left | bottom-right | mid-frame | speech-bubble | thought-bubble"
+    }
+  ]
 }
 
-Important: Return ONLY the JSON object. The merged fields must describe ONE multi-panel comic PAGE as a single generative image.
-LENGTH: When merged into one image prompt, keep substantive Chinese text (汉字) within 220 characters — be concise.`)
+Important: "keyElements" must have exactly %d entries (one per panel). "comicTexts" entries use zero-based "panelIndex".
+LENGTH: Each JSON string field should be concise (one short phrase or clause). The server will prepend the full scene narrative.`,
+		opts.PanelCount, opts.PanelCount,
+	))
 
 	return b.String()
 }

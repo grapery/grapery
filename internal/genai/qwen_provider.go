@@ -58,6 +58,8 @@ func (p *qwenProvider) Generate(ctx context.Context, req *GenerateRequest) (*Gen
 		return p.imageToVideo(ctx, req)
 	case OperationKeyframeToVideo:
 		return p.keyframeToVideo(ctx, req)
+	case OperationVideoEdit:
+		return p.videoEdit(ctx, req)
 	default:
 		return nil, fmt.Errorf("qwen provider does not support video operation %s", req.Operation)
 	}
@@ -78,8 +80,24 @@ func (p *qwenProvider) GenerateImage(ctx context.Context, req *GenerateRequest) 
 }
 
 func (p *qwenProvider) GetVideoStatus(ctx context.Context, taskID string) (*GenerateResponse, error) {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return nil, fmt.Errorf("task id is required")
+	}
+
+	// DashScope video-synthesis (HappyHorse, Wan I2V, etc.) returns nested output on GET /tasks/{id}.
+	syn, synErr := p.client.GetImageToVideoTask(ctx, taskID)
+	if synErr == nil && syn != nil && syn.Output != nil {
+		if tid := strings.TrimSpace(syn.Output.TaskID); tid != "" || strings.TrimSpace(syn.Output.TaskStatus) != "" {
+			return buildQwenVideoPollFromSynthesis(p.name, syn), nil
+		}
+	}
+
 	statusResp, err := p.client.GetTaskStatus(ctx, taskID)
 	if err != nil {
+		if synErr != nil {
+			return nil, fmt.Errorf("qwen video status: dashscope task: %v; legacy: %w", synErr, err)
+		}
 		return nil, err
 	}
 
@@ -111,7 +129,6 @@ func (p *qwenProvider) GetVideoStatus(ctx context.Context, taskID string) (*Gene
 		result.Message = trimmed
 	}
 
-	// Add Usage for completed video tasks
 	if result.Status == string(StatusCompleted) && result.VideoURL != "" {
 		result.Usage = &Usage{
 			VideoCount: 1,
@@ -190,9 +207,45 @@ func (p *qwenProvider) textToVideo(ctx context.Context, req *GenerateRequest) (*
 		return nil, fmt.Errorf("prompt is required for qwen text to video")
 	}
 
+	model := resolveQwenVideoModel(p, req)
+	if qwenprovider.IsHappyHorseModel(model) {
+		if pipe := qwenprovider.HappyHorsePipeline(model); pipe != "t2v" {
+			return nil, fmt.Errorf("model %q is not a HappyHorse text-to-video model; use %s", model, qwenprovider.ModelHappyHorseT2V)
+		}
+		model = qwenprovider.ResolveHappyHorseModelID(model, "t2v")
+		resolution := qwenprovider.NormalizeHappyHorseResolution(strings.TrimSpace(req.Resolution))
+		if strings.TrimSpace(req.Resolution) == "" && strings.TrimSpace(req.Quality) != "" {
+			resolution = qwenprovider.NormalizeHappyHorseResolution(strings.TrimSpace(req.Quality))
+		}
+		ratio := strings.TrimSpace(req.AspectRatio)
+		if ratio == "" {
+			ratio = "16:9"
+		}
+		dur := qwenprovider.ClampHappyHorseDuration(req.DurationSeconds, 5)
+		payload := &qwenprovider.HappyHorseT2VPayload{
+			Model: model,
+			Input: qwenprovider.HappyHorseT2VInput{Prompt: prompt},
+			Parameters: &qwenprovider.HappyHorseT2VParams{
+				Resolution: resolution,
+				Ratio:      ratio,
+				Duration:   dur,
+				Watermark:  req.Watermark,
+			},
+		}
+		if req.Seed != 0 {
+			s := int(req.Seed)
+			payload.Parameters.Seed = &s
+		}
+		resp, err := p.client.StartHappyHorseVideoSynthesis(ctx, payload)
+		if err != nil {
+			return nil, err
+		}
+		return buildQwenVideoSynthesisStartResponse(p.name, req, resp), nil
+	}
+
 	payload := &qwenprovider.TextToVideoRequest{
 		Prompt:      prompt,
-		Model:       strings.TrimSpace(req.Model),
+		Model:       model,
 		AspectRatio: strings.TrimSpace(req.AspectRatio),
 		Duration:    req.DurationSeconds,
 		Quality:     strings.TrimSpace(req.Quality),
@@ -218,10 +271,50 @@ func (p *qwenProvider) imageToVideo(ctx context.Context, req *GenerateRequest) (
 		return nil, fmt.Errorf("image_url is required for qwen image to video")
 	}
 
+	model := resolveQwenVideoModel(p, req)
+	if qwenprovider.IsHappyHorseModel(model) {
+		pipe := qwenprovider.HappyHorsePipeline(model)
+		if pipe == "t2v" {
+			return nil, fmt.Errorf("model %q is text-only; use %s for image-to-video", model, qwenprovider.ModelHappyHorseI2V)
+		}
+		if pipe == "video_edit" {
+			return nil, fmt.Errorf("use OperationVideoEdit with %s", qwenprovider.ModelHappyHorseVideoEdit)
+		}
+		model = qwenprovider.ResolveHappyHorseModelID(model, "i2v")
+		resolution := qwenprovider.NormalizeHappyHorseResolution(strings.TrimSpace(req.Resolution))
+		if strings.TrimSpace(req.Resolution) == "" && strings.TrimSpace(req.Quality) != "" {
+			resolution = qwenprovider.NormalizeHappyHorseResolution(strings.TrimSpace(req.Quality))
+		}
+		dur := qwenprovider.ClampHappyHorseDuration(req.DurationSeconds, 5)
+		payload := &qwenprovider.HappyHorseI2VPayload{
+			Model: model,
+			Input: qwenprovider.HappyHorseI2VInput{
+				Prompt: strings.TrimSpace(req.Prompt),
+				Media: []qwenprovider.HappyHorseI2VMedia{
+					{Type: "first_frame", URL: imageURL},
+				},
+			},
+			Parameters: &qwenprovider.HappyHorseI2VParams{
+				Resolution: resolution,
+				Duration:   dur,
+				Watermark:  req.Watermark,
+			},
+		}
+		if req.Seed != 0 {
+			s := int(req.Seed)
+			payload.Parameters.Seed = &s
+		}
+		resp, err := p.client.StartHappyHorseVideoSynthesis(ctx, payload)
+		if err != nil {
+			return nil, err
+		}
+		return buildQwenVideoSynthesisStartResponse(p.name, req, resp), nil
+	}
+
 	payload := &qwenprovider.ImageToVideoRequest{
 		ImageURL:    imageURL,
 		Prompt:      strings.TrimSpace(req.Prompt),
-		Model:       strings.TrimSpace(req.Model),
+		Model:       model,
 		AspectRatio: strings.TrimSpace(req.AspectRatio),
 		Duration:    req.DurationSeconds,
 		CallbackURL: strings.TrimSpace(req.CallbackURL),
@@ -237,6 +330,11 @@ func (p *qwenProvider) imageToVideo(ctx context.Context, req *GenerateRequest) (
 }
 
 func (p *qwenProvider) keyframeToVideo(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
+	model := resolveQwenVideoModel(p, req)
+	if qwenprovider.IsHappyHorseModel(model) {
+		return nil, fmt.Errorf("HappyHorse models do not support first-last-frame on DashScope API; choose another video provider or non-HappyHorse model")
+	}
+
 	first := strings.TrimSpace(req.FirstFrameURL)
 	last := strings.TrimSpace(req.LastFrameURL)
 	if first == "" || last == "" {
@@ -247,7 +345,7 @@ func (p *qwenProvider) keyframeToVideo(ctx context.Context, req *GenerateRequest
 		FirstFrameURL: first,
 		LastFrameURL:  last,
 		Prompt:        strings.TrimSpace(req.Prompt),
-		Model:         strings.TrimSpace(req.Model),
+		Model:         model,
 		Duration:      req.DurationSeconds,
 		CallbackURL:   strings.TrimSpace(req.CallbackURL),
 		Metadata:      cloneMap(req.Metadata),
@@ -259,6 +357,59 @@ func (p *qwenProvider) keyframeToVideo(ctx context.Context, req *GenerateRequest
 	}
 
 	return buildQwenVideoResponse(p.name, req, resp), nil
+}
+
+func (p *qwenProvider) videoEdit(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return nil, fmt.Errorf("prompt is required for video_edit")
+	}
+
+	model := resolveQwenVideoModel(p, req)
+	model = qwenprovider.ResolveHappyHorseModelID(model, "video_edit")
+	if !strings.Contains(strings.ToLower(model), "video-edit") {
+		return nil, fmt.Errorf("video_edit expects model %s", qwenprovider.ModelHappyHorseVideoEdit)
+	}
+
+	refs := collectImages(req.ReferenceImageURL, req.ReferenceImages, 0)
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("video_edit requires at least one URL: the source video as the first reference")
+	}
+	var media []qwenprovider.HappyHorseVideoEditMedia
+	media = append(media, qwenprovider.HappyHorseVideoEditMedia{Type: "video", URL: refs[0]})
+	for _, u := range refs[1:] {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if len(media) >= 6 {
+			break
+		}
+		media = append(media, qwenprovider.HappyHorseVideoEditMedia{Type: "reference_image", URL: u})
+	}
+
+	payload := &qwenprovider.HappyHorseVideoEditPayload{
+		Model: model,
+		Input: qwenprovider.HappyHorseVideoEditInput{
+			Prompt: prompt,
+			Media:  media,
+		},
+		Parameters: &qwenprovider.HappyHorseVideoEditParams{
+			Resolution: qwenprovider.NormalizeHappyHorseResolution(strings.TrimSpace(req.Resolution)),
+			Watermark:  req.Watermark,
+		},
+	}
+	if req.Seed != 0 {
+		s := int(req.Seed)
+		payload.Parameters.Seed = &s
+	}
+
+	resp, err := p.client.StartHappyHorseVideoSynthesis(ctx, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildQwenVideoSynthesisStartResponse(p.name, req, resp), nil
 }
 
 func (p *qwenProvider) textToImage(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
@@ -341,6 +492,107 @@ func (p *qwenProvider) imageToImage(ctx context.Context, req *GenerateRequest) (
 	}
 
 	return buildQwenImageResponse(p.name, req, resp), nil
+}
+
+func resolveQwenVideoModel(p *qwenProvider, req *GenerateRequest) string {
+	if req != nil {
+		if m := strings.TrimSpace(req.Model); m != "" {
+			return m
+		}
+	}
+	if p != nil && p.config != nil {
+		if m := strings.TrimSpace(p.config.VideoModel); m != "" {
+			return m
+		}
+		return strings.TrimSpace(p.config.Model)
+	}
+	return ""
+}
+
+func buildQwenVideoSynthesisStartResponse(provider string, req *GenerateRequest, resp *qwenprovider.VideoSynthesisTaskResponse) *GenerateResponse {
+	now := time.Now()
+	out := &GenerateResponse{
+		Provider:    provider,
+		Operation:   req.Operation,
+		MediaType:   MediaTypeVideo,
+		Status:      string(StatusPending),
+		Metadata:    mergeMaps(req.Metadata),
+		Raw:         map[string]interface{}{"synthesis_response": resp},
+		StartedAt:   now,
+		CompletedAt: now,
+		Message:     string(StatusPending),
+	}
+	if resp == nil {
+		return out
+	}
+	if resp.RequestID != "" {
+		if out.Metadata == nil {
+			out.Metadata = make(map[string]interface{})
+		}
+		out.Metadata["request_id"] = resp.RequestID
+	}
+	if resp.Code != "" {
+		out.ErrorCode = resp.Code
+		out.Error = resp.Message
+		out.Status = string(StatusFailed)
+		out.Message = resp.Message
+	}
+	if resp.Output != nil {
+		out.TaskID = strings.TrimSpace(resp.Output.TaskID)
+		st := NormalizeStatus(resp.Output.TaskStatus)
+		out.Status = st
+		out.Message = strings.TrimSpace(resp.Output.TaskStatus)
+		if resp.Output.Code != "" {
+			out.ErrorCode = resp.Output.Code
+			out.Error = resp.Output.Message
+			out.Status = string(StatusFailed)
+		}
+	}
+	return out
+}
+
+func buildQwenVideoPollFromSynthesis(provider string, resp *qwenprovider.VideoSynthesisTaskResponse) *GenerateResponse {
+	result := &GenerateResponse{
+		Provider:  provider,
+		MediaType: MediaTypeVideo,
+		Metadata:  make(map[string]interface{}),
+		Raw: map[string]interface{}{
+			"synthesis_task": resp,
+		},
+	}
+	if resp == nil {
+		return result
+	}
+	if resp.RequestID != "" {
+		result.Metadata["request_id"] = resp.RequestID
+	}
+	if resp.Code != "" {
+		result.Error = resp.Message
+		result.ErrorCode = resp.Code
+		result.Status = string(StatusFailed)
+	}
+	if resp.Output != nil {
+		result.TaskID = strings.TrimSpace(resp.Output.TaskID)
+		result.Status = NormalizeStatus(resp.Output.TaskStatus)
+		result.Message = strings.TrimSpace(resp.Output.TaskStatus)
+		result.VideoURL = strings.TrimSpace(resp.Output.VideoURL)
+		if resp.Output.Code != "" {
+			result.Error = resp.Output.Message
+			result.ErrorCode = resp.Output.Code
+			result.Status = string(StatusFailed)
+		}
+	}
+	if resp.Usage != nil {
+		u := &Usage{VideoCount: resp.Usage.VideoCount}
+		if resp.Usage.Duration > 0 {
+			u.DurationSeconds = resp.Usage.Duration
+		}
+		result.Usage = u
+		if result.VideoURL != "" && result.Status == string(StatusCompleted) {
+			result.Usage.VideoCount = 1
+		}
+	}
+	return result
 }
 
 func buildQwenVideoResponse(provider string, req *GenerateRequest, resp *qwenprovider.StartResponse) *GenerateResponse {

@@ -143,6 +143,8 @@ type CharacterGenerationTask struct {
 	CreatedAt                  int64  `json:"createdAt"`
 	UpdatedAt                  int64  `json:"updatedAt"`
 	CompletedAt                *int64 `json:"completedAt,omitempty"`
+	// DraftDismissedAt is set when the user confirms removal from the drafts list (server persists; list API omits these rows).
+	DraftDismissedAt *int64 `json:"draftDismissedAt,omitempty"`
 
 	Character *Character `json:"character,omitempty"`
 }

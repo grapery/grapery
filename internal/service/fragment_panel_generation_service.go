@@ -144,6 +144,7 @@ func (s *FragmentPanelGenerationService) StartGeneration(ctx context.Context, us
 		IsDraft:         true,
 		SourceType:      string(domain.FragmentSourcePanelGeneration),
 		SourceID:        taskID,
+		AspectRatio:     ar,
 		EngagementStats: common.EngagementStats{},
 	}
 
@@ -1187,6 +1188,7 @@ func (s *FragmentPanelGenerationService) syncDraftFromTask(ctx context.Context, 
 	}
 	frag.Content = partial
 	frag.Topic = panelTopicForFragment(task.Request, frag.Topic)
+	frag.AspectRatio = domain.NormalizeFragmentAspectRatio(task.Request.AspectRatio)
 	frag.UpdatedAt = time.Now().UnixMilli()
 	_ = s.fragmentRepo.Update(ctx, frag)
 }
@@ -1208,6 +1210,9 @@ func (s *FragmentPanelGenerationService) finalizeDraft(ctx context.Context, draf
 		frag.Caption = caption
 	}
 	frag.Topic = panelTopicForFragment(req, frag.Topic)
+	if ar := domain.NormalizeFragmentAspectRatio(req.AspectRatio); ar != "" {
+		frag.AspectRatio = ar
+	}
 	frag.UpdatedAt = time.Now().UnixMilli()
 	return s.fragmentRepo.Update(ctx, frag)
 }

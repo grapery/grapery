@@ -23,6 +23,8 @@ const (
 	OperationImageToVideo      OperationType = "image_to_video"
 	OperationKeyframeToVideo   OperationType = "keyframe_to_video"
 	OperationStoryboardToVideo OperationType = "storyboard_to_video"
+	// OperationVideoEdit edits an existing video with optional reference images (e.g. Alibaba HappyHorse video-edit).
+	OperationVideoEdit OperationType = "video_edit"
 )
 
 // TaskStatus represents the normalized status of a generation task.
@@ -59,7 +61,7 @@ func (op OperationType) MediaType() MediaType {
 	switch op {
 	case OperationTextToImage, OperationImageToImage:
 		return MediaTypeImage
-	case OperationTextToVideo, OperationImageToVideo, OperationKeyframeToVideo, OperationStoryboardToVideo:
+	case OperationTextToVideo, OperationImageToVideo, OperationKeyframeToVideo, OperationStoryboardToVideo, OperationVideoEdit:
 		return MediaTypeVideo
 	default:
 		return MediaType("")
@@ -97,24 +99,24 @@ type GenerateRequest struct {
 	LastFrameData      []byte
 	FirstFrameMIMEType string
 	LastFrameMIMEType  string
-	Size              string
-	Width             int
-	Height            int
-	Seed              int
-	OutputCount       int
-	ResponseFormat    string
-	Watermark         *bool
-	GuidanceScale     float64
-	AudioURL          string
-	Template          string
-	Storyboard        map[string]interface{}
-	UserID            int64
-	Platform          string
-	Mode              GenerationMode
-	ImageData         []byte
-	VideoData         []byte
-	ImageMIMEType     string
-	VideoMIMEType     string
+	Size               string
+	Width              int
+	Height             int
+	Seed               int
+	OutputCount        int
+	ResponseFormat     string
+	Watermark          *bool
+	GuidanceScale      float64
+	AudioURL           string
+	Template           string
+	Storyboard         map[string]interface{}
+	UserID             int64
+	Platform           string
+	Mode               GenerationMode
+	ImageData          []byte
+	VideoData          []byte
+	ImageMIMEType      string
+	VideoMIMEType      string
 }
 
 // Clone returns a deep copy of the request to avoid mutating caller state.

@@ -51,6 +51,9 @@ func (r *Repository) UpdateCharacterGenerationTask(ctx context.Context, task *do
 		"updated_at":    time.Now(),
 		"completed_at":  model.CompletedAt,
 	}
+	if model.DraftDismissedAt != nil {
+		updates["draft_dismissed_at"] = model.DraftDismissedAt
+	}
 	if err := r.db.WithContext(ctx).Model(&CharacterGenerationTask{}).
 		Where("id = ?", model.ID).
 		Updates(updates).Error; err != nil {
@@ -97,7 +100,8 @@ func (r *Repository) ListCharacterGenerationTasks(ctx context.Context, userID, s
 	}
 	query := r.db.WithContext(ctx).
 		Preload("Character").
-		Where("user_id = ?", userID)
+		Where("user_id = ?", userID).
+		Where("NOT (status = ? AND draft_dismissed_at IS NOT NULL)", domain.CharacterGenerationStatusCompleted)
 	if s := strings.TrimSpace(status); s != "" {
 		query = query.Where("status = ?", s)
 	}

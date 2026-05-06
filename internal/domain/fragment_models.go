@@ -63,6 +63,8 @@ type Fragment struct {
 	IsConverted        bool    `json:"isConverted" gorm:"column:is_converted;type:tinyint(1);default:0;index"`                  // 是否已转换为故事
 	GenerationTaskID   string  `json:"generationTaskId,omitempty" gorm:"column:generation_task_id;type:varchar(36);index"`      // 来源生成任务 ID
 	GenerationMetadata string  `json:"generationMetadata,omitempty" gorm:"column:generation_metadata;type:longtext"`            // 生成 trace/策略等元数据 JSON
+	// AspectRatio 配图宽高比（1:1、16:9、9:16、3:4、4:3）；与故事「图片比例」及碎片 AI 生成约定一致
+	AspectRatio string `json:"aspectRatio,omitempty" gorm:"column:image_aspect_ratio;size:16;index"`
 
 	// 向后兼容字段（内部使用）
 	CreatorID     string    `json:"-" gorm:"column:creator_id;type:varchar(36);not null;index"`              // 兼容旧代码 - 不在 JSON 中暴露

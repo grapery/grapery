@@ -351,6 +351,7 @@ type CharacterGenerationTask struct {
 	CreatedAt                  time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt                  time.Time      `gorm:"autoUpdateTime;index"`
 	CompletedAt                *time.Time     `gorm:"index"`
+	DraftDismissedAt           *time.Time     `gorm:"index"`
 	DeletedAt                  gorm.DeletedAt `gorm:"index"`
 }
 
@@ -1233,6 +1234,7 @@ type FragmentDB struct {
 	IsDraft            bool    `gorm:"column:is_draft;type:tinyint(1);default:0;index"`           // 草稿（AI 生成落库等）
 	GenerationTaskID   string  `gorm:"column:generation_task_id;size:36;index"`                   // AI 碎片生成任务 ID
 	GenerationMetadata string  `gorm:"column:generation_metadata;type:longtext"`                  // 生成 trace/策略等 JSON
+	ImageAspectRatio   string  `gorm:"column:image_aspect_ratio;size:16;index"`                  // 配图比例 1:1 / 16:9 等
 	Likes              int     `gorm:"type:int;default:0"`                                        // 点赞数
 	Comments           int     `gorm:"type:int;default:0"`                                        // 评论数
 	Shares             int     `gorm:"type:int;default:0"`                                        // 分享数

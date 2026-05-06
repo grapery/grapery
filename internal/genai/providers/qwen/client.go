@@ -482,6 +482,19 @@ func (c *Client) startImageToVideo(ctx context.Context, payload *ImageToVideoSyn
 	return resp, nil
 }
 
+// StartHappyHorseVideoSynthesis creates an async HappyHorse job (T2V / I2V / video-edit) on the DashScope video-synthesis endpoint.
+func (c *Client) StartHappyHorseVideoSynthesis(ctx context.Context, payload interface{}) (*VideoSynthesisTaskResponse, error) {
+	if payload == nil {
+		return nil, fmt.Errorf("payload cannot be nil")
+	}
+	resp := &VideoSynthesisTaskResponse{}
+	headers := map[string]string{"X-DashScope-Async": "enable"}
+	if err := c.doRequest(ctx, http.MethodPost, videoSynthesisPath, payload, resp, headers); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 // DownloadRendered retrieves rendered media for the specified task.
 func (c *Client) DownloadRendered(ctx context.Context, taskID string) ([]byte, error) {
 	endpoint := c.endpoint(fmt.Sprintf(renderDownloadPath, url.PathEscape(taskID)))

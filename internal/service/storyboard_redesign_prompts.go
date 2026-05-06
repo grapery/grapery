@@ -66,10 +66,11 @@ Hard requirements:
 }
 
 func buildStoryboardSceneWriterSystemPrompt() string {
-	return `You are a cinematic storyboard writer. Convert a validated bible and beat list into final storyboard content and scenes.
+	return `You are a cinematic storyboard writer and manga/comic panel director. Convert a validated bible and beat list into final storyboard content and scenes.
 Do not change visual bible facts, character IDs, character keys, location keys, or beat order.
 For every scene, include an English imagePrompt that can drive image generation with reference images.
 Use the character three-view sheet as identity authority, but compose a new scene pose and camera according to the beat.
+When the story style or beat requires it, populate comicTexts with on-image lettering (dialogue bubbles, thought bubbles, narration boxes, SFX) so the image model paints them directly — no app-side overlay.
 Output strict JSON only.`
 }
 
@@ -98,8 +99,14 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
       "referenceKeys": ["char_1","loc_1"],
       "continuityNote": "what must carry forward from previous scene or parent",
       "beatPurpose": "same purpose as beat",
-      "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose.",
-      "visualState": {"characters":"wardrobe/emotion/injuries/props after this scene"}
+      "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose. When comicTexts are present, describe speech balloon layout, tail direction, thought-bubble cloud style, SFX font treatment, and negative space reserved for lettering — so the image model renders them directly in-image.",
+      "visualState": {"characters":"wardrobe/emotion/injuries/props after this scene"},
+      "comicTexts": [
+        {"type":"narration","text":"中文旁白短句（≤12字）","speaker":"","position":"top-left"},
+        {"type":"dialogue","text":"台词（≤12字）","speaker":"char_1","position":"speech-bubble"},
+        {"type":"thought","text":"内心独白（≤12字）","speaker":"char_1","position":"thought-bubble"},
+        {"type":"sfx","text":"砰！","speaker":"","position":"mid-frame"}
+      ]
     }
   ]
 }
@@ -107,6 +114,8 @@ Hard requirements:
 - scenes length exactly matches requested count.
 - referenceKeys must be declared in the bible.
 - imagePrompt must be English and include identity, action, environment, composition, lighting, palette, mood, texture.
+- comicTexts may be omitted or an empty array for silent/atmospheric scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
+- imagePrompt must mirror any comicTexts as concrete English lettering instructions (balloon shape, tail direction, font weight, reserved white space).
 - Do not output Markdown or commentary.`)
 	return b.String()
 }

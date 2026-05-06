@@ -280,6 +280,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/character-generation-tasks", h.ListCharacterGenerationTasks)
 			authenticated.GET("/character-generation-tasks/:taskId", h.GetCharacterGenerationTask)
 			authenticated.POST("/character-generation-tasks/:taskId/retry", h.RetryCharacterGenerationTask)
+			authenticated.POST("/character-generation-tasks/:taskId/dismiss-from-drafts", h.DismissCharacterGenerationTaskFromDrafts)
 			authenticated.GET("/stories/:id/fragment-character-suggestions", h.PreviewFragmentCharactersForStory)
 			aiGen.POST("/characters/generate", h.GenerateCharacterAttributes) // AI生成角色属性
 			authenticated.PUT("/characters/:id", h.UpdateCharacter)
