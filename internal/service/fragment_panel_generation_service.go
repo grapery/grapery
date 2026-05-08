@@ -364,7 +364,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		return
 	}
 
-	visualEvidence, visionTok, visionDur := s.analyzePanelVisualEvidence(ctx, req)
+	visualEvidence, visionTok, visionDur := s.analyzePanelVisualEvidence(ctx, taskID, req)
 	if len(visualEvidence) > 0 {
 		task.VisualEvidence = visualEvidence
 		appendPanelMetric(task, "visual_evidence", visionTok, visionDur, visualEvidence[0].Provider, visualEvidence[0].Model)
@@ -445,7 +445,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 	s.completePanelGeneration(ctx, task, taskID, draftID, n)
 }
 
-func (s *FragmentPanelGenerationService) analyzePanelVisualEvidence(ctx context.Context, req domain.FragmentPanelGenerationRequest) ([]domain.FragmentVisualEvidence, int, int64) {
+func (s *FragmentPanelGenerationService) analyzePanelVisualEvidence(ctx context.Context, taskID string, req domain.FragmentPanelGenerationRequest) ([]domain.FragmentVisualEvidence, int, int64) {
 	if s.aiService == nil {
 		return nil, 0, 0
 	}
@@ -455,12 +455,14 @@ func (s *FragmentPanelGenerationService) analyzePanelVisualEvidence(ctx context.
 	}
 	start := time.Now()
 	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
-		Prompt:       buildFragmentVisualEvidencePrompt(req.UserInput, req.Style, imageURLs),
-		ImageURLs:    imageURLs,
-		ProviderHint: NormalizeTextPlanProvider("", req.UserRegion, s.aiGen),
-		MaxTokens:    4096,
-		Temperature:  0.25,
-		Step:         "panel_visual_evidence",
+		Prompt:            buildFragmentVisualEvidencePrompt(req.UserInput, req.Style, imageURLs),
+		ImageURLs:         imageURLs,
+		ProviderHint:      NormalizeTextPlanProvider("", req.UserRegion, s.aiGen),
+		MaxTokens:         4096,
+		Temperature:       0.25,
+		RelatedEntityType: "fragment_panel_generation",
+		RelatedEntityID:   taskID,
+		Step:              "panel_visual_evidence",
 	})
 	dur := time.Since(start).Milliseconds()
 	if err != nil {
@@ -919,11 +921,13 @@ func (s *FragmentPanelGenerationService) runPanelConsistencyCheck(ctx context.Co
 		string(vbBytes), string(evidenceBytes), string(planBytes), urlLines.String())
 
 	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
-		Prompt:      prompt,
-		ImageURLs:   auditURLs,
-		MaxTokens:   2048,
-		Temperature: 0.25,
-		Step:        "panel_consistency_audit",
+		Prompt:            prompt,
+		ImageURLs:         auditURLs,
+		MaxTokens:         2048,
+		Temperature:       0.25,
+		RelatedEntityType: "fragment_panel_generation",
+		RelatedEntityID:   task.ID,
+		Step:              "panel_consistency_audit",
 	})
 	dur := time.Since(start).Milliseconds()
 	if err != nil {

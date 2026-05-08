@@ -978,13 +978,15 @@ func (s *AIService) generateFragmentStoryMultimodal(ctx context.Context, prompt 
 }
 
 // generateFragmentExtractionMultimodalRaw 多模态提取：返回完整 JSON 文本（含 visualBible），不裁剪为 content-only。
-func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string) (string, int, error) {
+func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string, relatedEntityType, relatedEntityID string) (string, int, error) {
 	resp, err := s.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
-		Prompt:      prompt,
-		ImageURLs:   imageURLs,
-		MaxTokens:   4096,
-		Temperature: 0.55,
-		Step:        "fragment_extraction",
+		Prompt:            prompt,
+		ImageURLs:         imageURLs,
+		MaxTokens:         4096,
+		Temperature:       0.55,
+		RelatedEntityID:   relatedEntityID,
+		RelatedEntityType: relatedEntityType,
+		Step:              "fragment_extraction",
 	})
 	if err != nil {
 		return "", 0, err
@@ -1010,6 +1012,56 @@ type FragmentVisionJSONResult struct {
 	DurationMs int64
 	Provider   string
 	Model      string
+}
+
+func (s *AIService) recordFragmentPromptAudit(ctx context.Context, relatedType, relatedID, step, promptKind, provider, model string, temperature float64, maxTokens int, prompt string, imageURLs []string, output string, tokens int, metadata map[string]any) {
+	if s == nil || s.repo == nil || strings.TrimSpace(prompt) == "" {
+		return
+	}
+	step = strings.TrimSpace(step)
+	if step == "" {
+		step = "fragment_ai"
+	}
+	promptKind = strings.TrimSpace(promptKind)
+	if promptKind == "" {
+		promptKind = step
+	}
+	relatedType = strings.TrimSpace(relatedType)
+	if relatedType == "" {
+		relatedType = "fragment_generation"
+	}
+	tokenUsage := map[string]any{"totalTokens": tokens}
+	md := map[string]any{"source": "fragment_ai_service"}
+	for k, v := range metadata {
+		md[k] = v
+	}
+	audit := &domain.AIPromptAuditRecord{
+		ID:                    uuid.NewString(),
+		RelatedEntityType:     relatedType,
+		RelatedEntityID:       strings.TrimSpace(relatedID),
+		Step:                  step,
+		PromptKind:            promptKind,
+		PromptTemplateVersion: "fragment_generation_v1",
+		FullPromptHash:        stableSHA256(prompt),
+		Provider:              strings.TrimSpace(provider),
+		Model:                 strings.TrimSpace(model),
+		Temperature:           temperature,
+		MaxTokens:             maxTokens,
+		UserPrompt:            prompt,
+		FinalPrompt:           prompt,
+		ReferenceImageURLs:    fragmentPrefillHTTPImageURLs(imageURLs, 12),
+		Output:                output,
+		TokenUsageJSON:        mustJSON(tokenUsage, "{}"),
+		MetadataJSON:          mustJSON(md, "{}"),
+		CreatedAt:             time.Now().Unix(),
+	}
+	if err := s.repo.CreateAIPromptAuditRecord(ctx, audit); err != nil {
+		s.logger.Warn("failed to create fragment prompt audit",
+			zap.String("relatedEntityType", relatedType),
+			zap.String("relatedEntityID", relatedID),
+			zap.String("step", step),
+			zap.Error(err))
+	}
 }
 
 // GenerateFragmentVisionJSON runs a JSON-mode multimodal analysis/audit with Huoshan or Gemini.
@@ -1044,6 +1096,7 @@ func (s *AIService) GenerateFragmentVisionJSON(ctx context.Context, req *Fragmen
 		case "huoshan":
 			raw, tokens, model, err := s.generateFragmentVisionJSONHuoshan(ctx, req.Prompt, imageURLs, maxTokens, temp)
 			if err == nil && strings.TrimSpace(raw) != "" {
+				s.recordFragmentPromptAudit(ctx, req.RelatedEntityType, req.RelatedEntityID, req.Step, "vision_json", "huoshan", model, float64(temp), int(maxTokens), req.Prompt, imageURLs, strings.TrimSpace(raw), tokens, nil)
 				return &FragmentVisionJSONResult{Raw: strings.TrimSpace(raw), TokensUsed: tokens, DurationMs: time.Since(start).Milliseconds(), Provider: "huoshan", Model: model}, nil
 			}
 			if err != nil {
@@ -1053,6 +1106,7 @@ func (s *AIService) GenerateFragmentVisionJSON(ctx context.Context, req *Fragmen
 		case "gemini":
 			raw, tokens, model, err := s.generateFragmentVisionJSONGemini(ctx, req.Prompt, imageURLs, maxTokens, temp)
 			if err == nil && strings.TrimSpace(raw) != "" {
+				s.recordFragmentPromptAudit(ctx, req.RelatedEntityType, req.RelatedEntityID, req.Step, "vision_json", "gemini", model, float64(temp), int(maxTokens), req.Prompt, imageURLs, strings.TrimSpace(raw), tokens, nil)
 				return &FragmentVisionJSONResult{Raw: strings.TrimSpace(raw), TokensUsed: tokens, DurationMs: time.Since(start).Milliseconds(), Provider: "gemini", Model: model}, nil
 			}
 			if err != nil {
@@ -1187,10 +1241,11 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 		return "", 0, err
 	}
 	if len(imageURLs) > 0 {
-		return s.generateFragmentExtractionMultimodalRaw(ctx, prompt, imageURLs)
+		return s.generateFragmentExtractionMultimodalRaw(ctx, prompt, imageURLs, aiTask.RelatedEntityType, aiTask.RelatedEntityID)
 	}
 	if s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
 		if t, tok, err := s.generateFragmentExtractionTextHuoshan(ctx, prompt); err == nil && strings.TrimSpace(t) != "" {
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "huoshan", "", 0.55, 4096, prompt, nil, strings.TrimSpace(t), tok, nil)
 			return t, tok, nil
 		} else if err != nil {
 			s.logger.Warn("fragment extraction JSON: huoshan failed", zap.Error(err))
@@ -1211,6 +1266,7 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 		if gemResp != nil && gemResp.UsageMetadata != nil {
 			tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
 		}
+		s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "gemini", "", 0.55, 4096, prompt, nil, strings.TrimSpace(text), tokensUsed, nil)
 		return strings.TrimSpace(text), tokensUsed, nil
 	}
 	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
@@ -1285,9 +1341,20 @@ func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.
 	if err != nil {
 		return "", 0, "", err
 	}
+	auditStep := "fragment_text"
+	var inputMeta map[string]any
+	if json.Unmarshal([]byte(aiTask.Input), &inputMeta) == nil {
+		if step, ok := inputMeta["step"].(string); ok && strings.TrimSpace(step) != "" {
+			auditStep = strings.TrimSpace(step)
+		}
+	}
 
 	if len(imageURLs) > 0 {
-		return s.generateFragmentStoryMultimodal(ctx, prompt, imageURLs)
+		content, tokens, inferredAspect, err := s.generateFragmentStoryMultimodal(ctx, prompt, imageURLs)
+		if err == nil {
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, auditStep, "text_multimodal_json", "auto", "", 0.55, 1200, prompt, imageURLs, content, tokens, map[string]any{"inferredAspectRatio": inferredAspect})
+		}
+		return content, tokens, inferredAspect, err
 	}
 
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
@@ -1295,12 +1362,16 @@ func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.
 	if huoshanOK {
 		text, n, err := s.generateFragmentTextHuoshan(ctx, prompt)
 		if err == nil {
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, auditStep, "text", "huoshan", "", 0.7, 1000, prompt, nil, text, n, nil)
 			return text, n, "", nil
 		}
 		if s.geminiClient != nil {
 			s.logger.Warn("fragment text: huoshan failed, falling back to gemini",
 				zap.String("userId", aiTask.UserID), zap.Error(err))
 			t, tok, err2 := s.generateFragmentTextGemini(ctx, prompt)
+			if err2 == nil {
+				s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, auditStep, "text", "gemini", "", 0.7, 1000, prompt, nil, t, tok, map[string]any{"fallbackFrom": "huoshan"})
+			}
 			return t, tok, "", err2
 		}
 		return "", 0, "", err
@@ -1308,6 +1379,9 @@ func (s *AIService) GenerateTextForFragment(ctx context.Context, aiTask *domain.
 
 	if s.geminiClient != nil {
 		t, tok, err := s.generateFragmentTextGemini(ctx, prompt)
+		if err == nil {
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, auditStep, "text", "gemini", "", 0.7, 1000, prompt, nil, t, tok, nil)
+		}
 		return t, tok, "", err
 	}
 

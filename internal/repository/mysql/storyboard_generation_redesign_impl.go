@@ -86,3 +86,26 @@ func (r *Repository) ListAIPromptAuditRecords(ctx context.Context, runID string)
 	}
 	return out, nil
 }
+
+func (r *Repository) ListAIPromptAuditRecordsByEntity(ctx context.Context, entityType, entityID string, limit, offset int) ([]*domain.AIPromptAuditRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	var models []AIPromptAuditRecord
+	if err := r.db.WithContext(ctx).
+		Where("related_entity_type = ? AND related_entity_id = ?", entityType, entityID).
+		Order("created_at ASC, id ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&models).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*domain.AIPromptAuditRecord, len(models))
+	for i := range models {
+		out[i] = modelToAIPromptAuditRecord(&models[i])
+	}
+	return out, nil
+}

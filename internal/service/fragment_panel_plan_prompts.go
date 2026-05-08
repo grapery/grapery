@@ -108,6 +108,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 创作方法论（与「碎片多场景扩写」对齐的精简版）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+%s
+
 【一、世界观一致性】
 - 若多格出现同一角色，外貌（发型、服装颜色款式、体型、标志特征）应一致，除非剧情明确改变（换装、受伤等）。
 - 空间与地貌保持可辨识连续性，避免无因果的跳变。
@@ -128,6 +130,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - visual_hierarchy 说明主视觉、次视觉、背景信息的优先级，避免所有元素平均铺开。
 - shot_type 使用英文短语，例如 close_up、medium_shot、wide_shot、overhead、low_angle、dutch_angle、detail_insert；多区域时可用 wide_shot 概括整图或注明 per-zone。
 - 布局必须服务该格剧情功能（例如铺垫+反转可在一张图内用上下两区完成）。
+- 这四个字段是“文本阶段的前置漫画规划”，后续图片阶段会直接消费：不得留空、不得用模板占位、不得所有格重复同一值。
+- 若故事含「冲击/对抗/追逐/坠落/爆发」语义，至少两格必须在 layout_intent 或 composition_plan 中显式体现冲击镜头语法（如 diagonal_motion、extreme_angle、impact_burst、radial_lines、border_breaking）。
 - 如该格适合漫画表达，必须在 composition_plan / image_prompt 中写清漫画格框、gutter、气泡预留位置，并输出 comic_texts：narration=旁白框、dialogue=角色对白气泡、thought=内心气泡、sfx=拟声/语气音效字。
 - comic_texts 中的中文文字是最终图片中要直接画出来的文字，不是给 App 叠加的占位数据；image_prompt 必须明确要求图片模型 render the exact Chinese text inside the image。
 - 数量上限：每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；每条中文建议不超过 12 个汉字；禁止额外随机文字。
@@ -171,6 +175,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - "panels" 数组恰好 %d 项，index 依次为 0 到 %d。
 - image_prompt：仅英文；每格至少 %d 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
 - layout_intent、composition_plan、shot_type、visual_hierarchy 必须存在且服务当前格剧情，不得所有格重复。
+- 不允许“先不规划，后续生图再决定漫画元素”的写法；漫画相关结构必须在本 JSON 一次性给全。
 - 若某一格采用单图内多区域/子格，composition_plan 与 image_prompt 的 composition 层须一致写出分区、gutter、阅读顺序。
 - comic_texts 可为空数组；若 dialogue/thought 存在，speaker 必须是该格 reference_keys 中的角色 key；文字必须短（建议 <=12 汉字），不要把整段 caption 放入气泡；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；所有 comic_texts 都必须作为图中文字直接绘制在最终图片内，且不允许额外随机文字。
 - caption：仅中文，每格一行，无 # 号、无 markdown。
@@ -182,6 +187,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 		st,
 		styleDesc,
 		ui,
+		structuredMangaLanguageGuidance(),
 		minWords,
 		minWords,
 		panelCount,
@@ -191,5 +197,14 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 	if a := strings.TrimSpace(layoutAddon); a != "" {
 		body += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n版式与对白（用户指定；须融入分镜规划与 caption）\n" + a + "\n"
 	}
-	return body
+
+	return renderPromptDSL(PromptDSL{
+		Role:         "你是一位漫画分镜导演与结构化提示词工程师。",
+		Task:         "根据参考图锚点与用户文字，输出 panels[] 与 visualBible 的结构化 JSON。",
+		Inputs:       map[string]any{"userInput": ui, "styleSlug": st, "styleDesc": styleDesc, "panelCount": panelCount, "minWordsEach": minWords, "layoutAddon": strings.TrimSpace(layoutAddon), "narrativeHint": narr},
+		GlobalConfig: structuredMangaLanguageGuidance(),
+		Sections: []PromptDSLSection{
+			{Title: "Paneling / Camera / Action / Comic Elements Rules", Kind: "text", Body: body},
+		},
+	})
 }

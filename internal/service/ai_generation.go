@@ -1300,7 +1300,10 @@ func (s *AIGenerationService) RecordTextGenerationUsage(ctx context.Context, req
 		RelatedEntityID:   req.RelatedEntityID,
 		RelatedEntityType: req.RelatedEntityType,
 		CreatedAt:         time.Now().Unix(),
-		OutputResult:      "{}",
+		OutputResult:      req.OutputResult,
+	}
+	if record.OutputResult == "" {
+		record.OutputResult = "{}"
 	}
 	if record.TotalTokens == 0 {
 		record.TotalTokens = req.InputTokens + req.OutputTokens
@@ -1309,6 +1312,40 @@ func (s *AIGenerationService) RecordTextGenerationUsage(ctx context.Context, req
 		s.logger.Warn("failed to create AI text generation record",
 			zap.String("relatedEntityId", req.RelatedEntityID),
 			zap.Error(err))
+	}
+	if s.repo != nil && strings.TrimSpace(req.OriginalPrompt) != "" {
+		step := strings.TrimSpace(req.Step)
+		if step == "" {
+			step = "text_generation"
+		}
+		tokenUsage := map[string]any{
+			"inputTokens":  req.InputTokens,
+			"outputTokens": req.OutputTokens,
+			"totalTokens":  record.TotalTokens,
+		}
+		audit := &domain.AIPromptAuditRecord{
+			ID:                    uuid.NewString(),
+			RelatedEntityType:     req.RelatedEntityType,
+			RelatedEntityID:       req.RelatedEntityID,
+			Step:                  step,
+			PromptKind:            "text",
+			PromptTemplateVersion: "storyboard_generation_legacy_v1",
+			Provider:              req.Provider,
+			Model:                 req.Model,
+			UserPrompt:            req.OriginalPrompt,
+			FinalPrompt:           req.OriginalPrompt,
+			FullPromptHash:        stableSHA256(req.OriginalPrompt),
+			Output:                req.OutputResult,
+			TokenUsageJSON:        mustJSON(tokenUsage, "{}"),
+			MetadataJSON:          mustJSON(map[string]any{"source": "RecordTextGenerationUsage", "status": req.Status, "error": req.ErrorMessage}, "{}"),
+			CreatedAt:             time.Now().Unix(),
+		}
+		if err := s.repo.CreateAIPromptAuditRecord(ctx, audit); err != nil {
+			s.logger.Warn("failed to create AI text prompt audit",
+				zap.String("relatedEntityId", req.RelatedEntityID),
+				zap.String("step", step),
+				zap.Error(err))
+		}
 	}
 }
 
@@ -1320,6 +1357,8 @@ type RecordTextGenerationRequest struct {
 	Provider          string
 	Model             string
 	OriginalPrompt    string
+	OutputResult      string
+	Step              string
 	InputTokens       int
 	OutputTokens      int
 	Status            domain.AITaskStatus

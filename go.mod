@@ -3,9 +3,10 @@ module github.com/grapestree/fgrapery/grapery
 go 1.25.0
 
 require (
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.11
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.14
+	github.com/alibabacloud-go/dysmsapi-20170525/v5 v5.5.1
 	github.com/alibabacloud-go/imageaudit-20191230/v3 v3.0.5
-	github.com/alibabacloud-go/tea v1.3.11
+	github.com/alibabacloud-go/tea v1.3.13
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/aliyun/alibaba-cloud-sdk-go v1.63.103
 	github.com/aliyun/aliyun-log-go-sdk v0.1.113
@@ -39,6 +40,7 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.5.7
+	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.0
 )
 
@@ -75,7 +77,6 @@ require (
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gorm.io/driver/sqlite v1.6.0 // indirect
 )
 
 require (
@@ -129,7 +130,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/volcengine/volc-sdk-golang v1.0.23 // indirect
-	go.mongodb.org/mongo-driver v1.17.6 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/arch v0.8.0 // indirect

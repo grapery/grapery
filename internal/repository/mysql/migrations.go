@@ -357,6 +357,11 @@ func (r *Repository) ensureStoryboardScenesSchema() error {
 		{"camera_angle", "VARCHAR(100) DEFAULT ''", "镜头角度"},
 		{"lighting", "VARCHAR(100) DEFAULT ''", "光照"},
 		{"color_palette", "VARCHAR(100) DEFAULT ''", "色彩方案"},
+		{"comic_texts_json", "JSON", "漫画文字层 JSON（对白/思想泡/拟声/旁白）"},
+		{"layout_intent", "VARCHAR(120) DEFAULT ''", "漫画/分镜布局意图"},
+		{"composition_plan", "TEXT", "构图与分区规划"},
+		{"shot_type", "VARCHAR(120) DEFAULT ''", "镜头类型"},
+		{"visual_hierarchy", "TEXT", "视觉层级规划"},
 	}
 
 	for _, col := range columns {

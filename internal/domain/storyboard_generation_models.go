@@ -79,6 +79,8 @@ type StoryboardComicText struct {
 	Text     string `json:"text"`               // 实际要绘入图中的精确短句（建议 ≤12 汉字）
 	Speaker  string `json:"speaker,omitempty"`  // 气泡归属角色（dialogue/thought 时填写，其余可留空）
 	Position string `json:"position,omitempty"` // 建议排版区：top-left / top-right / bottom-left / bottom-right / mid-frame / speech-bubble / thought-bubble
+	// PanelIndex 仅漫画页管线使用：零基 panel 索引。单格故事板文字层可留空。
+	PanelIndex *int `json:"panelIndex,omitempty"`
 }
 
 // ImagePromptDetails 结构化的图片生成提示词详情
@@ -331,6 +333,8 @@ type StoryboardBeat struct {
 	BeatID         string   `json:"beatId,omitempty"`
 	Purpose        string   `json:"purpose"`
 	Summary        string   `json:"summary"`
+	ComicFunction  string   `json:"comicFunction,omitempty"` // establish | dialogue | action_impact | reaction | transition | atmosphere
+	LayoutHint     string   `json:"layoutHint,omitempty"`    // short layout hint for scene writer
 	Characters     []string `json:"characters,omitempty"`
 	LocationKey    string   `json:"locationKey,omitempty"`
 	ReferenceKeys  []string `json:"referenceKeys,omitempty"`
@@ -343,21 +347,26 @@ type StoryboardBiblePlan struct {
 }
 
 type StoryboardScenePlanItem struct {
-	Sequence       int                   `json:"sequence"`
-	Title          string                `json:"title"`
-	Description    string                `json:"description"`
-	Location       string                `json:"location,omitempty"`
-	TimeOfDay      string                `json:"timeOfDay,omitempty"`
-	Characters     []string              `json:"characters,omitempty"`
-	Mood           string                `json:"mood,omitempty"`
-	ReferenceKeys  []string              `json:"referenceKeys,omitempty"`
-	ContinuityNote string                `json:"continuityNote,omitempty"`
-	BeatPurpose    string                `json:"beatPurpose,omitempty"`
-	ImagePrompt    string                `json:"imagePrompt,omitempty"`
-	VisualState    map[string]any        `json:"visualState,omitempty"`
+	Sequence       int            `json:"sequence"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	Location       string         `json:"location,omitempty"`
+	TimeOfDay      string         `json:"timeOfDay,omitempty"`
+	Characters     []string       `json:"characters,omitempty"`
+	Mood           string         `json:"mood,omitempty"`
+	ReferenceKeys  []string       `json:"referenceKeys,omitempty"`
+	ContinuityNote string         `json:"continuityNote,omitempty"`
+	BeatPurpose    string         `json:"beatPurpose,omitempty"`
+	ImagePrompt    string         `json:"imagePrompt,omitempty"`
+	VisualState    map[string]any `json:"visualState,omitempty"`
 	// ComicTexts 本格漫画文字层（对白/思想泡/拟声/旁白）。
 	// AI 规划时产出，随后透传至图片 prompt 让图片模型直接绘入，无需 App 侧叠加。
 	ComicTexts []StoryboardComicText `json:"comicTexts,omitempty"`
+	// 漫画版式规划（与碎片多格规划字段语义对齐）
+	LayoutIntent    string `json:"layoutIntent,omitempty"`
+	CompositionPlan string `json:"compositionPlan,omitempty"`
+	ShotType        string `json:"shotType,omitempty"`
+	VisualHierarchy string `json:"visualHierarchy,omitempty"`
 }
 
 type StoryboardScenePlan struct {

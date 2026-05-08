@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	huoshanark "github.com/grapestree/fgrapery/grapery/internal/genai/providers/huoshan"
@@ -53,6 +54,53 @@ type GenerateFragmentPanelPlanResult struct {
 type fragmentPanelPlanRoot struct {
 	VisualBible *domain.FragmentVisualBible    `json:"visualBible"`
 	Panels      []domain.FragmentPanelPlanItem `json:"panels"`
+}
+
+func (s *AIGenerationService) recordPanelPlanPromptAudit(ctx context.Context, req *GenerateFragmentPanelPlanRequest, provider, model, systemPrompt, userPrompt, refURL, output string, temperature float64, maxTokens int, totalTokens int) {
+	if s == nil || s.repo == nil || req == nil || strings.TrimSpace(userPrompt) == "" {
+		return
+	}
+	entityType := strings.TrimSpace(req.RelatedEntityType)
+	if entityType == "" {
+		entityType = "fragment_panel_generation"
+	}
+	tokenUsage := map[string]any{"totalTokens": totalTokens}
+	metadata := map[string]any{
+		"source":       "fragment_panel_plan",
+		"panelCount":   req.PanelCount,
+		"style":        req.Style,
+		"planProvider": provider,
+	}
+	for k, v := range req.Metadata {
+		metadata[k] = v
+	}
+	record := &domain.AIPromptAuditRecord{
+		ID:                    uuid.NewString(),
+		RelatedEntityType:     entityType,
+		RelatedEntityID:       req.RelatedEntityID,
+		Step:                  "fragment_panel_plan",
+		PromptKind:            "multimodal_json_plan",
+		PromptTemplateVersion: "fragment_panel_plan_v1",
+		FullPromptHash:        stableSHA256(systemPrompt + "\n" + userPrompt),
+		SystemPrompt:          systemPrompt,
+		UserPrompt:            userPrompt,
+		ReferencePreamble:     systemPrompt,
+		FinalPrompt:           userPrompt,
+		ReferenceImageURLs:    fragmentPrefillHTTPImageURLs([]string{refURL}, 1),
+		Provider:              provider,
+		Model:                 model,
+		Temperature:           temperature,
+		MaxTokens:             maxTokens,
+		Output:                output,
+		TokenUsageJSON:        mustJSON(tokenUsage, "{}"),
+		MetadataJSON:          mustJSON(metadata, "{}"),
+		CreatedAt:             time.Now().Unix(),
+	}
+	if err := s.repo.CreateAIPromptAuditRecord(ctx, record); err != nil {
+		s.logger.Warn("failed to create fragment panel plan prompt audit",
+			zap.String("relatedEntityID", req.RelatedEntityID),
+			zap.Error(err))
+	}
 }
 
 // GenerateFragmentPanelPlan runs Step1: reference + text → JSON panel plan (Huoshan 或 Gemini).
@@ -175,6 +223,9 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 	}
 
 	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
+	record.OriginalPrompt = userText
+	record.SystemPrompt = fragmentPanelGeminiReferenceImagePreamble
+	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 	contents := []*genai.Content{{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{
@@ -228,11 +279,9 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 		record.OutputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 		record.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
 	}
-	out := map[string]interface{}{"panelCount": len(plan), "tokens": record.TotalTokens}
-	if ob, err := json.Marshal(out); err == nil {
-		record.OutputResult = string(ob)
-	}
+	record.OutputResult = responseText
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+	s.recordPanelPlanPromptAudit(ctx, req, "gemini", fragmentPanelPlanGeminiModel, fragmentPanelGeminiReferenceImagePreamble, userText, refURL, responseText, float64(temp), int(maxTok), record.TotalTokens)
 
 	if s.enableQuotaReservation && s.quotaReservation != nil && reservation != nil && reservation.Status == string(common.StatusPending) {
 		actualTokens := record.TotalTokens
@@ -344,6 +393,8 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
 	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
+	record.OriginalPrompt = userText
+	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 	maxHuoshanTok := 8192
 	if req.PanelCount >= 5 {
 		maxHuoshanTok = 16384
@@ -421,11 +472,9 @@ retryHuoshanPanelPlan:
 	if record.TotalTokens == 0 {
 		record.TotalTokens = record.InputTokens + record.OutputTokens
 	}
-	out := map[string]interface{}{"panelCount": len(plan), "tokens": record.TotalTokens}
-	if ob, err := json.Marshal(out); err == nil {
-		record.OutputResult = string(ob)
-	}
+	record.OutputResult = responseText
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
+	s.recordPanelPlanPromptAudit(ctx, req, "huoshan", modelName, "", userText, refURL, responseText, 0.35, maxHuoshanTok, record.TotalTokens)
 
 	if s.enableQuotaReservation && s.quotaReservation != nil && reservation != nil && reservation.Status == string(common.StatusPending) {
 		actualTokens := record.TotalTokens

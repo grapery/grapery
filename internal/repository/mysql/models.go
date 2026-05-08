@@ -412,6 +412,11 @@ type StoryboardScene struct {
 	ReferenceKeys   string `gorm:"column:reference_keys_json;type:json"`
 	ImagePrompt     string `gorm:"column:image_prompt;type:longtext"`
 	VisualStateJSON string `gorm:"column:visual_state_json;type:json"`
+	ComicTextsJSON  string `gorm:"column:comic_texts_json;type:json"`
+	LayoutIntent    string `gorm:"column:layout_intent;size:120"`
+	CompositionPlan string `gorm:"column:composition_plan;type:text"`
+	ShotType        string `gorm:"column:shot_type;size:120"`
+	VisualHierarchy string `gorm:"column:visual_hierarchy;type:text"`
 
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`

@@ -283,6 +283,7 @@ type Repository interface {
 	ListStoryboardGenerationAssets(ctx context.Context, runID string) ([]*StoryboardGenerationAsset, error)
 	CreateAIPromptAuditRecord(ctx context.Context, record *AIPromptAuditRecord) error
 	ListAIPromptAuditRecords(ctx context.Context, runID string) ([]*AIPromptAuditRecord, error)
+	ListAIPromptAuditRecordsByEntity(ctx context.Context, entityType, entityID string, limit, offset int) ([]*AIPromptAuditRecord, error)
 
 	// ========== Comment operations ==========
 	CommentByID(ctx context.Context, id string) (*Comment, error)

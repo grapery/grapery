@@ -653,6 +653,12 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 				referenceKeysJSON = string(jsonBytes)
 			}
 		}
+		comicTextsJSON := "[]"
+		if len(scene.ComicTexts) > 0 {
+			if jsonBytes, err := json.Marshal(scene.ComicTexts); err == nil {
+				comicTextsJSON = string(jsonBytes)
+			}
+		}
 		visualStateJSON := scene.VisualStateJSON
 		if visualStateJSON == "" || !json.Valid([]byte(visualStateJSON)) {
 			visualStateJSON = "{}"
@@ -679,6 +685,11 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 			ReferenceKeys:   referenceKeysJSON,
 			ImagePrompt:     scene.ImagePrompt,
 			VisualStateJSON: visualStateJSON,
+			ComicTextsJSON:  comicTextsJSON,
+			LayoutIntent:    strings.TrimSpace(scene.LayoutIntent),
+			CompositionPlan: strings.TrimSpace(scene.CompositionPlan),
+			ShotType:        strings.TrimSpace(scene.ShotType),
+			VisualHierarchy: strings.TrimSpace(scene.VisualHierarchy),
 		}
 		// Also update the domain object with the generated ID
 		scenes[i].ID = dbScenes[i].ID
@@ -760,6 +771,12 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 			referenceKeysJSON = string(jsonBytes)
 		}
 	}
+	comicTextsJSON := "[]"
+	if len(scene.ComicTexts) > 0 {
+		if jsonBytes, err := json.Marshal(scene.ComicTexts); err == nil {
+			comicTextsJSON = string(jsonBytes)
+		}
+	}
 	visualStateJSON := scene.VisualStateJSON
 	if visualStateJSON == "" || !json.Valid([]byte(visualStateJSON)) {
 		visualStateJSON = "{}"
@@ -785,6 +802,11 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 		"reference_keys_json": referenceKeysJSON,
 		"image_prompt":        scene.ImagePrompt,
 		"visual_state_json":   visualStateJSON,
+		"comic_texts_json":    comicTextsJSON,
+		"layout_intent":       strings.TrimSpace(scene.LayoutIntent),
+		"composition_plan":    strings.TrimSpace(scene.CompositionPlan),
+		"shot_type":           strings.TrimSpace(scene.ShotType),
+		"visual_hierarchy":    strings.TrimSpace(scene.VisualHierarchy),
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -876,6 +898,10 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		ContinuityNote:  dbScene.ContinuityNote,
 		ImagePrompt:     dbScene.ImagePrompt,
 		VisualStateJSON: dbScene.VisualStateJSON,
+		LayoutIntent:    dbScene.LayoutIntent,
+		CompositionPlan: dbScene.CompositionPlan,
+		ShotType:        dbScene.ShotType,
+		VisualHierarchy: dbScene.VisualHierarchy,
 	}
 
 	if dbScene.StorySceneID != nil {
@@ -909,6 +935,12 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		var keys []string
 		if err := json.Unmarshal([]byte(dbScene.ReferenceKeys), &keys); err == nil {
 			scene.ReferenceKeys = keys
+		}
+	}
+	if dbScene.ComicTextsJSON != "" && dbScene.ComicTextsJSON != "[]" {
+		var texts []domain.StoryboardComicText
+		if err := json.Unmarshal([]byte(dbScene.ComicTextsJSON), &texts); err == nil {
+			scene.ComicTexts = texts
 		}
 	}
 

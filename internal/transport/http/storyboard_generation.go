@@ -254,6 +254,22 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 		return
 	}
 
+	latestComicPageByScene := map[string]*domain.StoryboardImageGeneration{}
+	if progress, progressErr := h.svc.GetGenerationProgress(c.Request.Context(), storyboardID); progressErr == nil && progress != nil {
+		for _, gen := range progress.ImageGenerations {
+			if gen == nil {
+				continue
+			}
+			if strings.TrimSpace(gen.PipelineKind) != domain.StoryboardImagePipelineComicPage {
+				continue
+			}
+			if gen.Status != domain.GenerationStatusCompleted || strings.TrimSpace(gen.GeneratedImageURL) == "" {
+				continue
+			}
+			latestComicPageByScene[gen.SceneID] = gen
+		}
+	}
+
 	type sceneBatchResult struct {
 		SceneID          string                            `json:"sceneId"`
 		SceneTitle       string                            `json:"sceneTitle"`
@@ -269,14 +285,20 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 
 	for _, scene := range storyboard.StoryboardScenes {
 		if !req.RegenerateAll && scene.Image != "" {
-			results = append(results, sceneBatchResult{
-				SceneID:          scene.ID,
-				SceneTitle:       scene.Title,
-				Status:           "success",
-				ExistingImageURL: scene.Image,
-			})
-			successCount++
-			continue
+			existingComicPage := latestComicPageByScene[scene.ID]
+			if existingComicPage != nil && strings.TrimSpace(existingComicPage.GeneratedImageURL) == strings.TrimSpace(scene.Image) {
+				results = append(results, sceneBatchResult{
+					SceneID:          scene.ID,
+					SceneTitle:       scene.Title,
+					Status:           "success",
+					ExistingImageURL: scene.Image,
+				})
+				successCount++
+				continue
+			}
+			// `scene.Image` may be an older single-panel illustration. The comic-page endpoint
+			// must not report that as success, otherwise the product switch still appears to
+			// generate a single image instead of one image containing multiple panels.
 		}
 
 		characterPortraitMap := make(map[string]string)

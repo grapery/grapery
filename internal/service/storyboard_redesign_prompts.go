@@ -55,13 +55,14 @@ func buildStoryboardBiblePlanUserPrompt(story *domain.Story, storyboard *domain.
     "props": [{"key":"prop_key","name":"","immutableTraits":[""],"currentState":""}],
     "continuityRules": ["identity and plot rule"]
   },
-  "beats": [{"index":0,"beatId":"beat_0","purpose":"","summary":"","characters":["char_1"],"locationKey":"loc_1","referenceKeys":["char_1","loc_1"],"continuityNote":""}]
+  "beats": [{"index":0,"beatId":"beat_0","purpose":"","summary":"","comicFunction":"establish","layoutHint":"wide_establishing + negative_space_tension","characters":["char_1"],"locationKey":"loc_1","referenceKeys":["char_1","loc_1"],"continuityNote":""}]
 }
 Hard requirements:
 - beats length exactly matches requested count.
 - Character entries must include turnaroundAssetKeys when three-view URLs are available.
 - All immutableTraits must be visual facts, not vague personality labels.
-- Beat summaries must form one continuous plot chain.`)
+- Beat summaries must form one continuous plot chain.
+- Every beat must include comicFunction (establish|dialogue|action_impact|reaction|transition|atmosphere) and a concise layoutHint so scene writing starts with comic grammar, not post-image patching.`)
 	return b.String()
 }
 
@@ -101,6 +102,10 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
       "beatPurpose": "same purpose as beat",
       "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose. When comicTexts are present, describe speech balloon layout, tail direction, thought-bubble cloud style, SFX font treatment, and negative space reserved for lettering — so the image model renders them directly in-image.",
       "visualState": {"characters":"wardrobe/emotion/injuries/props after this scene"},
+      "layoutIntent": "short snake_case layout intent such as comic_single_panel, split_screen_two_beat, diagonal_motion, detail_insert",
+      "compositionPlan": "Chinese concise layout plan: panel/zones, gutters, reading order, bubble safe-space, focal flow",
+      "shotType": "English shot type such as close_up, medium_shot, wide_shot, dutch_angle, overhead",
+      "visualHierarchy": "what is primary, secondary, background information in this scene image",
       "comicTexts": [
         {"type":"narration","text":"中文旁白短句（≤12字）","speaker":"","position":"top-left"},
         {"type":"dialogue","text":"台词（≤12字）","speaker":"char_1","position":"speech-bubble"},
@@ -114,6 +119,7 @@ Hard requirements:
 - scenes length exactly matches requested count.
 - referenceKeys must be declared in the bible.
 - imagePrompt must be English and include identity, action, environment, composition, lighting, palette, mood, texture.
+- layoutIntent/compositionPlan/shotType/visualHierarchy are required for every scene and must be consistent with beat comicFunction/layoutHint.
 - comicTexts may be omitted or an empty array for silent/atmospheric scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
 - imagePrompt must mirror any comicTexts as concrete English lettering instructions (balloon shape, tail direction, font weight, reserved white space).
 - Do not output Markdown or commentary.`)
@@ -134,6 +140,9 @@ func validateStoryboardBiblePlan(plan *domain.StoryboardBiblePlan, sceneCount in
 	for i, beat := range plan.Beats {
 		if strings.TrimSpace(beat.Purpose) == "" || strings.TrimSpace(beat.Summary) == "" {
 			return fmt.Errorf("beat %d missing purpose or summary", i)
+		}
+		if strings.TrimSpace(beat.ComicFunction) == "" || strings.TrimSpace(beat.LayoutHint) == "" {
+			return fmt.Errorf("beat %d missing comicFunction or layoutHint", i)
 		}
 		for _, key := range beat.ReferenceKeys {
 			if _, ok := keys[key]; !ok {
@@ -161,6 +170,9 @@ func validateStoryboardScenePlan(scenePlan *domain.StoryboardScenePlan, biblePla
 		}
 		if strings.TrimSpace(scene.ImagePrompt) == "" {
 			return fmt.Errorf("scene %d missing imagePrompt", i)
+		}
+		if strings.TrimSpace(scene.LayoutIntent) == "" || strings.TrimSpace(scene.CompositionPlan) == "" || strings.TrimSpace(scene.ShotType) == "" || strings.TrimSpace(scene.VisualHierarchy) == "" {
+			return fmt.Errorf("scene %d missing comic layout metadata", i)
 		}
 		for _, key := range scene.ReferenceKeys {
 			if _, ok := keys[key]; !ok {

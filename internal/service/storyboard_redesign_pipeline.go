@@ -377,6 +377,11 @@ func (s *Service) storyboardScenesFromScenePlan(runID string, plan *domain.Story
 			ReferenceKeys:   item.ReferenceKeys,
 			ImagePrompt:     item.ImagePrompt,
 			VisualStateJSON: visualState,
+			ComicTexts:      item.ComicTexts,
+			LayoutIntent:    strings.TrimSpace(item.LayoutIntent),
+			CompositionPlan: strings.TrimSpace(item.CompositionPlan),
+			ShotType:        strings.TrimSpace(item.ShotType),
+			VisualHierarchy: strings.TrimSpace(item.VisualHierarchy),
 			ContextSnapshot: "{}",
 		})
 	}

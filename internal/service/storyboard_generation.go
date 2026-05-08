@@ -285,15 +285,20 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 			zap.String("storyboardId", gen.StoryboardID))
 		gen.GeneratedContent = gen.RawInput
 	} else {
-		prompt := fmt.Sprintf(`You are a creative story writer. Based on the following context and user input, generate an engaging story chapter.
-
-Context:
-%s
-
-User Input: %s
-Style: %s
-
-Generate a compelling narrative that continues the story naturally. Keep the tone consistent with the style requested.`, contextStr, gen.RawInput, style)
+		prompt := renderPromptDSL(PromptDSL{
+			Role:         "You are a creative story writer and manga/webtoon visual-story editor.",
+			Task:         "Generate an engaging story chapter in narrative prose that can be converted into structured comic panels.",
+			Inputs:       map[string]any{"context": contextStr, "userInput": gen.RawInput, "style": style},
+			GlobalConfig: structuredMangaLanguageGuidance(),
+			Sections: []PromptDSLSection{
+				{Title: "Rules", Kind: "text", Body: `
+- Generate final narrative prose only; do not output JSON or markdown because the next pipeline step consumes this as story text.
+- Write with visual beats that can become panels: clear actions, readable character blocking, concrete props, and spatial transitions.
+- Leave room for gutter/closure: do not over-explain every action between two dramatic moments.
+- If the user input contains fighting, impact, shouting, smashing, falling, chasing, fear, climax, or explosion-like verbs, stage at least one beat that can later trigger high contrast manga impact framing.
+- Keep tone consistent with the requested style.`},
+			},
+		})
 
 		s.logger.Debug("calling storyboard content text LLM (huoshan then gemini)",
 			zap.String("generationId", gen.ID),
@@ -313,7 +318,7 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
-			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prov, prompt, "", 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardContentGeneration("failed", duration)
@@ -343,7 +348,7 @@ Generate a compelling narrative that continues the story naturally. Keep the ton
 				zap.String("provider", prov))
 		}
 
-		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "content", prov, prompt, text, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("content generated successfully",
 			zap.String("generationId", gen.ID),
@@ -548,7 +553,7 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
-			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, 0, 0, domain.AITaskStatusFailed, err.Error())
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prov, prompt, "", 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardSceneGeneration("failed", duration)
@@ -573,7 +578,7 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 				zap.String("provider", prov))
 		}
 
-		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prompt, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "scene", prov, prompt, text, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("scene details generated successfully",
 			zap.String("generationId", gen.ID),
@@ -1008,7 +1013,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			if !gen.SkipPeerFailureGate {
 				s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 			}
-			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", prov, promptGen, "", 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardImageGeneration("failed", sceneType, duration)
@@ -1063,7 +1068,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				zap.String("provider", prov))
 		}
 
-		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", prov, promptGen, text, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("image prompt generated successfully",
 			zap.String("generationId", gen.ID),
@@ -1698,7 +1703,7 @@ LENGTH: When merged into one video prompt, keep the total substantive Chinese te
 			gen.Status = domain.GenerationStatusFailed
 			gen.ErrorMessage = formatGenerationError(classifyGenerationError(err, GenerationErrorProvider), err.Error())
 			_ = s.repo.UpdateVideoGeneration(ctx, gen)
-			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, 0, 0, domain.AITaskStatusFailed, err.Error())
+			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", prov, promptGen, "", 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				duration := time.Since(startTime)
 				s.metrics.RecordStoryboardVideoGeneration("failed", false, duration)
@@ -1731,7 +1736,7 @@ LENGTH: When merged into one video prompt, keep the total substantive Chinese te
 			s.metrics.RecordVideoGenerationTokenConsumed("prompt", float64(gen.TotalTokens))
 		}
 
-		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", promptGen, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
+		s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "video_prompt", prov, promptGen, text, gen.InputTokens, gen.OutputTokens, domain.AITaskStatusCompleted, "")
 
 		s.logger.Info("video prompt generated successfully",
 			zap.String("sceneId", gen.SceneID),
@@ -3190,7 +3195,7 @@ func (s *Service) RecoverPendingVideoGenerations(ctx context.Context) {
 
 // serializeVideoSegments converts video segments to JSON string for storage.
 // recordStoryboardTextGeneration records text generation (content/scene/image_prompt/video_prompt) to AIGenerationRecord.
-func (s *Service) recordStoryboardTextGeneration(ctx context.Context, storyboardID, subtype, prompt string, inputTokens, outputTokens int, status domain.AITaskStatus, errorMsg string) {
+func (s *Service) recordStoryboardTextGeneration(ctx context.Context, storyboardID, subtype, provider, prompt, output string, inputTokens, outputTokens int, status domain.AITaskStatus, errorMsg string) {
 	if s.aiGenService == nil {
 		return
 	}
@@ -3203,13 +3208,18 @@ func (s *Service) recordStoryboardTextGeneration(ctx context.Context, storyboard
 	if relID == "" {
 		relID = storyboardID
 	}
+	if provider == "" {
+		provider = "text_llm"
+	}
 	s.aiGenService.RecordTextGenerationUsage(ctx, &RecordTextGenerationRequest{
 		UserID:            userID,
 		RelatedEntityID:   relID,
 		RelatedEntityType: "storyboard",
-		Provider:          "gemini",
+		Provider:          provider,
 		Model:             "",
-		OriginalPrompt:    truncateForLog(prompt, 2000),
+		OriginalPrompt:    prompt,
+		OutputResult:      output,
+		Step:              subtype,
 		InputTokens:       inputTokens,
 		OutputTokens:      outputTokens,
 		Status:            status,
@@ -3398,82 +3408,77 @@ func (s *Service) convertToVideoGenerationInfo(gen *domain.StoryboardVideoGenera
 
 // buildImageGenerationPrompt 构建场景图片生成的AI提示词，包含故事风格配置和场景类型信息
 func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGeneration) string {
-	var prompt strings.Builder
-
-	prompt.WriteString(`Create a detailed image generation prompt for the following scene:
-
-`)
-	prompt.WriteString(fmt.Sprintf("Scene Title: %s\n", gen.SceneTitle))
-	prompt.WriteString(fmt.Sprintf("Scene Description: %s\n", gen.SceneDescription))
-
-	// 添加故事风格配置
-	if gen.StoryStyle != nil {
-		prompt.WriteString("\n## Story Style Configuration:\n")
-		prompt.WriteString(fmt.Sprintf("- Style: %s\n", gen.StoryStyle.Style))
-		if gen.StoryStyle.Description != "" {
-			prompt.WriteString(fmt.Sprintf("- Style Description: %s\n", gen.StoryStyle.Description))
-		}
-		prompt.WriteString("\nIMPORTANT: The generated image MUST follow the story's style configuration. ")
-		prompt.WriteString("Use the specified art style and visual elements as the primary guide.\n")
+	inputs := map[string]any{
+		"sceneTitle":             gen.SceneTitle,
+		"sceneDescription":       gen.SceneDescription,
+		"isTransitionScene":      gen.IsTransitionScene,
+		"sceneCharacters":        gen.SceneCharacters,
+		"referenceImages":        gen.ReferenceImages,
+		"characterReferenceImgs": gen.CharacterReferenceImages,
+		"comicStyleSlug":         strings.TrimSpace(gen.ComicStyle),
 	}
+	if gen.StoryStyle != nil {
+		inputs["storyStyle"] = map[string]any{
+			"style":       gen.StoryStyle.Style,
+			"description": gen.StoryStyle.Description,
+		}
+	}
+	sections := make([]PromptDSLSection, 0, 6)
 
 	if cs := strings.TrimSpace(gen.ComicStyle); cs != "" {
-		prompt.WriteString("\n## Comic / visual style (continuation)\n")
-		prompt.WriteString(fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n", cs))
-		prompt.WriteString("Apply this style consistently with line work, coloring, and overall visual temperament.\n")
-		prompt.WriteString("This slug implies manga/comic panels: favor readable speech balloons, thought bubbles, and SFX where the scene calls for dialogue or reaction beats; render short on-image text in a matching comic hand.\n")
+		sections = append(sections, PromptDSLSection{
+			Title: "Comic Style Continuation",
+			Kind:  "text",
+			Body:  fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n(Fragment-style zh summary for this slug: %s)\nApply this style consistently with line work, coloring, and overall visual temperament.\nThis slug implies manga/comic panels: favor readable speech balloons, thought bubbles, and SFX where the scene calls for dialogue or reaction beats; render short on-image text in a matching comic hand.", cs, fragmentStyleDesc(cs)),
+		})
 	}
 
 	if len(gen.ReferenceImages) > 0 {
-		prompt.WriteString("\n## Reference images (ordered)\n")
-		prompt.WriteString("When multiple reference images are provided, the FIRST image is usually the immediately previous storyboard panel: use it for shot-to-shot continuity (palette, environment, recurring wardrobe) when the scene follows the prior beat.\n")
-		prompt.WriteString("Additional images are character identity references: main cast must match those references.\n")
+		sections = append(sections, PromptDSLSection{
+			Title: "Reference Policy",
+			Kind:  "text",
+			Body:  "When multiple reference images are provided, the FIRST image is usually the immediately previous storyboard panel: use it for shot-to-shot continuity (palette, environment, recurring wardrobe) when the scene follows the prior beat.\nAdditional images are character identity references: main cast must match those references.",
+		})
 	}
 
-	// 添加场景类型信息
 	if gen.IsTransitionScene {
-		prompt.WriteString("\n## Scene Type: Transition Scene\n")
-		prompt.WriteString("This is a TRANSITION SCENE with no characters appearing. ")
-		prompt.WriteString("Focus on environment, atmosphere, and mood. ")
-		prompt.WriteString("Do NOT include any human figures or characters in the image.\n")
+		sections = append(sections, PromptDSLSection{
+			Title: "Scene Type",
+			Kind:  "text",
+			Body:  "This is a TRANSITION SCENE with no characters appearing. Focus on environment, atmosphere, and mood. Do NOT include any human figures or characters in the image.",
+		})
 	} else if len(gen.SceneCharacters) > 0 {
-		// 限制主要角色数量最多5个
 		maxMainCharacters := 5
 		mainCharacters := gen.SceneCharacters
 		if len(mainCharacters) > maxMainCharacters {
 			mainCharacters = mainCharacters[:maxMainCharacters]
 		}
-
-		prompt.WriteString("\n## Scene Characters:\n")
-		prompt.WriteString("MAIN CHARACTERS (limit to maximum 5, must be accurately depicted):\n")
-		for i, charName := range mainCharacters {
-			prompt.WriteString(fmt.Sprintf("- %s\n", charName))
-			if i >= maxMainCharacters-1 {
-				break
-			}
-		}
-
-		// 如果有超过5个角色，说明还有其他角色（群众、路人等）
-		if len(gen.SceneCharacters) > maxMainCharacters {
-			prompt.WriteString(fmt.Sprintf("\nNOTE: There are %d total characters mentioned in the scene. ", len(gen.SceneCharacters)))
-			prompt.WriteString("The above are the MAIN CHARACTERS (maximum 5). ")
-			prompt.WriteString("You may include additional background characters, crowds, bystanders, or passersby as needed for the scene composition. ")
-			prompt.WriteString("These additional characters do not need to match specific reference images.\n")
-		}
-
+		sections = append(sections, PromptDSLSection{
+			Title: "Main Characters",
+			Kind:  "json",
+			Payload: map[string]any{
+				"maxMainCharacters": maxMainCharacters,
+				"characters":        mainCharacters,
+				"totalCharacters":   len(gen.SceneCharacters),
+			},
+		})
 		if len(gen.CharacterReferenceImages) > 0 {
-			prompt.WriteString("\nCharacter reference images are provided for the MAIN CHARACTERS listed above. ")
-			prompt.WriteString("The generated image MUST accurately depict these main characters consistent with the reference images. ")
-			prompt.WriteString("Maintain character appearance, clothing style, and overall visual identity for the main characters. ")
-			prompt.WriteString("Background characters, crowds, and other non-main characters can be freely designed.\n")
+			sections = append(sections, PromptDSLSection{
+				Title: "Character Reference Policy",
+				Kind:  "text",
+				Body:  "Character reference images are provided for MAIN CHARACTERS. The generated image MUST accurately depict these main characters consistent with the reference images (appearance, clothing style, identity). Background characters can be freely designed.",
+			})
 		}
 	}
 
 	if gen.IsTransitionScene {
-		prompt.WriteString("\n## On-image text (transition scene)\n")
-		prompt.WriteString("Do NOT add speech bubbles, dialogue, thought bubbles, or comic SFX unless the scene description explicitly mentions environmental text (sign, poster, screen UI). Keep the frame atmospheric.\n")
+		sections = append(sections, PromptDSLSection{
+			Title: "On-image Text Policy",
+			Kind:  "text",
+			Body:  "Do NOT add speech bubbles, dialogue, thought bubbles, or comic SFX unless the scene description explicitly mentions environmental text (sign, poster, screen UI). Keep the frame atmospheric.",
+		})
 	} else {
-		prompt.WriteString(`
+		sections = append(sections, PromptDSLSection{Title: "Comic Typography & On-image Text", Kind: "text", Body: `
 ## Comic typography & on-image text (align with story-fragment image prompts)
 When the scene description, story style, or comic-style slug suggests manga/comic/strip panels — or when characters speak, react with interjections, or have a salient inner thought — you MUST carry that into the JSON so the image model paints text inside the picture (no reliance on app overlays):
 - In keyElements and/or additionalNotes: specify speech balloons with tails to the correct speaker; thought bubbles / cloud outlines for inner monologue; bold SFX or short interjections (e.g. Chinese 啊？ / 砰) where they add punch; optional rectangular narration captions for time/place or a beat of omniscient voice.
@@ -3481,19 +3486,19 @@ When the scene description, story style, or comic-style slug suggests manga/comi
 - Keep embedded language snippets short (about ≤12 Chinese characters per balloon or caption where applicable); state the exact string that must appear in-image (the renderer should draw it legibly in a comic-appropriate hand).
 - Cap density per panel: at most about 1 narration box, 1–2 dialogue balloons, at most 1 SFX, at most 1 thought bubble — omit if the beat is silent or purely atmospheric.
 - If the scene is wordless, state explicitly "no on-image dialogue" and rely on acting and composition.
-`)
+ -`})
 	}
 
-	prompt.WriteString(`
+	outputContract := `
 Please return a structured JSON object (without markdown code blocks) with the following format:
 {
-  "artStyle": "艺术风格和媒介，如 Unreal Engine 5 render, cinematic concept art, photorealistic, 8k resolution（必须遵循故事风格配置）",
-  "lighting": "具体的打光设置，如 volumetric lighting, rim light, chiaroscuro, cinematic soft box, neon glow, harsh dramatic shadows",
-  "colorPalette": "色彩调色板及调光风格，如 teal and orange color grading, muted pastels, high contrast, warm golden hour tones（应与故事风格一致）",
-  "composition": "构图与运镜细节，必须包含镜头毫米数、景别和角度，如 50mm prime lens, anamorphic, low angle extreme close-up, rule of thirds, deep depth of field",
-  "keyElements": ["关键视觉元素1", "关键视觉元素2", "服装材质/道具细节"],
-  "mood": "情绪氛围，如 peaceful tension, mysterious and foggy, melancholic",
-  "additionalNotes": "微表情、姿态、大气与流体特效；若画面有漫画字须在此用英文写明气泡排版/尾巴/字体处理，以便图片模型在画中渲染",
+  "artStyle": "English: structured global style, medium + line quality + tones/shading + texture; e.g. high contrast manga ink, dynamic screentones, gritty etching, or story-style equivalent",
+  "lighting": "English: specific lighting; use chiaroscuro/deep shadows/noir lighting when impact semantics are present",
+  "colorPalette": "English: palette and grading; concrete hues, accent color, saturation, black ink mass strategy",
+  "composition": "English: camera + panel-language composition. Must include shot scale + camera angle + perspective/lens; may include dynamic panel border/gutter/effect-line plan",
+  "keyElements": ["English or Chinese: concrete visual elements, character/action/prop anchors, effect lines/SFX/bubble plan if present"],
+  "mood": "English: compound emotional tone, not one vague adjective",
+  "additionalNotes": "English: micro-expression, body tension, SFX typography, speech/thought bubble placement, screentone/shading, gutter/closure or border-breaking notes",
   "comicTexts": [
     {"type":"narration|dialogue|thought|sfx","text":"画面内的精确中文短句（≤12字）","speaker":"dialogue/thought时填角色名，其余留空","position":"top-left|top-right|bottom-left|bottom-right|mid-frame|speech-bubble|thought-bubble"}
   ]
@@ -3507,11 +3512,19 @@ comicTexts rules:
 - Each text <= 12 Chinese characters. Per-panel cap: ~1 narration, 1-2 dialogue, 1 sfx, 1 thought.
 - For silent/atmospheric/transition scenes output "comicTexts": [].
 - The image model must render the exact Chinese text inside the image (legible comic hand); do NOT rely on app-side overlay.
+- If impact semantics are present, composition/additionalNotes must include at least two concrete impact controls: extreme low-angle, dramatic high-angle, Dutch angle, wide-angle distortion, fish-eye effect, radial action lines, motion streaking, debris, sparks, heavy ink contrast, dynamic screentones, border breaking.
 
 Important: Return ONLY the JSON object, no explanations or markdown formatting.
-LENGTH: Keep each JSON string field concise (roughly one short phrase or clause each). The server will prepend the full scene narrative separately.`)
+LENGTH: Keep each JSON string field concise but structured; avoid a single vague natural-language paragraph. The server will prepend the full scene narrative separately.`
 
-	return prompt.String()
+	return renderPromptDSL(PromptDSL{
+		Role:           "You are a manga/comic scene prompt planner.",
+		Task:           "Convert scene information into a structured JSON image prompt for downstream image synthesis.",
+		Inputs:         inputs,
+		GlobalConfig:   structuredMangaLanguageGuidance(),
+		OutputContract: outputContract,
+		Sections:       sections,
+	})
 }
 
 // parseImagePromptDetails 解析AI返回的结构化提示词JSON
@@ -3582,13 +3595,17 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 	if len(details.ComicTexts) > 0 {
 		var letteringLines []string
 		for _, ct := range details.ComicTexts {
+			panelRef := ""
+			if ct.PanelIndex != nil {
+				panelRef = fmt.Sprintf(" in panel %d", *ct.PanelIndex+1)
+			}
 			switch ct.Type {
 			case "narration":
 				pos := ct.Position
 				if pos == "" {
 					pos = "top of panel"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a rectangular narration caption box at %s with the exact Chinese text 「%s」 in clean comic font", pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a rectangular narration caption box%s at %s with the exact Chinese text 「%s」 in clean comic font", panelRef, pos, ct.Text))
 			case "dialogue":
 				pos := ct.Position
 				if pos == "" {
@@ -3598,7 +3615,7 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if speaker == "" {
 					speaker = "the character"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a speech balloon (oval with pointed tail toward %s) at %s containing the exact Chinese text 「%s」", speaker, pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a speech balloon%s (oval with pointed tail toward %s) at %s containing the exact Chinese text 「%s」", panelRef, speaker, pos, ct.Text))
 			case "thought":
 				pos := ct.Position
 				if pos == "" {
@@ -3608,13 +3625,13 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if speaker == "" {
 					speaker = "the character"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a thought cloud (bubble-chain outline) near %s at %s with the exact Chinese text 「%s」", speaker, pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a thought cloud%s (bubble-chain outline) near %s at %s with the exact Chinese text 「%s」", panelRef, speaker, pos, ct.Text))
 			case "sfx":
 				pos := ct.Position
 				if pos == "" {
 					pos = "mid-frame"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Render bold oversized SFX text 「%s」 at %s in dynamic comic lettering style", ct.Text, pos))
+				letteringLines = append(letteringLines, fmt.Sprintf("Render bold oversized SFX text%s 「%s」 at %s in dynamic comic lettering style", panelRef, ct.Text, pos))
 			}
 		}
 		if len(letteringLines) > 0 {

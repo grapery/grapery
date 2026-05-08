@@ -228,6 +228,20 @@ func TestPanelPlanPromptNoLongerMentionsFixedStripLayout(t *testing.T) {
 			t.Fatalf("expected prompt to contain %q", want)
 		}
 	}
+	for _, want := range []string{"文本阶段的前置漫画规划", "不允许“先不规划，后续生图再决定漫画元素”"} {
+		if !containsFragmentTestString(prompt, want) {
+			t.Fatalf("expected prompt to contain strengthened planning rule %q", want)
+		}
+	}
+}
+
+func TestPanelPlanPromptUsesStructuredInputSections(t *testing.T) {
+	prompt := buildFragmentPanelPlanUserPrompt("女孩在雨夜车站等待", "fantasy", 4, "")
+	for _, want := range []string{"# PromptDSL", "prompt_dsl_v1", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Paneling / Camera / Action / Comic Elements Rules"} {
+		if !containsFragmentTestString(prompt, want) {
+			t.Fatalf("expected structured section %q, got:\n%s", want, prompt)
+		}
+	}
 }
 
 func containsFragmentTestString(s, sub string) bool {

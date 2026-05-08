@@ -1,12 +1,14 @@
 package service
 
-// SendAliyunOTPCode uses Dysmsapi SendMessageWithTemplate (2018-05-01).
+// SendAliyunOTPCode uses Alibaba Cloud SMS OpenAPI SendSms (2017-05-25).
 //
 // Required env:
 //   - ALIYUN_SMS_ACCESS_KEY_ID, ALIYUN_SMS_ACCESS_KEY_SECRET
-//   - ALIYUN_SMS_SIGN_NAME (maps to API field From — 短信签名)
-//   - ALIYUN_SMS_TEMPLATE_CODE (模板 CODE，模板变量需包含与 TemplateParam 一致的 code 字段)
-// Optional: ALIYUN_SMS_REGION (default cn-hangzhou)
+//   - ALIYUN_SMS_SIGN_NAME（短信签名）
+//   - ALIYUN_SMS_TEMPLATE_CODE（模板 CODE，模板变量需包含 JSON 字段 code）
+//
+// Optional:
+//   - ALIYUN_SMS_REGION（默认 cn-hangzhou，用于 Endpoint 解析）
 
 import (
 	"encoding/json"
@@ -14,7 +16,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
+	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v5/client"
+	"github.com/alibabacloud-go/tea/dara"
+	"github.com/alibabacloud-go/tea/tea"
+	credential "github.com/aliyun/credentials-go/credentials"
 )
 
 // SendAliyunOTPCode sends a 6-digit verification SMS via Alibaba Cloud SMS (China).
@@ -24,7 +30,7 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 		return fmt.Errorf("empty phone")
 	}
 
-	region := os.Getenv("ALIYUN_SMS_REGION")
+	region := strings.TrimSpace(os.Getenv("ALIYUN_SMS_REGION"))
 	if region == "" {
 		region = "cn-hangzhou"
 	}
@@ -37,29 +43,52 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 		return fmt.Errorf("aliyun SMS not configured (set ALIYUN_SMS_ACCESS_KEY_ID, ALIYUN_SMS_ACCESS_KEY_SECRET, ALIYUN_SMS_SIGN_NAME, ALIYUN_SMS_TEMPLATE_CODE)")
 	}
 
-	client, err := dysmsapi.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
+	cred, err := credential.NewCredential(&credential.Config{
+		Type:            tea.String("access_key"),
+		AccessKeyId:     tea.String(accessKeyID),
+		AccessKeySecret: tea.String(accessKeySecret),
+	})
+	if err != nil {
+		return fmt.Errorf("aliyun sms credential: %w", err)
+	}
+
+	cfg := &openapi.Config{
+		Credential: cred,
+		RegionId:   tea.String(region),
+		Endpoint:   tea.String("dysmsapi.aliyuncs.com"),
+	}
+	client, err := dysmsapi.NewClient(cfg)
 	if err != nil {
 		return fmt.Errorf("aliyun sms client: %w", err)
 	}
 
-	// Alibaba Cloud SMS v20180501 — SendMessageWithTemplate (replaces legacy SendSms in current SDK)
-	req := dysmsapi.CreateSendMessageWithTemplateRequest()
-	req.Scheme = "https"
-	req.To = domesticPhone
-	req.From = signName
-	req.TemplateCode = templateCode
 	paramJSON, err := json.Marshal(map[string]string{"code": code})
 	if err != nil {
 		return fmt.Errorf("sms template param: %w", err)
 	}
-	req.TemplateParam = string(paramJSON)
 
-	resp, err := client.SendMessageWithTemplate(req)
-	if err != nil {
-		return fmt.Errorf("aliyun SendMessageWithTemplate: %w", err)
+	req := &dysmsapi.SendSmsRequest{
+		PhoneNumbers:  tea.String(domesticPhone),
+		SignName:      tea.String(signName),
+		TemplateCode:  tea.String(templateCode),
+		TemplateParam: tea.String(string(paramJSON)),
 	}
-	if resp.ResponseCode != "" && resp.ResponseCode != "OK" {
-		return fmt.Errorf("aliyun sms failed: %s %s", resp.ResponseCode, resp.ResponseDescription)
+	runtime := &dara.RuntimeOptions{}
+
+	resp, err := client.SendSmsWithOptions(req, runtime)
+	if err != nil {
+		return fmt.Errorf("aliyun SendSms: %w", err)
+	}
+	return validateSendSmsResponse(resp)
+}
+
+// validateSendSmsResponse checks SendSms RPC body; nil err means the request was accepted (Code empty or OK).
+func validateSendSmsResponse(resp *dysmsapi.SendSmsResponse) error {
+	if resp == nil || resp.Body == nil {
+		return fmt.Errorf("aliyun sms: empty response")
+	}
+	if c := dara.StringValue(resp.Body.Code); c != "" && c != "OK" {
+		return fmt.Errorf("aliyun sms failed: %s %s", c, dara.StringValue(resp.Body.Message))
 	}
 	return nil
 }

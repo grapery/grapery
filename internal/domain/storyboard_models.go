@@ -42,6 +42,13 @@ type StoryboardScene struct {
 	ReferenceKeys   []string `json:"referenceKeys,omitempty"`
 	ImagePrompt     string   `json:"imagePrompt,omitempty"`
 	VisualStateJSON string   `json:"visualState,omitempty"`
+	// ComicTexts 本格漫画文字层（对白/思想泡/拟声/旁白），由文本/分镜阶段产出并透传到生图。
+	ComicTexts []StoryboardComicText `json:"comicTexts,omitempty"`
+	// 漫画构图元数据：用于图片/漫画页阶段直接消费，不再仅靠二次推断。
+	LayoutIntent    string `json:"layoutIntent,omitempty"`
+	CompositionPlan string `json:"compositionPlan,omitempty"`
+	ShotType        string `json:"shotType,omitempty"`
+	VisualHierarchy string `json:"visualHierarchy,omitempty"`
 
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`

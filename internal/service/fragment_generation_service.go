@@ -129,7 +129,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	// ── Step 1: 元素提取 + 文案 + VisualBible ──
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 10, "extracting_elements")
 
-	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, task.Request)
+	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, taskID, task.Request)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Element extraction failed: %v", err))
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("元素提取失败：%v", err))
@@ -153,7 +153,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	if sceneCount <= 0 {
 		sceneCount = 1
 	}
-	scenesResult, err := s.expandScenes(ctx, task.UserID, task.Request, elemResult, sceneCount, resolvedAR)
+	scenesResult, err := s.expandScenes(ctx, task.UserID, taskID, task.Request, elemResult, sceneCount, resolvedAR)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Scene expansion failed: %v", err))
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("场景扩展失败：%v", err))
@@ -220,7 +220,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	// ── Step 5: 一致性检查（不阻断） ──
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 82, "checking_consistency")
 	checkStart := time.Now()
-	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, imageResult.ImageUrls, policy)
+	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, imageResult.ImageUrls, policy)
 	totalTokens += checkTok
 	trace.ConsistencyIssues = issues
 	trace.VisionAuditProvider = auditProvider
@@ -425,13 +425,13 @@ type fragmentStoryElements struct {
 	Tendency   string   `json:"tendency"`   // 情感倾向/叙事方向
 }
 
-func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
+func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID, taskID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
 	imageURLs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10)
 	hasImages := len(imageURLs) > 0
 	var visualEvidence []domain.FragmentVisualEvidence
 	visionTokens := 0
 	if hasImages {
-		evidence, tokens, err := s.analyzeFragmentVisualEvidence(ctx, imageURLs, req.UserInput, req.Style, "")
+		evidence, tokens, err := s.analyzeFragmentVisualEvidence(ctx, taskID, imageURLs, req.UserInput, req.Style, "")
 		if err != nil {
 			s.logger.Warn("fragment visual evidence analysis failed; falling back to legacy multimodal extraction", zap.Error(err))
 		} else {
@@ -454,12 +454,14 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 	}
 
 	aiReq := domain.AITask{
-		ID:       uuid.New().String(),
-		UserID:   userID,
-		Type:     domain.AITaskGenerateFragmentContent,
-		Status:   domain.AITaskStatusProcessing,
-		Provider: "",
-		Input:    string(inputBytes),
+		ID:                uuid.New().String(),
+		UserID:            userID,
+		Type:              domain.AITaskGenerateFragmentContent,
+		Status:            domain.AITaskStatusProcessing,
+		Provider:          "",
+		Input:             string(inputBytes),
+		RelatedEntityID:   taskID,
+		RelatedEntityType: "fragment_generation",
 	}
 
 	raw, tokensUsed, err := s.aiService.GenerateFragmentExtractionJSON(ctx, &aiReq)
@@ -569,7 +571,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 每个关键转折都要能在 elements 或原始输入中找到伏笔或视觉依据`
 	}
 
-	return fmt.Sprintf(`你是一位兼具文学才华和电影美术指导素养的故事碎片创作大师。你同时拥有小说家的叙事直觉、摄影师的画面敏感度、和漫画编辑的商业嗅觉——你知道什么样的内容能让人停下手指、点开、读完、然后截图转发。你需要完成两件事：
+	legacyPrompt := fmt.Sprintf(`你是一位兼具文学才华和电影美术指导素养的故事碎片创作大师。你同时拥有小说家的叙事直觉、摄影师的画面敏感度、和漫画编辑的商业嗅觉——你知道什么样的内容能让人停下手指、点开、读完、然后截图转发。你需要完成两件事：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 第一件事：元素提取（把模糊的感觉变成精确的视觉指令）
@@ -693,6 +695,8 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - 一段安静的描写之后突然一个短句转折，效果拔群
 - 句子长度本身就是情绪的呼吸——全篇匀速的文字是没有生命力的
 
+%s
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 第三件事：视觉圣经 visualBible（多实体一致性锚点，必须输出）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -704,6 +708,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 - ownership 用来表达归属关系：角色可以列出随身物，道具写关联角色 key；无法判断则留空。
 - roleImportance 必须是 core / supporting / background，用于后续决定是否生成 reference asset。
 - styleBible.artStyle 必须用英文写出可执行的总体画法（媒介、线稿/渲染、时代感、参考流派），供后续所有配图 prompt 对齐；其他 styleBible 字段可选。
+- 若风格/内容偏漫画，styleBible.lineQuality / palette / lightingMood 必须结构化体现：paneling、gutter、screentone/halftone、heavy ink、speech-bubble lettering、SFX/effect-lines 的总体策略；冲击感语义触发时写入 high contrast / chiaroscuro / extreme angle / action lines 等具体选择。
 
 请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明），字段为：
 {
@@ -737,7 +742,18 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
   "aspectRatio": "推荐长宽比：1:1、16:9、9:16、3:4、4:3，结合画面构图选择；不确定用 16:9"
 }`,
 		imgNote,
-		req.UserInput, styleDesc, moodDesc, lengthDesc, language)
+		req.UserInput, styleDesc, moodDesc, lengthDesc, language,
+		structuredMangaLanguageGuidance())
+
+	return renderPromptDSL(PromptDSL{
+		Role:         "你是一位兼具文学叙事与漫画视觉导演能力的故事碎片创作大师。",
+		Task:         "先做元素提取与视觉圣经，再生成可传播的故事碎片正文，并保证后续可用于分镜/配图。",
+		Inputs:       map[string]any{"userInput": req.UserInput, "styleSlug": req.Style, "styleDescription": styleDesc, "mood": req.Mood, "moodDescription": moodDesc, "length": req.Length, "lengthDescription": lengthDesc, "language": language, "hasReferenceImages": hasImages},
+		GlobalConfig: structuredMangaLanguageGuidance(),
+		Sections: []PromptDSLSection{
+			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
+		},
+	})
 }
 
 type fragmentVisualEvidenceRoot struct {
@@ -745,7 +761,7 @@ type fragmentVisualEvidenceRoot struct {
 	Images   []domain.FragmentVisualEvidence `json:"images"`
 }
 
-func (s *FragmentGenerationService) analyzeFragmentVisualEvidence(ctx context.Context, imageURLs []string, userInput, style, providerHint string) ([]domain.FragmentVisualEvidence, int, error) {
+func (s *FragmentGenerationService) analyzeFragmentVisualEvidence(ctx context.Context, taskID string, imageURLs []string, userInput, style, providerHint string) ([]domain.FragmentVisualEvidence, int, error) {
 	imageURLs = fragmentPrefillHTTPImageURLs(imageURLs, 10)
 	if len(imageURLs) == 0 || s.aiService == nil {
 		return nil, 0, nil
@@ -758,6 +774,7 @@ func (s *FragmentGenerationService) analyzeFragmentVisualEvidence(ctx context.Co
 		MaxTokens:         4096,
 		Temperature:       0.25,
 		RelatedEntityType: "fragment_generation",
+		RelatedEntityID:   taskID,
 		Step:              "visual_evidence",
 	})
 	if err != nil {
@@ -1466,7 +1483,7 @@ func (s *FragmentGenerationService) generateOneFragmentImageWithOptions(ctx cont
 	return s.aiService.GenerateImageForFragment(ctx, &aiReq)
 }
 
-func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
+func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, taskID string, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
 	auditURLs, skipped := selectFragmentAuditImageURLs(imageURLs, scenes, policy)
 	if len(auditURLs) == 0 {
 		return nil, 0, "", 0, skipped
@@ -1500,11 +1517,13 @@ func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context
 		string(vbBytes), string(evidenceBytes), string(scenesBytes), string(assetBytes), urlLines.String())
 
 	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
-		Prompt:      prompt,
-		ImageURLs:   auditURLs,
-		MaxTokens:   2048,
-		Temperature: 0.25,
-		Step:        "fragment_consistency_audit",
+		Prompt:            prompt,
+		ImageURLs:         auditURLs,
+		MaxTokens:         2048,
+		Temperature:       0.25,
+		RelatedEntityType: "fragment_generation",
+		RelatedEntityID:   taskID,
+		Step:              "fragment_consistency_audit",
 	})
 	if err != nil {
 		s.logger.Warn("fragment consistency check request failed", zap.Error(err))
@@ -1589,7 +1608,7 @@ type fragmentExpandedScene struct {
 	ComicTexts     []domain.FragmentComicText     `json:"comicTexts,omitempty"`
 }
 
-func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
+func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID, taskID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string) (*fragmentSceneExpansionResult, error) {
 	elementsJSON, _ := json.Marshal(elemResult.Elements)
 	vbJSON := "{}"
 	if elemResult.VisualBible != nil {
@@ -1611,7 +1630,7 @@ func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID str
 		narrativeHint = fmt.Sprintf("%d 格：一条故事线但绝不要线性平铺直叙。在格与格之间可以大胆穿插——视角突变（从人类视角突然切到猫的视角、从地面仰视突然变卫星俯瞰、从一个角色的POV切到另一个角色的POV看着同一个场景）、时空跳跃或闪回（这一格还是现在，下一格突然是十年前，再下一格又回到现在但时间已过）、打破第四面墙（角色看向\"镜头\"外、文字溢出画框、角色似乎在跟读者说话）、超现实梦境（前一秒还在教室，下一秒教室漂浮在星空中、水面变成了天空、书本里的文字活了过来）、意料之外的新元素闯入（一个路过的蝴蝶改变了整条故事线、一只手从画外伸进来拿走了桌上的杯子）。开头建立世界观和角色，中间尽情放飞制造\"没想到\"的惊喜，结尾可以呼应开头、可以留悬念、可以推翻之前所有设定——只要让观众看完觉得\"这趟旅程值了\"。中间某些格可以是氛围画面——不推进剧情但传递情绪（空椅子、飘落的羽毛、雨中的路灯）——这种\"停顿\"本身是节奏的一部分。", sceneCount)
 	}
 
-	prompt := fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事创作者，兼具导演的叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。你的任务是把一段故事文字拆解为 %d 个画面格——每一格都是一幅能独立吸引目光、按顺序浏览又能串联成完整故事的视觉作品。你不是在"配图"，你是在"用画面重新讲故事"。
+	legacyPrompt := fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事创作者，兼具导演的叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。你的任务是把一段故事文字拆解为 %d 个画面格——每一格都是一幅能独立吸引目光、按顺序浏览又能串联成完整故事的视觉作品。你不是在"配图"，你是在"用画面重新讲故事"。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 叙事节奏指引
@@ -1642,6 +1661,8 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 创作方法论（你的导演工具箱）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+%s
 
 【一、世界观一致性——这是底线，不是上限】
 - 角色的外貌（发型、服装、体型、标志性特征）必须在每一格中完全一致——除非剧情需要角色发生变化（被雨淋湿、受伤、换装等需要明确交代）
@@ -1844,17 +1865,33 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 		req.Style,
 		req.Mood,
 		aspectRatio,
+		structuredMangaLanguageGuidance(),
 		sceneCount,
 		sceneCount-1)
 
-	payloadBytes, _ := json.Marshal(map[string]interface{}{"prompt": prompt})
+	prompt := renderPromptDSL(PromptDSL{
+		Role:         "你是一位视觉叙事导演，负责将故事正文转为结构化分镜 JSON。",
+		Task:         "输出 scenes[]，每格包含 sceneDesc/imagePrompt/referenceKeys/entityBindings/comicTexts。",
+		Inputs:       map[string]any{"sceneCount": sceneCount, "aspectRatio": aspectRatio, "style": req.Style, "mood": req.Mood, "narrativeHint": narrativeHint, "storyElements": json.RawMessage(elementsJSON), "visualBible": json.RawMessage(vbJSON), "referenceKeysHint": keyHint, "storyContent": elemResult.Content},
+		GlobalConfig: structuredMangaLanguageGuidance(),
+		Sections: []PromptDSLSection{
+			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
+		},
+	})
+
+	payloadBytes, _ := json.Marshal(map[string]interface{}{
+		"prompt": prompt,
+		"step":   "fragment_scene_expansion",
+	})
 	aiReq := domain.AITask{
-		ID:       uuid.New().String(),
-		UserID:   userID,
-		Type:     domain.AITaskGenerateFragmentContent,
-		Status:   domain.AITaskStatusProcessing,
-		Provider: "",
-		Input:    string(payloadBytes),
+		ID:                uuid.New().String(),
+		UserID:            userID,
+		Type:              domain.AITaskGenerateFragmentContent,
+		Status:            domain.AITaskStatusProcessing,
+		Provider:          "",
+		Input:             string(payloadBytes),
+		RelatedEntityID:   taskID,
+		RelatedEntityType: "fragment_generation",
 	}
 
 	raw, tokensUsed, _, err := s.aiService.GenerateTextForFragment(ctx, &aiReq)
