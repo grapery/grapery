@@ -186,6 +186,7 @@ type IAPReceipt struct {
 	Platform           IAPPlatform `json:"platform"`
 	ReceiptData        string      `json:"receipt_data"`
 	BundleID           string      `json:"bundle_id"`
+	ProductID          string      `json:"product_id"`
 	ApplicationVersion string      `json:"application_version"`
 	CreationDate       time.Time   `json:"creation_date"`
 	ExpirationDate     *time.Time  `json:"expiration_date"`

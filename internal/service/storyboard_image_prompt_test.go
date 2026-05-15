@@ -54,6 +54,102 @@ func truncateForTest(s string, max int) string {
 	return string(r[:max]) + "..."
 }
 
+func TestCombineImagePrompt_LetteringBeforeLongVisualNotes(t *testing.T) {
+	var s Service
+	pi := 1
+	details := &domain.ImagePromptDetails{
+		AdditionalNotes: strings.Repeat("note ", 400),
+		ComicTexts: []domain.StoryboardComicText{
+			{Type: "thought", Text: "会下雨吗", Speaker: "boy", PanelIndex: &pi},
+		},
+	}
+	out := s.combineImagePrompt(details, "T", "D")
+	idxLetter := strings.Index(out, "会下雨吗")
+	idxVisual := strings.Index(out, "note ")
+	if idxLetter < 0 || idxVisual < 0 {
+		t.Fatalf("missing parts: letter=%d visual=%d", idxLetter, idxVisual)
+	}
+	if idxLetter > idxVisual {
+		t.Fatalf("lettering should precede long visual notes inside beauty section: letter=%d visual=%d", idxLetter, idxVisual)
+	}
+}
+
+func TestCombineImagePrompt_SkipsEmptyComicText(t *testing.T) {
+	var s Service
+	details := &domain.ImagePromptDetails{
+		ComicTexts: []domain.StoryboardComicText{
+			{Type: "thought", Text: ""},
+			{Type: "thought", Text: "有字"},
+		},
+	}
+	out := s.combineImagePrompt(details, "", "")
+	if strings.Contains(out, "「」") {
+		t.Fatalf("should not emit empty bracket placeholders: %s", truncateForTest(out, 200))
+	}
+	if !strings.Contains(out, "有字") {
+		t.Fatal("expected non-empty comic text in prompt")
+	}
+}
+
+func TestMergePlannedStoryboardComicTextsIntoDetails(t *testing.T) {
+	details := &domain.ImagePromptDetails{
+		ComicTexts: []domain.StoryboardComicText{
+			{Type: "thought", Text: ""},
+		},
+	}
+	planned := &domain.StoryboardScene{
+		ComicTexts: []domain.StoryboardComicText{
+			{Type: "thought", Text: "从场景合并"},
+		},
+	}
+	mergePlannedStoryboardComicTextsIntoDetails(details, planned)
+	if details.ComicTexts[0].Text != "从场景合并" {
+		t.Fatalf("got %q", details.ComicTexts[0].Text)
+	}
+}
+
+func TestEstimateComicPagePanelCountRangeAndCompactness(t *testing.T) {
+	transition := estimateComicPagePanelCount(nil, "夜色笼罩营地。", true, 6)
+	if transition != 1 {
+		t.Fatalf("short transition should stay one panel, got %d", transition)
+	}
+
+	dense := &domain.StoryboardScene{
+		Sequence:    5,
+		BeatPurpose: "climax reveal",
+		Characters:  []string{"A", "B"},
+		ComicTexts: []domain.StoryboardComicText{
+			{Type: "dialogue", Text: "别动"},
+			{Type: "thought", Text: "要来了"},
+			{Type: "sfx", Text: "砰！"},
+			{Type: "dialogue", Text: "太好了"},
+		},
+	}
+	got := estimateComicPagePanelCount(dense, strings.Repeat("高潮", 220), false, 6)
+	if got < 6 || got > comicPageMaxPanelCount {
+		t.Fatalf("dense climax should use 6-7 panels, got %d", got)
+	}
+
+	if maxed := estimateComicPagePanelCount(dense, strings.Repeat("高潮", 800), false, 6); maxed > 7 {
+		t.Fatalf("panel count must cap at 7, got %d", maxed)
+	}
+}
+
+func TestResolveComicPagePipelineIgnoresClientPanelCount(t *testing.T) {
+	got := resolveComicPagePipeline(ComicPagePipelineOptions{
+		LayoutPreset:    "strip5_top2_middle_wide_bottom2",
+		PanelCount:      5,
+		PageAspectRatio: "9:16",
+		DialogueMode:    "auto",
+	}, nil, "安静的雨夜。", true, 4)
+	if got.PanelCount != 1 {
+		t.Fatalf("server should auto-select compact transition count, got %d", got.PanelCount)
+	}
+	if got.LayoutPreset != "single_panel_full_page" {
+		t.Fatalf("layout should follow auto count, got %q", got.LayoutPreset)
+	}
+}
+
 func TestSelectStoryboardImageRefsAndOperation(t *testing.T) {
 	gen := &domain.StoryboardImageGeneration{
 		IsTransitionScene: false,

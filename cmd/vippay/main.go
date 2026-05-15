@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -18,8 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
+	gormlogger "gorm.io/gorm/logger"
+
+	gomysql "gorm.io/driver/mysql"
+	"gorm.io/gorm"
 
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	paypkg "github.com/grapestree/fgrapery/grapery/internal/service/pay"
@@ -29,6 +35,9 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"github.com/grapestree/fgrapery/grapery/internal/version"
 )
+
+// mainDB 是主服务数据库连接，用于读取 memberships 表（token_quota / token_used）
+var mainDB *gorm.DB
 
 var printVersion = flag.Bool("version", false, "app build version")
 var configPath = flag.String("config", "vippay.json", "config file")
@@ -259,6 +268,27 @@ func initializeServices(logger *zap.Logger) error {
 		logger.Info("web payments table migrated successfully")
 	}
 
+	// 初始化主库连接（用于读取 memberships 的 token_quota / token_used）
+	mainDSN := fmt.Sprintf("%s:%s@(%s:3306)/%s?charset=utf8mb4&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local",
+		dbUser, dbPass, dbAddr, dbName)
+	rawDB, rawErr := sql.Open("mysql", mainDSN)
+	if rawErr != nil {
+		logger.Warn("failed to open main DB connection, credit info will be unavailable", zap.Error(rawErr))
+	} else {
+		rawDB.SetMaxIdleConns(5)
+		rawDB.SetMaxOpenConns(20)
+		rawDB.SetConnMaxLifetime(5 * time.Minute)
+		gormDB, gormErr := gorm.Open(gomysql.New(gomysql.Config{Conn: rawDB}), &gorm.Config{
+			Logger: gormlogger.Default.LogMode(gormlogger.Warn),
+		})
+		if gormErr != nil {
+			logger.Warn("failed to init main gorm DB, credit info will be unavailable", zap.Error(gormErr))
+		} else {
+			mainDB = gormDB
+			logger.Info("main DB connection for credit info initialized successfully")
+		}
+	}
+
 	logger.Info("init vippay database success")
 	return nil
 }
@@ -370,8 +400,8 @@ func registerRoutes(router *gin.Engine) {
 	// 创建产品服务
 	productService := paypkg.NewIAPProductServiceFromIAPConfig(iapConfig)
 
-	// 创建 IAP 处理器，传入产品服务
-	iapHandler := pay.NewIAPHandler(iapService, productService)
+	// 创建 IAP 处理器，传入产品服务及主库（用于购买后充值 tokens）
+	iapHandler := pay.NewIAPHandler(iapService, productService, mainDB)
 
 	// 创建 OAuth Repository（用于持久化用户数据和第三方登录绑定）
 	oauthRepo := paymodels.NewOAuthRepository()
@@ -687,61 +717,70 @@ func registerRoutes(router *gin.Engine) {
 		vip := api.Group("/vip")
 		vip.Use(paymiddleware.AuthMiddleware())
 		{
-			vip.GET("/info", func(c *gin.Context) {
-				userIDStr := paymiddleware.GetUserIDFromContext(c)
-				userID := stringToInt64(userIDStr)
-				ctx := c.Request.Context()
+		vip.GET("/info", func(c *gin.Context) {
+			userIDStr := paymiddleware.GetUserIDFromContext(c)
+			userID := stringToInt64(userIDStr)
+			ctx := c.Request.Context()
 
-				// 查询用户活跃订阅
-				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
-				if err != nil {
-					// 没有活跃订阅，返回默认值
-					c.JSON(http.StatusOK, gin.H{
-						"code": 0,
-						"msg":  "success",
-						"data": gin.H{
-							"user_id":      userID,
-							"is_vip":       false,
-							"level":        0,
-							"status":       0,
-							"auto_renew":   false,
-							"quota_used":   0,
-							"quota_limit":  0,
-							"max_roles":    2, // 免费用户默认值
-							"max_contexts": 5, // 免费用户默认值
-							"expires_at":   nil,
-						},
-					})
-					return
-				}
+			// 从主库读取真实 token 余量（token_quota / token_used）
+			tokenQuota, tokenUsed := getMainDBTokenInfo(ctx, userIDStr)
+			creditLimit := ceilDiv(tokenQuota, common.CreditToTokenRatio)
+			creditUsed := ceilDiv(tokenUsed, common.CreditToTokenRatio)
 
-				// 计算VIP等级（根据订阅套餐）
-				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
-
-				// 格式化过期时间
-				var expiresAt *string
-				if !subscription.EndTime.IsZero() {
-					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
-					expiresAt = &expiresAtStr
-				}
-
+			// 查询用户活跃订阅
+			subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+			if err != nil {
+				// 没有活跃订阅，返回默认值
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"is_vip":       subscription.IsActive(),
-						"level":        vipLevel,
-						"status":       int(subscription.Status),
-						"auto_renew":   subscription.AutoRenew,
-						"quota_used":   subscription.QuotaUsed,
-						"quota_limit":  subscription.QuotaLimit,
-						"max_roles":    subscription.MaxRoles,
-						"max_contexts": subscription.MaxContexts,
-						"expires_at":   expiresAt,
+						"is_vip":       false,
+						"level":        0,
+						"status":       0,
+						"auto_renew":   false,
+						"quota_used":   tokenUsed,
+						"quota_limit":  tokenQuota,
+						"credit_used":  creditUsed,
+						"credit_limit": creditLimit,
+						"max_roles":    2, // 免费用户默认值
+						"max_contexts": 5, // 免费用户默认值
+						"expires_at":   nil,
 					},
 				})
+				return
+			}
+
+			// 计算VIP等级（根据订阅套餐）
+			vipLevel := calculateVIPLevel(subscription.PackagePlanID)
+
+			// 格式化过期时间
+			var expiresAt *string
+			if !subscription.EndTime.IsZero() {
+				expiresAtStr := subscription.EndTime.Format(time.RFC3339)
+				expiresAt = &expiresAtStr
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"user_id":      userID,
+					"is_vip":       subscription.IsActive(),
+					"level":        vipLevel,
+					"status":       int(subscription.Status),
+					"auto_renew":   subscription.AutoRenew,
+					"quota_used":   tokenUsed,
+					"quota_limit":  tokenQuota,
+					"credit_used":  creditUsed,
+					"credit_limit": creditLimit,
+					"max_roles":    subscription.MaxRoles,
+					"max_contexts": subscription.MaxContexts,
+					"expires_at":   expiresAt,
+				},
 			})
+		})
 			vip.GET("/check", func(c *gin.Context) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
@@ -1117,4 +1156,34 @@ func getVipPayDomain() string {
 		return domain
 	}
 	return "https://www.grapery.xyz"
+}
+
+// ceilDiv 向上取整除法：ceil(a/b)
+func ceilDiv(a, b int) int {
+	if b <= 0 {
+		return 0
+	}
+	return (a + b - 1) / b
+}
+
+// mainDBMembership 用于从主库读取 membership 行
+type mainDBMembership struct {
+	TokenQuota int `gorm:"column:token_quota"`
+	TokenUsed  int `gorm:"column:token_used"`
+}
+
+// getMainDBTokenInfo 从主库 memberships 表读取 token_quota 和 token_used。
+// 如果 mainDB 未配置或查询失败，返回 (0, 0)，调用方应降级处理。
+func getMainDBTokenInfo(ctx context.Context, userIDStr string) (quota int, used int) {
+	if mainDB == nil || userIDStr == "" {
+		return 0, 0
+	}
+	var m mainDBMembership
+	if err := mainDB.WithContext(ctx).Table("memberships").
+		Select("token_quota, token_used").
+		Where("user_id = ?", userIDStr).
+		First(&m).Error; err != nil {
+		return 0, 0
+	}
+	return m.TokenQuota, m.TokenUsed
 }

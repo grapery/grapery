@@ -17,6 +17,14 @@ func structuredMangaLanguageGuidance() string {
 3. SFX & effect lines（拟声词与效果线）
 - sfx 是画面元素，不是注释；用 bold blocky lettering、brushy lettering、jagged lettering 等说明字形。
 - 动作/爆发/大喊/击碎/坠落/冲撞等语义触发 impact package：action lines、radial speed lines、motion streaking、impact burst、particles/debris/sparks。
+- 语气词/反应词也是漫画节奏：疑惑/震惊用「啊？」「诶？」；沉默/压迫用「……」；期待用「要来了」「终于」；庆祝用「太好了！」；必须短、准、可读，不随机造无关文字。
+
+3.5. Emotional beat staging（重点情绪场）
+- turning_point（主要转折）：用大格/断裂边框/强剪影/突变光色/停顿旁白，把“局面变了”的瞬间视觉化。
+- shock（震惊）：用极近景、瞳孔高光、汗滴、速度线/放射线、背景抽离、粗黑阴影、短促 sfx/interjection。
+- anticipation（期待）：用留白、视线朝向画外、门缝/包裹/倒计时/手指停顿、低饱和静默、旁白框制造悬念。
+- celebration（庆祝）：用上扬构图、暖色光、碎纸/星形高光/群像反应、开阔空间、短对白或欢呼 SFX。
+- inner_monologue（心理描写）：用云朵思想泡、低饱和背景、脸部近景/手部细节/眼神方向，不把长段心理活动塞进气泡。
 
 4. Character design & iconography（角色符号化）
 - 角色外形、服饰、发型、标志物必须稳定且可被读者瞬间识别。

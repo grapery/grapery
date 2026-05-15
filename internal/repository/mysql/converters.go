@@ -435,6 +435,13 @@ func characterLinkToDomain(c *Character) domain.Character {
 	if c == nil {
 		return domain.Character{}
 	}
+	avatar := strings.TrimSpace(c.Avatar)
+	if avatar == "" {
+		avatar = strings.TrimSpace(c.Portrait)
+	}
+	if avatar == "" {
+		avatar = strings.TrimSpace(c.ReferenceImage)
+	}
 	return domain.Character{
 		BaseModel: common.BaseModel{
 			ID:        c.ID,
@@ -444,7 +451,7 @@ func characterLinkToDomain(c *Character) domain.Character {
 		StoryID:                  c.StoryID,
 		Name:                     c.Name,
 		Description:              c.Description,
-		Avatar:                   c.Avatar,
+		Avatar:                   avatar,
 		Poster:                   c.Poster,
 		Portrait:                 c.Portrait,
 		PortraitGenerationStatus: c.PortraitGenerationStatus,

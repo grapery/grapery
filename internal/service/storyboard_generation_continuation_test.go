@@ -57,7 +57,7 @@ func TestBuildComicPagePromptUsesStructuredSections(t *testing.T) {
 		LayoutPreset:    "grid_2x2",
 		PageAspectRatio: "3:4",
 		DialogueMode:    "auto",
-	}, nil)
+	}, nil, 0)
 	for _, want := range []string{"# PromptDSL", "prompt_dsl_v1", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Detailed Instructions"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("comic page prompt should contain structured section %q, got: %s", want, out)
@@ -86,7 +86,7 @@ func TestBuildComicPagePromptPrefersPreplannedComicMetadata(t *testing.T) {
 		LayoutPreset:    "strip5_top2_middle_wide_bottom2",
 		PageAspectRatio: "9:16",
 		DialogueMode:    "auto",
-	}, planned)
+	}, planned, 0)
 	for _, want := range []string{
 		"Pre-planned comic metadata from text stage (highest priority)",
 		"layoutIntent: diagonal_motion",

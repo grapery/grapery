@@ -2,8 +2,10 @@ package pay
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"io"
 	"net/http"
@@ -12,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
@@ -24,14 +28,17 @@ type IAPHandler struct {
 	iapService     pay.IAPService
 	productService pay.IAPProductService
 	logger         *logrus.Logger
+	// mainDB 是主服务数据库连接，用于购买成功后充值 token 余量
+	mainDB *gorm.DB
 }
 
-// NewIAPHandler 创建 IAP 处理器
-func NewIAPHandler(iapService pay.IAPService, productService pay.IAPProductService) *IAPHandler {
+// NewIAPHandler 创建 IAP 处理器；mainDB 可为 nil（降级为只写 vippay 库）
+func NewIAPHandler(iapService pay.IAPService, productService pay.IAPProductService, mainDB *gorm.DB) *IAPHandler {
 	return &IAPHandler{
 		iapService:     iapService,
 		productService: productService,
 		logger:         logrus.New(),
+		mainDB:         mainDB,
 	}
 }
 
@@ -141,6 +148,36 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 		"sandbox":    req.Sandbox,
 		"endpoint":   "VerifyAppleReceipt",
 	}).Info("Apple receipt verification completed successfully")
+
+	// 充值 token：从产品表获取 QuotaLimit（单位：tokens），写入主库 memberships
+	userIDStr := getUserIDString(c)
+	if userIDStr != "" && receipt.ProductID != "" {
+		if product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID); prodErr == nil && product != nil {
+			tokenAmount := product.QuotaLimit
+			if tokenAmount > 0 {
+				if topUpErr := h.topUpUserTokens(ctx, userIDStr, tokenAmount); topUpErr != nil {
+					h.logger.WithFields(logrus.Fields{
+						"user_id":      userIDStr,
+						"product_id":   receipt.ProductID,
+						"token_amount": tokenAmount,
+						"error":        topUpErr.Error(),
+					}).Error("Failed to top up user tokens after IAP purchase")
+				} else {
+					h.logger.WithFields(logrus.Fields{
+						"user_id":      userIDStr,
+						"product_id":   receipt.ProductID,
+						"token_amount": tokenAmount,
+					}).Info("Successfully topped up user tokens after IAP purchase")
+				}
+			}
+		} else if prodErr != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":    userIDStr,
+				"product_id": receipt.ProductID,
+				"error":      prodErr.Error(),
+			}).Warn("Could not look up product for token top-up")
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
@@ -1241,6 +1278,64 @@ func (h *IAPHandler) GetProductStats(c *gin.Context) {
 			"platform": platformStr,
 			"stats":    stats,
 		},
+	})
+}
+
+// topUpUserTokens 购买成功后在主库 memberships 表中充值 tokens。
+// tokens > 0 表示充值（增加 token_quota）。
+func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, tokens int) error {
+	if h.mainDB == nil {
+		h.logger.Warn("mainDB not configured, skipping token top-up")
+		return nil
+	}
+	if tokens <= 0 || userIDStr == "" {
+		return nil
+	}
+
+	type membership struct {
+		ID           string     `gorm:"column:id"`
+		UserID       string     `gorm:"column:user_id"`
+		Tier         string     `gorm:"column:tier"`
+		Status       string     `gorm:"column:status"`
+		StartDate    time.Time  `gorm:"column:start_date"`
+		EndDate      *time.Time `gorm:"column:end_date"`
+		TokenQuota   int        `gorm:"column:token_quota"`
+		TokenUsed    int        `gorm:"column:token_used"`
+		StorageQuota int64      `gorm:"column:storage_quota"`
+		StorageUsed  int64      `gorm:"column:storage_used"`
+		CreatedAt    time.Time  `gorm:"column:created_at"`
+		UpdatedAt    time.Time  `gorm:"column:updated_at"`
+	}
+
+	now := time.Now()
+	return h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var m membership
+		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			m = membership{
+				ID:           uuid.New().String(),
+				UserID:       userIDStr,
+				Tier:         "free",
+				Status:       string(common.MembershipStatusActive),
+				StartDate:    now,
+				TokenQuota:   common.DefaultFreeTierTokenQuota + tokens,
+				TokenUsed:    0,
+				StorageQuota: common.DefaultFreeTierStorageBytes,
+				StorageUsed:  0,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			return tx.Table("memberships").Create(&m).Error
+		}
+		if err != nil {
+			return fmt.Errorf("query membership: %w", err)
+		}
+		return tx.Table("memberships").
+			Where("user_id = ?", userIDStr).
+			Updates(map[string]interface{}{
+				"token_quota": gorm.Expr("token_quota + ?", tokens),
+				"updated_at":  time.Now(),
+			}).Error
 	})
 }
 

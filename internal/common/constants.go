@@ -164,6 +164,9 @@ const (
 
 	// AIImageBillingUnitTokens 图片生成预检与 usage 缺失时的单张参考（与常见 TotalTokens 量级一致）。
 	AIImageBillingUnitTokens = 4096
+
+	// CreditToTokenRatio 1 credit 对应的 token 数量；仅用于展示层换算，内部仍以 token 计量。
+	CreditToTokenRatio = 10000
 )
 
 // OrderStatus defines statuses for payment and order entities

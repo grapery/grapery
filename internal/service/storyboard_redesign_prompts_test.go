@@ -68,3 +68,27 @@ func TestValidateStoryboardScenePlanRequiresComicLayoutMetadata(t *testing.T) {
 	}
 }
 
+func TestStoryboardRedesignPromptsMentionEmotionalComicBeats(t *testing.T) {
+	system := buildStoryboardBiblePlanSystemPrompt()
+	if !strings.Contains(system, "turning points") || !strings.Contains(system, "shock beats") {
+		t.Fatalf("bible plan system prompt should require emotional comic beats, got: %s", system)
+	}
+
+	user := buildStoryboardBiblePlanUserPrompt(
+		&domain.Story{Title: "T", Genre: "adventure"},
+		&domain.Storyboard{RawInput: "少年在营地发现秘密。"},
+		storyboardGenerationContextSnapshot{},
+		5,
+	)
+	for _, want := range []string{"turning_point", "shock", "anticipation", "celebration", "speech_balloon_safe_space"} {
+		if !strings.Contains(user, want) {
+			t.Fatalf("bible plan user prompt missing %q", want)
+		}
+	}
+
+	sceneSystem := buildStoryboardSceneWriterSystemPrompt()
+	if !strings.Contains(sceneSystem, "SFX/interjections") || !strings.Contains(sceneSystem, "inner_monologue") {
+		t.Fatalf("scene writer system prompt missing comic text emphasis: %s", sceneSystem)
+	}
+}
+

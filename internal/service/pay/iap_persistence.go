@@ -308,11 +308,17 @@ func (s *IAPPersistenceService) PersistUserSubscription(ctx context.Context, rec
 		return fmt.Errorf("不支持的平台: %s", receipt.Platform)
 	}
 
+	// 从产品表查询实际的 QuotaLimit（tokens）；查询失败时使用合理默认值
+	quotaLimit := 25000 // 与 DefaultFreeTierTokenQuota 同量级的安全默认值
+	if product, err := paymodels.GetIAPProductByProductID(ctx, productID); err == nil && product != nil && product.QuotaLimit > 0 {
+		quotaLimit = product.QuotaLimit
+	}
+
 	// 创建用户订阅记录
 	userSubscription := &paymodels.UserSubscription{
 		UserID:          int64(receipt.UserID),
 		PackagePlanID:   packagePlanID,
-		OrderID:         0, // 需要从订单系统获取
+		OrderID:         0,
 		Status:          paymodels.UserSubscriptionStatusActive,
 		StartTime:       receipt.CreationDate,
 		EndTime:         *receipt.ExpirationDate,
@@ -320,12 +326,12 @@ func (s *IAPPersistenceService) PersistUserSubscription(ctx context.Context, rec
 		PaymentMethod:   paymentMethod,
 		PaymentProvider: paymentProvider,
 		ProviderSubID:   receipt.ReceiptData,
-		Amount:          0, // 需要从产品信息中获取
+		Amount:          0,
 		Currency:        "USD",
-		QuotaLimit:      1000, // 默认额度，实际应用中应该从套餐计划中获取
+		QuotaLimit:      quotaLimit,
 		QuotaUsed:       0,
-		MaxRoles:        2, // 默认值
-		MaxContexts:     5, // 默认值
+		MaxRoles:        2,
+		MaxContexts:     5,
 	}
 
 	return paymodels.CreateUserSubscription(ctx, userSubscription)

@@ -15,6 +15,8 @@ Rules:
 - Character three-view sheets are identity authority for face, body, hairstyle, costume proportions, color blocking, and silhouette.
 - Do not invent IDs. Use provided character IDs and location keys when available.
 - Every beat referenceKeys value must point to a key declared in storyboardBible.characters, locations, or props.
+- Plan in manga/comic language from the start: dialogue, inner monologue, interjections/SFX, emotional turning points, shock beats, anticipation beats, and celebration/release beats must be explicit beat functions when the story supports them.
+- Do not make every beat a scenic illustration. A good comic sequence alternates establishing, action/reaction, dialogue/thought, emotional punctuation, and transition.
 - Output only JSON with keys storyboardBible and beats.`
 }
 
@@ -62,7 +64,17 @@ Hard requirements:
 - Character entries must include turnaroundAssetKeys when three-view URLs are available.
 - All immutableTraits must be visual facts, not vague personality labels.
 - Beat summaries must form one continuous plot chain.
-- Every beat must include comicFunction (establish|dialogue|action_impact|reaction|transition|atmosphere) and a concise layoutHint so scene writing starts with comic grammar, not post-image patching.`)
+- Every beat must include comicFunction and a concise layoutHint so scene writing starts with comic grammar, not post-image patching.
+- Allowed comicFunction values: establish|dialogue|inner_monologue|action_impact|reaction|turning_point|shock|anticipation|celebration|transition|atmosphere.
+- Use comicFunction intentionally:
+  * dialogue: character speech is narratively useful; later scene must need speech balloons.
+  * inner_monologue: private thought/psychological hesitation; later scene must need thought bubbles.
+  * shock: surprise, fear, revelation, sudden reversal; later scene should use close-up, reaction marks, SFX/interjection.
+  * anticipation: before reveal/action/decision; later scene should use silence, negative space, caption or thought bubble.
+  * celebration: relief, success, reunion, reward; later scene may use warm light, crowd reaction, short cheering text.
+  * turning_point: main plot direction changes; later scene must visually emphasize the irreversible moment.
+- For 4+ beats, include at least one non-atmospheric emotional punctuation beat (turning_point|shock|anticipation|celebration|inner_monologue|dialogue) when the input story supports it.
+- layoutHint must mention concrete comic grammar, such as speech_balloon_safe_space, thought_bubble_close_up, jagged_shock_burst, cliffhanger_negative_space, celebration_wide_panel, border_breaking_impact, caption_box_transition.`)
 	return b.String()
 }
 
@@ -71,7 +83,8 @@ func buildStoryboardSceneWriterSystemPrompt() string {
 Do not change visual bible facts, character IDs, character keys, location keys, or beat order.
 For every scene, include an English imagePrompt that can drive image generation with reference images.
 Use the character three-view sheet as identity authority, but compose a new scene pose and camera according to the beat.
-When the story style or beat requires it, populate comicTexts with on-image lettering (dialogue bubbles, thought bubbles, narration boxes, SFX) so the image model paints them directly — no app-side overlay.
+When the story style or beat requires it, populate comicTexts with on-image lettering (dialogue bubbles, thought bubbles, narration boxes, SFX/interjections) so the image model paints them directly — no app-side overlay.
+Emotional manga beats must not become generic illustrations: turning_point, shock, anticipation, celebration, dialogue, and inner_monologue require visible comic staging and appropriate short text unless deliberately wordless for stronger effect.
 Output strict JSON only.`
 }
 
@@ -100,7 +113,7 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
       "referenceKeys": ["char_1","loc_1"],
       "continuityNote": "what must carry forward from previous scene or parent",
       "beatPurpose": "same purpose as beat",
-      "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose. When comicTexts are present, describe speech balloon layout, tail direction, thought-bubble cloud style, SFX font treatment, and negative space reserved for lettering — so the image model renders them directly in-image.",
+      "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose. For manga-emphasis beats, include concrete staging: speech/thought balloon placement, tail direction, SFX/interjection typography, reaction marks, effect lines, caption boxes, and negative space reserved for lettering — so the image model renders them directly in-image.",
       "visualState": {"characters":"wardrobe/emotion/injuries/props after this scene"},
       "layoutIntent": "short snake_case layout intent such as comic_single_panel, split_screen_two_beat, diagonal_motion, detail_insert",
       "compositionPlan": "Chinese concise layout plan: panel/zones, gutters, reading order, bubble safe-space, focal flow",
@@ -120,7 +133,9 @@ Hard requirements:
 - referenceKeys must be declared in the bible.
 - imagePrompt must be English and include identity, action, environment, composition, lighting, palette, mood, texture.
 - layoutIntent/compositionPlan/shotType/visualHierarchy are required for every scene and must be consistent with beat comicFunction/layoutHint.
-- comicTexts may be omitted or an empty array for silent/atmospheric scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
+- comicTexts may be omitted or an empty array only for silent/atmospheric/establishing scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
+- For beats whose comicFunction is dialogue, inner_monologue, shock, anticipation, celebration, or turning_point, either provide comicTexts OR explicitly make imagePrompt describe a deliberate wordless comic device (large silence, empty balloon avoided, held breath, reaction-only close-up). Do not leave these as plain scenic descriptions.
+- Use short Chinese text examples naturally when appropriate: 啊？ / …… / 要来了 / 终于 / 太好了！ / 别动！ / 原来如此. Do not add random unrelated text.
 - imagePrompt must mirror any comicTexts as concrete English lettering instructions (balloon shape, tail direction, font weight, reserved white space).
 - Do not output Markdown or commentary.`)
 	return b.String()

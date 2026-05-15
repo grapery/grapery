@@ -22,6 +22,12 @@ type ComicPagePipelineOptions struct {
 	DialogueMode    string
 }
 
+const (
+	comicPageMinPanelCount     = 1
+	comicPageMaxPanelCount     = 7
+	comicPageDefaultPanelCount = 3
+)
+
 // ComicPageGenerationRequest POST /storyboards/:id/generate/comic-page
 type ComicPageGenerationRequest struct {
 	StoryboardID             string
@@ -38,13 +44,14 @@ type ComicPageGenerationRequest struct {
 	SkipPeerFailureGate bool
 }
 
-// NormalizeComicPagePipeline applies defaults and validates panel count for known layouts.
+// NormalizeComicPagePipeline applies fallback defaults for legacy/internal callers.
+// GenerateStoryboardComicPage overrides panel count and layout with story-driven values.
 func NormalizeComicPagePipeline(o *ComicPagePipelineOptions) {
 	if o == nil {
 		return
 	}
 	if strings.TrimSpace(o.LayoutPreset) == "" {
-		o.LayoutPreset = "strip5_top2_middle_wide_bottom2"
+		o.LayoutPreset = comicPageLayoutPresetForPanelCount(o.PanelCount)
 	}
 	if strings.TrimSpace(o.PageAspectRatio) == "" {
 		o.PageAspectRatio = "9:16"
@@ -52,17 +59,151 @@ func NormalizeComicPagePipeline(o *ComicPagePipelineOptions) {
 	if strings.TrimSpace(o.DialogueMode) == "" {
 		o.DialogueMode = "auto"
 	}
-	switch strings.TrimSpace(o.LayoutPreset) {
-	case "strip5_top2_middle_wide_bottom2":
-		o.PanelCount = 5
-	default:
-		if o.PanelCount <= 0 {
-			o.PanelCount = 5
+	if o.PanelCount <= 0 {
+		o.PanelCount = comicPageDefaultPanelCount
+	}
+	if o.PanelCount < comicPageMinPanelCount {
+		o.PanelCount = comicPageMinPanelCount
+	}
+	if o.PanelCount > comicPageMaxPanelCount {
+		o.PanelCount = comicPageMaxPanelCount
+	}
+}
+
+func resolveComicPagePipeline(base ComicPagePipelineOptions, plannedScene *domain.StoryboardScene, sceneDescription string, isTransitionScene bool, totalScenes int) ComicPagePipelineOptions {
+	panelCount := estimateComicPagePanelCount(plannedScene, sceneDescription, isTransitionScene, totalScenes)
+	return ComicPagePipelineOptions{
+		LayoutPreset:    comicPageLayoutPresetForPanelCount(panelCount),
+		PanelCount:      panelCount,
+		PageAspectRatio: firstNonBlank(base.PageAspectRatio, "9:16"),
+		DialogueMode:    firstNonBlank(base.DialogueMode, "auto"),
+	}
+}
+
+func estimateComicPagePanelCount(plannedScene *domain.StoryboardScene, sceneDescription string, isTransitionScene bool, totalScenes int) int {
+	desc := strings.TrimSpace(sceneDescription)
+	descRunes := utf8.RuneCountInString(desc)
+	if isTransitionScene {
+		panelCount := 1
+		if descRunes > 140 || (plannedScene != nil && strings.TrimSpace(plannedScene.CompositionPlan) != "") {
+			panelCount = 2
 		}
-		if o.PanelCount > 12 {
-			o.PanelCount = 12
+		if descRunes > 300 {
+			panelCount = 3
+		}
+		return clampComicPagePanelCount(panelCount)
+	}
+
+	panelCount := 2
+	if descRunes > 60 {
+		panelCount++
+	}
+	if descRunes > 160 {
+		panelCount++
+	}
+	if descRunes > 280 {
+		panelCount++
+	}
+
+	comicTextCount := 0
+	characterCount := 0
+	impactBeat := false
+	if plannedScene != nil {
+		characterCount = len(plannedScene.Characters)
+		for _, ct := range plannedScene.ComicTexts {
+			if strings.TrimSpace(ct.Text) != "" {
+				comicTextCount++
+			}
+		}
+		beatText := strings.ToLower(strings.Join([]string{
+			plannedScene.BeatPurpose,
+			plannedScene.LayoutIntent,
+			plannedScene.CompositionPlan,
+			plannedScene.ShotType,
+			plannedScene.VisualHierarchy,
+			plannedScene.Mood,
+			plannedScene.Title,
+			plannedScene.Description,
+		}, " "))
+		impactBeat = containsAnyFold(beatText,
+			"climax", "turning", "shock", "reveal", "conflict", "battle", "celebration",
+			"高潮", "转折", "震惊", "揭示", "冲突", "战斗", "庆祝", "爆发", "危机")
+		if totalScenes > 0 && plannedScene.Sequence >= totalScenes-1 {
+			panelCount++
 		}
 	}
+
+	if comicTextCount > 0 {
+		panelCount++
+	}
+	if comicTextCount >= 3 {
+		panelCount++
+	}
+	if comicTextCount >= 5 {
+		panelCount++
+	}
+	if characterCount >= 2 {
+		panelCount++
+	}
+	if impactBeat {
+		panelCount++
+	}
+
+	// Keep ordinary scenes compact. Six or seven panels are reserved for dense or pivotal beats.
+	if panelCount > 5 && !impactBeat && comicTextCount < 3 && descRunes < 260 {
+		panelCount = 5
+	}
+	if panelCount > 6 && !(impactBeat && (comicTextCount >= 4 || descRunes > 360)) {
+		panelCount = 6
+	}
+	return clampComicPagePanelCount(panelCount)
+}
+
+func comicPageLayoutPresetForPanelCount(panelCount int) string {
+	switch clampComicPagePanelCount(panelCount) {
+	case 1:
+		return "single_panel_full_page"
+	case 2:
+		return "two_panel_vertical_stack"
+	case 3:
+		return "three_panel_setup_reaction_release"
+	case 4:
+		return "four_panel_2x2_grid"
+	case 5:
+		return "strip5_top2_middle_wide_bottom2"
+	case 6:
+		return "six_panel_2x3_grid"
+	case 7:
+		return "seven_panel_story_page_top2_middle3_bottom2"
+	default:
+		return "three_panel_setup_reaction_release"
+	}
+}
+
+func clampComicPagePanelCount(panelCount int) int {
+	if panelCount < comicPageMinPanelCount {
+		return comicPageMinPanelCount
+	}
+	if panelCount > comicPageMaxPanelCount {
+		return comicPageMaxPanelCount
+	}
+	return panelCount
+}
+
+func firstNonBlank(v, fallback string) string {
+	if trimmed := strings.TrimSpace(v); trimmed != "" {
+		return trimmed
+	}
+	return fallback
+}
+
+func containsAnyFold(s string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, strings.ToLower(needle)) {
+			return true
+		}
+	}
+	return false
 }
 
 // GenerateStoryboardComicPage 生成「单张内含多格」的漫画页（独立流水线，不复用 GenerateSceneImage 的请求体）。
@@ -70,14 +211,6 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 	if req == nil {
 		return nil, fmt.Errorf("nil comic page request")
 	}
-	NormalizeComicPagePipeline(&req.Pipeline)
-
-	s.logger.Info("starting storyboard comic page generation",
-		zap.String("storyboardId", req.StoryboardID),
-		zap.String("sceneId", req.SceneID),
-		zap.String("layoutPreset", req.Pipeline.LayoutPreset),
-		zap.Int("panelCount", req.Pipeline.PanelCount),
-		zap.String("aspectRatio", req.Pipeline.PageAspectRatio))
 
 	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
 	if err != nil {
@@ -101,6 +234,15 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 	mergedSceneDescription := s.MergedStoryboardSceneDescriptionForImage(ctx, req.StoryboardID, req.SceneID, req.SceneDescription)
 
 	isTransitionScene := len(req.SceneCharacters) == 0 && len(characterRefImages) == 0
+	plannedScene, totalScenes := s.storyboardSceneContextForComicPage(ctx, req.StoryboardID, req.SceneID, storyboard)
+	req.Pipeline = resolveComicPagePipeline(req.Pipeline, plannedScene, mergedSceneDescription, isTransitionScene, totalScenes)
+
+	s.logger.Info("starting storyboard comic page generation",
+		zap.String("storyboardId", req.StoryboardID),
+		zap.String("sceneId", req.SceneID),
+		zap.String("layoutPreset", req.Pipeline.LayoutPreset),
+		zap.Int("panelCount", req.Pipeline.PanelCount),
+		zap.String("aspectRatio", req.Pipeline.PageAspectRatio))
 
 	panelURL := strings.TrimSpace(s.previousStoryboardScenePanelImageURL(ctx, req.StoryboardID, req.SceneID))
 
@@ -200,9 +342,9 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
 	geminiOK := s.geminiClient != nil
-	plannedScene := s.lookupStoryboardSceneForComicPage(ctx, gen.StoryboardID, gen.SceneID)
+	plannedScene, totalScenes := s.storyboardSceneContextForComicPage(ctx, gen.StoryboardID, gen.SceneID, nil)
 	if huoshanOK || geminiOK {
-		promptGen := s.buildComicPageImageGenerationLLMPrompt(gen, opts, plannedScene)
+		promptGen := s.buildComicPageImageGenerationLLMPrompt(gen, opts, plannedScene, totalScenes)
 		text, inTok, outTok, totTok, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, promptGen, "comic_page_image_prompt", 4096, 0.35, true, 0.35, 4096)
 		if err != nil {
 			gen.Status = domain.GenerationStatusFailed
@@ -218,10 +360,17 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			return
 		}
 
-		promptDetails, combinedPrompt := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
+		promptDetails, _ := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
+			mergePlannedStoryboardComicTextsIntoDetails(promptDetails, plannedScene)
 			gen.PromptDetails = promptDetails
-			gen.GeneratedPrompt = combinedPrompt
+			gen.GeneratedPrompt = s.combineImagePrompt(promptDetails, gen.SceneTitle, gen.SceneDescription)
+		} else if plannedScene != nil && len(plannedScene.ComicTexts) > 0 {
+			fallback := &domain.ImagePromptDetails{
+				ComicTexts: append([]domain.StoryboardComicText(nil), plannedScene.ComicTexts...),
+			}
+			gen.PromptDetails = fallback
+			gen.GeneratedPrompt = s.combineImagePrompt(fallback, gen.SceneTitle, gen.SceneDescription)
 		} else {
 			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
 			gen.GeneratedPrompt = prependStoryboardImageNarrativeBlock(nb, capGeminiImageBeautyOutput(strings.TrimSpace(text)))
@@ -344,20 +493,80 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 	}
 }
 
-func (s *Service) lookupStoryboardSceneForComicPage(ctx context.Context, storyboardID, sceneID string) *domain.StoryboardScene {
+func (s *Service) storyboardSceneContextForComicPage(ctx context.Context, storyboardID, sceneID string, storyboard *domain.Storyboard) (*domain.StoryboardScene, int) {
 	if strings.TrimSpace(storyboardID) == "" || strings.TrimSpace(sceneID) == "" {
-		return nil
+		return nil, 0
+	}
+	if storyboard != nil && len(storyboard.StoryboardScenes) > 0 {
+		for i := range storyboard.StoryboardScenes {
+			if storyboard.StoryboardScenes[i].ID == sceneID {
+				return &storyboard.StoryboardScenes[i], len(storyboard.StoryboardScenes)
+			}
+		}
+		return nil, len(storyboard.StoryboardScenes)
 	}
 	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
 	if err != nil {
-		return nil
+		return nil, 0
 	}
 	for _, scene := range scenes {
 		if scene != nil && scene.ID == sceneID {
-			return scene
+			return scene, len(scenes)
 		}
 	}
-	return nil
+	return nil, len(scenes)
+}
+
+func (s *Service) lookupStoryboardSceneForComicPage(ctx context.Context, storyboardID, sceneID string) *domain.StoryboardScene {
+	scene, _ := s.storyboardSceneContextForComicPage(ctx, storyboardID, sceneID, nil)
+	return scene
+}
+
+func comicPageLayoutDescription(layout string, panelCount int) string {
+	switch strings.TrimSpace(layout) {
+	case "single_panel_full_page":
+		return "one full-page splash panel"
+	case "two_panel_vertical_stack":
+		return "two stacked horizontal panels: top setup, bottom reaction or reveal"
+	case "three_panel_setup_reaction_release":
+		return "three readable panels with setup, reaction, and release/turn"
+	case "four_panel_2x2_grid":
+		return "balanced 2x2 grid"
+	case "strip5_top2_middle_wide_bottom2":
+		return "five panels: two small top panels, one wide middle emphasis panel, two bottom panels"
+	case "six_panel_2x3_grid":
+		return "six panels in a compact 2-column by 3-row story grid"
+	case "seven_panel_story_page_top2_middle3_bottom2":
+		return "seven compact panels: two top panels, three middle beats, two bottom panels"
+	default:
+		if panelCount == 1 {
+			return "one full-page splash panel"
+		}
+		return fmt.Sprintf("%d story-driven panels with readable gutters", clampComicPagePanelCount(panelCount))
+	}
+}
+
+func comicPagePanelCountReason(plannedScene *domain.StoryboardScene, sceneDescription string, isTransitionScene bool, totalScenes int) string {
+	descRunes := utf8.RuneCountInString(strings.TrimSpace(sceneDescription))
+	if isTransitionScene {
+		return fmt.Sprintf("atmospheric transition scene; description length=%d runes; compact pacing", descRunes)
+	}
+	comicTextCount := 0
+	characterCount := 0
+	beatPurpose := ""
+	sequence := 0
+	if plannedScene != nil {
+		characterCount = len(plannedScene.Characters)
+		beatPurpose = strings.TrimSpace(plannedScene.BeatPurpose)
+		sequence = plannedScene.Sequence
+		for _, ct := range plannedScene.ComicTexts {
+			if strings.TrimSpace(ct.Text) != "" {
+				comicTextCount++
+			}
+		}
+	}
+	return fmt.Sprintf("story-driven auto count from chapter context: scene sequence=%d/%d, description length=%d runes, characters=%d, comicTexts=%d, beatPurpose=%s",
+		sequence, totalScenes, descRunes, characterCount, comicTextCount, beatPurpose)
 }
 
 func prependComicPageImagePromptGuard(prompt string, opts ComicPagePipelineOptions) string {
@@ -367,17 +576,20 @@ func prependComicPageImagePromptGuard(prompt string, opts ComicPagePipelineOptio
 	}
 	panelCount := opts.PanelCount
 	if panelCount <= 0 {
-		panelCount = 5
+		panelCount = comicPageDefaultPanelCount
 	}
 	layout := strings.TrimSpace(opts.LayoutPreset)
 	if layout == "" {
-		layout = "strip5_top2_middle_wide_bottom2"
+		layout = comicPageLayoutPresetForPanelCount(panelCount)
 	}
 	aspect := strings.TrimSpace(opts.PageAspectRatio)
 	if aspect == "" {
 		aspect = "9:16"
 	}
-	guard := fmt.Sprintf("[HARD OUTPUT REQUIREMENT] Generate ONE single image that is a complete multi-panel comic page, NOT one cinematic illustration. The page must contain exactly %d visibly separated comic panels using layout %s, clear gutters/panel borders, reading order left-to-right then top-to-bottom, and page aspect ratio %s. Each panel must show a distinct beat from the same scene; do not merge all beats into one full-frame drawing.", panelCount, layout, aspect)
+	guard := fmt.Sprintf("[HARD OUTPUT REQUIREMENT] Generate ONE single image that is a complete comic page, NOT one cinematic illustration. The page must contain exactly %d visibly separated comic panel(s) using layout %s (%s), clear gutters/panel borders when panelCount > 1, reading order left-to-right then top-to-bottom, and page aspect ratio %s. Each panel must show a distinct beat from the same scene; do not add extra panels beyond this exact count.", panelCount, layout, comicPageLayoutDescription(layout, panelCount), aspect)
+	if strings.TrimSpace(opts.DialogueMode) != "none" {
+		guard += " FORBIDDEN: empty speech balloons or empty thought bubbles — either omit bubbles entirely or fill them with the exact Chinese strings required in the COMIC LETTERING section (no blank outlines)."
+	}
 	return guard + "\n\n" + prompt
 }
 
@@ -402,7 +614,7 @@ func (s *Service) uploadStoryboardSceneImageOSS(gen *domain.StoryboardImageGener
 
 // buildComicPageImageGenerationLLMPrompt 让文本模型为「一页多格漫画」输出结构化 JSON，
 // 包含每格分镜描述、漫画文字层（对白/思想泡/拟声/旁白）及整页视觉参数。
-func (s *Service) buildComicPageImageGenerationLLMPrompt(gen *domain.StoryboardImageGeneration, opts ComicPagePipelineOptions, plannedScene *domain.StoryboardScene) string {
+func (s *Service) buildComicPageImageGenerationLLMPrompt(gen *domain.StoryboardImageGeneration, opts ComicPagePipelineOptions, plannedScene *domain.StoryboardScene, totalScenes int) string {
 	var b strings.Builder
 
 	dialogueMode := strings.TrimSpace(opts.DialogueMode)
@@ -412,11 +624,13 @@ func (s *Service) buildComicPageImageGenerationLLMPrompt(gen *domain.StoryboardI
 	}
 
 	b.WriteString(fmt.Sprintf(`You are a professional manga/webtoon panel director and image prompt engineer.
-Create a detailed prompt for a SINGLE OUTPUT IMAGE that is one multi-panel comic page containing exactly %d sequential panels.
+Create a detailed prompt for a SINGLE OUTPUT IMAGE that is one comic page containing exactly %d sequential panel(s).
 
-Layout preset  : %s
+Panel count    : %d (server-selected automatically from storyboard/chapter context; do NOT change it)
+Layout preset  : %s — %s
 Output ratio   : %s
 Dialogue mode  : %s (%s)
+Count rationale: %s
 
 Page-level rules:
 - Clear gutters between panels (2–4%% of page width, dark or white).
@@ -424,13 +638,17 @@ Page-level rules:
 - Reading order: left-to-right, top-to-bottom (webtoon / manga right-to-left only if style demands).
 - Lettering must be drawn inside the image by the image model — NO app-side overlay.
 - Use structured manga controls: panel grid, bubble shape, SFX typography, effect lines, screentone/shading, and gutter closure must each appear in the JSON when relevant.
+- The exact panel count is part of the art direction: never add extra panels, and never collapse multiple required beats into a hidden eighth/ninth panel.
 
 `,
 		opts.PanelCount,
+		opts.PanelCount,
 		strings.TrimSpace(opts.LayoutPreset),
+		comicPageLayoutDescription(opts.LayoutPreset, opts.PanelCount),
 		strings.TrimSpace(opts.PageAspectRatio),
 		dialogueMode,
 		dialogueModeDesc,
+		comicPagePanelCountReason(plannedScene, gen.SceneDescription, gen.IsTransitionScene, totalScenes),
 	))
 
 	// 与 internal/service 中「故事碎片」多格规划（fragment_panel_plan_prompts）及 expandScenes 配图方法论对齐的精简版，
@@ -450,6 +668,8 @@ Same product rules as fragment multi-panel Reference → Plan → Image pipeline
 ### Narrative beats (per panel is a NEW beat within the SAME scene arc)
 - Do NOT redraw the same shot with tiny tweaks panel after panel — especially after panel 1. Panel 1 may establish geography; subsequent panels MUST change framing, rhythm, blocking, emotion, or time beat.
 - Atmosphere-only panels (no progression) are allowed as rhythmic breathers — still need distinct framing vs neighbors.
+- Build a real manga rhythm, not a contact sheet: include clear panel roles such as setup, reaction, inner thought, turning point, shock, anticipation, release/celebration, or transition when the scene supports them.
+- If the page has four or more panels and is not purely atmospheric, at least one panel should carry an emotional punctuation beat (shock / anticipation / turning_point / celebration / inner_monologue / dialogue) with matching panel language.
 
 ### Shot diversity (HARD constraints)
 - **Adjacent panels:** never repeat the SAME pairing of ( shot scale + camera angle ); e.g. two consecutive panels cannot both be "medium shot + eye level".
@@ -554,6 +774,13 @@ Lettering types and rendering rules:
 Text constraints: each "text" value ≤ 12 Chinese characters. Per-panel cap: ~1 narration, 1–2 dialogue, 1 sfx, 1 thought.
 Reserve negative space near balloons; do not cover eyes or key props.
 Silent / purely atmospheric panels → comicTexts: [].
+
+Emotional punctuation guide:
+  shock          → close-up / Dutch angle / radial shock lines / sweat drop / short interjection like 「啊？」.
+  anticipation   → negative space / door-gap, hand pause, countdown, off-frame gaze / caption or thought like 「要来了」 or 「……」.
+  turning_point  → large or broken-border panel, silhouette, sudden lighting shift, caption that marks the irreversible reveal.
+  celebration    → warm open composition, confetti/star accents/crowd reaction, short cheering dialogue like 「太好了！」.
+  inner thought  → thought bubble, low-saturation background, eye/hand detail, do not cram long prose into the bubble.
 `)
 	}
 

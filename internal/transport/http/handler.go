@@ -95,6 +95,15 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			legalPublic.GET("/privacy-policy", h.GetLegalPrivacyPolicy)
 		}
 
+		// 故事板 feed：游客可读 discover（及 community 等）；带 JWT 时可附加点赞态等。
+		// tab=following 且无登录时 handler 侧 userID 为空，service 返回空列表。
+		storyboardFeed := api.Group("/v1")
+		if apiLimiter != nil {
+			storyboardFeed.Use(apiLimiter)
+		}
+		storyboardFeed.Use(authPkg.OptionalAuthMiddleware())
+		storyboardFeed.GET("/storyboards/feed", h.GetStoryboardFeed)
+
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
 		if apiLimiter != nil {
@@ -133,7 +142,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/stories/:id/tags", h.GetStoryTags)
 			authenticated.GET("/stories/:id/stats", h.GetStoryStats)
 			authenticated.GET("/storyboards", h.ListStoryboards)
-			authenticated.GET("/storyboards/feed", h.GetStoryboardFeed) // Community storyboard feed
 			// REMOVED: Dashboard storyboard feeds - not in StoryCreationAppUI design
 			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)

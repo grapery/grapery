@@ -467,8 +467,10 @@ func (s *AppleIAPService) parseReceiptData(resp *AppleReceiptResponse, iapReceip
 	}
 
 	if latestReceiptInfo != nil {
-		// 填充订阅相关信息 - 注意：IAPReceipt结构中没有这些字段，这里只是示例
-		// 实际应用中需要根据具体需求调整
+		// 填充产品 ID
+		if latestReceiptInfo.ProductID != "" {
+			iapReceipt.ProductID = latestReceiptInfo.ProductID
+		}
 
 		if purchaseDate, err := parseAppleTimestamp(latestReceiptInfo.PurchaseDate); err == nil {
 			iapReceipt.CreationDate = purchaseDate

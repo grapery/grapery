@@ -1025,10 +1025,12 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			return
 		}
 
-		promptDetails, combinedPrompt := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
+		plannedScene := s.lookupStoryboardSceneForComicPage(ctx, gen.StoryboardID, gen.SceneID)
+		promptDetails, _ := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
+			mergePlannedStoryboardComicTextsIntoDetails(promptDetails, plannedScene)
 			gen.PromptDetails = promptDetails
-			gen.GeneratedPrompt = combinedPrompt
+			gen.GeneratedPrompt = s.combineImagePrompt(promptDetails, gen.SceneTitle, gen.SceneDescription)
 			s.logger.Debug("structured prompt details parsed successfully",
 				zap.String("generationId", gen.ID),
 				zap.String("provider", prov),
@@ -1036,6 +1038,19 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				zap.String("mood", promptDetails.Mood))
 			if s.metrics != nil {
 				s.metrics.RecordImageGenerationPromptDetails(true)
+			}
+		} else if plannedScene != nil && len(plannedScene.ComicTexts) > 0 {
+			fallback := &domain.ImagePromptDetails{
+				ComicTexts: append([]domain.StoryboardComicText(nil), plannedScene.ComicTexts...),
+			}
+			gen.PromptDetails = fallback
+			gen.GeneratedPrompt = s.combineImagePrompt(fallback, gen.SceneTitle, gen.SceneDescription)
+			s.logger.Warn("failed to parse structured prompt; using scene comicTexts only",
+				zap.String("generationId", gen.ID),
+				zap.String("provider", prov))
+			if s.metrics != nil {
+				s.metrics.RecordImageGenerationError("parsing_error")
+				s.metrics.RecordImageGenerationPromptDetails(false)
 			}
 		} else {
 			nb := storyboardSceneNarrativeBlock(gen.SceneTitle, gen.SceneDescription)
@@ -3429,7 +3444,7 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 		sections = append(sections, PromptDSLSection{
 			Title: "Comic Style Continuation",
 			Kind:  "text",
-			Body:  fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n(Fragment-style zh summary for this slug: %s)\nApply this style consistently with line work, coloring, and overall visual temperament.\nThis slug implies manga/comic panels: favor readable speech balloons, thought bubbles, and SFX where the scene calls for dialogue or reaction beats; render short on-image text in a matching comic hand.", cs, fragmentStyleDesc(cs)),
+			Body:  fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n(Fragment-style zh summary for this slug: %s)\nApply this style consistently with line work, coloring, and overall visual temperament.\nThis slug implies manga/comic panels: favor readable speech balloons, thought bubbles, caption boxes, reaction marks, effect lines, and SFX/interjections where the scene calls for dialogue, inner monologue, shock, anticipation, celebration, or turning-point beats; render short on-image Chinese text in a matching comic hand.", cs, fragmentStyleDesc(cs)),
 		})
 	}
 
@@ -3482,6 +3497,8 @@ func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGenerati
 ## Comic typography & on-image text (align with story-fragment image prompts)
 When the scene description, story style, or comic-style slug suggests manga/comic/strip panels — or when characters speak, react with interjections, or have a salient inner thought — you MUST carry that into the JSON so the image model paints text inside the picture (no reliance on app overlays):
 - In keyElements and/or additionalNotes: specify speech balloons with tails to the correct speaker; thought bubbles / cloud outlines for inner monologue; bold SFX or short interjections (e.g. Chinese 啊？ / 砰) where they add punch; optional rectangular narration captions for time/place or a beat of omniscient voice.
+- Turning points, shock, anticipation, and celebration are comic-emphasis beats, not plain illustrations. Add at least one concrete device where appropriate: jagged shock bubble, radial shock lines, held-breath caption, thought bubble, cheering dialogue, celebratory SFX, border breaking, or large negative space.
+- Prefer short natural Chinese phrases for on-image text: 啊？ / …… / 要来了 / 终于 / 太好了！ / 别动！ / 原来如此. Do not invent random signage or filler words.
 - Reserve negative space for lettering; avoid covering eyes or story-critical props.
 - Keep embedded language snippets short (about ≤12 Chinese characters per balloon or caption where applicable); state the exact string that must appear in-image (the renderer should draw it legibly in a comic-appropriate hand).
 - Cap density per panel: at most about 1 narration box, 1–2 dialogue balloons, at most 1 SFX, at most 1 thought bubble — omit if the beat is silent or purely atmospheric.
@@ -3512,6 +3529,7 @@ comicTexts rules:
 - Each text <= 12 Chinese characters. Per-panel cap: ~1 narration, 1-2 dialogue, 1 sfx, 1 thought.
 - For silent/atmospheric/transition scenes output "comicTexts": [].
 - The image model must render the exact Chinese text inside the image (legible comic hand); do NOT rely on app-side overlay.
+- If the scene contains explicit speech, private thought, surprise, anticipation, victory/release, or a major reversal, comicTexts should usually be non-empty unless the JSON states a deliberate wordless device in additionalNotes.
 - If impact semantics are present, composition/additionalNotes must include at least two concrete impact controls: extreme low-angle, dramatic high-angle, Dutch angle, wide-angle distortion, fish-eye effect, radial action lines, motion streaking, debris, sparks, heavy ink contrast, dynamic screentones, border breaking.
 
 Important: Return ONLY the JSON object, no explanations or markdown formatting.
@@ -3595,6 +3613,9 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 	if len(details.ComicTexts) > 0 {
 		var letteringLines []string
 		for _, ct := range details.ComicTexts {
+			if strings.TrimSpace(ct.Text) == "" {
+				continue
+			}
 			panelRef := ""
 			if ct.PanelIndex != nil {
 				panelRef = fmt.Sprintf(" in panel %d", *ct.PanelIndex+1)
@@ -3632,17 +3653,84 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 					pos = "mid-frame"
 				}
 				letteringLines = append(letteringLines, fmt.Sprintf("Render bold oversized SFX text%s 「%s」 at %s in dynamic comic lettering style", panelRef, ct.Text, pos))
+			default:
+				pos := ct.Position
+				if pos == "" {
+					pos = "mid-frame"
+				}
+				letteringLines = append(letteringLines, fmt.Sprintf("Render legible Chinese text%s 「%s」 at %s", panelRef, ct.Text, pos))
 			}
 		}
+		visualOnly := strings.Join(parts, ". ")
+		visualOnly = capGeminiImageBeautyOutput(visualOnly)
+		var beauty string
 		if len(letteringLines) > 0 {
-			parts = append(parts, "Comic lettering (render in-image, legible): "+strings.Join(letteringLines, "; "))
+			// Lettering MUST appear before the capped visual block inside 【画面与镜头】 so
+			// truncateStoryboardImagePromptPreservingNarrative (tail-truncates beauty) and
+			// capGeminiImageBeautyOutput do not drop comic text instructions.
+			letteringBlock := "[COMIC LETTERING — mandatory in-image; exact Chinese below]\n" + strings.Join(letteringLines, "; ")
+			if visualOnly != "" {
+				beauty = letteringBlock + "\n\n" + visualOnly
+			} else {
+				beauty = letteringBlock
+			}
+		} else {
+			beauty = visualOnly
 		}
+		nb := storyboardSceneNarrativeBlock(sceneTitle, sceneDescription)
+		return prependStoryboardImageNarrativeBlock(nb, beauty)
 	}
 
 	beauty := strings.Join(parts, ". ")
 	beauty = capGeminiImageBeautyOutput(beauty)
 	nb := storyboardSceneNarrativeBlock(sceneTitle, sceneDescription)
 	return prependStoryboardImageNarrativeBlock(nb, beauty)
+}
+
+// mergePlannedStoryboardComicTextsIntoDetails fills missing comic lettering from the persisted storyboard scene
+// (e.g. redesign / fragment pipeline) when the image-prompt LLM omits or empties comicTexts.
+func mergePlannedStoryboardComicTextsIntoDetails(details *domain.ImagePromptDetails, planned *domain.StoryboardScene) {
+	if details == nil || planned == nil || len(planned.ComicTexts) == 0 {
+		return
+	}
+	if len(details.ComicTexts) == 0 {
+		details.ComicTexts = append([]domain.StoryboardComicText(nil), planned.ComicTexts...)
+		return
+	}
+	var plannedNonEmpty []domain.StoryboardComicText
+	for _, ct := range planned.ComicTexts {
+		if strings.TrimSpace(ct.Text) != "" {
+			plannedNonEmpty = append(plannedNonEmpty, ct)
+		}
+	}
+	if len(plannedNonEmpty) == 0 {
+		return
+	}
+	pi := 0
+	for i := range details.ComicTexts {
+		if strings.TrimSpace(details.ComicTexts[i].Text) != "" {
+			continue
+		}
+		if pi >= len(plannedNonEmpty) {
+			break
+		}
+		src := plannedNonEmpty[pi]
+		pi++
+		details.ComicTexts[i].Text = src.Text
+		if details.ComicTexts[i].Speaker == "" {
+			details.ComicTexts[i].Speaker = src.Speaker
+		}
+		if details.ComicTexts[i].Type == "" {
+			details.ComicTexts[i].Type = src.Type
+		}
+		if details.ComicTexts[i].Position == "" {
+			details.ComicTexts[i].Position = src.Position
+		}
+		if details.ComicTexts[i].PanelIndex == nil && src.PanelIndex != nil {
+			pidx := *src.PanelIndex
+			details.ComicTexts[i].PanelIndex = &pidx
+		}
+	}
 }
 
 // parseVideoPromptDetails 解析AI返回的结构化视频提示词JSON

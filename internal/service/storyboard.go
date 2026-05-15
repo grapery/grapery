@@ -1978,6 +1978,7 @@ func (s *Service) buildStoryboardPrompt(storyboard *domain.Storyboard, story *do
 	prompt += "\n重要：如果使用了提供的场景地点，请填写对应的storySceneId。"
 	prompt += "\n重要：comicTexts 数组是漫画文字层（对白气泡/思想泡/拟声词/旁白框），图片模型将直接把这些文字绘入图片——请为每格真正需要说台词或有内心活动的场景输出此字段；无对白/无需声效的纯过渡/空镜格可留空数组 []。"
 	prompt += "\n重要：comicTexts 每条 text 宜短（≤12汉字）；dialogue/thought 的 speaker 必须是该场景 characters 中的角色名；每格上限约 1 narration + 1~2 dialogue + 1 sfx + 1 thought。"
+	prompt += "\n重要：不要把所有分镜写成风景插画。若故事出现主要转折、震惊、期待、庆祝、心理犹豫或明确台词，必须在对应场景中通过 comicTexts、特写、效果线、留白、旁白框、气泡安全区等漫画语言突出；可自然使用短语气词如「啊？」「……」「要来了」「终于」「太好了！」。"
 
 	s.logger.Debug("storyboard prompt built",
 		zap.String("storyboardId", storyboard.ID),
@@ -2048,6 +2049,7 @@ func (s *Service) buildStoryboardSystemPrompt(story *domain.Story, storyboard *d
 - 场景标题：简洁有力，10字以内，体现场景核心
 - 场景描述：100-200字。必须具有清晰的影视画面定格表现力，明确包含：摄影机位（全景/中景/特写与运镜意图）、光线分布（逆光/柔光/明暗对比）、人物面部表情/肢体语言服装细节、以及场景中的环境质感。
 - **漫画文字层（comicTexts 字段，与故事碎片多格配图逻辑完全对齐）**：每格中有台词/内心活动/拟声时，必须在 JSON 的 comicTexts 数组中结构化输出：narration=旁白框（时间/地点/第三视角）、dialogue=对白气泡（尾巴指向说话者）、thought=内心独白气泡（云朵形）、sfx=拟声/语气词（夸张字体，如「砰！」「啊？」）；每条 text ≤12汉字，speaker 对应角色名，position 给出排版建议；每格上限 1 narration + 1~2 dialogue + 1 sfx + 1 thought；纯过渡/无声氛围格留空数组。
+- **漫画重点场景**：主要转折用大格/断裂边框/突变光色/旁白框突出“局面变了”；震惊用极近景、放射线、汗滴、短语气词（如「啊？」）；期待用留白、画外视线、手部停顿、短旁白或思想泡（如「要来了」「……」）；庆祝用暖光、开阔构图、星形高光/人群反应、短对白（如「太好了！」）；心理描写用 thought 气泡、低饱和背景和眼神/手部细节。
 - 地点和时间：具体明确，与场景内容呼应
 - 氛围关键词：精准概括场景情感基调（如：紧张、温馨、神秘、悲伤）
 - 角色选择：只在characters数组中包含确实参与该场景的角色
