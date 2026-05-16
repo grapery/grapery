@@ -10,7 +10,7 @@ import (
 func TestDeriveWizardPipelineSteps_ContentFailed(t *testing.T) {
 	sb := &domain.Storyboard{SceneCount: 4, WorkflowStatus: domain.WorkflowStatusDraft}
 	cg := &domain.StoryboardContentGeneration{Status: domain.GenerationStatusFailed, ErrorMessage: "quota exceeded"}
-	steps, sug := deriveWizardPipelineSteps(sb, nil, cg, nil, nil, false)
+	steps, sug := deriveWizardPipelineSteps(sb, nil, cg, nil, nil, false, nil)
 	if len(steps) != 3 {
 		t.Fatalf("steps len: %d", len(steps))
 	}
@@ -36,7 +36,7 @@ func TestDeriveWizardPipelineSteps_ImagesRetry(t *testing.T) {
 		{SceneID: "s1", Status: domain.GenerationStatusCompleted, GeneratedImageURL: "http://x", CreatedAt: 1},
 		{SceneID: "s2", Status: domain.GenerationStatusFailed, ErrorMessage: "timeout", CreatedAt: 2},
 	}
-	steps, sug := deriveWizardPipelineSteps(sb, scenes, nil, nil, imgs, false)
+	steps, sug := deriveWizardPipelineSteps(sb, scenes, nil, nil, imgs, false, nil)
 	if steps[2].Status != domain.PipelineStepFailed {
 		t.Fatalf("images step: %+v", steps[2])
 	}
@@ -50,7 +50,7 @@ func TestDeriveWizardPipelineSteps_AllImagesDone(t *testing.T) {
 	scenes := []*domain.StoryboardScene{
 		{BaseModel: common.BaseModel{ID: "s1"}, Title: "A", Image: "http://img", Sequence: 1},
 	}
-	steps, sug := deriveWizardPipelineSteps(sb, scenes, nil, nil, nil, false)
+	steps, sug := deriveWizardPipelineSteps(sb, scenes, nil, nil, nil, false, nil)
 	if steps[2].Status != domain.PipelineStepCompleted {
 		t.Fatalf("images: %+v", steps[2])
 	}

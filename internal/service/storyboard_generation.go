@@ -1107,6 +1107,17 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		gen.GeneratedPrompt = finalizeStoryboardImagePromptForAPI(gen)
 	}
 
+	// Inject AI-chosen panel-shape composition hint so the image model frames the subject
+	// correctly when the app assembles the multi-panel collage cover.
+	// We look up the storyboard scene (same lookup used for comicTexts above) to read PanelShape.
+	if gen.GeneratedPrompt != "" {
+		if ps := s.lookupStoryboardSceneForComicPage(ctx, gen.StoryboardID, gen.SceneID); ps != nil {
+			if shape := strings.TrimSpace(ps.PanelShape); shape != "" {
+				gen.GeneratedPrompt = appendStoryboardPanelShapeCompositionHint(gen.GeneratedPrompt, shape)
+			}
+		}
+	}
+
 	narrativeRunes := utf8.RuneCountInString(strings.TrimSpace(gen.SceneDescription))
 	refURLs, imgOp, refPrimary := selectStoryboardImageRefsAndOperation(gen, narrativeRunes)
 	useRefs := len(refURLs) > 0 && imgOp == genapi.OperationImageToImage
@@ -2149,6 +2160,11 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		zap.String("workflowStatus", storyboard.WorkflowStatus),
 		zap.Int("currentStep", storyboard.CurrentStep))
 
+	var latestRun *domain.StoryboardGenerationRun
+	if r, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboardID); err == nil && r != nil {
+		latestRun = r
+	}
+
 	progress := &domain.StoryboardGenerationProgress{
 		StoryboardID:   storyboardID,
 		WorkflowStatus: storyboard.WorkflowStatus,
@@ -2279,6 +2295,33 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 			zap.Error(err))
 	}
 
+	// Latest redesign pipeline run (bible + scene plan) may be active without legacy generation rows updating yet.
+	if latestRun != nil {
+		switch latestRun.Status {
+		case domain.GenerationStatusProcessing:
+			isGenerating = true
+			msg := "正在生成分镜结构"
+			switch latestRun.CurrentStep {
+			case domain.StoryboardGenerationStepContext:
+				msg = "正在准备分镜上下文"
+			case domain.StoryboardGenerationStepBiblePlan:
+				msg = "正在生成视觉圣经与节拍"
+			case domain.StoryboardGenerationStepScenePlan:
+				msg = "正在规划分镜场景"
+			default:
+				if step := strings.TrimSpace(latestRun.CurrentStep); step != "" {
+					msg = fmt.Sprintf("正在生成分镜结构（%s）", step)
+				}
+			}
+			statusMessages = append(statusMessages, msg)
+		case domain.GenerationStatusFailed:
+			hasFailed = true
+			if em := strings.TrimSpace(latestRun.ErrorMessage); em != "" {
+				statusMessages = append(statusMessages, "分镜结构生成失败: "+em)
+			}
+		}
+	}
+
 	// Set final status
 	progress.IsGenerating = isGenerating
 	progress.HasPendingTasks = hasPending
@@ -2329,6 +2372,7 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		progress.SceneGenerations,
 		progress.ImageGenerations,
 		isGenerating,
+		latestRun,
 	)
 	if len(steps) > 0 {
 		progress.PipelineSteps = steps
@@ -2336,10 +2380,10 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 	if suggested != "" && suggested != domain.SuggestedResumeNone {
 		progress.SuggestedResumeAction = suggested
 	}
-	if run, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboardID); err == nil && run != nil {
-		progress.LatestRun = run
-		progress.ConsistencyIssuesJSON = run.ConsistencyIssuesJSON
-		if audits, auditErr := s.repo.ListAIPromptAuditRecords(ctx, run.ID); auditErr == nil {
+	if latestRun != nil {
+		progress.LatestRun = latestRun
+		progress.ConsistencyIssuesJSON = latestRun.ConsistencyIssuesJSON
+		if audits, auditErr := s.repo.ListAIPromptAuditRecords(ctx, latestRun.ID); auditErr == nil {
 			progress.PromptAuditRecordIDs = make([]string, 0, len(audits))
 			for _, audit := range audits {
 				if audit != nil {

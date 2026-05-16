@@ -16,6 +16,7 @@ func deriveWizardPipelineSteps(
 	sceneGens []*domain.StoryboardSceneGeneration,
 	imageGens []*domain.StoryboardImageGeneration,
 	globalGenerating bool,
+	latestRun *domain.StoryboardGenerationRun,
 ) ([]domain.GenerationPipelineStep, string) {
 	if sb == nil {
 		return nil, domain.SuggestedResumeNone
@@ -81,7 +82,14 @@ func deriveWizardPipelineSteps(
 		scenesStep.Status = domain.PipelineStepPending
 		scenesStep.Summary = "等待故事内容完成"
 	} else if nScenes == 0 {
-		if globalGenerating {
+		if latestRun != nil && latestRun.Status == domain.GenerationStatusFailed {
+			scenesStep.Status = domain.PipelineStepFailed
+			scenesStep.ErrorMessage = strings.TrimSpace(latestRun.ErrorMessage)
+			if scenesStep.ErrorMessage == "" {
+				scenesStep.ErrorMessage = "分镜规划失败"
+			}
+			scenesStep.Summary = "分镜生成失败"
+		} else if globalGenerating {
 			scenesStep.Status = domain.PipelineStepRunning
 			scenesStep.Summary = fmt.Sprintf("正在生成分镜（目标 %d 格）", expectedScenes)
 		} else {

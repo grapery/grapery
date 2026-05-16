@@ -108,6 +108,45 @@ func prependStoryboardImageNarrativeBlock(narrativeBlock, beauty string) string 
 	return narrativeBlock + "\n\n【画面与镜头 / Visual direction】\n" + beauty
 }
 
+// appendStoryboardPanelShapeCompositionHint appends a brief English composition hint derived from
+// the AI-chosen panelShape so the image model knows how to frame the subject within the clipped region.
+// This is injected at the end of the narrative block, before the visual direction section.
+func appendStoryboardPanelShapeCompositionHint(prompt, panelShape string) string {
+	prompt = strings.TrimSpace(prompt)
+	hint := panelShapeCompositionHint(strings.TrimSpace(panelShape))
+	if hint == "" || prompt == "" {
+		return prompt
+	}
+	return prompt + "\n[Panel crop shape: " + hint + "]"
+}
+
+// panelShapeCompositionHint returns a short English composition instruction for the image model
+// so it frames the main subject appropriately for the given clipping shape.
+func panelShapeCompositionHint(shape string) string {
+	switch shape {
+	case "diagonal_left":
+		return "diagonal_left crop — main subject and action momentum in the LEFT half; leave right side available for the diagonal cut edge; lines of force flow bottom-left to top-right"
+	case "diagonal_right":
+		return "diagonal_right crop — main subject and action momentum in the RIGHT half; leave left side available for the diagonal cut edge; lines of force flow bottom-right to top-left"
+	case "trapezoid_leading":
+		return "trapezoid_leading crop — subject centered-left, right edge tapers inward; avoid placing key elements beyond 80% of the frame width"
+	case "trapezoid_trailing":
+		return "trapezoid_trailing crop — subject centered-right, left edge tapers inward; avoid placing key elements within the leftmost 20% of the frame"
+	case "triangle_tl":
+		return "triangle_tl crop — only top-left triangular region is visible; concentrate the focal point (face, impact) near the top-left corner; strong diagonal energy"
+	case "triangle_tr":
+		return "triangle_tr crop — only top-right triangular region is visible; concentrate the focal point near the top-right corner; strong diagonal energy"
+	case "triangle_bl":
+		return "triangle_bl crop — only bottom-left triangular region is visible; ground the subject in the lower-left; diagonal fades toward top-right"
+	case "triangle_br":
+		return "triangle_br crop — only bottom-right triangular region is visible; ground the subject in the lower-right; diagonal fades toward top-left"
+	case "wide_panorama":
+		return "wide_panorama crop — ultra-wide horizontal aspect; spread subjects across the full width; use negative space to convey scale or isolation"
+	default:
+		return ""
+	}
+}
+
 func appendStoryboardImageToImageConstraints(prompt string, useReferenceImages bool) string {
 	prompt = strings.TrimSpace(prompt)
 	if !useReferenceImages || prompt == "" {

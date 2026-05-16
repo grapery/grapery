@@ -55,6 +55,29 @@ func (h *Handler) GenerateContent(c *gin.Context) {
 	Success(c, gen)
 }
 
+// GenerateStoryboardStructure reruns bible + scene-plan pipeline and persists scenes when DB has zero scenes.
+// When scenes already exist, returns the storyboard synchronously (asyncAccepted=false).
+// Otherwise accepts immediately (asyncAccepted=true) while work continues in-process; clients poll GET .../generation-progress.
+// POST /api/storyboards/:id/generate/structure
+func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	storyboardID := c.Param("id")
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+
+	resp, err := h.svc.StartStoryboardStructureGeneration(c.Request.Context(), userID, storyboardID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, resp)
+}
+
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 // POST /api/storyboards/:id/generate/scene-details
 func (h *Handler) GenerateSceneDetails(c *gin.Context) {

@@ -417,6 +417,7 @@ type StoryboardScene struct {
 	CompositionPlan string `gorm:"column:composition_plan;type:text"`
 	ShotType        string `gorm:"column:shot_type;size:120"`
 	VisualHierarchy string `gorm:"column:visual_hierarchy;type:text"`
+	PanelShape      string `gorm:"column:panel_shape;size:60"`
 
 	CreatedAt time.Time      `gorm:"autoCreateTime;index"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`

@@ -49,6 +49,13 @@ type StoryboardScene struct {
 	CompositionPlan string `json:"compositionPlan,omitempty"`
 	ShotType        string `json:"shotType,omitempty"`
 	VisualHierarchy string `json:"visualHierarchy,omitempty"`
+	// PanelShape 决定本格在多格拼贴封面中的裁切形状。
+	// AI 根据剧情情绪（comicFunction）赋值；前端 collage view 直接消费。
+	// 允许值：full | diagonal_left | diagonal_right |
+	//         trapezoid_leading | trapezoid_trailing |
+	//         triangle_tl | triangle_tr | triangle_bl | triangle_br |
+	//         wide_panorama
+	PanelShape string `json:"panelShape,omitempty"`
 
 	// Relations
 	StoryScene *StoryScene `json:"storyScene,omitempty"`

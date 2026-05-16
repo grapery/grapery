@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
@@ -28,6 +29,9 @@ type Service struct {
 	recoCfg          config.RecommendationConfig
 	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
 	aiTextAdmission  *AITextAdmissionGate       // optional: global outbound LLM text concurrency (Redis)
+
+	// structureResumeLocks serializes POST .../generate/structure per storyboard ID (TryLock = busy).
+	structureResumeLocks sync.Map // string -> *sync.Mutex
 }
 
 type FragmentAssetQuery struct {

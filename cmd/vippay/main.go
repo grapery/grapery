@@ -145,22 +145,34 @@ func main() {
 		zap.String("addr", cfg.Addr()),
 	)
 
-	// 配置 JWT Secret
+	// JWT must match Grapery API: same HS256 secret as cmd/server (internal/auth.ParseToken).
 	logger.Info("========== JWT Configuration ==========")
 
-	jwtSecret := os.Getenv("JWT_SECRET")
+	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
 	if jwtSecret == "" {
-		logger.Info("JWT_SECRET environment variable not set")
-		jwtSecret = cfg.JWT.Secret
-		if jwtSecret == "" {
-			logger.Error("JWT_SECRET not configured - authentication will fail")
-			logger.Error("Set JWT_SECRET environment variable or configure it in the config file")
-			// Continue without secret - token generation will fail with ErrSecretNotSet
-		} else {
-			logger.Info("JWT Secret loaded from config file")
+		jwtSecret = strings.TrimSpace(cfg.JWT.Secret)
+		if jwtSecret != "" {
+			logger.Info("JWT secret loaded from VipPay config file (jwt.secret)")
 		}
 	} else {
-		logger.Info("JWT Secret loaded from environment variable")
+		logger.Info("JWT secret loaded from JWT_SECRET environment variable")
+	}
+	if jwtSecret == "" {
+		for _, p := range config.SharedJWTConfigCandidatePaths() {
+			if sec, ok := config.ReadJWTSecretFromConfigFile(p); ok {
+				jwtSecret = sec
+				logger.Info("JWT secret loaded from shared Grapery API config file",
+					zap.String("path", p),
+					zap.String("hint_env", "GRAPH_API_CONFIG_PATH | GRAPERY_CONFIG_PATH | JWT_FALLBACK_CONFIG_PATH"))
+				break
+			}
+		}
+	}
+	if jwtSecret == "" {
+		logger.Error("JWT_SECRET is empty: VipPay authenticated routes will reject Bearer tokens from the app",
+			zap.String("fix", "Set JWT_SECRET to the same value as the Grapery API, or set jwt.secret in vippay config, or point JWT_FALLBACK_CONFIG_PATH at the API config YAML that contains jwt.secret"))
+	} else {
+		logger.Info("JWT secret ready for VipPay (must match Grapery API)")
 	}
 
 	// 记录JWT Secret的长度和预览（安全性考虑不记录完整值）
@@ -172,7 +184,7 @@ func main() {
 	)
 
 	auth.SetJWTSecret(jwtSecret)
-	logger.Info("=========================================")
+	logger.Info("========== End JWT Configuration ==========")
 
 	// 初始化数据库
 	err = initializeServices(logger)

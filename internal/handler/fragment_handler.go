@@ -84,8 +84,9 @@ func (h *FragmentHandler) GetFragmentStyles(c *gin.Context) {
 	})
 }
 
-// PostFragmentStylesNext handles POST /fragments/styles/next — first 8 comic styles from the global catalog (ordered by id).
-// Query allow_ai=false reads only the database; allow_ai=true may call Gemini when the catalog table is empty.
+// PostFragmentStylesNext handles POST /fragments/styles/next.
+// Query allow_ai=false: first 8 rows by id ASC (cheap default catalog).
+// allow_ai=true: best-effort insert one AI row, then return newest 8 by id DESC (fresh styles visible); cold empty DB still AI-fills.
 func (h *FragmentHandler) PostFragmentStylesNext(c *gin.Context) {
 	userID := c.GetString("userID")
 	if userID == "" {

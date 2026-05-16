@@ -7,6 +7,51 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
 
+// applyStoryboardScenePlanFallbacks fills missing layout metadata and sanitizes referenceKeys before validate.
+func applyStoryboardScenePlanFallbacks(scenePlan *domain.StoryboardScenePlan, biblePlan *domain.StoryboardBiblePlan) {
+	if scenePlan == nil || biblePlan == nil {
+		return
+	}
+	keySet := storyboardBibleReferenceKeySet(&biblePlan.StoryboardBible)
+	for i := range scenePlan.Scenes {
+		sc := &scenePlan.Scenes[i]
+		var filtered []string
+		for _, k := range sc.ReferenceKeys {
+			k = strings.TrimSpace(k)
+			if k == "" {
+				continue
+			}
+			if _, ok := keySet[k]; ok {
+				filtered = append(filtered, k)
+			}
+		}
+		sc.ReferenceKeys = filtered
+		if len(sc.ReferenceKeys) == 0 && i < len(biblePlan.Beats) {
+			for _, k := range biblePlan.Beats[i].ReferenceKeys {
+				k = strings.TrimSpace(k)
+				if _, ok := keySet[k]; ok {
+					sc.ReferenceKeys = append(sc.ReferenceKeys, k)
+				}
+			}
+		}
+		if strings.TrimSpace(sc.PanelShape) == "" {
+			sc.PanelShape = "full"
+		}
+		if strings.TrimSpace(sc.LayoutIntent) == "" {
+			sc.LayoutIntent = "comic_single_panel"
+		}
+		if strings.TrimSpace(sc.CompositionPlan) == "" {
+			sc.CompositionPlan = "单格竖构图，主体居中，留白满足字幕需求"
+		}
+		if strings.TrimSpace(sc.ShotType) == "" {
+			sc.ShotType = "medium_shot"
+		}
+		if strings.TrimSpace(sc.VisualHierarchy) == "" {
+			sc.VisualHierarchy = "character_primary_environment_secondary"
+		}
+	}
+}
+
 func buildStoryboardBiblePlanSystemPrompt() string {
 	return `You are a senior storyboard continuity planner. Produce strict JSON only.
 Your job is to create a storyboard visual bible and narrative beats before scene writing.
@@ -119,6 +164,7 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
       "compositionPlan": "Chinese concise layout plan: panel/zones, gutters, reading order, bubble safe-space, focal flow",
       "shotType": "English shot type such as close_up, medium_shot, wide_shot, dutch_angle, overhead",
       "visualHierarchy": "what is primary, secondary, background information in this scene image",
+      "panelShape": "one of: full | diagonal_left | diagonal_right | trapezoid_leading | trapezoid_trailing | triangle_tl | triangle_tr | triangle_bl | triangle_br | wide_panorama",
       "comicTexts": [
         {"type":"narration","text":"中文旁白短句（≤12字）","speaker":"","position":"top-left"},
         {"type":"dialogue","text":"台词（≤12字）","speaker":"char_1","position":"speech-bubble"},
@@ -132,7 +178,19 @@ Hard requirements:
 - scenes length exactly matches requested count.
 - referenceKeys must be declared in the bible.
 - imagePrompt must be English and include identity, action, environment, composition, lighting, palette, mood, texture.
-- layoutIntent/compositionPlan/shotType/visualHierarchy are required for every scene and must be consistent with beat comicFunction/layoutHint.
+- layoutIntent/compositionPlan/shotType/visualHierarchy/panelShape are required for every scene and must be consistent with beat comicFunction/layoutHint.
+- panelShape encodes the clipping shape used when the app assembles a multi-panel collage cover. Choose based on dramatic content:
+  * full          — establish, atmosphere, anticipation, celebration, inner_monologue (contained or wide single-image beats)
+  * wide_panorama — establish with sweeping landscape; crowd scenes; transition bookends
+  * diagonal_left — action_impact, turning_point where energy flows top-right → bottom-left; the character/focal point sits in the LEFT portion
+  * diagonal_right — action_impact, turning_point where energy flows top-left → bottom-right; the character/focal point sits in the RIGHT portion
+  * trapezoid_leading — dialogue or reaction close-up: leading-edge trapezoid, left panel in a 2- or 3-panel row
+  * trapezoid_trailing — dialogue or reaction close-up: trailing-edge trapezoid, right panel in a 2- or 3-panel row
+  * triangle_tl   — shock, surprise reveal: triangular crop top-left (jagged energy)
+  * triangle_tr   — shock, surprise reveal: triangular crop top-right
+  * triangle_bl   — transition, fading out: triangular crop bottom-left
+  * triangle_br   — transition, fading out: triangular crop bottom-right
+- For a storyboard with N scenes, ensure the panelShape sequence creates a visually balanced collage (avoid N consecutive "full"; mix at least one non-rectangular shape per 3 scenes when the story supports it).
 - comicTexts may be omitted or an empty array only for silent/atmospheric/establishing scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
 - For beats whose comicFunction is dialogue, inner_monologue, shock, anticipation, celebration, or turning_point, either provide comicTexts OR explicitly make imagePrompt describe a deliberate wordless comic device (large silence, empty balloon avoided, held breath, reaction-only close-up). Do not leave these as plain scenic descriptions.
 - Use short Chinese text examples naturally when appropriate: 啊？ / …… / 要来了 / 终于 / 太好了！ / 别动！ / 原来如此. Do not add random unrelated text.
@@ -188,6 +246,9 @@ func validateStoryboardScenePlan(scenePlan *domain.StoryboardScenePlan, biblePla
 		}
 		if strings.TrimSpace(scene.LayoutIntent) == "" || strings.TrimSpace(scene.CompositionPlan) == "" || strings.TrimSpace(scene.ShotType) == "" || strings.TrimSpace(scene.VisualHierarchy) == "" {
 			return fmt.Errorf("scene %d missing comic layout metadata", i)
+		}
+		if strings.TrimSpace(scene.PanelShape) == "" {
+			return fmt.Errorf("scene %d missing panelShape", i)
 		}
 		for _, key := range scene.ReferenceKeys {
 			if _, ok := keys[key]; !ok {

@@ -367,6 +367,12 @@ type StoryboardScenePlanItem struct {
 	CompositionPlan string `json:"compositionPlan,omitempty"`
 	ShotType        string `json:"shotType,omitempty"`
 	VisualHierarchy string `json:"visualHierarchy,omitempty"`
+	// PanelShape AI 根据剧情情绪为本格选定的裁切形状，与 StoryboardScene.PanelShape 保持一致。
+	// 允许值：full | diagonal_left | diagonal_right |
+	//         trapezoid_leading | trapezoid_trailing |
+	//         triangle_tl | triangle_tr | triangle_bl | triangle_br |
+	//         wide_panorama
+	PanelShape string `json:"panelShape,omitempty"`
 }
 
 type StoryboardScenePlan struct {
@@ -391,6 +397,15 @@ type GenerationPipelineStep struct {
 	Summary      string                        `json:"summary,omitempty"`
 	ErrorMessage string                        `json:"errorMessage,omitempty"`
 	SceneItems   []GenerationPipelineSceneItem `json:"sceneItems,omitempty"`
+}
+
+// StoryboardStructureGenerationResponse is returned by POST .../generate/structure.
+// When scenes already exist the server returns the full storyboard synchronously (asyncAccepted=false).
+// When scenes must be rebuilt, work runs in the background (asyncAccepted=true) and clients should poll GET .../generation-progress.
+type StoryboardStructureGenerationResponse struct {
+	AsyncAccepted        bool                         `json:"asyncAccepted"`
+	Storyboard           *Storyboard                  `json:"storyboard,omitempty"`
+	GenerationProgress   *StoryboardGenerationProgress `json:"generationProgress,omitempty"`
 }
 
 // StoryboardGenerationProgress aggregates all generation records for a storyboard

@@ -51,8 +51,10 @@ func NewFragmentComicStyleService(db *gorm.DB, aiGen *AIGenerationService, logge
 	}
 }
 
-// NextBatch returns the first fragmentComicStyleBatchSize rows by id (global catalog head).
-// If the table is empty, inserts via AI (when configured) and retries until rows exist or attempts exhaust.
+// NextBatch is used when POST /fragments/styles/next allows AI (`allow_ai=true`).
+// It best-effort inserts one new catalog row via AI (when configured), then returns the **newest**
+// fragmentComicStyleBatchSize rows by primary key id DESC — so freshly generated styles appear.
+// Empty-catalog cold start still fills via AI in a retry loop until rows exist or attempts exhaust.
 func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string) ([]FragmentComicStyleItem, error) {
 	if userID == "" {
 		return nil, errors.New("userID required")
@@ -68,29 +70,31 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 	var out []FragmentComicStyleItem
 
 	err := s.db.WithContext(opCtx).Transaction(func(tx *gorm.DB) error {
+		// 用户点「换一批」：尽量先写入 1 条 AI 新风格（失败不阻断读库）。
+		if s.aiGen != nil {
+			if n, genErr := s.generateAndInsertStyles(opCtx, tx, userID, 1); genErr != nil {
+				s.logger.Debug("optional comic style AI insert failed", zap.Error(genErr))
+			} else if n > 0 {
+				s.logger.Info("inserted AI comic style row(s)", zap.Int("count", n))
+			}
+		}
+
+		var batch []mysql.FragmentComicStyle
+		if err := tx.Order("id DESC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
+			return err
+		}
+		if len(batch) > 0 {
+			out = toStyleItems(batch)
+			return nil
+		}
+
+		// 冷启动：表为空时沿用多轮 AI 填充逻辑。
+		if s.aiGen == nil {
+			return errors.New("Gemini client not configured and no styles in database")
+		}
 		const maxRounds = 6
 		var lastGenErr error
-
 		for round := 0; round < maxRounds; round++ {
-			var batch []mysql.FragmentComicStyle
-			if err := tx.Order("id ASC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
-				return err
-			}
-
-			if len(batch) >= fragmentComicStyleBatchSize {
-				out = toStyleItems(batch)
-				return nil
-			}
-
-			if len(batch) > 0 {
-				out = toStyleItems(batch)
-				return nil
-			}
-
-			if s.aiGen == nil {
-				return errors.New("Gemini client not configured and no styles in database")
-			}
-
 			inserted, genErr := s.generateAndInsertStyles(opCtx, tx, userID, fragmentComicStyleBatchSize)
 			if genErr != nil {
 				lastGenErr = genErr
@@ -102,8 +106,14 @@ func (s *FragmentComicStyleService) NextBatch(ctx context.Context, userID string
 				}
 				return errors.New("AI returned no valid comic styles")
 			}
+			if err := tx.Order("id DESC").Limit(fragmentComicStyleBatchSize).Find(&batch).Error; err != nil {
+				return err
+			}
+			if len(batch) > 0 {
+				out = toStyleItems(batch)
+				return nil
+			}
 		}
-
 		if lastGenErr != nil {
 			return fmt.Errorf("could not fill comic style batch: %w", lastGenErr)
 		}

@@ -231,6 +231,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// Storyboard AI Generation 相关 (rate-limited)
 			aiGen.POST("/storyboards/:id/generate/content", h.GenerateContent)
+			aiGen.POST("/storyboards/:id/generate/structure", h.GenerateStoryboardStructure)
 			aiGen.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
 			aiGen.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
 			aiGen.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)

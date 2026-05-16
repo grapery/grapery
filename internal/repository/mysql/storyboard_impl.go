@@ -690,6 +690,7 @@ func (r *Repository) CreateStoryboardScenes(ctx context.Context, storyboardID st
 			CompositionPlan: strings.TrimSpace(scene.CompositionPlan),
 			ShotType:        strings.TrimSpace(scene.ShotType),
 			VisualHierarchy: strings.TrimSpace(scene.VisualHierarchy),
+			PanelShape:      strings.TrimSpace(scene.PanelShape),
 		}
 		// Also update the domain object with the generated ID
 		scenes[i].ID = dbScenes[i].ID
@@ -807,6 +808,7 @@ func (r *Repository) UpdateStoryboardScene(ctx context.Context, scene *domain.St
 		"composition_plan":    strings.TrimSpace(scene.CompositionPlan),
 		"shot_type":           strings.TrimSpace(scene.ShotType),
 		"visual_hierarchy":    strings.TrimSpace(scene.VisualHierarchy),
+		"panel_shape":         strings.TrimSpace(scene.PanelShape),
 	}
 
 	if err := r.db.WithContext(ctx).
@@ -902,6 +904,7 @@ func (r *Repository) storyboardSceneToDomain(dbScene StoryboardScene) *domain.St
 		CompositionPlan: dbScene.CompositionPlan,
 		ShotType:        dbScene.ShotType,
 		VisualHierarchy: dbScene.VisualHierarchy,
+		PanelShape:      dbScene.PanelShape,
 	}
 
 	if dbScene.StorySceneID != nil {

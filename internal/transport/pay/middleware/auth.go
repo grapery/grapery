@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -19,19 +20,39 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
-		logrus.WithField("token_length", len(tokenStr)).Debug("AuthMiddleware: processing token")
-
-		// TEMP(通知联调): 打印完整 Bearer JWT，测试完成后删除本段日志。
 		logrus.WithFields(logrus.Fields{
-			"method":       c.Request.Method,
 			"path":         c.Request.URL.Path,
-			"bearer_token": tokenStr,
-		}).Info("TEMP debug bearer token (vippay) — remove this log block after tests")
+			"token_length": len(tokenStr),
+		}).Debug("AuthMiddleware: validating Bearer token")
 
 		claims, err := auth.ParseToken(tokenStr)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "invalid token"})
-			logrus.WithError(err).Error("AuthMiddleware: invalid token")
+			// Align with Grapery API AuthMiddleware (HTTP 401 + business codes for App refresh logic).
+			switch {
+			case errors.Is(err, auth.ErrSecretNotSet):
+				logrus.Error("AuthMiddleware: JWT secret not configured on VipPay")
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"code":    http.StatusInternalServerError,
+					"msg":     "jwt secret not configured",
+					"message": "jwt secret not configured",
+				})
+			case errors.Is(err, auth.ErrExpiredToken):
+				logrus.WithError(err).Warn("AuthMiddleware: token expired")
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"code":    -8,
+					"msg":     "token expired",
+					"message": "token expired",
+					"data":    nil,
+				})
+			default:
+				logrus.WithError(err).Warn("AuthMiddleware: invalid token")
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"code":    -9,
+					"msg":     "invalid token",
+					"message": "invalid token",
+					"data":    nil,
+				})
+			}
 			return
 		}
 

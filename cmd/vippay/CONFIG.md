@@ -32,9 +32,25 @@ VIPPay 服务支持两种配置方式：
 - `DB_PASSWORD` - 数据库密码（敏感）
 - `DB_ADDRESS` - 数据库地址
 
-### JWT 配置
-- `JWT_SECRET` - JWT 密钥（敏感，必须设置）
-- `JWT_EXPIRY_HOURS` - Token 过期时间（小时）
+### JWT 配置（必须与 Grapery 主 API 完全一致）
+
+VipPay 与主站共用 `internal/auth.ParseToken`（HS256），**两边必须使用同一密钥**，否则 App 带主站登录下发的 Bearer 访问 VipPay 会返回 `401 invalid token`。
+
+优先级：`JWT_SECRET` 环境变量 → VipPay 配置文件里的 `jwt.secret` → **共享主站配置文件**（仅当以上为空时尝试）：
+
+- `GRAPH_API_CONFIG_PATH` — 指向主 API 使用的 YAML/JSON（内含 `jwt.secret`）
+- `GRAPERY_CONFIG_PATH` — 同上别名
+- `JWT_FALLBACK_CONFIG_PATH` — 显式「仅从该文件补全 jwt.secret」
+
+本地典型做法任选其一：
+
+1. 启动 VipPay 前 `export JWT_SECRET=<与 cmd/server 相同>`  
+2. 在 `vippay.json` 中填写与主站相同的 `jwt.secret`（勿提交真实密钥）  
+3. `export JWT_FALLBACK_CONFIG_PATH=/path/to/grapery-api-config.yaml`（与主服务共用一份配置）
+
+其他：
+
+- `JWT_EXPIRY_HOURS` — 仅影响本进程若自行签发 token 时的过期时间；校验 App 令牌仍以签发方（主 API）为准。
 
 ### Apple IAP 配置
 - `APPLE_BUNDLE_ID` - App Bundle ID

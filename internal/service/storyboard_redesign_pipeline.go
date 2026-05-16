@@ -165,6 +165,57 @@ func (s *Service) generateStoryboardWithRedesignPipeline(ctx context.Context, st
 	return nil
 }
 
+func (s *Service) repairStoryboardJSONResponse(
+	ctx context.Context,
+	run *domain.StoryboardGenerationRun,
+	storyboard *domain.Storyboard,
+	broken string,
+	detail string,
+	step string,
+	promptKind string,
+	metadataOp string,
+) (string, int, error) {
+	if s.aiGenService == nil {
+		return "", 0, fmt.Errorf("AI generation service not configured")
+	}
+	snippet := broken
+	const maxRepairSnippet = 12000
+	if len(snippet) > maxRepairSnippet {
+		snippet = snippet[:maxRepairSnippet]
+	}
+	systemPrompt := `You are a strict JSON repair tool. Output ONE JSON value only (a single JSON object as required). No markdown fences, no commentary before or after.
+Rules:
+- Preserve semantics when possible.
+- If input is truncated, minimally close brackets/braces so the JSON parses.
+- Never output prose outside JSON.`
+	userPrompt := fmt.Sprintf("Repair into valid JSON. Failure detail:\n%s\n\nBroken model output:\n%s", detail, snippet)
+
+	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
+		UserID:                storyboard.UserID,
+		OriginalPrompt:        userPrompt,
+		SystemPrompt:          systemPrompt,
+		Model:                 "gemini-2.5-flash",
+		Temperature:           0.1,
+		MaxTokens:             8192,
+		RelatedEntityID:       storyboard.ID,
+		RelatedEntityType:     "storyboard",
+		RunID:                 run.ID,
+		Step:                  step,
+		PromptKind:            promptKind,
+		PromptTemplateVersion: storyboardPromptTemplateVersion,
+		AlignmentPrompt:       "",
+		Metadata: map[string]interface{}{
+			"operation":    metadataOp,
+			"storyboardId": storyboard.ID,
+			"storyId":      storyboard.StoryID,
+		},
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	return res.Text, res.TokensUsed, nil
+}
+
 func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, alignmentPrompt string, sceneCount int) (*domain.StoryboardBiblePlan, string, int, error) {
 	systemPrompt := buildStoryboardBiblePlanSystemPrompt()
 	userPrompt := buildStoryboardBiblePlanUserPrompt(story, storyboard, snapshot, sceneCount)
@@ -191,14 +242,48 @@ func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.S
 	if err != nil {
 		return nil, "", 0, fmt.Errorf("generate storyboard bible plan: %w", err)
 	}
-	plan, err := s.parseStoryboardBiblePlan(res.Text)
-	if err != nil {
-		return nil, res.Text, res.TokensUsed, err
+	text := res.Text
+	totalTok := res.TokensUsed
+	var parseErr error
+	var validateErr error
+	var plan *domain.StoryboardBiblePlan
+	for attempt := 0; attempt < 2; attempt++ {
+		plan, parseErr = s.parseStoryboardBiblePlan(text)
+		if parseErr == nil {
+			validateErr = validateStoryboardBiblePlan(plan, sceneCount)
+		} else {
+			validateErr = nil
+		}
+		if parseErr == nil && validateErr == nil {
+			return plan, res.Text, totalTok, nil
+		}
+		detail := ""
+		if parseErr != nil {
+			detail = fmt.Sprintf("parse: %v", parseErr)
+		}
+		if validateErr != nil {
+			if detail != "" {
+				detail += "; "
+			}
+			detail += fmt.Sprintf("validate: %v", validateErr)
+		}
+		if attempt == 1 {
+			if parseErr != nil {
+				return nil, res.Text, totalTok, parseErr
+			}
+			return nil, res.Text, totalTok, validateErr
+		}
+		repaired, repairTok, rerr := s.repairStoryboardJSONResponse(ctx, run, storyboard, text, detail, domain.StoryboardGenerationStepBiblePlan, domain.PromptKindBiblePlanUser, "storyboard_bible_plan_json_repair")
+		if rerr != nil {
+			if parseErr != nil {
+				return nil, res.Text, totalTok, parseErr
+			}
+			return nil, res.Text, totalTok, validateErr
+		}
+		text = repaired
+		totalTok += repairTok
 	}
-	if err := validateStoryboardBiblePlan(plan, sceneCount); err != nil {
-		return nil, res.Text, res.TokensUsed, err
-	}
-	return plan, res.Text, res.TokensUsed, nil
+	return nil, res.Text, totalTok, fmt.Errorf("unexpected bible plan repair exit")
 }
 
 func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int) (*domain.StoryboardScenePlan, string, int, error) {
@@ -209,7 +294,7 @@ func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.S
 		OriginalPrompt:        userPrompt,
 		SystemPrompt:          systemPrompt,
 		Model:                 "gemini-2.5-flash",
-		Temperature:           0.55,
+		Temperature:           0.28,
 		MaxTokens:             6500,
 		RelatedEntityID:       storyboard.ID,
 		RelatedEntityType:     "storyboard",
@@ -227,14 +312,49 @@ func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.S
 	if err != nil {
 		return nil, "", 0, fmt.Errorf("generate storyboard scene plan: %w", err)
 	}
-	scenePlan, err := s.parseStoryboardScenePlan(res.Text)
-	if err != nil {
-		return nil, res.Text, res.TokensUsed, err
+	text := res.Text
+	totalTok := res.TokensUsed
+	var parseErr error
+	var validateErr error
+	var scenePlan *domain.StoryboardScenePlan
+	for attempt := 0; attempt < 2; attempt++ {
+		scenePlan, parseErr = s.parseStoryboardScenePlan(text)
+		if parseErr == nil {
+			applyStoryboardScenePlanFallbacks(scenePlan, plan)
+			validateErr = validateStoryboardScenePlan(scenePlan, plan, sceneCount)
+		} else {
+			validateErr = nil
+		}
+		if parseErr == nil && validateErr == nil {
+			return scenePlan, res.Text, totalTok, nil
+		}
+		detail := ""
+		if parseErr != nil {
+			detail = fmt.Sprintf("parse: %v", parseErr)
+		}
+		if validateErr != nil {
+			if detail != "" {
+				detail += "; "
+			}
+			detail += fmt.Sprintf("validate: %v", validateErr)
+		}
+		if attempt == 1 {
+			if parseErr != nil {
+				return nil, res.Text, totalTok, parseErr
+			}
+			return nil, res.Text, totalTok, validateErr
+		}
+		repaired, repairTok, rerr := s.repairStoryboardJSONResponse(ctx, run, storyboard, text, detail, domain.StoryboardGenerationStepScenePlan, domain.PromptKindSceneWriterUser, "storyboard_scene_plan_json_repair")
+		if rerr != nil {
+			if parseErr != nil {
+				return nil, res.Text, totalTok, parseErr
+			}
+			return nil, res.Text, totalTok, validateErr
+		}
+		text = repaired
+		totalTok += repairTok
 	}
-	if err := validateStoryboardScenePlan(scenePlan, plan, sceneCount); err != nil {
-		return nil, res.Text, res.TokensUsed, err
-	}
-	return scenePlan, res.Text, res.TokensUsed, nil
+	return nil, res.Text, totalTok, fmt.Errorf("unexpected scene plan repair exit")
 }
 
 func (s *Service) buildStoryboardGenerationContextSnapshot(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story, continuation bool) storyboardGenerationContextSnapshot {
@@ -382,6 +502,7 @@ func (s *Service) storyboardScenesFromScenePlan(runID string, plan *domain.Story
 			CompositionPlan: strings.TrimSpace(item.CompositionPlan),
 			ShotType:        strings.TrimSpace(item.ShotType),
 			VisualHierarchy: strings.TrimSpace(item.VisualHierarchy),
+			PanelShape:      strings.TrimSpace(item.PanelShape),
 			ContextSnapshot: "{}",
 		})
 	}
@@ -390,18 +511,18 @@ func (s *Service) storyboardScenesFromScenePlan(runID string, plan *domain.Story
 
 func (s *Service) parseStoryboardBiblePlan(text string) (*domain.StoryboardBiblePlan, error) {
 	var plan domain.StoryboardBiblePlan
-	cleaned := s.cleanAIResponseText(text)
+	cleaned := s.fixCommonJSONIssues(s.cleanAIResponseText(text))
 	if err := json.Unmarshal([]byte(cleaned), &plan); err != nil {
-		return nil, fmt.Errorf("parse storyboard bible plan: %w", err)
+		return nil, fmt.Errorf("parse storyboard bible plan: %w (cleaned_prefix=%q)", err, truncateForLog(cleaned, 160))
 	}
 	return &plan, nil
 }
 
 func (s *Service) parseStoryboardScenePlan(text string) (*domain.StoryboardScenePlan, error) {
 	var plan domain.StoryboardScenePlan
-	cleaned := s.cleanAIResponseText(text)
+	cleaned := s.fixCommonJSONIssues(s.cleanAIResponseText(text))
 	if err := json.Unmarshal([]byte(cleaned), &plan); err != nil {
-		return nil, fmt.Errorf("parse storyboard scene plan: %w", err)
+		return nil, fmt.Errorf("parse storyboard scene plan: %w (cleaned_prefix=%q)", err, truncateForLog(cleaned, 160))
 	}
 	return &plan, nil
 }

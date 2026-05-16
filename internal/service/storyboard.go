@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -812,6 +813,153 @@ func (s *Service) persistStoryboardScenes(ctx context.Context, storyboard *domai
 	s.invalidateStoryboardDetailAndListCaches(ctx, storyboard.ID, storyboard.StoryID)
 
 	return nil
+}
+
+func (s *Service) structureResumeMutex(storyboardID string) *sync.Mutex {
+	v, _ := s.structureResumeLocks.LoadOrStore(storyboardID, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
+func (s *Service) failLatestContentGeneration(ctx context.Context, storyboardID, msg string) {
+	cg, err := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID)
+	if err != nil || cg == nil {
+		return
+	}
+	cg.Status = domain.GenerationStatusFailed
+	cg.ErrorMessage = msg
+	_ = s.repo.UpdateContentGeneration(ctx, cg)
+}
+
+func (s *Service) syncLatestContentGenerationCompleted(ctx context.Context, storyboardID, content string) {
+	cg, err := s.repo.GetContentGenerationByStoryboard(ctx, storyboardID)
+	if err != nil || cg == nil {
+		return
+	}
+	cg.GeneratedContent = content
+	cg.Status = domain.GenerationStatusCompleted
+	cg.ErrorMessage = ""
+	now := time.Now().Unix()
+	cg.CompletedAt = &now
+	_ = s.repo.UpdateContentGeneration(ctx, cg)
+}
+
+// resumeStoryboardStructureGenerationWork runs bible + scene-plan pipeline and persists scenes.
+// Caller must hold structureResumeMutex for storyboardID for the full duration of this call.
+func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, userID, storyboardID string) error {
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return fmt.Errorf("storyboard not found: %w", err)
+	}
+	if sb.UserID != userID {
+		return fmt.Errorf("permission denied: not the creator")
+	}
+
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil {
+		return fmt.Errorf("load storyboard scenes: %w", err)
+	}
+	if len(scenes) > 0 {
+		return nil
+	}
+
+	sb, err = s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(sb.RawInput) == "" && strings.TrimSpace(sb.Content) != "" {
+		sb.RawInput = strings.TrimSpace(sb.Content)
+	}
+	if !s.canGenerateStoryboardText() {
+		return fmt.Errorf("storyboard AI generation is not configured")
+	}
+
+	if err := s.GenerateStoryboardWithAI(ctx, sb); err != nil {
+		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
+		return err
+	}
+	if err := s.repo.UpdateStoryboard(ctx, sb); err != nil {
+		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
+		return fmt.Errorf("failed to update storyboard after structure regeneration: %w", err)
+	}
+	if err := s.persistStoryboardScenes(ctx, sb); err != nil {
+		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
+		return err
+	}
+
+	s.syncLatestContentGenerationCompleted(ctx, storyboardID, sb.Content)
+	_ = s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusContentReady, 2)
+
+	s.generateOrRefreshStoryboardSummary(ctx, storyboardID)
+
+	if len(sb.StoryboardScenes) > 0 && !sb.UseComicPagePipeline {
+		s.startContinuationSceneImageGenerations(storyboardID, sb.ContinuationComicStyle, sb.StoryboardScenes)
+	} else if len(sb.StoryboardScenes) > 0 && sb.UseComicPagePipeline {
+		s.logger.Info("skipping auto scene image generation after structure resume; comic page pipeline selected",
+			zap.String("storyboardId", storyboardID),
+			zap.Int("sceneCount", len(sb.StoryboardScenes)))
+	}
+
+	s.logger.Info("storyboard structure regeneration completed",
+		zap.String("storyboardId", storyboardID),
+		zap.Int("sceneCount", len(sb.StoryboardScenes)))
+
+	return nil
+}
+
+// StartStoryboardStructureGeneration starts structure regeneration when DB has zero scenes.
+// The HTTP handler returns immediately with asyncAccepted=true while work continues in-process.
+func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID, storyboardID string) (*domain.StoryboardStructureGenerationResponse, error) {
+	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
+	if err != nil {
+		return nil, fmt.Errorf("storyboard not found: %w", err)
+	}
+	if sb.UserID != userID {
+		return nil, fmt.Errorf("permission denied: not the creator")
+	}
+
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil {
+		return nil, fmt.Errorf("load storyboard scenes: %w", err)
+	}
+	if len(scenes) > 0 {
+		full, err := s.GetStoryboard(ctx, storyboardID)
+		if err != nil {
+			return nil, err
+		}
+		return &domain.StoryboardStructureGenerationResponse{
+			AsyncAccepted: false,
+			Storyboard:    full,
+		}, nil
+	}
+
+	if prog, err := s.GetGenerationProgress(ctx, storyboardID); err == nil && prog != nil && prog.IsGenerating {
+		return nil, fmt.Errorf("storyboard generation already in progress, please wait")
+	}
+
+	mu := s.structureResumeMutex(storyboardID)
+	if !mu.TryLock() {
+		return nil, fmt.Errorf("storyboard structure generation already in progress")
+	}
+
+	go func(sbID, uid string) {
+		defer mu.Unlock()
+		workCtx := context.Background()
+		if err := s.resumeStoryboardStructureGenerationWork(workCtx, uid, sbID); err != nil {
+			s.logger.Error("async storyboard structure generation failed",
+				zap.String("storyboardId", sbID),
+				zap.String("userId", uid),
+				zap.Error(err))
+		}
+	}(storyboardID, userID)
+
+	var progSnap *domain.StoryboardGenerationProgress
+	if prog, err := s.GetGenerationProgress(ctx, storyboardID); err == nil {
+		progSnap = prog
+	}
+	return &domain.StoryboardStructureGenerationResponse{
+		AsyncAccepted:      true,
+		GenerationProgress: progSnap,
+	}, nil
 }
 
 // StoryboardPlotScenePatch 用户可改的分镜叙事字段（PUT body；未出现字段保持不变）。
@@ -2187,28 +2335,98 @@ func (s *Service) parseStoryboardResult(text string) *StoryboardResult {
 	return &result
 }
 
+// stripMarkdownJSONFence 从任意位置提取 ``` / ```json 代码块内的正文（模型常在前面加说明句）。
+func stripMarkdownJSONFence(s string) string {
+	s = strings.TrimSpace(s)
+	i := strings.Index(s, "```")
+	if i < 0 {
+		return s
+	}
+	afterOpen := s[i+3:]
+	end := strings.LastIndex(afterOpen, "```")
+	content := afterOpen
+	if end >= 0 {
+		content = afterOpen[:end]
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return strings.TrimSpace(s)
+	}
+	trimContent := strings.TrimSpace(content)
+	if strings.HasPrefix(trimContent, "{") || strings.HasPrefix(trimContent, "[") {
+		return trimContent
+	}
+	if nl := strings.IndexByte(content, '\n'); nl >= 0 {
+		firstLine := strings.TrimSpace(content[:nl])
+		rest := strings.TrimSpace(content[nl+1:])
+		if strings.HasPrefix(strings.ToLower(firstLine), "json") {
+			return rest
+		}
+		return rest
+	}
+	// 单行：`json{...}`
+	lower := strings.ToLower(content)
+	if strings.HasPrefix(lower, "json") && len(content) > 4 {
+		if c := content[4]; c == '{' || c == '[' {
+			return strings.TrimSpace(content[4:])
+		}
+	}
+	return trimContent
+}
+
+// extractBalancedJSONObject 从首个 '{' 起截取与之平衡的 JSON 对象（忽略尾部模型评语）。
+func extractBalancedJSONObject(s string) string {
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return s
+	}
+	depth := 0
+	inString := false
+	escape := false
+	rs := []rune(s[start:])
+	for i, r := range rs {
+		if escape {
+			escape = false
+			continue
+		}
+		if r == '\\' && inString {
+			escape = true
+			continue
+		}
+		if r == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return string(rs[:i+1])
+			}
+		}
+	}
+	return s[start:]
+}
+
 // cleanAIResponseText 清理 AI 响应文本
 func (s *Service) cleanAIResponseText(text string) string {
 	cleanedText := strings.TrimSpace(text)
 
-	// 移除 markdown 代码块 (```json ... ``` 或 ``` ... ```)
-	if strings.HasPrefix(cleanedText, "```") {
-		// 找到第一行的结束位置（跳过 ```json 或 ```）
-		if idx := strings.Index(cleanedText, "\n"); idx != -1 {
-			cleanedText = cleanedText[idx+1:]
-		}
-		// 移除尾部的 ```
-		if idx := strings.LastIndex(cleanedText, "```"); idx != -1 {
-			cleanedText = strings.TrimSpace(cleanedText[:idx])
-		}
+	// 先尝试提取 markdown 围栏（不限于串首：常见为 “Here is … ```json …”）
+	if strings.Contains(cleanedText, "```") {
+		cleanedText = stripMarkdownJSONFence(cleanedText)
 	}
 
 	// 移除可能的 BOM 标记
 	cleanedText = strings.TrimPrefix(cleanedText, "\ufeff")
 
-	// 移除开头可能的非 JSON 文本（找到第一个 { 的位置）
+	// 去掉首个 JSON 对象前的说明文字（含 “We …” 等）
 	if idx := strings.Index(cleanedText, "{"); idx > 0 {
-		// 检查前面是否只有空白字符
 		prefix := strings.TrimSpace(cleanedText[:idx])
 		if prefix != "" {
 			s.logger.Debug("removing non-JSON prefix",
@@ -2217,7 +2435,12 @@ func (s *Service) cleanAIResponseText(text string) string {
 		cleanedText = cleanedText[idx:]
 	}
 
-	// 确保以 } 结尾，移除尾部可能的非 JSON 文本
+	// 只保留与首枚 '{' 平衡的对象，丢弃尾部解释性段落
+	if strings.HasPrefix(strings.TrimSpace(cleanedText), "{") {
+		cleanedText = extractBalancedJSONObject(cleanedText)
+	}
+
+	// 移除尾部紧跟的非 JSON（LastIndex '}' 兜底）
 	if idx := strings.LastIndex(cleanedText, "}"); idx >= 0 && idx < len(cleanedText)-1 {
 		suffix := strings.TrimSpace(cleanedText[idx+1:])
 		if suffix != "" {

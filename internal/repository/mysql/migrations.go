@@ -362,6 +362,7 @@ func (r *Repository) ensureStoryboardScenesSchema() error {
 		{"composition_plan", "TEXT", "构图与分区规划"},
 		{"shot_type", "VARCHAR(120) DEFAULT ''", "镜头类型"},
 		{"visual_hierarchy", "TEXT", "视觉层级规划"},
+		{"panel_shape", "VARCHAR(60) DEFAULT ''", "AI 驱动的面板裁切形状（full/diagonal_left/diagonal_right/trapezoid_leading/trapezoid_trailing/triangle_tl/triangle_tr/triangle_bl/triangle_br/wide_panorama）"},
 	}
 
 	for _, col := range columns {

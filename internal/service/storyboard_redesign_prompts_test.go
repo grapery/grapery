@@ -63,6 +63,7 @@ func TestValidateStoryboardScenePlanRequiresComicLayoutMetadata(t *testing.T) {
 	scenePlan.Scenes[0].CompositionPlan = "主角居中，右上预留气泡区。"
 	scenePlan.Scenes[0].ShotType = "medium_shot"
 	scenePlan.Scenes[0].VisualHierarchy = "主角第一，背景第二。"
+	scenePlan.Scenes[0].PanelShape = "full"
 	if err := validateStoryboardScenePlan(scenePlan, bible, 1); err != nil {
 		t.Fatalf("expected valid scene plan, got: %v", err)
 	}
