@@ -187,6 +187,10 @@ type IAPReceipt struct {
 	ReceiptData        string      `json:"receipt_data"`
 	BundleID           string      `json:"bundle_id"`
 	ProductID          string      `json:"product_id"`
+	// OriginalTransactionID Apple 订阅原始交易 ID（同一订阅链路不变）。
+	OriginalTransactionID string `json:"original_transaction_id,omitempty"`
+	// SubscriptionTransactionID 当前订阅周期对应的交易 ID（含续费）；用于按期重置点数幂等。
+	SubscriptionTransactionID string `json:"subscription_transaction_id,omitempty"`
 	ApplicationVersion string      `json:"application_version"`
 	CreationDate       time.Time   `json:"creation_date"`
 	ExpirationDate     *time.Time  `json:"expiration_date"`

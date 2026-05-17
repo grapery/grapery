@@ -3,8 +3,12 @@ package pay
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
+
 
 // IAPProductStatus IAP 产品状态
 type IAPProductStatus int
@@ -69,6 +73,14 @@ type IAPProduct struct {
 
 func (p IAPProduct) TableName() string {
 	return "iap_products"
+}
+
+// BeforeSave MySQL JSON 列不接受 ''，否则报 Error 3140（Invalid JSON / document is empty）。
+func (p *IAPProduct) BeforeSave(_ *gorm.DB) error {
+	if strings.TrimSpace(p.Metadata) == "" {
+		p.Metadata = "{}"
+	}
+	return nil
 }
 
 // GetMetadata 获取元数据

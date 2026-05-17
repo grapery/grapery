@@ -271,6 +271,14 @@ func initializeServices(logger *zap.Logger) error {
 		return err
 	}
 
+	// iap_products 表未跑 Grapery API 迁移时可能不存在；对齐 VipPay 商品列表所用表结构
+	if mErr := paymodels.DataBase().AutoMigrate(&paymodels.IAPProduct{}); mErr != nil {
+		logger.Warn("iap_products AutoMigrate skipped or failed", zap.Error(mErr))
+	}
+	if seedErr := paymodels.SeedGraperyIAPAppleProductsIfMissing(logger); seedErr != nil {
+		logger.Warn("seed Grapery IAP products failed", zap.Error(seedErr))
+	}
+
 	// 初始化 Web 支付表
 	err = paymodels.AutoMigrateWebPayments()
 	if err != nil {

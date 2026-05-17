@@ -149,33 +149,76 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 		"endpoint":   "VerifyAppleReceipt",
 	}).Info("Apple receipt verification completed successfully")
 
-	// 充值 token：从产品表获取 QuotaLimit（单位：tokens），写入主库 memberships
+	// 写入主库 memberships：订阅按期重置定额（unused 不结转）；非订阅仍为增量充值。
 	userIDStr := getUserIDString(c)
 	if userIDStr != "" && receipt.ProductID != "" {
-		if product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID); prodErr == nil && product != nil {
-			tokenAmount := product.QuotaLimit
-			if tokenAmount > 0 {
-				if topUpErr := h.topUpUserTokens(ctx, userIDStr, tokenAmount); topUpErr != nil {
+		product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID)
+		if prodErr != nil || product == nil {
+			if prodErr != nil {
+				h.logger.WithFields(logrus.Fields{
+					"user_id":    userIDStr,
+					"product_id": receipt.ProductID,
+					"error":      prodErr.Error(),
+				}).Warn("Could not look up product for membership quota update")
+			}
+		} else {
+			grantTokens := common.SubscriptionBillingPeriodGrantTokens(product.QuotaLimit, product.Duration)
+			if grantTokens > 0 && product.IsSubscription() {
+				txID := strings.TrimSpace(receipt.SubscriptionTransactionID)
+				applyReset := func() {
+					if resetErr := h.resetSubscriptionPeriodTokens(ctx, userIDStr, grantTokens); resetErr != nil {
+						h.logger.WithFields(logrus.Fields{
+							"user_id":       userIDStr,
+							"product_id":    receipt.ProductID,
+							"grant_tokens":  grantTokens,
+							"transaction_id": txID,
+							"error":         resetErr.Error(),
+						}).Error("Failed to reset subscription period tokens after IAP")
+					} else {
+						h.logger.WithFields(logrus.Fields{
+							"user_id":       userIDStr,
+							"product_id":    receipt.ProductID,
+							"grant_tokens":  grantTokens,
+							"transaction_id": txID,
+						}).Info("Reset subscription period tokens after IAP (billing cycle allowance)")
+					}
+				}
+
+				if txID == "" {
+					h.logger.WithFields(logrus.Fields{
+						"user_id":    userIDStr,
+						"product_id": receipt.ProductID,
+					}).Warn("Apple subscription receipt missing transaction_id; applying quota reset without idempotency")
+					applyReset()
+				} else {
+					claimed, claimErr := paymodels.TryClaimSubscriptionCreditGrant(ctx, txID, userIDStr, receipt.ProductID)
+					if claimErr != nil {
+						h.logger.WithFields(logrus.Fields{
+							"user_id":        userIDStr,
+							"product_id":     receipt.ProductID,
+							"transaction_id": txID,
+							"error":          claimErr.Error(),
+						}).Error("Failed to claim subscription credit grant row")
+					} else if claimed {
+						applyReset()
+					}
+				}
+			} else if grantTokens > 0 {
+				if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens); topUpErr != nil {
 					h.logger.WithFields(logrus.Fields{
 						"user_id":      userIDStr,
 						"product_id":   receipt.ProductID,
-						"token_amount": tokenAmount,
+						"token_amount": grantTokens,
 						"error":        topUpErr.Error(),
 					}).Error("Failed to top up user tokens after IAP purchase")
 				} else {
 					h.logger.WithFields(logrus.Fields{
 						"user_id":      userIDStr,
 						"product_id":   receipt.ProductID,
-						"token_amount": tokenAmount,
+						"token_amount": grantTokens,
 					}).Info("Successfully topped up user tokens after IAP purchase")
 				}
 			}
-		} else if prodErr != nil {
-			h.logger.WithFields(logrus.Fields{
-				"user_id":    userIDStr,
-				"product_id": receipt.ProductID,
-				"error":      prodErr.Error(),
-			}).Warn("Could not look up product for token top-up")
 		}
 	}
 
@@ -1281,8 +1324,68 @@ func (h *IAPHandler) GetProductStats(c *gin.Context) {
 	})
 }
 
-// topUpUserTokens 购买成功后在主库 memberships 表中充值 tokens。
-// tokens > 0 表示充值（增加 token_quota）。
+// resetSubscriptionPeriodTokens 每期订阅付款后重置点数：token_quota = 免费底座 + 本期订阅定额，token_used = 0。
+// 未用完的点数不结转至下一期（下一期收据会带来新的 transaction_id 并再次重置）。
+func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDStr string, subscriptionGrantTokens int) error {
+	if h.mainDB == nil {
+		h.logger.Warn("mainDB not configured, skipping subscription quota reset")
+		return nil
+	}
+	if userIDStr == "" || subscriptionGrantTokens < 0 {
+		return nil
+	}
+
+	totalQuota := common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
+	now := time.Now()
+
+	type membership struct {
+		ID           string     `gorm:"column:id"`
+		UserID       string     `gorm:"column:user_id"`
+		Tier         string     `gorm:"column:tier"`
+		Status       string     `gorm:"column:status"`
+		StartDate    time.Time  `gorm:"column:start_date"`
+		EndDate      *time.Time `gorm:"column:end_date"`
+		TokenQuota   int        `gorm:"column:token_quota"`
+		TokenUsed    int        `gorm:"column:token_used"`
+		StorageQuota int64      `gorm:"column:storage_quota"`
+		StorageUsed  int64      `gorm:"column:storage_used"`
+		CreatedAt    time.Time  `gorm:"column:created_at"`
+		UpdatedAt    time.Time  `gorm:"column:updated_at"`
+	}
+
+	return h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var m membership
+		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			m = membership{
+				ID:           uuid.New().String(),
+				UserID:       userIDStr,
+				Tier:         "free",
+				Status:       string(common.MembershipStatusActive),
+				StartDate:    now,
+				TokenQuota:   totalQuota,
+				TokenUsed:    0,
+				StorageQuota: common.DefaultFreeTierStorageBytes,
+				StorageUsed:  0,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			return tx.Table("memberships").Create(&m).Error
+		}
+		if err != nil {
+			return fmt.Errorf("query membership: %w", err)
+		}
+		return tx.Table("memberships").
+			Where("user_id = ?", userIDStr).
+			Updates(map[string]interface{}{
+				"token_quota": totalQuota,
+				"token_used":  0,
+				"updated_at":  now,
+			}).Error
+	})
+}
+
+// topUpUserTokens 非订阅类 IAP：在主库 memberships 上增量增加 token_quota。
 func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, tokens int) error {
 	if h.mainDB == nil {
 		h.logger.Warn("mainDB not configured, skipping token top-up")

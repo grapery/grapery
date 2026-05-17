@@ -88,6 +88,15 @@ func init() {
 	})
 
 	registry.RegisterPaymentStep(migrations.MigrationStep{
+		Name:        "migrate_iap_subscription_credit_grants",
+		Description: "Idempotent grants for subscription billing periods (Apple/Google transaction_id)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&IAPSubscriptionCreditGrant{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterPaymentStep(migrations.MigrationStep{
 		Name:        "migrate_google_purchases",
 		Description: "Create and migrate google_purchases table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -215,6 +224,15 @@ func registerPaymentDataInitSteps(registry *migrations.MigrationRegistry) {
 		Description: "Initialize predefined badges",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return initPredefinedBadges(db, log)
+		},
+		Required: false,
+	})
+
+	registry.RegisterDataInitStep(migrations.MigrationStep{
+		Name:        "seed_grapery_iap_products",
+		Description: "Insert Grapery Apple IAP rows into iap_products when absent (VipPay product list)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return seedGraperyIAPAppleProducts(db, log)
 		},
 		Required: false,
 	})

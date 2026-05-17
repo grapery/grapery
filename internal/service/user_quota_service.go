@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -421,26 +422,31 @@ func (s *UserQuotaService) GetMembershipTiers(ctx context.Context) ([]*domain.Me
 		return nil, fmt.Errorf("failed to list subscription plans: %w", err)
 	}
 
-	tiers := make([]*domain.MembershipTier, len(plans))
-	for i, plan := range plans {
-		tiers[i] = &domain.MembershipTier{
-			Tier:          plan.Name,
-			TierName:      plan.Name,
-			DisplayName:   plan.Name,
-			Description:   fmt.Sprintf("%s 会员计划", plan.Name),
+	tiers := make([]*domain.MembershipTier, 0, len(plans))
+	for _, plan := range plans {
+		if normalizeBillingPeriod(plan.BillingPeriod) == string(domain.PeriodQuarterly) {
+			continue
+		}
+		canon := domain.CanonicalMembershipTier(plan.MembershipTier, plan.Name)
+		tierStr := string(canon)
+		tiers = append(tiers, &domain.MembershipTier{
+			Tier:          tierStr,
+			TierName:      tierStr,
+			DisplayName:   s.getTierName(tierStr),
+			Description:   fmt.Sprintf("%s 订阅方案", s.getTierName(tierStr)),
 			Price:         plan.Price,
 			Currency:      plan.Currency,
 			TokenQuota:    plan.TokenQuota,
 			StorageQuota:  plan.StorageQuota,
 			MaxStories:    plan.MaxStories,
 			MaxCharacters: plan.MaxCharacters,
-			Benefits:      s.getMembershipBenefits(plan.Name),
+			Benefits:      s.getMembershipBenefits(tierStr),
 			Features:      s.parsePlanFeaturesFromPlan(plan),
 			SortOrder:     plan.SortOrder,
 			IsActive:      plan.IsActive,
-			TrialDays:     s.getTrialDaysForPlan(plan.Name),
-			UpgradeFrom:   s.getUpgradeFromTiers(plan.Name),
-		}
+			TrialDays:     s.getTrialDaysForPlan(plan.MembershipTier, plan.Name),
+			UpgradeFrom:   s.getUpgradeFromTiers(tierStr),
+		})
 	}
 
 	return tiers, nil
@@ -453,7 +459,10 @@ func (s *UserQuotaService) getTierName(tier string) string {
 	names := map[string]string{
 		"free":       "免费用户",
 		"basic":      "基础会员",
-		"pro":        "专业会员",
+		"premium":    "高级会员",
+		"pro":        "基础会员",
+		"prime":      "高级会员",
+		"ultra":      "高级会员",
 		"enterprise": "企业会员",
 	}
 	if name, ok := names[tier]; ok {
@@ -476,27 +485,35 @@ func (s *UserQuotaService) getStatusName(status string) string {
 	return status
 }
 
-// getMembershipBenefits 获取会员权益列表
+// getMembershipBenefits 获取会员权益列表（仅区分免费 / 基础 / 高级；兼容历史 tier 字符串）
 func (s *UserQuotaService) getMembershipBenefits(tier string) []domain.MembershipBenefit {
+	freeBenefits := []domain.MembershipBenefit{
+		{ID: "ai_text", Name: "AI 文本生成", Description: "每月 1000 tokens", Icon: "text.bubble", Enabled: true, Value: "1000 tokens/月"},
+		{ID: "basic_support", Name: "基础支持", Description: "社区支持", Icon: "message", Enabled: true, Value: "社区支持"},
+	}
+	basicPaid := []domain.MembershipBenefit{
+		{ID: "ai_text", Name: "AI 文本生成", Description: "每月 50000 tokens", Icon: "text.bubble", Enabled: true, Value: "50000 tokens/月"},
+		{ID: "ai_image", Name: "AI 图片生成", Description: "每月 500 张", Icon: "photo", Enabled: true, Value: "500 张/月"},
+		{ID: "ai_video", Name: "AI 视频生成", Description: "每月 10 个", Icon: "video", Enabled: true, Value: "10 个/月"},
+		{ID: "storage", Name: "云存储", Description: "100GB 存储空间", Icon: "icloud", Enabled: true, Value: "100GB"},
+		{ID: "priority_support", Name: "优先支持", Description: "更快响应", Icon: "star.fill", Enabled: true, Value: "12小时内"},
+	}
+	premiumPaid := []domain.MembershipBenefit{
+		{ID: "ai_text", Name: "AI 文本生成", Description: "更高配额与优先级", Icon: "text.bubble", Enabled: true, Value: "高配额"},
+		{ID: "ai_image", Name: "AI 图片生成", Description: "高质量场景图与优先队列", Icon: "photo", Enabled: true, Value: "优先队列"},
+		{ID: "ai_video", Name: "AI 视频生成", Description: "场景视频生成能力", Icon: "video", Enabled: true, Value: "视频创作"},
+		{ID: "storage", Name: "云存储", Description: "更大存储空间", Icon: "icloud", Enabled: true, Value: "TB 级"},
+		{ID: "priority_support", Name: "高级会员支持", Description: "优先客服与问题跟进", Icon: "bell.badge", Enabled: true, Value: "优先"},
+		{ID: "advanced_features", Name: "高级创作能力", Description: "解锁高级协作与会员标识", Icon: "wand.and.stars", Enabled: true, Value: "全开"},
+	}
+
 	allBenefits := map[string][]domain.MembershipBenefit{
-		"free": {
-			{ID: "ai_text", Name: "AI 文本生成", Description: "每月 1000 tokens", Icon: "text.bubble", Enabled: true, Value: "1000 tokens/月"},
-			{ID: "basic_support", Name: "基础支持", Description: "社区支持", Icon: "message", Enabled: true, Value: "社区支持"},
-		},
-		"basic": {
-			{ID: "ai_text", Name: "AI 文本生成", Description: "每月 10000 tokens", Icon: "text.bubble", Enabled: true, Value: "10000 tokens/月"},
-			{ID: "ai_image", Name: "AI 图片生成", Description: "每月 100 张", Icon: "photo", Enabled: true, Value: "100 张/月"},
-			{ID: "storage", Name: "云存储", Description: "10GB 存储空间", Icon: "icloud", Enabled: true, Value: "10GB"},
-			{ID: "priority_support", Name: "优先支持", Description: "更快响应", Icon: "star.fill", Enabled: true, Value: "24小时内"},
-		},
-		"pro": {
-			{ID: "ai_text", Name: "AI 文本生成", Description: "每月 50000 tokens", Icon: "text.bubble", Enabled: true, Value: "50000 tokens/月"},
-			{ID: "ai_image", Name: "AI 图片生成", Description: "每月 500 张", Icon: "photo", Enabled: true, Value: "500 张/月"},
-			{ID: "ai_video", Name: "AI 视频生成", Description: "每月 10 个", Icon: "video", Enabled: true, Value: "10 个/月"},
-			{ID: "storage", Name: "云存储", Description: "100GB 存储空间", Icon: "icloud", Enabled: true, Value: "100GB"},
-			{ID: "priority_support", Name: "专属支持", Description: "专属客服", Icon: "star.fill", Enabled: true, Value: "12小时内"},
-			{ID: "advanced_features", Name: "高级功能", Description: "解锁所有高级功能", Icon: "wand.and.stars", Enabled: true, Value: "全部"},
-		},
+		"free":    freeBenefits,
+		"basic":   basicPaid,
+		"premium": premiumPaid,
+		"pro":     basicPaid,
+		"prime":   premiumPaid,
+		"ultra":   premiumPaid,
 		"enterprise": {
 			{ID: "ai_text", Name: "AI 文本生成", Description: "无限 tokens", Icon: "text.bubble", Enabled: true, Value: "无限"},
 			{ID: "ai_image", Name: "AI 图片生成", Description: "无限生成", Icon: "photo", Enabled: true, Value: "无限"},
@@ -508,10 +525,14 @@ func (s *UserQuotaService) getMembershipBenefits(tier string) []domain.Membershi
 		},
 	}
 
+	key := string(domain.CanonicalMembershipTier(tier, tier))
+	if benefits, ok := allBenefits[key]; ok {
+		return benefits
+	}
 	if benefits, ok := allBenefits[tier]; ok {
 		return benefits
 	}
-	return allBenefits["free"]
+	return freeBenefits
 }
 
 // getStorageUsed 获取用户存储使用量
@@ -546,17 +567,13 @@ func (s *UserQuotaService) parsePlanFeatures(features string) []string {
 }
 
 // getTrialDaysForPlan 获取计划的试用天数
-func (s *UserQuotaService) getTrialDaysForPlan(planName string) int {
-	trialDays := map[string]int{
-		"free":       0,
-		"basic":      7,
-		"pro":        14,
-		"enterprise": 30,
+func (s *UserQuotaService) getTrialDaysForPlan(tierRaw, planName string) int {
+	switch domain.CanonicalMembershipTier(tierRaw, planName) {
+	case domain.TierTypeBasic, domain.TierTypePremium:
+		return 14
+	default:
+		return 0
 	}
-	if days, ok := trialDays[planName]; ok {
-		return days
-	}
-	return 0
 }
 
 // parsePlanFeaturesFromPlan parses features from a subscription plan
@@ -571,27 +588,30 @@ func (s *UserQuotaService) parsePlanFeaturesFromPlan(plan *domain.SubscriptionPl
 
 // getDefaultFeaturesForPlan returns default features for a plan
 func (s *UserQuotaService) getDefaultFeaturesForPlan(planName string) []string {
-	featuresMap := map[string][]string{
-		"free":       {"basic_ai_generation", "community_support"},
-		"basic":      {"unlimited_text", "basic_image_generation", "priority_support"},
-		"pro":        {"unlimited_text", "unlimited_images", "video_generation", "api_access"},
-		"enterprise": {"unlimited_all", "api_access", "dedicated_support", "custom_integration"},
+	switch domain.CanonicalMembershipTier("", planName) {
+	case domain.TierTypeBasic:
+		return []string{"unlimited_text", "unlimited_images", "video_generation", "priority_support"}
+	case domain.TierTypePremium:
+		return []string{"unlimited_text", "unlimited_images", "video_generation", "advanced_collab", "priority_support"}
+	case domain.TierTypeFree:
+		return []string{"basic_ai_generation", "community_support"}
+	default:
+		return []string{}
 	}
-	if features, ok := featuresMap[planName]; ok {
-		return features
-	}
-	return []string{}
 }
 
-// getUpgradeFromTiers 获取可以升级到此等级的等级列表
-func (s *UserQuotaService) getUpgradeFromTiers(planName string) []string {
+// getUpgradeFromTiers 获取可以升级到此等级的等级列表（canonical: free | basic | premium）
+func (s *UserQuotaService) getUpgradeFromTiers(canonicalTier string) []string {
+	t := strings.ToLower(strings.TrimSpace(canonicalTier))
 	upgradeMap := map[string][]string{
-		"free":       {},
-		"basic":      {"free"},
-		"pro":        {"free", "basic"},
-		"enterprise": {"free", "basic", "pro"},
+		"free":    {},
+		"basic":   {"free"},
+		"premium": {"free", "basic"},
+		"pro":     {"free"},
+		"prime":   {"free", "basic"},
+		"ultra":   {"free", "basic"},
 	}
-	if tiers, ok := upgradeMap[planName]; ok {
+	if tiers, ok := upgradeMap[t]; ok {
 		return tiers
 	}
 	return []string{}

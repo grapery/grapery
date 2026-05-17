@@ -26,10 +26,9 @@ const (
 type MembershipTierType string
 
 const (
-	TierTypeFree  MembershipTierType = "free"
-	TierTypePro   MembershipTierType = "pro"
-	TierTypePrime MembershipTierType = "prime"
-	TierTypeUltra MembershipTierType = "ultra"
+	TierTypeFree    MembershipTierType = "free"
+	TierTypeBasic   MembershipTierType = "basic"   // 基础会员（兼容历史 tier / 套餐名 pro）
+	TierTypePremium MembershipTierType = "premium" // 高级会员（兼容 prime / ultra）
 )
 
 // MembershipPeriod 会员周期
@@ -45,7 +44,7 @@ const (
 type Membership struct {
 	ID           string `json:"id"`
 	UserID       string `json:"userId"`
-	Tier         string `json:"tier"`   // free, basic, pro, enterprise
+	Tier         string `json:"tier"`   // free | basic | premium（兼容存量的 pro / prime / ultra）
 	Status       string `json:"status"` // active, expired, cancelled
 	StartDate    int64  `json:"startDate"`
 	EndDate      *int64 `json:"endDate,omitempty"`
@@ -96,7 +95,7 @@ type SubscriptionPlan struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"` // Free, Basic, Pro, Enterprise
 	IAPProductID   string  `json:"iapProductId,omitempty"`
-	MembershipTier string  `json:"membershipTier,omitempty"` // free, pro, prime, ultra
+	MembershipTier string  `json:"membershipTier,omitempty"` // free | basic | premium（兼容 pro / prime / ultra）
 	BillingPeriod  string  `json:"billingPeriod,omitempty"`  // monthly, quarterly, yearly
 	Price          float64 `json:"price"`                    // 月费
 	Currency       string  `json:"currency"`                 // USD, CNY

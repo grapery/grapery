@@ -125,8 +125,8 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 		UpdatedAt:          time.Now(),
 	}
 
-	// 6. 完善收据解析逻辑
-	if err := s.parseReceiptData(&AppleReceiptResponse{Receipt: resp.Receipt, LatestReceiptInfo: []AppleReceiptInfo{}}, iapReceipt); err != nil {
+	// 6. 完善收据解析逻辑（必须传入 latest_receipt_info，否则无法解析订阅 SKU / transaction_id）
+	if err := s.parseReceiptData(resp, iapReceipt); err != nil {
 		s.logger.WithError(err).Error("解析收据数据失败")
 		return nil, fmt.Errorf("解析收据数据失败: %w", err)
 	}
@@ -470,6 +470,12 @@ func (s *AppleIAPService) parseReceiptData(resp *AppleReceiptResponse, iapReceip
 		// 填充产品 ID
 		if latestReceiptInfo.ProductID != "" {
 			iapReceipt.ProductID = latestReceiptInfo.ProductID
+		}
+		if latestReceiptInfo.OriginalTransactionID != "" {
+			iapReceipt.OriginalTransactionID = latestReceiptInfo.OriginalTransactionID
+		}
+		if latestReceiptInfo.TransactionID != "" {
+			iapReceipt.SubscriptionTransactionID = latestReceiptInfo.TransactionID
 		}
 
 		if purchaseDate, err := parseAppleTimestamp(latestReceiptInfo.PurchaseDate); err == nil {

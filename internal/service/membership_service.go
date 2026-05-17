@@ -23,14 +23,17 @@ func (s *Service) ListMembershipPlans(ctx context.Context) ([]domain.MembershipP
 		return nil, err
 	}
 
-	// 转换为 MembershipPlan 格式
-	result := make([]domain.MembershipPlan, len(plans))
-	for i, p := range plans {
-		features := parsePlanFeatures(p.Features)
+	// 转换为 MembershipPlan 格式（仅对外提供月付 / 年付）
+	result := make([]domain.MembershipPlan, 0, len(plans))
+	for _, p := range plans {
 		period := normalizeBillingPeriod(p.BillingPeriod)
-		tier := normalizeMembershipTier(p.MembershipTier, p.Name)
+		if period == string(domain.PeriodQuarterly) {
+			continue
+		}
+		features := parsePlanFeatures(p.Features)
+		tier := domain.CanonicalMembershipTier(p.MembershipTier, p.Name)
 
-		result[i] = domain.MembershipPlan{
+		result = append(result, domain.MembershipPlan{
 			ID:           p.ID,
 			Tier:         tier,
 			Period:       period,
@@ -41,7 +44,7 @@ func (s *Service) ListMembershipPlans(ctx context.Context) ([]domain.MembershipP
 			Features:     features,
 			IsActive:     p.IsActive,
 			SortOrder:    p.SortOrder,
-		}
+		})
 	}
 
 	return result, nil
@@ -78,7 +81,7 @@ func (s *Service) GetUserMembership(ctx context.Context, userID string) (*domain
 			UpdatedAt: now,
 		},
 		UserID:          membership.UserID,
-		Tier:            domain.MembershipTierType(membership.Tier),
+		Tier:            domain.CanonicalMembershipTier(membership.Tier, ""),
 		StartedAt:       membership.StartDate,
 		ExpiresAt:       getExpiresAt(membership.EndDate),
 		AutoRenew:       membership.AutoRenew,
@@ -96,12 +99,29 @@ func (s *Service) SubscribeMembership(ctx context.Context, userID string, req do
 		return nil, err
 	}
 
+	wantTier := domain.CanonicalMembershipTier(string(req.Tier), "")
+	wantPeriod := normalizeBillingPeriod(string(req.Period))
+	if wantPeriod == string(domain.PeriodQuarterly) {
+		return nil, domain.ErrInvalidInput
+	}
+
 	var selectedPlan *domain.SubscriptionPlan
 	for _, p := range plans {
-		if p.Name == string(req.Tier) {
-			selectedPlan = p
-			break
+		if p == nil {
+			continue
 		}
+		if domain.CanonicalMembershipTier(p.MembershipTier, p.Name) != wantTier {
+			continue
+		}
+		bp := normalizeBillingPeriod(p.BillingPeriod)
+		if bp == string(domain.PeriodQuarterly) {
+			continue
+		}
+		if bp != wantPeriod {
+			continue
+		}
+		selectedPlan = p
+		break
 	}
 
 	if selectedPlan == nil {
@@ -170,8 +190,8 @@ func (s *Service) GetMembershipUsage(ctx context.Context, userID string) (*Membe
 	}
 
 	return &MembershipUsage{
-		UserID:          userID,
-		Tier:            membership.Tier,
+		UserID: userID,
+		Tier:   string(domain.CanonicalMembershipTier(membership.Tier, "")),
 		AIUsedThisMonth: membership.TokenUsed,
 		AILimit:         membership.TokenQuota,
 		PeriodStart:     membership.StartDate,
@@ -206,20 +226,6 @@ func normalizeBillingPeriod(raw string) string {
 		return period
 	default:
 		return string(domain.PeriodMonthly)
-	}
-}
-
-func normalizeMembershipTier(tierRaw string, nameFallback string) domain.MembershipTierType {
-	raw := strings.ToLower(strings.TrimSpace(tierRaw))
-	if raw == "" {
-		raw = strings.ToLower(strings.TrimSpace(nameFallback))
-	}
-
-	switch domain.MembershipTierType(raw) {
-	case domain.TierTypeFree, domain.TierTypePro, domain.TierTypePrime, domain.TierTypeUltra:
-		return domain.MembershipTierType(raw)
-	default:
-		return domain.TierTypeFree
 	}
 }
 
