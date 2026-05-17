@@ -77,6 +77,8 @@ func TestSendAliyunOTPCode_notConfigured(t *testing.T) {
 		"ALIYUN_SMS_SIGN_NAME",
 		"ALIYUN_SMS_TEMPLATE_CODE",
 		"ALIYUN_SMS_REGION",
+		"ALIYUN_SMS_ENDPOINT",
+		"ALIYUN_SMS_USE_DEFAULT_CREDENTIAL",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -96,6 +98,8 @@ func TestSendAliyunOTPCode_notConfigured_partial(t *testing.T) {
 	t.Setenv("ALIYUN_SMS_SIGN_NAME", "")
 	t.Setenv("ALIYUN_SMS_TEMPLATE_CODE", "SMS_1")
 	t.Setenv("ALIYUN_SMS_REGION", "")
+	t.Setenv("ALIYUN_SMS_ENDPOINT", "")
+	t.Setenv("ALIYUN_SMS_USE_DEFAULT_CREDENTIAL", "")
 
 	err := SendAliyunOTPCode("13800138000", "123456")
 	if err == nil {

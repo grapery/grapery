@@ -1,7 +1,10 @@
 package http
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
+	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
 )
 
@@ -23,6 +26,10 @@ func (h *Handler) SendPhoneSMSVerificationCode(c *gin.Context) {
 		c.GetHeader("X-Real-IP"),
 	)
 	if err := h.svc.SendPhoneSMSVerificationCode(c.Request.Context(), userID, req.Phone, ip); err != nil {
+		if errors.Is(err, service.ErrSMSSendRateLimited) {
+			RateLimitExceeded(c, err.Error())
+			return
+		}
 		HandleError(c, err)
 		return
 	}

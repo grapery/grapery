@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -31,7 +31,10 @@ const (
 	smsPhoneAttemptMax       = 5
 )
 
-var errSMSSendRateLimited = errors.New("verification code can only be sent once per minute per account, phone number, and IP; please try again later")
+// ErrSMSSendRateLimited indicates send-sms throttling per IP/user/phone window is exceeded (HTTP handlers map to CodeRateLimitExceed).
+var ErrSMSSendRateLimited = errors.New("verification code can only be sent once per minute per account, phone number, and IP; please try again later")
+
+var mainlandChinaMobile11 = regexp.MustCompile(`^1[3-9]\d{9}$`)
 
 // AttachPhoneVerificationRequirement sets RequiresPhoneVerification from PendingOAuthPhoneSMS
 // (only first-time Apple/WeChat-registered accounts until SMS completes).
@@ -64,23 +67,23 @@ func (s *Service) hashSMSCode(userID, phone, code string) (string, error) {
 	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
-// NormalizeChinaPhone trims input and returns domestic 11-digit mobile (no +86), or error.
+// NormalizeChinaPhone trims input and returns domestic 11-digit mainland mobile (no +86), matching ^1[3-9]\d{9}$, or error.
 func NormalizeChinaPhone(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
 	s = strings.TrimPrefix(s, "+86")
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ReplaceAll(s, "-", "")
-	if len(s) != 11 {
-		return "", errors.New("phone must be 11 digits")
-	}
 	for _, r := range s {
-		if !unicode.IsDigit(r) {
-			return "", errors.New("phone must contain only digits")
+		if r < '0' || r > '9' {
+			return "", errors.New("china mobile number must contain only digits")
 		}
 	}
-	if s[0] != '1' {
-		return "", errors.New("invalid china mobile")
+	if len(s) != 11 {
+		return "", errors.New("china mobile number must be 11 digits")
+	}
+	if !mainlandChinaMobile11.MatchString(s) {
+		return "", errors.New("invalid mainland china mobile number")
 	}
 	return s, nil
 }
@@ -145,7 +148,7 @@ func (s *Service) SendPhoneSMSVerificationCode(ctx context.Context, userID, rawP
 		}
 		if n > smsPhoneSendMaxPerWindow {
 			rollbackEarlier()
-			return errSMSSendRateLimited
+			return ErrSMSSendRateLimited
 		}
 		undoKeys = append(undoKeys, key)
 		return nil
@@ -195,14 +198,18 @@ func (s *Service) SendPhoneSMSVerificationCode(ctx context.Context, userID, rawP
 	return nil
 }
 
+// smsCodeDecimal6 validates a 6-digit ASCII decimal OTP.
+var smsCodeDecimal6 = regexp.MustCompile(`^[0-9]{6}$`)
+
 // VerifyPhoneSMSCode verifies the OTP and binds the phone to the user.
 func (s *Service) VerifyPhoneSMSCode(ctx context.Context, userID, rawPhone, code string) error {
 	phone, err := NormalizeChinaPhone(rawPhone)
 	if err != nil {
 		return err
 	}
-	if len(code) != 6 {
-		return errors.New("invalid code")
+	code = strings.TrimSpace(code)
+	if len(code) != 6 || !smsCodeDecimal6.MatchString(code) {
+		return errors.New("verification code must be 6 digits")
 	}
 
 	if err := s.userMayUsePhoneSMSGate(ctx, userID); err != nil {

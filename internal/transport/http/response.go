@@ -113,6 +113,10 @@ func DuplicateEntry(c *gin.Context, message string) {
 	Error(c, CodeDuplicateEntry, message)
 }
 
+func RateLimitExceeded(c *gin.Context, message string) {
+	Error(c, CodeRateLimitExceed, message)
+}
+
 func TokenExpired(c *gin.Context) {
 	Error(c, CodeTokenExpired, "token expired")
 }
