@@ -388,38 +388,27 @@ func (r *Repository) ListCharacterFollowRecordsByUser(ctx context.Context, userI
 	return out, nil
 }
 
-// StoryboardsByCharacter retrieves storyboards that a character participates in
+// StoryboardsByCharacter retrieves storyboards that a character participates in (non-deleted only).
 func (r *Repository) StoryboardsByCharacter(ctx context.Context, characterID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	// Get storyboard IDs from the character link table
-	var storyboardIDs []string
-	if err := r.db.WithContext(ctx).
-		Model(&StoryboardCharacterLink{}).
-		Where("character_id = ?", characterID).
-		Order("created_at DESC").
-		Pluck("storyboard_id", &storyboardIDs).Error; err != nil {
-		return nil, 0, err
-	}
+	linkJoin := "JOIN storyboard_character_links ON storyboard_character_links.storyboard_id = storyboards.id AND storyboard_character_links.character_id = ?"
 
-	if len(storyboardIDs) == 0 {
-		return []*domain.Storyboard{}, 0, nil
-	}
-
-	// Count total
 	var total int64
 	if err := r.db.WithContext(ctx).
 		Model(&Storyboard{}).
-		Where("id IN ?", storyboardIDs).
+		Joins(linkJoin, characterID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+	if total == 0 {
+		return []*domain.Storyboard{}, 0, nil
+	}
 
-	// Fetch storyboards with pagination
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Story").
 		Preload("Creator").
-		Where("id IN ?", storyboardIDs).
-		Order("created_at DESC")
+		Joins(linkJoin, characterID).
+		Order("storyboards.created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)

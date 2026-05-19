@@ -198,16 +198,20 @@ func registerPaymentIndexSteps(registry *migrations.MigrationRegistry) {
 		Name:        "create_web_payments_indexes",
 		Description: "Create composite indexes for web_payments table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			indexes := []string{
-				"CREATE INDEX IF NOT EXISTS idx_web_payments_user_status ON web_payments(user_id, status)",
-				"CREATE INDEX IF NOT EXISTS idx_web_payments_user_created ON web_payments(user_id, created_at DESC)",
-				"CREATE INDEX IF NOT EXISTS idx_web_payments_method_status ON web_payments(method, status)",
+			manager := migrations.NewMigrationManager(db, log)
+			indexes := []struct {
+				name    string
+				columns string
+			}{
+				{name: "idx_web_payments_user_status", columns: "user_id, status"},
+				{name: "idx_web_payments_user_created", columns: "user_id, created_at DESC"},
+				{name: "idx_web_payments_method_status", columns: "method, status"},
 			}
 
 			for _, idx := range indexes {
-				if err := db.Exec(idx).Error; err != nil {
+				if err := manager.CreateIndex("web_payments", idx.name, idx.columns); err != nil {
 					// 索引可能已存在，记录警告但不中断
-					log.Warn("Failed to create index (may already exist)", zap.String("index", idx), zap.Error(err))
+					log.Warn("Failed to create index (may already exist)", zap.String("index", idx.name), zap.Error(err))
 				}
 			}
 			return nil

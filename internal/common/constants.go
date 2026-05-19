@@ -14,13 +14,17 @@ const (
 	StatusCancelled BaseStatus = "cancelled" // Operation cancelled by user
 	StatusSuspended BaseStatus = "suspended" // Temporarily disabled (e.g., user accounts)
 	StatusExpired   BaseStatus = "expired"   // Time-based expiration (e.g., memberships)
+	// StatusPendingDeletion user requested account closure; restricted writes until finalized.
+	StatusPendingDeletion BaseStatus = "pending_deletion"
+	// StatusSystem reserved for non-login service accounts (e.g. orphaned content holder).
+	StatusSystem BaseStatus = "system"
 )
 
 // IsValid returns true if the status is a valid BaseStatus
 func (s BaseStatus) IsValid() bool {
 	switch s {
 	case StatusActive, StatusDraft, StatusPending, StatusDeleted, StatusFailed,
-		StatusCancelled, StatusSuspended, StatusExpired:
+		StatusCancelled, StatusSuspended, StatusExpired, StatusPendingDeletion, StatusSystem:
 		return true
 	}
 	return false

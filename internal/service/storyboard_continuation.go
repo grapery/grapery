@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
@@ -43,6 +44,199 @@ func (s *Service) invalidateStoryboardDetailAndListCaches(ctx context.Context, s
 		for offset := 0; offset < 200; offset += limit {
 			_ = c.Delete(ctx, cache.StoryboardsListKey(storyID, limit, offset))
 		}
+	}
+}
+
+// invalidateParentStoryboardCaches busts parent detail, children list, and by-parent list caches after a child publishes.
+func (s *Service) invalidateParentStoryboardCaches(ctx context.Context, parentID, storyID string) {
+	c := s.getCache()
+	if c == nil {
+		return
+	}
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return
+	}
+	_ = c.Delete(ctx, cache.StoryboardKey(parentID))
+	_ = c.Delete(ctx, cache.StoryboardKey(parentID)+":children")
+	if storyID == "" {
+		return
+	}
+	for limit := 20; limit <= 100; limit += 20 {
+		for offset := 0; offset < 200; offset += limit {
+			_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+parentID, limit, offset))
+		}
+	}
+}
+
+// storyboardParentIDForReparent normalizes a storyboard's parent for child reparenting on delete (root → empty).
+func storyboardParentIDForReparent(parentID string) string {
+	p := strings.TrimSpace(parentID)
+	if p == domain.StoryboardRootMarker {
+		return ""
+	}
+	return p
+}
+
+// invalidateStoryboardCachesAfterDelete busts caches after delete + child reparent.
+func (s *Service) invalidateStoryboardCachesAfterDelete(ctx context.Context, deletedID, storyID, grandparentID string, reparentedChildIDs []string) {
+	c := s.getCache()
+	deletedID = strings.TrimSpace(deletedID)
+	storyID = strings.TrimSpace(storyID)
+	grandparentID = strings.TrimSpace(grandparentID)
+
+	if c != nil && deletedID != "" {
+		_ = c.Delete(ctx, cache.StoryboardKey(deletedID))
+		_ = c.Delete(ctx, cache.StoryboardKey(deletedID)+":children")
+		_ = c.Delete(ctx, cache.StoryboardKey(deletedID)+":tree")
+	}
+	if c != nil && storyID != "" {
+		for limit := 20; limit <= 100; limit += 20 {
+			for offset := 0; offset < 200; offset += limit {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(storyID, limit, offset))
+				if deletedID != "" {
+					_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+deletedID, limit, offset))
+				}
+				if grandparentID != "" {
+					_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+grandparentID, limit, offset))
+				}
+			}
+		}
+	}
+	if grandparentID != "" {
+		if err := s.repo.RecountParentPublishedForkCount(ctx, grandparentID); err != nil {
+			s.logger.Warn("failed to recount grandparent fork count after storyboard delete",
+				zap.String("grandparentId", grandparentID),
+				zap.String("deletedId", deletedID),
+				zap.Error(err))
+		}
+		s.invalidateParentStoryboardCaches(ctx, grandparentID, storyID)
+		s.invalidateStoryboardDetailAndListCaches(ctx, grandparentID, storyID)
+	}
+	for _, childID := range reparentedChildIDs {
+		childID = strings.TrimSpace(childID)
+		if childID == "" {
+			continue
+		}
+		s.invalidateStoryboardDetailAndListCaches(ctx, childID, storyID)
+	}
+	if c := s.getCache(); c != nil && deletedID != "" {
+		deleteCommentsListCacheForTarget(ctx, c, "storyboard", deletedID)
+	}
+}
+
+// removeStoryboardFromDefaultPath drops a deleted node from the story's default path and clears path marks.
+func (s *Service) removeStoryboardFromDefaultPath(ctx context.Context, storyID, deletedStoryboardID string) {
+	storyID = strings.TrimSpace(storyID)
+	deletedStoryboardID = strings.TrimSpace(deletedStoryboardID)
+	if storyID == "" || deletedStoryboardID == "" {
+		return
+	}
+	story, err := s.repo.StoryByID(ctx, storyID)
+	if err != nil || story == nil || len(story.DefaultPathNodeIDs) == 0 {
+		return
+	}
+	found := false
+	newIDs := make([]string, 0, len(story.DefaultPathNodeIDs))
+	for _, nodeID := range story.DefaultPathNodeIDs {
+		if nodeID == deletedStoryboardID {
+			found = true
+			continue
+		}
+		newIDs = append(newIDs, nodeID)
+	}
+	if !found {
+		return
+	}
+	story.DefaultPathNodeIDs = newIDs
+	now := time.Now().Unix()
+	story.DefaultPathUpdatedAt = &now
+	if err := s.repo.UpdateStory(ctx, story); err != nil {
+		s.logger.Warn("failed to update story default path after storyboard delete",
+			zap.String("storyId", storyID),
+			zap.String("deletedStoryboardId", deletedStoryboardID),
+			zap.Error(err))
+		return
+	}
+	s.syncStoryboardDefaultPathMarks(ctx, storyID, newIDs)
+}
+
+func (s *Service) syncStoryboardDefaultPathMarks(ctx context.Context, storyID string, nodeIDs []string) {
+	storyboards, err := s.repo.StoryboardsByStory(ctx, storyID, 1000, 0)
+	if err != nil {
+		s.logger.Warn("failed to load storyboards for default path mark sync",
+			zap.String("storyId", storyID),
+			zap.Error(err))
+		return
+	}
+	orderMap := make(map[string]int, len(nodeIDs))
+	for i, nodeID := range nodeIDs {
+		orderMap[nodeID] = i + 1
+	}
+	for _, sb := range storyboards {
+		if sb == nil {
+			continue
+		}
+		if order, ok := orderMap[sb.ID]; ok {
+			sb.IsInDefaultPath = true
+			sb.DefaultPathOrder = order
+		} else {
+			sb.IsInDefaultPath = false
+			sb.DefaultPathOrder = 0
+		}
+		if err := s.repo.UpdateStoryboard(ctx, sb); err != nil {
+			s.logger.Warn("failed to sync storyboard default path mark",
+				zap.String("storyboardId", sb.ID),
+				zap.Error(err))
+		}
+	}
+}
+
+// onChildStoryboardPublished updates parent fork stats, caches, and optional fork notification when a child is first published.
+func (s *Service) onChildStoryboardPublished(ctx context.Context, child *domain.Storyboard) {
+	if child == nil {
+		return
+	}
+	parentID := strings.TrimSpace(child.ParentID)
+	if parentID == "" || parentID == domain.StoryboardRootMarker {
+		return
+	}
+	if err := s.repo.RecountParentPublishedForkCount(ctx, parentID); err != nil {
+		s.logger.Warn("failed to recount parent fork count on child publish",
+			zap.String("parentId", parentID),
+			zap.String("childId", child.ID),
+			zap.Error(err))
+	}
+	s.invalidateParentStoryboardCaches(ctx, parentID, child.StoryID)
+	s.invalidateStoryboardDetailAndListCaches(ctx, parentID, child.StoryID)
+
+	if s.metrics != nil {
+		parent, err := s.repo.StoryboardByID(ctx, parentID)
+		if err == nil && parent != nil {
+			s.metrics.RecordStoryboardChildCount(parentID, float64(parent.ForkCount))
+		}
+	}
+
+	parent, err := s.repo.StoryboardByID(ctx, parentID)
+	if err != nil || parent == nil || parent.UserID == child.UserID {
+		return
+	}
+	creator, err := s.repo.UserByID(ctx, child.UserID)
+	if err != nil {
+		return
+	}
+	if err := s.NotifyStoryboardForked(ctx,
+		parent.UserID,
+		child.UserID,
+		creator.DisplayName,
+		creator.Avatar,
+		child.StoryID,
+		parentID,
+		child.ID); err != nil {
+		s.logger.Warn("failed to send storyboard forked notification on publish",
+			zap.Error(err),
+			zap.String("parentId", parentID),
+			zap.String("childId", child.ID))
 	}
 }
 

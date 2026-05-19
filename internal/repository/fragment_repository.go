@@ -660,7 +660,10 @@ func (r *FragmentRepository) Delete(ctx context.Context, id string) error {
 
 	// Start a transaction
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete the fragment
+		if err := mysql.DeleteFragmentRelatedData(ctx, tx, id, strings.TrimSpace(fragment.GenerationTaskID)); err != nil {
+			return err
+		}
+
 		if err := tx.Where("id = ?", id).Delete(&mysql.FragmentDB{}).Error; err != nil {
 			return err
 		}

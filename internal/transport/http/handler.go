@@ -111,6 +111,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 		}
 		authenticated.Use(authPkg.AuthMiddleware())
 		authenticated.Use(h.EnsureActiveUser())
+		authenticated.Use(h.RestrictPendingDeletionWrites())
 
 		// AI generation rate-limited sub-group
 		aiGen := authenticated.Group("")
@@ -162,7 +163,15 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 用户相关
 			authenticated.GET("/auth/me", h.CurrentUser)
-			authenticated.DELETE("/auth/account", h.DeleteMyAccount)
+			authenticated.GET("/auth/account/deletion", h.GetAccountDeletionStatus)
+			authenticated.POST("/auth/account/deletion/cancel", h.CancelAccountDeletion)
+			authenticated.POST("/auth/account/deletion/send-sms-code", h.SendAccountDeletionSMS)
+			authenticated.POST("/auth/account/deletion/verify-sms-code", h.VerifyAccountDeletionSMS)
+			authenticated.DELETE("/auth/account", h.RequestAccountDeletion)
+			authenticated.POST("/auth/account/phone/send-sms-code", h.SendAccountContactPhoneSMS)
+			authenticated.POST("/auth/account/phone/verify-sms-code", h.VerifyAccountContactPhoneSMS)
+			authenticated.POST("/auth/account/email/send-verification-code", h.SendAccountContactEmailCode)
+			authenticated.POST("/auth/account/email/verify", h.ConfirmAccountContactEmail)
 			authenticated.POST("/auth/phone/send-sms-code", h.SendPhoneSMSVerificationCode)
 			authenticated.POST("/auth/phone/verify-sms-code", h.VerifyPhoneSMSCode)
 			authenticated.GET("/me/creator-analytics", h.GetMyCreatorAnalytics)

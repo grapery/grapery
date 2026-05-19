@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	arkmodel "github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
@@ -20,6 +22,17 @@ const (
 	ImageModeTextToImageSet    = "text_to_image_set"    // 文生组图
 	ImageModeMultiRefToImageSet = "multi_ref_to_image_set" // 多参考图生组图
 	ImageModeWebSearchToImage  = "web_search_to_image"  // 联网搜索生图（需启用 optimize_prompt）
+)
+
+// Seedream 5.0（doubao-seedream-5-0-260128）六种生成形态，与火山方舟文档一一对应：
+// 文生图单张 / 文生图组图 / 单图参考单张 / 单图参考组图 / 多图参考单张 / 多图参考组图。
+const (
+	Seedream50ModeTextSingle       = "seedream50_text_single"
+	Seedream50ModeTextSet          = "seedream50_text_set"
+	Seedream50ModeImageSingleSingle = "seedream50_i2i_1_single"
+	Seedream50ModeImageSingleSet    = "seedream50_i2i_1_set"
+	Seedream50ModeImageMultiSingle  = "seedream50_i2i_n_single"
+	Seedream50ModeImageMultiSet     = "seedream50_i2i_n_set"
 )
 
 // ImageGenerationRequest represents the payload for Doubao Seedream image generation.
@@ -88,9 +101,12 @@ func (c *Client) generateImage(ctx context.Context, payload *ImageGenerationRequ
 		return nil, fmt.Errorf("image client is not configured")
 	}
 
-	req, err := c.prepareImageRequest(payload, requireImage)
+	req, useStream, err := c.prepareImageRequest(payload, requireImage)
 	if err != nil {
 		return nil, err
+	}
+	if useStream {
+		return c.generateImageStreaming(ctx, req)
 	}
 
 	resp, err := c.arkClient.GenerateImages(ctx, req)
@@ -101,7 +117,26 @@ func (c *Client) generateImage(ctx context.Context, payload *ImageGenerationRequ
 	return toImageGenerationResponse(resp), nil
 }
 
-func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireImage bool) (arkmodel.GenerateImagesRequest, error) {
+func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireImage bool) (arkmodel.GenerateImagesRequest, bool, error) {
+	if payload == nil {
+		return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("payload cannot be nil")
+	}
+	modelName := strings.TrimSpace(payload.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(choose(c.config.ImageModel, DefaultHuoshanImageModelID))
+	}
+	if isSeedream50Model(modelName) {
+		return c.prepareSeedream50ImageRequest(payload, requireImage, modelName)
+	}
+	req, err := c.prepareLegacyImageRequest(payload, requireImage)
+	return req, false, err
+}
+
+func isSeedream50Model(model string) bool {
+	return strings.TrimSpace(model) == defaultImageModelLevel2
+}
+
+func (c *Client) prepareLegacyImageRequest(payload *ImageGenerationRequest, requireImage bool) (arkmodel.GenerateImagesRequest, error) {
 	if payload == nil {
 		return arkmodel.GenerateImagesRequest{}, fmt.Errorf("payload cannot be nil")
 	}
@@ -113,7 +148,7 @@ func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireIma
 
 	modelName := strings.TrimSpace(payload.Model)
 	if modelName == "" {
-		modelName = strings.TrimSpace(choose(c.config.ImageModel, defaultImageModel))
+		modelName = strings.TrimSpace(choose(c.config.ImageModel, DefaultHuoshanImageModelID))
 		if modelName == "" {
 			return arkmodel.GenerateImagesRequest{}, fmt.Errorf("model is required")
 		}
@@ -219,6 +254,313 @@ func (c *Client) prepareImageRequest(payload *ImageGenerationRequest, requireIma
 	}
 
 	return request, nil
+}
+
+func (c *Client) generateImageStreaming(ctx context.Context, req arkmodel.GenerateImagesRequest) (*ImageGenerationResponse, error) {
+	stream, err := c.arkClient.GenerateImagesStreaming(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	var data []ImageGenerationData
+	var usage *ImageGenerationUsage
+	var streamModel string
+
+	for {
+		recv, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if recv.Model != "" {
+			streamModel = recv.Model
+		}
+		switch recv.Type {
+		case arkmodel.ImageGenerationStreamEventPartialFailed:
+			if recv.Error != nil && strings.EqualFold(recv.Error.Code, "InternalServiceError") {
+				return nil, fmt.Errorf("image generation stream failed: %s", recv.Error.Message)
+			}
+		case arkmodel.ImageGenerationStreamEventPartialSucceeded:
+			if recv.Error == nil && recv.Url != nil && strings.TrimSpace(*recv.Url) != "" {
+				data = append(data, ImageGenerationData{URL: *recv.Url, Size: recv.Size})
+			}
+		case arkmodel.ImageGenerationStreamEventCompleted:
+			if recv.Usage != nil {
+				usage = &ImageGenerationUsage{
+					GeneratedImages: int(recv.Usage.GeneratedImages),
+					OutputTokens:    int(recv.Usage.OutputTokens),
+					TotalTokens:     int(recv.Usage.TotalTokens),
+				}
+			}
+		}
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("streaming image generation returned no images")
+	}
+	outModel := streamModel
+	if outModel == "" {
+		outModel = req.Model
+	}
+	return &ImageGenerationResponse{
+		Model:   outModel,
+		Created: time.Now().Unix(),
+		Data:    data,
+		Usage:   usage,
+	}, nil
+}
+
+func (c *Client) prepareSeedream50ImageRequest(payload *ImageGenerationRequest, requireImage bool, model string) (arkmodel.GenerateImagesRequest, bool, error) {
+	prompt := strings.TrimSpace(payload.Prompt)
+	if prompt == "" {
+		return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("prompt is required")
+	}
+
+	effectiveMode := normalizeSeedream50EffectiveMode(strings.TrimSpace(payload.Mode), payload, requireImage)
+	if effectiveMode == ImageModeWebSearchToImage {
+		req, err := c.prepareLegacyImageRequest(payload, requireImage)
+		if err != nil {
+			return arkmodel.GenerateImagesRequest{}, false, err
+		}
+		req.Model = model
+		return req, false, nil
+	}
+
+	refURLs, err := extractRefStringsForSeedream(payload.Image)
+	if err != nil {
+		return arkmodel.GenerateImagesRequest{}, false, err
+	}
+
+	responseFormat := strings.TrimSpace(payload.ResponseFormat)
+	if responseFormat == "" {
+		responseFormat = arkmodel.GenerateImagesResponseFormatURL
+	}
+
+	buildBase := func() arkmodel.GenerateImagesRequest {
+		r := arkmodel.GenerateImagesRequest{
+			Model:          model,
+			Prompt:         prompt,
+			ResponseFormat: ptr(responseFormat),
+		}
+		if s := strings.TrimSpace(payload.Size); s != "" {
+			r.Size = ptr(s)
+		}
+		if payload.Seed != 0 {
+			sd := payload.Seed
+			r.Seed = &sd
+		}
+		if payload.GuidanceScale > 0 {
+			g := payload.GuidanceScale
+			r.GuidanceScale = &g
+		}
+		if payload.Watermark != nil {
+			r.Watermark = payload.Watermark
+		}
+		if payload.WebSearch {
+			e := true
+			r.OptimizePrompt = &e
+		}
+		if len(payload.OptimizePromptOptions) > 0 {
+			if o := toBoolPointer(payload.OptimizePromptOptions["enable"]); o != nil {
+				r.OptimizePrompt = o
+			}
+		}
+		return r
+	}
+
+	seqAuto := arkmodel.SequentialImageGeneration(arkmodel.SequentialImageGenerationAuto)
+	seqDisabled := arkmodel.SequentialImageGeneration(arkmodel.SequentialImageGenerationDisabled)
+	maxOpts := func() *arkmodel.SequentialImageGenerationOptions {
+		n := seedream50MaxImages(payload, 4)
+		return &arkmodel.SequentialImageGenerationOptions{MaxImages: &n}
+	}
+
+	switch effectiveMode {
+	case Seedream50ModeTextSingle:
+		if len(refURLs) > 0 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s does not accept reference images", effectiveMode)
+		}
+		r := buildBase()
+		r.SequentialImageGeneration = &seqDisabled
+		return r, false, nil
+
+	case Seedream50ModeTextSet:
+		if len(refURLs) > 0 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s does not accept reference images", effectiveMode)
+		}
+		r := buildBase()
+		r.SequentialImageGeneration = &seqAuto
+		r.SequentialImageGenerationOptions = maxOpts()
+		return r, true, nil
+
+	case Seedream50ModeImageSingleSingle:
+		if len(refURLs) != 1 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s requires exactly one reference image", effectiveMode)
+		}
+		r := buildBase()
+		r.SequentialImageGeneration = &seqDisabled
+		r.Image = refURLs[0]
+		return r, false, nil
+
+	case Seedream50ModeImageSingleSet:
+		if len(refURLs) != 1 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s requires exactly one reference image", effectiveMode)
+		}
+		r := buildBase()
+		r.Image = refURLs[0]
+		r.SequentialImageGeneration = &seqAuto
+		r.SequentialImageGenerationOptions = maxOpts()
+		return r, true, nil
+
+	case Seedream50ModeImageMultiSingle:
+		if len(refURLs) < 2 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s requires at least two reference images", effectiveMode)
+		}
+		r := buildBase()
+		r.SequentialImageGeneration = &seqDisabled
+		r.Image = refURLs
+		return r, false, nil
+
+	case Seedream50ModeImageMultiSet:
+		if len(refURLs) < 2 {
+			return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("mode %s requires at least two reference images", effectiveMode)
+		}
+		r := buildBase()
+		r.Image = refURLs
+		r.SequentialImageGeneration = &seqAuto
+		r.SequentialImageGenerationOptions = maxOpts()
+		return r, true, nil
+
+	default:
+		return arkmodel.GenerateImagesRequest{}, false, fmt.Errorf("unsupported seedream 5.0 image mode %q", effectiveMode)
+	}
+}
+
+func normalizeSeedream50EffectiveMode(mode string, payload *ImageGenerationRequest, requireImage bool) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return inferSeedream50Mode(payload, requireImage)
+	}
+	switch mode {
+	case ImageModeTextToImage:
+		return Seedream50ModeTextSingle
+	case ImageModeTextToImageSet:
+		return Seedream50ModeTextSet
+	case ImageModeImageTextToImage:
+		return Seedream50ModeImageSingleSingle
+	case ImageModeSingleToImageSet:
+		return Seedream50ModeImageSingleSet
+	case ImageModeMultiImageFusion:
+		return Seedream50ModeImageMultiSingle
+	case ImageModeMultiRefToImageSet:
+		return Seedream50ModeImageMultiSet
+	case ImageModeWebSearchToImage:
+		return ImageModeWebSearchToImage
+	default:
+		return mode
+	}
+}
+
+func inferSeedream50Mode(payload *ImageGenerationRequest, requireImage bool) string {
+	_ = requireImage
+	if payload.WebSearch {
+		return ImageModeWebSearchToImage
+	}
+	urls, _ := extractRefStringsForSeedream(payload.Image)
+	seq := strings.TrimSpace(payload.SequentialImageGeneration)
+	maxFromOpts := 0
+	if payload.SequentialImageGenerationOptions != nil {
+		if n := toIntPointer(payload.SequentialImageGenerationOptions["max_images"]); n != nil {
+			maxFromOpts = *n
+		} else if n := toIntPointer(payload.SequentialImageGenerationOptions["maxImages"]); n != nil {
+			maxFromOpts = *n
+		}
+	}
+	seqLow := strings.ToLower(seq)
+	var sequentialLikely bool
+	switch {
+	case seqLow == "disabled" || seqLow == "off":
+		sequentialLikely = false
+	case seqLow == "auto" || seqLow == "enabled" || seqLow == "on":
+		sequentialLikely = true
+	default:
+		sequentialLikely = payload.MaxImages > 1 || maxFromOpts > 1
+	}
+
+	switch len(urls) {
+	case 0:
+		if sequentialLikely {
+			return Seedream50ModeTextSet
+		}
+		return Seedream50ModeTextSingle
+	case 1:
+		if sequentialLikely {
+			return Seedream50ModeImageSingleSet
+		}
+		return Seedream50ModeImageSingleSingle
+	default:
+		if sequentialLikely {
+			return Seedream50ModeImageMultiSet
+		}
+		return Seedream50ModeImageMultiSingle
+	}
+}
+
+func seedream50MaxImages(payload *ImageGenerationRequest, fallback int) int {
+	if payload.MaxImages > 0 {
+		return payload.MaxImages
+	}
+	if payload.SequentialImageGenerationOptions == nil {
+		return fallback
+	}
+	if n := toIntPointer(payload.SequentialImageGenerationOptions["max_images"]); n != nil {
+		return *n
+	}
+	if n := toIntPointer(payload.SequentialImageGenerationOptions["maxImages"]); n != nil {
+		return *n
+	}
+	return fallback
+}
+
+func extractRefStringsForSeedream(image interface{}) ([]string, error) {
+	if image == nil {
+		return nil, nil
+	}
+	norm, err := normalizeReferenceImages(image)
+	if err != nil {
+		return nil, err
+	}
+	switch v := norm.(type) {
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil, nil
+		}
+		return []string{s}, nil
+	case []string:
+		return cleanStrings(v), nil
+	case []interface{}:
+		var out []string
+		for _, e := range v {
+			switch t := e.(type) {
+			case string:
+				if x := strings.TrimSpace(t); x != "" {
+					out = append(out, x)
+				}
+			case *string:
+				if t != nil {
+					if x := strings.TrimSpace(*t); x != "" {
+						out = append(out, x)
+					}
+				}
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported normalized reference type %T", norm)
+	}
 }
 
 func toImageGenerationResponse(resp arkmodel.ImagesResponse) *ImageGenerationResponse {

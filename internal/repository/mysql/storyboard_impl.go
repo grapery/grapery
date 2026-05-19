@@ -123,15 +123,7 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 	storyboard.CreatedAt = dbStoryboard.CreatedAt.Unix()
 	storyboard.UpdatedAt = dbStoryboard.UpdatedAt.Unix()
 
-	// 如果有父节点（非root），更新父节点的 fork 计数
-	if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
-		if err := r.db.WithContext(ctx).
-			Model(&Storyboard{}).
-			Where("id = ?", storyboard.ParentID).
-			UpdateColumn("fork_count", gorm.Expr("fork_count + ?", 1)).Error; err != nil {
-			r.log.Warn("failed to update parent fork count", zap.Error(err))
-		}
-	}
+	// fork_count 在子故事板发布（workflow=published）时由 RecountParentPublishedForkCount 更新，创建草稿时不计入父级统计。
 
 	// Persist associations
 	if err := r.AttachCharactersToStoryboard(ctx, dbStoryboard.ID, storyboard.CharacterRefs); err != nil {
@@ -196,6 +188,133 @@ func (r *Repository) DeleteStoryboard(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to delete storyboard: %w", err)
 	}
 	return nil
+}
+
+// SoftDeleteStoryboardRelatedData soft-deletes (or hard-deletes where no DeletedAt) all rows
+// tied to a storyboard so scenes, interactions, and generations are hidden from APIs.
+func (r *Repository) SoftDeleteStoryboardRelatedData(ctx context.Context, storyboardID string) error {
+	storyboardID = strings.TrimSpace(storyboardID)
+	if storyboardID == "" {
+		return fmt.Errorf("storyboard id is required")
+	}
+	db := r.db.WithContext(ctx)
+
+	var runIDs []string
+	if err := db.Model(&StoryboardGenerationRun{}).
+		Where("storyboard_id = ?", storyboardID).
+		Pluck("id", &runIDs).Error; err != nil {
+		return fmt.Errorf("list storyboard generation runs: %w", err)
+	}
+	if len(runIDs) > 0 {
+		if err := db.Where("run_id IN ?", runIDs).Delete(&StoryboardGenerationAsset{}).Error; err != nil {
+			return fmt.Errorf("soft delete storyboard generation assets: %w", err)
+		}
+		if err := db.Where("run_id IN ?", runIDs).Delete(&AIPromptAuditRecord{}).Error; err != nil {
+			return fmt.Errorf("soft delete generation audit records by run: %w", err)
+		}
+	}
+	if err := db.Where("storyboard_id = ?", storyboardID).Delete(&StoryboardGenerationRun{}).Error; err != nil {
+		return fmt.Errorf("soft delete storyboard generation runs: %w", err)
+	}
+	if err := db.Where("related_entity_type = ? AND related_entity_id = ?", "storyboard", storyboardID).
+		Delete(&AIPromptAuditRecord{}).Error; err != nil {
+		return fmt.Errorf("soft delete storyboard audit records: %w", err)
+	}
+
+	generationModels := []interface{}{
+		&StoryboardContentGeneration{},
+		&StoryboardSceneGeneration{},
+		&StoryboardImageGeneration{},
+		&StoryboardVideoGeneration{},
+	}
+	for _, model := range generationModels {
+		if err := db.Where("storyboard_id = ?", storyboardID).Delete(model).Error; err != nil {
+			return fmt.Errorf("soft delete storyboard generation records: %w", err)
+		}
+	}
+
+	linkModels := []interface{}{
+		&StoryboardScene{},
+		&StoryboardCharacterLink{},
+		&StoryboardSceneLink{},
+		&StoryboardLike{},
+	}
+	for _, model := range linkModels {
+		if err := db.Where("storyboard_id = ?", storyboardID).Delete(model).Error; err != nil {
+			return fmt.Errorf("soft delete storyboard related rows: %w", err)
+		}
+	}
+
+	var commentIDs []string
+	if err := db.Model(&Comment{}).
+		Where("target_type = ? AND target_id = ?", "storyboard", storyboardID).
+		Pluck("id", &commentIDs).Error; err != nil {
+		return fmt.Errorf("list storyboard comments: %w", err)
+	}
+	if len(commentIDs) > 0 {
+		if err := db.Where("comment_id IN ?", commentIDs).Delete(&CommentLike{}).Error; err != nil {
+			return fmt.Errorf("soft delete storyboard comment likes: %w", err)
+		}
+		if err := db.Where("id IN ?", commentIDs).Delete(&Comment{}).Error; err != nil {
+			return fmt.Errorf("soft delete storyboard comments: %w", err)
+		}
+	}
+
+	// Bookmarks and legacy polymorphic likes have no deleted_at — hard delete.
+	if err := db.Where("bookmark_type = ? AND bookmark_id = ?", "storyboard", storyboardID).
+		Delete(&Bookmark{}).Error; err != nil {
+		return fmt.Errorf("delete storyboard bookmarks: %w", err)
+	}
+	if err := db.Where("likeable_type IN ? AND likeable_id = ?",
+		[]string{"storyboard", "storyboard_node"}, storyboardID).
+		Delete(&Like{}).Error; err != nil {
+		return fmt.Errorf("delete legacy storyboard likes: %w", err)
+	}
+
+	r.log.Info("storyboard related data soft-deleted", zap.String("storyboardId", storyboardID))
+	return nil
+}
+
+// ReparentStoryboardChildren reassigns all direct children of deletedID to newParentID.
+// newParentID empty or StoryboardRootMarker means root (parent_id NULL).
+func (r *Repository) ReparentStoryboardChildren(ctx context.Context, deletedID, newParentID string) (int64, error) {
+	deletedID = strings.TrimSpace(deletedID)
+	if deletedID == "" {
+		return 0, fmt.Errorf("deleted storyboard id is required")
+	}
+	newParentID = strings.TrimSpace(newParentID)
+	updates := map[string]interface{}{
+		"updated_at": time.Now().UTC(),
+	}
+	if newParentID == "" || newParentID == domain.StoryboardRootMarker {
+		updates["parent_id"] = nil
+	} else {
+		updates["parent_id"] = newParentID
+	}
+	result := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("parent_id = ?", deletedID).
+		Updates(updates)
+	if result.Error != nil {
+		return 0, fmt.Errorf("reparent storyboard children: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+// StoryboardDirectChildIDs returns IDs of all direct children (any workflow status).
+func (r *Repository) StoryboardDirectChildIDs(ctx context.Context, parentID string) ([]string, error) {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return nil, nil
+	}
+	var ids []string
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("parent_id = ?", parentID).
+		Pluck("id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("list direct child storyboard ids: %w", err)
+	}
+	return ids, nil
 }
 
 // StoryboardsByStory retrieves storyboards for a story
@@ -267,15 +386,15 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 	return result, nil
 }
 
-// StoryboardsByParent retrieves storyboards by parent ID.
-// For branch continuation flow, return all children regardless of workflow status.
+// StoryboardsByParent retrieves published child storyboards for a parent (sub-storyboard list / fork rail).
 func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("story_id = ?", storyID).
 		Where("parent_id = ?", parentID).
-		Order("created_at ASC")
+		Where("workflow_status = ?", domain.WorkflowStatusPublished).
+		Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
@@ -480,6 +599,29 @@ func (r *Repository) StoryboardTree(ctx context.Context, rootID string) ([]*doma
 	return result, nil
 }
 
+// RecountParentPublishedForkCount sets parent.fork_count to its count of published direct children.
+func (r *Repository) RecountParentPublishedForkCount(ctx context.Context, parentID string) error {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" || parentID == domain.StoryboardRootMarker {
+		return nil
+	}
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("parent_id = ?", parentID).
+		Where("workflow_status = ?", domain.WorkflowStatusPublished).
+		Count(&count).Error; err != nil {
+		return fmt.Errorf("count published child storyboards: %w", err)
+	}
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("id = ?", parentID).
+		UpdateColumn("fork_count", count).Error; err != nil {
+		return fmt.Errorf("update parent fork_count: %w", err)
+	}
+	return nil
+}
+
 // ForkStoryboard creates a fork of a storyboard
 func (r *Repository) ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *domain.Storyboard) error {
 	// 设置父节点
@@ -525,10 +667,12 @@ func (r *Repository) DecrementStoryStoryboardCount(ctx context.Context, storyID 
 
 // storyboardToDomain converts database model to domain model
 func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (domain.Storyboard, error) {
-	// 获取子节点 IDs
+	// 获取已发布子节点 IDs（草稿/生成中不计入 childrenIds，避免详情页误判有子分支）
 	var childrenIds []string
 	r.db.Model(&Storyboard{}).
 		Where("parent_id = ?", sb.ID).
+		Where("workflow_status = ?", domain.WorkflowStatusPublished).
+		Order("created_at DESC").
 		Pluck("id", &childrenIds)
 
 	charRefs, err := r.storyboardCharacterLinks(ctx, sb.ID)

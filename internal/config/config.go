@@ -24,6 +24,8 @@ type Config struct {
 	Database       DatabaseConfig       `yaml:"database"`
 	Redis          RedisConfig          `yaml:"redis"`
 	Recommendation RecommendationConfig `yaml:"recommendation"`
+	// AccountDeletion system placeholder user ID and grace period (env: SYSTEM_ANONYMOUS_USER_ID, ACCOUNT_DELETION_GRACE_SECONDS).
+	AccountDeletion AccountDeletionConfig `yaml:"account_deletion"`
 	AI             AIConfig             `yaml:"ai"`
 	JWT            JWTConfig            `yaml:"jwt"`
 	Aliyun         AliyunConfig         `yaml:"aliyun"`
@@ -59,6 +61,15 @@ type RedisConfig struct {
 	PingInterval time.Duration `yaml:"ping_interval"`
 }
 
+// AccountDeletionConfig placeholder user reassignment during account deletion.
+type AccountDeletionConfig struct {
+	SystemAnonymousUserID string `yaml:"system_anonymous_user_id"`
+	GracePeriodSeconds    int    `yaml:"grace_period_seconds"`
+}
+
+// DefaultSystemAnonymousUserID is created by migration unless overridden by SYSTEM_ANONYMOUS_USER_ID.
+const DefaultSystemAnonymousUserID = "00000000-0000-4000-8000-000000000001"
+
 // RecommendationConfig holds recommendation and feed cache configuration
 type RecommendationConfig struct {
 	FragmentGenreRatio      int `yaml:"fragment_genre_ratio"`
@@ -91,9 +102,28 @@ type AIConfig struct {
 	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
 	// (Gemini, Huoshan, Kling). 0 or negative means default 180 (multimodal / 分镜规划常需更久).
 	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`
+	// HuoshanRequestTimeoutSeconds is the Ark/火山 HTTP client timeout (seconds). 0 means derive from RequestTimeoutSeconds
+	// but never below EffectiveHuoshanRequestTimeoutFloor — Seedream 5.0 组图等高分辨率流式读 body 常会超过短时全局阈值。
+	HuoshanRequestTimeoutSeconds int `yaml:"huoshan_request_timeout_seconds"`
 	// TextMaxConcurrent caps simultaneous outbound text-LLM calls cluster-wide (in-flight until response completes).
 	// Implemented via Redis; 0 disables the gate. Typical value matches provider throughput (e.g. 5).
 	TextMaxConcurrent int `yaml:"text_max_concurrent"`
+}
+
+// EffectiveHuoshanRequestTimeoutFloor is the minimum Huoshan HTTP timeout when huoshan_request_timeout_seconds is unset.
+// Matches prior huoshan client default (300s) with headroom for streaming image sets (user reports context deadline ~ global 180s).
+const EffectiveHuoshanRequestTimeoutFloor = 600 // seconds (10 minutes)
+
+// EffectiveHuoshanRequestTimeoutSeconds returns HTTP timeout (seconds) for the Huoshan Ark client.
+func (ai AIConfig) EffectiveHuoshanRequestTimeoutSeconds() int {
+	if ai.HuoshanRequestTimeoutSeconds > 0 {
+		return ai.HuoshanRequestTimeoutSeconds
+	}
+	global := normalizeAIRequestTimeoutSeconds(ai.RequestTimeoutSeconds)
+	if global < EffectiveHuoshanRequestTimeoutFloor {
+		return EffectiveHuoshanRequestTimeoutFloor
+	}
+	return global
 }
 
 // NormalizeAITextDefaultProvider coerces default_provider / AI_DEFAULT_PROVIDER to a text-LLM-capable name (huoshan or gemini).
@@ -241,6 +271,10 @@ func Load(app string) Config {
 			SeenMaxEntries:          getEnvInt("RECO_SEEN_MAX_ENTRIES", 5000),
 			SeenTTLDays:             getEnvInt("RECO_SEEN_TTL_DAYS", 30),
 		},
+		AccountDeletion: AccountDeletionConfig{
+			SystemAnonymousUserID: EffectiveSystemAnonymousUserID(getEnv("SYSTEM_ANONYMOUS_USER_ID", DefaultSystemAnonymousUserID)),
+			GracePeriodSeconds:    getEnvInt("ACCOUNT_DELETION_GRACE_SECONDS", 7*24*3600),
+		},
 		AI: AIConfig{
 			HuoshanAPIKey:         getEnv("HUOSHAN_API_KEY", ""),
 			HuoshanBaseURL:        getEnv("HUOSHAN_BASE_URL", ""),
@@ -315,6 +349,15 @@ func Load(app string) Config {
 	}
 
 	return cfg
+}
+
+// EffectiveSystemAnonymousUserID normalizes SYSTEM_ANONYMOUS_USER_ID; empty resolves to DefaultSystemAnonymousUserID.
+func EffectiveSystemAnonymousUserID(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return DefaultSystemAnonymousUserID
+	}
+	return v
 }
 
 func (c Config) Addr() string {
@@ -536,6 +579,7 @@ func overrideWithEnv(cfg Config, app string) Config {
 	cfg.AI.ImageProvider = getEnv("AI_IMAGE_PROVIDER", cfg.AI.ImageProvider)
 	cfg.AI.VideoProvider = getEnv("AI_VIDEO_PROVIDER", cfg.AI.VideoProvider)
 	cfg.AI.RequestTimeoutSeconds = normalizeAIRequestTimeoutSeconds(getEnvInt("AI_REQUEST_TIMEOUT_SECONDS", cfg.AI.RequestTimeoutSeconds))
+	cfg.AI.HuoshanRequestTimeoutSeconds = getEnvInt("HUOSHAN_REQUEST_TIMEOUT_SECONDS", cfg.AI.HuoshanRequestTimeoutSeconds)
 	cfg.AI.TextMaxConcurrent = normalizeAITextMaxConcurrent(getEnvInt("AI_TEXT_MAX_CONCURRENT", cfg.AI.TextMaxConcurrent))
 
 	// JWT config

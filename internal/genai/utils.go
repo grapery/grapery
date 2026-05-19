@@ -176,16 +176,24 @@ func collectImages(primary string, extras []string, limit int) []string {
 		limit = len(extras) + 1
 	}
 	var result []string
-	if trimmed := strings.TrimSpace(primary); trimmed != "" {
+	seen := make(map[string]struct{})
+	add := func(raw string) {
+		if len(result) >= limit {
+			return
+		}
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
 		result = append(result, trimmed)
 	}
+	add(primary)
 	for _, img := range extras {
-		if trimmed := strings.TrimSpace(img); trimmed != "" {
-			result = append(result, trimmed)
-		}
-		if len(result) >= limit {
-			break
-		}
+		add(img)
 	}
 	return result
 }

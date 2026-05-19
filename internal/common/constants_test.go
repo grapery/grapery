@@ -18,6 +18,8 @@ func TestBaseStatusConst(t *testing.T) {
 		{StatusCancelled, "cancelled"},
 		{StatusSuspended, "suspended"},
 		{StatusExpired, "expired"},
+		{StatusPendingDeletion, "pending_deletion"},
+		{StatusSystem, "system"},
 	}
 
 	for _, tt := range tests {
@@ -32,6 +34,7 @@ func TestBaseStatusIsValid(t *testing.T) {
 	validStatuses := []BaseStatus{
 		StatusActive, StatusDraft, StatusPending, StatusDeleted,
 		StatusFailed, StatusCancelled, StatusSuspended, StatusExpired,
+		StatusPendingDeletion, StatusSystem,
 	}
 
 	for _, status := range validStatuses {
@@ -68,6 +71,7 @@ func TestBaseStatusIsTerminal(t *testing.T) {
 
 	nonTerminalStatuses := []BaseStatus{
 		StatusActive, StatusDraft, StatusPending, StatusSuspended,
+		StatusPendingDeletion, StatusSystem,
 	}
 
 	for _, status := range nonTerminalStatuses {
@@ -86,6 +90,7 @@ func TestBaseStatusIsActive(t *testing.T) {
 	otherStatuses := []BaseStatus{
 		StatusDraft, StatusPending, StatusDeleted, StatusFailed,
 		StatusCancelled, StatusSuspended, StatusExpired,
+		StatusPendingDeletion, StatusSystem,
 	}
 
 	for _, status := range otherStatuses {

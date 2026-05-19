@@ -168,15 +168,29 @@ func AutoMigrateWebPayments() error {
 }
 
 func createWebPaymentIndexes(db *gorm.DB) error {
-	// Composite indexes
-	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_web_payments_user_status ON web_payments(user_id, status)").Error; err != nil {
-		return err
+	indexes := []struct {
+		name    string
+		columns string
+	}{
+		{name: "idx_web_payments_user_status", columns: "user_id, status"},
+		{name: "idx_web_payments_user_created", columns: "user_id, created_at DESC"},
+		{name: "idx_web_payments_method_status", columns: "method, status"},
 	}
-	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_web_payments_user_created ON web_payments(user_id, created_at DESC)").Error; err != nil {
-		return err
-	}
-	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_web_payments_method_status ON web_payments(method, status)").Error; err != nil {
-		return err
+
+	for _, idx := range indexes {
+		var count int64
+		if err := db.Raw(`
+SELECT COUNT(*) FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
+`, "web_payments", idx.name).Scan(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+		if err := db.Exec("CREATE INDEX `" + idx.name + "` ON `web_payments`(" + idx.columns + ")").Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

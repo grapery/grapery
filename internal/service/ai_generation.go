@@ -568,15 +568,23 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		return nil, fmt.Errorf("GenAPI client not configured")
 	}
 
+	if strings.EqualFold(strings.TrimSpace(req.Provider), "huoshan") {
+		PrepareHuoshanGenerateImageRequest(req)
+	}
+
 	startTime := time.Now()
 
 	// ============== 配额预留和分布式锁 ==============
 	// 估算 token：供应商常返回数千 TotalTokens/张；与扣费下限对齐，避免预留/预检过小导致扣费失败
 	perImageEstimate := common.AIImageBillingUnitTokens
-	estimatedTokens := req.OutputCount * perImageEstimate
-	if estimatedTokens == 0 {
-		estimatedTokens = perImageEstimate
+	outCount := req.OutputCount
+	if mi := effectiveMaxImagesFromOptions(req.Options); mi > outCount {
+		outCount = mi
 	}
+	if outCount < 1 {
+		outCount = 1
+	}
+	estimatedTokens := outCount * perImageEstimate
 
 	// 生成请求 ID 用于分布式锁
 	requestID := fmt.Sprintf("image_gen_%s_%d", req.UserID, time.Now().UnixNano())

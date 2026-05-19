@@ -30,21 +30,21 @@ func NormalizeFragmentAspectRatio(s string) string {
 }
 
 // FragmentImagePixelSizeForAspectRatio 将比例映射为火山等使用像素尺寸时的字符串（与角色立绘逻辑对齐）。
-// 方舟文生图/图生图要求总像素不小于 921600（约 960×960）；1024×768 与 768×1024 不满足，故 4:3 / 3:4 使用更大一档。
+// 总像素须满足 Seedream 5.0（doubao-seedream-5-0）等组图接口下限（当前方舟返回至少 3686400 像素，约为 1920² 或 2560×1440）。
 func FragmentImagePixelSizeForAspectRatio(ar string) string {
 	switch NormalizeFragmentAspectRatio(ar) {
 	case FragmentAspect1x1:
-		return "1024x1024"
+		return "1920x1920"
 	case FragmentAspect16x9:
-		return "1920x1080"
+		return "2560x1440"
 	case FragmentAspect9x16:
-		return "1080x1920"
+		return "1440x2560"
 	case FragmentAspect4x3:
-		return "1280x960"
+		return "2220x1665"
 	case FragmentAspect3x4:
-		return "960x1280"
+		return "1665x2220"
 	default:
-		return "1920x1080"
+		return "2560x1440"
 	}
 }
 

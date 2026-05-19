@@ -103,5 +103,6 @@ AuthKey_*.p8
 # Video project (separate repo)
 my-video/
 
-# Root-level vippay binary
+# Root-level binaries
 /vippay
+/server

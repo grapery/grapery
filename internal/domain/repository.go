@@ -37,6 +37,20 @@ type Repository interface {
 	CreateAccountDeletionBlock(ctx context.Context, userID, emailNorm, phoneNorm string, blockedUntil int64) error
 	IsAccountReRegistrationBlocked(ctx context.Context, emailNorm, phoneNorm string) (bool, error)
 
+	// AccountDeletionRequest phased deletion (grace period → content reassignment → finalize user).
+	CreateAccountDeletionRequest(ctx context.Context, req *AccountDeletionRequestRow) error
+	GetActiveAccountDeletionRequestByUser(ctx context.Context, userID string) (*AccountDeletionRequestRow, error)
+	ListDueAccountDeletionRequests(ctx context.Context, nowUnix int64, limit int) ([]*AccountDeletionRequestRow, error)
+	UpdateAccountDeletionRequestStatus(ctx context.Context, id, status string, processedAt *int64, cancelledAt *int64, cancelledReason string) error
+	ClaimPendingDueAccountDeletionRequest(ctx context.Context, requestID string, nowUnix int64) (bool, error)
+	// ResetAccountDeletionRequestToPending clears scheduler claim failures (allows retry).
+	ResetAccountDeletionRequestToPending(ctx context.Context, requestID string) error
+
+	// TerminateOwnedStoryAndDependents removes a user's story and its boards/characters/panels/comments (account deletion purge).
+	TerminateOwnedStoryAndDependents(ctx context.Context, storyID string) error
+	ApplyAccountDeletionContentReassignment(ctx context.Context, fromUserID, systemUserID string) error
+	ApplyAccountDeletionUserSocialGraphPurge(ctx context.Context, userID string) error
+
 	// REMOVED: User Activity operations - not in StoryCreationAppUI design
 
 	// ========== User Settings ==========
@@ -205,9 +219,16 @@ type Repository interface {
 	// UpdateStoryboardContinuationSummary updates only continuation_summary (and updated_at).
 	UpdateStoryboardContinuationSummary(ctx context.Context, storyboardID string, summary string) error
 	DeleteStoryboard(ctx context.Context, id string) error
+	// ReparentStoryboardChildren moves direct children of deletedID to newParentID (empty = root / NULL).
+	ReparentStoryboardChildren(ctx context.Context, deletedID, newParentID string) (int64, error)
+	// StoryboardDirectChildIDs returns IDs of all direct children (any workflow status).
+	StoryboardDirectChildIDs(ctx context.Context, parentID string) ([]string, error)
+	// SoftDeleteStoryboardRelatedData soft-deletes scenes, links, generations, likes, comments, etc.
+	SoftDeleteStoryboardRelatedData(ctx context.Context, storyboardID string) error
 	StoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)
 	RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)        // 获取故事的根故事板（ParentID 为空或 "__root__"）
-	StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*Storyboard, error) // 按 ParentID 过滤
+	StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*Storyboard, error) // 按 ParentID 过滤（仅已发布）
+	RecountParentPublishedForkCount(ctx context.Context, parentID string) error
 	StoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	DraftStoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	CountStoryboardsByCreator(ctx context.Context, creatorID string) (int64, error)
@@ -509,6 +530,8 @@ type Repository interface {
 	UpdateFragment(ctx context.Context, fragment *Fragment) error
 	// DeleteFragment deletes a fragment
 	DeleteFragment(ctx context.Context, id string) error
+	// DeleteFragmentRelatedData removes interaction, generation, and comment rows tied to a fragment.
+	DeleteFragmentRelatedData(ctx context.Context, fragmentID, generationTaskID string) error
 	// CreateFragmentGenerationAssets stores generated/reused image assets for a fragment.
 	CreateFragmentGenerationAssets(ctx context.Context, assets []*FragmentGenerationAsset) error
 	// ListFragmentGenerationAssets lists all stored image assets for a fragment.

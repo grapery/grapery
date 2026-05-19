@@ -113,13 +113,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			"token_start": tokenString[:min(len(tokenString), 20)] + "...",
 		}).Debug("Token received for validation")
 
-		// TEMP(通知联调): 打印完整 Bearer JWT，测试完成后删除本段日志。
-		authLogger.WithFields(logrus.Fields{
-			"method":       method,
-			"path":         path,
-			"bearer_token": tokenString,
-		}).Info("TEMP debug bearer token for notification testing — remove this log block after tests")
-
 		// 解析 Token
 		claims, err := ParseToken(tokenString)
 		if err != nil {
@@ -209,13 +202,6 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-
-		// TEMP(通知联调): 打印完整 Bearer JWT，测试完成后删除本段日志。
-		authLogger.WithFields(logrus.Fields{
-			"method":       method,
-			"path":         path,
-			"bearer_token": tokenString,
-		}).Info("TEMP debug bearer token (optional auth) — remove this log block after tests")
 
 		claims, err := ParseToken(tokenString)
 		if err == nil {

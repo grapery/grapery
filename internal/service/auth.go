@@ -581,8 +581,8 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, loginInfo *Login
 		return nil, errors.New("invalid email or password")
 	}
 
-	// 检查用户状态
-	if user.Status != "active" {
+	// 检查用户状态（注销冷静期仍允许登录以撤销）
+	if user.Status != string(common.StatusActive) && user.Status != string(common.StatusPendingDeletion) {
 		return nil, fmt.Errorf("account is %s", user.Status)
 	}
 
@@ -797,8 +797,10 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 		return nil, errors.New("user not found")
 	}
 
-	// 检查用户状态
-	if user.Status != string(common.StatusActive) {
+	// 检查用户状态（注销冷静期仍允许刷新令牌）
+	switch user.Status {
+	case string(common.StatusActive), string(common.StatusPendingDeletion):
+	default:
 		return nil, fmt.Errorf("account is %s", user.Status)
 	}
 

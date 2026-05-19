@@ -3,8 +3,10 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/migrations"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -81,6 +83,31 @@ func init() {
 		Description: "Create account_deletion_blocks for post-deletion registration cooldown",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AccountDeletionBlock{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_account_deletion_requests",
+		Description: "Create account_deletion_requests for phased account closure",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &AccountDeletionRequest{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "seed_system_anonymous_deleted_user_placeholder",
+		Description: "Ensure system anonymous user exists for orphaned public content (SYSTEM_ANONYMOUS_USER_ID)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			raw := ""
+			if log != nil {
+				raw = os.Getenv("SYSTEM_ANONYMOUS_USER_ID")
+				log.Info("seeding system anonymous user if absent", zap.String("configuredID", strings.TrimSpace(raw)))
+			}
+			systemID := config.EffectiveSystemAnonymousUserID(strings.TrimSpace(os.Getenv("SYSTEM_ANONYMOUS_USER_ID")))
+			return SeedSystemAnonymousUser(db, log, systemID)
 		},
 		Required: true,
 	})

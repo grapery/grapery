@@ -9,6 +9,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
+	"github.com/grapestree/fgrapery/grapery/internal/repository"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
@@ -28,7 +29,9 @@ type Service struct {
 	userStatsService *UserStatisticsService // 用户统计服务
 	recoCfg          config.RecommendationConfig
 	comicStyleSvc    *FragmentComicStyleService // 碎片漫画风格目录（与创作页同源）
-	aiTextAdmission  *AITextAdmissionGate       // optional: global outbound LLM text concurrency (Redis)
+	aiTextAdmission           *AITextAdmissionGate           // optional: global outbound LLM text concurrency (Redis)
+	accountDeletionCfg        config.AccountDeletionConfig // grace period & system anon user ID
+	terminationFragmentRepo   *repository.FragmentRepository
 
 	// structureResumeLocks serializes POST .../generate/structure per storyboard ID (TryLock = busy).
 	structureResumeLocks sync.Map // string -> *sync.Mutex
@@ -88,6 +91,16 @@ func (s *Service) ConfigureAITextAdmission(c cache.Cache, maxConcurrent int) {
 	if s.aiGenService != nil {
 		s.aiGenService.SetAITextAdmission(gate)
 	}
+}
+
+// SetAccountDeletionDeps wires phased account deletion (grace window, reassignment holder) plus fragment teardown.
+func (s *Service) SetAccountDeletionDeps(cfg config.AccountDeletionConfig, frag *repository.FragmentRepository) {
+	s.accountDeletionCfg = cfg
+	s.terminationFragmentRepo = frag
+	s.logger.Info("account deletion deps configured",
+		zap.String("systemAnonymousUserId", cfg.SystemAnonymousUserID),
+		zap.Int("gracePeriodSeconds", cfg.GracePeriodSeconds),
+		zap.Bool("fragmentsAttached", frag != nil))
 }
 
 // SetCache 设置缓存实例

@@ -427,9 +427,16 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		_ = s.panelRepo.Save(ctx, task)
 	}
 
-	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, 0, n, anchorMap, policy); err != nil {
-		s.failTask(ctx, taskID, draftID, err.Error())
-		return
+	if strings.EqualFold(imgProv, "huoshan") {
+		if err := s.runPanelImageBatchHuoshan(ctx, task, taskID, draftID, req, imgProv, n, anchorMap, policy); err != nil {
+			s.failTask(ctx, taskID, draftID, err.Error())
+			return
+		}
+	} else {
+		if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, 0, n, anchorMap, policy); err != nil {
+			s.failTask(ctx, taskID, draftID, err.Error())
+			return
+		}
 	}
 
 	checkTok, checkDur, checkProvider := s.runPanelConsistencyCheck(ctx, task, policy)
@@ -550,7 +557,12 @@ func (s *FragmentPanelGenerationService) processResume(ctx context.Context, task
 		_ = s.panelRepo.Save(ctx, task)
 	}
 
-	if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, startIdx, n, anchorMap, policy); err != nil {
+	if strings.EqualFold(imgProv, "huoshan") {
+		if err := s.runPanelImageBatchHuoshanRange(ctx, task, taskID, draftID, req, imgProv, startIdx, n, anchorMap, policy); err != nil {
+			s.failTask(ctx, taskID, draftID, err.Error())
+			return
+		}
+	} else if err := s.runPanelImageLoop(ctx, task, taskID, draftID, req, imgProv, startIdx, n, anchorMap, policy); err != nil {
 		s.failTask(ctx, taskID, draftID, err.Error())
 		return
 	}

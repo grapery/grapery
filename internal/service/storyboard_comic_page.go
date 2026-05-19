@@ -421,6 +421,9 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		if imageProvider == "" {
 			imageProvider = "huoshan"
 		}
+		if strings.EqualFold(imageProvider, "huoshan") {
+			PrepareHuoshanGenAPIImageRequest(genReq)
+		}
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
 			s.logger.Warn("comic page image API failed",

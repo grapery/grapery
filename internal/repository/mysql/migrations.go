@@ -567,17 +567,14 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_generation_records' AND COL
 
 // ensureStoryboardImageGenerationSchema ensures storyboard_image_generations has prompt_details_json column
 func (r *Repository) ensureStoryboardImageGenerationSchema() error {
-	migrator := r.db.Migrator()
-	type StoryboardImageGeneration struct{}
-
-	if !migrator.HasColumn(&StoryboardImageGeneration{}, "prompt_details_json") {
+	if !r.hasColumn("storyboard_image_generations", "prompt_details_json") {
 		r.log.Info("Adding prompt_details_json column to storyboard_image_generations")
 		if err := r.db.Exec("ALTER TABLE storyboard_image_generations ADD COLUMN prompt_details_json TEXT COMMENT 'Prompt details JSON'").Error; err != nil {
 			r.log.Error("failed to add prompt_details_json column", zap.Error(err))
 			return err
 		}
 	}
-	if !migrator.HasColumn(&StoryboardImageGeneration{}, "PipelineKind") {
+	if !r.hasColumn("storyboard_image_generations", "pipeline_kind") {
 		r.log.Info("Adding pipeline_kind column to storyboard_image_generations")
 		if err := r.db.Exec("ALTER TABLE storyboard_image_generations ADD COLUMN pipeline_kind VARCHAR(24) NOT NULL DEFAULT '' COMMENT 'scene | comic_page'").Error; err != nil {
 			r.log.Error("failed to add pipeline_kind column", zap.Error(err))
@@ -586,6 +583,21 @@ func (r *Repository) ensureStoryboardImageGenerationSchema() error {
 	}
 
 	return nil
+}
+
+func (r *Repository) hasColumn(tableName, columnName string) bool {
+	var n int64
+	if err := r.db.Raw(`
+SELECT COUNT(*) FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+`, tableName, columnName).Scan(&n).Error; err != nil {
+		r.log.Warn("column existence check failed",
+			zap.String("table", tableName),
+			zap.String("column", columnName),
+			zap.Error(err))
+		return false
+	}
+	return n > 0
 }
 
 // ensureStoryboardVideoGenerationPromptDetailsSchema ensures storyboard_video_generations has prompt_details_json column

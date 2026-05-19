@@ -53,6 +53,10 @@ type FragmentPanelResultData struct {
 	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`
 	GenerationTrace   *FragmentGenerationTrace   `json:"generationTrace,omitempty"`
 	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"`
+	// BatchHuoshanPrompt Huoshan 单次组图请求使用的合并 prompt（审计/回放）。
+	BatchHuoshanPrompt string `json:"batchHuoshanPrompt,omitempty"`
+	// BatchSourceImageURLs 模型返回的原始图片 URL 列表（与 Panels 顺序一致；OSS 前地址）。
+	BatchSourceImageURLs []string `json:"batchSourceImageUrls,omitempty"`
 }
 
 // FragmentPanelStepMetric 单步 AI 指标

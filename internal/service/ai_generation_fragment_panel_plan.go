@@ -50,12 +50,6 @@ type GenerateFragmentPanelPlanResult struct {
 	Provider    string // "gemini" | "huoshan"
 }
 
-// fragmentPanelPlanRoot Step1 完整 JSON（visualBible + panels），与普通碎片方案 B 对齐。
-type fragmentPanelPlanRoot struct {
-	VisualBible *domain.FragmentVisualBible    `json:"visualBible"`
-	Panels      []domain.FragmentPanelPlanItem `json:"panels"`
-}
-
 func (s *AIGenerationService) recordPanelPlanPromptAudit(ctx context.Context, req *GenerateFragmentPanelPlanRequest, provider, model, systemPrompt, userPrompt, refURL, output string, temperature float64, maxTokens int, totalTokens int) {
 	if s == nil || s.repo == nil || req == nil || strings.TrimSpace(userPrompt) == "" {
 		return
@@ -503,19 +497,34 @@ retryHuoshanPanelPlan:
 }
 
 func parseFragmentPanelPlanJSON(responseText string, panelCount int) ([]domain.FragmentPanelPlanItem, *domain.FragmentVisualBible, error) {
-	var root fragmentPanelPlanRoot
-	if err := json.Unmarshal([]byte(responseText), &root); err != nil {
-		cleaned := extractJSON(responseText)
-		if err2 := json.Unmarshal([]byte(cleaned), &root); err2 != nil {
-			return nil, nil, fmt.Errorf("parse panel plan JSON: %w", err2)
+	blob := strings.TrimSpace(responseText)
+	if blob == "" {
+		return nil, nil, fmt.Errorf("parse panel plan JSON: empty response")
+	}
+
+	// Gemini / Ark 偶有额外前后缀或非严格 JSON。注意：通用的 `extractJSON` 在遇到 JSON 数组
+	// （如 `[ {...} ]`）时只会截取第一个 `{` 到最后一个 `}`，会把数组裁成单体对象，
+	// 进而误走「缺 panels」分支；因此只有当顶层不以 `[` 开头时才套用 `extractJSON`。
+	variants := []string{blob}
+	tr := strings.TrimSpace(blob)
+	if tr != "" && !strings.HasPrefix(tr, "[") {
+		if j := strings.TrimSpace(extractJSON(tr)); j != "" && j != tr {
+			variants = append(variants, j)
 		}
 	}
-	normalizeFragmentVisualBible(&root.VisualBible)
-	plan, err := normalizeFragmentPanelPlan(root.Panels, panelCount)
-	if err != nil {
-		return nil, root.VisualBible, err
+
+	var lastErr error
+	for _, v := range variants {
+		plan, vb, err := parseFragmentPanelPlanJSONOnce(strings.TrimSpace(v), panelCount)
+		if err == nil {
+			return plan, vb, nil
+		}
+		lastErr = err
 	}
-	return plan, root.VisualBible, nil
+	if lastErr == nil {
+		lastErr = fmt.Errorf("unable to parse")
+	}
+	return nil, nil, fmt.Errorf("parse panel plan JSON: %w", lastErr)
 }
 
 func (s *AIGenerationService) failPanelPlanRecord(ctx context.Context, record *domain.AIGenerationRecord, startTime time.Time, genErr error) {

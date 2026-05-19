@@ -290,6 +290,7 @@ func main() {
 	// Initialize Fragment repositories and service
 	fragmentGenRepo := repository.NewFragmentGenerationRepository(repo.DB())
 	fragmentRepo := repository.NewFragmentRepository(repo.DB(), cfg.Recommendation, redisCache, logger)
+	svc.SetAccountDeletionDeps(cfg.AccountDeletion, fragmentRepo)
 	fragmentGenService := service.NewFragmentGenerationService(fragmentGenRepo, fragmentRepo, repo, aiSvc, logger)
 	fragmentGenService.SetNotify(svc)
 	logger.Info("fragment generation service initialized")
@@ -438,6 +439,10 @@ func main() {
 		)
 	}
 
+	// Start phased account deletion worker (grace window completion)
+	go startAccountDeletionProcessor(shutdownCtx, svc, logger)
+	logger.Info("Account deletion processor started")
+
 	// Start user statistics persistence task (runs daily at midnight)
 	if svc.UserStatsService() != nil {
 		go startUserStatisticsTask(shutdownCtx, svc.UserStatsService(), logger)
@@ -467,6 +472,22 @@ func main() {
 	}
 
 	logger.Info("server stopped")
+}
+
+func startAccountDeletionProcessor(ctx context.Context, svc *service.Service, logger *zap.Logger) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			svc.ProcessDueAccountDeletionBatch(runCtx, 30)
+			cancel()
+		}
+	}
 }
 
 // startUserStatisticsTask 启动用户统计持久化任务（每天凌晨执行）
@@ -538,13 +559,21 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 
 	// Check and register Huoshan provider (火山引擎/豆包)
 	if cfg.AI.HuoshanAPIKey != "" {
+		huoshanSec := cfg.AI.EffectiveHuoshanRequestTimeoutSeconds()
+		huoshanHTTPTimeout := time.Duration(huoshanSec) * time.Second
+		if huoshanSec != aiReqSec {
+			logger.Info("Huoshan outbound HTTP timeout differs from global AI timeout (Seedream streaming / image payloads)",
+				zap.Int("huoshan_seconds", huoshanSec),
+				zap.Int("global_seconds", aiReqSec),
+			)
+		}
 		huoshanCfg := &genapi.Config{
 			Provider:   genapi.ProviderHuoshan,
 			APIKey:     cfg.AI.HuoshanAPIKey,
 			BaseURL:    cfg.AI.HuoshanBaseURL,
 			ImageModel: cfg.AI.HuoshanImageModel,
 			TextModel:  cfg.AI.HuoshanTextModel,
-			Timeout:    aiHTTPTimeout,
+			Timeout:    huoshanHTTPTimeout,
 		}
 		if _, err := genAPI.RegisterProviderConfig(huoshanCfg); err != nil {
 			logger.Error("❌ Huoshan provider registration failed",

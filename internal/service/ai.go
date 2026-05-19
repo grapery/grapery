@@ -484,6 +484,10 @@ func (s *AIService) processImageGeneration(ctx context.Context, task *domain.AIT
 		providerName = CoalesceRegisteredImageProvider(s.genAPI, providerName)
 	}
 
+	if strings.EqualFold(strings.TrimSpace(providerName), "huoshan") {
+		PrepareHuoshanGenAPIImageRequest(genReq)
+	}
+
 	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
 	if err != nil {
 		s.logger.Error("图片生成失败",
@@ -1528,6 +1532,80 @@ func (s *AIService) GenerateTextForFragmentStoryPrefill(ctx context.Context, pro
 		return "", fmt.Errorf("gemini generate text failed: %w", err)
 	}
 	return raw, nil
+}
+
+// ResolveFragmentImageProvider 与 GenerateImageForFragment 相同的配图路由规则（Huoshan / Gemini 等）。
+func (s *AIService) ResolveFragmentImageProvider(ctx context.Context, userID, taskProviderOverride string) string {
+	region := s.fragmentTextUserRegion(ctx, userID)
+	_, preferred := ResolvePanelGenerationAIProviders(region, s.defaultImageProvider, s.aiGen)
+	p := strings.TrimSpace(taskProviderOverride)
+	if p != "" {
+		return CoalesceRegisteredImageProvider(s.genAPI, p)
+	}
+	return CoalesceRegisteredImageProvider(s.genAPI, preferred)
+}
+
+// GenerateBatchImagesForFragment 叙事碎片 Huoshan 组图：一次请求多场景（仅当 provider 为 huoshan 时由调用方保证）。
+func (s *AIService) GenerateBatchImagesForFragment(ctx context.Context, userID, relatedEntityID, relatedEntityType, prompt, aspectRatio string, refImgs []string, sceneCount int, options map[string]interface{}, seed int, guidanceScale float64, metadata map[string]interface{}) ([]string, int, error) {
+	if s.aiGen == nil {
+		return nil, 0, fmt.Errorf("AI generation service not configured")
+	}
+	if sceneCount < 1 {
+		return nil, 0, fmt.Errorf("sceneCount must be >= 1")
+	}
+	ar := domain.NormalizeFragmentAspectRatio(aspectRatio)
+	if ar == "" {
+		ar = domain.FragmentAspectDefault
+	}
+	provider := s.ResolveFragmentImageProvider(ctx, userID, "")
+	if !strings.EqualFold(provider, "huoshan") {
+		return nil, 0, fmt.Errorf("batch narrative images requires huoshan provider, got %s", provider)
+	}
+	if s.genAPI != nil && s.genAPI.GetImageProvider(provider) == nil {
+		return nil, 0, fmt.Errorf("image provider %q is not registered", provider)
+	}
+	md := map[string]interface{}{
+		"source":       "fragment_generation_batch_huoshan",
+		"aspectRatio":  ar,
+		"scene_count":  sceneCount,
+		"batch_huoshan": true,
+	}
+	for k, v := range metadata {
+		md[k] = v
+	}
+	imgReq := &GenerateImageRequest{
+		UserID:            strings.TrimSpace(userID),
+		Prompt:            prompt,
+		Provider:          provider,
+		Quality:           "standard",
+		OutputCount:       sceneCount,
+		ReferenceImages:   refImgs,
+		Seed:              seed,
+		Options:           options,
+		GuidanceScale:     guidanceScale,
+		RelatedEntityID:   strings.TrimSpace(relatedEntityID),
+		RelatedEntityType: strings.TrimSpace(relatedEntityType),
+		Metadata:          md,
+	}
+	imgReq.Size = domain.FragmentImagePixelSizeForAspectRatio(ar)
+
+	imgOut, err := s.aiGen.GenerateImage(ctx, imgReq)
+	if err != nil {
+		return nil, 0, err
+	}
+	got := 0
+	if imgOut != nil {
+		got = len(imgOut.ImageURLs)
+	}
+	expected := imgReq.OutputCount
+	if imgOut == nil || got < expected {
+		tok := 0
+		if imgOut != nil {
+			tok = imgOut.TokensUsed
+		}
+		return nil, tok, fmt.Errorf("batch images insufficient: got %d need %d", got, expected)
+	}
+	return imgOut.ImageURLs[:expected], imgOut.TokensUsed, nil
 }
 
 // GenerateImageForFragment 生成图片（为 FragmentGenerationService 提供简化接口）。

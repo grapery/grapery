@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/gomail.v2"
 )
@@ -235,6 +236,28 @@ func SubscriptionRenewedEmail(to []string, username, plan, expire string) error 
         </p>
     `, html.EscapeString(username), html.EscapeString(plan), html.EscapeString(plan), html.EscapeString(expire))
 	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	body := baseEmailTemplate(subject, content, footer)
+	return SendSystemEmails(to, subject, body)
+}
+
+// AccountDeletionGracePeriodScheduledEmail notifies the user that account closure enters the grace/review window.
+func AccountDeletionGracePeriodScheduledEmail(to []string, username string, scheduledUnix int64) error {
+	t := time.Unix(scheduledUnix, 0).UTC().Format("2006-01-02 15:04 (UTC)")
+	subject := "【未择】账号注销已进入冷静期"
+	content := fmt.Sprintf(`
+        <h2>亲爱的 %s，</h2>
+        <p>我们已收到您的账号注销申请。</p>
+        <div class="warning">
+            <p>⚠️ 冷静期内，您在应用内仍可登录并可撤销注销。<b>非公开内容与草稿将在正式注销时被删除</b>；公开的已发布故事/故事板等将匿名保留。</p>
+        </div>
+        <div class="info-box">
+            <p><span class="info-label">预定处理完成时间：</span>%s</p>
+        </div>
+        <p style="text-align: center;">
+            <a href="https://rankquantity.xyz" class="button">打开未择客户端</a>
+        </p>
+    `, html.EscapeString(username), html.EscapeString(t))
+	footer := `<p>如有疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -197,6 +198,52 @@ func TestParseFragmentPanelPlanIncludesAILayoutFields(t *testing.T) {
 	}
 	if !containsFragmentTestString(plan[0].CompositionPlan, "左下三分之一") {
 		t.Fatalf("expected composition plan to survive, got %#v", plan[0])
+	}
+}
+
+func TestParseFragmentPanelPlanToleratesMalformedVisualBible(t *testing.T) {
+	// visualBible 内字段类型漂移时不得拖垮整块 JSON；panels 仍可解析。
+	raw := `{"visualBible":{"characters":[{"key":"a","immutableTraits":"should-have-been-array"}],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"a detailed campsite scene at dusk","caption":"露营夜话","reference_keys":"user_ref_main"}]}`
+	plan, vb, err := parseFragmentPanelPlanJSON(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vb != nil {
+		t.Fatalf("expected visualBible discarded when invalid, got %#v", vb)
+	}
+	if len(plan) != 1 {
+		t.Fatalf("expected 1 panel, got %d", len(plan))
+	}
+	if len(plan[0].ReferenceKeys) != 1 || plan[0].ReferenceKeys[0] != "user_ref_main" {
+		t.Fatalf("reference_keys string coerced to slice: %#v", plan[0].ReferenceKeys)
+	}
+}
+
+func TestParseFragmentPanelPlanCamelCasePanelsAndSparseComicText(t *testing.T) {
+	raw := `[{"index":0,"imagePrompt":"wide shot of tents under stars","caption":"生火","comicTexts":{"type":"dialogue","text":"好冷呀","speaker":"主角"}}]`
+	plan, _, err := parseFragmentPanelPlanJSON(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan) != 1 || plan[0].ImagePrompt == "" {
+		t.Fatalf("camelCase imagePrompt not applied: %#v", plan)
+	}
+	if len(plan[0].ComicTexts) != 1 || strings.TrimSpace(plan[0].ComicTexts[0].Text) == "" {
+		t.Fatalf("sparse comicTexts object expected: %#v", plan[0].ComicTexts)
+	}
+}
+
+func TestParseFragmentPanelPlanNumericKeyedPanels(t *testing.T) {
+	raw := `{"panels":{"0":{"image_prompt":"p0","caption":"c0"},"1":{"image_prompt":"p1","caption":"c1"}}}`
+	plan, _, err := parseFragmentPanelPlanJSON(raw, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan) != 2 {
+		t.Fatalf("expected 2 panels, got %d", len(plan))
+	}
+	if strings.TrimSpace(plan[0].ImagePrompt) != "p0" || strings.TrimSpace(plan[1].ImagePrompt) != "p1" {
+		t.Fatalf("unexpected order/content: %#v", plan)
 	}
 }
 

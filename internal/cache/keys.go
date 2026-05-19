@@ -41,6 +41,25 @@ const (
 	PrefixSmsPhonePhoneSend = "sms:phone:send:phone:"
 	PrefixSmsPhoneOTP      = "sms:phone:otp:"
 
+	// Account deletion SMS / proof (独立于 OAuth 首次注册门禁)
+	PrefixAcctDelOTP         = "acctdel:otp:v1:"
+	PrefixAcctDelProof       = "acctdel:ok:v1:"
+	PrefixAcctDelSendUser    = "acctdel:sms:send:user:"
+	PrefixAcctDelSendIP      = "acctdel:sms:send:ip:"
+	PrefixAcctDelSendPhone   = "acctdel:sms:send:phone:"
+
+	// Account settings contact bind (phone/email) — independent of OAuth gate SMS
+	PrefixAcctBindPhoneOTP      = "acctbind:phone:otp:"
+	PrefixAcctBindPhoneLock     = "acctbind:phone:lock:"
+	PrefixAcctBindPhoneSendUser = "acctbind:phone:send:user:"
+	PrefixAcctBindPhoneSendIP   = "acctbind:phone:send:ip:"
+	PrefixAcctBindPhoneSendPhone = "acctbind:phone:send:phone:"
+	PrefixAcctBindEmailCode     = "acctbind:email:code:"
+	PrefixAcctBindEmailLock     = "acctbind:email:lock:"
+	PrefixAcctBindEmailSendUser = "acctbind:email:send:user:"
+	PrefixAcctBindEmailSendIP   = "acctbind:email:send:ip:"
+	PrefixAcctBindEmailSendEmail = "acctbind:email:send:email:"
+
 	PrefixSearchStories    = "search:stories:"
 	PrefixSearchCharacters = "search:characters:"
 	PrefixSearchUsers      = "search:users:"
@@ -197,6 +216,68 @@ func SMSPhoneSendPhoneKey(phone string) string {
 
 func SMSPhoneOTPKey(userID string, phone string) string {
 	return PrefixSmsPhoneOTP + userID + ":" + strings.TrimPrefix(strings.TrimPrefix(phone, "+"), " ")
+}
+
+// AccountDeletionOTPKey stores OTP hash for phased account deletion (not OAuth gate SMS).
+func AccountDeletionOTPKey(userID string) string {
+	return PrefixAcctDelOTP + userID
+}
+
+// AccountDeletionProofKey is set after successful OTP verify; DELETE /account consumes it once.
+func AccountDeletionProofKey(userID string) string {
+	return PrefixAcctDelProof + userID
+}
+
+func AccountDeletionSMSUserSendKey(userID string) string {
+	return PrefixAcctDelSendUser + userID
+}
+
+func AccountDeletionSMSIPLimitKey(ip string) string {
+	return PrefixAcctDelSendIP + ip
+}
+
+func AccountDeletionSMSPhoneSendKey(phone string) string {
+	return PrefixAcctDelSendPhone + phone
+}
+
+func AccountBindPhoneOTPKey(userID, phone string) string {
+	return PrefixAcctBindPhoneOTP + userID + ":" + strings.TrimPrefix(strings.TrimPrefix(phone, "+"), " ")
+}
+
+func AccountBindPhoneLockKey(userID string) string {
+	return PrefixAcctBindPhoneLock + userID
+}
+
+func AccountBindPhoneSendUserKey(userID string) string {
+	return PrefixAcctBindPhoneSendUser + userID
+}
+
+func AccountBindPhoneSendIPKey(ip string) string {
+	return PrefixAcctBindPhoneSendIP + ip
+}
+
+func AccountBindPhoneSendPhoneKey(phone string) string {
+	return PrefixAcctBindPhoneSendPhone + phone
+}
+
+func AccountBindEmailCodeKey(userID, emailLower string) string {
+	return PrefixAcctBindEmailCode + userID + ":" + emailLower
+}
+
+func AccountBindEmailLockKey(userID string) string {
+	return PrefixAcctBindEmailLock + userID
+}
+
+func AccountBindEmailSendUserKey(userID string) string {
+	return PrefixAcctBindEmailSendUser + userID
+}
+
+func AccountBindEmailSendIPKey(ip string) string {
+	return PrefixAcctBindEmailSendIP + ip
+}
+
+func AccountBindEmailSendEmailKey(emailLower string) string {
+	return PrefixAcctBindEmailSendEmail + emailLower
 }
 
 // AITextProviderInflightKey is the Redis string counter used for cluster-wide outbound LLM HTTP text concurrency.

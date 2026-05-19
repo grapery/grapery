@@ -13,6 +13,8 @@ const (
 	defaultImageModelLevel2 = "doubao-seedream-5-0-260128"
 	defaultImageModelLevel1 = "doubao-seedream-4-5-251128"
 	defaultImageModel       = "doubao-seedream-4-0-250828"
+	// DefaultHuoshanImageModelID is used when config and request do not specify an image model (Seedream 5.0).
+	DefaultHuoshanImageModelID = defaultImageModelLevel2
 	// defaultTextModel: 火山方舟 Chat API 使用 Endpoint ID（如 ep-20241104104259-xxxx），
 	// 非模型名。需在控制台创建推理接入点后配置 TextModel/Endpoint ID。
 	defaultTextModel  = "doubao-seed-2-0-lite-260215"

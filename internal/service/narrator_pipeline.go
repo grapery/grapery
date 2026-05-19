@@ -232,13 +232,7 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 
 	s.startContinuationSceneImageGenerations(newStoryboard.ID, newStoryboard.ContinuationComicStyle, generatedScenes)
 
-	// Update parent storyboard's fork count
-	parentStoryboard.ForkCount++
-	if err := s.repo.UpdateStoryboard(ctx, parentStoryboard); err != nil {
-		s.logger.Warn("failed to update parent storyboard fork count",
-			zap.String("parentStoryboardId", req.ParentStoryboardID),
-			zap.Error(err))
-	}
+	// 父级 fork_count 在子故事板发布时更新（RecountParentPublishedForkCount），续写创建草稿时不计入。
 
 	s.logger.Info("storyboard continuation completed successfully",
 		zap.String("newStoryboardId", newStoryboardID),

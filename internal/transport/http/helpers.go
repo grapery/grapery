@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	authPkg "github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	svcerrs "github.com/grapestree/fgrapery/grapery/internal/service"
 )
 
 // BindJSON 统一JSON参数绑定和校验
@@ -105,6 +106,35 @@ func HandleError(c *gin.Context, err error) {
 	}
 	if errors.Is(err, domain.ErrAlreadyExists) {
 		DuplicateEntry(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrAccountDeletionRiskAckRequired) || errors.Is(err, svcerrs.ErrAccountDeletionInvalidDeletionSMSCodeFmt) {
+		InvalidParams(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrAccountDeletionSMSProofMissing) ||
+		errors.Is(err, svcerrs.ErrAccountDeletionVerifiedPhoneRequired) ||
+		errors.Is(err, svcerrs.ErrAccountDeletionSMSOnlyForActiveAccounts) {
+		Forbidden(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrContactOTPExpired) ||
+		errors.Is(err, svcerrs.ErrAccountContactInvalidCodeFmt) ||
+		errors.Is(err, svcerrs.ErrAccountContactInvalidEmail) {
+		InvalidParams(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrAccountContactVerifyLocked) ||
+		errors.Is(err, svcerrs.ErrAccountContactModifyLocked) {
+		Forbidden(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrAccountContactEmailRegistered) {
+		DuplicateEntry(c, errMsg)
+		return
+	}
+	if errors.Is(err, svcerrs.ErrAccountContactCacheRequired) {
+		InternalError(c, errMsg)
 		return
 	}
 

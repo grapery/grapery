@@ -13,6 +13,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	genapi "github.com/grapestree/fgrapery/grapery/internal/genai"
+	grafysvc "github.com/grapestree/fgrapery/grapery/internal/service"
 	"github.com/grapestree/fgrapery/grapery/internal/genai/providers/gemini"
 	"github.com/grapestree/fgrapery/grapery/internal/queue"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
@@ -435,6 +436,10 @@ func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask
 		zap.String("taskId", task.ID),
 		zap.String("provider", providerName),
 		zap.String("prompt", req.Prompt))
+
+	if strings.EqualFold(strings.TrimSpace(providerName), "huoshan") {
+		grafysvc.PrepareHuoshanGenAPIImageRequest(genReq)
+	}
 
 	// 调用 GenAPI 生成图片
 	resp, err := w.genAPI.GenerateImage(ctx, providerName, genReq)

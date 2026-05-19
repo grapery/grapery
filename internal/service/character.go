@@ -2256,20 +2256,7 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 	return avatarURL, nil
 }
 
-// aspectRatioToSize converts aspect ratio string to image size（火山方舟等要求总像素 ≥ 921600，4:3/3:4 不可用 1024×768）。
+// aspectRatioToSize 与 fragments 共用 domain 映射，以满足 Seedream 5.0 等对总像素下限的要求。
 func aspectRatioToSize(aspectRatio string) string {
-	switch aspectRatio {
-	case "1:1":
-		return "1024x1024"
-	case "16:9":
-		return "1920x1080"
-	case "9:16":
-		return "1080x1920"
-	case "4:3":
-		return "1280x960"
-	case "3:4":
-		return "960x1280"
-	default:
-		return "1024x1024"
-	}
+	return domain.FragmentImagePixelSizeForAspectRatio(aspectRatio)
 }

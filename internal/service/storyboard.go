@@ -241,21 +241,6 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		if storyboard.TokenConsumption > 0 {
 			s.metrics.RecordStoryboardTokenConsumed(storyboard.ID, float64(storyboard.TokenConsumption))
 		}
-
-		// Record child count if this is a child storyboard
-		if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
-			// Query actual child count for the parent
-			childStoryboards, err := s.repo.StoryboardsByStory(ctx, storyboard.StoryID, 1000, 0)
-			if err == nil {
-				childCount := 0
-				for _, sb := range childStoryboards {
-					if sb.ParentID == storyboard.ParentID {
-						childCount++
-					}
-				}
-				s.metrics.RecordStoryboardChildCount(storyboard.ParentID, float64(childCount))
-			}
-		}
 	}
 
 	// 创建通知
@@ -282,32 +267,7 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 		}
 	}
 
-	// 如果是 fork（不是 root），通知父节点作者
-	if storyboard.ParentID != "" && storyboard.ParentID != domain.StoryboardRootMarker {
-		parent, err := s.repo.StoryboardByID(ctx, storyboard.ParentID)
-		if err == nil && parent.UserID != storyboard.UserID {
-			// 获取创建者信息
-			creator, err := s.repo.UserByID(ctx, storyboard.UserID)
-			if err == nil {
-				if err := s.NotifyStoryboardForked(ctx,
-					parent.UserID,
-					storyboard.UserID,
-					creator.DisplayName,
-					creator.Avatar,
-					storyboard.StoryID,
-					storyboard.ParentID,
-					storyboard.ID); err != nil {
-					s.logger.Warn("failed to send storyboard forked notification",
-						zap.Error(err),
-						zap.String("storyboardId", storyboard.ID))
-				} else {
-					s.logger.Info("storyboard forked notification sent",
-						zap.String("recipientId", parent.UserID),
-						zap.String("storyboardId", storyboard.ID))
-				}
-			}
-		}
-	}
+	// 子故事板 fork 通知在发布时发送（onChildStoryboardPublished），草稿/生成中不打扰父级作者。
 
 	// REMOVED: RecordStoryboardCreated - not in StoryCreationAppUI design
 
@@ -1223,7 +1183,37 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 	}
 
 	// 使用事务确保删除和计数更新的原子性
+	grandparentID := storyboardParentIDForReparent(storyboard.ParentID)
+	reparentedChildIDs, err := s.repo.StoryboardDirectChildIDs(ctx, id)
+	if err != nil {
+		s.logger.Warn("failed to list child storyboards before delete (cache invalidation may be incomplete)",
+			zap.String("storyboardId", id),
+			zap.Error(err))
+		reparentedChildIDs = nil
+	}
 	err = s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
+		if err := tx.SoftDeleteStoryboardRelatedData(ctx, id); err != nil {
+			s.logger.Error("failed to soft-delete storyboard related data",
+				zap.String("storyboardId", id),
+				zap.Error(err))
+			return fmt.Errorf("failed to soft-delete storyboard related data: %w", err)
+		}
+
+		reparented, err := tx.ReparentStoryboardChildren(ctx, id, grandparentID)
+		if err != nil {
+			s.logger.Error("failed to reparent child storyboards before delete",
+				zap.String("storyboardId", id),
+				zap.String("newParentId", grandparentID),
+				zap.Error(err))
+			return fmt.Errorf("failed to reparent child storyboards: %w", err)
+		}
+		if reparented > 0 {
+			s.logger.Info("reparented child storyboards before delete",
+				zap.String("storyboardId", id),
+				zap.String("newParentId", grandparentID),
+				zap.Int64("childCount", reparented))
+		}
+
 		// 删除
 		if err := tx.DeleteStoryboard(ctx, id); err != nil {
 			s.logger.Error("failed to delete storyboard from database",
@@ -1247,6 +1237,17 @@ func (s *Service) DeleteStoryboard(ctx context.Context, id, userID string) error
 
 	if err != nil {
 		return err
+	}
+
+	s.invalidateStoryboardCachesAfterDelete(ctx, id, storyboard.StoryID, grandparentID, reparentedChildIDs)
+	s.removeStoryboardFromDefaultPath(ctx, storyboard.StoryID, id)
+
+	if err := s.refreshPublishStoryStats(ctx, userID, storyboard.StoryID); err != nil {
+		s.logger.Warn("failed to refresh stats after storyboard delete (non-fatal)",
+			zap.String("storyboardId", id),
+			zap.String("userId", userID),
+			zap.String("storyId", storyboard.StoryID),
+			zap.Error(err))
 	}
 
 	// 更新 metrics（只有已发布的故事板才需要更新统计指标）
@@ -1819,36 +1820,6 @@ func (s *Service) ForkStoryboard(ctx context.Context, parentID, userID string, n
 
 	if s.canGenerateStoryboardText() && strings.TrimSpace(newStoryboard.Content) != "" {
 		go s.generateOrRefreshStoryboardSummary(context.Background(), newStoryboard.ID)
-	}
-
-	// 创建通知给父节点作者
-	if parent.UserID != userID {
-		// 获取 fork 者信息
-		forker, err := s.repo.UserByID(ctx, userID)
-		if err == nil {
-			if err := s.NotifyStoryboardForked(ctx,
-				parent.UserID,
-				userID,
-				forker.DisplayName,
-				forker.Avatar,
-				newStoryboard.StoryID,
-				parentID,
-				newStoryboard.ID); err != nil {
-				s.logger.Warn("failed to send storyboard forked notification",
-					zap.Error(err),
-					zap.String("parentId", parentID),
-					zap.String("newId", newStoryboard.ID))
-			} else {
-				s.logger.Info("storyboard forked notification sent",
-					zap.String("recipientId", parent.UserID),
-					zap.String("parentId", parentID),
-					zap.String("newId", newStoryboard.ID))
-			}
-		} else {
-			s.logger.Warn("failed to get forker info for notification",
-				zap.Error(err),
-				zap.String("forkerId", userID))
-		}
 	}
 
 	return nil

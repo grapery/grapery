@@ -244,6 +244,55 @@ func (h *FragmentPanelGenerationHandler) ResumePanelGeneration(c *gin.Context) {
 	})
 }
 
+// RetryPanelGeneration POST /fragment-panels/generate/:taskId/retry
+// 客户端「重试」语义；当前与 Resume 等价（服务端从失败或可恢复的状态重新排队任务），路由独立便于统计与日后分叉。
+func (h *FragmentPanelGenerationHandler) RetryPanelGeneration(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task id is required"})
+		return
+	}
+
+	task, err := h.svc.ResumeGeneration(c.Request.Context(), userID, taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrPanelGenerationResumeConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrPanelGenerationDraftResetFailed) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrPanelGenerationNotResumable) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
+		if errors.Is(err, service.ErrFragmentPanelTaskForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"taskId":          task.ID,
+		"draftFragmentId": task.DraftFragmentID,
+		"status":          task.Status,
+		"progress":        task.Progress,
+		"currentStep":     task.CurrentStep,
+	})
+}
+
 // RegisterRoutes registers /generate routes under a parent group (e.g. /api/v1/fragment-panels).
 func (h *FragmentPanelGenerationHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	g := router.Group("/generate")
@@ -253,6 +302,7 @@ func (h *FragmentPanelGenerationHandler) RegisterRoutes(router *gin.RouterGroup,
 	}
 	{
 		g.POST("", h.CreatePanelGeneration)
+		g.POST("/:taskId/retry", h.RetryPanelGeneration)
 		g.POST("/:taskId/resume", h.ResumePanelGeneration)
 		g.GET("/:taskId", h.GetPanelGeneration)
 	}

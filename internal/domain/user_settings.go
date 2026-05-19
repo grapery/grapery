@@ -18,13 +18,16 @@ type DeviceInfo struct {
 	LoggedInAt   int64  `json:"loggedInAt"`
 }
 
-// AccountDeletionStatus 账号删除状态响应
+// AccountDeletionStatus 账号删除流程状态响应（REST JSON）。
+// UserStatus：users 表中账号状态（如 active、pending_deletion）。
+// DeletionRequestStatus：account_deletion_requests 行状态（如 pending）；无有效请求时为空。
 type AccountDeletionStatus struct {
-	IsPending           bool   `json:"isPending"`
-	Status              string `json:"status,omitempty"`
-	ScheduledDeletionAt *int64 `json:"scheduledDeletionAt,omitempty"`
-	GracePeriodEndsAt   *int64 `json:"gracePeriodEndsAt,omitempty"`
-	Reason              string `json:"reason,omitempty"`
+	IsPending             bool   `json:"isPending"`
+	UserStatus            string `json:"userStatus,omitempty"`
+	DeletionRequestStatus string `json:"deletionRequestStatus,omitempty"`
+	ScheduledDeletionAt   *int64 `json:"scheduledDeletionAt,omitempty"`
+	GracePeriodEndsAt     *int64 `json:"gracePeriodEndsAt,omitempty"`
+	Reason                string `json:"reason,omitempty"`
 }
 
 // ToDeviceInfo 将 LoginHistory 转换为 DeviceInfo

@@ -2088,6 +2088,38 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 		ar = domain.FragmentAspectDefault
 	}
 
+	imgProv := s.aiService.ResolveFragmentImageProvider(ctx, userID, "")
+	if strings.EqualFold(imgProv, "huoshan") {
+		n := len(scenes)
+		batchPrompt := buildFragmentScenesBatchHuoshanPrompt(bible, scenes, n)
+		refBatch := mergeFragmentScenesBatchReferenceImages(userRefURLs, scenes, referenceAssets, fragmentMaxSceneReferenceImages)
+		sharedSeed := fragmentStoryImageSeed(policy)
+		options := cloneFragmentProviderOptions(policy)
+		meta := map[string]interface{}{
+			"gen_task_id": genTaskID,
+		}
+		urls, tok, err := s.aiService.GenerateBatchImagesForFragment(ctx, userID, genTaskID, "fragment_generation", batchPrompt, ar, refBatch, n, options, sharedSeed, 0, meta)
+		if err == nil && len(urls) == n {
+			for i := range scenes {
+				scenes[i].Seed = sharedSeed
+				scenes[i].ProviderOptions = options
+				scenes[i].FinalImagePrompt = buildFragmentSceneImagePrompt(bible, scenes[i])
+				scenes[i].GeneratedImageURL = urls[i]
+			}
+			return &domain.FragmentImageGenerationResult{
+				ImageUrls:  urls,
+				TokensUsed: tok,
+			}, nil
+		}
+		if err != nil {
+			s.logger.Warn("Huoshan batch narrative images failed, falling back to per-scene",
+				zap.Error(err), zap.String("gen_task_id", genTaskID))
+		} else {
+			s.logger.Warn("Huoshan batch narrative images count mismatch, falling back to per-scene",
+				zap.Int("got", len(urls)), zap.Int("need", n), zap.String("gen_task_id", genTaskID))
+		}
+	}
+
 	var allImageUrls []string
 	totalTokens := 0
 

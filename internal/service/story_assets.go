@@ -293,6 +293,10 @@ func (s *Service) GenerateStorySceneImage(ctx context.Context, storyID, sceneID,
 		zap.String("provider", imageProvider),
 		zap.String("prompt", finalPrompt))
 
+	if strings.EqualFold(imageProvider, "huoshan") {
+		PrepareHuoshanGenAPIImageRequest(genReq)
+	}
+
 	resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 	if err != nil {
 		s.logger.Error("AI image generation failed",

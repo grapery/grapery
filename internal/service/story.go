@@ -3347,6 +3347,10 @@ func (s *Service) generateEnhancedImage(ctx context.Context, userID string, desc
 		providerName = "huoshan" // Default to Huoshan for image
 	}
 
+	if strings.EqualFold(providerName, "huoshan") {
+		PrepareHuoshanGenAPIImageRequest(genReq)
+	}
+
 	resp, err := s.genAPI.GenerateImage(ctx, providerName, genReq)
 	if err != nil {
 		s.logger.Error("image generation failed",

@@ -1166,6 +1166,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			zap.String("operation", string(genReq.Operation)),
 			zap.String("prompt", truncateForLog(finalPrompt, 200)))
 
+		if strings.EqualFold(imageProvider, "huoshan") {
+			PrepareHuoshanGenAPIImageRequest(genReq)
+		}
+
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
 			s.logger.Warn("AI image generation failed, keeping prompt only",
@@ -2575,12 +2579,18 @@ func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) er
 		zap.String("currentWorkflowStatus", storyboard.WorkflowStatus),
 		zap.Int("currentStep", storyboard.CurrentStep))
 
+	wasPublished := storyboard.WorkflowStatus == domain.WorkflowStatusPublished
+
 	// Update workflow status to published using the dedicated workflow update method
 	if err := s.repo.UpdateStoryboardWorkflow(ctx, storyboardID, domain.WorkflowStatusPublished, 5); err != nil {
 		s.logger.Error("failed to publish storyboard",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
 		return fmt.Errorf("failed to publish storyboard: %w", err)
+	}
+
+	if !wasPublished {
+		s.onChildStoryboardPublished(ctx, storyboard)
 	}
 
 	// Record metrics: workflow completed (published)

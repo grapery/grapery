@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/common"
@@ -164,15 +165,118 @@ func (r *Repository) UpdateFragment(ctx context.Context, fragment *domain.Fragme
 	return r.db.WithContext(ctx).Save(dbFragment).Error
 }
 
-// DeleteFragment deletes a fragment
+// DeleteFragment deletes a fragment and its related data.
 func (r *Repository) DeleteFragment(ctx context.Context, id string) error {
-	result := r.db.WithContext(ctx).Delete(&FragmentDB{}, "id = ?", id)
-	if result.Error != nil {
-		return result.Error
+	var fragment FragmentDB
+	if err := r.db.WithContext(ctx).First(&fragment, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return domain.ErrNotFound
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := DeleteFragmentRelatedData(ctx, tx, id, strings.TrimSpace(fragment.GenerationTaskID)); err != nil {
+			return err
+		}
+		result := tx.Delete(&FragmentDB{}, "id = ?", id)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
+}
+
+// DeleteFragmentRelatedData removes interaction, generation, and comment rows tied to a fragment.
+func (r *Repository) DeleteFragmentRelatedData(ctx context.Context, fragmentID, generationTaskID string) error {
+	return DeleteFragmentRelatedData(ctx, r.db.WithContext(ctx), fragmentID, generationTaskID)
+}
+
+// DeleteFragmentRelatedData removes interaction, generation, and comment rows tied to a fragment.
+func DeleteFragmentRelatedData(ctx context.Context, db *gorm.DB, fragmentID, generationTaskID string) error {
+	fragmentID = strings.TrimSpace(fragmentID)
+	if fragmentID == "" {
+		return fmt.Errorf("fragment id is required")
 	}
+	generationTaskID = strings.TrimSpace(generationTaskID)
+
+	var panelTaskIDs []string
+	if err := db.WithContext(ctx).Model(&FragmentPanelGenerationTaskDB{}).
+		Where("draft_fragment_id = ?", fragmentID).
+		Pluck("id", &panelTaskIDs).Error; err != nil {
+		return fmt.Errorf("list fragment panel generation tasks: %w", err)
+	}
+
+	if generationTaskID != "" {
+		if err := db.WithContext(ctx).Where("id = ?", generationTaskID).
+			Delete(&FragmentGenerationTaskDB{}).Error; err != nil {
+			return fmt.Errorf("delete fragment generation task: %w", err)
+		}
+		if err := db.WithContext(ctx).
+			Where("related_entity_type = ? AND related_entity_id = ?", "fragment_generation", generationTaskID).
+			Delete(&AIPromptAuditRecord{}).Error; err != nil {
+			return fmt.Errorf("soft delete fragment generation audit records: %w", err)
+		}
+	}
+	if len(panelTaskIDs) > 0 {
+		if err := db.WithContext(ctx).
+			Where("related_entity_type = ? AND related_entity_id IN ?", "fragment_panel_generation", panelTaskIDs).
+			Delete(&AIPromptAuditRecord{}).Error; err != nil {
+			return fmt.Errorf("soft delete fragment panel generation audit records: %w", err)
+		}
+	}
+	if err := db.WithContext(ctx).
+		Where("related_entity_type = ? AND related_entity_id = ?", "fragment", fragmentID).
+		Delete(&AIPromptAuditRecord{}).Error; err != nil {
+		return fmt.Errorf("soft delete fragment audit records: %w", err)
+	}
+
+	if err := db.WithContext(ctx).Where("draft_fragment_id = ?", fragmentID).
+		Delete(&FragmentPanelGenerationTaskDB{}).Error; err != nil {
+		return fmt.Errorf("delete fragment panel generation tasks: %w", err)
+	}
+	if err := db.WithContext(ctx).Where("fragment_id = ?", fragmentID).
+		Delete(&FragmentGenerationAssetDB{}).Error; err != nil {
+		return fmt.Errorf("delete fragment generation assets: %w", err)
+	}
+
+	hardDeleteModels := []interface{}{
+		&FragmentLikeDB{},
+		&FragmentCommentDB{},
+		&FragmentShareDB{},
+	}
+	for _, model := range hardDeleteModels {
+		if err := db.WithContext(ctx).Where("fragment_id = ?", fragmentID).Delete(model).Error; err != nil {
+			return fmt.Errorf("delete fragment interaction rows: %w", err)
+		}
+	}
+
+	var commentIDs []string
+	if err := db.WithContext(ctx).Model(&Comment{}).
+		Where("target_type = ? AND target_id = ?", "fragment", fragmentID).
+		Pluck("id", &commentIDs).Error; err != nil {
+		return fmt.Errorf("list fragment comments: %w", err)
+	}
+	if len(commentIDs) > 0 {
+		if err := db.WithContext(ctx).Where("comment_id IN ?", commentIDs).Delete(&CommentLike{}).Error; err != nil {
+			return fmt.Errorf("soft delete fragment comment likes: %w", err)
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", commentIDs).Delete(&Comment{}).Error; err != nil {
+			return fmt.Errorf("soft delete fragment comments: %w", err)
+		}
+	}
+
+	if err := db.WithContext(ctx).Where("bookmark_type = ? AND bookmark_id = ?", "fragment", fragmentID).
+		Delete(&Bookmark{}).Error; err != nil {
+		return fmt.Errorf("delete fragment bookmarks: %w", err)
+	}
+	if err := db.WithContext(ctx).Where("likeable_type = ? AND likeable_id = ?", "fragment", fragmentID).
+		Delete(&Like{}).Error; err != nil {
+		return fmt.Errorf("delete legacy fragment likes: %w", err)
+	}
+
 	return nil
 }
 
