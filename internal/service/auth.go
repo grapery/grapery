@@ -542,8 +542,6 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 			source = "invitation"
 		}
 		s.metrics.RecordUserRegistration(source)
-		// 更新用户总数
-		s.metrics.UserCount.Inc()
 	}
 
 	// 记录活跃用户（注册也算活跃）

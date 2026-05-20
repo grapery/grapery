@@ -282,11 +282,6 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 			zap.String("storyId", storyboard.StoryID))
 	}
 
-	// Update storyboard count metric (increment by 1)
-	if s.metrics != nil {
-		s.metrics.StoryboardCount.Inc()
-	}
-
 	// 创建阶段改为快速返回：AI 内容/场景生成在后台异步执行，避免请求长时间阻塞。
 	if s.canGenerateStoryboardText() && strings.TrimSpace(storyboard.RawInput) != "" {
 		contentGen := &domain.StoryboardContentGeneration{

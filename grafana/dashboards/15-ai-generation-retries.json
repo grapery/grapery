@@ -94,117 +94,12 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "sum(rate(oauth_login_total[$__rate_interval])) by (provider, status)",
-          "legendFormat": "{{ provider }}/{{ status }}",
+          "expr": "sum(rate(ai_generations_total[$__rate_interval])) by (provider, type)",
+          "legendFormat": "{{ provider }}/{{ type }}",
           "refId": "A"
         }
       ],
-      "title": "OAuth Login Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${datasource}",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "p95",
-            "p99"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.50, sum(rate(oauth_login_duration_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.95, sum(rate(oauth_login_duration_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.99, sum(rate(oauth_login_duration_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "title": "OAuth Login Duration",
+      "title": "AI Generations Rate",
       "type": "timeseries"
     },
     {
@@ -260,11 +155,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 8
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      "id": 3,
+      "id": 2,
       "options": {
         "legend": {
           "calcs": [
@@ -282,12 +177,12 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "sum(rate(oauth_login_errors_total[$__rate_interval])) by (provider, error_type)",
-          "legendFormat": "{{ provider }}/{{ error_type }}",
+          "expr": "sum(rate(ai_generation_retries_total[$__rate_interval])) by (type, provider, retry_count)",
+          "legendFormat": "{{ type }}/{{ provider }}/{{ retry_count }}",
           "refId": "A"
         }
       ],
-      "title": "OAuth Login Errors",
+      "title": "AI Generation Retries",
       "type": "timeseries"
     }
   ],
@@ -295,7 +190,7 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "oauth",
+    "ai",
     "business"
   ],
   "templating": {
@@ -323,7 +218,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "OAuth Metrics Dashboard",
-  "uid": "oauth-metrics",
+  "title": "AI Generation Retries Dashboard",
+  "uid": "ai-generation-retries",
   "version": 1
 }

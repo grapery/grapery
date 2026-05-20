@@ -148,7 +148,7 @@ func NewTelemetryManager(config TelemetryManagerConfig) (*TelemetryManager, erro
 
 	// Initialize Prometheus metrics if enabled
 	if config.Prometheus != nil && config.Prometheus.Enabled {
-		tm.Metrics = NewMetrics(*config.Prometheus)
+		tm.Metrics = InitDefaultMetrics(*config.Prometheus)
 	}
 
 	// Initialize tracing if enabled

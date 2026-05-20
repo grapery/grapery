@@ -92,7 +92,6 @@ func main() {
 			Source:          cfg.Telemetry.SLS.Source,
 		}
 	}
-	cfg.Telemetry.Prometheus.Enabled = false // Disable Prometheus for vippay service
 	// Configure Prometheus if enabled
 	if cfg.Telemetry.Prometheus.Enabled {
 		fmt.Println("telemetry Prometheus enable")

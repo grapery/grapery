@@ -303,9 +303,6 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		s.metrics.RecordStoryCreation(story.Genre)
 		// Record story participant count (will be updated when contributors are added)
 		s.metrics.RecordStoryParticipantCount(story.ID, 1.0) // At least the author
-
-		// Update story count metric (increment by 1 since we just created one)
-		s.metrics.StoryCount.Inc()
 	}
 
 	// 如果提供了 Style 字符串但没有 AIStyle，尝试获取 StyleConfig

@@ -99,7 +99,6 @@ func main() {
 		}
 	}
 
-	cfg.Telemetry.Prometheus.Enabled = false
 	// Configure Prometheus if enabled
 	if cfg.Telemetry.Prometheus.Enabled {
 		fmt.Println("telemetry Prometheus enable")
@@ -277,9 +276,6 @@ func main() {
 	// Set metrics if enabled
 	if telemetryManager.Metrics != nil {
 		svc.SetMetrics(telemetryManager.Metrics)
-		// Start metrics collection
-		ctx := context.Background()
-		telemetryManager.Metrics.Start(ctx)
 	}
 
 	// Initialize AI clients

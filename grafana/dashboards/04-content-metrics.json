@@ -42,7 +42,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 8,
         "x": 0,
         "y": 0
       },
@@ -95,8 +95,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 8,
+        "x": 8,
         "y": 0
       },
       "id": 2,
@@ -148,8 +148,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 0
       },
       "id": 3,
@@ -253,12 +253,12 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "sum(rate(character_message_count_total[$__rate_interval])) by (character_id)",
-          "legendFormat": "{{ character_id }}",
+          "expr": "sum(rate(story_creations_total[$__rate_interval])) by (type)",
+          "legendFormat": "{{ type }}",
           "refId": "A"
         }
       ],
-      "title": "Character Message Rate",
+      "title": "Story Creations Rate",
       "type": "timeseries"
     },
     {
@@ -305,10 +305,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
               }
             ]
           },
-          "unit": "tokens"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -322,7 +330,9 @@
       "options": {
         "legend": {
           "calcs": [
-            "sum"
+            "mean",
+            "p95",
+            "p99"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -336,12 +346,24 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "sum(rate(character_token_consumed_sum[$__rate_interval])) by (character_id)",
-          "legendFormat": "{{ character_id }}",
+          "expr": "histogram_quantile(0.50, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
           "refId": "A"
+        },
+        {
+          "datasource": "${datasource}",
+          "expr": "histogram_quantile(0.95, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": "${datasource}",
+          "expr": "histogram_quantile(0.99, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
         }
       ],
-      "title": "Character Token Consumption",
+      "title": "Storyboard Scene Count",
       "type": "timeseries"
     },
     {
@@ -410,111 +432,6 @@
         "y": 12
       },
       "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "p95",
-            "p99"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.50, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.95, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.99, sum(rate(storyboard_scene_count_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "title": "Storyboard Scene Count Distribution",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${datasource}",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
-              }
-            ]
-          },
-          "unit": "tokens"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 12
-      },
-      "id": 7,
       "options": {
         "legend": {
           "calcs": [
@@ -609,17 +526,17 @@
               }
             ]
           },
-          "unit": "tokens"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 20
+        "x": 12,
+        "y": 12
       },
-      "id": 8,
+      "id": 7,
       "options": {
         "legend": {
           "calcs": [
@@ -721,10 +638,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 20
       },
-      "id": 9,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [
@@ -744,24 +661,24 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.50, sum(rate(group_member_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.95, sum(rate(group_member_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.99, sum(rate(group_member_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
         }
       ],
-      "title": "Group Member Count Distribution",
+      "title": "Story Participant Count",
       "type": "timeseries"
     },
     {
@@ -826,10 +743,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 28
+        "x": 12,
+        "y": 20
       },
-      "id": 10,
+      "id": 9,
       "options": {
         "legend": {
           "calcs": [
@@ -849,24 +766,24 @@
       "targets": [
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.50, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(storyboard_child_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.95, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(storyboard_child_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
           "datasource": "${datasource}",
-          "expr": "histogram_quantile(0.99, sum(rate(story_participant_count_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(storyboard_child_count_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
         }
       ],
-      "title": "Story Participant Count Distribution",
+      "title": "Storyboard Fork Count",
       "type": "timeseries"
     }
   ],
@@ -875,7 +792,7 @@
   "style": "dark",
   "tags": [
     "content",
-    "metrics"
+    "business"
   ],
   "templating": {
     "list": [
