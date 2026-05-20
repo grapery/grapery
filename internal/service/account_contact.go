@@ -21,6 +21,7 @@ const (
 	acctBindModifyLockTTL      = 7 * 24 * time.Hour
 	acctBindSendWindow         = time.Minute
 	acctBindSendMaxPerWindow   = int64(1)
+	acctBindPhoneChangeDailyMax = int64(3)
 )
 
 // Stable sentinel messages for iOS ServerMessageLocalization mapping.
@@ -33,6 +34,7 @@ var (
 	ErrAccountContactInvalidEmail     = errors.New("invalid email address")
 	ErrAccountContactCacheRequired    = errors.New("contact verification temporarily unavailable")
 	ErrAccountContactInvalidCodeFmt   = errors.New("verification code must be 6 digits")
+	ErrAccountContactPhoneChangeDailyLimit = errors.New("phone number can only be changed up to 3 times per day")
 )
 
 type accountContactOTPStored struct {
@@ -153,6 +155,92 @@ func (s *Service) accountContactIncrSendLimits(ctx context.Context, keys ...stri
 	return nil
 }
 
+func chinaTimeLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return time.FixedZone("CST", 8*3600)
+	}
+	return loc
+}
+
+func chinaCalendarDayKey(t time.Time) string {
+	return t.In(chinaTimeLocation()).Format("20060102")
+}
+
+func untilEndOfChinaDay(t time.Time) time.Duration {
+	loc := chinaTimeLocation()
+	local := t.In(loc)
+	end := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, loc)
+	d := end.Sub(t)
+	if d <= 0 {
+		return time.Second
+	}
+	return d
+}
+
+// accountContactIsPhoneNumberChange is true when the user already has a phone and the new number differs.
+func accountContactIsPhoneNumberChange(currentPhone, newNormalizedPhone string) bool {
+	cur := strings.TrimSpace(currentPhone)
+	if cur == "" {
+		return false
+	}
+	cn, err := NormalizeChinaPhone(cur)
+	if err != nil {
+		cn = strings.TrimPrefix(strings.TrimPrefix(cur, "+86"), " ")
+	}
+	return cn != newNormalizedPhone
+}
+
+func (s *Service) accountContactPhoneChangeCountToday(ctx context.Context, userID string) (int64, error) {
+	c := s.getCache()
+	if c == nil {
+		return 0, ErrAccountContactCacheRequired
+	}
+	key := cache.AccountBindPhoneChangeDailyKey(userID, chinaCalendarDayKey(time.Now()))
+	raw, err := c.Eval(ctx, `return tonumber(redis.call('GET', KEYS[1]) or '0')`, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	switch v := raw.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	default:
+		return 0, nil
+	}
+}
+
+func (s *Service) accountContactAssertPhoneChangeDailyQuota(ctx context.Context, userID string) error {
+	n, err := s.accountContactPhoneChangeCountToday(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if n >= acctBindPhoneChangeDailyMax {
+		return ErrAccountContactPhoneChangeDailyLimit
+	}
+	return nil
+}
+
+func (s *Service) accountContactRecordPhoneChange(ctx context.Context, userID string) error {
+	c := s.getCache()
+	if c == nil {
+		return ErrAccountContactCacheRequired
+	}
+	now := time.Now()
+	key := cache.AccountBindPhoneChangeDailyKey(userID, chinaCalendarDayKey(now))
+	n, err := c.Incr(ctx, key)
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		_ = c.Expire(ctx, key, untilEndOfChinaDay(now))
+	}
+	return nil
+}
+
 // SendAccountContactPhoneSMS sends OTP for settings phone bind/change.
 func (s *Service) SendAccountContactPhoneSMS(ctx context.Context, userID, rawPhone, clientIP string) error {
 	userID = strings.TrimSpace(userID)
@@ -186,6 +274,16 @@ func (s *Service) SendAccountContactPhoneSMS(ctx context.Context, userID, rawPho
 	}
 	if blocked {
 		return errors.New("this phone number cannot be bound within 30 days after account deletion")
+	}
+
+	me, err := s.repo.UserByID(ctx, userID)
+	if err != nil || me == nil {
+		return errors.New("user not found")
+	}
+	if accountContactIsPhoneNumberChange(me.Phone, phone) {
+		if err := s.accountContactAssertPhoneChangeDailyQuota(ctx, userID); err != nil {
+			return err
+		}
 	}
 
 	limitKeys := []string{
@@ -295,12 +393,25 @@ func (s *Service) VerifyAccountContactPhoneSMS(ctx context.Context, userID, rawP
 	if err != nil || user == nil {
 		return errors.New("user not found")
 	}
+	isChange := accountContactIsPhoneNumberChange(user.Phone, phone)
+	if isChange {
+		if err := s.accountContactAssertPhoneChangeDailyQuota(ctx, userID); err != nil {
+			return err
+		}
+	}
+
 	user.Phone = phone
 	user.PhoneVerifiedAt = &now
 	user.PendingOAuthPhoneSMS = false
 	user.UpdatedAt = now
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		return fmt.Errorf("update user: %w", err)
+	}
+
+	if isChange {
+		if err := s.accountContactRecordPhoneChange(ctx, userID); err != nil {
+			s.logger.Warn("account contact phone change daily counter failed", zap.Error(err))
+		}
 	}
 
 	_ = c.Delete(ctx, otpKey)

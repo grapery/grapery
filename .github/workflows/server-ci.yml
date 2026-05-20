@@ -228,12 +228,14 @@ jobs:
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           
           # ========== Aliyun SMS — Repository Variables ==========
-          # ECS/RAM default credential chain: https://help.aliyun.com/document_detail/378661.html
+          # Sign/template fall back to code defaults; credentials: OSS keys below, or ECS RAM via USE_DEFAULT_CREDENTIAL
           ALIYUN_SMS_SIGN_NAME=${{ vars.ALIYUN_SMS_SIGN_NAME }}
           ALIYUN_SMS_TEMPLATE_CODE=${{ vars.ALIYUN_SMS_TEMPLATE_CODE }}
           ALIYUN_SMS_REGION=${{ vars.ALIYUN_SMS_REGION || 'cn-hangzhou' }}
           ALIYUN_SMS_ENDPOINT=${{ vars.ALIYUN_SMS_ENDPOINT }}
           ALIYUN_SMS_USE_DEFAULT_CREDENTIAL=1
+          ALIYUN_SMS_ACCESS_KEY_ID=${{ vars.ALIYUN_SMS_ACCESS_ID }}
+          ALIYUN_SMS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_SMS_ACCESS_SECRET }}
           
           # ========== Aliyun SLS Telemetry Configuration ==========
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
@@ -257,6 +259,7 @@ jobs:
           echo "### Aliyun SMS (repo Variables)" >> $GITHUB_STEP_SUMMARY
           echo "- ALIYUN_SMS_SIGN_NAME: ${{ vars.ALIYUN_SMS_SIGN_NAME != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
           echo "- ALIYUN_SMS_TEMPLATE_CODE: ${{ vars.ALIYUN_SMS_TEMPLATE_CODE != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ALIYUN_SMS_ACCESS_ID: ${{ vars.ALIYUN_SMS_ACCESS_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
           echo "- ALIYUN_SMS_USE_DEFAULT_CREDENTIAL: 1 (fixed)" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload .env to ECS
@@ -451,12 +454,13 @@ jobs:
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           
           # ========== Aliyun SMS — Repository Variables ==========
-          # Same as development: ECS/RAM default credential chain via ALIYUN_SMS_USE_DEFAULT_CREDENTIAL
           ALIYUN_SMS_SIGN_NAME=${{ vars.ALIYUN_SMS_SIGN_NAME }}
           ALIYUN_SMS_TEMPLATE_CODE=${{ vars.ALIYUN_SMS_TEMPLATE_CODE }}
           ALIYUN_SMS_REGION=${{ vars.ALIYUN_SMS_REGION || 'cn-hangzhou' }}
           ALIYUN_SMS_ENDPOINT=${{ vars.ALIYUN_SMS_ENDPOINT }}
           ALIYUN_SMS_USE_DEFAULT_CREDENTIAL=1
+          ALIYUN_SMS_ACCESS_KEY_ID=${{ vars.ALIYUN_SMS_ACCESS_ID }}
+          ALIYUN_SMS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_SMS_ACCESS_SECRET }}
           EOF
           echo "✅ Production .env file generated"
           cat .env
@@ -479,6 +483,7 @@ jobs:
           echo "- GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- ALIYUN_SMS_SIGN_NAME: ${{ vars.ALIYUN_SMS_SIGN_NAME != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
           echo "- ALIYUN_SMS_TEMPLATE_CODE: ${{ vars.ALIYUN_SMS_TEMPLATE_CODE != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ALIYUN_SMS_ACCESS_ID: ${{ vars.ALIYUN_SMS_ACCESS_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4

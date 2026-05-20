@@ -54,6 +54,7 @@ const (
 	PrefixAcctBindPhoneSendUser = "acctbind:phone:send:user:"
 	PrefixAcctBindPhoneSendIP   = "acctbind:phone:send:ip:"
 	PrefixAcctBindPhoneSendPhone = "acctbind:phone:send:phone:"
+	PrefixAcctBindPhoneChangeDaily = "acctbind:phone:change:daily:"
 	PrefixAcctBindEmailCode     = "acctbind:email:code:"
 	PrefixAcctBindEmailLock     = "acctbind:email:lock:"
 	PrefixAcctBindEmailSendUser = "acctbind:email:send:user:"
@@ -258,6 +259,10 @@ func AccountBindPhoneSendIPKey(ip string) string {
 
 func AccountBindPhoneSendPhoneKey(phone string) string {
 	return PrefixAcctBindPhoneSendPhone + phone
+}
+
+func AccountBindPhoneChangeDailyKey(userID, dayKey string) string {
+	return PrefixAcctBindPhoneChangeDaily + userID + ":" + dayKey
 }
 
 func AccountBindEmailCodeKey(userID, emailLower string) string {

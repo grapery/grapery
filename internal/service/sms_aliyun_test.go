@@ -70,12 +70,33 @@ func TestSendAliyunOTPCode_emptyPhone(t *testing.T) {
 	}
 }
 
+func TestAliyunSMSDefaults(t *testing.T) {
+	t.Setenv("ALIYUN_SMS_SIGN_NAME", "")
+	t.Setenv("ALIYUN_SMS_TEMPLATE_CODE", "")
+	if got := aliyunSMSSignName(); got != defaultAliyunSMSSignName {
+		t.Fatalf("sign default: got %q want %q", got, defaultAliyunSMSSignName)
+	}
+	if got := aliyunSMSTemplateCode(); got != defaultAliyunSMSTemplateCode {
+		t.Fatalf("template default: got %q want %q", got, defaultAliyunSMSTemplateCode)
+	}
+	t.Setenv("ALIYUN_SMS_SIGN_NAME", "自定义签名")
+	t.Setenv("ALIYUN_SMS_TEMPLATE_CODE", "SMS_override")
+	if got := aliyunSMSSignName(); got != "自定义签名" {
+		t.Fatalf("sign override: got %q", got)
+	}
+	if got := aliyunSMSTemplateCode(); got != "SMS_override" {
+		t.Fatalf("template override: got %q", got)
+	}
+}
+
 func TestSendAliyunOTPCode_notConfigured(t *testing.T) {
 	envKeys := []string{
 		"ALIYUN_SMS_ACCESS_KEY_ID",
 		"ALIYUN_SMS_ACCESS_KEY_SECRET",
-		"ALIYUN_SMS_SIGN_NAME",
-		"ALIYUN_SMS_TEMPLATE_CODE",
+		"ALIYUN_OSS_ACCESS_KEY_ID",
+		"ALIYUN_OSS_ACCESS_KEY_SECRET",
+		"ALIYUN_ACCESS_KEY_ID",
+		"ALIYUN_ACCESS_KEY_SECRET",
 		"ALIYUN_SMS_REGION",
 		"ALIYUN_SMS_ENDPOINT",
 		"ALIYUN_SMS_USE_DEFAULT_CREDENTIAL",
@@ -85,27 +106,24 @@ func TestSendAliyunOTPCode_notConfigured(t *testing.T) {
 	}
 	err := SendAliyunOTPCode("13800138000", "123456")
 	if err == nil {
-		t.Fatal("want error when SMS env not set")
+		t.Fatal("want error when SMS credentials not set")
 	}
 	if !strings.Contains(err.Error(), "aliyun SMS not configured") {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestSendAliyunOTPCode_notConfigured_partial(t *testing.T) {
-	t.Setenv("ALIYUN_SMS_ACCESS_KEY_ID", "id")
-	t.Setenv("ALIYUN_SMS_ACCESS_KEY_SECRET", "secret")
-	t.Setenv("ALIYUN_SMS_SIGN_NAME", "")
-	t.Setenv("ALIYUN_SMS_TEMPLATE_CODE", "SMS_1")
-	t.Setenv("ALIYUN_SMS_REGION", "")
-	t.Setenv("ALIYUN_SMS_ENDPOINT", "")
-	t.Setenv("ALIYUN_SMS_USE_DEFAULT_CREDENTIAL", "")
-
-	err := SendAliyunOTPCode("13800138000", "123456")
-	if err == nil {
-		t.Fatal("want error when sign name missing")
+func TestAliyunSMSCredentialFallback(t *testing.T) {
+	t.Setenv("ALIYUN_SMS_ACCESS_KEY_ID", "")
+	t.Setenv("ALIYUN_SMS_ACCESS_KEY_SECRET", "")
+	t.Setenv("ALIYUN_SMS_ACCESS_ID", "sms-id")
+	t.Setenv("ALIYUN_SMS_ACCESS_SECRET", "sms-secret")
+	t.Setenv("ALIYUN_ACCESS_KEY_ID", "main-id")
+	t.Setenv("ALIYUN_ACCESS_KEY_SECRET", "main-secret")
+	if got := aliyunSMSAccessKeyID(); got != "sms-id" {
+		t.Fatalf("id fallback: got %q want sms-id (ALIYUN_SMS_ACCESS_ID alias)", got)
 	}
-	if !strings.Contains(err.Error(), "aliyun SMS not configured") {
-		t.Fatalf("got %v", err)
+	if got := aliyunSMSAccessKeySecret(); got != "sms-secret" {
+		t.Fatalf("secret fallback: got %q want sms-secret", got)
 	}
 }

@@ -9,9 +9,11 @@ package service
 //   - ALIYUN_SMS_SIGN_NAME（短信签名，如 「上海秩量科技」）
 //   - ALIYUN_SMS_TEMPLATE_CODE（模板 CODE；模板变量需包含 JSON 字段 code，与本服务 marshal 一致）
 //
-// Credential (either):
-//   - ALIYUN_SMS_ACCESS_KEY_ID + ALIYUN_SMS_ACCESS_KEY_SECRET
-//   - Or ALIYUN_SMS_USE_DEFAULT_CREDENTIAL=1 / true → credential.NewCredential(nil)（推荐使用 RAM/无 AK 挂载方式）
+// Credential (first match wins):
+//   - ALIYUN_SMS_ACCESS_KEY_ID / ALIYUN_SMS_ACCESS_ID + matching secret（SMS 专用 RAM 子账号，推荐）
+//   - Or ALIYUN_ACCESS_KEY_ID + ALIYUN_ACCESS_KEY_SECRET
+//   - Or ALIYUN_OSS_ACCESS_KEY_ID + ALIYUN_OSS_ACCESS_KEY_SECRET（通常仅有 OSS 权限）
+//   - Or ALIYUN_SMS_USE_DEFAULT_CREDENTIAL=1 / true → credential.NewCredential(nil)（ECS RAM 需挂 SMS 策略）
 //
 // Optional:
 //   - ALIYUN_SMS_REGION（默认 cn-hangzhou）
@@ -30,6 +32,55 @@ import (
 	credential "github.com/aliyun/credentials-go/credentials"
 )
 
+// Non-secret Aliyun SMS identity defaults (approved sign + template). Override via env in CI if needed.
+const (
+	defaultAliyunSMSSignName     = "上海秩量科技"
+	defaultAliyunSMSTemplateCode = "SMS_333971751"
+)
+
+func aliyunSMSSignName() string {
+	if v := strings.TrimSpace(os.Getenv("ALIYUN_SMS_SIGN_NAME")); v != "" {
+		return v
+	}
+	return defaultAliyunSMSSignName
+}
+
+func aliyunSMSTemplateCode() string {
+	if v := strings.TrimSpace(os.Getenv("ALIYUN_SMS_TEMPLATE_CODE")); v != "" {
+		return v
+	}
+	return defaultAliyunSMSTemplateCode
+}
+
+// aliyunSMSAccessKeyID resolves SMS credentials: dedicated SMS keys, then general Aliyun, then OSS.
+func aliyunSMSAccessKeyID() string {
+	for _, key := range []string{
+		"ALIYUN_SMS_ACCESS_KEY_ID",
+		"ALIYUN_SMS_ACCESS_ID",
+		"ALIYUN_ACCESS_KEY_ID",
+		"ALIYUN_OSS_ACCESS_KEY_ID",
+	} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func aliyunSMSAccessKeySecret() string {
+	for _, key := range []string{
+		"ALIYUN_SMS_ACCESS_KEY_SECRET",
+		"ALIYUN_SMS_ACCESS_SECRET",
+		"ALIYUN_ACCESS_KEY_SECRET",
+		"ALIYUN_OSS_ACCESS_KEY_SECRET",
+	} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // SendAliyunOTPCode sends a 6-digit verification SMS via Alibaba Cloud SMS (China).
 func SendAliyunOTPCode(domesticPhone, code string) error {
 	domesticPhone = strings.TrimSpace(domesticPhone)
@@ -37,14 +88,11 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 		return fmt.Errorf("empty phone")
 	}
 
-	signName := strings.TrimSpace(os.Getenv("ALIYUN_SMS_SIGN_NAME"))
-	templateCode := strings.TrimSpace(os.Getenv("ALIYUN_SMS_TEMPLATE_CODE"))
-	if signName == "" || templateCode == "" {
-		return fmt.Errorf("aliyun SMS not configured (set ALIYUN_SMS_SIGN_NAME and ALIYUN_SMS_TEMPLATE_CODE)")
-	}
+	signName := aliyunSMSSignName()
+	templateCode := aliyunSMSTemplateCode()
 
-	accessKeyID := strings.TrimSpace(os.Getenv("ALIYUN_SMS_ACCESS_KEY_ID"))
-	accessKeySecret := strings.TrimSpace(os.Getenv("ALIYUN_SMS_ACCESS_KEY_SECRET"))
+	accessKeyID := aliyunSMSAccessKeyID()
+	accessKeySecret := aliyunSMSAccessKeySecret()
 	useDefaultChain := smsEnvTruthy("ALIYUN_SMS_USE_DEFAULT_CREDENTIAL")
 
 	var cred credential.Credential

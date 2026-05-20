@@ -16,6 +16,10 @@ func handleAccountContactError(c *gin.Context, err error) {
 		RateLimitExceeded(c, err.Error())
 		return
 	}
+	if errors.Is(err, servicepkg.ErrAccountContactPhoneChangeDailyLimit) {
+		RateLimitExceeded(c, err.Error())
+		return
+	}
 	if errors.Is(err, servicepkg.ErrAccountContactCacheRequired) {
 		InternalError(c, err.Error())
 		return

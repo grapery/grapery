@@ -35,13 +35,14 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	transport "github.com/grapestree/fgrapery/grapery/internal/transport/http"
 	"github.com/grapestree/fgrapery/grapery/internal/utils"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load .env file
-	if err := godotenv.Load(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Error loading .env file: %v\n", err)
+	utils.LoadDotEnvFiles()
+	if _, err := os.Stat(".env"); err != nil {
+		if _, err2 := os.Stat("grapery/.env"); err2 != nil {
+			fmt.Fprintf(os.Stderr, "Warning: no .env file found in cwd or grapery/\n")
+		}
 	}
 
 	// Parse command line flags
