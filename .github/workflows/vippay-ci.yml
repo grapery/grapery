@@ -215,6 +215,10 @@ jobs:
           # ========== Google OAuth Configuration ==========
           GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
           
+          # ========== WeChat OAuth (mobile login — OpenSDK / code exchange on VIPPay) ==========
+          WECHAT_APP_ID=${{ vars.WECHAT_APP_ID }}
+          WECHAT_APP_SECRET=${{ vars.WECHAT_APP_SECRET }}
+          
           # ========== Aliyun OSS Configuration ==========
           ALIYUN_API_KEY=${{ vars.ALIYUN_API_KEY }}
           ALIYUN_SECRET_KEY=${{ vars.ALIYUN_SECRET_KEY }}
@@ -245,6 +249,10 @@ jobs:
           echo "| Image | \`${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | development |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### WeChat (VIPPay OAuth)" >> $GITHUB_STEP_SUMMARY
+          echo "- WECHAT_APP_ID (Variable): ${{ vars.WECHAT_APP_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- WECHAT_APP_SECRET (Variable): ${{ vars.WECHAT_APP_SECRET != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4
@@ -421,6 +429,10 @@ jobs:
           # ========== Google OAuth Configuration ==========
           GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
           
+          # ========== WeChat OAuth (mobile login — OpenSDK / code exchange on VIPPay) ==========
+          WECHAT_APP_ID=${{ vars.WECHAT_APP_ID }}
+          WECHAT_APP_SECRET=${{ vars.WECHAT_APP_SECRET }}
+          
           # ========== Aliyun OSS Configuration ==========
           ALIYUN_API_KEY=${{ vars.ALIYUN_API_KEY }}
           ALIYUN_SECRET_KEY=${{ vars.ALIYUN_SECRET_KEY }}
@@ -455,6 +467,8 @@ jobs:
           echo "- APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- GOOGLE_PACKAGE_NAME: ${{ vars.GOOGLE_PACKAGE_NAME && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- GOOGLE_SERVICE_ACCOUNT_KEY: ${{ vars.GOOGLE_SERVICE_ACCOUNT_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- WECHAT_APP_ID (Variable): ${{ vars.WECHAT_APP_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- WECHAT_APP_SECRET (Variable): ${{ vars.WECHAT_APP_SECRET != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4

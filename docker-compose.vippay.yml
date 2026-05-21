@@ -10,6 +10,8 @@ services:
     ports:
       - "${VIPPAY_PORT:-8081}:8081"
     env_file:
+      # CI 由 vippay-ci.yml 生成 .env（GitHub Repository Variables，含 WECHAT_APP_ID / WECHAT_APP_SECRET）
+      # 本地：cp env.vippay.example .env 并填入 OAuth / IAP / JWT 等
       - .env
     volumes:
       # APNs：CI 上传到 ./certs/apns.p8（与 server 相同扁平路径，见 vippay-ci）

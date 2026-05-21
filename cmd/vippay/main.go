@@ -44,6 +44,11 @@ var configPath = flag.String("config", "vippay.json", "config file")
 
 func main() {
 	flag.Parse()
+
+	// Load WECHAT_APP_ID / WECHAT_APP_SECRET and other vars from grapery/.env when running locally
+	// (matches cmd/server behavior; Docker can still inject env via env_file).
+	utils.LoadDotEnvFiles()
+
 	if *printVersion {
 		version.PrintFullVersionInfo()
 		return

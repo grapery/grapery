@@ -43,6 +43,7 @@ run-server:
 
 run-vippay:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT)..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
 	VIPPAY_PORT=$(VIPPAY_PORT) \
 	DB_USERNAME=$(DB_USERNAME) \
 	DB_PASSWORD=$(DB_PASSWORD) \
@@ -68,6 +69,7 @@ run-server-with-config:
 
 run-vippay-with-config:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT) with config..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
 	VIPPAY_PORT=$(VIPPAY_PORT) \
 	DB_USERNAME=$(DB_USERNAME) \
 	DB_PASSWORD=$(DB_PASSWORD) \
@@ -146,7 +148,7 @@ help:
 	@echo "Run Commands:"
 	@echo "  make run                    - Run server (default, port $(SERVER_PORT))"
 	@echo "  make run-server             - Run Grapery Server (port $(SERVER_PORT))"
-	@echo "  make run-vippay             - Run VIP Payment Service (port $(VIPPAY_PORT))"
+	@echo "  make run-vippay             - Run VIP Payment Service (port $(VIPPAY_PORT), loads .env if present)"
 	@echo "  make run-server-with-config - Run Server with config.yaml"
 	@echo "  make run-vippay-with-config - Run VIP Pay with vippay.json"
 	@echo ""
@@ -177,3 +179,7 @@ help:
 	@echo ""
 	@echo "Example with custom settings:"
 	@echo "  make run-vippay DB_PASSWORD=mypassword"
+	@echo ""
+	@echo "VIPPay OAuth (.env or env vars):"
+	@echo "  WECHAT_APP_ID / WECHAT_APP_SECRET — WeChat mobile login (see env.vippay.example)"
+	@echo "  GOOGLE_CLIENT_ID — Google ID token verification"

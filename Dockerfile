@@ -93,6 +93,11 @@ ENV APPLE_PRIVATE_KEY=
 ENV GOOGLE_PACKAGE_NAME=
 ENV GOOGLE_SERVICE_ACCOUNT_KEY=
 
+# ========== OAuth Configuration (override via .env / env_file at runtime) ==========
+ENV GOOGLE_CLIENT_ID=
+ENV WECHAT_APP_ID=
+ENV WECHAT_APP_SECRET=
+
 EXPOSE 8081
 CMD ["/app/grapery-vippay"]
 

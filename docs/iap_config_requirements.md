@@ -177,6 +177,8 @@ stringData:
 
 ## 产品配置
 
+> **App Store Connect 逐步配置（SKU、价格、中英文元数据、审核清单）**见 [app-store-connect-iap-setup.md](./app-store-connect-iap-setup.md)。
+
 ### 建议的产品 ID 命名规范
 
 | 类型 | 命名格式 | 示例 |
