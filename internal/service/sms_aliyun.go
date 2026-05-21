@@ -30,6 +30,8 @@ import (
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	credential "github.com/aliyun/credentials-go/credentials"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
+	"github.com/sirupsen/logrus"
 )
 
 // Non-secret Aliyun SMS identity defaults (approved sign + template). Override via env in CI if needed.
@@ -95,18 +97,29 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 	accessKeySecret := aliyunSMSAccessKeySecret()
 	useDefaultChain := smsEnvTruthy("ALIYUN_SMS_USE_DEFAULT_CREDENTIAL")
 
+	credentialMode := "none"
 	var cred credential.Credential
 	var err error
 	switch {
 	case accessKeyID != "" && accessKeySecret != "":
+		credentialMode = "access_key"
 		cred, err = credential.NewCredential(&credential.Config{
 			Type:            tea.String("access_key"),
 			AccessKeyId:     tea.String(accessKeyID),
 			AccessKeySecret: tea.String(accessKeySecret),
 		})
 	case useDefaultChain:
+		credentialMode = "default_chain"
 		cred, err = credential.NewCredential(nil)
 	default:
+		logrus.WithFields(logrus.Fields{
+			"phone_masked":         utils.MaskChinaPhone(domesticPhone),
+			"sign_name":            signName,
+			"template_code":        templateCode,
+			"credential_mode":      credentialMode,
+			"use_default_cred_env": useDefaultChain,
+			"access_key_id_set":    accessKeyID != "",
+		}).Warn("aliyun sms: not configured")
 		return fmt.Errorf(
 			"aliyun SMS not configured (set ALIYUN_SMS_ACCESS_KEY_ID & ALIYUN_SMS_ACCESS_KEY_SECRET, or ALIYUN_SMS_USE_DEFAULT_CREDENTIAL=1 with a cloud credential chain)",
 		)
@@ -147,11 +160,53 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 	}
 	runtime := &util.RuntimeOptions{}
 
+	logrus.WithFields(logrus.Fields{
+		"phone_masked":    utils.MaskChinaPhone(domesticPhone),
+		"sign_name":       signName,
+		"template_code":   templateCode,
+		"credential_mode": credentialMode,
+		"region":          region,
+		"endpoint":        endpoint,
+	}).Info("aliyun sms: send attempt")
+
 	resp, err := client.SendSmsWithOptions(req, runtime)
 	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"phone_masked":    utils.MaskChinaPhone(domesticPhone),
+			"sign_name":       signName,
+			"template_code":   templateCode,
+			"credential_mode": credentialMode,
+		}).Warnf("aliyun sms: SendSms RPC error: %v", err)
 		return wrapAliyunSendSmsError(err)
 	}
-	return validateSendSmsResponse(resp)
+	if err := validateSendSmsResponse(resp); err != nil {
+		fields := logrus.Fields{
+			"phone_masked":    utils.MaskChinaPhone(domesticPhone),
+			"sign_name":       signName,
+			"template_code":   templateCode,
+			"credential_mode": credentialMode,
+		}
+		if resp != nil && resp.Body != nil {
+			fields["biz_id"] = smsStrPtr(resp.Body.BizId)
+			fields["aliyun_code"] = smsStrPtr(resp.Body.Code)
+			fields["aliyun_message"] = smsStrPtr(resp.Body.Message)
+		}
+		logrus.WithFields(fields).Warnf("aliyun sms: SendSms response rejected: %v", err)
+		return err
+	}
+
+	successFields := logrus.Fields{
+		"phone_masked":    utils.MaskChinaPhone(domesticPhone),
+		"sign_name":       signName,
+		"template_code":   templateCode,
+		"credential_mode": credentialMode,
+	}
+	if resp != nil && resp.Body != nil {
+		successFields["biz_id"] = smsStrPtr(resp.Body.BizId)
+		successFields["aliyun_code"] = smsStrPtr(resp.Body.Code)
+	}
+	logrus.WithFields(successFields).Info("aliyun sms: send succeeded")
+	return nil
 }
 
 func smsEnvTruthy(key string) bool {

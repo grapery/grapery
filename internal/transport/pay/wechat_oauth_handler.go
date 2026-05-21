@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -51,8 +52,18 @@ func NewWeChatOAuthHandlerWithRepo(repo OAuthRepository) *WeChatOAuthHandler {
 
 // createWeChatOAuthConfig 创建微信OAuth配置
 func createWeChatOAuthConfig() *payservice.WeChatOAuthConfig {
-	appID := os.Getenv("WECHAT_APP_ID")
-	appSecret := os.Getenv("WECHAT_APP_SECRET")
+	appID := strings.TrimSpace(os.Getenv("WECHAT_APP_ID"))
+	appSecret := strings.TrimSpace(os.Getenv("WECHAT_APP_SECRET"))
+
+	if appID != "" {
+		logrus.WithFields(logrus.Fields{
+			"wechat_app_id":      appID,
+			"wechat_secret_set":  appSecret != "",
+			"wechat_secret_len":  len(appSecret),
+		}).Info("WeChat OAuth configured")
+	} else {
+		logrus.Warn("WECHAT_APP_ID is not set; WeChat sign-in will be unavailable")
+	}
 
 	return &payservice.WeChatOAuthConfig{
 		AppID:     appID,
@@ -67,6 +78,7 @@ func (h *WeChatOAuthHandler) HandleWeChatSignIn(c *gin.Context) {
 		return
 	}
 
+	req.Code = normalizeWeChatAuthCode(req.Code)
 	if req.Code == "" {
 		InvalidParams(c, "code is required")
 		return
@@ -86,14 +98,26 @@ func (h *WeChatOAuthHandler) HandleWeChatSignIn(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	logrus.WithFields(logrus.Fields{
+		"wechat_app_id": h.client.GetAppID(),
+		"code_len":      len(req.Code),
+		"client_ip":     c.ClientIP(),
+		"user_agent":    c.Request.UserAgent(),
+	}).Info("WeChat sign-in: exchanging authorization code")
+
 	// 1. 用code换取access_token
 	tokenResp, err := h.client.GetAccessToken(ctx, req.Code)
 	if err != nil {
-		logrus.Errorf("Failed to get WeChat access token: %v", err)
+		userMessage := weChatTokenExchangeUserMessage(err)
+		logrus.WithFields(logrus.Fields{
+			"wechat_app_id": h.client.GetAppID(),
+			"code_len":      len(req.Code),
+			"client_ip":     c.ClientIP(),
+		}).Errorf("WeChat sign-in: access token exchange failed: %v", err)
 		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
 			Code:    401,
-			Msg:     "Failed to get WeChat access token",
-			Message: "Failed to get WeChat access token",
+			Msg:     userMessage,
+			Message: userMessage,
 			Success: false,
 		})
 		return
@@ -102,7 +126,12 @@ func (h *WeChatOAuthHandler) HandleWeChatSignIn(c *gin.Context) {
 	// 2. 获取微信用户信息
 	userInfo, err := h.client.GetUserInfo(ctx, tokenResp.AccessToken, tokenResp.OpenID)
 	if err != nil {
-		logrus.Errorf("Failed to get WeChat user info: %v", err)
+		logrus.WithFields(logrus.Fields{
+			"wechat_app_id":  h.client.GetAppID(),
+			"wechat_openid":  tokenResp.OpenID,
+			"wechat_scope":   tokenResp.Scope,
+			"has_unionid":    tokenResp.UnionID != "",
+		}).Errorf("WeChat sign-in: fetch user info failed: %v", err)
 		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
 			Code:    401,
 			Msg:     "Failed to get WeChat user info",
@@ -392,6 +421,7 @@ func (h *WeChatOAuthHandler) HandleWeChatLink(c *gin.Context) {
 		return
 	}
 
+	req.Code = normalizeWeChatAuthCode(req.Code)
 	if req.Code == "" {
 		c.JSON(http.StatusBadRequest, VipPayAPIResponse{
 			Code:    400,
@@ -416,14 +446,26 @@ func (h *WeChatOAuthHandler) HandleWeChatLink(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	logrus.WithFields(logrus.Fields{
+		"wechat_app_id": h.client.GetAppID(),
+		"code_len":      len(req.Code),
+		"user_id":       currentUserID,
+		"client_ip":     c.ClientIP(),
+	}).Info("WeChat link: exchanging authorization code")
+
 	// 验证微信授权code
 	tokenResp, err := h.client.GetAccessToken(ctx, req.Code)
 	if err != nil {
-		logrus.Errorf("Failed to get WeChat access token: %v", err)
+		userMessage := weChatTokenExchangeUserMessage(err)
+		logrus.WithFields(logrus.Fields{
+			"wechat_app_id": h.client.GetAppID(),
+			"code_len":      len(req.Code),
+			"user_id":       currentUserID,
+		}).Errorf("WeChat link: access token exchange failed: %v", err)
 		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
 			Code:    401,
-			Msg:     "Invalid WeChat authorization code",
-			Message: "Invalid WeChat authorization code",
+			Msg:     userMessage,
+			Message: userMessage,
 			Success: false,
 		})
 		return
@@ -573,4 +615,23 @@ func (h *WeChatOAuthHandler) HandleWeChatUnlink(c *gin.Context) {
 		Success: true,
 		Data:    gin.H{"message": "WeChat account unlinked successfully"},
 	})
+}
+
+func normalizeWeChatAuthCode(code string) string {
+	return strings.TrimSpace(code)
+}
+
+func weChatTokenExchangeUserMessage(err error) string {
+	if err == nil {
+		return "Failed to get WeChat access token"
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "40029"):
+		return "WeChat authorization code is invalid or expired. Please sign in again."
+	case strings.Contains(msg, "40125"):
+		return "WeChat OAuth server configuration is invalid (check WECHAT_APP_SECRET)."
+	default:
+		return "Failed to get WeChat access token"
+	}
 }

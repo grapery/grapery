@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -35,4 +36,19 @@ func JSONMarshal(v interface{}) ([]byte, error) {
 // GenerateID 生成ID辅助函数
 func GenerateID() string {
 	return fmt.Sprintf("id_%d", time.Now().UnixNano())
+}
+
+// MaskChinaPhone masks mainland mobile numbers for logs (e.g. 138****8000).
+func MaskChinaPhone(phone string) string {
+	s := strings.TrimSpace(phone)
+	s = strings.TrimPrefix(s, "+86")
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, "-", "")
+	if len(s) <= 4 {
+		return "****"
+	}
+	if len(s) <= 7 {
+		return s[:3] + "****"
+	}
+	return s[:3] + "****" + s[len(s)-4:]
 }

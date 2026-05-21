@@ -14,6 +14,7 @@ import (
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"github.com/grapestree/fgrapery/grapery/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -105,25 +106,39 @@ func (s *Service) userMayUsePhoneSMSGate(ctx context.Context, userID string) err
 
 // SendPhoneSMSVerificationCode sends an OTP to the given phone for an authenticated user.
 func (s *Service) SendPhoneSMSVerificationCode(ctx context.Context, userID, rawPhone, clientIP string) error {
+	log := s.logger.With(
+		zap.String("flow", "oauth_phone_sms_send"),
+		zap.String("user_id", userID),
+		zap.String("client_ip", clientIP),
+		zap.String("raw_phone_masked", utils.MaskChinaPhone(rawPhone)),
+	)
+	log.Info("phone sms send: request accepted")
+
 	c := s.getCache()
 	if c == nil {
+		log.Warn("phone sms send: redis cache unavailable")
 		return errors.New("SMS verification requires Redis cache")
 	}
 
 	phone, err := NormalizeChinaPhone(rawPhone)
 	if err != nil {
+		log.Warn("phone sms send: invalid phone format", zap.Error(err))
 		return err
 	}
+	log = log.With(zap.String("phone_masked", utils.MaskChinaPhone(phone)))
 
 	other, err := s.repo.UserByPhone(ctx, phone)
 	if err != nil {
+		log.Error("phone sms send: lookup phone owner failed", zap.Error(err))
 		return err
 	}
 	if other != nil && other.ID != userID {
+		log.Warn("phone sms send: phone bound to another account", zap.String("other_user_id", other.ID))
 		return errors.New("this phone number is already bound to another account")
 	}
 
 	if err := s.userMayUsePhoneSMSGate(ctx, userID); err != nil {
+		log.Warn("phone sms send: gate check failed", zap.Error(err))
 		return err
 	}
 
@@ -156,24 +171,31 @@ func (s *Service) SendPhoneSMSVerificationCode(ctx context.Context, userID, rawP
 
 	if clientIP != "" {
 		if err := tryIncrLimit(cache.SMSPhoneIPLimitKey(clientIP)); err != nil {
+			log.Warn("phone sms send: rate limited (ip)", zap.Error(err))
 			return err
 		}
 	}
 	if err := tryIncrLimit(cache.SMSPhoneSendUserKey(userID)); err != nil {
+		log.Warn("phone sms send: rate limited (user)", zap.Error(err))
 		return err
 	}
 	if err := tryIncrLimit(cache.SMSPhoneSendPhoneKey(phone)); err != nil {
+		log.Warn("phone sms send: rate limited (phone)", zap.Error(err))
 		return err
 	}
+
+	log.Debug("phone sms send: rate limit passed, generating otp")
 
 	code, err := generate6DigitCode()
 	if err != nil {
 		rollbackEarlier()
+		log.Error("phone sms send: generate otp failed", zap.Error(err))
 		return err
 	}
 	hash, err := s.hashSMSCode(userID, phone, code)
 	if err != nil {
 		rollbackEarlier()
+		log.Error("phone sms send: hash otp failed", zap.Error(err))
 		return err
 	}
 
@@ -185,16 +207,19 @@ func (s *Service) SendPhoneSMSVerificationCode(ctx context.Context, userID, rawP
 	}
 	if err := c.Set(ctx, otpKey, data, smsPhoneOTPTTL); err != nil {
 		rollbackEarlier()
+		log.Error("phone sms send: redis set otp failed", zap.Error(err))
 		return err
 	}
 
+	log.Info("phone sms send: otp stored in redis, calling aliyun")
 	if err := SendAliyunOTPCode(phone, code); err != nil {
 		_ = c.Delete(ctx, otpKey)
 		rollbackEarlier()
-		s.logger.Warn("aliyun sms send failed", zap.Error(err))
+		log.Warn("phone sms send: aliyun dispatch failed", zap.Error(err))
 		return err
 	}
 
+	log.Info("phone sms send: completed successfully")
 	return nil
 }
 
@@ -203,40 +228,57 @@ var smsCodeDecimal6 = regexp.MustCompile(`^[0-9]{6}$`)
 
 // VerifyPhoneSMSCode verifies the OTP and binds the phone to the user.
 func (s *Service) VerifyPhoneSMSCode(ctx context.Context, userID, rawPhone, code string) error {
+	log := s.logger.With(
+		zap.String("flow", "oauth_phone_sms_verify"),
+		zap.String("user_id", userID),
+		zap.String("raw_phone_masked", utils.MaskChinaPhone(rawPhone)),
+	)
+	log.Info("phone sms verify: request accepted")
+
 	phone, err := NormalizeChinaPhone(rawPhone)
 	if err != nil {
+		log.Warn("phone sms verify: invalid phone format", zap.Error(err))
 		return err
 	}
+	log = log.With(zap.String("phone_masked", utils.MaskChinaPhone(phone)))
+
 	code = strings.TrimSpace(code)
 	if len(code) != 6 || !smsCodeDecimal6.MatchString(code) {
+		log.Warn("phone sms verify: invalid code format", zap.Int("code_len", len(code)))
 		return errors.New("verification code must be 6 digits")
 	}
 
 	if err := s.userMayUsePhoneSMSGate(ctx, userID); err != nil {
+		log.Warn("phone sms verify: gate check failed", zap.Error(err))
 		return err
 	}
 
 	c := s.getCache()
 	if c == nil {
+		log.Warn("phone sms verify: redis cache unavailable")
 		return errors.New("SMS verification requires Redis cache")
 	}
 
 	otpKey := cache.SMSPhoneOTPKey(userID, phone)
 	var stored smsOTPStoredData
 	if err := c.Get(ctx, otpKey, &stored); err != nil || stored.CodeHash == "" {
+		log.Warn("phone sms verify: otp missing or expired", zap.Error(err))
 		return errors.New("code expired or not found, please request a new one")
 	}
 	if stored.Attempts >= smsPhoneAttemptMax {
+		log.Warn("phone sms verify: too many attempts", zap.Int("attempts", stored.Attempts))
 		return errors.New("too many incorrect attempts")
 	}
 
 	wantHash, err := s.hashSMSCode(userID, phone, code)
 	if err != nil {
+		log.Error("phone sms verify: hash otp failed", zap.Error(err))
 		return err
 	}
 	if !hmac.Equal([]byte(wantHash), []byte(stored.CodeHash)) {
 		stored.Attempts++
 		_ = c.Set(ctx, otpKey, stored, smsPhoneOTPTTL)
+		log.Warn("phone sms verify: incorrect code", zap.Int("attempts", stored.Attempts))
 		return errors.New("invalid verification code")
 	}
 
@@ -272,5 +314,6 @@ func (s *Service) VerifyPhoneSMSCode(ctx context.Context, userID, rawPhone, code
 	_ = c.Delete(ctx, otpKey)
 	s.invalidateUserCache(ctx, userID)
 
+	log.Info("phone sms verify: completed successfully")
 	return nil
 }

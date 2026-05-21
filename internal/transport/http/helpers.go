@@ -194,6 +194,19 @@ func HandleError(c *gin.Context, err error) {
 		return
 	}
 
+	// Aliyun SMS / Redis OTP backend (avoid matching generic "invalid" in SDK messages).
+	if strings.Contains(errMsgLower, "sms verification requires redis cache") {
+		InternalError(c, errMsg)
+		return
+	}
+	if strings.Contains(errMsgLower, "aliyun sms not configured") ||
+		strings.Contains(errMsgLower, "aliyun sendsms") ||
+		strings.Contains(errMsgLower, "aliyun sms failed") ||
+		strings.Contains(errMsgLower, "aliyun sms:") {
+		InternalError(c, "contact verification temporarily unavailable")
+		return
+	}
+
 	// 参数错误
 	if strings.Contains(errMsgLower, "invalid") ||
 		strings.Contains(errMsgLower, "bad request") ||
