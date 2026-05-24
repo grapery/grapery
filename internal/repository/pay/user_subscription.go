@@ -206,15 +206,19 @@ func GetUserSubscription(ctx context.Context, id uint) (*UserSubscription, error
 
 // GetUserActiveSubscriptionByUserID 获取用户活跃订阅
 func GetUserActiveSubscriptionByUserID(ctx context.Context, userID int64) (*UserSubscription, error) {
-	var subscription UserSubscription
+	var subscriptions []UserSubscription
 	err := DataBase().WithContext(ctx).
 		Where("user_id = ? AND status = ? AND end_time > ?", userID, UserSubscriptionStatusActive, time.Now()).
 		Order("end_time DESC").
-		First(&subscription).Error
+		Limit(1).
+		Find(&subscriptions).Error
 	if err != nil {
 		return nil, err
 	}
-	return &subscription, nil
+	if len(subscriptions) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &subscriptions[0], nil
 }
 
 // GetUserSubscriptionsByUserID 获取用户所有订阅

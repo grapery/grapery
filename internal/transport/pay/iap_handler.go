@@ -73,8 +73,12 @@ func uint64ToString(id uint64) string {
 
 // VerifyAppleReceiptRequest Apple 收据验证请求
 type VerifyAppleReceiptRequest struct {
-	ReceiptData string `json:"receipt_data" binding:"required"`
-	Sandbox     bool   `json:"sandbox"`
+	ReceiptData           string `json:"receipt_data"`
+	Sandbox               bool   `json:"sandbox"`
+	StoreKitLocal         bool   `json:"storekit_local"`
+	ProductID             string `json:"product_id"`
+	TransactionID         string `json:"transaction_id"`
+	OriginalTransactionID string `json:"original_transaction_id"`
 }
 
 // VerifyAppleReceiptResponse Apple 收据验证响应
@@ -114,113 +118,75 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":        userID,
-		"receipt_length": len(req.ReceiptData),
-		"sandbox":        req.Sandbox,
-		"endpoint":       "VerifyAppleReceipt",
-	}).Info("Starting Apple receipt verification")
+	userIDStr := getUserIDString(c)
 
-	// 验证收据
-	receipt, err := h.iapService.VerifyReceipt(ctx, req.ReceiptData, req.Sandbox)
-	if err != nil {
+	var receipt *pay.IAPReceipt
+	var err error
+
+	if req.StoreKitLocal && req.Sandbox {
+		receipt, err = h.buildStoreKitLocalReceipt(ctx, userID, req)
+		if err != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":  userID,
+				"endpoint": "VerifyAppleReceipt",
+				"error":    err.Error(),
+			}).Warn("StoreKit local verify rejected")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  err.Error(),
+			})
+			return
+		}
+		h.logger.WithFields(logrus.Fields{
+			"user_id":    userID,
+			"product_id": receipt.ProductID,
+			"transaction_id": receipt.SubscriptionTransactionID,
+			"endpoint":   "VerifyAppleReceipt",
+		}).Info("Accepted StoreKit local sandbox transaction")
+	} else {
+		if strings.TrimSpace(req.ReceiptData) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "receipt_data is required",
+			})
+			return
+		}
+
 		h.logger.WithFields(logrus.Fields{
 			"user_id":        userID,
 			"receipt_length": len(req.ReceiptData),
 			"sandbox":        req.Sandbox,
 			"endpoint":       "VerifyAppleReceipt",
-			"error":          err.Error(),
-		}).Error("Failed to verify Apple receipt")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "failed to verify receipt",
-		})
-		return
-	}
+		}).Info("Starting Apple receipt verification")
 
-	// 设置用户 ID
-	receipt.UserID = userID
-
-	h.logger.WithFields(logrus.Fields{
-		"user_id":    userID,
-		"receipt_id": receipt.ID,
-		"bundle_id":  receipt.BundleID,
-		"sandbox":    req.Sandbox,
-		"endpoint":   "VerifyAppleReceipt",
-	}).Info("Apple receipt verification completed successfully")
-
-	// 写入主库 memberships：订阅按期重置定额（unused 不结转）；非订阅仍为增量充值。
-	userIDStr := getUserIDString(c)
-	if userIDStr != "" && receipt.ProductID != "" {
-		product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID)
-		if prodErr != nil || product == nil {
-			if prodErr != nil {
-				h.logger.WithFields(logrus.Fields{
-					"user_id":    userIDStr,
-					"product_id": receipt.ProductID,
-					"error":      prodErr.Error(),
-				}).Warn("Could not look up product for membership quota update")
-			}
-		} else {
-			grantTokens := common.SubscriptionBillingPeriodGrantTokens(product.QuotaLimit, product.Duration)
-			if grantTokens > 0 && product.IsSubscription() {
-				txID := strings.TrimSpace(receipt.SubscriptionTransactionID)
-				applyReset := func() {
-					if resetErr := h.resetSubscriptionPeriodTokens(ctx, userIDStr, grantTokens); resetErr != nil {
-						h.logger.WithFields(logrus.Fields{
-							"user_id":       userIDStr,
-							"product_id":    receipt.ProductID,
-							"grant_tokens":  grantTokens,
-							"transaction_id": txID,
-							"error":         resetErr.Error(),
-						}).Error("Failed to reset subscription period tokens after IAP")
-					} else {
-						h.logger.WithFields(logrus.Fields{
-							"user_id":       userIDStr,
-							"product_id":    receipt.ProductID,
-							"grant_tokens":  grantTokens,
-							"transaction_id": txID,
-						}).Info("Reset subscription period tokens after IAP (billing cycle allowance)")
-					}
-				}
-
-				if txID == "" {
-					h.logger.WithFields(logrus.Fields{
-						"user_id":    userIDStr,
-						"product_id": receipt.ProductID,
-					}).Warn("Apple subscription receipt missing transaction_id; applying quota reset without idempotency")
-					applyReset()
-				} else {
-					claimed, claimErr := paymodels.TryClaimSubscriptionCreditGrant(ctx, txID, userIDStr, receipt.ProductID)
-					if claimErr != nil {
-						h.logger.WithFields(logrus.Fields{
-							"user_id":        userIDStr,
-							"product_id":     receipt.ProductID,
-							"transaction_id": txID,
-							"error":          claimErr.Error(),
-						}).Error("Failed to claim subscription credit grant row")
-					} else if claimed {
-						applyReset()
-					}
-				}
-			} else if grantTokens > 0 {
-				if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens); topUpErr != nil {
-					h.logger.WithFields(logrus.Fields{
-						"user_id":      userIDStr,
-						"product_id":   receipt.ProductID,
-						"token_amount": grantTokens,
-						"error":        topUpErr.Error(),
-					}).Error("Failed to top up user tokens after IAP purchase")
-				} else {
-					h.logger.WithFields(logrus.Fields{
-						"user_id":      userIDStr,
-						"product_id":   receipt.ProductID,
-						"token_amount": grantTokens,
-					}).Info("Successfully topped up user tokens after IAP purchase")
-				}
-			}
+		receipt, err = h.iapService.VerifyReceipt(ctx, req.ReceiptData, req.Sandbox)
+		if err != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":        userID,
+				"receipt_length": len(req.ReceiptData),
+				"sandbox":        req.Sandbox,
+				"endpoint":       "VerifyAppleReceipt",
+				"error":          err.Error(),
+			}).Error("Failed to verify Apple receipt")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "failed to verify receipt",
+			})
+			return
 		}
+		receipt.UserID = userID
+
+		h.logger.WithFields(logrus.Fields{
+			"user_id":    userID,
+			"receipt_id": receipt.ID,
+			"bundle_id":  receipt.BundleID,
+			"sandbox":    req.Sandbox,
+			"endpoint":   "VerifyAppleReceipt",
+		}).Info("Apple receipt verification completed successfully")
 	}
+
+	h.applyApplePurchaseGrants(ctx, userIDStr, receipt)
+	h.persistApplePurchaseRecords(ctx, userID, receipt)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
@@ -304,23 +270,13 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 	if originalID != "" {
 		subscription, err = h.iapService.GetSubscription(ctx, originalID)
 	} else {
-		var appleSub paymodels.AppleSubscription
+		var appleSubs []paymodels.AppleSubscription
 		err = paymodels.DataBase().WithContext(ctx).
 			Where("user_id = ?", userID).
 			Order("updated_at DESC").
-			First(&appleSub).Error
+			Limit(1).
+			Find(&appleSubs).Error
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusOK, gin.H{
-					"code": 0,
-					"msg":  "success",
-					"data": GetAppleSubscriptionStatusResponse{
-						Success:        true,
-						Subscription: nil,
-					},
-				})
-				return
-			}
 			h.logger.WithFields(logrus.Fields{
 				"user_id":  userID,
 				"endpoint": "GetAppleSubscriptionStatus",
@@ -332,7 +288,18 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 			})
 			return
 		}
-		subscription = iapSubscriptionFromAppleRow(&appleSub)
+		if len(appleSubs) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": GetAppleSubscriptionStatusResponse{
+					Success:      true,
+					Subscription: nil,
+				},
+			})
+			return
+		}
+		subscription = iapSubscriptionFromAppleRow(&appleSubs[0])
 	}
 	if err != nil {
 		h.logger.WithFields(logrus.Fields{
@@ -365,9 +332,17 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 	})
 }
 
-// HandleAppleNotificationRequest 处理 Apple 通知请求
+// HandleAppleNotificationRequest 处理 Apple 通知请求（ASC V2 使用 signedPayload）。
 type HandleAppleNotificationRequest struct {
-	SignedPayload string `json:"signed_payload" binding:"required"`
+	SignedPayload      string `json:"signedPayload"`
+	SignedPayloadSnake string `json:"signed_payload"`
+}
+
+func (r *HandleAppleNotificationRequest) payload() string {
+	if s := strings.TrimSpace(r.SignedPayload); s != "" {
+		return s
+	}
+	return strings.TrimSpace(r.SignedPayloadSnake)
 }
 
 // HandleAppleNotification 处理 Apple 通知
@@ -387,18 +362,26 @@ func (h *IAPHandler) HandleAppleNotification(c *gin.Context) {
 		})
 		return
 	}
+	signedPayload := req.payload()
+	if signedPayload == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400,
+			"msg":  "signedPayload is required",
+		})
+		return
+	}
 
 	h.logger.WithFields(logrus.Fields{
-		"payload_length": len(req.SignedPayload),
+		"payload_length": len(signedPayload),
 		"endpoint":       "HandleAppleNotification",
 		"ip":             c.ClientIP(),
 	}).Info("Starting Apple notification processing")
 
 	// 解析通知
-	notificationData, err := pay.ParseAppleNotification(req.SignedPayload)
+	notificationData, err := pay.ParseAppleNotification(signedPayload)
 	if err != nil {
 		h.logger.WithFields(logrus.Fields{
-			"payload_length": len(req.SignedPayload),
+			"payload_length": len(signedPayload),
 			"endpoint":       "HandleAppleNotification",
 			"error":          err.Error(),
 		}).Error("Failed to parse Apple notification")
@@ -409,15 +392,17 @@ func (h *IAPHandler) HandleAppleNotification(c *gin.Context) {
 		return
 	}
 
+	rawData, _ := json.Marshal(map[string]string{"signedPayload": signedPayload})
+
 	// 创建通知记录
 	notification := &pay.IAPNotification{
 		Platform:         pay.IAPPlatformApple,
 		NotificationID:   notificationData.NotificationUUID,
 		NotificationType: notificationData.NotificationType,
 		Subtype:          notificationData.Subtype,
-		Version:          "1.0",
-		SignedPayload:    req.SignedPayload,
-		RawData:          "", // TODO: 序列化通知数据
+		Version:          "2.0",
+		SignedPayload:    signedPayload,
+		RawData:          string(rawData),
 		ProcessedAt:      time.Now(),
 		Status:           "Pending",
 		CreatedAt:        time.Now(),
@@ -1324,9 +1309,232 @@ func (h *IAPHandler) GetProductStats(c *gin.Context) {
 	})
 }
 
+// buildStoreKitLocalReceipt 为 Xcode StoreKit Configuration（无 App Store 收据文件）构建可入账的收据。
+// 仅允许 sandbox + storekit_local，供本地/模拟器开发使用。
+func (h *IAPHandler) buildStoreKitLocalReceipt(ctx context.Context, userID uint64, req VerifyAppleReceiptRequest) (*pay.IAPReceipt, error) {
+	productID := strings.TrimSpace(req.ProductID)
+	txID := strings.TrimSpace(req.TransactionID)
+	if productID == "" || txID == "" {
+		return nil, fmt.Errorf("product_id and transaction_id are required for storekit_local verify")
+	}
+	origTx := strings.TrimSpace(req.OriginalTransactionID)
+	if origTx == "" {
+		origTx = txID
+	}
+
+	product, err := h.productService.GetProductByProductID(ctx, productID)
+	if err != nil || product == nil {
+		return nil, fmt.Errorf("unknown product_id: %s", productID)
+	}
+
+	now := time.Now()
+	exp := subscriptionEndTimeFromProduct(product, now)
+
+	return &pay.IAPReceipt{
+		UserID:                    userID,
+		Platform:                  pay.IAPPlatformApple,
+		ProductID:                 productID,
+		OriginalTransactionID:     origTx,
+		SubscriptionTransactionID: txID,
+		Environment:               "Sandbox",
+		Status:                    "Valid",
+		CreationDate:              now,
+		ExpirationDate:            &exp,
+		CreatedAt:                 now,
+		UpdatedAt:                 now,
+	}, nil
+}
+
+func subscriptionEndTimeFromProduct(product *paymodels.IAPProduct, start time.Time) time.Time {
+	if product == nil {
+		return start.AddDate(0, 1, 0)
+	}
+	if days := product.GetDurationInDays(); days > 0 {
+		return start.AddDate(0, 0, days)
+	}
+	return start.AddDate(0, 1, 0)
+}
+
+// applyApplePurchaseGrants 购买成功后写入主库 token 配额（订阅按期重置，非订阅增量充值）。
+func (h *IAPHandler) applyApplePurchaseGrants(ctx context.Context, userIDStr string, receipt *pay.IAPReceipt) {
+	if userIDStr == "" || receipt == nil || receipt.ProductID == "" {
+		return
+	}
+
+	product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID)
+	if prodErr != nil || product == nil {
+		if prodErr != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":    userIDStr,
+				"product_id": receipt.ProductID,
+				"error":      prodErr.Error(),
+			}).Warn("Could not look up product for membership quota update")
+		}
+		return
+	}
+
+	normalizedQuota := common.NormalizeIAPProductQuotaLimit(receipt.ProductID, product.QuotaLimit)
+	grantTokens := common.SubscriptionBillingPeriodGrantTokens(normalizedQuota, product.Duration)
+	membershipTier := common.MembershipTierFromIAPProductID(receipt.ProductID)
+	if grantTokens > 0 && product.IsSubscription() {
+		txID := strings.TrimSpace(receipt.SubscriptionTransactionID)
+		applyReset := func() {
+			if resetErr := h.resetSubscriptionPeriodTokens(ctx, userIDStr, grantTokens, membershipTier); resetErr != nil {
+				h.logger.WithFields(logrus.Fields{
+					"user_id":        userIDStr,
+					"product_id":     receipt.ProductID,
+					"grant_tokens":   grantTokens,
+					"transaction_id": txID,
+					"error":          resetErr.Error(),
+				}).Error("Failed to reset subscription period tokens after IAP")
+			} else {
+				h.logger.WithFields(logrus.Fields{
+					"user_id":        userIDStr,
+					"product_id":     receipt.ProductID,
+					"grant_tokens":   grantTokens,
+					"transaction_id": txID,
+				}).Info("Reset subscription period tokens after IAP (billing cycle allowance)")
+			}
+		}
+
+		if txID == "" {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":    userIDStr,
+				"product_id": receipt.ProductID,
+			}).Warn("Apple subscription receipt missing transaction_id; applying quota reset without idempotency")
+			applyReset()
+		} else {
+			claimed, claimErr := paymodels.TryClaimSubscriptionCreditGrant(ctx, txID, userIDStr, receipt.ProductID)
+			if claimErr != nil {
+				h.logger.WithFields(logrus.Fields{
+					"user_id":        userIDStr,
+					"product_id":     receipt.ProductID,
+					"transaction_id": txID,
+					"error":          claimErr.Error(),
+				}).Error("Failed to claim subscription credit grant row")
+			} else if claimed {
+				applyReset()
+			}
+		}
+	} else if grantTokens > 0 {
+		if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens); topUpErr != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":      userIDStr,
+				"product_id":   receipt.ProductID,
+				"token_amount": grantTokens,
+				"error":        topUpErr.Error(),
+			}).Error("Failed to top up user tokens after IAP purchase")
+		} else {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":      userIDStr,
+				"product_id":   receipt.ProductID,
+				"token_amount": grantTokens,
+			}).Info("Successfully topped up user tokens after IAP purchase")
+		}
+	}
+}
+
+// persistApplePurchaseRecords 写入 vippay 库中的 Apple 订阅与用户订阅记录，供 VIP 状态查询。
+func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uint64, receipt *pay.IAPReceipt) {
+	if receipt == nil || receipt.ProductID == "" {
+		return
+	}
+
+	product, err := h.productService.GetProductByProductID(ctx, receipt.ProductID)
+	if err != nil || product == nil {
+		return
+	}
+
+	origTx := strings.TrimSpace(receipt.OriginalTransactionID)
+	if origTx == "" {
+		origTx = strings.TrimSpace(receipt.SubscriptionTransactionID)
+	}
+	if origTx == "" {
+		return
+	}
+
+	now := time.Now()
+	start := receipt.CreationDate
+	if start.IsZero() {
+		start = now
+	}
+	end := subscriptionEndTimeFromProduct(product, start)
+	if receipt.ExpirationDate != nil {
+		end = *receipt.ExpirationDate
+	}
+
+	var appleRows []paymodels.AppleSubscription
+	if dbErr := paymodels.DataBase().WithContext(ctx).
+		Where("original_transaction_id = ?", origTx).
+		Limit(1).
+		Find(&appleRows).Error; dbErr != nil {
+		h.logger.WithError(dbErr).Warn("Failed to query apple_subscriptions for upsert")
+		return
+	}
+
+	if len(appleRows) == 0 {
+		row := paymodels.AppleSubscription{
+			UserID:                userID,
+			OriginalTransactionID: origTx,
+			ProductID:             receipt.ProductID,
+			PurchaseDate:          start,
+			ExpiresDate:           &end,
+			Status:                "Active",
+			AutoRenewStatus:       "On",
+		}
+		if createErr := paymodels.DataBase().WithContext(ctx).Create(&row).Error; createErr != nil {
+			h.logger.WithError(createErr).Warn("Failed to create apple_subscriptions row")
+		}
+	} else {
+		row := appleRows[0]
+		row.UserID = userID
+		row.ProductID = receipt.ProductID
+		row.ExpiresDate = &end
+		row.Status = "Active"
+		row.UpdatedAt = now
+		if saveErr := paymodels.DataBase().WithContext(ctx).Save(&row).Error; saveErr != nil {
+			h.logger.WithError(saveErr).Warn("Failed to update apple_subscriptions row")
+		}
+	}
+
+	userIDInt := int64(userID)
+	active, activeErr := paymodels.GetUserActiveSubscriptionByUserID(ctx, userIDInt)
+	if activeErr == nil && active != nil {
+		active.PackagePlanID = product.ID
+		active.EndTime = end
+		active.ProviderSubID = origTx
+		active.MaxRoles = product.MaxRoles
+		active.MaxContexts = product.MaxContexts
+		active.QuotaLimit = product.QuotaLimit
+		if updateErr := paymodels.UpdateUserSubscription(ctx, active); updateErr != nil {
+			h.logger.WithError(updateErr).Warn("Failed to update user_subscriptions row")
+		}
+		return
+	}
+
+	sub := &paymodels.UserSubscription{
+		UserID:          userIDInt,
+		PackagePlanID:   product.ID,
+		Status:          paymodels.UserSubscriptionStatusActive,
+		StartTime:       start,
+		EndTime:         end,
+		AutoRenew:       true,
+		PaymentMethod:   paymodels.PaymentMethodApplePay,
+		PaymentProvider: "App Store",
+		ProviderSubID:   origTx,
+		Currency:        "CNY",
+		QuotaLimit:      product.QuotaLimit,
+		MaxRoles:        product.MaxRoles,
+		MaxContexts:     product.MaxContexts,
+	}
+	if createErr := paymodels.CreateUserSubscription(ctx, sub); createErr != nil {
+		h.logger.WithError(createErr).Warn("Failed to create user_subscriptions row")
+	}
+}
+
 // resetSubscriptionPeriodTokens 每期订阅付款后重置点数：token_quota = 免费底座 + 本期订阅定额，token_used = 0。
 // 未用完的点数不结转至下一期（下一期收据会带来新的 transaction_id 并再次重置）。
-func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDStr string, subscriptionGrantTokens int) error {
+func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDStr string, subscriptionGrantTokens int, membershipTier string) error {
 	if h.mainDB == nil {
 		h.logger.Warn("mainDB not configured, skipping subscription quota reset")
 		return nil
@@ -1336,6 +1544,10 @@ func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDSt
 	}
 
 	totalQuota := common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
+	tier := strings.TrimSpace(membershipTier)
+	if tier == "" {
+		tier = "free"
+	}
 	now := time.Now()
 
 	type membership struct {
@@ -1360,7 +1572,7 @@ func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDSt
 			m = membership{
 				ID:           uuid.New().String(),
 				UserID:       userIDStr,
-				Tier:         "free",
+				Tier:         tier,
 				Status:       string(common.MembershipStatusActive),
 				StartDate:    now,
 				TokenQuota:   totalQuota,
@@ -1378,6 +1590,7 @@ func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDSt
 		return tx.Table("memberships").
 			Where("user_id = ?", userIDStr).
 			Updates(map[string]interface{}{
+				"tier":        tier,
 				"token_quota": totalQuota,
 				"token_used":  0,
 				"updated_at":  now,

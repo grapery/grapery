@@ -34,9 +34,16 @@
 
 #### 1.3 配置 Server Notifications (Webhook)
 1. 进入 **App Information** → **App Store Server Notifications**
-2. 设置 **Production Server URL**: `https://your-domain.com/api/iap/apple/notification`
-3. 设置 **Sandbox Server URL**: `https://your-domain.com/api/iap/apple/notification`
+2. 设置 **Production Server URL**: `https://rankquantity.xyz/api/vippay/iap/apple/notification`
+3. 设置 **Sandbox Server URL**: `https://rankquantity.xyz/api/vippay/iap/apple/notification`
 4. 选择 **Version 2** 通知格式
+5. 保存后点击 **Send Test Notification**，VipPay 日志应出现 `Starting Apple notification processing`
+
+Apple V2 请求体为 camelCase：`{"signedPayload":"<JWS>"}`（不是 `signed_payload`）。
+
+上线前可运行：`bash grapery/scripts/verify_vippay_iap_ready.sh`
+- 部署前 probe 可能返回 `invalid request parameters`（旧版只认 snake_case）
+- 部署后 probe 应返回 `failed to parse notification`（说明 JSON 已正确绑定）
 
 ### 2. 必需的环境变量
 
@@ -152,8 +159,8 @@ stringData:
 
 | 平台 | 端点 | 说明 |
 |-----|------|------|
-| Apple | `POST /api/iap/apple/notification` | App Store Server Notifications V2 |
-| Google | `POST /api/iap/google/notification` | Real-time Developer Notifications |
+| Apple | `POST /api/vippay/iap/apple/notification` | App Store Server Notifications V2 |
+| Google | `POST /api/vippay/iap/google/notification` | Real-time Developer Notifications |
 
 ### Apple Notification Types
 - `INITIAL_BUY` - 首次购买

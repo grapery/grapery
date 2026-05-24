@@ -3,12 +3,16 @@ package pay
 import (
 	"context"
 	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	"github.com/google/uuid"
 )
 
 // IAPPlatform IAP平台类型
@@ -407,15 +411,42 @@ type GoogleNotificationData struct {
 	} `json:"subscriptionNotification"`
 }
 
-// ParseAppleNotification 解析Apple通知
+// ParseAppleNotification 解析 App Store Server Notifications V2 的 signedPayload（JWS payload 段）。
 func ParseAppleNotification(signedPayload string) (*AppleNotificationData, error) {
-	// 简化的Apple通知解析实现
-	// 实际应用中需要解析JWT payload
-	return &AppleNotificationData{
-		NotificationUUID: "mock_uuid",
-		NotificationType: "INITIAL_BUY",
-		Subtype:          "",
-	}, nil
+	signedPayload = strings.TrimSpace(signedPayload)
+	if signedPayload == "" {
+		return nil, fmt.Errorf("empty signed payload")
+	}
+	parts := strings.Split(signedPayload, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWS format")
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decode JWS payload: %w", err)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal JWS payload: %w", err)
+	}
+
+	out := &AppleNotificationData{}
+	if v, ok := payload["notificationUUID"].(string); ok {
+		out.NotificationUUID = v
+	}
+	if v, ok := payload["notificationType"].(string); ok {
+		out.NotificationType = v
+	}
+	if v, ok := payload["subtype"].(string); ok {
+		out.Subtype = v
+	}
+	if out.NotificationUUID == "" {
+		out.NotificationUUID = uuid.New().String()
+	}
+	if out.NotificationType == "" {
+		return nil, fmt.Errorf("missing notificationType in signed payload")
+	}
+	return out, nil
 }
 
 // ParseGoogleNotification 解析Google通知

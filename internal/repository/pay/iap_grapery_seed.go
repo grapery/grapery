@@ -21,24 +21,51 @@ func seedGraperyIAPAppleProducts(db *gorm.DB, log *zap.Logger) error {
 		return errors.New("database nil")
 	}
 	rows := defaultGraperyAppleIAPRows()
-	inserted := 0
+	inserted, updated := 0, 0
 	for _, p := range rows {
-		var n int64
-		if err := db.Model(&IAPProduct{}).Where("product_id = ?", p.ProductID).Count(&n).Error; err != nil {
+		var existing IAPProduct
+		err := db.Where("product_id = ?", p.ProductID).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := db.Create(&p).Error; err != nil {
+				log.Warn("Failed to seed IAP product", zap.String("product_id", p.ProductID), zap.Error(err))
+				continue
+			}
+			inserted++
+			log.Info("Seeded Grapery IAP product", zap.String("product_id", p.ProductID))
+			continue
+		}
+		if err != nil {
 			return err
 		}
-		if n > 0 {
-			continue
+		// 已有行仅插入时不会修正 quota_limit；启动时对齐 canonical 配置（含误存为 100/200 的历史值）。
+		updates := map[string]interface{}{
+			"product_type":  p.ProductType,
+			"quota_limit":   p.QuotaLimit,
+			"max_roles":     p.MaxRoles,
+			"max_contexts":  p.MaxContexts,
+			"duration":      p.Duration,
+			"currency":      p.Currency,
+			"is_active":     p.IsActive,
+			"family_shareable": p.FamilyShareable,
 		}
-		if err := db.Create(&p).Error; err != nil {
-			log.Warn("Failed to seed IAP product", zap.String("product_id", p.ProductID), zap.Error(err))
-			continue
+		if existing.QuotaLimit != p.QuotaLimit ||
+			existing.ProductType != p.ProductType ||
+			existing.MaxRoles != p.MaxRoles ||
+			existing.MaxContexts != p.MaxContexts {
+			if err := db.Model(&IAPProduct{}).Where("product_id = ?", p.ProductID).Updates(updates).Error; err != nil {
+				log.Warn("Failed to sync IAP product", zap.String("product_id", p.ProductID), zap.Error(err))
+				continue
+			}
+			updated++
+			log.Info("Synced Grapery IAP product",
+				zap.String("product_id", p.ProductID),
+				zap.Int("old_quota_limit", existing.QuotaLimit),
+				zap.Int("new_quota_limit", p.QuotaLimit),
+			)
 		}
-		inserted++
-		log.Info("Seeded Grapery IAP product", zap.String("product_id", p.ProductID))
 	}
-	if inserted == 0 {
-		log.Debug("Grapery Apple IAP catalog already present (no new rows)")
+	if inserted == 0 && updated == 0 {
+		log.Debug("Grapery Apple IAP catalog already aligned")
 	}
 	return nil
 }
