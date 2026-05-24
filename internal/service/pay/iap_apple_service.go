@@ -17,6 +17,7 @@ import (
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/sirupsen/logrus"
 )
@@ -395,25 +396,41 @@ func (s *AppleIAPService) HandleNotification(ctx context.Context, notification *
 		return fmt.Errorf("解析通知数据失败: %w", err)
 	}
 
-	// 3. 根据通知类型处理
-	switch notification.NotificationType {
-	case "INITIAL_BUY":
+	// 3. 根据通知类型处理（V2 与 legacy 均映射为内部 action）
+	action := common.NormalizeAppleNotificationAction(notification.NotificationType, notification.Subtype)
+	switch action {
+	case common.ChangeInitial:
 		return s.handleInitialPurchase(ctx, notification, transactionInfo)
-	case "DID_RENEW":
+	case common.ChangeRenewal:
 		return s.handleSubscriptionRenewal(ctx, notification, transactionInfo)
-	case "DID_CHANGE_RENEWAL_STATUS":
+	case common.ChangeCancelRenewal:
 		return s.handleRenewalStatusChange(ctx, notification, transactionInfo)
-	case "DID_FAIL_TO_RENEW":
+	case common.ChangeExpired:
 		return s.handleSubscriptionExpiration(ctx, notification, transactionInfo)
-	case "DID_RECOVER":
-		return s.handleSubscriptionRecovery(ctx, notification, transactionInfo)
-	case "REVOKE":
+	case common.ChangeRevoked:
 		return s.handleSubscriptionRevocation(ctx, notification, transactionInfo)
-	case "REFUND":
-		return s.handleRefund(ctx, notification, transactionInfo)
+	case common.ChangeUpgrade, common.ChangeDowngradeScheduled:
+		return s.handleSubscriptionRenewal(ctx, notification, transactionInfo)
 	default:
-		s.logger.WithField("notification_type", notification.NotificationType).Warn("未知的Apple通知类型")
-		return nil
+		switch notification.NotificationType {
+		case "INITIAL_BUY":
+			return s.handleInitialPurchase(ctx, notification, transactionInfo)
+		case "DID_RENEW":
+			return s.handleSubscriptionRenewal(ctx, notification, transactionInfo)
+		case "DID_CHANGE_RENEWAL_STATUS":
+			return s.handleRenewalStatusChange(ctx, notification, transactionInfo)
+		case "DID_FAIL_TO_RENEW":
+			return s.handleSubscriptionExpiration(ctx, notification, transactionInfo)
+		case "DID_RECOVER":
+			return s.handleSubscriptionRecovery(ctx, notification, transactionInfo)
+		case "REVOKE":
+			return s.handleSubscriptionRevocation(ctx, notification, transactionInfo)
+		case "REFUND":
+			return s.handleRefund(ctx, notification, transactionInfo)
+		default:
+			s.logger.WithField("notification_type", notification.NotificationType).Warn("未知的Apple通知类型")
+			return nil
+		}
 	}
 }
 

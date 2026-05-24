@@ -42,6 +42,7 @@ type AppleSubscription struct {
 	PriceIncreaseStatus    string         `gorm:"type:varchar(100)" json:"price_increase_status"`
 	LastNotificationType   string         `gorm:"type:varchar(100)" json:"last_notification_type"`
 	LastNotificationDate   *time.Time     `json:"last_notification_date"`
+	AppUserID              string         `gorm:"column:app_user_id;size:64;index;comment:应用用户UUID" json:"app_user_id"`
 	CreatedAt              time.Time      `json:"created_at"`
 	UpdatedAt              time.Time      `json:"updated_at"`
 	DeletedAt              gorm.DeletedAt `gorm:"index" json:"deleted_at"`

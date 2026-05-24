@@ -186,7 +186,7 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 	}
 
 	h.applyApplePurchaseGrants(ctx, userIDStr, receipt)
-	h.persistApplePurchaseRecords(ctx, userID, receipt)
+	h.persistApplePurchaseRecords(ctx, userID, userIDStr, receipt)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
@@ -206,9 +206,10 @@ type GetAppleSubscriptionStatusRequest struct {
 
 // GetAppleSubscriptionStatusResponse 获取 Apple 订阅状态响应
 type GetAppleSubscriptionStatusResponse struct {
-	Success      bool                 `json:"success"`
-	Subscription *pay.IAPSubscription `json:"subscription,omitempty"`
-	Error        string               `json:"error,omitempty"`
+	Success      bool                     `json:"success"`
+	Subscription *pay.IAPSubscription     `json:"subscription,omitempty"`
+	Display      *SubscriptionDisplayInfo `json:"display,omitempty"`
+	Error        string                   `json:"error,omitempty"`
 }
 
 // GetAppleSubscriptionStatus 获取 Apple 订阅状态
@@ -289,12 +290,15 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 			return
 		}
 		if len(appleSubs) == 0 {
+			userIDStr := getUserIDString(c)
+			display := h.buildSubscriptionDisplay(ctx, userIDStr, nil)
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,
 				"msg":  "success",
 				"data": GetAppleSubscriptionStatusResponse{
 					Success:      true,
 					Subscription: nil,
+					Display:      display,
 				},
 			})
 			return
@@ -322,14 +326,44 @@ func (h *IAPHandler) GetAppleSubscriptionStatus(c *gin.Context) {
 		"endpoint":            "GetAppleSubscriptionStatus",
 	}).Info("Apple subscription status retrieved successfully")
 
+	userIDStr := getUserIDString(c)
+	display := h.buildSubscriptionDisplay(ctx, userIDStr, subscription)
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
 		"data": GetAppleSubscriptionStatusResponse{
 			Success:      true,
 			Subscription: subscription,
+			Display:      display,
 		},
 	})
+}
+
+// AckAppleSubscriptionNoticeRequest ACK 订阅变更提示。
+type AckAppleSubscriptionNoticeRequest struct {
+	NoticeID string `json:"notice_id" binding:"required"`
+}
+
+// AckAppleSubscriptionNotice 标记订阅变更提示已读。
+func (h *IAPHandler) AckAppleSubscriptionNotice(c *gin.Context) {
+	ctx := c.Request.Context()
+	userIDStr := getUserIDString(c)
+	if userIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "unauthorized"})
+		return
+	}
+	var req AckAppleSubscriptionNoticeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "invalid request parameters"})
+		return
+	}
+	if err := paymodels.AckSubscriptionNotice(ctx, strings.TrimSpace(req.NoticeID), userIDStr); err != nil {
+		h.logger.WithError(err).Error("ack subscription notice failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "failed to ack notice"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success"})
 }
 
 // HandleAppleNotificationRequest 处理 Apple 通知请求（ASC V2 使用 signedPayload）。
@@ -435,6 +469,7 @@ func (h *IAPHandler) HandleAppleNotification(c *gin.Context) {
 			"endpoint":          "HandleAppleNotification",
 		}).Info("Apple notification processed successfully")
 		notification.Status = "Success"
+		h.applyEntitlementsFromAppleNotification(ctx, signedPayload, notificationData.NotificationType, notificationData.Subtype)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1355,87 +1390,8 @@ func subscriptionEndTimeFromProduct(product *paymodels.IAPProduct, start time.Ti
 	return start.AddDate(0, 1, 0)
 }
 
-// applyApplePurchaseGrants 购买成功后写入主库 token 配额（订阅按期重置，非订阅增量充值）。
-func (h *IAPHandler) applyApplePurchaseGrants(ctx context.Context, userIDStr string, receipt *pay.IAPReceipt) {
-	if userIDStr == "" || receipt == nil || receipt.ProductID == "" {
-		return
-	}
-
-	product, prodErr := h.productService.GetProductByProductID(ctx, receipt.ProductID)
-	if prodErr != nil || product == nil {
-		if prodErr != nil {
-			h.logger.WithFields(logrus.Fields{
-				"user_id":    userIDStr,
-				"product_id": receipt.ProductID,
-				"error":      prodErr.Error(),
-			}).Warn("Could not look up product for membership quota update")
-		}
-		return
-	}
-
-	normalizedQuota := common.NormalizeIAPProductQuotaLimit(receipt.ProductID, product.QuotaLimit)
-	grantTokens := common.SubscriptionBillingPeriodGrantTokens(normalizedQuota, product.Duration)
-	membershipTier := common.MembershipTierFromIAPProductID(receipt.ProductID)
-	if grantTokens > 0 && product.IsSubscription() {
-		txID := strings.TrimSpace(receipt.SubscriptionTransactionID)
-		applyReset := func() {
-			if resetErr := h.resetSubscriptionPeriodTokens(ctx, userIDStr, grantTokens, membershipTier); resetErr != nil {
-				h.logger.WithFields(logrus.Fields{
-					"user_id":        userIDStr,
-					"product_id":     receipt.ProductID,
-					"grant_tokens":   grantTokens,
-					"transaction_id": txID,
-					"error":          resetErr.Error(),
-				}).Error("Failed to reset subscription period tokens after IAP")
-			} else {
-				h.logger.WithFields(logrus.Fields{
-					"user_id":        userIDStr,
-					"product_id":     receipt.ProductID,
-					"grant_tokens":   grantTokens,
-					"transaction_id": txID,
-				}).Info("Reset subscription period tokens after IAP (billing cycle allowance)")
-			}
-		}
-
-		if txID == "" {
-			h.logger.WithFields(logrus.Fields{
-				"user_id":    userIDStr,
-				"product_id": receipt.ProductID,
-			}).Warn("Apple subscription receipt missing transaction_id; applying quota reset without idempotency")
-			applyReset()
-		} else {
-			claimed, claimErr := paymodels.TryClaimSubscriptionCreditGrant(ctx, txID, userIDStr, receipt.ProductID)
-			if claimErr != nil {
-				h.logger.WithFields(logrus.Fields{
-					"user_id":        userIDStr,
-					"product_id":     receipt.ProductID,
-					"transaction_id": txID,
-					"error":          claimErr.Error(),
-				}).Error("Failed to claim subscription credit grant row")
-			} else if claimed {
-				applyReset()
-			}
-		}
-	} else if grantTokens > 0 {
-		if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens); topUpErr != nil {
-			h.logger.WithFields(logrus.Fields{
-				"user_id":      userIDStr,
-				"product_id":   receipt.ProductID,
-				"token_amount": grantTokens,
-				"error":        topUpErr.Error(),
-			}).Error("Failed to top up user tokens after IAP purchase")
-		} else {
-			h.logger.WithFields(logrus.Fields{
-				"user_id":      userIDStr,
-				"product_id":   receipt.ProductID,
-				"token_amount": grantTokens,
-			}).Info("Successfully topped up user tokens after IAP purchase")
-		}
-	}
-}
-
 // persistApplePurchaseRecords 写入 vippay 库中的 Apple 订阅与用户订阅记录，供 VIP 状态查询。
-func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uint64, receipt *pay.IAPReceipt) {
+func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uint64, appUserID string, receipt *pay.IAPReceipt) {
 	if receipt == nil || receipt.ProductID == "" {
 		return
 	}
@@ -1475,6 +1431,7 @@ func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uin
 	if len(appleRows) == 0 {
 		row := paymodels.AppleSubscription{
 			UserID:                userID,
+			AppUserID:             strings.TrimSpace(appUserID),
 			OriginalTransactionID: origTx,
 			ProductID:             receipt.ProductID,
 			PurchaseDate:          start,
@@ -1488,6 +1445,9 @@ func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uin
 	} else {
 		row := appleRows[0]
 		row.UserID = userID
+		if strings.TrimSpace(appUserID) != "" {
+			row.AppUserID = strings.TrimSpace(appUserID)
+		}
 		row.ProductID = receipt.ProductID
 		row.ExpiresDate = &end
 		row.Status = "Active"
@@ -1530,72 +1490,6 @@ func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uin
 	if createErr := paymodels.CreateUserSubscription(ctx, sub); createErr != nil {
 		h.logger.WithError(createErr).Warn("Failed to create user_subscriptions row")
 	}
-}
-
-// resetSubscriptionPeriodTokens 每期订阅付款后重置点数：token_quota = 免费底座 + 本期订阅定额，token_used = 0。
-// 未用完的点数不结转至下一期（下一期收据会带来新的 transaction_id 并再次重置）。
-func (h *IAPHandler) resetSubscriptionPeriodTokens(ctx context.Context, userIDStr string, subscriptionGrantTokens int, membershipTier string) error {
-	if h.mainDB == nil {
-		h.logger.Warn("mainDB not configured, skipping subscription quota reset")
-		return nil
-	}
-	if userIDStr == "" || subscriptionGrantTokens < 0 {
-		return nil
-	}
-
-	totalQuota := common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
-	tier := strings.TrimSpace(membershipTier)
-	if tier == "" {
-		tier = "free"
-	}
-	now := time.Now()
-
-	type membership struct {
-		ID           string     `gorm:"column:id"`
-		UserID       string     `gorm:"column:user_id"`
-		Tier         string     `gorm:"column:tier"`
-		Status       string     `gorm:"column:status"`
-		StartDate    time.Time  `gorm:"column:start_date"`
-		EndDate      *time.Time `gorm:"column:end_date"`
-		TokenQuota   int        `gorm:"column:token_quota"`
-		TokenUsed    int        `gorm:"column:token_used"`
-		StorageQuota int64      `gorm:"column:storage_quota"`
-		StorageUsed  int64      `gorm:"column:storage_used"`
-		CreatedAt    time.Time  `gorm:"column:created_at"`
-		UpdatedAt    time.Time  `gorm:"column:updated_at"`
-	}
-
-	return h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var m membership
-		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			m = membership{
-				ID:           uuid.New().String(),
-				UserID:       userIDStr,
-				Tier:         tier,
-				Status:       string(common.MembershipStatusActive),
-				StartDate:    now,
-				TokenQuota:   totalQuota,
-				TokenUsed:    0,
-				StorageQuota: common.DefaultFreeTierStorageBytes,
-				StorageUsed:  0,
-				CreatedAt:    now,
-				UpdatedAt:    now,
-			}
-			return tx.Table("memberships").Create(&m).Error
-		}
-		if err != nil {
-			return fmt.Errorf("query membership: %w", err)
-		}
-		return tx.Table("memberships").
-			Where("user_id = ?", userIDStr).
-			Updates(map[string]interface{}{
-				"tier":        tier,
-				"token_quota": totalQuota,
-				"token_used":  0,
-				"updated_at":  now,
-			}).Error
-	})
 }
 
 // topUpUserTokens 非订阅类 IAP：在主库 memberships 上增量增加 token_quota。

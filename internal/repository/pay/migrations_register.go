@@ -88,6 +88,15 @@ func init() {
 	})
 
 	registry.RegisterPaymentStep(migrations.MigrationStep{
+		Name:        "migrate_iap_subscription_notices",
+		Description: "Pending subscription change notices for client ACK",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&IAPSubscriptionNotice{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterPaymentStep(migrations.MigrationStep{
 		Name:        "migrate_iap_subscription_credit_grants",
 		Description: "Idempotent grants for subscription billing periods (Apple/Google transaction_id)",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

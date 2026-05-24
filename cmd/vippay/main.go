@@ -427,6 +427,17 @@ func registerRoutes(router *gin.Engine) {
 	// 创建 IAP 处理器，传入产品服务及主库（用于购买后充值 tokens）
 	iapHandler := pay.NewIAPHandler(iapService, productService, mainDB)
 
+	// 兜底扫描：已过期但仍标记 Active/WillExpire 的 Apple 订阅
+	go func() {
+		ctx := context.Background()
+		iapHandler.ExpireStaleAppleSubscriptions(ctx)
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			iapHandler.ExpireStaleAppleSubscriptions(ctx)
+		}
+	}()
+
 	// 创建 OAuth Repository（用于持久化用户数据和第三方登录绑定）
 	oauthRepo := paymodels.NewOAuthRepository()
 
@@ -672,6 +683,7 @@ func registerRoutes(router *gin.Engine) {
 				// Apple IAP
 				auth.POST("/apple/verify", iapHandler.VerifyAppleReceipt)
 				auth.POST("/apple/subscription-status", iapHandler.GetAppleSubscriptionStatus)
+				auth.POST("/apple/subscription-notice/ack", iapHandler.AckAppleSubscriptionNotice)
 				auth.POST("/apple/acknowledge", iapHandler.AcknowledgePurchase)
 				auth.POST("/apple/consume", iapHandler.ConsumePurchase)
 
