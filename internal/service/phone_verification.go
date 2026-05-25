@@ -43,6 +43,10 @@ func (s *Service) AttachPhoneVerificationRequirement(_ context.Context, u *domai
 	if u == nil {
 		return nil
 	}
+	if u.PhoneVerifiedAt != nil && *u.PhoneVerifiedAt > 0 {
+		u.RequiresPhoneVerification = false
+		return nil
+	}
 	u.RequiresPhoneVerification = u.PendingOAuthPhoneSMS
 	return nil
 }

@@ -2,6 +2,7 @@ package pay
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -197,39 +198,10 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 	now := time.Now().Unix()
 
 	if h.repo != nil {
-		// Step 1: 通过 openid 查找已绑定的第三方登录
-		thirdPartyLogin, err := h.repo.GetThirdPartyLoginByProviderUserID(ctx, domain.ProviderWechat, userInfo.OpenID)
-		if err == nil && thirdPartyLogin != nil {
-			// 已有绑定，获取关联的用户
-			user, err := h.repo.UserByID(ctx, thirdPartyLogin.UserID)
-			if err != nil {
-				logrus.Errorf("Failed to get user by ID from third party login: %v", err)
-				return nil, false, err
-			}
-
-			// 更新登录时间、头像
-			user.LastLoginAt = &now
-			user.UpdatedAt = now
-			if userInfo.HeadImgURL != "" && user.Avatar == "" {
-				user.Avatar = userInfo.HeadImgURL
-			}
-			_ = h.repo.UpdateUser(ctx, user)
-
-			// 更新第三方登录记录
-			thirdPartyLogin.UpdatedAt = now
-			_ = h.repo.UpdateThirdPartyLogin(ctx, thirdPartyLogin)
-
-			logrus.WithFields(logrus.Fields{
-				"provider":       "wechat",
-				"providerUserID": userInfo.OpenID,
-				"userID":         user.ID,
-				"nickname":       userInfo.Nickname,
-			}).Info("Existing user logged in via WeChat")
-
-			return user, false, nil
+		if existing, err := h.resolveExistingWeChatUser(ctx, userInfo, now); err == nil && existing != nil {
+			return existing, false, nil
 		}
 
-		// Step 2: 创建新用户并绑定第三方登录
 		username := generateUsername(userInfo.Nickname, "", userInfo.OpenID, "wechat")
 		displayName := userInfo.Nickname
 		if displayName == "" {
@@ -246,21 +218,23 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 				Followers: 0,
 				Following: 0,
 			},
-			Username:               username,
-			Email:                  "", // 微信不一定提供邮箱
-			DisplayName:            displayName,
-			Avatar:                 userInfo.HeadImgURL,
-			Status:                 "active",
-			EmailVerified:          false,
-			PendingOAuthPhoneSMS:   true, // 首次微信注册需短信验证（中国大陆）
-			LastLoginAt:            &now,
+			Username:             username,
+			Email:                wechatPlaceholderEmail(userInfo.OpenID),
+			DisplayName:          displayName,
+			Avatar:               userInfo.HeadImgURL,
+			Status:               "active",
+			EmailVerified:        false,
+			PendingOAuthPhoneSMS: true,
+			LastLoginAt:          &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
+			if recovered, recErr := h.resolveExistingWeChatUser(ctx, userInfo, now); recErr == nil && recovered != nil {
+				return recovered, false, nil
+			}
 			return nil, false, err
 		}
 
-		// 创建第三方登录绑定
 		newThirdPartyLogin := &domain.ThirdPartyLogin{
 			ID:               uuid.New().String(),
 			UserID:           newUser.ID,
@@ -273,18 +247,21 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			UpdatedAt:        now,
 		}
 		if err := h.repo.CreateThirdPartyLogin(ctx, newThirdPartyLogin); err != nil {
-			logrus.Warnf("Failed to create third party login binding: %v", err)
-			// 不阻塞登录流程
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"provider":       "wechat",
-				"providerUserID": userInfo.OpenID,
-				"userID":         newUser.ID,
-				"nickname":       userInfo.Nickname,
-			}).Info("New user created via WeChat login")
+			logrus.Errorf("Failed to create WeChat third-party login binding: %v", err)
+			_ = h.repo.DeleteUserByID(ctx, newUser.ID)
+			if recovered, recErr := h.resolveExistingWeChatUser(ctx, userInfo, now); recErr == nil && recovered != nil {
+				return recovered, false, nil
+			}
+			return nil, false, fmt.Errorf("failed to bind WeChat account: %w", err)
 		}
 
-		// 创建默认用户设置
+		logrus.WithFields(logrus.Fields{
+			"provider":       "wechat",
+			"providerUserID": userInfo.OpenID,
+			"userID":         newUser.ID,
+			"nickname":       userInfo.Nickname,
+		}).Info("New user created via WeChat login")
+
 		settings := &domain.UserSettings{
 			BaseModel: common.BaseModel{
 				ID:        uuid.New().String(),
@@ -307,7 +284,6 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
-		// 创建默认会员信息
 		membership := &domain.Membership{
 			ID:           uuid.New().String(),
 			UserID:       newUser.ID,

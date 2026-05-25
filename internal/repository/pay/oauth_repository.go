@@ -249,6 +249,36 @@ func (r *OAuthRepository) GetThirdPartyLoginByProviderUserID(ctx context.Context
 	return r.thirdPartyLoginModelToDomain(&model), nil
 }
 
+// GetThirdPartyLoginByProviderUserIDUnscoped includes soft-deleted rows (for login recovery).
+func (r *OAuthRepository) GetThirdPartyLoginByProviderUserIDUnscoped(ctx context.Context, provider domain.ThirdPartyProvider, providerUserID string) (*domain.ThirdPartyLogin, error) {
+	var model OAuthThirdPartyLogin
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("provider = ? AND provider_user_id = ?", string(provider), providerUserID).
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.thirdPartyLoginModelToDomain(&model), nil
+}
+
+// RestoreThirdPartyLogin clears soft-delete on a third-party login row.
+func (r *OAuthRepository) RestoreThirdPartyLogin(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Unscoped().
+		Model(&OAuthThirdPartyLogin{}).
+		Where("id = ?", id).
+		Update("deleted_at", nil).Error
+}
+
+// DeleteUserByID hard-deletes a user created during a failed OAuth bind rollback.
+func (r *OAuthRepository) DeleteUserByID(ctx context.Context, userID string) error {
+	return r.db.WithContext(ctx).Unscoped().
+		Where("id = ?", userID).
+		Delete(&OAuthUser{}).Error
+}
+
 // GetThirdPartyLoginByEmail 根据 Provider 和 Email 获取第三方登录记录
 func (r *OAuthRepository) GetThirdPartyLoginByEmail(ctx context.Context, provider domain.ThirdPartyProvider, email string) (*domain.ThirdPartyLogin, error) {
 	var model OAuthThirdPartyLogin

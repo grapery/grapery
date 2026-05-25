@@ -101,6 +101,9 @@ type OAuthRepository interface {
 	// 第三方登录操作（支持 Google/Apple 跨设备登录）
 	CreateThirdPartyLogin(ctx context.Context, login *domain.ThirdPartyLogin) error
 	GetThirdPartyLoginByProviderUserID(ctx context.Context, provider domain.ThirdPartyProvider, providerUserID string) (*domain.ThirdPartyLogin, error)
+	GetThirdPartyLoginByProviderUserIDUnscoped(ctx context.Context, provider domain.ThirdPartyProvider, providerUserID string) (*domain.ThirdPartyLogin, error)
+	RestoreThirdPartyLogin(ctx context.Context, id string) error
+	DeleteUserByID(ctx context.Context, userID string) error
 	GetThirdPartyLoginByEmail(ctx context.Context, provider domain.ThirdPartyProvider, email string) (*domain.ThirdPartyLogin, error)
 	GetThirdPartyLoginsByUserID(ctx context.Context, userID string) ([]*domain.ThirdPartyLogin, error)
 	UpdateThirdPartyLogin(ctx context.Context, login *domain.ThirdPartyLogin) error

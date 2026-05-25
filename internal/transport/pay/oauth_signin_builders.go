@@ -23,6 +23,9 @@ func RequiresPhoneVerification(provider string, u *domain.User) bool {
 	if u == nil || !ProviderRequiresPhoneVerification(provider) {
 		return false
 	}
+	if UserPhoneVerified(u) {
+		return false
+	}
 	return u.PendingOAuthPhoneSMS
 }
 
