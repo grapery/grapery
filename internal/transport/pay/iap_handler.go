@@ -143,6 +143,30 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 			"transaction_id": receipt.SubscriptionTransactionID,
 			"endpoint":   "VerifyAppleReceipt",
 		}).Info("Accepted StoreKit local sandbox transaction")
+	} else if strings.TrimSpace(req.ReceiptData) == "" && strings.TrimSpace(req.TransactionID) != "" {
+		h.logger.WithFields(logrus.Fields{
+			"user_id":        userID,
+			"transaction_id": req.TransactionID,
+			"sandbox":        req.Sandbox,
+			"endpoint":       "VerifyAppleReceipt",
+		}).Info("Starting Apple transaction verification (App Store Server API)")
+
+		receipt, err = h.verifyAppleTransaction(ctx, req.TransactionID, req.Sandbox)
+		if err != nil {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":        userID,
+				"transaction_id": req.TransactionID,
+				"sandbox":        req.Sandbox,
+				"endpoint":       "VerifyAppleReceipt",
+				"error":          err.Error(),
+			}).Error("Failed to verify Apple transaction")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "failed to verify receipt",
+			})
+			return
+		}
+		receipt.UserID = userID
 	} else {
 		if strings.TrimSpace(req.ReceiptData) == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -1342,6 +1366,18 @@ func (h *IAPHandler) GetProductStats(c *gin.Context) {
 			"stats":    stats,
 		},
 	})
+}
+
+func (h *IAPHandler) verifyAppleTransaction(ctx context.Context, transactionID string, sandbox bool) (*pay.IAPReceipt, error) {
+	if comp, ok := h.iapService.(*pay.CompositeIAPService); ok {
+		if apple, ok := comp.GetAppleService().(*pay.AppleIAPService); ok {
+			return apple.VerifyTransaction(ctx, transactionID, sandbox)
+		}
+	}
+	if apple, ok := h.iapService.(*pay.AppleIAPService); ok {
+		return apple.VerifyTransaction(ctx, transactionID, sandbox)
+	}
+	return nil, fmt.Errorf("apple transaction verification is not configured")
 }
 
 // buildStoreKitLocalReceipt 为 Xcode StoreKit Configuration（无 App Store 收据文件）构建可入账的收据。

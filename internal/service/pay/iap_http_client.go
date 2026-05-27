@@ -3,10 +3,17 @@ package pay
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2/jwt"
@@ -132,11 +139,11 @@ func NewAppleAppStoreConnect(apiKey, issuerID, bundleID string) *AppleAppStoreCo
 	}
 }
 
-// AppleReceiptRequest Apple 收据验证请求
+// AppleReceiptRequest Apple 收据验证请求（legacy verifyReceipt，字段名须与 Apple 文档一致）
 type AppleReceiptRequest struct {
-	ReceiptData            string `json:"receipt_data"`
+	ReceiptData            string `json:"receipt-data"`
 	Password               string `json:"password,omitempty"`
-	ExcludeOldTransactions bool   `json:"exclude_old_transactions"`
+	ExcludeOldTransactions bool   `json:"exclude-old-transactions"`
 }
 
 // AppleReceiptResponse Apple 收据验证响应
@@ -175,39 +182,172 @@ type ApplePendingRenewalInfo struct {
 	ProductID             string `json:"product_id"`
 }
 
-// VerifyReceipt 验证 Apple 收据
-func (a *AppleAppStoreConnect) VerifyReceipt(ctx context.Context, receipt string, sandbox bool) (*AppleReceiptResponse, error) {
-	// 选择验证 URL
-	var url string
-	if sandbox {
-		url = "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/verifyReceipt"
-	} else {
-		url = "https://api.storekit.itunes.apple.com/inApps/v1/verifyReceipt"
+const (
+	appleReceiptStatusSandboxReceiptOnProduction = 21007
+	appleReceiptStatusProductionReceiptOnSandbox = 21008
+)
+
+// VerifyReceipt 验证 Apple 收据（legacy verifyReceipt；支持 21007/21008 环境自动切换）
+func VerifyAppleLegacyReceipt(ctx context.Context, httpClient *HTTPClient, receipt string, sandbox bool, verifyURL, sharedSecret string) (*AppleReceiptResponse, error) {
+	if strings.TrimSpace(verifyURL) == "" {
+		if sandbox {
+			verifyURL = "https://sandbox.itunes.apple.com/verifyReceipt"
+		} else {
+			verifyURL = "https://buy.itunes.apple.com/verifyReceipt"
+		}
 	}
 
-	// 构建请求
-	req := &Request{
+	result, err := postAppleLegacyVerifyReceipt(ctx, httpClient, verifyURL, receipt, sharedSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	switch result.Status {
+	case appleReceiptStatusSandboxReceiptOnProduction:
+		if !sandbox {
+			return postAppleLegacyVerifyReceipt(ctx, httpClient, "https://sandbox.itunes.apple.com/verifyReceipt", receipt, sharedSecret)
+		}
+	case appleReceiptStatusProductionReceiptOnSandbox:
+		if sandbox {
+			return postAppleLegacyVerifyReceipt(ctx, httpClient, "https://buy.itunes.apple.com/verifyReceipt", receipt, sharedSecret)
+		}
+	}
+
+	return result, nil
+}
+
+func postAppleLegacyVerifyReceipt(ctx context.Context, httpClient *HTTPClient, url, receipt, sharedSecret string) (*AppleReceiptResponse, error) {
+	body := AppleReceiptRequest{
+		ReceiptData:            receipt,
+		ExcludeOldTransactions: false,
+	}
+	if strings.TrimSpace(sharedSecret) != "" {
+		body.Password = sharedSecret
+	}
+
+	resp, err := httpClient.Do(ctx, &Request{
 		Method: "POST",
 		URL:    url,
-		Body: AppleReceiptRequest{
-			ReceiptData:            receipt,
-			ExcludeOldTransactions: false,
-		},
-	}
-
-	// 执行请求
-	resp, err := a.httpClient.Do(ctx, req)
+		Body:   body,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify receipt: %w", err)
 	}
 
-	// 解析响应
 	var result AppleReceiptResponse
 	if err := json.Unmarshal(resp.Body, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-
 	return &result, nil
+}
+
+// AppleTransactionAPIResponse App Store Server API GET /transactions/{id}
+type AppleTransactionAPIResponse struct {
+	SignedTransactionInfo string `json:"signedTransactionInfo"`
+}
+
+// GetAppleStoreTransaction 通过 App Store Server API 查询单笔交易（StoreKit 2 / 无收据文件）
+func GetAppleStoreTransaction(ctx context.Context, httpClient *HTTPClient, transactionID string, sandbox bool, bundleID, issuerID, keyID, privateKeyPEM string) (*AppleTransactionAPIResponse, error) {
+	transactionID = strings.TrimSpace(transactionID)
+	if transactionID == "" {
+		return nil, fmt.Errorf("transaction_id is required")
+	}
+	token, err := generateAppStoreServerJWT(bundleID, issuerID, keyID, privateKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+
+	host := "https://api.storekit.itunes.apple.com"
+	if sandbox {
+		host = "https://api.storekit-sandbox.itunes.apple.com"
+	}
+	url := host + "/inApps/v1/transactions/" + transactionID
+
+	resp, err := httpClient.Do(ctx, &Request{
+		Method: "GET",
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": "Bearer " + token,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get transaction: %w", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("transaction not found: %s", transactionID)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("app store server api status %d: %s", resp.StatusCode, string(resp.Body))
+	}
+
+	var result AppleTransactionAPIResponse
+	if err := json.Unmarshal(resp.Body, &result); err != nil {
+		return nil, fmt.Errorf("parse transaction response: %w", err)
+	}
+	if strings.TrimSpace(result.SignedTransactionInfo) == "" {
+		return nil, fmt.Errorf("missing signedTransactionInfo")
+	}
+	return &result, nil
+}
+
+// generateAppStoreServerJWT 为 App Store Server API 签发 ES256 JWT（须含 bundle id）
+func generateAppStoreServerJWT(bundleID, issuerID, keyID, privateKeyPEM string) (string, error) {
+	bundleID = strings.TrimSpace(bundleID)
+	issuerID = strings.TrimSpace(issuerID)
+	keyID = strings.TrimSpace(keyID)
+	privateKeyPEM = strings.TrimSpace(privateKeyPEM)
+	if bundleID == "" || issuerID == "" || keyID == "" || privateKeyPEM == "" {
+		return "", fmt.Errorf("apple app store server api credentials incomplete")
+	}
+
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to decode apple private key PEM")
+	}
+	keyAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		keyAny, err = x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			return "", fmt.Errorf("parse apple private key: %w", err)
+		}
+	}
+	privateKey, ok := keyAny.(*ecdsa.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("apple private key is not ECDSA")
+	}
+
+	now := time.Now().Unix()
+	headerJSON, _ := json.Marshal(map[string]string{
+		"alg": "ES256",
+		"kid": keyID,
+		"typ": "JWT",
+	})
+	payloadJSON, _ := json.Marshal(map[string]interface{}{
+		"iss": issuerID,
+		"iat": now,
+		"exp": now + 1200,
+		"aud": "appstoreconnect-v1",
+		"bid": bundleID,
+	})
+	header := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	signingInput := header + "." + payload
+	hash := sha256.Sum256([]byte(signingInput))
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+	if err != nil {
+		return "", fmt.Errorf("sign jwt: %w", err)
+	}
+	curveBits := privateKey.Curve.Params().BitSize
+	keyBytes := curveBits / 8
+	if curveBits%8 > 0 {
+		keyBytes++
+	}
+	sig := make([]byte, 2*keyBytes)
+	rBytes := r.Bytes()
+	copy(sig[keyBytes-len(rBytes):keyBytes], rBytes)
+	sBytes := s.Bytes()
+	copy(sig[2*keyBytes-len(sBytes):], sBytes)
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
 // Google Play Developer API 相关结构

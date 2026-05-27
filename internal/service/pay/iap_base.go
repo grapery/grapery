@@ -34,6 +34,7 @@ type AppleConfig struct {
 	BundleID       string `json:"bundle_id"`
 	SandboxURL     string `json:"sandbox_url"`
 	ProductionURL  string `json:"production_url"`
+	SharedSecret   string `json:"shared_secret,omitempty"` // App-Specific Shared Secret（legacy verifyReceipt）
 	IssuerID       string `json:"issuer_id"`
 	KeyID          string `json:"key_id"`
 	PrivateKey     string `json:"private_key"`

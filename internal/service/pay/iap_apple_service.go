@@ -17,6 +17,7 @@ import (
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"github.com/sirupsen/logrus"
@@ -42,21 +43,12 @@ func NewAppleIAPService(config *IAPConfig) *AppleIAPService {
 	}
 }
 
-// getUserIDFromContext 从上下文获取用户ID
+// getUserIDFromContext 从上下文获取用户ID（vippay handler 会覆盖 IAPReceipt.UserID，此处可为 0）
 func getUserIDFromContext(ctx context.Context) (int64, error) {
-	userID, ok := ctx.Value("userID").(int64)
-	if !ok {
-		// 尝试其他类型转换
-		if _, ok := ctx.Value("userID").(string); ok {
-			// 如果存储为字符串，这里可以转换
-			return 0, fmt.Errorf("userID is string type, needs conversion")
-		}
-		if uid, ok := ctx.Value("userID").(uint64); ok {
-			return int64(uid), nil
-		}
-		return 0, fmt.Errorf("userID not found in context")
+	if uid := auth.UserIDFromContext(ctx); uid != "" {
+		return 0, nil
 	}
-	return userID, nil
+	return 0, nil
 }
 
 // GetPlatform 获取平台
@@ -74,18 +66,12 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 		"verification_url": s.config.Apple.GetVerificationURL(sandbox),
 	}).Info("验证Apple收据")
 
-	// 1. 根据环境获取配置
 	bundleID := s.config.Apple.GetBundleID(sandbox)
-	issuerID := s.config.Apple.GetIssuerID(sandbox)
-	keyID := s.config.Apple.GetKeyID(sandbox)
-	privateKey := s.config.Apple.GetPrivateKey(sandbox)
-	_ = s.config.Apple.GetVerificationURL(sandbox) // 验证URL配置正确性
+	verifyURL := s.config.Apple.GetVerificationURL(sandbox)
+	sharedSecret := s.config.Apple.SharedSecret
 
-	// 2. 创建Apple App Store Connect客户端
-	appleClient := NewAppleAppStoreConnect(issuerID, keyID, privateKey)
-
-	// 3. 验证收据（使用sandbox参数）
-	resp, err := appleClient.VerifyReceipt(ctx, receipt, sandbox)
+	// 2. 验证收据（legacy verifyReceipt；自动处理 21007/21008）
+	resp, err := VerifyAppleLegacyReceipt(ctx, s.httpClient.client, receipt, sandbox, verifyURL, sharedSecret)
 	if err != nil {
 		s.logger.WithError(err).Error("Apple收据验证失败")
 		// 记录验证失败的指标
@@ -105,16 +91,10 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 		return nil, fmt.Errorf("收据验证失败，状态码: %d", resp.Status)
 	}
 
-	// 4. 从上下文获取用户ID
-	userID, err := getUserIDFromContext(ctx)
-	if err != nil {
-		s.logger.WithError(err).Error("无法从上下文获取用户ID")
-		return nil, fmt.Errorf("无法获取用户ID: %w", err)
-	}
-
-	// 5. 构建返回对象
+	// 4. 构建返回对象（UserID 由 transport handler 写入）
+	_, _ = getUserIDFromContext(ctx)
 	iapReceipt := &IAPReceipt{
-		UserID:             uint64(userID),
+		UserID:             0,
 		Platform:           IAPPlatformApple,
 		ReceiptData:        receipt,
 		BundleID:           bundleID, // 使用配置中的Bundle ID
@@ -144,6 +124,85 @@ func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, san
 		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
 	}
 
+	return iapReceipt, nil
+}
+
+// VerifyTransaction 通过 App Store Server API 校验单笔交易（TestFlight / StoreKit 2 无收据文件时）
+func (s *AppleIAPService) VerifyTransaction(ctx context.Context, transactionID string, sandbox bool) (*IAPReceipt, error) {
+	startTime := time.Now()
+	transactionID = strings.TrimSpace(transactionID)
+	if transactionID == "" {
+		return nil, fmt.Errorf("transaction_id is required")
+	}
+
+	bundleID := s.config.Apple.GetBundleID(sandbox)
+	issuerID := s.config.Apple.GetIssuerID(sandbox)
+	keyID := s.config.Apple.GetKeyID(sandbox)
+	privateKey := s.config.Apple.GetPrivateKey(sandbox)
+
+	apiResp, err := GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, sandbox, bundleID, issuerID, keyID, privateKey)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		apiResp, err = GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, !sandbox, bundleID, issuerID, keyID, privateKey)
+		if err == nil {
+			sandbox = !sandbox
+		}
+	}
+	if err != nil {
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
+		}
+		return nil, err
+	}
+
+	txPayload, err := DecodeAppleJWSPayload(apiResp.SignedTransactionInfo)
+	if err != nil {
+		return nil, fmt.Errorf("decode signedTransactionInfo: %w", err)
+	}
+
+	productID, _ := txPayload["productId"].(string)
+	txID, _ := txPayload["transactionId"].(string)
+	origTxID, _ := txPayload["originalTransactionId"].(string)
+	if origTxID == "" {
+		origTxID = txID
+	}
+	if productID == "" || txID == "" {
+		return nil, fmt.Errorf("incomplete transaction payload from app store")
+	}
+
+	env := "Production"
+	if sandbox {
+		env = "Sandbox"
+	}
+	now := time.Now()
+	iapReceipt := &IAPReceipt{
+		Platform:                  IAPPlatformApple,
+		ProductID:                 productID,
+		OriginalTransactionID:     origTxID,
+		SubscriptionTransactionID: txID,
+		BundleID:                  bundleID,
+		Environment:               env,
+		Status:                    "Valid",
+		CreationDate:              now,
+		CreatedAt:                 now,
+		UpdatedAt:                 now,
+	}
+	if ms, ok := txPayload["purchaseDate"].(float64); ok && ms > 0 {
+		iapReceipt.CreationDate = time.UnixMilli(int64(ms))
+	}
+	if ms, ok := txPayload["expiresDate"].(float64); ok && ms > 0 {
+		exp := time.UnixMilli(int64(ms))
+		iapReceipt.ExpirationDate = &exp
+		if exp.After(now) {
+			iapReceipt.Status = "Active"
+		} else {
+			iapReceipt.Status = "Expired"
+		}
+	}
+	iapReceipt.VerificationHash = s.generateReceiptHash(iapReceipt)
+
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
+	}
 	return iapReceipt, nil
 }
 
