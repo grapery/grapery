@@ -64,6 +64,11 @@ Apple V2 请求体为 camelCase：`{"signedPayload":"<JWS>"}`（不是 `signed_p
 | `APPLE_SANDBOX_KEY_ID` | Sandbox Key ID |
 | `APPLE_SANDBOX_PRIVATE_KEY` | Sandbox 私钥 |
 
+#### VIPPay 部署（Docker Compose）
+| 环境变量 | 说明 |
+|---------|------|
+| `APPLE_PRIVATE_KEY` | App Store Connect API `.p8` PEM；CI 写入 `.env` 时为单行 JSON 转义（**勿**用 heredoc `<<`，`docker compose` 无法解析） |
+
 #### 本地 Xcode StoreKit Configuration（仅开发）
 | 环境变量 | 说明 |
 |---------|------|

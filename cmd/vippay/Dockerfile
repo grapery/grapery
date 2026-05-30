@@ -99,7 +99,7 @@ ENV ALIYUN_ACCESS_KEY_SECRET=
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/app/grapery-vippay", "-version"] || exit 1
+    CMD ["/app/grapery-vippay", "-version"]
 
 CMD ["/app/grapery-vippay"]
 

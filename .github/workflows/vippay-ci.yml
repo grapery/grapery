@@ -241,14 +241,8 @@ jobs:
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           EOF
-          if [ -n "${APPLE_PRIVATE_KEY:-}" ]; then
-            {
-              printf 'APPLE_PRIVATE_KEY<<__APPLE_IAP_PKEY__\n'
-              printf '%s\n' "$APPLE_PRIVATE_KEY"
-              printf '__APPLE_IAP_PKEY__\n'
-            } >> .env
-          fi
-          echo "✅ Development .env file generated"
+          bash scripts/vippay_ci_apple_iap_setup.sh
+          echo "✅ Development .env file generated (APPLE_PRIVATE_KEY in compose-safe single line)"
           grep -vE '^(APPLE_PRIVATE_KEY|JWT_SECRET|WECHAT_APP_SECRET|DB_PASSWORD|GOOGLE_SERVICE_ACCOUNT_KEY)=' .env || true
 
       - name: Deploy notification
@@ -346,15 +340,8 @@ jobs:
             # 如果存在 docker-compose.vippay.yml，使用 docker compose 部署
             if [ -f docker-compose.vippay.yml ]; then
               echo "📦 Deploying via docker-compose.vippay.yml..."
-              # 在当前服务目录中直接使用 docker compose（目录已隔离）
-              echo "📋 Verifying compose file in service directory..."
-              ls -la "$SERVICE_DIR"
-              echo "--- docker-compose.yml content ---"
-              cat docker-compose.vippay.yml
-              # 先停止并清理可能存在的旧容器（使用项目名称隔离）
               docker compose -f docker-compose.vippay.yml -p grapery-vippay down 2>/dev/null || true
-              # 显式指定 compose 文件，确保只使用当前服务的配置
-              docker compose -f docker-compose.vippay.yml -p grapery-vippay up -d vippay
+              docker compose -f docker-compose.vippay.yml -p grapery-vippay up -d --force-recreate vippay
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
@@ -370,8 +357,8 @@ jobs:
                 ${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev
             fi
             
-            # 清理未使用的镜像
-            docker system prune -f
+            # 仅清理悬空镜像，避免删掉仍被旧容器引用的 tag
+            docker image prune -f --filter "dangling=true" || true
 
   # ========================================
   # 部署到生产环境 - Main 分支
@@ -467,14 +454,8 @@ jobs:
           ALIYUN_OSS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_OSS_ACCESS_KEY_SECRET }}
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
-          if [ -n "${APPLE_PRIVATE_KEY:-}" ]; then
-            {
-              printf 'APPLE_PRIVATE_KEY<<__APPLE_IAP_PKEY__\n'
-              printf '%s\n' "$APPLE_PRIVATE_KEY"
-              printf '__APPLE_IAP_PKEY__\n'
-            } >> .env
-          fi
-          echo "✅ Production .env file generated"
+          bash scripts/vippay_ci_apple_iap_setup.sh
+          echo "✅ Production .env file generated (APPLE_PRIVATE_KEY in compose-safe single line)"
           grep -vE '^(APPLE_PRIVATE_KEY|JWT_SECRET|WECHAT_APP_SECRET|DB_PASSWORD|GOOGLE_SERVICE_ACCOUNT_KEY)=' .env || true
 
       - name: Deploy notification
@@ -574,15 +555,8 @@ jobs:
             # 如果存在 docker-compose.vippay.yml，使用 docker compose 部署
             if [ -f docker-compose.vippay.yml ]; then
               echo "📦 Deploying via docker-compose.vippay.yml..."
-              # 在当前服务目录中直接使用 docker compose（目录已隔离）
-              echo "📋 Verifying compose file in service directory..."
-              ls -la "$SERVICE_DIR"
-              echo "--- docker-compose.yml content ---"
-              cat docker-compose.vippay.yml
-              # 先停止并清理可能存在的旧容器（使用项目名称隔离）
               docker compose -f docker-compose.vippay.yml -p grapery-vippay down 2>/dev/null || true
-              # 显式指定 compose 文件，确保只使用当前服务的配置
-              docker compose -f docker-compose.vippay.yml -p grapery-vippay up -d vippay
+              docker compose -f docker-compose.vippay.yml -p grapery-vippay up -d --force-recreate vippay
             else
               # 否则直接运行容器，连接到 grapery-network 网络
               echo "🚀 Deploying container directly..."
@@ -598,6 +572,6 @@ jobs:
                 ${{ env.REGISTRY }}/grapery-prod/${{ env.IMAGE_NAME }}:prod
             fi
             
-            # 清理未使用的镜像
-            docker system prune -f
+            # 仅清理悬空镜像，避免删掉仍被旧容器引用的 tag
+            docker image prune -f --filter "dangling=true" || true
 

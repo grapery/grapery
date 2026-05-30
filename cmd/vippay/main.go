@@ -1071,13 +1071,22 @@ func registerRoutes(router *gin.Engine) {
 	}
 }
 
+// normalizeApplePrivateKeyPEM 支持 .env 内 JSON 转义换行（docker compose 单行配置）。
+func normalizeApplePrivateKeyPEM(pem string) string {
+	pem = strings.TrimSpace(pem)
+	if strings.Contains(pem, `\n`) {
+		pem = strings.ReplaceAll(pem, `\n`, "\n")
+	}
+	return pem
+}
+
 // createIAPConfig 创建IAP配置（从环境变量加载）
 func createIAPConfig() *paypkg.IAPConfig {
 	// Apple 配置
 	appleBundleID := getEnvWithDefault("APPLE_BUNDLE_ID", "com.rankquantity.voyager")
 	appleIssuerID := os.Getenv("APPLE_ISSUER_ID")
 	appleKeyID := os.Getenv("APPLE_KEY_ID")
-	applePrivateKey := os.Getenv("APPLE_PRIVATE_KEY")
+	applePrivateKey := normalizeApplePrivateKeyPEM(os.Getenv("APPLE_PRIVATE_KEY"))
 	// Apple Sandbox 配置（如不设置，使用生产配置）
 	appleSandboxBundleID := getEnvWithDefault("APPLE_SANDBOX_BUNDLE_ID", appleBundleID)
 	appleSandboxIssuerID := getEnvWithDefault("APPLE_SANDBOX_ISSUER_ID", appleIssuerID)
