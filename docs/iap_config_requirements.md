@@ -13,6 +13,8 @@
 
 ## Apple App Store IAP 配置
 
+VipPay 对 Apple **仅支持 StoreKit 2**：客户端提交 `transaction_id`，服务端通过 **App Store Server API** 验单（不再使用 legacy `verifyReceipt` / `APPLE_SHARED_SECRET`）。
+
 ### 1. App Store Connect 配置
 
 #### 1.1 创建 App Store Connect API Key
@@ -61,6 +63,11 @@ Apple V2 请求体为 camelCase：`{"signedPayload":"<JWS>"}`（不是 `signed_p
 | `APPLE_SANDBOX_ISSUER_ID` | Sandbox Issuer ID |
 | `APPLE_SANDBOX_KEY_ID` | Sandbox Key ID |
 | `APPLE_SANDBOX_PRIVATE_KEY` | Sandbox 私钥 |
+
+#### 本地 Xcode StoreKit Configuration（仅开发）
+| 环境变量 | 说明 |
+|---------|------|
+| `IAP_ALLOW_STOREKIT_LOCAL` | 设为 `true` 时允许请求体 `storekit_local: true`（免 App Store 验单）；**生产环境切勿开启** |
 
 ---
 
@@ -246,9 +253,9 @@ stringData:
 
 ### 常见问题
 
-1. **Apple 验证失败 (21007)**
-   - 原因：使用生产环境验证 Sandbox 收据
-   - 解决：确保在 Sandbox 模式下使用 Sandbox 验证 URL
+1. **Apple 验单 404 / transaction not found**
+   - 原因：客户端 `sandbox` 与交易实际环境不一致，或 Server API 凭证未配置
+   - 解决：确认 `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` / `APPLE_BUNDLE_ID`；iOS 端以 `Transaction.environment` 决定 `sandbox` 字段
 
 2. **Google 401 Unauthorized**
    - 原因：服务账号权限不足或未关联

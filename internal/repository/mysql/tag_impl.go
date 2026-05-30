@@ -72,10 +72,20 @@ func (r *Repository) StoriesByTag(ctx context.Context, tagID string, limit, offs
 		return nil, fmt.Errorf("failed to get stories by tag: %w", err)
 	}
 
-	result := make([]*domain.Story, len(storyTags))
-	for i, st := range storyTags {
+	// 标签页为公开发现入口：仅展示已发布且公开可见的故事，避免泄露草稿/私有/关注者可见内容。
+	result := make([]*domain.Story, 0, len(storyTags))
+	for _, st := range storyTags {
 		story := r.storyToDomain(st.Story)
-		result[i] = &story
+		if story.ID == "" {
+			continue
+		}
+		if story.Status != string(domain.StoryStatusPublished) {
+			continue
+		}
+		switch story.Visibility {
+		case string(domain.StoryVisibilityPublic), "":
+			result = append(result, &story)
+		}
 	}
 	return result, nil
 }

@@ -852,7 +852,7 @@ func (s *Service) canViewerSeeStory(ctx context.Context, story *domain.Story, ow
 	if !storiesPublic {
 		return false
 	}
-	switch story.Visibility {
+	switch normalizeStoryVisibility(story.Visibility) {
 	case string(domain.StoryVisibilityPrivate):
 		return false
 	case string(domain.StoryVisibilityFollowers):

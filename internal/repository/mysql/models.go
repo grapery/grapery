@@ -106,6 +106,7 @@ type Story struct {
 	Status              string         `gorm:"size:20;default:'draft';index"`  // draft, published, rendering
 	IsCollaborationOpen bool           `gorm:"default:false;index"`            // Whether collaboration is open: true=anyone can edit, false=only author can edit
 	Visibility          string         `gorm:"size:20;default:'public';index"` // 可见性: public, followers, private
+	AllowComments       bool           `gorm:"default:true"`                   // 是否允许读者评论
 	UseAI               bool           `gorm:"default:true"`                   // AI开关（创建时确定）
 	AIAssistanceOptions string         `gorm:"type:text"`                      // AI辅助选项 JSON
 	CreatedAt           time.Time      `gorm:"autoCreateTime;index"`

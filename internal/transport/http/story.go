@@ -78,6 +78,12 @@ func (h *Handler) GetStory(c *gin.Context) {
 		return
 	}
 
+	// 可见性鉴权：private 仅作者、followers 仅关注者可见。
+	if !h.svc.CanViewerSeeStory(c.Request.Context(), GetUserID(c), story) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
+
 	h.attachStoryViewerState(c, story)
 	Success(c, story)
 }
@@ -88,6 +94,7 @@ func (h *Handler) ListStories(c *gin.Context) {
 	if !BindQuery(c, &req) {
 		return
 	}
+	req.ViewerID = GetUserID(c)
 
 	stories, total, err := h.svc.ListStories(c.Request.Context(), req)
 	if err != nil {

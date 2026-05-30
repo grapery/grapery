@@ -229,6 +229,7 @@ func StoryToModel(d *domain.Story) *Story {
 		Status:              d.Status,
 		IsCollaborationOpen: d.IsCollaborationOpen,
 		Visibility:          d.Visibility,
+		AllowComments:       d.AllowComments,
 		UseAI:               d.UseAI,
 		AIAssistanceOptions: aiAssistanceOptionsToJSON(d.AIAssistanceOptions),
 		CreatedAt:           unixToTime(d.CreatedAt),
@@ -264,6 +265,7 @@ func ModelToStory(m *Story) *domain.Story {
 		Status:              m.Status,
 		IsCollaborationOpen: m.IsCollaborationOpen,
 		Visibility:          m.Visibility,
+		AllowComments:       m.AllowComments,
 		UseAI:               m.UseAI,
 		AIAssistanceOptions: jsonToAIAssistanceOptions(m.AIAssistanceOptions),
 	}

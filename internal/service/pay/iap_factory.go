@@ -104,8 +104,17 @@ func (c *CompositeIAPService) VerifyReceipt(ctx context.Context, receipt string,
 		return nil, fmt.Errorf("不支持的收据平台: %s", platform)
 	}
 
-	// 3. 验证收据
-	receiptResult, err := service.VerifyReceipt(ctx, receipt, sandbox)
+	// 3. 验证收据（Apple StoreKit 2 使用 transaction_id）
+	var receiptResult *IAPReceipt
+	if platform == IAPPlatformApple && IsAppleStoreKitTransactionID(receipt) {
+		if apple, ok := service.(*AppleIAPService); ok {
+			receiptResult, err = apple.VerifyTransaction(ctx, receipt, sandbox)
+		} else {
+			err = fmt.Errorf("apple transaction verification is not configured")
+		}
+	} else {
+		receiptResult, err = service.VerifyReceipt(ctx, receipt, sandbox)
+	}
 	if err != nil {
 		c.logger.WithError(err).WithField("platform", platform).Error("收据验证失败")
 		return nil, fmt.Errorf("收据验证失败: %w", err)
@@ -166,9 +175,12 @@ func (c *CompositeIAPService) VerifyReceiptWithAutoDetection(ctx context.Context
 	return receiptResult, err
 }
 
-// VerifyAppleReceipt 验证Apple收据
-func (c *CompositeIAPService) VerifyAppleReceipt(ctx context.Context, receipt string, sandbox bool) (*IAPReceipt, error) {
-	return c.appleService.VerifyReceipt(ctx, receipt, sandbox)
+// VerifyAppleReceipt 通过 App Store Server API 验证 StoreKit 2 交易（参数为 transaction_id）。
+func (c *CompositeIAPService) VerifyAppleReceipt(ctx context.Context, transactionID string, sandbox bool) (*IAPReceipt, error) {
+	if apple, ok := c.appleService.(*AppleIAPService); ok {
+		return apple.VerifyTransaction(ctx, transactionID, sandbox)
+	}
+	return nil, fmt.Errorf("apple transaction verification is not configured")
 }
 
 // VerifyGoogleReceipt 验证Google收据
@@ -336,6 +348,11 @@ func (c *CompositeIAPService) detectReceiptPlatform(receipt string) (IAPPlatform
 		return "", fmt.Errorf("收据数据为空")
 	}
 
+	if IsAppleStoreKitTransactionID(receipt) {
+		c.logger.Debug("检测到 Apple StoreKit 2 transaction id")
+		return IAPPlatformApple, nil
+	}
+
 	// 1. 尝试检测Apple收据格式
 	if c.isAppleReceipt(receipt) {
 		c.logger.Debug("检测到Apple收据格式")
@@ -422,37 +439,20 @@ func (c *CompositeIAPService) isValidBase64(s string) bool {
 func (c *CompositeIAPService) detectPlatformByVerification(receipt string) (IAPPlatform, error) {
 	c.logger.Debug("通过验证检测收据平台")
 
-	// 创建上下文用于验证
+	// Apple 已弃用 legacy receipt；仅通过 Google 验单探测平台
 	ctx := context.Background()
 
-	// 1. 先尝试Apple验证（生产环境）
-	_, err := c.appleService.VerifyReceipt(ctx, receipt, false)
-	if err == nil {
-		c.logger.Debug("通过Apple生产环境验证检测到平台")
-		return IAPPlatformApple, nil
-	}
-
-	// 2. 尝试Apple验证（沙盒环境）
-	_, err = c.appleService.VerifyReceipt(ctx, receipt, true)
-	if err == nil {
-		c.logger.Debug("通过Apple沙盒环境验证检测到平台")
-		return IAPPlatformApple, nil
-	}
-
-	// 3. 尝试Google验证（生产环境）
-	_, err = c.googleService.VerifyReceipt(ctx, receipt, false)
+	_, err := c.googleService.VerifyReceipt(ctx, receipt, false)
 	if err == nil {
 		c.logger.Debug("通过Google生产环境验证检测到平台")
 		return IAPPlatformGoogle, nil
 	}
 
-	// 4. 尝试Google验证（沙盒环境）
 	_, err = c.googleService.VerifyReceipt(ctx, receipt, true)
 	if err == nil {
 		c.logger.Debug("通过Google沙盒环境验证检测到平台")
 		return IAPPlatformGoogle, nil
 	}
 
-	// 5. 如果所有验证都失败，返回错误
-	return "", fmt.Errorf("无法确定收据平台，所有验证尝试都失败")
+	return "", fmt.Errorf("无法确定收据平台；Apple 请使用 StoreKit 2 transaction_id")
 }

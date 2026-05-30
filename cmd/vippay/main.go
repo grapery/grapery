@@ -1078,8 +1078,6 @@ func createIAPConfig() *paypkg.IAPConfig {
 	appleIssuerID := os.Getenv("APPLE_ISSUER_ID")
 	appleKeyID := os.Getenv("APPLE_KEY_ID")
 	applePrivateKey := os.Getenv("APPLE_PRIVATE_KEY")
-	appleSharedSecret := os.Getenv("APPLE_SHARED_SECRET")
-
 	// Apple Sandbox 配置（如不设置，使用生产配置）
 	appleSandboxBundleID := getEnvWithDefault("APPLE_SANDBOX_BUNDLE_ID", appleBundleID)
 	appleSandboxIssuerID := getEnvWithDefault("APPLE_SANDBOX_ISSUER_ID", appleIssuerID)
@@ -1097,9 +1095,6 @@ func createIAPConfig() *paypkg.IAPConfig {
 	config := &paypkg.IAPConfig{
 		Apple: paypkg.AppleConfig{
 			BundleID:       appleBundleID,
-			SandboxURL:     "https://sandbox.itunes.apple.com/verifyReceipt",
-			ProductionURL:  "https://buy.itunes.apple.com/verifyReceipt",
-			SharedSecret:   appleSharedSecret,
 			IssuerID:       appleIssuerID,
 			KeyID:          appleKeyID,
 			PrivateKey:     applePrivateKey,

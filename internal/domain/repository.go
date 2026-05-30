@@ -11,8 +11,10 @@ type StoryFilter struct {
 	UserID string
 	Search string
 	Genre  string
-	Limit  int
-	Offset int
+	// PublicOnly 限制只返回公开可见的故事（用于非作者本人的发现/浏览场景）。
+	PublicOnly bool
+	Limit      int
+	Offset     int
 }
 
 // Repository defines the data access interface

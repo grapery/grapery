@@ -40,10 +40,17 @@ func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (boo
 	// Case 2: Check status
 	switch story.Status {
 	case "published":
-		// 已发布的故事：任何人可以查看
-		s.logger.Debug("story is published, allowing view",
-			zap.String("storyID", storyID))
-		return true, nil
+		// 已发布的故事：再按可见性（public/followers/private）裁决。
+		if s.CanViewerSeeStory(ctx, userID, story) {
+			s.logger.Debug("story is published and visible to viewer",
+				zap.String("storyID", storyID))
+			return true, nil
+		}
+		s.logger.Debug("story is published but not visible to viewer",
+			zap.String("storyID", storyID),
+			zap.String("userID", userID),
+			zap.String("visibility", story.Visibility))
+		return false, nil
 
 	case "draft", "rendering":
 		// 草稿/渲染中的故事：只有作者可以查看（V1/V2 MVP）

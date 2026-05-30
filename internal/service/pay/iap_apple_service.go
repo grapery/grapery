@@ -43,12 +43,13 @@ func NewAppleIAPService(config *IAPConfig) *AppleIAPService {
 	}
 }
 
-// getUserIDFromContext 从上下文获取用户ID（vippay handler 会覆盖 IAPReceipt.UserID，此处可为 0）
-func getUserIDFromContext(ctx context.Context) (int64, error) {
-	if uid := auth.UserIDFromContext(ctx); uid != "" {
-		return 0, nil
+// getUserIDFromContext 从 context 读取 JWT 用户 ID 并转为与 handler 一致的 uint64 哈希。
+func getUserIDFromContext(ctx context.Context) (uint64, error) {
+	uid := auth.UserIDFromContext(ctx)
+	if uid == "" {
+		return 0, fmt.Errorf("userID not found in context")
 	}
-	return 0, nil
+	return UserIDUint64FromAuthString(uid), nil
 }
 
 // GetPlatform 获取平台
@@ -56,97 +57,23 @@ func (s *AppleIAPService) GetPlatform() IAPPlatform {
 	return IAPPlatformApple
 }
 
-// VerifyReceipt 验证收据
+// VerifyReceipt 已废弃：Apple 仅支持 StoreKit 2 + App Store Server API（见 VerifyTransaction）。
 func (s *AppleIAPService) VerifyReceipt(ctx context.Context, receipt string, sandbox bool) (*IAPReceipt, error) {
-	startTime := time.Now()
-	s.logger.WithFields(logrus.Fields{
-		"sandbox":          sandbox,
-		"receipt_length":   len(receipt),
-		"bundle_id":        s.config.Apple.GetBundleID(sandbox),
-		"verification_url": s.config.Apple.GetVerificationURL(sandbox),
-	}).Info("验证Apple收据")
-
-	bundleID := s.config.Apple.GetBundleID(sandbox)
-	verifyURL := s.config.Apple.GetVerificationURL(sandbox)
-	sharedSecret := s.config.Apple.SharedSecret
-
-	// 2. 验证收据（legacy verifyReceipt；自动处理 21007/21008）
-	resp, err := VerifyAppleLegacyReceipt(ctx, s.httpClient.client, receipt, sandbox, verifyURL, sharedSecret)
-	if err != nil {
-		s.logger.WithError(err).Error("Apple收据验证失败")
-		// 记录验证失败的指标
-		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
-			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
-		}
-		return nil, fmt.Errorf("收据验证失败: %w", err)
-	}
-
-	// 3. 检查验证状态
-	if resp.Status != 0 {
-		s.logger.WithField("status", resp.Status).Error("Apple收据验证失败")
-		// 记录验证失败的指标
-		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
-			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
-		}
-		return nil, fmt.Errorf("收据验证失败，状态码: %d", resp.Status)
-	}
-
-	// 4. 构建返回对象（UserID 由 transport handler 写入）
-	_, _ = getUserIDFromContext(ctx)
-	iapReceipt := &IAPReceipt{
-		UserID:             0,
-		Platform:           IAPPlatformApple,
-		ReceiptData:        receipt,
-		BundleID:           bundleID, // 使用配置中的Bundle ID
-		ApplicationVersion: resp.Receipt.ApplicationVersion,
-		Environment:        map[bool]string{true: "Sandbox", false: "Production"}[sandbox],
-		Status:             "Valid",
-		CreationDate:       time.Now(),
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-	}
-
-	// 6. 完善收据解析逻辑（必须传入 latest_receipt_info，否则无法解析订阅 SKU / transaction_id）
-	if err := s.parseReceiptData(resp, iapReceipt); err != nil {
-		s.logger.WithError(err).Error("解析收据数据失败")
-		return nil, fmt.Errorf("解析收据数据失败: %w", err)
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"user_id":     iapReceipt.UserID,
-		"bundle_id":   iapReceipt.BundleID,
-		"status":      iapReceipt.Status,
-		"environment": iapReceipt.Environment,
-	}).Info("Apple收据验证成功")
-
-	// 记录验证成功的指标
-	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
-		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
-	}
-
-	return iapReceipt, nil
+	_ = ctx
+	_ = receipt
+	_ = sandbox
+	return nil, fmt.Errorf("apple legacy receipt verification is not supported; use transaction_id with App Store Server API")
 }
 
-// VerifyTransaction 通过 App Store Server API 校验单笔交易（TestFlight / StoreKit 2 无收据文件时）
-func (s *AppleIAPService) VerifyTransaction(ctx context.Context, transactionID string, sandbox bool) (*IAPReceipt, error) {
+// VerifyTransaction 通过 App Store Server API 校验单笔 StoreKit 2 交易
+func (s *AppleIAPService) VerifyTransaction(ctx context.Context, transactionID string, clientSandbox bool) (*IAPReceipt, error) {
 	startTime := time.Now()
 	transactionID = strings.TrimSpace(transactionID)
 	if transactionID == "" {
 		return nil, fmt.Errorf("transaction_id is required")
 	}
 
-	bundleID := s.config.Apple.GetBundleID(sandbox)
-	issuerID := s.config.Apple.GetIssuerID(sandbox)
-	keyID := s.config.Apple.GetKeyID(sandbox)
-	privateKey := s.config.Apple.GetPrivateKey(sandbox)
-
-	apiResp, err := GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, sandbox, bundleID, issuerID, keyID, privateKey)
-	if err != nil && strings.Contains(err.Error(), "not found") {
-		apiResp, err = GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, !sandbox, bundleID, issuerID, keyID, privateKey)
-		if err == nil {
-			sandbox = !sandbox
-		}
-	}
+	signedInfo, bundleID, sandbox, err := s.fetchAppleTransactionSignedInfo(ctx, transactionID, clientSandbox)
 	if err != nil {
 		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
 			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
@@ -154,56 +81,128 @@ func (s *AppleIAPService) VerifyTransaction(ctx context.Context, transactionID s
 		return nil, err
 	}
 
-	txPayload, err := DecodeAppleJWSPayload(apiResp.SignedTransactionInfo)
+	receipt, err := s.iapReceiptFromSignedTransactionInfo(signedInfo, bundleID, sandbox)
 	if err != nil {
-		return nil, fmt.Errorf("decode signedTransactionInfo: %w", err)
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("apple", "failed", time.Since(startTime))
+		}
+		return nil, err
 	}
 
-	productID, _ := txPayload["productId"].(string)
-	txID, _ := txPayload["transactionId"].(string)
-	origTxID, _ := txPayload["originalTransactionId"].(string)
-	if origTxID == "" {
-		origTxID = txID
+	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
 	}
-	if productID == "" || txID == "" {
-		return nil, fmt.Errorf("incomplete transaction payload from app store")
-	}
+	return receipt, nil
+}
 
+func (s *AppleIAPService) fetchAppleTransactionSignedInfo(ctx context.Context, transactionID string, clientSandbox bool) (signedInfo, bundleID string, sandbox bool, err error) {
+	trySandbox := clientSandbox
+	apiResp, err := GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, trySandbox,
+		s.config.Apple.GetBundleID(trySandbox),
+		s.config.Apple.GetIssuerID(trySandbox),
+		s.config.Apple.GetKeyID(trySandbox),
+		s.config.Apple.GetPrivateKey(trySandbox),
+	)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		trySandbox = !clientSandbox
+		apiResp, err = GetAppleStoreTransaction(ctx, s.httpClient.client, transactionID, trySandbox,
+			s.config.Apple.GetBundleID(trySandbox),
+			s.config.Apple.GetIssuerID(trySandbox),
+			s.config.Apple.GetKeyID(trySandbox),
+			s.config.Apple.GetPrivateKey(trySandbox),
+		)
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return apiResp.SignedTransactionInfo, s.config.Apple.GetBundleID(trySandbox), trySandbox, nil
+}
+
+func (s *AppleIAPService) fetchAppleSubscriptionSignedInfo(ctx context.Context, originalTransactionID string, clientSandbox bool) (signedInfo, bundleID string, sandbox bool, err error) {
+	trySandbox := clientSandbox
+	signedInfo, err = GetAppleStoreSubscriptionSignedTransaction(ctx, s.httpClient.client, originalTransactionID, trySandbox,
+		s.config.Apple.GetBundleID(trySandbox),
+		s.config.Apple.GetIssuerID(trySandbox),
+		s.config.Apple.GetKeyID(trySandbox),
+		s.config.Apple.GetPrivateKey(trySandbox),
+	)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		trySandbox = !clientSandbox
+		signedInfo, err = GetAppleStoreSubscriptionSignedTransaction(ctx, s.httpClient.client, originalTransactionID, trySandbox,
+			s.config.Apple.GetBundleID(trySandbox),
+			s.config.Apple.GetIssuerID(trySandbox),
+			s.config.Apple.GetKeyID(trySandbox),
+			s.config.Apple.GetPrivateKey(trySandbox),
+		)
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return signedInfo, s.config.Apple.GetBundleID(trySandbox), trySandbox, nil
+}
+
+func (s *AppleIAPService) iapReceiptFromSignedTransactionInfo(signedInfo, bundleID string, sandbox bool) (*IAPReceipt, error) {
+	fields, jwsSandbox, err := ParseAppleSignedTransactionInfo(signedInfo, bundleID)
+	if err != nil {
+		return nil, err
+	}
+	if jwsSandbox != sandbox {
+		s.logger.WithFields(logrus.Fields{
+			"jws_sandbox":    jwsSandbox,
+			"client_sandbox": sandbox,
+		}).Warn("Apple transaction environment differs from request hint; using JWS environment")
+		sandbox = jwsSandbox
+	}
+	return s.buildIAPReceiptFromFields(fields, bundleID, sandbox), nil
+}
+
+func (s *AppleIAPService) buildIAPReceiptFromFields(fields *AppleSignedTransactionFields, bundleID string, sandbox bool) *IAPReceipt {
 	env := "Production"
 	if sandbox {
 		env = "Sandbox"
 	}
 	now := time.Now()
-	iapReceipt := &IAPReceipt{
+	receipt := &IAPReceipt{
 		Platform:                  IAPPlatformApple,
-		ProductID:                 productID,
-		OriginalTransactionID:     origTxID,
-		SubscriptionTransactionID: txID,
+		ProductID:                 fields.ProductID,
+		OriginalTransactionID:     fields.OriginalTransactionID,
+		SubscriptionTransactionID: fields.TransactionID,
 		BundleID:                  bundleID,
 		Environment:               env,
+		ReceiptData:               fields.TransactionID,
 		Status:                    "Valid",
 		CreationDate:              now,
 		CreatedAt:                 now,
 		UpdatedAt:                 now,
 	}
-	if ms, ok := txPayload["purchaseDate"].(float64); ok && ms > 0 {
-		iapReceipt.CreationDate = time.UnixMilli(int64(ms))
+	if !fields.PurchaseDate.IsZero() {
+		receipt.CreationDate = fields.PurchaseDate
 	}
-	if ms, ok := txPayload["expiresDate"].(float64); ok && ms > 0 {
-		exp := time.UnixMilli(int64(ms))
-		iapReceipt.ExpirationDate = &exp
-		if exp.After(now) {
-			iapReceipt.Status = "Active"
+	if fields.ExpiresDate != nil {
+		receipt.ExpirationDate = fields.ExpiresDate
+		if fields.ExpiresDate.After(now) {
+			receipt.Status = "Active"
 		} else {
-			iapReceipt.Status = "Expired"
+			receipt.Status = "Expired"
 		}
 	}
-	iapReceipt.VerificationHash = s.generateReceiptHash(iapReceipt)
+	receipt.VerificationHash = s.generateReceiptHash(receipt)
+	return receipt
+}
 
-	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
-		metrics.RecordPaymentVerify("apple", "success", time.Since(startTime))
+func (s *AppleIAPService) findAppleSubscriptionByPurchaseToken(ctx context.Context, token string) (*paymodels.AppleSubscription, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, fmt.Errorf("empty purchase token")
 	}
-	return iapReceipt, nil
+	var sub paymodels.AppleSubscription
+	err := paymodels.DataBase().WithContext(ctx).
+		Where("original_transaction_id = ?", token).
+		First(&sub).Error
+	if err == nil {
+		return &sub, nil
+	}
+	return nil, fmt.Errorf("subscription not found for purchase token: %s", token)
 }
 
 // GetSubscription 获取订阅信息
@@ -256,10 +255,13 @@ func (s *AppleIAPService) SyncSubscription(ctx context.Context, subscriptionID s
 		return fmt.Errorf("获取订阅信息失败: %w", err)
 	}
 
-	// 验证收据
-	receipt, err := s.VerifyReceipt(ctx, subscriptionID, false) // 假设是生产环境
+	signedInfo, bundleID, sandbox, err := s.fetchAppleSubscriptionSignedInfo(ctx, subscriptionID, false)
 	if err != nil {
-		return fmt.Errorf("验证收据失败: %w", err)
+		return fmt.Errorf("从 App Store 拉取订阅状态失败: %w", err)
+	}
+	receipt, err := s.iapReceiptFromSignedTransactionInfo(signedInfo, bundleID, sandbox)
+	if err != nil {
+		return fmt.Errorf("解析订阅交易失败: %w", err)
 	}
 
 	// 更新订阅状态
@@ -277,160 +279,38 @@ func (s *AppleIAPService) SyncSubscription(ctx context.Context, subscriptionID s
 	return nil
 }
 
-// AcknowledgePurchase 确认购买
+// AcknowledgePurchase 确认购买（StoreKit 2：按 original_transaction_id 更新订阅行）
 func (s *AppleIAPService) AcknowledgePurchase(ctx context.Context, purchaseToken string) error {
 	s.logger.WithField("purchase_token", purchaseToken).Info("确认Apple购买")
 
-	// 1. 从上下文获取用户ID
-	userID, err := getUserIDFromContext(ctx)
+	appleSub, err := s.findAppleSubscriptionByPurchaseToken(ctx, purchaseToken)
 	if err != nil {
-		s.logger.WithError(err).Error("无法从上下文获取用户ID")
-		return fmt.Errorf("无法获取用户ID: %w", err)
+		return err
 	}
-
-	// 2. 查找对应的收据记录
-	var appleReceipt paymodels.AppleReceipt
-	err = paymodels.DataBase().WithContext(ctx).
-		Where("user_id = ? AND receipt_data LIKE ?", userID, "%"+purchaseToken+"%").
-		First(&appleReceipt).Error
-
-	if err != nil {
-		s.logger.WithError(err).Error("查找Apple收据记录失败")
-		return fmt.Errorf("查找收据记录失败: %w", err)
+	appleSub.Status = "Active"
+	appleSub.UpdatedAt = time.Now()
+	if err := paymodels.DataBase().WithContext(ctx).Save(appleSub).Error; err != nil {
+		return fmt.Errorf("更新订阅状态失败: %w", err)
 	}
-
-	// 3. 更新收据状态为已确认
-	appleReceipt.Status = "Acknowledged"
-	appleReceipt.UpdatedAt = time.Now()
-
-	if err := paymodels.DataBase().WithContext(ctx).Save(&appleReceipt).Error; err != nil {
-		s.logger.WithError(err).Error("更新Apple收据状态失败")
-		return fmt.Errorf("更新收据状态失败: %w", err)
-	}
-
-	// 4. 如果是订阅类型，同时更新订阅状态
-	if appleReceipt.ExpirationDate != nil {
-		var appleSub paymodels.AppleSubscription
-		err = paymodels.DataBase().WithContext(ctx).
-			Where("user_id = ? AND product_id IN (SELECT product_id FROM apple_receipts WHERE id = ?)", userID, appleReceipt.ID).
-			First(&appleSub).Error
-
-		if err == nil {
-			// 订阅存在，更新状态
-			appleSub.Status = "Active"
-			appleSub.UpdatedAt = time.Now()
-			paymodels.DataBase().WithContext(ctx).Save(&appleSub)
-		}
-	}
-
-	// 5. 记录确认操作到支付记录
-	paymentRecord := &paymodels.PaymentRecord{
-		UserID:          int64(userID),
-		TransactionID:   purchaseToken,
-		ProductID:       "", // 需要从收据中提取
-		Amount:          0,  // Apple不提供金额信息
-		Currency:        "USD",
-		Status:          paymodels.PaymentStatusSuccess,
-		PaymentMethod:   paymodels.PaymentMethodApplePay,
-		PaymentProvider: "App Store",
-	}
-
-	if err := paymodels.DataBase().WithContext(ctx).Create(paymentRecord).Error; err != nil {
-		s.logger.WithError(err).Warn("创建支付记录失败，但不影响主要流程")
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"user_id":        userID,
-		"purchase_token": purchaseToken,
-		"receipt_id":     appleReceipt.ID,
-		"receipt_status": appleReceipt.Status,
-	}).Info("Apple购买确认完成")
-
 	return nil
 }
 
-// ConsumePurchase 消费购买
+// ConsumePurchase 消费购买（订阅类 IAP 在 Apple 侧无需 consume；此处标记订阅已处理）
 func (s *AppleIAPService) ConsumePurchase(ctx context.Context, purchaseToken string) error {
 	s.logger.WithField("purchase_token", purchaseToken).Info("消费Apple购买")
 
-	// 1. 从上下文获取用户ID
-	userID, err := getUserIDFromContext(ctx)
+	appleSub, err := s.findAppleSubscriptionByPurchaseToken(ctx, purchaseToken)
 	if err != nil {
-		s.logger.WithError(err).Error("无法从上下文获取用户ID")
-		return fmt.Errorf("无法获取用户ID: %w", err)
+		return err
 	}
-
-	// 2. 查找对应的收据记录
-	var appleReceipt paymodels.AppleReceipt
-	err = paymodels.DataBase().WithContext(ctx).
-		Where("user_id = ? AND receipt_data LIKE ?", userID, "%"+purchaseToken+"%").
-		First(&appleReceipt).Error
-
-	if err != nil {
-		s.logger.WithError(err).Error("查找Apple收据记录失败")
-		return fmt.Errorf("查找收据记录失败: %w", err)
-	}
-
-	// 3. 检查是否已经消费过
-	if appleReceipt.Status == "Consumed" {
-		s.logger.WithField("purchase_token", purchaseToken).Warn("Apple购买已经消费过")
+	if appleSub.Status == "Consumed" {
 		return fmt.Errorf("购买已经消费过")
 	}
-
-	// 4. 检查是否为一次性购买（订阅类型不需要消费）
-	if appleReceipt.ExpirationDate != nil {
-		s.logger.WithField("purchase_token", purchaseToken).Warn("Apple订阅类型不需要消费")
-		return fmt.Errorf("订阅类型不需要消费")
+	appleSub.Status = "Consumed"
+	appleSub.UpdatedAt = time.Now()
+	if err := paymodels.DataBase().WithContext(ctx).Save(appleSub).Error; err != nil {
+		return fmt.Errorf("更新订阅状态失败: %w", err)
 	}
-
-	// 5. 更新收据状态为已消费
-	appleReceipt.Status = "Consumed"
-	appleReceipt.UpdatedAt = time.Now()
-
-	if err := paymodels.DataBase().WithContext(ctx).Save(&appleReceipt).Error; err != nil {
-		s.logger.WithError(err).Error("更新Apple收据状态失败")
-		return fmt.Errorf("更新收据状态失败: %w", err)
-	}
-
-	// 6. 记录消费操作到支付记录
-	paymentRecord := &paymodels.PaymentRecord{
-		UserID:          int64(userID),
-		TransactionID:   purchaseToken,
-		ProductID:       "", // 需要从收据中提取
-		Amount:          0,  // Apple不提供金额信息
-		Currency:        "USD",
-		Status:          paymodels.PaymentStatusSuccess,
-		PaymentMethod:   paymodels.PaymentMethodApplePay,
-		PaymentProvider: "App Store",
-	}
-
-	if err := paymodels.DataBase().WithContext(ctx).Create(paymentRecord).Error; err != nil {
-		s.logger.WithError(err).Warn("创建支付记录失败，但不影响主要流程")
-	}
-
-	// 7. 记录消费历史
-	consumptionRecord := &paymodels.PaymentRecord{
-		UserID:          int64(userID),
-		TransactionID:   purchaseToken + "_consumed",
-		ProductID:       "",
-		Amount:          0,
-		Currency:        "USD",
-		Status:          paymodels.PaymentStatusSuccess,
-		PaymentMethod:   paymodels.PaymentMethodApplePay,
-		PaymentProvider: "App Store",
-	}
-
-	if err := paymodels.DataBase().WithContext(ctx).Create(consumptionRecord).Error; err != nil {
-		s.logger.WithError(err).Warn("创建消费记录失败，但不影响主要流程")
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"user_id":        userID,
-		"purchase_token": purchaseToken,
-		"receipt_id":     appleReceipt.ID,
-		"receipt_status": appleReceipt.Status,
-	}).Info("Apple购买消费完成")
-
 	return nil
 }
 
@@ -508,80 +388,6 @@ func (s *AppleIAPService) SyncProducts(ctx context.Context) error {
 	}
 
 	s.logger.Info("Apple产品同步成功")
-	return nil
-}
-
-// parseReceiptData 解析收据数据
-func (s *AppleIAPService) parseReceiptData(resp *AppleReceiptResponse, iapReceipt *IAPReceipt) error {
-	iapReceipt.ApplicationVersion = resp.Receipt.ApplicationVersion
-	iapReceipt.BundleID = resp.Receipt.BundleID
-	iapReceipt.Environment = resp.Environment
-	iapReceipt.Status = fmt.Sprintf("%d", resp.Status)
-
-	// 解析创建日期
-	if creationDate, err := parseAppleTimestamp(resp.Receipt.CreationDate); err == nil {
-		iapReceipt.CreationDate = creationDate
-	} else {
-		s.logger.WithError(err).Warn("解析收据创建日期失败")
-	}
-
-	// 查找最新的订阅信息
-	var latestReceiptInfo *AppleReceiptInfo
-	if len(resp.LatestReceiptInfo) > 0 {
-		for _, info := range resp.LatestReceiptInfo {
-			if latestReceiptInfo == nil {
-				latestReceiptInfo = &info
-			} else {
-				// 比较过期时间找到最新的
-				currentExpiry, err1 := parseAppleTimestamp(latestReceiptInfo.ExpiresDate)
-				newExpiry, err2 := parseAppleTimestamp(info.ExpiresDate)
-				if err1 == nil && err2 == nil && newExpiry.After(currentExpiry) {
-					latestReceiptInfo = &info
-				}
-			}
-		}
-	}
-
-	if latestReceiptInfo != nil {
-		// 填充产品 ID
-		if latestReceiptInfo.ProductID != "" {
-			iapReceipt.ProductID = latestReceiptInfo.ProductID
-		}
-		if latestReceiptInfo.OriginalTransactionID != "" {
-			iapReceipt.OriginalTransactionID = latestReceiptInfo.OriginalTransactionID
-		}
-		if latestReceiptInfo.TransactionID != "" {
-			iapReceipt.SubscriptionTransactionID = latestReceiptInfo.TransactionID
-		}
-
-		if purchaseDate, err := parseAppleTimestamp(latestReceiptInfo.PurchaseDate); err == nil {
-			iapReceipt.CreationDate = purchaseDate
-		}
-
-		if latestReceiptInfo.ExpiresDate != "" {
-			if expiryDate, err := parseAppleTimestamp(latestReceiptInfo.ExpiresDate); err == nil {
-				iapReceipt.ExpirationDate = &expiryDate
-				// 判断订阅状态
-				if expiryDate.After(time.Now()) {
-					iapReceipt.Status = "Active"
-				} else {
-					iapReceipt.Status = "Expired"
-				}
-			} else {
-				s.logger.WithError(err).Warn("解析订阅过期日期失败")
-			}
-		} else {
-			// 如果没有过期日期，则可能是一次性购买或非订阅产品
-			iapReceipt.Status = "OneTimePurchase"
-		}
-	} else {
-		// 如果没有LatestReceiptInfo，则可能是一个非常旧的收据或非订阅产品
-		iapReceipt.Status = "NoSubscriptionInfo"
-	}
-
-	// 生成验证哈希
-	iapReceipt.VerificationHash = s.generateReceiptHash(iapReceipt)
-
 	return nil
 }
 
@@ -1041,31 +847,11 @@ func (s *AppleIAPService) generateReceiptHash(receipt *IAPReceipt) string {
 // GetPurchaseStatus 获取购买状态
 func (s *AppleIAPService) GetPurchaseStatus(ctx context.Context, purchaseToken string) (string, error) {
 	s.logger.WithField("purchase_token", purchaseToken).Debug("获取Apple购买状态")
-
-	// 从上下文获取用户ID
-	userID, err := getUserIDFromContext(ctx)
+	sub, err := s.findAppleSubscriptionByPurchaseToken(ctx, purchaseToken)
 	if err != nil {
-		s.logger.WithError(err).Error("无法从上下文获取用户ID")
-		return "", fmt.Errorf("无法获取用户ID: %w", err)
+		return "", err
 	}
-
-	// 查找收据记录
-	var appleReceipt paymodels.AppleReceipt
-	err = paymodels.DataBase().WithContext(ctx).
-		Where("user_id = ? AND receipt_data LIKE ?", userID, "%"+purchaseToken+"%").
-		First(&appleReceipt).Error
-
-	if err != nil {
-		s.logger.WithError(err).Error("查找Apple收据记录失败")
-		return "", fmt.Errorf("查找收据记录失败: %w", err)
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"purchase_token": purchaseToken,
-		"status":         appleReceipt.Status,
-	}).Debug("获取Apple购买状态成功")
-
-	return appleReceipt.Status, nil
+	return sub.Status, nil
 }
 
 // IsPurchaseConsumed 检查购买是否已消费
@@ -1121,46 +907,24 @@ func (s *AppleIAPService) GetPurchaseHistory(ctx context.Context, userID uint64,
 // ValidatePurchaseToken 验证购买令牌
 func (s *AppleIAPService) ValidatePurchaseToken(ctx context.Context, purchaseToken string) error {
 	s.logger.WithField("purchase_token", purchaseToken).Debug("验证Apple购买令牌")
-
-	// 1. 检查令牌格式
-	if purchaseToken == "" {
+	token := strings.TrimSpace(purchaseToken)
+	if token == "" {
 		return fmt.Errorf("购买令牌不能为空")
 	}
-
-	// 2. 从上下文获取用户ID
-	userID, err := getUserIDFromContext(ctx)
-	if err != nil {
-		s.logger.WithError(err).Error("无法从上下文获取用户ID")
-		return fmt.Errorf("无法获取用户ID: %w", err)
+	if IsAppleStoreKitTransactionID(token) {
+		_, err := s.VerifyTransaction(ctx, token, true)
+		if err != nil {
+			_, err = s.VerifyTransaction(ctx, token, false)
+		}
+		return err
 	}
-
-	// 3. 查找对应的收据记录
-	var appleReceipt paymodels.AppleReceipt
-	err = paymodels.DataBase().WithContext(ctx).
-		Where("user_id = ? AND receipt_data LIKE ?", userID, "%"+purchaseToken+"%").
-		First(&appleReceipt).Error
-
+	sub, err := s.findAppleSubscriptionByPurchaseToken(ctx, token)
 	if err != nil {
-		s.logger.WithError(err).Error("查找Apple收据记录失败")
 		return fmt.Errorf("无效的购买令牌: %w", err)
 	}
-
-	// 4. 检查收据状态
-	if appleReceipt.Status == "Invalid" {
-		return fmt.Errorf("收据状态无效")
+	if sub.ExpiresDate != nil && sub.ExpiresDate.Before(time.Now()) {
+		return fmt.Errorf("订阅已过期")
 	}
-
-	// 5. 检查收据是否过期（对于订阅类型）
-	if appleReceipt.ExpirationDate != nil && appleReceipt.ExpirationDate.Before(time.Now()) {
-		return fmt.Errorf("收据已过期")
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"purchase_token": purchaseToken,
-		"receipt_id":     appleReceipt.ID,
-		"status":         appleReceipt.Status,
-	}).Debug("Apple购买令牌验证成功")
-
 	return nil
 }
 

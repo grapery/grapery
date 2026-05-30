@@ -139,108 +139,6 @@ func NewAppleAppStoreConnect(apiKey, issuerID, bundleID string) *AppleAppStoreCo
 	}
 }
 
-// AppleReceiptRequest Apple 收据验证请求（legacy verifyReceipt，字段名须与 Apple 文档一致）
-type AppleReceiptRequest struct {
-	ReceiptData            string `json:"receipt-data"`
-	Password               string `json:"password,omitempty"`
-	ExcludeOldTransactions bool   `json:"exclude-old-transactions"`
-}
-
-// AppleReceiptResponse Apple 收据验证响应
-type AppleReceiptResponse struct {
-	Status             int                       `json:"status"`
-	Environment        string                    `json:"environment"`
-	Receipt            AppleReceiptData          `json:"receipt"`
-	LatestReceiptInfo  []AppleReceiptInfo        `json:"latest_receipt_info"`
-	PendingRenewalInfo []ApplePendingRenewalInfo `json:"pending_renewal_info"`
-}
-
-type AppleReceiptData struct {
-	ApplicationVersion         string `json:"application_version"`
-	BundleID                   string `json:"bundle_id"`
-	ApplicationIdentifier      string `json:"application_identifier"`
-	OriginalApplicationVersion string `json:"original_application_version"`
-	CreationDate               string `json:"creation_date"`
-	OriginalPurchaseDate       string `json:"original_purchase_date"`
-	RequestDate                string `json:"request_date"`
-}
-
-type AppleReceiptInfo struct {
-	OriginalTransactionID  string `json:"original_transaction_id"`
-	ProductID              string `json:"product_id"`
-	TransactionID          string `json:"transaction_id"`
-	PurchaseDate           string `json:"purchase_date"`
-	ExpiresDate            string `json:"expires_date,omitempty"`
-	IsInIntroOfferPeriod   bool   `json:"is_in_intro_offer_period"`
-	IsInGracePeriod        bool   `json:"is_in_grace_period"`
-	GracePeriodExpiresDate string `json:"grace_period_expires_date,omitempty"`
-}
-
-type ApplePendingRenewalInfo struct {
-	OriginalTransactionID string `json:"original_transaction_id"`
-	AutoRenewStatus       string `json:"auto_renew_status"`
-	ProductID             string `json:"product_id"`
-}
-
-const (
-	appleReceiptStatusSandboxReceiptOnProduction = 21007
-	appleReceiptStatusProductionReceiptOnSandbox = 21008
-)
-
-// VerifyReceipt 验证 Apple 收据（legacy verifyReceipt；支持 21007/21008 环境自动切换）
-func VerifyAppleLegacyReceipt(ctx context.Context, httpClient *HTTPClient, receipt string, sandbox bool, verifyURL, sharedSecret string) (*AppleReceiptResponse, error) {
-	if strings.TrimSpace(verifyURL) == "" {
-		if sandbox {
-			verifyURL = "https://sandbox.itunes.apple.com/verifyReceipt"
-		} else {
-			verifyURL = "https://buy.itunes.apple.com/verifyReceipt"
-		}
-	}
-
-	result, err := postAppleLegacyVerifyReceipt(ctx, httpClient, verifyURL, receipt, sharedSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	switch result.Status {
-	case appleReceiptStatusSandboxReceiptOnProduction:
-		if !sandbox {
-			return postAppleLegacyVerifyReceipt(ctx, httpClient, "https://sandbox.itunes.apple.com/verifyReceipt", receipt, sharedSecret)
-		}
-	case appleReceiptStatusProductionReceiptOnSandbox:
-		if sandbox {
-			return postAppleLegacyVerifyReceipt(ctx, httpClient, "https://buy.itunes.apple.com/verifyReceipt", receipt, sharedSecret)
-		}
-	}
-
-	return result, nil
-}
-
-func postAppleLegacyVerifyReceipt(ctx context.Context, httpClient *HTTPClient, url, receipt, sharedSecret string) (*AppleReceiptResponse, error) {
-	body := AppleReceiptRequest{
-		ReceiptData:            receipt,
-		ExcludeOldTransactions: false,
-	}
-	if strings.TrimSpace(sharedSecret) != "" {
-		body.Password = sharedSecret
-	}
-
-	resp, err := httpClient.Do(ctx, &Request{
-		Method: "POST",
-		URL:    url,
-		Body:   body,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify receipt: %w", err)
-	}
-
-	var result AppleReceiptResponse
-	if err := json.Unmarshal(resp.Body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &result, nil
-}
-
 // AppleTransactionAPIResponse App Store Server API GET /transactions/{id}
 type AppleTransactionAPIResponse struct {
 	SignedTransactionInfo string `json:"signedTransactionInfo"`
@@ -288,6 +186,62 @@ func GetAppleStoreTransaction(ctx context.Context, httpClient *HTTPClient, trans
 		return nil, fmt.Errorf("missing signedTransactionInfo")
 	}
 	return &result, nil
+}
+
+type appleSubscriptionStatusesResponse struct {
+	Environment string `json:"environment"`
+	Data        []struct {
+		LastTransactions []struct {
+			SignedTransactionInfo string `json:"signedTransactionInfo"`
+		} `json:"lastTransactions"`
+	} `json:"data"`
+}
+
+// GetAppleStoreSubscriptionSignedTransaction 按 originalTransactionId 拉取最新 signedTransactionInfo。
+func GetAppleStoreSubscriptionSignedTransaction(ctx context.Context, httpClient *HTTPClient, originalTransactionID string, sandbox bool, bundleID, issuerID, keyID, privateKeyPEM string) (string, error) {
+	originalTransactionID = strings.TrimSpace(originalTransactionID)
+	if originalTransactionID == "" {
+		return "", fmt.Errorf("original_transaction_id is required")
+	}
+	token, err := generateAppStoreServerJWT(bundleID, issuerID, keyID, privateKeyPEM)
+	if err != nil {
+		return "", err
+	}
+	host := "https://api.storekit.itunes.apple.com"
+	if sandbox {
+		host = "https://api.storekit-sandbox.itunes.apple.com"
+	}
+	url := host + "/inApps/v1/subscriptions/" + originalTransactionID
+
+	resp, err := httpClient.Do(ctx, &Request{
+		Method: "GET",
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": "Bearer " + token,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("get subscription status: %w", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("subscription not found: %s", originalTransactionID)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("app store server api status %d: %s", resp.StatusCode, string(resp.Body))
+	}
+
+	var result appleSubscriptionStatusesResponse
+	if err := json.Unmarshal(resp.Body, &result); err != nil {
+		return "", fmt.Errorf("parse subscription status response: %w", err)
+	}
+	for _, group := range result.Data {
+		for _, tx := range group.LastTransactions {
+			if strings.TrimSpace(tx.SignedTransactionInfo) != "" {
+				return tx.SignedTransactionInfo, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("missing signedTransactionInfo in subscription status")
 }
 
 // generateAppStoreServerJWT 为 App Store Server API 签发 ES256 JWT（须含 bundle id）

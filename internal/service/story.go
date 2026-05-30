@@ -45,7 +45,7 @@ type CreateStoryRequest struct {
 	Visibility string `json:"visibility" binding:"omitempty,oneof=public followers private"` // 可见性: public, followers, private
 
 	// Comment settings
-	AllowComments bool `json:"allowComments"` // 是否允许评论
+	AllowComments *bool `json:"allowComments"` // 是否允许评论（不传默认为 true）
 
 	// AI collaboration label settings
 	ShowAICollaborationLabel bool `json:"showAICollaborationLabel"` // 是否显示 AI 协作标签
@@ -119,6 +119,8 @@ type StoryListRequest struct {
 	Search string `form:"search"`
 	Limit  int    `form:"limit" binding:"omitempty,min=1,max=100"`
 	Offset int    `form:"offset" binding:"omitempty,min=0"`
+	// ViewerID 由 HTTP 层注入（不来自查询参数），用于可见性鉴权。
+	ViewerID string `form:"-"`
 }
 
 // CreateStory 创建故事
@@ -215,6 +217,12 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		visibility = string(domain.StoryVisibilityPublic) // 默认公开
 	}
 
+	// 评论开关默认开启（请求未显式传入时）。
+	allowComments := true
+	if req.AllowComments != nil {
+		allowComments = *req.AllowComments
+	}
+
 	var sourceFragmentPtr *string
 	if fragmentToMark != nil {
 		id := fragmentToMark.ID
@@ -237,7 +245,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 		Status:                   status,
 		DefaultSceneCount:        defaultSceneCount,
 		Visibility:               visibility, // 可见性设置
-		AllowComments:            req.AllowComments,
+		AllowComments:            allowComments,
 		ShowAICollaborationLabel: req.ShowAICollaborationLabel,
 		SourceFragmentID:         sourceFragmentPtr,
 		EngagementStats: common.EngagementStats{
@@ -621,6 +629,104 @@ func (s *Service) AttachStoryViewerState(ctx context.Context, viewerUserID strin
 	}
 }
 
+// storyOwnerID 返回故事作者 ID（优先 UserID，回退到 Author.ID）。
+func storyOwnerID(st *domain.Story) string {
+	if st == nil {
+		return ""
+	}
+	if st.UserID != "" {
+		return st.UserID
+	}
+	if st.Author != nil {
+		return st.Author.ID
+	}
+	return ""
+}
+
+// normalizeStoryVisibility 归一化为三态（public/followers/private），兼容历史 unlisted 值。
+func normalizeStoryVisibility(v string) string {
+	switch v {
+	case string(domain.StoryVisibilityPublic),
+		string(domain.StoryVisibilityFollowers),
+		string(domain.StoryVisibilityPrivate):
+		return v
+	case string(domain.StoryVisibilityUnlisted), "followers_only":
+		return string(domain.StoryVisibilityFollowers)
+	default:
+		// 空值或未知一律按公开处理，避免历史数据被误隐藏
+		return string(domain.StoryVisibilityPublic)
+	}
+}
+
+// filterPublicPublishedStories 仅保留已发布且公开可见的故事，用于搜索等公开发现入口。
+func filterPublicPublishedStories(stories []*domain.Story) []*domain.Story {
+	if len(stories) == 0 {
+		return stories
+	}
+	out := make([]*domain.Story, 0, len(stories))
+	for _, st := range stories {
+		if st == nil {
+			continue
+		}
+		if st.Status != string(domain.StoryStatusPublished) {
+			continue
+		}
+		if normalizeStoryVisibility(st.Visibility) == string(domain.StoryVisibilityPublic) {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
+// CanViewerSeeStory 判断 viewerUserID 是否有权查看 st（基于已加载的故事对象）：
+// - 作者本人：始终可见
+// - public：所有人可见
+// - followers：仅关注作者者可见
+// - private：仅作者可见
+func (s *Service) CanViewerSeeStory(ctx context.Context, viewerUserID string, st *domain.Story) bool {
+	if st == nil {
+		return false
+	}
+	ownerID := storyOwnerID(st)
+	if ownerID != "" && viewerUserID == ownerID {
+		return true
+	}
+	switch normalizeStoryVisibility(st.Visibility) {
+	case string(domain.StoryVisibilityPublic):
+		return true
+	case string(domain.StoryVisibilityPrivate):
+		return false
+	case string(domain.StoryVisibilityFollowers):
+		if viewerUserID == "" || ownerID == "" {
+			return false
+		}
+		following, err := s.repo.IsFollowing(ctx, viewerUserID, ownerID)
+		if err != nil {
+			s.logger.Debug("CanViewStory: IsFollowing check failed",
+				zap.String("storyID", st.ID),
+				zap.Error(err))
+			return false
+		}
+		return following
+	default:
+		return true
+	}
+}
+
+// FilterViewableStories 按可见性过滤故事列表（用于他人主页/标签/搜索等聚合场景）。
+func (s *Service) FilterViewableStories(ctx context.Context, viewerUserID string, stories []*domain.Story) []*domain.Story {
+	if len(stories) == 0 {
+		return stories
+	}
+	out := make([]*domain.Story, 0, len(stories))
+	for _, st := range stories {
+		if s.CanViewerSeeStory(ctx, viewerUserID, st) {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
 // ListStories 获取故事列表
 func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*domain.Story, int64, error) {
 	s.logger.Info("listing stories",
@@ -645,6 +751,13 @@ func (s *Service) ListStories(ctx context.Context, req StoryListRequest) ([]*dom
 		Search: req.Search,
 		Limit:  req.Limit,
 		Offset: req.Offset,
+	}
+	// 非作者本人浏览时，仅返回「已发布 + 公开可见」的故事；作者查询自己的故事列表则不受限。
+	if req.UserID == "" || req.ViewerID == "" || req.UserID != req.ViewerID {
+		filter.PublicOnly = true
+		if filter.Status == "" {
+			filter.Status = string(domain.StoryStatusPublished)
+		}
 	}
 
 	s.logger.Debug("querying stories with filter",

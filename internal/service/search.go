@@ -110,6 +110,9 @@ func (s *Service) SearchStories(ctx context.Context, query string, searchType Se
 		return nil, fmt.Errorf("failed to search stories: %w", err)
 	}
 
+	// 搜索为公开发现入口：统一过滤为已发布且公开可见，避免模糊/索引路径泄露草稿或私有内容。
+	results = filterPublicPublishedStories(results)
+
 	// 缓存结果
 	if c != nil && len(results) > 0 {
 		cacheKey := cache.SearchStoriesKey(query, string(searchType), limit, offset)

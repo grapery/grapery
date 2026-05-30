@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/service/pay"
@@ -71,9 +72,13 @@ func uint64ToString(id uint64) string {
 	return strconv.FormatUint(id, 10)
 }
 
-// VerifyAppleReceiptRequest Apple 收据验证请求
+// requestContext 将 JWT 用户 ID 注入标准 context，供 pay 层 getUserIDFromContext 使用。
+func requestContext(c *gin.Context) context.Context {
+	return auth.ContextWithUserID(c.Request.Context(), getUserIDString(c))
+}
+
+// VerifyAppleReceiptRequest StoreKit 2 购买校验请求（App Store Server API 或本地 StoreKit 配置）
 type VerifyAppleReceiptRequest struct {
-	ReceiptData           string `json:"receipt_data"`
 	Sandbox               bool   `json:"sandbox"`
 	StoreKitLocal         bool   `json:"storekit_local"`
 	ProductID             string `json:"product_id"`
@@ -90,7 +95,7 @@ type VerifyAppleReceiptResponse struct {
 
 // VerifyAppleReceipt 验证 Apple 收据
 func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := requestContext(c)
 	userID := getUserID(c)
 	if userID == 0 {
 		h.logger.WithFields(logrus.Fields{
@@ -123,7 +128,25 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 	var receipt *pay.IAPReceipt
 	var err error
 
-	if req.StoreKitLocal && req.Sandbox {
+	if req.StoreKitLocal {
+		if !pay.AllowStoreKitLocalVerify() {
+			h.logger.WithFields(logrus.Fields{
+				"user_id":  userID,
+				"endpoint": "VerifyAppleReceipt",
+			}).Warn("storekit_local rejected: IAP_ALLOW_STOREKIT_LOCAL is not enabled")
+			c.JSON(http.StatusForbidden, gin.H{
+				"code": 403,
+				"msg":  "storekit_local verification is disabled",
+			})
+			return
+		}
+		if !req.Sandbox {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "storekit_local requires sandbox=true",
+			})
+			return
+		}
 		receipt, err = h.buildStoreKitLocalReceipt(ctx, userID, req)
 		if err != nil {
 			h.logger.WithFields(logrus.Fields{
@@ -138,12 +161,12 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 			return
 		}
 		h.logger.WithFields(logrus.Fields{
-			"user_id":    userID,
-			"product_id": receipt.ProductID,
+			"user_id":        userID,
+			"product_id":     receipt.ProductID,
 			"transaction_id": receipt.SubscriptionTransactionID,
-			"endpoint":   "VerifyAppleReceipt",
+			"endpoint":       "VerifyAppleReceipt",
 		}).Info("Accepted StoreKit local sandbox transaction")
-	} else if strings.TrimSpace(req.ReceiptData) == "" && strings.TrimSpace(req.TransactionID) != "" {
+	} else if strings.TrimSpace(req.TransactionID) != "" {
 		h.logger.WithFields(logrus.Fields{
 			"user_id":        userID,
 			"transaction_id": req.TransactionID,
@@ -162,51 +185,31 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 			}).Error("Failed to verify Apple transaction")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code": 500,
-				"msg":  "failed to verify receipt",
+				"msg":  "failed to verify transaction",
 			})
 			return
 		}
 		receipt.UserID = userID
-	} else {
-		if strings.TrimSpace(req.ReceiptData) == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400,
-				"msg":  "receipt_data is required",
-			})
-			return
-		}
-
-		h.logger.WithFields(logrus.Fields{
-			"user_id":        userID,
-			"receipt_length": len(req.ReceiptData),
-			"sandbox":        req.Sandbox,
-			"endpoint":       "VerifyAppleReceipt",
-		}).Info("Starting Apple receipt verification")
-
-		receipt, err = h.iapService.VerifyReceipt(ctx, req.ReceiptData, req.Sandbox)
-		if err != nil {
+		if want := strings.TrimSpace(req.ProductID); want != "" && !strings.EqualFold(want, strings.TrimSpace(receipt.ProductID)) {
 			h.logger.WithFields(logrus.Fields{
 				"user_id":        userID,
-				"receipt_length": len(req.ReceiptData),
-				"sandbox":        req.Sandbox,
+				"transaction_id": req.TransactionID,
+				"client_product": want,
+				"apple_product":  receipt.ProductID,
 				"endpoint":       "VerifyAppleReceipt",
-				"error":          err.Error(),
-			}).Error("Failed to verify Apple receipt")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  "failed to verify receipt",
+			}).Warn("product_id mismatch after Apple verification")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "product_id does not match App Store transaction",
 			})
 			return
 		}
-		receipt.UserID = userID
-
-		h.logger.WithFields(logrus.Fields{
-			"user_id":    userID,
-			"receipt_id": receipt.ID,
-			"bundle_id":  receipt.BundleID,
-			"sandbox":    req.Sandbox,
-			"endpoint":   "VerifyAppleReceipt",
-		}).Info("Apple receipt verification completed successfully")
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400,
+			"msg":  "transaction_id is required (StoreKit 2); use storekit_local only for Xcode StoreKit Configuration",
+		})
+		return
 	}
 
 	h.applyApplePurchaseGrants(ctx, userIDStr, receipt)
@@ -786,7 +789,7 @@ type AcknowledgePurchaseRequest struct {
 
 // AcknowledgePurchase 确认购买
 func (h *IAPHandler) AcknowledgePurchase(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := requestContext(c)
 	userID := getUserID(c)
 	if userID == 0 {
 		h.logger.WithFields(logrus.Fields{
@@ -901,7 +904,7 @@ type ConsumePurchaseRequest struct {
 
 // ConsumePurchase 消费购买
 func (h *IAPHandler) ConsumePurchase(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := requestContext(c)
 	userID := getUserID(c)
 	if userID == 0 {
 		h.logger.WithFields(logrus.Fields{

@@ -29,12 +29,9 @@ type IAPConfig struct {
 	Google GoogleConfig `json:"google"`
 }
 
-// AppleConfig Apple IAP配置
+// AppleConfig Apple IAP配置（StoreKit 2 + App Store Server API）
 type AppleConfig struct {
 	BundleID       string `json:"bundle_id"`
-	SandboxURL     string `json:"sandbox_url"`
-	ProductionURL  string `json:"production_url"`
-	SharedSecret   string `json:"shared_secret,omitempty"` // App-Specific Shared Secret（legacy verifyReceipt）
 	IssuerID       string `json:"issuer_id"`
 	KeyID          string `json:"key_id"`
 	PrivateKey     string `json:"private_key"`
@@ -92,14 +89,6 @@ func (c *AppleConfig) GetPrivateKey(sandbox bool) string {
 		return c.SandboxPrivateKey
 	}
 	return c.PrivateKey
-}
-
-// GetVerificationURL 获取验证URL（支持sandbox）
-func (c *AppleConfig) GetVerificationURL(sandbox bool) string {
-	if sandbox {
-		return c.SandboxURL
-	}
-	return c.ProductionURL
 }
 
 // GetPackageName 获取Package Name（支持sandbox）
@@ -441,44 +430,6 @@ type AppleSignedTransactionFields struct {
 	OriginalTransactionID string
 	ExpiresDate           *time.Time
 	PurchaseDate          time.Time
-}
-
-// ExtractAppleTransactionFromNotificationPayload 解析 V2 通知 signedPayload 内的 signedTransactionInfo。
-func ExtractAppleTransactionFromNotificationPayload(signedPayload string) (*AppleSignedTransactionFields, error) {
-	root, err := DecodeAppleJWSPayload(signedPayload)
-	if err != nil {
-		return nil, err
-	}
-	data, _ := root["data"].(map[string]interface{})
-	if data == nil {
-		return nil, fmt.Errorf("missing data in notification payload")
-	}
-	signedTx, _ := data["signedTransactionInfo"].(string)
-	if strings.TrimSpace(signedTx) == "" {
-		return nil, fmt.Errorf("missing signedTransactionInfo")
-	}
-	txPayload, err := DecodeAppleJWSPayload(signedTx)
-	if err != nil {
-		return nil, err
-	}
-	out := &AppleSignedTransactionFields{}
-	if v, ok := txPayload["productId"].(string); ok {
-		out.ProductID = v
-	}
-	if v, ok := txPayload["transactionId"].(string); ok {
-		out.TransactionID = v
-	}
-	if v, ok := txPayload["originalTransactionId"].(string); ok {
-		out.OriginalTransactionID = v
-	}
-	if ms, ok := txPayload["expiresDate"].(float64); ok && ms > 0 {
-		t := time.UnixMilli(int64(ms))
-		out.ExpiresDate = &t
-	}
-	if ms, ok := txPayload["purchaseDate"].(float64); ok && ms > 0 {
-		out.PurchaseDate = time.UnixMilli(int64(ms))
-	}
-	return out, nil
 }
 
 // ParseAppleNotification 解析 App Store Server Notifications V2 的 signedPayload（JWS payload 段）。

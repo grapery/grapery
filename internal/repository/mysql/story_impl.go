@@ -36,11 +36,25 @@ func (r *Repository) CreateStory(ctx context.Context, story *domain.Story) error
 		Style:               styleConfigToJSON(story.Style),
 		Status:              story.Status,
 		IsCollaborationOpen: story.IsCollaborationOpen,
+		Visibility:          story.Visibility,
+		AllowComments:       story.AllowComments,
 		UseAI:               story.UseAI,
 		AIAssistanceOptions: aiAssistanceOptionsToJSON(story.AIAssistanceOptions),
 	}
 
-	return r.db.WithContext(ctx).Create(dbStory).Error
+	if err := r.db.WithContext(ctx).Create(dbStory).Error; err != nil {
+		return err
+	}
+	// allow_comments 带有 default:true，GORM 在插入时会忽略 false 零值，
+	// 因此显式回写一次，确保「关闭评论」的创建请求被持久化。
+	if !story.AllowComments {
+		if err := r.db.WithContext(ctx).Model(&Story{}).
+			Where("id = ?", dbStory.ID).
+			UpdateColumn("allow_comments", false).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // StoryByID retrieves a story by ID
@@ -79,10 +93,22 @@ func (r *Repository) UpdateStory(ctx context.Context, story *domain.Story) error
 		StoryboardCount:     story.StoryboardCount,
 		DefaultSceneCount:   story.DefaultSceneCount,
 		IsCollaborationOpen: story.IsCollaborationOpen,
+		Visibility:          story.Visibility,
+		AllowComments:       story.AllowComments,
 		UpdatedAt:           time.Now(),
 	}
 
 	if err := r.db.WithContext(ctx).Model(&Story{}).Where("id = ?", story.ID).Updates(&dbStory).Error; err != nil {
+		return err
+	}
+
+	// 布尔字段（默认值/零值）通过结构体 Updates 会被 GORM 跳过，需用 map 显式写入，
+	// 以支持「关闭评论 / 关闭协作」等 false 值的更新。
+	if err := r.db.WithContext(ctx).Model(&Story{}).Where("id = ?", story.ID).
+		Updates(map[string]interface{}{
+			"allow_comments":        story.AllowComments,
+			"is_collaboration_open": story.IsCollaborationOpen,
+		}).Error; err != nil {
 		return err
 	}
 

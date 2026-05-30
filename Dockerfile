@@ -83,11 +83,14 @@ ENV DB_ADDRESS=
 ENV JWT_SECRET=
 ENV JWT_EXPIRY_HOURS=24
 
-# ========== Apple IAP Configuration ==========
+# ========== Apple IAP (StoreKit 2 / App Store Server API; override via .env at runtime) ==========
 ENV APPLE_BUNDLE_ID=
 ENV APPLE_ISSUER_ID=
 ENV APPLE_KEY_ID=
 ENV APPLE_PRIVATE_KEY=
+# Optional sandbox overrides: APPLE_SANDBOX_BUNDLE_ID, APPLE_SANDBOX_ISSUER_ID, APPLE_SANDBOX_KEY_ID, APPLE_SANDBOX_PRIVATE_KEY
+# Dev-only Xcode StoreKit Configuration: IAP_ALLOW_STOREKIT_LOCAL=true (never in production)
+ENV IAP_ALLOW_STOREKIT_LOCAL=
 
 # ========== Google IAP Configuration ==========
 ENV GOOGLE_PACKAGE_NAME=

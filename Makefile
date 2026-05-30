@@ -1,5 +1,5 @@
 .PHONY: run run-with-config test lint build docker migrate mock-load \
-        run-server run-vippay \
+        run-server run-vippay sync-apple-iap-env \
         build-server build-vippay build-all \
         clean help
 
@@ -43,7 +43,11 @@ run-server:
 
 run-vippay:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT)..."
+	@echo "   Apple IAP: run 'bash scripts/sync_apple_iap_env.sh' after gh auth login, or set vars in .env"
 	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$${APPLE_PRIVATE_KEY:-}" ] && [ -n "$${APPLE_PRIVATE_KEY_PATH:-}" ] && [ -f "$${APPLE_PRIVATE_KEY_PATH}" ]; then \
+		export APPLE_PRIVATE_KEY="$$(cat "$${APPLE_PRIVATE_KEY_PATH}")"; \
+	fi; \
 	VIPPAY_PORT=$(VIPPAY_PORT) \
 	DB_USERNAME=$(DB_USERNAME) \
 	DB_PASSWORD=$(DB_PASSWORD) \
@@ -70,6 +74,9 @@ run-server-with-config:
 run-vippay-with-config:
 	@echo "🚀 Starting VIP Payment Service on port $(VIPPAY_PORT) with config..."
 	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$${APPLE_PRIVATE_KEY:-}" ] && [ -n "$${APPLE_PRIVATE_KEY_PATH:-}" ] && [ -f "$${APPLE_PRIVATE_KEY_PATH}" ]; then \
+		export APPLE_PRIVATE_KEY="$$(cat "$${APPLE_PRIVATE_KEY_PATH}")"; \
+	fi; \
 	VIPPAY_PORT=$(VIPPAY_PORT) \
 	DB_USERNAME=$(DB_USERNAME) \
 	DB_PASSWORD=$(DB_PASSWORD) \
@@ -99,6 +106,10 @@ build-all:
 	@echo ""
 	@echo "✅ All services built successfully!"
 	@ls -la bin/
+
+# 从 GitHub Actions Variables 拉取 APPLE_* 并写入 .env + certs/AuthKey_*.p8（需 gh auth login）
+sync-apple-iap-env:
+	bash scripts/sync_apple_iap_env.sh
 
 # ========== Development Tools ==========
 
@@ -180,6 +191,7 @@ help:
 	@echo "Example with custom settings:"
 	@echo "  make run-vippay DB_PASSWORD=mypassword"
 	@echo ""
-	@echo "VIPPay OAuth (.env or env vars):"
-	@echo "  WECHAT_APP_ID / WECHAT_APP_SECRET — WeChat mobile login (see env.vippay.example)"
+	@echo "VIPPay (.env or env vars, see env.vippay.example):"
+	@echo "  APPLE_BUNDLE_ID / APPLE_ISSUER_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY — StoreKit 2 IAP"
+	@echo "  WECHAT_APP_ID / WECHAT_APP_SECRET — WeChat mobile login"
 	@echo "  GOOGLE_CLIENT_ID — Google ID token verification"

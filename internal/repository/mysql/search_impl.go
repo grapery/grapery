@@ -11,7 +11,9 @@ import (
 func (r *Repository) SearchStories(ctx context.Context, query string, limit, offset int) ([]*domain.Story, error) {
 	var stories []Story
 	q := r.db.WithContext(ctx).Preload("Author").
-		Where("title LIKE ? OR description LIKE ?", "%"+query+"%", "%"+query+"%").
+		Where("status = ?", string(domain.StoryStatusPublished)).
+		Where("(visibility = ? OR visibility = '' OR visibility IS NULL)", string(domain.StoryVisibilityPublic)).
+		Where("(title LIKE ? OR description LIKE ?)", "%"+query+"%", "%"+query+"%").
 		Order("created_at DESC")
 	if limit > 0 {
 		q = q.Limit(limit).Offset(offset)

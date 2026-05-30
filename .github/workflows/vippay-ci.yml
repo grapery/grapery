@@ -30,6 +30,9 @@ on:
           - dev
           - prod
 
+# Repository Variables（Settings → Secrets and variables → Actions → Variables）:
+#   APPLE_BUNDLE_ID, APPLE_ISSUER_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY — StoreKit 2 / App Store Server API
+#   WECHAT_APP_ID, WECHAT_APP_SECRET, GOOGLE_CLIENT_ID, JWT_SECRET, DB_* …
 env:
   GO_VERSION: '1.24'
   REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com' }}
@@ -159,6 +162,10 @@ jobs:
         env:
           APNS_PRIVATE_KEY_SECRET: ${{ secrets.APNS_PRIVATE_KEY }}
           APNS_PRIVATE_KEY_VAR: ${{ vars.APNS_PRIVATE_KEY }}
+          APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID }}
+          APPLE_ISSUER_ID: ${{ vars.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID: ${{ vars.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY }}
         run: |
           echo "📦 Generating development .env file..."
           APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_SECRET:-}"
@@ -195,11 +202,10 @@ jobs:
           JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
           
-          # ========== Apple IAP Configuration ==========
-          APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
-          APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
-          APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
+          # ========== Apple IAP (StoreKit 2 / App Store Server API) ==========
+          APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
+          APPLE_ISSUER_ID=${APPLE_ISSUER_ID}
+          APPLE_KEY_ID=${APPLE_KEY_ID}
           
           # ========== Apple Push (APNs) — same Repository Variables as API server ==========
           APNS_BUNDLE_ID=${{ vars.APNS_BUNDLE_ID }}
@@ -235,8 +241,15 @@ jobs:
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           EOF
+          if [ -n "${APPLE_PRIVATE_KEY:-}" ]; then
+            {
+              printf 'APPLE_PRIVATE_KEY<<__APPLE_IAP_PKEY__\n'
+              printf '%s\n' "$APPLE_PRIVATE_KEY"
+              printf '__APPLE_IAP_PKEY__\n'
+            } >> .env
+          fi
           echo "✅ Development .env file generated"
-          cat .env
+          grep -vE '^(APPLE_PRIVATE_KEY|JWT_SECRET|WECHAT_APP_SECRET|DB_PASSWORD|GOOGLE_SERVICE_ACCOUNT_KEY)=' .env || true
 
       - name: Deploy notification
         run: |
@@ -249,6 +262,12 @@ jobs:
           echo "| Image | \`${{ env.REGISTRY }}/grapery-dev/${{ env.IMAGE_NAME }}:dev\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | development |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Apple IAP (StoreKit 2)" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_ISSUER_ID: ${{ vars.APPLE_ISSUER_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_KEY_ID: ${{ vars.APPLE_KEY_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### WeChat (VIPPay OAuth)" >> $GITHUB_STEP_SUMMARY
           echo "- WECHAT_APP_ID (Variable): ${{ vars.WECHAT_APP_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
@@ -373,6 +392,10 @@ jobs:
         env:
           APNS_PRIVATE_KEY_SECRET: ${{ secrets.APNS_PRIVATE_KEY }}
           APNS_PRIVATE_KEY_VAR: ${{ vars.APNS_PRIVATE_KEY }}
+          APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID }}
+          APPLE_ISSUER_ID: ${{ vars.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID: ${{ vars.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY }}
         run: |
           echo "📦 Generating production .env file..."
           APNS_PRIVATE_KEY="${APNS_PRIVATE_KEY_SECRET:-}"
@@ -409,11 +432,10 @@ jobs:
           JWT_SECRET=${{ vars.JWT_SECRET }}
           JWT_EXPIRY_HOURS=${{ vars.JWT_EXPIRY_HOURS || '24' }}
           
-          # ========== Apple IAP Configuration ==========
-          APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
-          APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
-          APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
+          # ========== Apple IAP (StoreKit 2 / App Store Server API) ==========
+          APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
+          APPLE_ISSUER_ID=${APPLE_ISSUER_ID}
+          APPLE_KEY_ID=${APPLE_KEY_ID}
           
           # ========== Apple Push (APNs) — same Repository Variables as API server ==========
           APNS_BUNDLE_ID=${{ vars.APNS_BUNDLE_ID }}
@@ -445,8 +467,15 @@ jobs:
           ALIYUN_OSS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_OSS_ACCESS_KEY_SECRET }}
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
+          if [ -n "${APPLE_PRIVATE_KEY:-}" ]; then
+            {
+              printf 'APPLE_PRIVATE_KEY<<__APPLE_IAP_PKEY__\n'
+              printf '%s\n' "$APPLE_PRIVATE_KEY"
+              printf '__APPLE_IAP_PKEY__\n'
+            } >> .env
+          fi
           echo "✅ Production .env file generated"
-          cat .env
+          grep -vE '^(APPLE_PRIVATE_KEY|JWT_SECRET|WECHAT_APP_SECRET|DB_PASSWORD|GOOGLE_SERVICE_ACCOUNT_KEY)=' .env || true
 
       - name: Deploy notification
         run: |
@@ -463,8 +492,10 @@ jobs:
           echo "### vars Status" >> $GITHUB_STEP_SUMMARY
           echo "- DB_PASSWORD: ${{ vars.DB_PASSWORD && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- JWT_SECRET: ${{ vars.JWT_SECRET && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_ISSUER_ID: ${{ vars.APPLE_ISSUER_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_KEY_ID: ${{ vars.APPLE_KEY_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY
           echo "- GOOGLE_PACKAGE_NAME: ${{ vars.GOOGLE_PACKAGE_NAME && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- GOOGLE_SERVICE_ACCOUNT_KEY: ${{ vars.GOOGLE_SERVICE_ACCOUNT_KEY && '✅ Set' || '❌ Not Set' }}" >> $GITHUB_STEP_SUMMARY
           echo "- WECHAT_APP_ID (Variable): ${{ vars.WECHAT_APP_ID != '' && '✅ Set' || '❌ Missing' }}" >> $GITHUB_STEP_SUMMARY

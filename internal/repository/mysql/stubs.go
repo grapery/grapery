@@ -82,6 +82,7 @@ func (r *Repository) TrendingStories(ctx context.Context, limit int) ([]*domain.
 	err := r.db.WithContext(ctx).
 		Preload("Author").
 		Where("status = ?", string(common.ContentStatusPublished)).
+		Where("(visibility = ? OR visibility = '' OR visibility IS NULL)", string(domain.StoryVisibilityPublic)).
 		Order("followers DESC, likes DESC, updated_at DESC").
 		Limit(limit).
 		Find(&stories).Error
@@ -1798,6 +1799,9 @@ func (r *Repository) ListStories(ctx context.Context, filter domain.StoryFilter)
 	}
 	if filter.Genre != "" {
 		query = query.Where("genre = ?", filter.Genre)
+	}
+	if filter.PublicOnly {
+		query = query.Where("(visibility = ? OR visibility = '' OR visibility IS NULL)", string(domain.StoryVisibilityPublic))
 	}
 
 	// Count total

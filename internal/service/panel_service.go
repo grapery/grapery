@@ -266,6 +266,14 @@ func (s *Service) CreateStoryComment(ctx context.Context, userID string, req Cre
 		userTag = "作者"
 	}
 
+	// 评论开关：作者本人不受限；关闭评论时其他用户不可评论。
+	if story != nil && !story.AllowComments && story.UserID != userID {
+		s.logger.Warn("comment rejected: comments disabled for story",
+			zap.String("storyID", req.StoryID),
+			zap.String("userID", userID))
+		return nil, domain.ErrForbidden
+	}
+
 	now := time.Now().Unix()
 	comment := &domain.Comment{
 		BaseModel: common.BaseModel{
@@ -319,8 +327,16 @@ func (s *Service) CreateCommentReply(ctx context.Context, userID string, req Cre
 	var userTag string
 	if comment.TargetType == "story" {
 		story, _ := s.repo.StoryByID(ctx, comment.TargetID)
-		if story != nil && story.UserID == userID {
-			userTag = "作者"
+		if story != nil {
+			if story.UserID == userID {
+				userTag = "作者"
+			} else if !story.AllowComments {
+				// 评论关闭时，非作者不可回复该故事下的评论。
+				s.logger.Warn("reply rejected: comments disabled for story",
+					zap.String("storyID", comment.TargetID),
+					zap.String("userID", userID))
+				return nil, domain.ErrForbidden
+			}
 		}
 	}
 

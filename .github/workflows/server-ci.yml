@@ -30,6 +30,7 @@ on:
           - dev
           - prod
 
+# Apple IAP（StoreKit 2）环境变量在 VIPPay 工作流配置，见 .github/workflows/vippay-ci.yml
 env:
   GO_VERSION: '1.24'
   REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com' }}
