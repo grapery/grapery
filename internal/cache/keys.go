@@ -41,6 +41,11 @@ const (
 	PrefixSmsPhonePhoneSend = "sms:phone:send:phone:"
 	PrefixSmsPhoneOTP      = "sms:phone:otp:"
 
+	// Phone login (unauthenticated): 手机号验证码登录/自动注册，独立于 OAuth 绑定门禁。
+	PrefixSmsPhoneLoginIPLimit   = "sms:phone:login:limit:ip:"
+	PrefixSmsPhoneLoginPhoneSend = "sms:phone:login:send:phone:"
+	PrefixSmsPhoneLoginOTP       = "sms:phone:login:otp:"
+
 	// Account deletion SMS / proof (独立于 OAuth 首次注册门禁)
 	PrefixAcctDelOTP         = "acctdel:otp:v1:"
 	PrefixAcctDelProof       = "acctdel:ok:v1:"
@@ -217,6 +222,21 @@ func SMSPhoneSendPhoneKey(phone string) string {
 
 func SMSPhoneOTPKey(userID string, phone string) string {
 	return PrefixSmsPhoneOTP + userID + ":" + strings.TrimPrefix(strings.TrimPrefix(phone, "+"), " ")
+}
+
+// SMSPhoneLoginIPLimitKey throttles unauthenticated phone-login SMS sends per client IP.
+func SMSPhoneLoginIPLimitKey(ip string) string {
+	return PrefixSmsPhoneLoginIPLimit + ip
+}
+
+// SMSPhoneLoginSendPhoneKey throttles unauthenticated phone-login SMS sends per phone number.
+func SMSPhoneLoginSendPhoneKey(phone string) string {
+	return PrefixSmsPhoneLoginPhoneSend + phone
+}
+
+// SMSPhoneLoginOTPKey stores the OTP hash for unauthenticated phone-login (keyed by phone only).
+func SMSPhoneLoginOTPKey(phone string) string {
+	return PrefixSmsPhoneLoginOTP + strings.TrimPrefix(strings.TrimPrefix(phone, "+"), " ")
 }
 
 // AccountDeletionOTPKey stores OTP hash for phased account deletion (not OAuth gate SMS).

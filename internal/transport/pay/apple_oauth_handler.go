@@ -15,6 +15,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	appservice "github.com/grapestree/fgrapery/grapery/internal/service"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
@@ -41,7 +42,7 @@ type OAuthSignInData struct {
 	ExpiresIn    int64              `json:"expiresIn"`
 	IsNewUser    bool               `json:"isNewUser"`
 	// Apple / WeChat 登录需完成手机号短信验证（邮箱注册与 Google 登录不要求）
-	RequiresPhoneVerification     bool `json:"requiresPhoneVerification"`
+	RequiresPhoneVerification      bool `json:"requiresPhoneVerification"`
 	RequiresPhoneVerificationSnake bool `json:"requires_phone_verification,omitempty"`
 
 	// Android keys (VipPayService.kt OAuthSignInResponse)
@@ -64,19 +65,19 @@ type AppleSignInRequest struct {
 
 // OAuthUserResponse 用户信息响应 (匹配前端 User model)
 type OAuthUserResponse struct {
-	ID                          string `json:"id"`
-	Username                    string `json:"username"`
-	Email                       string `json:"email"`
-	DisplayName                 string `json:"displayName"`
-	Avatar                      string `json:"avatar,omitempty"`
-	Bio                         string `json:"bio,omitempty"`
-	Status                      string `json:"status"`
-	Phone                       string `json:"phone,omitempty"`
-	PhoneVerifiedAt             int64  `json:"phoneVerifiedAt,omitempty"`
-	RequiresPhoneVerification   bool   `json:"requiresPhoneVerification"`
-	PendingOAuthPhoneSMS        bool   `json:"pendingOAuthPhoneSMS"`
-	CreatedAt                   int64  `json:"createdAt"`
-	UpdatedAt                   int64  `json:"updatedAt"`
+	ID                        string `json:"id"`
+	Username                  string `json:"username"`
+	Email                     string `json:"email"`
+	DisplayName               string `json:"displayName"`
+	Avatar                    string `json:"avatar,omitempty"`
+	Bio                       string `json:"bio,omitempty"`
+	Status                    string `json:"status"`
+	Phone                     string `json:"phone,omitempty"`
+	PhoneVerifiedAt           int64  `json:"phoneVerifiedAt,omitempty"`
+	RequiresPhoneVerification bool   `json:"requiresPhoneVerification"`
+	PendingOAuthPhoneSMS      bool   `json:"pendingOAuthPhoneSMS"`
+	CreatedAt                 int64  `json:"createdAt"`
+	UpdatedAt                 int64  `json:"updatedAt"`
 }
 
 // OAuthResponse 统一的 OAuth 响应结构 (匹配前端 OAuthResponse)
@@ -424,9 +425,10 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			}
 		}
 
+		newUserID := uuid.New().String()
 		newUser := &domain.User{
 			BaseModel: common.BaseModel{
-				ID:        uuid.New().String(),
+				ID:        newUserID,
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
@@ -434,13 +436,14 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 				Followers: 0,
 				Following: 0,
 			},
-			Username:               username,
-			Email:                  email,
-			DisplayName:            displayName,
-			Status:                 "active",
-			EmailVerified:          true, // OAuth 登录邮箱已验证
-			PendingOAuthPhoneSMS:   true, // 首次 Apple 注册需短信验证（中国大陆）
-			LastLoginAt:            &now,
+			Username:             username,
+			Email:                email,
+			DisplayName:          displayName,
+			Status:               "active",
+			EmailVerified:        true, // OAuth 登录邮箱已验证
+			PendingOAuthPhoneSMS: true, // 首次 Apple 注册需短信验证（中国大陆）
+			ReferralCode:         appservice.GenerateUserReferralCode(newUserID),
+			LastLoginAt:          &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {

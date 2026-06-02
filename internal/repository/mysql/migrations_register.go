@@ -1075,6 +1075,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 	})
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_user_phone_oauth_columns",
+		Description: "Ensure users has phone, phone_verified_at, pending_oauth_phone_sms",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			repo := &Repository{db: db, log: log}
+			return repo.ensureUserPhoneOAuthColumns()
+		},
+		Required: true,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "migrate_legacy_polymorphic_storyboard_likes",
 		Description: "Copy likes(storyboard_node|storyboard) into storyboard_likes; drop those likes rows; reconcile storyboards.likes",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

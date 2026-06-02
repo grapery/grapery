@@ -244,6 +244,32 @@ func (r *Repository) EnsureIsCollaborationOpenColumn(logger *zap.Logger) error {
 	return nil
 }
 
+// ensureUserPhoneOAuthColumns ensures phone verification columns exist on users (OAuth + email register).
+func (r *Repository) ensureUserPhoneOAuthColumns() error {
+	migrator := r.db.Migrator()
+	type User struct{}
+
+	if !migrator.HasColumn(&User{}, "phone") {
+		r.log.Info("Adding phone column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN phone VARCHAR(20) NULL DEFAULT ''").Error; err != nil {
+			return err
+		}
+	}
+	if !migrator.HasColumn(&User{}, "phone_verified_at") {
+		r.log.Info("Adding phone_verified_at column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN phone_verified_at BIGINT NOT NULL DEFAULT 0").Error; err != nil {
+			return err
+		}
+	}
+	if !migrator.HasColumn(&User{}, "pending_oauth_phone_sms") {
+		r.log.Info("Adding pending_oauth_phone_sms column to users table")
+		if err := r.db.Exec("ALTER TABLE users ADD COLUMN pending_oauth_phone_sms TINYINT(1) NOT NULL DEFAULT 0").Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureUserFragmentsCountColumn ensures the users table has the fragments_count column
 func (r *Repository) ensureUserFragmentsCountColumn() error {
 	migrator := r.db.Migrator()

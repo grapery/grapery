@@ -86,6 +86,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			auth.POST("/email/send-verification-code", h.SendEmailVerificationCode)
 			auth.POST("/email/verify", h.VerifyEmail)
 			auth.POST("/refresh", h.RefreshToken)
+			// 手机号验证码登录（未认证；不存在则自动注册）
+			auth.POST("/phone/login/send-sms-code", h.PhoneLoginSendSMSCode)
+			auth.POST("/phone/login/verify", h.PhoneLoginVerify)
 		}
 
 		// 主 API 公开法律文档（无需登录；Grapery 信封 code=1）

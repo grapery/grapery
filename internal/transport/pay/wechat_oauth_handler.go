@@ -13,6 +13,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	appservice "github.com/grapestree/fgrapery/grapery/internal/service"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
@@ -58,9 +59,9 @@ func createWeChatOAuthConfig() *payservice.WeChatOAuthConfig {
 
 	if appID != "" {
 		logrus.WithFields(logrus.Fields{
-			"wechat_app_id":      appID,
-			"wechat_secret_set":  appSecret != "",
-			"wechat_secret_len":  len(appSecret),
+			"wechat_app_id":     appID,
+			"wechat_secret_set": appSecret != "",
+			"wechat_secret_len": len(appSecret),
 		}).Info("WeChat OAuth configured")
 	} else {
 		logrus.Warn("WECHAT_APP_ID is not set; WeChat sign-in will be unavailable")
@@ -128,10 +129,10 @@ func (h *WeChatOAuthHandler) HandleWeChatSignIn(c *gin.Context) {
 	userInfo, err := h.client.GetUserInfo(ctx, tokenResp.AccessToken, tokenResp.OpenID)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"wechat_app_id":  h.client.GetAppID(),
-			"wechat_openid":  tokenResp.OpenID,
-			"wechat_scope":   tokenResp.Scope,
-			"has_unionid":    tokenResp.UnionID != "",
+			"wechat_app_id": h.client.GetAppID(),
+			"wechat_openid": tokenResp.OpenID,
+			"wechat_scope":  tokenResp.Scope,
+			"has_unionid":   tokenResp.UnionID != "",
 		}).Errorf("WeChat sign-in: fetch user info failed: %v", err)
 		c.JSON(http.StatusUnauthorized, VipPayAPIResponse{
 			Code:    401,
@@ -208,9 +209,10 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			displayName = username
 		}
 
+		newUserID := uuid.New().String()
 		newUser := &domain.User{
 			BaseModel: common.BaseModel{
-				ID:        uuid.New().String(),
+				ID:        newUserID,
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
@@ -225,6 +227,7 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			Status:               "active",
 			EmailVerified:        false,
 			PendingOAuthPhoneSMS: true,
+			ReferralCode:         appservice.GenerateUserReferralCode(newUserID),
 			LastLoginAt:          &now,
 		}
 

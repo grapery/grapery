@@ -14,6 +14,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	appservice "github.com/grapestree/fgrapery/grapery/internal/service"
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	paymiddleware "github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
@@ -290,9 +291,10 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 		}
 
 		phoneExempt := now
+		newUserID := uuid.New().String()
 		newUser := &domain.User{
 			BaseModel: common.BaseModel{
-				ID:        uuid.New().String(),
+				ID:        newUserID,
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
@@ -300,14 +302,15 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserI
 				Followers: 0,
 				Following: 0,
 			},
-			Username:         username,
-			Email:            email,
-			DisplayName:      displayName,
-			Avatar:           avatar,
-			Status:           "active",
-			EmailVerified:    email != "" && emailVerified,
-			PhoneVerifiedAt:  &phoneExempt,
-			LastLoginAt:      &now,
+			Username:        username,
+			Email:           email,
+			DisplayName:     displayName,
+			Avatar:          avatar,
+			Status:          "active",
+			EmailVerified:   email != "" && emailVerified,
+			PhoneVerifiedAt: &phoneExempt,
+			ReferralCode:    appservice.GenerateUserReferralCode(newUserID),
+			LastLoginAt:     &now,
 		}
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {

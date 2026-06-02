@@ -424,20 +424,22 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	// 创建用户
 	now := time.Now().Unix()
 	phoneExempt := now
+	userID := uuid.New().String()
 	user := &domain.User{
 		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
+			ID:        userID,
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Username:         req.Username,
-		Email:            req.Email,
-		PasswordHash:     passwordHash,
-		DisplayName:      req.DisplayName,
-		DateOfBirth:      dob,
-		Status:           string(common.StatusActive),
-		EmailVerified:    false,
-		PhoneVerifiedAt:  &phoneExempt,
+		Username:        req.Username,
+		Email:           req.Email,
+		PasswordHash:    passwordHash,
+		DisplayName:     req.DisplayName,
+		DateOfBirth:     dob,
+		Status:          string(common.StatusActive),
+		EmailVerified:   false,
+		PhoneVerifiedAt: &phoneExempt,
+		ReferralCode:    GenerateUserReferralCode(userID),
 		SocialStats: common.SocialStats{
 			Followers: 0,
 			Following: 0,
@@ -451,7 +453,10 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 	err = s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
 		// 创建用户
 		if err := tx.CreateUser(ctx, user); err != nil {
-			s.logger.Error("failed to create user", zap.Error(err))
+			s.logger.Error("failed to create user", zap.String("userID", user.ID), zap.Error(err))
+			if regErr := registrationCreateUserError(err); regErr != nil {
+				return regErr
+			}
 			return errors.New("failed to create user account")
 		}
 
@@ -822,4 +827,25 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 		RefreshToken: newRefreshToken,
 		ExpiresIn:    24 * 3600,
 	}, nil
+}
+
+// registrationCreateUserError maps known DB constraint failures to client-safe messages.
+func registrationCreateUserError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "duplicate") && !strings.Contains(msg, "1062") {
+		return nil
+	}
+	switch {
+	case strings.Contains(msg, "username"):
+		return errors.New("username already taken")
+	case strings.Contains(msg, "email"):
+		return errors.New("email already registered")
+	case strings.Contains(msg, "referral_code"):
+		return errors.New("failed to create user account")
+	default:
+		return nil
+	}
 }

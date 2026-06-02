@@ -211,7 +211,7 @@ func (s *Service) GetOrCreateReferralCode(ctx context.Context, userID string) (s
 	}
 
 	// 生成新的专属邀请码（基于用户ID生成短码）
-	referralCode := generateUserReferralCode(userID)
+	referralCode := GenerateUserReferralCode(userID)
 
 	// 更新用户的邀请码
 	user.ReferralCode = referralCode
@@ -222,18 +222,6 @@ func (s *Service) GetOrCreateReferralCode(ctx context.Context, userID string) (s
 
 	s.logger.Info("referral code created", zap.String("userID", userID), zap.String("code", referralCode))
 	return referralCode, nil
-}
-
-// generateUserReferralCode 基于用户ID生成专属邀请码
-func generateUserReferralCode(userID string) string {
-	// 取用户ID的前8位作为基础
-	if len(userID) >= 8 {
-		return "WZ" + userID[:8]
-	}
-	// 如果ID太短，用随机码补充
-	bytes := make([]byte, 8)
-	rand.Read(bytes)
-	return "WZ" + base64.URLEncoding.EncodeToString(bytes)[:6]
 }
 
 // UseReferralCode 使用邀请码（新用户注册时调用）
