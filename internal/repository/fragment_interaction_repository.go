@@ -186,11 +186,11 @@ func (r *FragmentInteractionRepository) GetCommentReplies(ctx context.Context, p
 	return replies, total, nil
 }
 
-// GetCommentsCount 获取评论数（统一 comments 表，含回复；与 CreateComment/updateTargetCommentCount 一致）
+// GetCommentsCount 获取评论数（统一 comments 表，仅顶层）
 func (r *FragmentInteractionRepository) GetCommentsCount(ctx context.Context, fragmentID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Raw(
-		`SELECT COUNT(*) FROM comments WHERE deleted_at IS NULL AND target_type = ? AND target_id = ?`,
+		`SELECT COUNT(*) FROM comments WHERE deleted_at IS NULL AND target_type = ? AND target_id = ? AND parent_id IS NULL`,
 		"fragment", fragmentID,
 	).Scan(&count).Error
 	return count, err

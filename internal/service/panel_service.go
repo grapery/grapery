@@ -215,7 +215,11 @@ func (s *Service) ReorderStoryPanels(ctx context.Context, userID, storyID string
 // ListStoryComments 列出故事评论
 func (s *Service) ListStoryComments(ctx context.Context, storyID, userID string, limit, offset int, sortBy string) ([]domain.StoryComment, int, error) {
 	// 使用现有的 CommentsByTarget 方法
-	comments, total, err := s.repo.CommentsByTarget(ctx, "story", storyID, "newest", limit, offset)
+	sort := "newest"
+	if sortBy == "hot" || sortBy == "hottest" {
+		sort = "hot"
+	}
+	comments, total, err := s.repo.CommentsByTarget(ctx, "story", storyID, sort, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to list story comments", zap.Error(err), zap.String("storyId", storyID))
 		return nil, 0, err
@@ -274,13 +278,7 @@ func (s *Service) CreateStoryComment(ctx context.Context, userID string, req Cre
 		return nil, domain.ErrForbidden
 	}
 
-	now := time.Now().Unix()
 	comment := &domain.Comment{
-		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
 		UserID:     userID,
 		Content:    req.Content,
 		TargetType: "story",
@@ -289,7 +287,7 @@ func (s *Service) CreateStoryComment(ctx context.Context, userID string, req Cre
 		Author:     user,
 	}
 
-	if err := s.repo.CreateComment(ctx, comment); err != nil {
+	if err := s.CreateComment(ctx, comment); err != nil {
 		s.logger.Error("failed to create story comment", zap.Error(err))
 		return nil, err
 	}
@@ -322,6 +320,9 @@ func (s *Service) CreateCommentReply(ctx context.Context, userID string, req Cre
 	if err != nil {
 		return nil, err
 	}
+	if comment.TargetType != "story" {
+		return nil, domain.ErrInvalidInput
+	}
 
 	// 检查是否是故事作者
 	var userTag string
@@ -340,23 +341,16 @@ func (s *Service) CreateCommentReply(ctx context.Context, userID string, req Cre
 		}
 	}
 
-	now := time.Now().Unix()
 	reply := &domain.Comment{
-		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
 		UserID:     userID,
 		Content:    req.Content,
-		TargetType: "comment",
-		TargetID:   req.CommentID,
+		TargetType: comment.TargetType,
+		TargetID:   comment.TargetID,
 		ParentID:   req.CommentID,
-		RootID:     getRootID(comment),
 		Author:     user,
 	}
 
-	if err := s.repo.CreateComment(ctx, reply); err != nil {
+	if err := s.CreateComment(ctx, reply); err != nil {
 		s.logger.Error("failed to create comment reply", zap.Error(err))
 		return nil, err
 	}
@@ -387,13 +381,6 @@ func getAuthorAvatar(author *domain.User) string {
 		return ""
 	}
 	return author.Avatar
-}
-
-func getRootID(comment *domain.Comment) string {
-	if comment.RootID != "" {
-		return comment.RootID
-	}
-	return comment.ID
 }
 
 // ========== Storyboard Panel Service Methods ==========

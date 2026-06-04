@@ -76,8 +76,10 @@ func (r *Repository) CreateComment(ctx context.Context, comment *domain.Comment)
 		return fmt.Errorf("failed to create comment: %w", err)
 	}
 
-	// 更新目标对象的评论计数
-	go r.updateTargetCommentCount(context.Background(), comment.TargetType, comment.TargetID, 1)
+	// 更新目标对象的评论计数（仅统计顶层评论）
+	if comment.ParentID == "" {
+		go r.updateTargetCommentCount(context.Background(), comment.TargetType, comment.TargetID, 1)
+	}
 
 	comment.ID = dbComment.ID
 	comment.CreatedAt = dbComment.CreatedAt.Unix()
@@ -110,25 +112,75 @@ func (r *Repository) DeleteComment(ctx context.Context, id string) error {
 		return fmt.Errorf("comment not found: %w", err)
 	}
 
-	// 软删除
-	if err := r.db.WithContext(ctx).Delete(&Comment{}, "id = ?", id).Error; err != nil {
-		return fmt.Errorf("failed to delete comment: %w", err)
-	}
-
-	// 如果有父评论，更新父评论的回复计数
-	if comment.ParentID != nil {
-		if err := r.db.WithContext(ctx).
-			Model(&Comment{}).
-			Where("id = ?", *comment.ParentID).
-			UpdateColumn("reply_count", gorm.Expr("reply_count - ?", 1)).Error; err != nil {
-			r.log.Warn("failed to update parent reply count", zap.Error(err))
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ids, collectErr := r.collectCommentSubtreeIDs(ctx, tx, id)
+		if collectErr != nil {
+			return collectErr
 		}
+		if len(ids) == 0 {
+			return domain.ErrNotFound
+		}
+
+		if delErr := tx.Delete(&Comment{}, "id IN ?", ids).Error; delErr != nil {
+			return fmt.Errorf("failed to delete comment subtree: %w", delErr)
+		}
+
+		// 如果有父评论，更新父评论的回复计数（仅直接子评论计数）
+		if comment.ParentID != nil {
+			if updateErr := tx.Model(&Comment{}).
+				Where("id = ?", *comment.ParentID).
+				UpdateColumn("reply_count", gorm.Expr("CASE WHEN reply_count - 1 < 0 THEN 0 ELSE reply_count - 1 END")).Error; updateErr != nil {
+				r.log.Warn("failed to update parent reply count", zap.Error(updateErr))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	// 更新目标对象的评论计数
-	go r.updateTargetCommentCount(context.Background(), comment.TargetType, comment.TargetID, -1)
+	// 更新目标对象的评论计数（仅统计顶层评论）
+	topLevelDelta := 0
+	if comment.ParentID == nil {
+		topLevelDelta = 1
+	}
+	if topLevelDelta > 0 {
+		go r.updateTargetCommentCount(context.Background(), comment.TargetType, comment.TargetID, -topLevelDelta)
+	}
 
 	return nil
+}
+
+func (r *Repository) collectCommentSubtreeIDs(ctx context.Context, tx *gorm.DB, rootID string) ([]string, error) {
+	ids := []string{rootID}
+	current := []string{rootID}
+	seen := map[string]struct{}{rootID: {}}
+
+	for len(current) > 0 {
+		var rows []struct {
+			ID string
+		}
+		if err := tx.WithContext(ctx).
+			Model(&Comment{}).
+			Select("id").
+			Where("parent_id IN ?", current).
+			Find(&rows).Error; err != nil {
+			return nil, fmt.Errorf("failed to collect comment descendants: %w", err)
+		}
+
+		next := make([]string, 0, len(rows))
+		for _, row := range rows {
+			if _, exists := seen[row.ID]; exists {
+				continue
+			}
+			seen[row.ID] = struct{}{}
+			ids = append(ids, row.ID)
+			next = append(next, row.ID)
+		}
+		current = next
+	}
+
+	return ids, nil
 }
 
 // CommentsByTarget retrieves top-level comments for a target.
@@ -424,10 +476,10 @@ func (r *Repository) updateTargetCommentCount(ctx context.Context, targetType, t
 		// 	UpdateColumn("comments", gorm.Expr("comments + ?", delta))
 	case "storyboard":
 		r.db.WithContext(ctx).Model(&Storyboard{}).Where("id = ?", targetID).
-			UpdateColumn("comments", gorm.Expr("comments + ?", delta))
+			UpdateColumn("comments", gorm.Expr("CASE WHEN comments + ? < 0 THEN 0 ELSE comments + ? END", delta, delta))
 	case "fragment":
 		r.db.WithContext(ctx).Model(&FragmentDB{}).Where("id = ?", targetID).
-			UpdateColumn("comments", gorm.Expr("comments + ?", delta))
+			UpdateColumn("comments", gorm.Expr("CASE WHEN comments + ? < 0 THEN 0 ELSE comments + ? END", delta, delta))
 	case "character":
 		// 更新角色的评论计数（如果有这个字段）
 	}

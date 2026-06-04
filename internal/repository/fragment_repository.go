@@ -830,27 +830,12 @@ func (r *FragmentRepository) BatchGetEngagementStats(ctx context.Context, fragme
 	if err := r.db.WithContext(ctx).
 		Table("comments").
 		Select("target_id as fragment_id, count(*) as count").
-		Where("target_type = ? AND target_id IN ?", "fragment", fragmentIDs).
+		Where("target_type = ? AND target_id IN ? AND parent_id IS NULL", "fragment", fragmentIDs).
 		Group("target_id").
 		Find(&commentCounts).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range commentCounts {
-		stats := result[row.FragmentID]
-		stats.Comments += int(row.Count)
-		result[row.FragmentID] = stats
-	}
-
-	var fragmentCommentCounts []groupedCount
-	if err := r.db.WithContext(ctx).
-		Table("fragment_comments").
-		Select("fragment_id as fragment_id, count(*) as count").
-		Where("fragment_id IN ?", fragmentIDs).
-		Group("fragment_id").
-		Find(&fragmentCommentCounts).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range fragmentCommentCounts {
 		stats := result[row.FragmentID]
 		stats.Comments += int(row.Count)
 		result[row.FragmentID] = stats

@@ -48,8 +48,8 @@ func (s *Service) CreateComment(ctx context.Context, comment *domain.Comment) er
 		return err
 	}
 	comment.Content = normalized
-	// 验证目标存在
-	if err := s.validateCommentTarget(ctx, comment.TargetType, comment.TargetID); err != nil {
+	// 验证目标存在与评论策略
+	if err := s.validateCommentTarget(ctx, comment.TargetType, comment.TargetID, comment.UserID); err != nil {
 		return err
 	}
 
@@ -706,22 +706,43 @@ func (s *Service) UnlikeComment(ctx context.Context, userID, commentID string) e
 }
 
 // validateCommentTarget 验证评论目标是否存在
-func (s *Service) validateCommentTarget(ctx context.Context, targetType, targetID string) error {
+func (s *Service) validateCommentTarget(ctx context.Context, targetType, targetID, actorID string) error {
 	switch targetType {
 	case "story":
-		_, err := s.repo.StoryByID(ctx, targetID)
+		story, err := s.repo.StoryByID(ctx, targetID)
 		if err != nil {
 			return fmt.Errorf("story not found: %w", err)
 		}
+		if !story.AllowComments && story.UserID != actorID {
+			return domain.ErrForbidden
+		}
+		if story.Visibility == string(domain.StoryVisibilityPrivate) && story.UserID != actorID {
+			return domain.ErrForbidden
+		}
 	case "fragment":
-		_, err := s.repo.FragmentByID(ctx, targetID)
+		fragment, err := s.repo.FragmentByID(ctx, targetID)
 		if err != nil {
 			return fmt.Errorf("fragment not found: %w", err)
 		}
+		visibility := domain.NormalizeFragmentVisibility(fragment.Visibility)
+		if visibility == domain.FragmentVisibilityPrivate && fragment.UserID != actorID {
+			return domain.ErrForbidden
+		}
 	case "storyboard":
-		_, err := s.repo.StoryboardByID(ctx, targetID)
+		storyboard, err := s.repo.StoryboardByID(ctx, targetID)
 		if err != nil {
 			return fmt.Errorf("storyboard not found: %w", err)
+		}
+		if storyboard.UserID != actorID && storyboard.StoryID != "" {
+			story, storyErr := s.repo.StoryByID(ctx, storyboard.StoryID)
+			if storyErr == nil {
+				if !story.AllowComments && story.UserID != actorID {
+					return domain.ErrForbidden
+				}
+				if story.Visibility == string(domain.StoryVisibilityPrivate) && story.UserID != actorID {
+					return domain.ErrForbidden
+				}
+			}
 		}
 	case "character":
 		_, err := s.repo.CharacterByID(ctx, targetID)
