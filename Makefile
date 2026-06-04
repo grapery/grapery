@@ -1,4 +1,4 @@
-.PHONY: run run-with-config test lint build docker migrate mock-load \
+.PHONY: run run-with-config test lint build docker migrate mock-load review-demo-load \
         run-server run-vippay sync-apple-iap-env \
         build-server build-vippay build-all \
         clean help
@@ -147,6 +147,15 @@ mock-load:
 	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < migrations/king_mock_data.sql
 	@echo "Mock data loaded successfully!"
 
+# App Review demo account (jingjing@grapery.xyz) — idempotent, does NOT wipe other users.
+# Order: main user/membership/content, then VipPay VIP grant (requires iap_products).
+# Regenerate bcrypt/FNV: go run ./cmd/gen-review-demo
+review-demo-load:
+	@echo "Loading App Review demo account into $(DB_DATABASE)..."
+	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/app_review_demo_jingjing.sql
+	@mysql -u $(DB_USERNAME) -p$(DB_PASSWORD) -h $(DB_ADDRESS) $(DB_DATABASE) < scripts/app_review_demo_jingjing_vippay.sql
+	@echo "Review demo loaded. Login: jingjing@grapery.xyz / Gr@p3ryIap2026! (use Email in app)"
+
 # ========== Help ==========
 
 help:
@@ -187,6 +196,8 @@ help:
 	@echo ""
 	@echo "Mock Data:"
 	@echo "  make mock-load             - Load mock data (base + King, uses DB_* config)"
+	@echo "  make review-demo-load      - App Review demo user (jingjing@grapery.xyz, idempotent)"
+	@echo "  go run ./cmd/gen-review-demo - Print bcrypt hash + VipPay FNV for demo user"
 	@echo ""
 	@echo "Example with custom settings:"
 	@echo "  make run-vippay DB_PASSWORD=mypassword"
