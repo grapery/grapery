@@ -1574,9 +1574,50 @@ func (s *Service) RecordStoryboardFeedSeen(ctx context.Context, userID, storyboa
 	recommendation.RecordStoryboardSeen(ctx, s.getCache(), s.recoCfg, userID, storyboardID)
 }
 
-// GetStoryboardFeed 获取故事板 feed。
-// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended 为 discover 别名；following；community（带缓存）。
+// GetStoryboardFeed 获取故事板 feed，并过滤掉当前用户已屏蔽创作者的内容（App Store 指南 1.2）。
 func (s *Service) GetStoryboardFeed(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	storyboards, total, err := s.getStoryboardFeedRaw(ctx, userID, tab, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	storyboards, total = s.excludeBlockedCreators(ctx, userID, storyboards, total)
+	return storyboards, total, nil
+}
+
+// excludeBlockedCreators removes storyboards authored by users the viewer has blocked.
+func (s *Service) excludeBlockedCreators(ctx context.Context, userID string, storyboards []*domain.Storyboard, total int64) ([]*domain.Storyboard, int64) {
+	if userID == "" || len(storyboards) == 0 {
+		return storyboards, total
+	}
+	blockedIDs, err := s.repo.ListBlockedUserIDs(ctx, userID)
+	if err != nil || len(blockedIDs) == 0 {
+		return storyboards, total
+	}
+	blocked := make(map[string]struct{}, len(blockedIDs))
+	for _, id := range blockedIDs {
+		blocked[id] = struct{}{}
+	}
+	filtered := make([]*domain.Storyboard, 0, len(storyboards))
+	removed := 0
+	for _, sb := range storyboards {
+		if sb == nil {
+			continue
+		}
+		if _, isBlocked := blocked[sb.UserID]; isBlocked {
+			removed++
+			continue
+		}
+		filtered = append(filtered, sb)
+	}
+	if removed > 0 && total >= int64(removed) {
+		total -= int64(removed)
+	}
+	return filtered, total
+}
+
+// getStoryboardFeedRaw 获取故事板 feed。
+// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended 为 discover 别名；following；community（带缓存）。
+func (s *Service) getStoryboardFeedRaw(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
 	if tab == "" || tab == "recommended" || tab == "for_you" {
 		tab = "discover"

@@ -454,3 +454,31 @@ func (h *Handler) ReportUser(c *gin.Context) {
 
 	Success(c, gin.H{"message": "user reported successfully"})
 }
+
+// ReportContentRequest 举报内容请求
+type ReportContentRequest struct {
+	ContentType string `json:"content_type" binding:"required,oneof=storyboard story comment fragment character"`
+	ContentID   string `json:"content_id" binding:"required,min=1,max=64"`
+	Reason      string `json:"reason" binding:"required,min=1,max=500"`
+}
+
+// ReportContent 举报用户生成内容（App Store 指南 1.2）
+// POST /api/v1/content/report
+func (h *Handler) ReportContent(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
+	var req ReportContentRequest
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	if err := h.svc.ReportContent(c.Request.Context(), userID, req.ContentType, req.ContentID, req.Reason); err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	Success(c, gin.H{"message": "content reported successfully"})
+}

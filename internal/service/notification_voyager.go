@@ -16,7 +16,7 @@ func VoyagerNotificationType(server string) string {
 		return "story_update"
 	case "reply":
 		return "comment"
-	case "group_invite":
+	case "group_invite", "moderation_report_received", "moderation_block_confirmed", "moderation_report_resolved":
 		return "system"
 	default:
 		return "system"

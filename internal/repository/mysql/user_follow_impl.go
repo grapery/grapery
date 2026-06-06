@@ -302,6 +302,21 @@ func (r *Repository) IsBlocked(ctx context.Context, blockerID, blockedID string)
 	return count > 0, nil
 }
 
+// ListBlockedUserIDs returns the IDs of users that blockerID has blocked.
+func (r *Repository) ListBlockedUserIDs(ctx context.Context, blockerID string) ([]string, error) {
+	if blockerID == "" {
+		return nil, nil
+	}
+	var ids []string
+	if err := r.db.WithContext(ctx).
+		Model(&UserBlock{}).
+		Where("blocker_id = ?", blockerID).
+		Pluck("blocked_id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("failed to list blocked user ids: %w", err)
+	}
+	return ids, nil
+}
+
 // ========== User Report Operations ==========
 
 func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error {
@@ -319,6 +334,24 @@ func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID stri
 
 	if err := r.db.WithContext(ctx).Create(&report).Error; err != nil {
 		return fmt.Errorf("failed to create report: %w", err)
+	}
+
+	return nil
+}
+
+// ReportContent records a UGC report against a specific piece of content.
+func (r *Repository) ReportContent(ctx context.Context, reporterID, contentType, contentID, reason string) error {
+	report := ContentReport{
+		ID:          uuid.New().String(),
+		ReporterID:  reporterID,
+		ContentType: contentType,
+		ContentID:   contentID,
+		Reason:      reason,
+		Status:      "pending",
+	}
+
+	if err := r.db.WithContext(ctx).Create(&report).Error; err != nil {
+		return fmt.Errorf("failed to create content report: %w", err)
 	}
 
 	return nil

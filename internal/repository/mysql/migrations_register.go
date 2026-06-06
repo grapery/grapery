@@ -717,6 +717,24 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_content_reports",
+		Description: "Create and migrate content_reports table (UGC moderation, App Store guideline 1.2)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &ContentReport{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_report_review_metadata",
+		Description: "Add review_remarks/reviewed_by/reviewed_at to user_reports and content_reports (Forge moderation)",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &UserReport{}, &ContentReport{})
+		},
+		Required: true,
+	})
+
 	// ========== Fragment 相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragments",

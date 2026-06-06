@@ -284,6 +284,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/users/:id/block", h.BlockUser)
 			authenticated.DELETE("/users/:id/block", h.UnblockUser)
 			authenticated.POST("/users/:id/report", h.ReportUser)
+			authenticated.POST("/content/report", h.ReportContent)
 
 			// 标签相关
 			authenticated.POST("/stories/:id/tags", h.AddStoryTags)

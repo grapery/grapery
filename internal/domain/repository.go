@@ -164,9 +164,13 @@ type Repository interface {
 	BlockUser(ctx context.Context, blockerID, blockedID string) error
 	UnblockUser(ctx context.Context, blockerID, blockedID string) error
 	IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error)
+	// ListBlockedUserIDs returns the IDs of all users that blockerID has blocked.
+	ListBlockedUserIDs(ctx context.Context, blockerID string) ([]string, error)
 
 	// Report
 	ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error
+	// ReportContent records a user-generated-content report (storyboard, story, comment, fragment, character).
+	ReportContent(ctx context.Context, reporterID, contentType, contentID, reason string) error
 
 	// Get Liked Content IDs
 	GetLikedStoryIDs(ctx context.Context, userID string, limit, offset int) ([]string, error)

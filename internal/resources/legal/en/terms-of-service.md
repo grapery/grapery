@@ -56,9 +56,20 @@ You must have legal capacity where you live. We may suspend or terminate account
 - **Visibility settings** may limit who can see your content. **If you set content to be public or visible to other users, it may be viewed, interacted with, or retained by others in accordance with product behavior and applicable law.**
 - You represent that your User Content does not violate third-party rights or law, and you will indemnify us against claims arising from your breach to the extent permitted by law.
 
-## 6. Prohibited conduct
+## 6. Prohibited conduct, objectionable content, and zero tolerance
 
 You must not use the Service to break the law, harass others, distribute malware, impersonate people, manipulate metrics, spam users, collect personal data without permission, or engage in other conduct we reasonably deem harmful or abusive.
+
+**There is zero tolerance for objectionable content or abusive behavior.** "Objectionable content" includes, without limitation, content that is unlawful, sexually explicit or pornographic, that sexualizes minors, that is violent or gory, that promotes self-harm, that is hateful, harassing, defamatory, that incites violence or discrimination, or that infringes others' rights. You agree not to create, upload, publish, or share any objectionable content, and not to harass, threaten, bully, or abuse other users.
+
+By using the Service you agree to this no-tolerance policy. To keep the community safe, we provide and you agree to the following safeguards:
+
+- **Content filtering.** We use automated and/or manual moderation to detect and filter objectionable content. Content may be reviewed, age-gated, hidden, or removed.
+- **Flagging / reporting.** Every piece of user content and every user profile can be **reported** from within the app. Submitting a report sends the content and context to our moderation team.
+- **Blocking.** You can **block** any user. Blocking immediately hides that user's content from your feed and stops further interaction; it also notifies us so we can review the underlying content.
+- **Enforcement within 24 hours.** We will review reports of objectionable content and **act within 24 hours** by removing the content and, where warranted, suspending or terminating (ejecting) the user who provided the offending content. Repeat or severe violations may result in permanent account termination.
+
+We may take any of these actions at our sole discretion and without prior notice where reasonably necessary to protect users or comply with law.
 
 ## 7. AI output and third-party models
 
@@ -94,7 +105,7 @@ The Service is provided **"as is"** and **"as available."** We do not warrant un
 
 ### Informal resolution
 
-Contact **support@grapery.xyz** first.
+Contact **putaoshuyunying@grapery.xyz** first.
 
 ### Arbitration (where permitted)
 
@@ -138,7 +149,7 @@ We may update these Terms. We will notify you of **material** changes through th
 
 ## 21. Contact
 
-**Email:** support@grapery.xyz  
+**Email:** putaoshuyunying@grapery.xyz  
 
 **Company:** Shanghai Rankquantity Technology Co., Ltd. (上海秩量科技有限公司)  
 **Website:** https://www.rankquantity.xyz/  

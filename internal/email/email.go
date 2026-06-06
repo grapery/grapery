@@ -17,7 +17,7 @@ var (
 	SMTPPort     = 0
 	SMTPUsername = ""
 	SMTPPassword = ""
-	SMTPFrom     = "support@grapery.xyz"
+	SMTPFrom     = "putaoshuyunying@grapery.xyz"
 	// SMTPInsecureSkipVerify is useful for some self-hosted SMTP servers; keep false in production.
 	SMTPInsecureSkipVerify = false
 )
@@ -140,7 +140,7 @@ func PasswordResetEmail(to []string, username, resetLink string) error {
         <p>如果按钮无法点击，请复制以下链接到浏览器：</p>
         <p style="word-break: break-all; color: #6366f1;">%s</p>
     `, html.EscapeString(username), resetLink, resetLink)
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -193,7 +193,7 @@ func SubscriptionActivatedEmail(to []string, username, plan string, expire strin
             <a href="https://rankquantity.xyz/membership" class="button">查看会员中心</a>
         </p>
     `, html.EscapeString(username), html.EscapeString(plan), html.EscapeString(expire))
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -213,7 +213,7 @@ func SubscriptionCancelledEmail(to []string, username, plan string) error {
             <a href="https://rankquantity.xyz/membership" class="button">重新订阅</a>
         </p>
     `, html.EscapeString(username), html.EscapeString(plan))
-	footer := `<p>如需帮助，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如需帮助，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -235,7 +235,7 @@ func SubscriptionRenewedEmail(to []string, username, plan, expire string) error 
             <a href="https://rankquantity.xyz/membership" class="button">查看会员中心</a>
         </p>
     `, html.EscapeString(username), html.EscapeString(plan), html.EscapeString(plan), html.EscapeString(expire))
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -257,7 +257,7 @@ func AccountDeletionGracePeriodScheduledEmail(to []string, username string, sche
             <a href="https://rankquantity.xyz" class="button">打开未择客户端</a>
         </p>
     `, html.EscapeString(username), html.EscapeString(t))
-	footer := `<p>如有疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -310,7 +310,7 @@ func VerificationCodeEmail(to []string, username, code string, expireMinutes int
         </div>
         <p>如果这不是您的操作，请忽略此邮件并检查您的账户安全。</p>
     `, html.EscapeString(username), html.EscapeString(code), expireMinutes)
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -336,7 +336,7 @@ func SecurityAlertEmail(to []string, username, alertType, details, ipAddress, lo
         </p>
     `, html.EscapeString(username), html.EscapeString(alertType), html.EscapeString(details),
 		html.EscapeString(ipAddress), html.EscapeString(location))
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -360,7 +360,7 @@ func PaymentSuccessEmail(to []string, username, orderID, amount, productName str
         </p>
     `, html.EscapeString(username), html.EscapeString(orderID),
 		html.EscapeString(productName), html.EscapeString(amount))
-	footer := `<p>如有任何疑问，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如有任何疑问，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -384,7 +384,7 @@ func PaymentFailedEmail(to []string, username, orderID, amount, reason string) e
         </p>
     `, html.EscapeString(username), html.EscapeString(orderID),
 		html.EscapeString(amount), html.EscapeString(reason), html.EscapeString(orderID))
-	footer := `<p>如需帮助，请联系 <a href="mailto:support@grapery.xyz">support@grapery.xyz</a></p>`
+	footer := `<p>如需帮助，请联系 <a href="mailto:putaoshuyunying@grapery.xyz">putaoshuyunying@grapery.xyz</a></p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
 }
@@ -464,4 +464,65 @@ func WelcomeBackEmail(to []string, username string, daysAway int) error {
 	footer := `<p>期待与您再次相遇！</p>`
 	body := baseEmailTemplate(subject, content, footer)
 	return SendSystemEmails(to, subject, body)
+}
+
+// ModerationAlertEmail notifies the moderation team about a user report, content report, or block event.
+func ModerationAlertEmail(to []string, event string, fields map[string]string) error {
+	title := moderationEventTitle(event)
+	rows := moderationEventRows(fields)
+	subject := fmt.Sprintf("【未择·审核】%s", title)
+	content := fmt.Sprintf(`
+        <h2>%s</h2>
+        <p>请在 Forge 内容审核中心查看并处理（目标 SLA：24 小时内）。</p>
+        <div class="info-box">%s</div>
+    `, html.EscapeString(title), rows)
+	footer := `<p>此邮件由系统自动发送</p>`
+	body := baseEmailTemplate(subject, content, footer)
+	return SendSystemEmails(to, subject, body)
+}
+
+func moderationEventTitle(event string) string {
+	switch strings.ToLower(strings.TrimSpace(event)) {
+	case "user_report":
+		return "新的用户举报"
+	case "content_report":
+		return "新的内容举报"
+	case "user_block":
+		return "用户屏蔽记录"
+	default:
+		return "新的审核事件"
+	}
+}
+
+func moderationEventRows(fields map[string]string) string {
+	if len(fields) == 0 {
+		return "<p>（无附加字段）</p>"
+	}
+	labels := map[string]string{
+		"reporterId":  "举报人 ID",
+		"reportedId":  "被举报用户 ID",
+		"blockerId":   "屏蔽方 ID",
+		"blockedId":   "被屏蔽用户 ID",
+		"contentType": "内容类型",
+		"contentId":   "内容 ID",
+		"reason":      "原因",
+	}
+	var b strings.Builder
+	for _, key := range []string{"reporterId", "reportedId", "blockerId", "blockedId", "contentType", "contentId", "reason"} {
+		val, ok := fields[key]
+		if !ok || strings.TrimSpace(val) == "" {
+			continue
+		}
+		label := labels[key]
+		if label == "" {
+			label = key
+		}
+		fmt.Fprintf(&b, `<p><span class="info-label">%s：</span>%s</p>`, html.EscapeString(label), html.EscapeString(val))
+	}
+	if b.Len() == 0 {
+		for k, v := range fields {
+			fmt.Fprintf(&b, `<p><span class="info-label">%s：</span>%s</p>`, html.EscapeString(k), html.EscapeString(v))
+		}
+	}
+	return b.String()
 }

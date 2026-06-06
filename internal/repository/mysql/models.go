@@ -590,16 +590,42 @@ type UserBlock struct {
 
 // UserReport 用户举报记录
 type UserReport struct {
-	ID         string         `gorm:"primaryKey;size:36"`
-	ReporterID string         `gorm:"size:36;not null;index:idx_reporter_reported"`
-	Reporter   User           `gorm:"foreignKey:ReporterID"`
-	ReportedID string         `gorm:"size:36;not null;index:idx_reporter_reported;index"`
-	Reported   User           `gorm:"foreignKey:ReportedID"`
-	Reason     string         `gorm:"size:500"`
-	Status     string         `gorm:"size:20;default:'pending'"` // pending, reviewed, resolved, dismissed
-	CreatedAt  time.Time      `gorm:"autoCreateTime"`
-	UpdatedAt  time.Time      `gorm:"autoUpdateTime"`
-	DeletedAt  gorm.DeletedAt `gorm:"index"`
+	ID            string         `gorm:"primaryKey;size:36"`
+	ReporterID    string         `gorm:"size:36;not null;index:idx_reporter_reported"`
+	Reporter      User           `gorm:"foreignKey:ReporterID"`
+	ReportedID    string         `gorm:"size:36;not null;index:idx_reporter_reported;index"`
+	Reported      User           `gorm:"foreignKey:ReportedID"`
+	Reason        string         `gorm:"size:500"`
+	Status        string         `gorm:"size:20;default:'pending'"` // pending, reviewed, resolved, dismissed
+	ReviewRemarks string         `gorm:"size:500"`
+	ReviewedBy    string         `gorm:"size:36"`
+	ReviewedAt    *time.Time     `gorm:"index"`
+	CreatedAt     time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
+}
+
+// ContentReport 用户生成内容举报记录（分镜 / 故事 / 评论 / 片段 / 角色等）。
+// 用于 App Store 审核指南 1.2：为令人反感的内容提供举报通道，并形成可供运营在 24 小时内处置的工单。
+type ContentReport struct {
+	ID            string         `gorm:"primaryKey;size:36"`
+	ReporterID    string         `gorm:"size:36;not null;index:idx_content_report_reporter"`
+	Reporter      User           `gorm:"foreignKey:ReporterID"`
+	ContentType   string         `gorm:"size:32;not null;index:idx_content_report_target"` // storyboard, story, comment, fragment, character
+	ContentID     string         `gorm:"size:64;not null;index:idx_content_report_target"`
+	Reason        string         `gorm:"size:500"`
+	Status        string         `gorm:"size:20;default:'pending'"` // pending, reviewed, resolved, dismissed
+	ReviewRemarks string         `gorm:"size:500"`
+	ReviewedBy    string         `gorm:"size:36"`
+	ReviewedAt    *time.Time     `gorm:"index"`
+	CreatedAt     time.Time      `gorm:"autoCreateTime"`
+	UpdatedAt     time.Time      `gorm:"autoUpdateTime"`
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
+}
+
+// TableName 显式表名
+func (ContentReport) TableName() string {
+	return "content_reports"
 }
 
 // CommentLike 评论点赞

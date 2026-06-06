@@ -89,7 +89,8 @@ func (s *Service) userAllowsPushForNotificationType(ctx context.Context, userID,
 		return ns.Push.StoryUpdate
 	case "group_invite":
 		return ns.Push.SystemAnnouncement
-	case "system", "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed":
+	case "system", "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed",
+		"moderation_report_received", "moderation_block_confirmed", "moderation_report_resolved":
 		return ns.Push.SystemAnnouncement
 	default:
 		return true
@@ -139,7 +140,8 @@ func (s *Service) CreateNotification(ctx context.Context, notification *domain.N
 			category = "social"
 		case "storyboard", "fork", "story_follow_storyboard", "storyboard_generation_complete", "storyboard_generation_failed":
 			category = "transactional"
-		case "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed":
+		case "fragment_generation_complete", "fragment_generation_failed", "character_generation_complete", "character_generation_failed",
+			"moderation_report_received", "moderation_block_confirmed", "moderation_report_resolved":
 			category = "system"
 		}
 		metrics.RecordNotificationByCategory(category)

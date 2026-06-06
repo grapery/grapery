@@ -933,6 +933,12 @@ func (s *Service) BlockUser(ctx context.Context, blockerID, blockedID string) er
 	_ = s.repo.UnfollowUser(ctx, blockerID, blockedID)
 	_ = s.repo.UnfollowUser(ctx, blockedID, blockerID)
 
+	s.notifyModerationBlockConfirmed(ctx, blockerID, blockedID)
+	s.notifyModerationTeamAsync("user_block", map[string]string{
+		"blockerId": blockerID,
+		"blockedId": blockedID,
+	})
+
 	s.logger.Info("user blocked successfully",
 		zap.String("blockerID", blockerID),
 		zap.String("blockedID", blockedID))
@@ -983,9 +989,58 @@ func (s *Service) ReportUser(ctx context.Context, reporterID, reportedID string,
 		return fmt.Errorf("failed to report user: %w", err)
 	}
 
+	s.notifyModerationReportReceived(ctx, reporterID, "user", reportedID, reason)
+	s.notifyModerationTeamAsync("user_report", map[string]string{
+		"reporterId": reporterID,
+		"reportedId": reportedID,
+		"reason":     reason,
+	})
+
 	s.logger.Info("user reported successfully",
 		zap.String("reporterID", reporterID),
 		zap.String("reportedID", reportedID))
+	return nil
+}
+
+// ListBlockedUserIDs returns the IDs of users that the given user has blocked.
+func (s *Service) ListBlockedUserIDs(ctx context.Context, blockerID string) ([]string, error) {
+	return s.repo.ListBlockedUserIDs(ctx, blockerID)
+}
+
+// ReportContent records a report against a specific piece of user-generated content.
+// Creates a moderation record so the team can act within 24 hours (App Store guideline 1.2).
+func (s *Service) ReportContent(ctx context.Context, reporterID, contentType, contentID, reason string) error {
+	s.logger.Info("reporting content",
+		zap.String("reporterID", reporterID),
+		zap.String("contentType", contentType),
+		zap.String("contentID", contentID),
+		zap.String("reason", reason))
+
+	if contentType == "" || contentID == "" {
+		return fmt.Errorf("content type and id are required")
+	}
+
+	if err := s.repo.ReportContent(ctx, reporterID, contentType, contentID, reason); err != nil {
+		s.logger.Error("failed to report content",
+			zap.String("reporterID", reporterID),
+			zap.String("contentType", contentType),
+			zap.String("contentID", contentID),
+			zap.Error(err))
+		return fmt.Errorf("failed to report content: %w", err)
+	}
+
+	s.notifyModerationReportReceived(ctx, reporterID, contentType, contentID, reason)
+	s.notifyModerationTeamAsync("content_report", map[string]string{
+		"reporterId":  reporterID,
+		"contentType": contentType,
+		"contentId":   contentID,
+		"reason":      reason,
+	})
+
+	s.logger.Info("content reported successfully",
+		zap.String("reporterID", reporterID),
+		zap.String("contentType", contentType),
+		zap.String("contentID", contentID))
 	return nil
 }
 

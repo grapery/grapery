@@ -496,7 +496,7 @@ func registerRoutes(router *gin.Engine) {
 					"version":          version.GetVersion(),
 					"service_terms":    domain + "/api/vippay/terms-of-service",
 					"privacy_policy":   domain + "/api/vippay/privacy-policy",
-					"contact_email":    "support@grapery.xyz",
+					"contact_email":    "putaoshuyunying@grapery.xyz",
 					"contact_phone":    "+86-18589045535",
 					"address":          "上海市浦东新区临港新片区环湖西二路888号C楼",
 					"business_license": "沪ICP备2025137210号",
@@ -753,70 +753,70 @@ func registerRoutes(router *gin.Engine) {
 		vip := api.Group("/vip")
 		vip.Use(paymiddleware.AuthMiddleware())
 		{
-		vip.GET("/info", func(c *gin.Context) {
-			userIDStr := paymiddleware.GetUserIDFromContext(c)
-			userID := stringToInt64(userIDStr)
-			ctx := c.Request.Context()
+			vip.GET("/info", func(c *gin.Context) {
+				userIDStr := paymiddleware.GetUserIDFromContext(c)
+				userID := stringToInt64(userIDStr)
+				ctx := c.Request.Context()
 
-			// 从主库读取真实 token 余量（token_quota / token_used）
-			tokenQuota, tokenUsed := getMainDBTokenInfo(ctx, userIDStr)
-			creditLimit := ceilDiv(tokenQuota, common.CreditToTokenRatio)
-			creditUsed := ceilDiv(tokenUsed, common.CreditToTokenRatio)
+				// 从主库读取真实 token 余量（token_quota / token_used）
+				tokenQuota, tokenUsed := getMainDBTokenInfo(ctx, userIDStr)
+				creditLimit := ceilDiv(tokenQuota, common.CreditToTokenRatio)
+				creditUsed := ceilDiv(tokenUsed, common.CreditToTokenRatio)
 
-			// 查询用户活跃订阅
-			subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
-			if err != nil {
-				// 没有活跃订阅，返回默认值
+				// 查询用户活跃订阅
+				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
+				if err != nil {
+					// 没有活跃订阅，返回默认值
+					c.JSON(http.StatusOK, gin.H{
+						"code": 0,
+						"msg":  "success",
+						"data": gin.H{
+							"user_id":      userID,
+							"is_vip":       false,
+							"level":        0,
+							"status":       0,
+							"auto_renew":   false,
+							"quota_used":   tokenUsed,
+							"quota_limit":  tokenQuota,
+							"credit_used":  creditUsed,
+							"credit_limit": creditLimit,
+							"max_roles":    2, // 免费用户默认值
+							"max_contexts": 5, // 免费用户默认值
+							"expires_at":   nil,
+						},
+					})
+					return
+				}
+
+				// 计算VIP等级（根据订阅套餐）
+				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
+
+				// 格式化过期时间
+				var expiresAt *string
+				if !subscription.EndTime.IsZero() {
+					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
+					expiresAt = &expiresAtStr
+				}
+
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
 						"user_id":      userID,
-						"is_vip":       false,
-						"level":        0,
-						"status":       0,
-						"auto_renew":   false,
+						"is_vip":       subscription.IsActive(),
+						"level":        vipLevel,
+						"status":       int(subscription.Status),
+						"auto_renew":   subscription.AutoRenew,
 						"quota_used":   tokenUsed,
 						"quota_limit":  tokenQuota,
 						"credit_used":  creditUsed,
 						"credit_limit": creditLimit,
-						"max_roles":    2, // 免费用户默认值
-						"max_contexts": 5, // 免费用户默认值
-						"expires_at":   nil,
+						"max_roles":    subscription.MaxRoles,
+						"max_contexts": subscription.MaxContexts,
+						"expires_at":   expiresAt,
 					},
 				})
-				return
-			}
-
-			// 计算VIP等级（根据订阅套餐）
-			vipLevel := calculateVIPLevel(subscription.PackagePlanID)
-
-			// 格式化过期时间
-			var expiresAt *string
-			if !subscription.EndTime.IsZero() {
-				expiresAtStr := subscription.EndTime.Format(time.RFC3339)
-				expiresAt = &expiresAtStr
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"code": 0,
-				"msg":  "success",
-				"data": gin.H{
-					"user_id":      userID,
-					"is_vip":       subscription.IsActive(),
-					"level":        vipLevel,
-					"status":       int(subscription.Status),
-					"auto_renew":   subscription.AutoRenew,
-					"quota_used":   tokenUsed,
-					"quota_limit":  tokenQuota,
-					"credit_used":  creditUsed,
-					"credit_limit": creditLimit,
-					"max_roles":    subscription.MaxRoles,
-					"max_contexts": subscription.MaxContexts,
-					"expires_at":   expiresAt,
-				},
 			})
-		})
 			vip.GET("/check", func(c *gin.Context) {
 				userIDStr := paymiddleware.GetUserIDFromContext(c)
 				userID := stringToInt64(userIDStr)
