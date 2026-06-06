@@ -406,11 +406,18 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 		// 公开接口（无需认证）
 		public := api.Group("")
+		if apiLimiter != nil {
+			public.Use(apiLimiter)
+		}
 		{
 			public.POST("/invitation-codes/validate", h.ValidateInvitationCode) // 验证邀请码（注册前验证）
 			// Public Trending (guest-accessible)
 			public.GET("/public/stories/trending", h.GetTrendingStoriesPublic)
 			public.GET("/public/trending/storyboards", h.GetPublicTrendingStoryboards)
+			if deps.FeedbackService != nil {
+				feedbackHandler := NewFeedbackHandler(deps.FeedbackService)
+				feedbackHandler.RegisterPublicSupportRoutes(public)
+			}
 		}
 
 	}

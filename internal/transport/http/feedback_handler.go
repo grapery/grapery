@@ -17,10 +17,17 @@ func NewFeedbackHandler(svc service.FeedbackService) *FeedbackHandler {
 	return &FeedbackHandler{svc: svc}
 }
 
+const publicSupportGuestUserID = "public-support-guest"
+
 // RegisterFeedbackRoutes under authenticated /v1 group
 func (h *FeedbackHandler) RegisterFeedbackRoutes(r *gin.RouterGroup) {
 	r.POST("/feedback", h.SubmitFeedback)
 	r.GET("/feedback", h.ListMyFeedback)
+}
+
+// RegisterPublicSupportRoutes under unauthenticated /api group
+func (h *FeedbackHandler) RegisterPublicSupportRoutes(r *gin.RouterGroup) {
+	r.POST("/public/support/feedback", h.SubmitPublicSupportFeedback)
 }
 
 type submitFeedbackBody struct {
@@ -48,6 +55,31 @@ func (h *FeedbackHandler) SubmitFeedback(c *gin.Context) {
 		"id":        fb.ID,
 		"status":    fb.Status,
 		"message":   "Feedback received",
+		"createdAt": fb.CreatedAt,
+	})
+}
+
+type submitPublicSupportFeedbackBody struct {
+	Category    string `json:"category" binding:"required"`
+	Content     string `json:"content" binding:"required"`
+	ContactInfo string `json:"contactInfo" binding:"required"`
+}
+
+// SubmitPublicSupportFeedback POST /api/public/support/feedback
+func (h *FeedbackHandler) SubmitPublicSupportFeedback(c *gin.Context) {
+	var body submitPublicSupportFeedbackBody
+	if !BindJSON(c, &body) {
+		return
+	}
+	fb, err := h.svc.SubmitFeedback(c.Request.Context(), publicSupportGuestUserID, body.Category, body.Content, body.ContactInfo)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{
+		"id":        fb.ID,
+		"status":    fb.Status,
+		"message":   "Support request received",
 		"createdAt": fb.CreatedAt,
 	})
 }

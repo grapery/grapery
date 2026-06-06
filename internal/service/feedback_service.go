@@ -48,7 +48,12 @@ func (s *feedbackService) SubmitFeedback(ctx context.Context, userID, category, 
 		s.logger.Error("create feedback failed", zap.Error(err), zap.String("userID", userID))
 		return nil, fmt.Errorf("failed to save feedback: %w", err)
 	}
-	// Re-read timestamps from DB if needed — Create fills CreatedAt via GORM
+	// Notification email is intentionally deferred; feedback is persisted only for now.
+	s.logger.Info("feedback saved",
+		zap.String("feedbackID", fb.ID),
+		zap.String("userID", userID),
+		zap.String("category", fb.Category),
+	)
 	return fb, nil
 }
 
