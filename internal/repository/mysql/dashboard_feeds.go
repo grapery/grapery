@@ -10,6 +10,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/recommendation"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // REMOVED: DashboardStoryboards - not in StoryCreationAppUI design
@@ -207,9 +208,79 @@ func (r *Repository) StoryboardFeedRecommended(ctx context.Context, userID strin
 	return rows, total, nil
 }
 
-// StoryboardFeedDiscover is the discover tab: full public trending feed (no onboarding genre filter).
+// StoryboardFeedDiscover is the discover tab: published storyboards on PUBLIC stories that the viewer does
+// NOT follow and does NOT own (those belong to the following tab). Storyboards on public stories authored by
+// users the viewer follows (user_follows) are prioritized, then ordered by engagement.
+// Guests (empty userID): all public published storyboards by engagement, no exclusion or prioritization.
 func (r *Repository) StoryboardFeedDiscover(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
-	return r.GetPublicTrendingStoryboards(ctx, userID, limit, offset)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	publicVis := string(domain.StoryVisibilityPublic)
+
+	buildBase := func() *gorm.DB {
+		q := r.db.WithContext(ctx).
+			Model(&Storyboard{}).
+			Joins("JOIN stories ON stories.id = storyboards.story_id AND stories.deleted_at IS NULL").
+			Where("storyboards.workflow_status = ?", domain.WorkflowStatusPublished).
+			Where("stories.visibility = ?", publicVis)
+		if userID != "" {
+			// Stories the viewer follows or owns live in the following tab; exclude them from discover.
+			q = q.
+				Where("storyboards.story_id NOT IN (SELECT story_id FROM story_follows WHERE user_id = ? AND deleted_at IS NULL)", userID).
+				Where("stories.author_id <> ?", userID)
+		}
+		return q
+	}
+
+	var total int64
+	if err := buildBase().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard discover count: %w", err)
+	}
+	if total == 0 {
+		return []*domain.Storyboard{}, 0, nil
+	}
+
+	type idRow struct {
+		ID string `gorm:"column:id"`
+	}
+	var idRows []idRow
+
+	idQuery := buildBase()
+	if userID != "" {
+		// Prioritize public stories authored by users the viewer follows, then engagement.
+		idQuery = idQuery.
+			Select("storyboards.id, (CASE WHEN stories.author_id IN (SELECT followee_id FROM user_follows WHERE follower_id = ? AND deleted_at IS NULL) THEN 1 ELSE 0 END) AS followed_author", userID).
+			Order("followed_author DESC, storyboards.likes DESC, storyboards.views DESC, storyboards.fork_count DESC, storyboards.updated_at DESC")
+	} else {
+		idQuery = idQuery.
+			Select("storyboards.id").
+			Order("storyboards.likes DESC, storyboards.views DESC, storyboards.fork_count DESC, storyboards.updated_at DESC")
+	}
+	if err := idQuery.Limit(limit).Offset(offset).Scan(&idRows).Error; err != nil {
+		return nil, 0, fmt.Errorf("storyboard discover ids: %w", err)
+	}
+
+	ids := make([]string, 0, len(idRows))
+	for _, row := range idRows {
+		ids = append(ids, row.ID)
+	}
+	if len(ids) == 0 {
+		return []*domain.Storyboard{}, total, nil
+	}
+
+	rows, err := r.storyboardsByIDsInOrder(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("storyboard discover load: %w", err)
+	}
+	return rows, total, nil
 }
 
 // buildStoryboardPreferenceMerged merges onboarding genre matches with a popularity fallback pool only.

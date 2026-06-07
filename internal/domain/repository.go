@@ -246,13 +246,14 @@ type Repository interface {
 	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
 	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
-	// StoryboardFeedFromFollowedStories returns the following tab: reader-visible storyboards on followed stories (story_follows),
-	// on public stories by followed users (user_follows), and on the viewer’s own stories (author match; any story visibility).
+	// StoryboardFeedFromFollowedStories returns the following tab: reader-visible storyboards on followed stories (story_follows)
+	// and on the viewer’s own stories (author match; any story visibility). Users auto-follow their own stories.
 	StoryboardFeedFromFollowedStories(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	// StoryboardFeedRecommended is the “for you” tab: published storyboards matching onboarding preferred genres, plus a public engagement fallback (guests: trending).
 	// excludeStoryboardIDs may be nil; IDs in the set are omitted from the merged list (oversampling fills the page when possible).
 	StoryboardFeedRecommended(ctx context.Context, userID string, limit, offset int, excludeStoryboardIDs map[string]struct{}) ([]*Storyboard, int64, error)
-	// StoryboardFeedDiscover is the discover tab: only published public storyboards whose story genre is in preferredGenres, by updated_at; guests get trending; empty genres => empty.
+	// StoryboardFeedDiscover is the discover tab: published storyboards on PUBLIC stories the viewer neither follows nor owns;
+	// public stories authored by followed users (user_follows) are prioritized, then by engagement. Guests: all public published by engagement.
 	StoryboardFeedDiscover(ctx context.Context, userID string, limit, offset int) ([]*Storyboard, int64, error)
 	ForkStoryboard(ctx context.Context, parentID, creatorID string, storyboard *Storyboard) error
 	IncrementStoryboardViews(ctx context.Context, id string) error

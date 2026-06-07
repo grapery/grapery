@@ -1235,9 +1235,10 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		domain.WorkflowStatusImagesReady,
 		domain.WorkflowStatusVideoReady,
 	}
-	publicVis := string(domain.StoryVisibilityPublic)
 
-	// OR: followed stories, followed users’ public stories, or own stories (any visibility).
+	// Following = storyboards on stories the viewer follows (story_follows; users auto-follow their own stories),
+	// plus the viewer's own stories (any visibility) as a safety net when the auto-follow row is missing.
+	// Followed users' (unfollowed) public stories are NOT here; they are prioritized in the discover tab instead.
 	buildBase := func() *gorm.DB {
 		return r.db.WithContext(ctx).
 			Model(&Storyboard{}).
@@ -1246,11 +1247,8 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 				(storyboards.story_id IN (SELECT story_id FROM story_follows WHERE user_id = ? AND deleted_at IS NULL)
 				 AND storyboards.workflow_status IN ?)
 				OR
-				(stories.visibility = ? AND storyboards.workflow_status IN ?
-				 AND stories.author_id IN (SELECT followee_id FROM user_follows WHERE follower_id = ? AND deleted_at IS NULL))
-				OR
 				(stories.author_id = ? AND storyboards.workflow_status IN ?)
-			)`, userID, visibleForFollowedStory, publicVis, visibleForFollowedStory, userID, userID, visibleForFollowedStory)
+			)`, userID, visibleForFollowedStory, userID, visibleForFollowedStory)
 	}
 
 	var total int64
