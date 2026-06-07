@@ -166,6 +166,8 @@ type Repository interface {
 	IsBlocked(ctx context.Context, blockerID, blockedID string) (bool, error)
 	// ListBlockedUserIDs returns the IDs of all users that blockerID has blocked.
 	ListBlockedUserIDs(ctx context.Context, blockerID string) ([]string, error)
+	// ListBlockedUsers returns blocked users with profile fields for the blocker's settings list.
+	ListBlockedUsers(ctx context.Context, blockerID string, limit, offset int) ([]*BlockedUser, int64, error)
 
 	// Report
 	ReportUser(ctx context.Context, reporterID, reportedID string, reason string) error

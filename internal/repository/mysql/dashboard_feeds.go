@@ -111,17 +111,21 @@ func (r *Repository) GetPublicTrendingStoryboards(ctx context.Context, userID st
 	for _, sb := range rows {
 		byID[sb.ID] = sb
 	}
-	result := make([]*domain.Storyboard, 0, len(idRows))
+	orderedRows := make([]Storyboard, 0, len(idRows))
 	for _, id := range ids {
 		sb, ok := byID[id]
 		if !ok {
 			continue
 		}
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, 0, err
-		}
-		copySb := domainSb
+		orderedRows = append(orderedRows, sb)
+	}
+	domainRows, err := r.storyboardsToDomain(ctx, orderedRows)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 	return result, total, nil
@@ -301,17 +305,21 @@ func (r *Repository) storyboardsByIDsInOrder(ctx context.Context, ids []string) 
 	for _, sb := range rows {
 		byID[sb.ID] = sb
 	}
-	out := make([]*domain.Storyboard, 0, len(ids))
+	orderedRows := make([]Storyboard, 0, len(ids))
 	for _, id := range ids {
 		sb, ok := byID[id]
 		if !ok {
 			continue
 		}
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+		orderedRows = append(orderedRows, sb)
+	}
+	domainRows, err := r.storyboardsToDomain(ctx, orderedRows)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		out = append(out, &copySb)
 	}
 	return out, nil

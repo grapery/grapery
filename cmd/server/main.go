@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 
 	"github.com/grapestree/fgrapery/grapery/internal/aliyun"
@@ -263,11 +264,37 @@ func main() {
 	}
 
 	var redisCache cache.Cache
+	var aiRedisClient *redis.Client
 	redisCache, err = cache.NewRedisCache(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.Database, logger)
 	if err != nil {
 		logger.Warn("failed to initialize redis cache; recommendation cache disabled", zap.Error(err))
 	} else {
 		svc.SetCache(redisCache)
+		repo.SetCache(redisCache)
+		aiRedisClient = redis.NewClient(&redis.Options{
+			Addr:         cfg.Redis.Address,
+			Password:     cfg.Redis.Password,
+			DB:           cfg.Redis.Database,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+			PoolSize:     10,
+			MinIdleConns: 5,
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pingErr := aiRedisClient.Ping(ctx).Err()
+		cancel()
+		if pingErr != nil {
+			logger.Warn("failed to initialize ai redis client", zap.Error(pingErr))
+			_ = aiRedisClient.Close()
+			aiRedisClient = nil
+		} else {
+			defer func() {
+				if aiRedisClient != nil {
+					_ = aiRedisClient.Close()
+				}
+			}()
+		}
 	}
 
 	// Global outbound text-LLM concurrency (Redis-backed; disables if Redis unavailable or text_max_concurrent=0).
@@ -280,6 +307,9 @@ func main() {
 
 	// Initialize AI clients
 	initAIClients(cfg, svc, repo, logger)
+	if aiSvc := svc.AIGenerationService(); aiSvc != nil && aiRedisClient != nil {
+		aiSvc.SetRedisClient(aiRedisClient)
+	}
 
 	// 与 Fragment 生成等共用同一套 AI 依赖；HTTP 路由上的 /ai/*（含 enhance-prompt）必须非 nil，否则异步 goroutine 会在 nil 接收者上 panic。
 	aiSvc := svc.AIService()
@@ -314,7 +344,7 @@ func main() {
 	svc.SetFragmentComicStyleService(comicStyleSvc)
 
 	// Initialize Fragment Handler
-	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo, comicStyleSvc)
+	fragmentHandler := handler.NewFragmentHandler(fragmentRepo, userSettingsRepo, repo, svc, comicStyleSvc)
 	logger.Info("fragment handler initialized")
 
 	// Initialize Like Repository
@@ -339,6 +369,9 @@ func main() {
 
 	// Initialize Storyboard Path Service
 	storyboardPathService := service.NewStoryboardPathService(repo, logger)
+	if redisCache != nil {
+		storyboardPathService.SetCache(redisCache)
+	}
 	logger.Info("storyboard path service initialized")
 
 	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
@@ -351,6 +384,7 @@ func main() {
 		GenreCatalogService:   genreCatalogService,
 		FeedbackService:       feedbackService,
 		Logger:                logger,
+		Cache:                 redisCache,
 	}
 	router := transport.SetupRouter(deps)
 

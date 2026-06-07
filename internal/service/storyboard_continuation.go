@@ -158,6 +158,7 @@ func (s *Service) removeStoryboardFromDefaultPath(ctx context.Context, storyID, 
 			zap.Error(err))
 		return
 	}
+	s.invalidateStoryCache(ctx, storyID)
 	s.syncStoryboardDefaultPathMarks(ctx, storyID, newIDs)
 }
 

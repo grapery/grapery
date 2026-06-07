@@ -445,6 +445,7 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 				zap.String("storyID", story.ID),
 				zap.Error(err))
 		} else {
+			s.invalidateStoryCache(ctx, story.ID)
 			s.logger.Debug("story updated with AI enriched content",
 				zap.String("storyID", story.ID))
 		}
@@ -510,10 +511,29 @@ func (s *Service) CreateStory(ctx context.Context, userID string, req CreateStor
 	return story, nil
 }
 
+func (s *Service) invalidateStoryCache(ctx context.Context, storyID string) {
+	cache.InvalidateStory(ctx, s.getCache(), storyID)
+}
+
 // GetStory 获取故事详情
 func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, error) {
 	s.logger.Info("getting story",
 		zap.String("storyID", storyID))
+
+	c := s.getCache()
+	if c != nil {
+		var cached domain.Story
+		if err := c.Get(ctx, cache.StoryKey(storyID), &cached); err == nil {
+			s.logger.Debug("story cache hit", zap.String("storyID", storyID))
+			if s.metrics != nil {
+				s.metrics.RecordCacheHit("story")
+			}
+			return &cached, nil
+		}
+		if s.metrics != nil {
+			s.metrics.RecordCacheMiss("story")
+		}
+	}
 
 	story, err := s.repo.StoryByID(ctx, storyID)
 	if err != nil {
@@ -601,6 +621,13 @@ func (s *Service) GetStory(ctx context.Context, storyID string) (*domain.Story, 
 		zap.Int("characterCount", len(story.Characters)),
 		zap.Int("sceneCount", len(story.Scenes)),
 		zap.Int("contributorCount", len(story.Contributors)))
+	if c != nil {
+		if err := c.Set(ctx, cache.StoryKey(storyID), story, 15*time.Minute); err != nil {
+			s.logger.Warn("failed to cache story",
+				zap.String("storyID", storyID),
+				zap.Error(err))
+		}
+	}
 
 	return story, nil
 }
@@ -943,6 +970,8 @@ func (s *Service) UpdateStory(ctx context.Context, userID, storyID string, req U
 		return nil, errors.New("failed to update story")
 	}
 
+	s.invalidateStoryCache(ctx, storyID)
+
 	s.logger.Info("story updated successfully",
 		zap.String("storyID", storyID),
 		zap.Strings("fieldsUpdated", fieldsUpdated))
@@ -1027,6 +1056,8 @@ func (s *Service) DeleteStory(ctx context.Context, userID, storyID string) error
 		return errors.New("failed to delete story")
 	}
 
+	s.invalidateStoryCache(ctx, storyID)
+
 	s.logger.Info("story deleted successfully",
 		zap.String("storyID", storyID),
 		zap.String("userID", userID))
@@ -1077,6 +1108,8 @@ func (s *Service) LikeStory(ctx context.Context, userID, storyID string) error {
 		return errors.New("failed to like story")
 	}
 
+	s.invalidateStoryCache(ctx, storyID)
+
 	s.logger.Info("story liked successfully",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
@@ -1106,6 +1139,8 @@ func (s *Service) UnlikeStory(ctx context.Context, userID, storyID string) error
 			zap.Error(err))
 		return errors.New("failed to unlike story")
 	}
+
+	s.invalidateStoryCache(ctx, storyID)
 
 	s.logger.Info("story unliked successfully",
 		zap.String("userID", userID),
@@ -1377,6 +1412,7 @@ func (s *Service) RenderStory(ctx context.Context, userID, storyID string, req R
 				zap.Error(err))
 			return nil, errors.New("failed to save rendered story")
 		}
+		s.invalidateStoryCache(ctx, storyID)
 
 		// 更新用户的token使用量
 		if totalTokens > 0 {
@@ -2321,7 +2357,7 @@ func (s *Service) refreshPublishStoryStats(ctx context.Context, userID, storyID 
 	c := s.getCache()
 	if c != nil {
 		_ = c.Delete(ctx, cache.UserKey(userID))
-		_ = c.Delete(ctx, cache.StoryKey(storyID))
+		s.invalidateStoryCache(ctx, storyID)
 		for _, ch := range chars {
 			if ch == nil {
 				continue
@@ -3121,6 +3157,7 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 		}
 	}
 
+	s.invalidateStoryCache(ctx, storyID)
 	return contributor, nil
 }
 
@@ -3178,6 +3215,7 @@ func (s *Service) RemoveStoryContributor(ctx context.Context, operatorID, storyI
 		}
 	}
 
+	s.invalidateStoryCache(ctx, storyID)
 	return nil
 }
 

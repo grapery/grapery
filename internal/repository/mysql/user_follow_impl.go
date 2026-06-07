@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -246,13 +247,18 @@ func (r *Repository) LikedStoryboards(ctx context.Context, userID string, limit,
 		return nil, fmt.Errorf("failed to get liked storyboards: %w", err)
 	}
 
-	result := make([]*domain.Storyboard, len(likes))
-	for i, like := range likes {
-		storyboard, err := r.storyboardToDomain(ctx, like.Storyboard)
-		if err != nil {
-			return nil, err
-		}
-		result[i] = &storyboard
+	storyboards := make([]Storyboard, 0, len(likes))
+	for _, like := range likes {
+		storyboards = append(storyboards, like.Storyboard)
+	}
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
+		result = append(result, &copySb)
 	}
 	return result, nil
 }
@@ -315,6 +321,59 @@ func (r *Repository) ListBlockedUserIDs(ctx context.Context, blockerID string) (
 		return nil, fmt.Errorf("failed to list blocked user ids: %w", err)
 	}
 	return ids, nil
+}
+
+// ListBlockedUsers returns blocked users with profile metadata for the blocker's list UI.
+func (r *Repository) ListBlockedUsers(ctx context.Context, blockerID string, limit, offset int) ([]*domain.BlockedUser, int64, error) {
+	if blockerID == "" {
+		return nil, 0, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	base := r.db.WithContext(ctx).
+		Table("user_blocks").
+		Joins("JOIN users ON users.id = user_blocks.blocked_id AND users.deleted_at IS NULL").
+		Where("user_blocks.blocker_id = ? AND user_blocks.deleted_at IS NULL", blockerID)
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count blocked users: %w", err)
+	}
+
+	type row struct {
+		ID          string    `gorm:"column:id"`
+		DisplayName string    `gorm:"column:display_name"`
+		Username    string    `gorm:"column:username"`
+		BlockedAt   time.Time `gorm:"column:created_at"`
+	}
+	var rows []row
+	if err := base.
+		Select("users.id, users.display_name, users.username, user_blocks.created_at").
+		Order("user_blocks.created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Scan(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to list blocked users: %w", err)
+	}
+
+	out := make([]*domain.BlockedUser, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &domain.BlockedUser{
+			ID:          row.ID,
+			DisplayName: row.DisplayName,
+			Username:    row.Username,
+			BlockedAt:   row.BlockedAt.Unix(),
+		})
+	}
+	return out, total, nil
 }
 
 // ========== User Report Operations ==========

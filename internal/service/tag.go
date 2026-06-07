@@ -2,9 +2,15 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
+
+func popularTagsCacheKey(limit int) string {
+	return fmt.Sprintf("tags:popular:%d", limit)
+}
 
 func (s *Service) AddStoryTags(ctx context.Context, storyID string, tagNames []string) error {
 	for _, name := range tagNames {
@@ -16,11 +22,24 @@ func (s *Service) AddStoryTags(ctx context.Context, storyID string, tagNames []s
 			return err
 		}
 	}
+	if c := s.getCache(); c != nil {
+		for i := 20; i <= 100; i += 20 {
+			_ = c.Delete(ctx, popularTagsCacheKey(i))
+		}
+	}
 	return nil
 }
 
 func (s *Service) RemoveStoryTag(ctx context.Context, storyID, tagID string) error {
-	return s.repo.RemoveStoryTag(ctx, storyID, tagID)
+	if err := s.repo.RemoveStoryTag(ctx, storyID, tagID); err != nil {
+		return err
+	}
+	if c := s.getCache(); c != nil {
+		for i := 20; i <= 100; i += 20 {
+			_ = c.Delete(ctx, popularTagsCacheKey(i))
+		}
+	}
+	return nil
 }
 
 func (s *Service) GetStoryTags(ctx context.Context, storyID string) ([]*domain.Tag, error) {
@@ -44,7 +63,22 @@ func (s *Service) GetPopularTags(ctx context.Context, limit int) ([]*domain.Tag,
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.PopularTags(ctx, limit)
+	c := s.getCache()
+	key := popularTagsCacheKey(limit)
+	if c != nil {
+		var cached []*domain.Tag
+		if err := c.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		}
+	}
+	tags, err := s.repo.PopularTags(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	if c != nil {
+		_ = c.Set(ctx, key, tags, 10*time.Minute)
+	}
+	return tags, nil
 }
 
 func (s *Service) AddCharacterTags(ctx context.Context, characterID string, tagNames []string) error {

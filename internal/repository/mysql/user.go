@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -138,13 +139,21 @@ func (r *Repository) Membership(ctx context.Context, userID string) (*domain.Mem
 // CreateMembership 创建会员信息
 func (r *Repository) CreateMembership(ctx context.Context, membership *domain.Membership) error {
 	dbMembership := r.membershipFromDomain(membership)
-	return r.db.WithContext(ctx).Create(dbMembership).Error
+	if err := r.db.WithContext(ctx).Create(dbMembership).Error; err != nil {
+		return err
+	}
+	cache.InvalidateMembership(ctx, r.cache, membership.UserID)
+	return nil
 }
 
 // UpdateMembership 更新会员信息
 func (r *Repository) UpdateMembership(ctx context.Context, membership *domain.Membership) error {
 	dbMembership := r.membershipFromDomain(membership)
-	return r.db.WithContext(ctx).Save(dbMembership).Error
+	if err := r.db.WithContext(ctx).Save(dbMembership).Error; err != nil {
+		return err
+	}
+	cache.InvalidateMembership(ctx, r.cache, membership.UserID)
+	return nil
 }
 
 // ========== Helper Functions ==========
@@ -190,15 +199,15 @@ func (r *Repository) userToDomainPtr(user *User) *domain.User {
 			Followers: user.Followers,
 			Following: user.Following,
 		},
-		StoryboardCount: user.StoryboardCount,
-		Status:          user.Status,
-		EmailVerified:   user.EmailVerified,
+		StoryboardCount:      user.StoryboardCount,
+		Status:               user.Status,
+		EmailVerified:        user.EmailVerified,
 		Phone:                user.Phone,
 		PhoneVerifiedAt:      phoneVerifiedAt,
 		PendingOAuthPhoneSMS: user.PendingOAuthPhoneSMS,
 		LastLoginAt:          lastLoginAt,
-		Points:          user.Points,
-		ReferralCode:    user.ReferralCode,
+		Points:               user.Points,
+		ReferralCode:         user.ReferralCode,
 	}
 }
 
@@ -220,31 +229,31 @@ func (r *Repository) userFromDomain(user *domain.User) *User {
 	}
 
 	return &User{
-		ID:                  user.ID,
-		Username:            user.Username,
-		Email:               user.Email,
-		PasswordHash:        user.PasswordHash,
-		DisplayName:         user.DisplayName,
-		Avatar:              user.Avatar,
-		Background:          user.Background,
-		Bio:                 user.Bio,
-		Location:            user.Location,
-		Website:             user.Website,
-		AIPromptPreferences: user.AIPromptPreferences,
-		DateOfBirth:         dateOfBirth,
-		Followers:           user.Followers,
-		Following:           user.Following,
-		StoryboardCount:     user.StoryboardCount,
-		Status:              user.Status,
-		EmailVerified:       user.EmailVerified,
+		ID:                   user.ID,
+		Username:             user.Username,
+		Email:                user.Email,
+		PasswordHash:         user.PasswordHash,
+		DisplayName:          user.DisplayName,
+		Avatar:               user.Avatar,
+		Background:           user.Background,
+		Bio:                  user.Bio,
+		Location:             user.Location,
+		Website:              user.Website,
+		AIPromptPreferences:  user.AIPromptPreferences,
+		DateOfBirth:          dateOfBirth,
+		Followers:            user.Followers,
+		Following:            user.Following,
+		StoryboardCount:      user.StoryboardCount,
+		Status:               user.Status,
+		EmailVerified:        user.EmailVerified,
 		Phone:                user.Phone,
 		PhoneVerifiedAt:      phoneVerifiedAt,
 		PendingOAuthPhoneSMS: user.PendingOAuthPhoneSMS,
 		LastLoginAt:          lastLoginAt,
-		Points:              user.Points,
-		ReferralCode:        user.ReferralCode,
-		CreatedAt:           user.CreatedAt,
-		UpdatedAt:           user.UpdatedAt,
+		Points:               user.Points,
+		ReferralCode:         user.ReferralCode,
+		CreatedAt:            user.CreatedAt,
+		UpdatedAt:            user.UpdatedAt,
 	}
 }
 

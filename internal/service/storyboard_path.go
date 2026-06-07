@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
@@ -14,6 +15,7 @@ import (
 type StoryboardPathService struct {
 	storyRepo domain.Repository
 	logger    *zap.Logger
+	cache     cache.Cache
 }
 
 // NewStoryboardPathService 创建路径服务
@@ -25,6 +27,11 @@ func NewStoryboardPathService(
 		storyRepo: storyRepo,
 		logger:    logger,
 	}
+}
+
+// SetCache wires optional Redis for story detail cache invalidation on path updates.
+func (s *StoryboardPathService) SetCache(c cache.Cache) {
+	s.cache = c
 }
 
 // SetDefaultPath 手动设置默认路径
@@ -60,6 +67,7 @@ func (s *StoryboardPathService) SetDefaultPath(ctx context.Context, storyID stri
 	if err := s.storyRepo.UpdateStory(ctx, story); err != nil {
 		return fmt.Errorf("failed to update story default path: %w", err)
 	}
+	cache.InvalidateStory(ctx, s.cache, storyID)
 
 	// 5. 更新 storyboard 的默认路径标记
 	s.updateStoryboardDefaultPathMarks(ctx, storyID, nodeIDs)
@@ -131,6 +139,7 @@ func (s *StoryboardPathService) CalculateAutoPath(ctx context.Context, storyID s
 	if err := s.storyRepo.UpdateStory(ctx, story); err != nil {
 		return nil, fmt.Errorf("failed to update story default path: %w", err)
 	}
+	cache.InvalidateStory(ctx, s.cache, storyID)
 
 	// 8. 更新 storyboard 标记
 	s.updateStoryboardDefaultPathMarks(ctx, storyID, path)

@@ -25,6 +25,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
@@ -38,6 +39,9 @@ import (
 
 // mainDB 是主服务数据库连接，用于读取 memberships 表（token_quota / token_used）
 var mainDB *gorm.DB
+
+// membershipCache invalidates grapery API membership caches after IAP writes (optional).
+var membershipCache cache.Cache
 
 var printVersion = flag.Bool("version", false, "app build version")
 var configPath = flag.String("config", "vippay.json", "config file")
@@ -198,6 +202,12 @@ func main() {
 
 	// 创建 Gin 引擎
 	router := createGinEngine(cfg, logger, telemetryManager)
+
+	if c, cacheErr := cache.NewRedisCache(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.Database, logger); cacheErr != nil {
+		logger.Warn("failed to initialize redis for membership cache invalidation", zap.Error(cacheErr))
+	} else {
+		membershipCache = c
+	}
 
 	// 注册路由
 	registerRoutes(router)
@@ -426,6 +436,7 @@ func registerRoutes(router *gin.Engine) {
 
 	// 创建 IAP 处理器，传入产品服务及主库（用于购买后充值 tokens）
 	iapHandler := pay.NewIAPHandler(iapService, productService, mainDB)
+	iapHandler.SetCache(membershipCache)
 
 	// 兜底扫描：已过期但仍标记 Active/WillExpire 的 Apple 订阅
 	go func() {

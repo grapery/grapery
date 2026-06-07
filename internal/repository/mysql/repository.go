@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
@@ -15,6 +16,7 @@ type Repository struct {
 	db      *gorm.DB
 	log     *zap.Logger
 	recoCfg config.RecommendationConfig
+	cache   cache.Cache
 }
 
 // NewRepository creates a new Repository instance
@@ -24,6 +26,11 @@ func NewRepository(db *gorm.DB, log *zap.Logger, recoCfg config.RecommendationCo
 		log:     log,
 		recoCfg: recoCfg,
 	}
+}
+
+// SetCache wires optional Redis for membership cache invalidation on writes.
+func (r *Repository) SetCache(c cache.Cache) {
+	r.cache = c
 }
 
 // DB returns the underlying GORM database instance
@@ -51,6 +58,7 @@ func (r *Repository) WithTransaction(ctx context.Context, fn func(tx domain.Repo
 			db:      tx,
 			log:     r.log,
 			recoCfg: r.recoCfg,
+			cache:   r.cache,
 		},
 		tx: tx,
 	}

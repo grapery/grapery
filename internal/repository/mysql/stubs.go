@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -1267,6 +1268,7 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 	if err != nil {
 		return nil, err
 	}
+	cache.InvalidateMembership(ctx, r.cache, userID)
 	return resultTx, nil
 }
 

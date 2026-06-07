@@ -33,14 +33,14 @@ type membershipRow struct {
 
 // SubscriptionDisplayInfo 客户端展示用订阅摘要。
 type SubscriptionDisplayInfo struct {
-	Tier            string                            `json:"tier"`
-	TierDisplayKey  string                            `json:"tier_display_key"`
-	ProductID       string                            `json:"product_id,omitempty"`
-	ExpiresAt       *time.Time                        `json:"expires_at,omitempty"`
-	AutoRenewing    bool                              `json:"auto_renewing"`
-	LifecycleStatus string                            `json:"lifecycle_status"`
-	TokenQuota      int                               `json:"token_quota,omitempty"`
-	TokenUsed       int                               `json:"token_used,omitempty"`
+	Tier            string                               `json:"tier"`
+	TierDisplayKey  string                               `json:"tier_display_key"`
+	ProductID       string                               `json:"product_id,omitempty"`
+	ExpiresAt       *time.Time                           `json:"expires_at,omitempty"`
+	AutoRenewing    bool                                 `json:"auto_renewing"`
+	LifecycleStatus string                               `json:"lifecycle_status"`
+	TokenQuota      int                                  `json:"token_quota,omitempty"`
+	TokenUsed       int                                  `json:"token_used,omitempty"`
 	PendingNotice   *paymodels.SubscriptionNoticePayload `json:"pending_notice,omitempty"`
 }
 
@@ -218,7 +218,7 @@ func (h *IAPHandler) applyMembershipQuota(
 	}
 	now := time.Now()
 
-	return h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var m membershipRow
 		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -275,6 +275,10 @@ func (h *IAPHandler) applyMembershipQuota(
 
 		return tx.Table("memberships").Where("user_id = ?", userIDStr).Updates(updates).Error
 	})
+	if err == nil {
+		h.invalidateMembershipCache(ctx, userIDStr)
+	}
+	return err
 }
 
 func (h *IAPHandler) buildNoticeArgs(
@@ -320,8 +324,8 @@ func (h *IAPHandler) readMembershipTokens(ctx context.Context, userIDStr string)
 
 func (h *IAPHandler) buildSubscriptionDisplay(ctx context.Context, userIDStr string, sub *payservice.IAPSubscription) *SubscriptionDisplayInfo {
 	display := &SubscriptionDisplayInfo{
-		Tier:           "free",
-		TierDisplayKey: tierDisplayKey("free"),
+		Tier:            "free",
+		TierDisplayKey:  tierDisplayKey("free"),
 		LifecycleStatus: "free",
 	}
 	if quota, used := h.readMembershipTokens(ctx, userIDStr); quota > 0 || used > 0 {

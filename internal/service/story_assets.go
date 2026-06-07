@@ -80,6 +80,7 @@ func (s *Service) CreateStoryScene(ctx context.Context, userID string, req Creat
 		s.logger.Error("create story scene failed", zap.Error(err), zap.String("storyId", req.StoryID))
 		return nil, fmt.Errorf("failed to create story scene")
 	}
+	s.invalidateStoryCache(ctx, req.StoryID)
 	return scene, nil
 }
 
@@ -131,6 +132,7 @@ func (s *Service) UpdateStoryScene(ctx context.Context, userID, storyID, sceneID
 			zap.String("storyId", storyID))
 		return nil, fmt.Errorf("failed to update story scene")
 	}
+	s.invalidateStoryCache(ctx, storyID)
 	return scene, nil
 }
 
@@ -144,7 +146,11 @@ func (s *Service) DeleteStoryScene(ctx context.Context, userID, storyID, sceneID
 	if err := s.ensureStoryOwnership(ctx, storyID, userID); err != nil {
 		return err
 	}
-	return s.repo.DeleteStoryScene(ctx, storyID, sceneID)
+	if err := s.repo.DeleteStoryScene(ctx, storyID, sceneID); err != nil {
+		return err
+	}
+	s.invalidateStoryCache(ctx, storyID)
+	return nil
 }
 
 // ensureStoryOwnership validates that the user owns the story.

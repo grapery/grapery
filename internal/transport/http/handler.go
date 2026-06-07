@@ -281,6 +281,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/users/:id/points", h.GetUserPoints)
 
 			// 用户屏蔽/举报相关
+			authenticated.GET("/users/blocked", h.GetBlockedUsers)
 			authenticated.POST("/users/:id/block", h.BlockUser)
 			authenticated.DELETE("/users/:id/block", h.UnblockUser)
 			authenticated.POST("/users/:id/report", h.ReportUser)

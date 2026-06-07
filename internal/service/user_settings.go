@@ -40,6 +40,17 @@ type userSettingsService struct {
 	cache            cache.Cache
 }
 
+func userSettingsCacheKey(userID string) string {
+	return "user_settings:" + userID
+}
+
+func (s *userSettingsService) invalidateSettingsCache(ctx context.Context, userID string) {
+	if s.cache == nil {
+		return
+	}
+	_ = s.cache.Delete(ctx, userSettingsCacheKey(userID))
+}
+
 // NewUserSettingsService 创建用户设置服务
 func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, genreCatalogRepo domain.GenreCatalogRepository, logger *zap.Logger, c cache.Cache) UserSettingsService {
 	return &userSettingsService{
@@ -54,6 +65,12 @@ func NewUserSettingsService(settingsRepo domain.UserSettingsRepository, genreCat
 func (s *userSettingsService) GetSettings(ctx context.Context, userID string) (*domain.UserSettings, error) {
 	s.logger.Debug("getting user settings",
 		zap.String("userID", userID))
+	if s.cache != nil {
+		var cached domain.UserSettings
+		if err := s.cache.Get(ctx, userSettingsCacheKey(userID), &cached); err == nil {
+			return &cached, nil
+		}
+	}
 
 	settings, err := s.settingsRepo.GetUserSettings(userID)
 	if err != nil {
@@ -72,6 +89,9 @@ func (s *userSettingsService) GetSettings(ctx context.Context, userID string) (*
 				zap.Error(err),
 				zap.String("userID", userID))
 		}
+	}
+	if s.cache != nil {
+		_ = s.cache.Set(ctx, userSettingsCacheKey(userID), settings, 10*time.Minute)
 	}
 
 	s.logger.Debug("user settings retrieved",
@@ -122,6 +142,9 @@ func (s *userSettingsService) CreateDefaultSettings(ctx context.Context, userID 
 
 	s.logger.Info("default user settings created",
 		zap.String("userID", userID))
+	if s.cache != nil {
+		_ = s.cache.Set(ctx, userSettingsCacheKey(userID), defaultSettings, 10*time.Minute)
+	}
 	return defaultSettings, nil
 }
 
@@ -242,6 +265,7 @@ func (s *userSettingsService) UpdateSettings(ctx context.Context, userID string,
 
 	s.logger.Info("user settings updated",
 		zap.String("userID", userID))
+	s.invalidateSettingsCache(ctx, userID)
 	if preferredGenresChanged {
 		recommendation.InvalidateAllForUser(ctx, s.cache, userID)
 	}
@@ -259,6 +283,7 @@ func (s *userSettingsService) UpdatePreferredGenres(ctx context.Context, userID 
 	if err := s.settingsRepo.UpdateUserSettings(settings); err != nil {
 		return nil, fmt.Errorf("failed to update preferred genres: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 	recommendation.InvalidateAllForUser(ctx, s.cache, userID)
 	return sanitized, nil
 }
@@ -301,6 +326,7 @@ func (s *userSettingsService) UpdateLanguage(ctx context.Context, userID string,
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update language: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }
@@ -329,6 +355,7 @@ func (s *userSettingsService) UpdateTheme(ctx context.Context, userID string, th
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update theme: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }
@@ -395,6 +422,7 @@ func (s *userSettingsService) UpdatePrivacy(ctx context.Context, userID string, 
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update privacy settings: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }
@@ -421,6 +449,7 @@ func (s *userSettingsService) UpdateAISettings(ctx context.Context, userID strin
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update AI settings: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }
@@ -504,6 +533,7 @@ func (s *userSettingsService) UpdateNotificationSettings(ctx context.Context, us
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update notification settings: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }
@@ -536,9 +566,9 @@ func (s *userSettingsService) getDefaultNotificationSettingsMap() map[string]int
 			"productUpdates": true,
 		},
 		"inApp": map[string]interface{}{
-			"enabled":           true,
-			"showPreview":       true,
-			"soundEnabled":      true,
+			"enabled":          true,
+			"showPreview":      true,
+			"soundEnabled":     true,
 			"vibrationEnabled": true,
 		},
 	}
@@ -615,6 +645,7 @@ func (s *userSettingsService) UpdateFontSize(ctx context.Context, userID string,
 			zap.String("userID", userID))
 		return fmt.Errorf("failed to update font size: %w", err)
 	}
+	s.invalidateSettingsCache(ctx, userID)
 
 	return nil
 }

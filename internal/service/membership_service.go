@@ -7,10 +7,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
+
+func (s *Service) invalidateMembershipCache(ctx context.Context, userID string) {
+	cache.InvalidateMembership(ctx, s.getCache(), userID)
+}
 
 // ========== Membership Service Methods ==========
 
@@ -52,12 +57,20 @@ func (s *Service) ListMembershipPlans(ctx context.Context) ([]domain.MembershipP
 
 // GetUserMembership 获取用户会员信息
 func (s *Service) GetUserMembership(ctx context.Context, userID string) (*domain.UserMembership, error) {
+	c := s.getCache()
+	if c != nil {
+		var cached domain.UserMembership
+		if err := c.Get(ctx, cache.MembershipKey(userID), &cached); err == nil {
+			return &cached, nil
+		}
+	}
+
 	membership, err := s.repo.Membership(ctx, userID)
 	if err != nil {
 		s.logger.Error("failed to get user membership", zap.Error(err), zap.String("userId", userID))
 		// 返回免费用户
 		now := time.Now().Unix()
-		return &domain.UserMembership{
+		free := &domain.UserMembership{
 			BaseModel: common.BaseModel{
 				ID:        uuid.New().String(),
 				CreatedAt: now,
@@ -70,11 +83,15 @@ func (s *Service) GetUserMembership(ctx context.Context, userID string) (*domain
 			AutoRenew:       false,
 			AIUsedThisMonth: 0,
 			AILimit:         10,
-		}, nil
+		}
+		if c != nil {
+			_ = c.Set(ctx, cache.MembershipKey(userID), free, 2*time.Minute)
+		}
+		return free, nil
 	}
 
 	now := time.Now().Unix()
-	return &domain.UserMembership{
+	out := &domain.UserMembership{
 		BaseModel: common.BaseModel{
 			ID:        membership.ID,
 			CreatedAt: membership.CreatedAt,
@@ -87,7 +104,11 @@ func (s *Service) GetUserMembership(ctx context.Context, userID string) (*domain
 		AutoRenew:       membership.AutoRenew,
 		AIUsedThisMonth: membership.TokenUsed,
 		AILimit:         membership.TokenQuota,
-	}, nil
+	}
+	if c != nil {
+		_ = c.Set(ctx, cache.MembershipKey(userID), out, 2*time.Minute)
+	}
+	return out, nil
 }
 
 // SubscribeMembership 订阅会员方案
@@ -170,33 +191,49 @@ func (s *Service) CancelMembership(ctx context.Context, userID string) error {
 		s.logger.Error("failed to cancel membership", zap.Error(err))
 		return err
 	}
+	s.invalidateMembershipCache(ctx, userID)
 
 	return nil
 }
 
 // GetMembershipUsage 获取会员使用量
 func (s *Service) GetMembershipUsage(ctx context.Context, userID string) (*MembershipUsage, error) {
+	c := s.getCache()
+	if c != nil {
+		var cached MembershipUsage
+		if err := c.Get(ctx, cache.MembershipUsageKey(userID), &cached); err == nil {
+			return &cached, nil
+		}
+	}
 	membership, err := s.repo.Membership(ctx, userID)
 	if err != nil {
 		// 如果没有会员信息，返回免费用户的使用量
-		return &MembershipUsage{
+		free := &MembershipUsage{
 			UserID:          userID,
 			Tier:            string(domain.TierTypeFree),
 			AIUsedThisMonth: 0,
 			AILimit:         10, // 免费用户限制
 			PeriodStart:     time.Now().Unix(),
 			PeriodEnd:       time.Now().AddDate(0, 1, 0).Unix(),
-		}, nil
+		}
+		if c != nil {
+			_ = c.Set(ctx, cache.MembershipUsageKey(userID), free, 2*time.Minute)
+		}
+		return free, nil
 	}
 
-	return &MembershipUsage{
-		UserID: userID,
-		Tier:   string(domain.CanonicalMembershipTier(membership.Tier, "")),
+	out := &MembershipUsage{
+		UserID:          userID,
+		Tier:            string(domain.CanonicalMembershipTier(membership.Tier, "")),
 		AIUsedThisMonth: membership.TokenUsed,
 		AILimit:         membership.TokenQuota,
 		PeriodStart:     membership.StartDate,
 		PeriodEnd:       getExpiresAt(membership.EndDate),
-	}, nil
+	}
+	if c != nil {
+		_ = c.Set(ctx, cache.MembershipUsageKey(userID), out, 2*time.Minute)
+	}
+	return out, nil
 }
 
 // Helper function

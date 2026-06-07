@@ -933,6 +933,9 @@ func (s *Service) BlockUser(ctx context.Context, blockerID, blockedID string) er
 	_ = s.repo.UnfollowUser(ctx, blockerID, blockedID)
 	_ = s.repo.UnfollowUser(ctx, blockedID, blockerID)
 
+	s.writeThroughBlockedID(ctx, blockerID, blockedID, true)
+	s.invalidateBlockedUserCaches(ctx, blockerID)
+
 	s.notifyModerationBlockConfirmed(ctx, blockerID, blockedID)
 	s.notifyModerationTeamAsync("user_block", map[string]string{
 		"blockerId": blockerID,
@@ -958,6 +961,9 @@ func (s *Service) UnblockUser(ctx context.Context, blockerID, blockedID string) 
 			zap.Error(err))
 		return fmt.Errorf("failed to unblock user: %w", err)
 	}
+
+	s.writeThroughBlockedID(ctx, blockerID, blockedID, false)
+	s.invalidateBlockedUserCaches(ctx, blockerID)
 
 	s.logger.Info("user unblocked successfully",
 		zap.String("blockerID", blockerID),
@@ -1003,8 +1009,61 @@ func (s *Service) ReportUser(ctx context.Context, reporterID, reportedID string,
 }
 
 // ListBlockedUserIDs returns the IDs of users that the given user has blocked.
+// Uses a Redis SET cache when available; falls back to MySQL on miss or Redis outage.
 func (s *Service) ListBlockedUserIDs(ctx context.Context, blockerID string) ([]string, error) {
-	return s.repo.ListBlockedUserIDs(ctx, blockerID)
+	if blockerID == "" {
+		return nil, nil
+	}
+	if ids, ok := s.readBlockedIDsFromCache(ctx, blockerID); ok {
+		return ids, nil
+	}
+	ids, err := s.repo.ListBlockedUserIDs(ctx, blockerID)
+	if err != nil {
+		return nil, err
+	}
+	s.populateBlockedIDsCache(ctx, blockerID, ids)
+	return ids, nil
+}
+
+// ListBlockedUsers returns blocked users with profile metadata for the settings list UI.
+func (s *Service) ListBlockedUsers(ctx context.Context, blockerID string, limit, offset int) ([]*domain.BlockedUser, int64, error) {
+	if blockerID == "" {
+		return nil, 0, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	c := s.getCache()
+	if c != nil {
+		cacheKey := cache.UserBlockedListKey(blockerID, limit, offset)
+		var cached blockedListCachePayload
+		if err := c.Get(ctx, cacheKey, &cached); err == nil {
+			return cached.Users, cached.Total, nil
+		}
+	}
+
+	users, total, err := s.repo.ListBlockedUsers(ctx, blockerID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if c != nil {
+		cacheKey := cache.UserBlockedListKey(blockerID, limit, offset)
+		payload := blockedListCachePayload{Users: users, Total: total}
+		if err := c.Set(ctx, cacheKey, payload, listCacheTTL); err != nil {
+			s.logger.Warn("failed to cache blocked users list",
+				zap.String("blockerID", blockerID),
+				zap.Error(err))
+		}
+	}
+	return users, total, nil
 }
 
 // ReportContent records a report against a specific piece of user-generated content.

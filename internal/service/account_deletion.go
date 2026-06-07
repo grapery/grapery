@@ -60,7 +60,7 @@ func (s *Service) SessionUser(ctx context.Context, userID string) (*domain.User,
 	if strings.TrimSpace(userID) == "" {
 		return nil, errors.New("not authenticated")
 	}
-	return s.repo.UserByID(ctx, userID)
+	return s.GetUser(ctx, userID)
 }
 
 // EnsureActiveSessionUser allows active accounts and grace-period pending_deletion (for cancel/read paths).

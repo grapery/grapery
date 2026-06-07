@@ -382,6 +382,33 @@ func (h *Handler) GetLikedStoryboards(c *gin.Context) {
 // REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
 // REMOVED: GetUserActivityList - not in StoryCreationAppUI design
 
+// GetBlockedUsers 获取当前用户屏蔽列表
+// GET /api/v1/users/blocked
+func (h *Handler) GetBlockedUsers(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	users, total, err := h.svc.ListBlockedUsers(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	if users == nil {
+		users = []*domain.BlockedUser{}
+	}
+	Success(c, gin.H{
+		"users":  users,
+		"total":  total,
+		"count":  len(users),
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
 // BlockUser 屏蔽用户
 // POST /api/v1/users/:id/block
 func (h *Handler) BlockUser(c *gin.Context) {

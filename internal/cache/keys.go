@@ -119,6 +119,16 @@ func UserFollowersKey(userID string) string {
 	return PrefixUser + userID + ":followers"
 }
 
+// UserBlockedIDsKey Redis SET of blocked user IDs for a blocker (App Store UGC blocklist cache).
+func UserBlockedIDsKey(userID string) string {
+	return PrefixUser + userID + ":blocked_ids"
+}
+
+// UserBlockedListKey paginated blocked-user list with profile fields (JSON cache).
+func UserBlockedListKey(userID string, limit, offset int) string {
+	return fmt.Sprintf("%s%s:blocked_list:%d:%d", PrefixUser, userID, limit, offset)
+}
+
 func UserStoriesListKey(userID string, limit, offset int) string {
 	return fmt.Sprintf("%s%s:%d:%d", PrefixUserStories, userID, limit, offset)
 }

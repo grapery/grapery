@@ -274,6 +274,8 @@ func (s *Service) CreateCharacter(ctx context.Context, userID string, req Create
 		}
 	}
 
+	s.invalidateStoryCache(ctx, req.StoryID)
+
 	s.logger.Info("character created successfully",
 		zap.String("characterID", character.ID))
 
@@ -1244,6 +1246,8 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 		}
 	}
 
+	s.invalidateStoryCache(ctx, character.StoryID)
+
 	s.logger.Info("character updated successfully",
 		zap.String("characterID", characterID))
 	return character, nil
@@ -1293,6 +1297,8 @@ func (s *Service) DeleteCharacter(ctx context.Context, userID, characterID strin
 			}
 		}
 	}
+
+	s.invalidateStoryCache(ctx, character.StoryID)
 
 	s.logger.Info("character deleted successfully",
 		zap.String("characterID", characterID))

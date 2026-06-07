@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/telemetry"
 	"go.uber.org/zap"
 )
+
+func notificationUnreadCountCacheKey(userID string) string {
+	return "notif:unread:" + userID
+}
 
 func notificationPushBody(n *domain.Notification) string {
 	if n == nil {
@@ -108,25 +113,61 @@ func (s *Service) ListNotifications(ctx context.Context, userID string, limit, o
 }
 
 func (s *Service) UnreadCount(ctx context.Context, userID string) (int, error) {
-	return s.repo.UnreadNotificationCount(ctx, userID)
+	c := s.getCache()
+	key := notificationUnreadCountCacheKey(userID)
+	if c != nil {
+		var cached int
+		if err := c.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		}
+	}
+	count, err := s.repo.UnreadNotificationCount(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	if c != nil {
+		_ = c.Set(ctx, key, count, 30*time.Second)
+	}
+	return count, nil
 }
 
 func (s *Service) MarkAsRead(ctx context.Context, id, userID string) error {
-	return s.repo.MarkNotificationRead(ctx, id)
+	if err := s.repo.MarkNotificationRead(ctx, id); err != nil {
+		return err
+	}
+	if c := s.getCache(); c != nil {
+		_ = c.Delete(ctx, notificationUnreadCountCacheKey(userID))
+	}
+	return nil
 }
 
 func (s *Service) MarkAllAsRead(ctx context.Context, userID string) error {
-	return s.repo.MarkAllNotificationsRead(ctx, userID)
+	if err := s.repo.MarkAllNotificationsRead(ctx, userID); err != nil {
+		return err
+	}
+	if c := s.getCache(); c != nil {
+		_ = c.Delete(ctx, notificationUnreadCountCacheKey(userID))
+	}
+	return nil
 }
 
 func (s *Service) DeleteNotification(ctx context.Context, id, userID string) error {
-	return s.repo.DeleteNotification(ctx, id)
+	if err := s.repo.DeleteNotification(ctx, id); err != nil {
+		return err
+	}
+	if c := s.getCache(); c != nil {
+		_ = c.Delete(ctx, notificationUnreadCountCacheKey(userID))
+	}
+	return nil
 }
 
 // CreateNotification 创建通知（内部使用）
 func (s *Service) CreateNotification(ctx context.Context, notification *domain.Notification) error {
 	if err := s.repo.CreateNotification(ctx, notification); err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
+	}
+	if c := s.getCache(); c != nil {
+		_ = c.Delete(ctx, notificationUnreadCountCacheKey(notification.UserID))
 	}
 	s.logger.Info("notification created", zap.String("userId", notification.UserID), zap.String("type", notification.Type))
 

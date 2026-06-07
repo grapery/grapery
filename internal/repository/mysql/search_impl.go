@@ -56,13 +56,13 @@ func (r *Repository) SearchStoryboards(ctx context.Context, query string, limit,
 		return nil, fmt.Errorf("failed to search storyboards: %w", err)
 	}
 
-	result := make([]*domain.Storyboard, 0, len(sbs))
-	for i := range sbs {
-		d, err := r.storyboardToDomain(ctx, sbs[i])
-		if err != nil {
-			return nil, err
-		}
-		dCopy := d
+	domainRows, err := r.storyboardsToDomain(ctx, sbs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		dCopy := domainRows[i]
 		result = append(result, &dCopy)
 	}
 	return result, nil

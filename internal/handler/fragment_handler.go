@@ -20,14 +20,16 @@ type FragmentHandler struct {
 	fragmentRepo     *repository.FragmentRepository
 	userSettingsRepo domain.UserSettingsRepository
 	repo             domain.Repository
+	svc              *coreservice.Service
 	comicStyleSvc    *coreservice.FragmentComicStyleService
 }
 
-func NewFragmentHandler(fragmentRepo *repository.FragmentRepository, userSettingsRepo domain.UserSettingsRepository, repo domain.Repository, comicStyleSvc *coreservice.FragmentComicStyleService) *FragmentHandler {
+func NewFragmentHandler(fragmentRepo *repository.FragmentRepository, userSettingsRepo domain.UserSettingsRepository, repo domain.Repository, svc *coreservice.Service, comicStyleSvc *coreservice.FragmentComicStyleService) *FragmentHandler {
 	return &FragmentHandler{
 		fragmentRepo:     fragmentRepo,
 		userSettingsRepo: userSettingsRepo,
 		repo:             repo,
+		svc:              svc,
 		comicStyleSvc:    comicStyleSvc,
 	}
 }
@@ -350,12 +352,25 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 				return
 			}
 			fragments, total, err = h.fragmentRepo.ListFollowing(c.Request.Context(), userID, limit, offset)
+		case "for_you", "recommended":
+			if publicFeed {
+				fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+			} else {
+				fragments, total, err = h.fragmentRepo.ListRecommendedForUser(c.Request.Context(), userID, limit, offset)
+			}
+		case "discover":
+			if publicFeed {
+				// Align with plaza rail: full public timeline (not genre-scoped discover).
+				fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
+			} else {
+				fragments, total, err = h.fragmentRepo.ListRecommendedForUser(c.Request.Context(), userID, limit, offset)
+			}
 		default: // discover, for_you, recommended
 			if publicFeed {
 				// Align with plaza rail: full public timeline (not genre-scoped discover).
 				fragments, total, err = h.fragmentRepo.List(c.Request.Context(), limit, offset, domain.FragmentVisibilityPublic)
 			} else {
-				fragments, total, err = h.fragmentRepo.ListDiscoverFragmentsForUser(c.Request.Context(), userID, limit, offset)
+				fragments, total, err = h.fragmentRepo.ListRecommendedForUser(c.Request.Context(), userID, limit, offset)
 			}
 		}
 	}
@@ -363,6 +378,18 @@ func (h *FragmentHandler) ListFragments(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch fragments"})
 		return
+	}
+
+	if userID != "" && h.svc != nil && len(fragments) > 0 {
+		if blockedIDs, blockErr := h.svc.ListBlockedUserIDs(c.Request.Context(), userID); blockErr == nil && len(blockedIDs) > 0 {
+			blocked := coreservice.BlockedIDSet(blockedIDs)
+			fragments, total = coreservice.ExcludeByBlockedAuthors(fragments, total, blocked, func(f *domain.Fragment) string {
+				if f == nil {
+					return ""
+				}
+				return f.UserID
+			})
+		}
 	}
 
 	if len(fragments) > 0 {

@@ -332,14 +332,13 @@ func (r *Repository) StoryboardsByStory(ctx context.Context, storyID string, lim
 	if err := query.Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get storyboards: %w", err)
 	}
-
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -373,13 +372,13 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 		zap.String("storyId", storyID),
 		zap.Int("count", len(storyboards)))
 
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -403,14 +402,13 @@ func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID 
 	if err := query.Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get storyboards by parent: %w", err)
 	}
-
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -432,14 +430,13 @@ func (r *Repository) StoryboardsByCreator(ctx context.Context, creatorID string,
 	if err := query.Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get storyboards by creator: %w", err)
 	}
-
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -463,14 +460,13 @@ func (r *Repository) DraftStoryboardsByCreator(ctx context.Context, creatorID st
 	if err := query.Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get draft storyboards by creator: %w", err)
 	}
-
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -542,14 +538,13 @@ func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([
 		Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get child storyboards: %w", err)
 	}
-
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -667,100 +662,164 @@ func (r *Repository) DecrementStoryStoryboardCount(ctx context.Context, storyID 
 
 // storyboardToDomain converts database model to domain model
 func (r *Repository) storyboardToDomain(ctx context.Context, sb Storyboard) (domain.Storyboard, error) {
-	// 获取已发布子节点 IDs（草稿/生成中不计入 childrenIds，避免详情页误判有子分支）
-	var childrenIds []string
-	r.db.Model(&Storyboard{}).
-		Where("parent_id = ?", sb.ID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished).
-		Order("created_at DESC").
-		Pluck("id", &childrenIds)
-
-	charRefs, err := r.storyboardCharacterLinks(ctx, sb.ID)
+	out, err := r.storyboardsToDomain(ctx, []Storyboard{sb})
 	if err != nil {
-		return domain.Storyboard{}, fmt.Errorf("load storyboard character links: %w", err)
+		return domain.Storyboard{}, err
 	}
-	sceneRefs, err := r.storyboardSceneLinks(ctx, sb.ID)
-	if err != nil {
-		return domain.Storyboard{}, fmt.Errorf("load storyboard scene links: %w", err)
+	if len(out) == 0 {
+		return domain.Storyboard{}, fmt.Errorf("storyboard %s not found", sb.ID)
+	}
+	return out[0], nil
+}
+
+func (r *Repository) storyboardsToDomain(ctx context.Context, storyboards []Storyboard) ([]domain.Storyboard, error) {
+	if len(storyboards) == 0 {
+		return []domain.Storyboard{}, nil
+	}
+	ids := make([]string, 0, len(storyboards))
+	for _, sb := range storyboards {
+		if sb.ID != "" {
+			ids = append(ids, sb.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return []domain.Storyboard{}, nil
 	}
 
-	// 获取 AI 生成的场景（包含图片）
-	storyboardScenes, err := r.StoryboardScenes(ctx, sb.ID)
-	if err != nil {
-		return domain.Storyboard{}, fmt.Errorf("load storyboard scenes: %w", err)
-	}
-
-	r.log.Debug("storyboardToDomain: loaded storyboard scenes",
-		zap.String("storyboardId", sb.ID),
-		zap.Int("sceneCount", len(storyboardScenes)))
-
-	// 转换指针切片为值切片
-	scenes := make([]domain.StoryboardScene, len(storyboardScenes))
-	for i, scene := range storyboardScenes {
-		if scene != nil {
-			scenes[i] = *scene
-			r.log.Debug("storyboardToDomain: scene detail",
-				zap.String("sceneId", scene.ID),
-				zap.String("image", scene.Image),
-				zap.String("title", scene.Title))
+	childrenMap := make(map[string][]string, len(ids))
+	{
+		type row struct {
+			ParentID string `gorm:"column:parent_id"`
+			ID       string `gorm:"column:id"`
+		}
+		var rows []row
+		if err := r.db.WithContext(ctx).
+			Model(&Storyboard{}).
+			Select("parent_id, id").
+			Where("parent_id IN ?", ids).
+			Where("workflow_status = ?", domain.WorkflowStatusPublished).
+			Order("created_at DESC").
+			Scan(&rows).Error; err != nil {
+			return nil, fmt.Errorf("load storyboard children ids: %w", err)
+		}
+		for _, row := range rows {
+			childrenMap[row.ParentID] = append(childrenMap[row.ParentID], row.ID)
 		}
 	}
 
-	var parentID string
-	if sb.ParentID != nil {
-		parentID = *sb.ParentID
+	charRefsMap := make(map[string][]domain.StoryboardCharacterRef, len(ids))
+	{
+		var links []StoryboardCharacterLink
+		if err := r.db.WithContext(ctx).
+			Preload("Character").
+			Where("storyboard_id IN ?", ids).
+			Order("storyboard_id ASC").
+			Order("ordering ASC").
+			Order("created_at ASC").
+			Find(&links).Error; err != nil {
+			return nil, fmt.Errorf("load storyboard character links: %w", err)
+		}
+		for _, link := range links {
+			charRefsMap[link.StoryboardID] = append(charRefsMap[link.StoryboardID], modelToStoryboardCharacterRef(&link))
+		}
 	}
 
-	var storyRel *domain.Story
-	if sb.Story.ID != "" {
-		s := r.storyToDomain(sb.Story)
-		storyRel = &s
+	sceneRefsMap := make(map[string][]domain.StoryboardSceneRef, len(ids))
+	{
+		var links []StoryboardSceneLink
+		if err := r.db.WithContext(ctx).
+			Preload("StoryScene").
+			Where("storyboard_id IN ?", ids).
+			Order("storyboard_id ASC").
+			Order("sequence ASC").
+			Order("created_at ASC").
+			Find(&links).Error; err != nil {
+			return nil, fmt.Errorf("load storyboard scene links: %w", err)
+		}
+		for _, link := range links {
+			sceneRefsMap[link.StoryboardID] = append(sceneRefsMap[link.StoryboardID], modelToStoryboardSceneRef(&link))
+		}
 	}
 
-	var fateSnap *string
-	if t := strings.TrimSpace(sb.FateSnapshot); t != "" && t != "{}" {
-		fateSnap = &t
+	scenesMap := make(map[string][]*domain.StoryboardScene, len(ids))
+	{
+		var dbScenes []StoryboardScene
+		if err := r.db.WithContext(ctx).
+			Preload("StoryScene").
+			Where("storyboard_id IN ?", ids).
+			Order("storyboard_id ASC").
+			Order("sequence ASC").
+			Find(&dbScenes).Error; err != nil {
+			return nil, fmt.Errorf("load storyboard scenes: %w", err)
+		}
+		for _, dbScene := range dbScenes {
+			scenesMap[dbScene.StoryboardID] = append(scenesMap[dbScene.StoryboardID], r.storyboardSceneToDomain(dbScene))
+		}
 	}
 
-	return domain.Storyboard{
-		BaseModel: common.BaseModel{
-			ID:        sb.ID,
-			CreatedAt: sb.CreatedAt.Unix(),
-			UpdatedAt: sb.UpdatedAt.Unix(),
-		},
-		StoryID:                  sb.StoryID,
-		ParentID:                 parentID,
-		UserID:                   sb.UserID,
-		CreatorName:              sb.Creator.DisplayName,
-		CreatorAvatar:            sb.Creator.Avatar,
-		Title:                    sb.Title,
-		Content:                  sb.Content,
-		RawInput:                 sb.RawInput,
-		IsStandalone:             sb.IsStandalone,
-		IsAIGenerated:            sb.IsAIGenerated,
-		SceneCount:               sb.SceneCount,
-		WorkflowStatus:           sb.WorkflowStatus,
-		CurrentStep:              sb.CurrentStep,
-		GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
-		ContinuationComicStyle:   sb.ContinuationComicStyle,
-		UseComicPagePipeline:     sb.UseComicPagePipeline,
-		ContinuationSummary:      sb.ContinuationSummary,
-		FateSnapshot:             fateSnap,
-		FateSnapshotHash:         sb.FateSnapshotHash,
-		EngagementStats: common.EngagementStats{
-			Likes:    sb.Likes,
-			Comments: sb.Comments,
-			Shares:   sb.Shares,
-			Views:    sb.Views,
-		},
-		ForkCount:        sb.ForkCount,
-		TokenConsumption: sb.TokenConsumption,
-		ChildrenIds:      childrenIds,
-		StoryboardScenes: scenes,
-		CharacterRefs:    charRefs,
-		SceneRefs:        sceneRefs,
-		Story:            storyRel,
-	}, nil
+	result := make([]domain.Storyboard, 0, len(storyboards))
+	for _, sb := range storyboards {
+		storyboardScenes := scenesMap[sb.ID]
+		scenes := make([]domain.StoryboardScene, 0, len(storyboardScenes))
+		for _, scene := range storyboardScenes {
+			if scene != nil {
+				scenes = append(scenes, *scene)
+			}
+		}
+		var parentID string
+		if sb.ParentID != nil {
+			parentID = *sb.ParentID
+		}
+		var storyRel *domain.Story
+		if sb.Story.ID != "" {
+			s := r.storyToDomain(sb.Story)
+			storyRel = &s
+		}
+		var fateSnap *string
+		if t := strings.TrimSpace(sb.FateSnapshot); t != "" && t != "{}" {
+			fateSnap = &t
+		}
+		result = append(result, domain.Storyboard{
+			BaseModel: common.BaseModel{
+				ID:        sb.ID,
+				CreatedAt: sb.CreatedAt.Unix(),
+				UpdatedAt: sb.UpdatedAt.Unix(),
+			},
+			StoryID:                  sb.StoryID,
+			ParentID:                 parentID,
+			UserID:                   sb.UserID,
+			CreatorName:              sb.Creator.DisplayName,
+			CreatorAvatar:            sb.Creator.Avatar,
+			Title:                    sb.Title,
+			Content:                  sb.Content,
+			RawInput:                 sb.RawInput,
+			IsStandalone:             sb.IsStandalone,
+			IsAIGenerated:            sb.IsAIGenerated,
+			SceneCount:               sb.SceneCount,
+			WorkflowStatus:           sb.WorkflowStatus,
+			CurrentStep:              sb.CurrentStep,
+			GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
+			ContinuationComicStyle:   sb.ContinuationComicStyle,
+			UseComicPagePipeline:     sb.UseComicPagePipeline,
+			ContinuationSummary:      sb.ContinuationSummary,
+			FateSnapshot:             fateSnap,
+			FateSnapshotHash:         sb.FateSnapshotHash,
+			EngagementStats: common.EngagementStats{
+				Likes:    sb.Likes,
+				Comments: sb.Comments,
+				Shares:   sb.Shares,
+				Views:    sb.Views,
+			},
+			ForkCount:        sb.ForkCount,
+			TokenConsumption: sb.TokenConsumption,
+			ChildrenIds:      childrenMap[sb.ID],
+			StoryboardScenes: scenes,
+			CharacterRefs:    charRefsMap[sb.ID],
+			SceneRefs:        sceneRefsMap[sb.ID],
+			Story:            storyRel,
+		})
+	}
+	return result, nil
 }
 
 // ========== StoryboardScene operations (AI-generated plot scenes) ==========
@@ -1141,13 +1200,13 @@ func (r *Repository) StoryboardFeed(ctx context.Context, limit, offset int) ([]*
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
-	result := make([]*domain.Storyboard, 0, len(storyboards))
-	for _, sb := range storyboards {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, 0, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		result = append(result, &copySb)
 	}
 
@@ -1211,13 +1270,13 @@ func (r *Repository) StoryboardFeedFromFollowedStories(ctx context.Context, user
 		return nil, 0, fmt.Errorf("storyboard feed following: %w", err)
 	}
 
-	out := make([]*domain.Storyboard, 0, len(rows))
-	for _, sb := range rows {
-		domainSb, err := r.storyboardToDomain(ctx, sb)
-		if err != nil {
-			return nil, 0, err
-		}
-		copySb := domainSb
+	domainRows, err := r.storyboardsToDomain(ctx, rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]*domain.Storyboard, 0, len(domainRows))
+	for i := range domainRows {
+		copySb := domainRows[i]
 		out = append(out, &copySb)
 	}
 	return out, total, nil

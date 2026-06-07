@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/auth"
+	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	"github.com/grapestree/fgrapery/grapery/internal/service/pay"
@@ -31,6 +32,7 @@ type IAPHandler struct {
 	logger         *logrus.Logger
 	// mainDB 是主服务数据库连接，用于购买成功后充值 token 余量
 	mainDB *gorm.DB
+	cache  cache.Cache
 }
 
 // NewIAPHandler 创建 IAP 处理器；mainDB 可为 nil（降级为只写 vippay 库）
@@ -41,6 +43,15 @@ func NewIAPHandler(iapService pay.IAPService, productService pay.IAPProductServi
 		logger:         logrus.New(),
 		mainDB:         mainDB,
 	}
+}
+
+// SetCache wires optional Redis so membership writes invalidate grapery API caches.
+func (h *IAPHandler) SetCache(c cache.Cache) {
+	h.cache = c
+}
+
+func (h *IAPHandler) invalidateMembershipCache(ctx context.Context, userID string) {
+	cache.InvalidateMembership(ctx, h.cache, userID)
 }
 
 // getUserID 从context获取用户ID并转换为uint64
@@ -1557,7 +1568,7 @@ func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, toke
 	}
 
 	now := time.Now()
-	return h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var m membership
 		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1586,6 +1597,10 @@ func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, toke
 				"updated_at":  time.Now(),
 			}).Error
 	})
+	if err == nil {
+		h.invalidateMembershipCache(ctx, userIDStr)
+	}
+	return err
 }
 
 // iapSubscriptionFromAppleRow 将本地库中的 Apple 订阅行转为与 GetSubscription 一致的结构
