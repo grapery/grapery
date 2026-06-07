@@ -1580,33 +1580,51 @@ type storyboardFeedCachePayload struct {
 	Total       int64                `json:"total"`
 }
 
+func discoverFeedCacheUserKey(userID string) string {
+	if userID == "" {
+		return "guest"
+	}
+	return userID
+}
+
+// getDiscoverStoryboardFeed serves the discover tab: public trending storyboards (no genre filter, no seen exclusion).
+func (s *Service) getDiscoverStoryboardFeed(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
+	c := s.getCache()
+	cacheKey := fmt.Sprintf("storyboard_feed:discover:%s:%d:%d", discoverFeedCacheUserKey(userID), limit, offset)
+	if c != nil {
+		var cached storyboardFeedCachePayload
+		if err := c.Get(ctx, cacheKey, &cached); err == nil {
+			s.logger.Debug("storyboard discover feed cache hit",
+				zap.String("userID", userID),
+				zap.Int("count", len(cached.Storyboards)))
+			if s.metrics != nil {
+				s.metrics.RecordCacheHit("storyboard_feed")
+			}
+			return cached.Storyboards, cached.Total, nil
+		}
+		if s.metrics != nil {
+			s.metrics.RecordCacheMiss("storyboard_feed")
+		}
+	}
+	storyboards, total, err := s.repo.StoryboardFeedDiscover(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	if c != nil && len(storyboards) > 0 {
+		_ = c.Set(ctx, cacheKey, storyboardFeedCachePayload{
+			Storyboards: storyboards,
+			Total:       total,
+		}, 5*time.Minute)
+	}
+	return storyboards, total, nil
+}
+
 func (s *Service) getRecommendedStoryboardFeed(ctx context.Context, userID string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	c := s.getCache()
 	if userID == "" {
-		if c != nil {
-			cacheKey := fmt.Sprintf("storyboard_feed:discover:guest:%d:%d", limit, offset)
-			var cached storyboardFeedCachePayload
-			if err := c.Get(ctx, cacheKey, &cached); err == nil {
-				s.logger.Debug("storyboard discover guest feed cache hit", zap.Int("count", len(cached.Storyboards)))
-				if s.metrics != nil {
-					s.metrics.RecordCacheHit("storyboard_feed")
-				}
-				return cached.Storyboards, cached.Total, nil
-			}
-			if s.metrics != nil {
-				s.metrics.RecordCacheMiss("storyboard_feed")
-			}
-		}
 		storyboards, total, err := s.repo.StoryboardFeedRecommended(ctx, "", limit, offset, nil)
 		if err != nil {
 			return nil, 0, err
-		}
-		if c != nil && len(storyboards) > 0 {
-			cacheKey := fmt.Sprintf("storyboard_feed:discover:guest:%d:%d", limit, offset)
-			_ = c.Set(ctx, cacheKey, storyboardFeedCachePayload{
-				Storyboards: storyboards,
-				Total:       total,
-			}, 5*time.Minute)
 		}
 		return storyboards, total, nil
 	}
@@ -1646,7 +1664,7 @@ func (s *Service) getRecommendedStoryboardFeed(ctx context.Context, userID strin
 	if err != nil {
 		return nil, 0, err
 	}
-	if c != nil {
+	if c != nil && len(storyboards) > 0 {
 		payload := storyboardFeedCachePayload{Storyboards: storyboards, Total: total}
 		_ = c.Set(ctx, cacheKey, payload, cacheTTL)
 		recommendation.TrackFeedCacheKey(ctx, c, recommendation.FeedTypeStoryboards, userID, cacheKey, cacheTTL)
@@ -1683,10 +1701,10 @@ func (s *Service) excludeBlockedCreators(ctx context.Context, userID string, sto
 }
 
 // getStoryboardFeedRaw 获取故事板 feed。
-// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended 为 discover 别名；following；community（带缓存）。
+// tab: discover（默认：全站公开 trending，不按 onboarding 体裁过滤）；for_you / recommended（个性化推荐）；following；community（带缓存）。
 func (s *Service) getStoryboardFeedRaw(ctx context.Context, userID string, tab string, limit, offset int) ([]*domain.Storyboard, int64, error) {
 	tab = strings.TrimSpace(strings.ToLower(tab))
-	if tab == "" || tab == "recommended" || tab == "for_you" {
+	if tab == "" {
 		tab = "discover"
 	}
 
@@ -1762,7 +1780,7 @@ func (s *Service) getStoryboardFeedRaw(ctx context.Context, userID string, tab s
 		return storyboards, total, nil
 
 	case "discover":
-		storyboards, total, err := s.getRecommendedStoryboardFeed(ctx, userID, limit, offset)
+		storyboards, total, err := s.getDiscoverStoryboardFeed(ctx, userID, limit, offset)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				s.logger.Debug("discover storyboard feed: request context canceled")
@@ -1776,8 +1794,23 @@ func (s *Service) getStoryboardFeedRaw(ctx context.Context, userID string, tab s
 			zap.Int64("total", total))
 		return storyboards, total, nil
 
-	default:
+	case "for_you", "recommended":
 		storyboards, total, err := s.getRecommendedStoryboardFeed(ctx, userID, limit, offset)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				s.logger.Debug("for_you storyboard feed: request context canceled")
+			} else {
+				s.logger.Error("failed to get for_you storyboard feed", zap.Error(err))
+			}
+			return nil, 0, fmt.Errorf("failed to get storyboard feed: %w", err)
+		}
+		s.logger.Info("for_you storyboard feed fetched",
+			zap.Int("count", len(storyboards)),
+			zap.Int64("total", total))
+		return storyboards, total, nil
+
+	default:
+		storyboards, total, err := s.getDiscoverStoryboardFeed(ctx, userID, limit, offset)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				s.logger.Debug("discover storyboard feed: request context canceled")

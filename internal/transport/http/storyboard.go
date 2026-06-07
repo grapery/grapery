@@ -403,7 +403,7 @@ func (h *Handler) DeleteStoryboard(c *gin.Context) {
 
 // GetStoryboardFeed 获取故事板 feed 流
 // Query params:
-//   - tab: discover（默认，全站公开 trending；for_you/recommended 为别名）；following；community（全站时间线）
+//   - tab: discover（默认，全站公开 trending）；for_you / recommended（个性化推荐）；following；community（全站时间线）
 //   - limit: 分页限制（默认20）
 //   - offset: 分页偏移（默认0）
 func (h *Handler) GetStoryboardFeed(c *gin.Context) {
