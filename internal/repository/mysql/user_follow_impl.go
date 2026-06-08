@@ -279,6 +279,25 @@ func (r *Repository) BlockUser(ctx context.Context, blockerID, blockedID string)
 		return fmt.Errorf("failed to check existing block: %w", err)
 	}
 
+	// 软删行被默认 scope 过滤，但唯一键 (blocker_id, blocked_id) 仍冲突，应恢复而非 INSERT
+	var soft UserBlock
+	errSoft := r.db.WithContext(ctx).Unscoped().
+		Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).
+		First(&soft).Error
+	if errSoft == nil {
+		if soft.DeletedAt.Valid {
+			if err := r.db.WithContext(ctx).Unscoped().Model(&UserBlock{}).
+				Where("id = ?", soft.ID).
+				UpdateColumn("deleted_at", nil).Error; err != nil {
+				return fmt.Errorf("failed to restore block: %w", err)
+			}
+		}
+		return nil
+	}
+	if !errors.Is(errSoft, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check soft-deleted block: %w", errSoft)
+	}
+
 	block := UserBlock{
 		ID:        uuid.New().String(),
 		BlockerID: blockerID,
@@ -286,6 +305,23 @@ func (r *Repository) BlockUser(ctx context.Context, blockerID, blockedID string)
 	}
 
 	if err := r.db.WithContext(ctx).Create(&block).Error; err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			var dup UserBlock
+			if err2 := r.db.WithContext(ctx).Unscoped().
+				Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).
+				First(&dup).Error; err2 != nil {
+				return fmt.Errorf("failed to create block: %w", err)
+			}
+			if dup.DeletedAt.Valid {
+				if err := r.db.WithContext(ctx).Unscoped().Model(&UserBlock{}).
+					Where("id = ?", dup.ID).
+					UpdateColumn("deleted_at", nil).Error; err != nil {
+					return fmt.Errorf("failed to restore block after duplicate: %w", err)
+				}
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to create block: %w", err)
 	}
 
@@ -383,6 +419,17 @@ func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID stri
 		return fmt.Errorf("cannot report yourself")
 	}
 
+	// 无 (reporter, reported) 唯一键，多用户可分别举报同一用户；仅对同一举报人的待处理工单幂等。
+	var pending int64
+	if err := r.db.WithContext(ctx).Model(&UserReport{}).
+		Where("reporter_id = ? AND reported_id = ? AND status = ?", reporterID, reportedID, "pending").
+		Count(&pending).Error; err != nil {
+		return fmt.Errorf("failed to check existing report: %w", err)
+	}
+	if pending > 0 {
+		return nil
+	}
+
 	report := UserReport{
 		ID:         uuid.New().String(),
 		ReporterID: reporterID,
@@ -400,6 +447,17 @@ func (r *Repository) ReportUser(ctx context.Context, reporterID, reportedID stri
 
 // ReportContent records a UGC report against a specific piece of content.
 func (r *Repository) ReportContent(ctx context.Context, reporterID, contentType, contentID, reason string) error {
+	// 无 (content_type, content_id) 唯一键，多用户可分别举报同一内容；仅对同一举报人的待处理工单幂等。
+	var pending int64
+	if err := r.db.WithContext(ctx).Model(&ContentReport{}).
+		Where("reporter_id = ? AND content_type = ? AND content_id = ? AND status = ?", reporterID, contentType, contentID, "pending").
+		Count(&pending).Error; err != nil {
+		return fmt.Errorf("failed to check existing content report: %w", err)
+	}
+	if pending > 0 {
+		return nil
+	}
+
 	report := ContentReport{
 		ID:          uuid.New().String(),
 		ReporterID:  reporterID,
