@@ -375,6 +375,9 @@ func main() {
 	logger.Info("storyboard path service initialized")
 
 	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
+	shareSigner := service.NewShareLinkSigner(jwtSecret)
+	svc.SetShareLinkSigner(shareSigner)
+
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
 		AIService:             aiSvc,
@@ -385,6 +388,7 @@ func main() {
 		FeedbackService:       feedbackService,
 		Logger:                logger,
 		Cache:                 redisCache,
+		ShareSigner:           shareSigner,
 	}
 	router := transport.SetupRouter(deps)
 

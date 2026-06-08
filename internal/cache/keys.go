@@ -80,9 +80,10 @@ const (
 )
 
 const (
-	PrefixRateLimitAI   = "ratelimit:ai:"
-	PrefixRateLimitAuth = "ratelimit:auth:"
-	PrefixRateLimitAPI  = "ratelimit:api:"
+	PrefixRateLimitAI     = "ratelimit:ai:"
+	PrefixRateLimitAuth   = "ratelimit:auth:"
+	PrefixRateLimitAPI    = "ratelimit:api:"
+	PrefixRateLimitShare  = "ratelimit:share:"
 )
 
 func searchHash(query, searchType string, limit, offset int) string {

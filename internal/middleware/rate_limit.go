@@ -41,6 +41,14 @@ var (
 		KeyPrefix:    cache.PrefixRateLimitAPI,
 		ErrorMessage: "rate limit exceeded, please slow down",
 	}
+
+	// RateLimitSharePreview throttles anonymous share landing / OG preview fetches.
+	RateLimitSharePreview = RateLimitConfig{
+		Window:       time.Minute,
+		MaxRequests:  30,
+		KeyPrefix:    cache.PrefixRateLimitShare,
+		ErrorMessage: "share preview rate limit exceeded, please try again later",
+	}
 )
 
 // NewRateLimiter creates a Gin middleware that enforces fixed-window rate limits

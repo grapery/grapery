@@ -15,6 +15,7 @@ type Handler struct {
 	svc               *service.Service
 	aiService         *service.AIService
 	storyboardPathSvc *service.StoryboardPathService
+	shareSigner       *service.ShareLinkSigner
 	logger            *zap.Logger
 }
 
@@ -29,6 +30,7 @@ type HandlerDependencies struct {
 	FeedbackService       service.FeedbackService
 	Logger                *zap.Logger
 	Cache                 cache.Cache
+	ShareSigner           *service.ShareLinkSigner
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
@@ -46,6 +48,7 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 		svc:               deps.Service,
 		aiService:         deps.AIService,
 		storyboardPathSvc: deps.StoryboardPathService,
+		shareSigner:       deps.ShareSigner,
 		logger:            deps.Logger,
 	}
 }
@@ -57,11 +60,12 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 	router.Use(gin.Recovery())
 
 	// Rate limiters (nil-safe: if Cache is nil, middleware is not applied)
-	var authLimiter, aiLimiter, apiLimiter gin.HandlerFunc
+	var authLimiter, aiLimiter, apiLimiter, sharePreviewLimiter gin.HandlerFunc
 	if deps.Cache != nil {
 		authLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitAuth, deps.Logger)
 		aiLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitAIGeneration, deps.Logger)
 		apiLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitGeneral, deps.Logger)
+		sharePreviewLimiter = middleware.NewRateLimiter(deps.Cache, middleware.RateLimitSharePreview, deps.Logger)
 	}
 
 	// 健康检查
@@ -293,6 +297,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// 邀请/推荐系统 (StoryCreationAppUI Design)
 			authenticated.GET("/referrals/code", h.GetReferralCode)
 			authenticated.GET("/referrals/share", h.GetInviteShareContent)
+			authenticated.POST("/share/issue", h.IssueShareLink)
 			authenticated.GET("/referrals/stats", h.GetReferralStats)
 			authenticated.GET("/referrals", h.GetReferrals)
 			authenticated.POST("/referrals/use", h.UseReferralCode)
@@ -416,6 +421,11 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// Public Trending (guest-accessible)
 			public.GET("/public/stories/trending", h.GetTrendingStoriesPublic)
 			public.GET("/public/trending/storyboards", h.GetPublicTrendingStoryboards)
+			sharePublic := public.Group("/public/share")
+			if sharePreviewLimiter != nil {
+				sharePublic.Use(sharePreviewLimiter)
+			}
+			sharePublic.GET("/preview", h.GetPublicSharePreview)
 			if deps.FeedbackService != nil {
 				feedbackHandler := NewFeedbackHandler(deps.FeedbackService)
 				feedbackHandler.RegisterPublicSupportRoutes(public)

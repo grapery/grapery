@@ -256,6 +256,14 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 	}
 
 	userID := c.GetString("userID")
+	shareGrant := false
+	if token, exp, ok := coreservice.ParseShareGrantFromQuery(c.Query("t"), c.Query("exp")); ok && h.svc != nil {
+		shareGrant = h.svc.HasValidShareGrant(coreservice.ShareKindFragment, id, token, exp)
+	}
+	if h.svc != nil && !h.svc.CanViewerSeeFragment(c.Request.Context(), userID, fragment, shareGrant) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 	if stats, statsErr := h.fragmentRepo.GetEngagementStats(c.Request.Context(), id, userID); statsErr == nil {
 		fragment.Likes = stats.Likes
 		fragment.Comments = stats.Comments

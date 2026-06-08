@@ -32,6 +32,7 @@ type Service struct {
 	aiTextAdmission           *AITextAdmissionGate           // optional: global outbound LLM text concurrency (Redis)
 	accountDeletionCfg        config.AccountDeletionConfig // grace period & system anon user ID
 	terminationFragmentRepo   *repository.FragmentRepository
+	shareSigner               *ShareLinkSigner
 
 	// structureResumeLocks serializes POST .../generate/structure per storyboard ID (TryLock = busy).
 	structureResumeLocks sync.Map // string -> *sync.Mutex
@@ -91,6 +92,19 @@ func (s *Service) ConfigureAITextAdmission(c cache.Cache, maxConcurrent int) {
 	if s.aiGenService != nil {
 		s.aiGenService.SetAITextAdmission(gate)
 	}
+}
+
+// SetShareLinkSigner wires HMAC signing for public share URLs.
+func (s *Service) SetShareLinkSigner(signer *ShareLinkSigner) {
+	s.shareSigner = signer
+}
+
+// HasValidShareGrant returns true when query token matches kind/id/exp.
+func (s *Service) HasValidShareGrant(kind ShareKind, id, token string, exp int64) bool {
+	if s.shareSigner == nil {
+		return false
+	}
+	return s.shareSigner.Verify(kind, id, token, exp)
 }
 
 // SetAccountDeletionDeps wires phased account deletion (grace window, reassignment holder) plus fragment teardown.
