@@ -119,6 +119,11 @@ func UserFollowersKey(userID string) string {
 	return PrefixUser + userID + ":followers"
 }
 
+// UserSocialListMetaKey Redis HASH for social-list cache generation (followers / following / blocked list).
+func UserSocialListMetaKey(userID string) string {
+	return PrefixUser + userID + ":social_list_meta"
+}
+
 // UserBlockedIDsKey Redis SET of blocked user IDs for a blocker (App Store UGC blocklist cache).
 func UserBlockedIDsKey(userID string) string {
 	return PrefixUser + userID + ":blocked_ids"

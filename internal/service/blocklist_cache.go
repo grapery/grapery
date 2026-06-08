@@ -20,6 +20,10 @@ const (
 	blockedIDsEmptyMember = "__blocked_empty__"
 )
 
+// invalidateBlockedUserCaches clears paginated block-list JSON caches and recommendation
+// feeds. Blocked-ID membership is updated via writeThroughBlockedID and must not be deleted
+// here — deleting the SET after write-through invites stale DB repopulation on repeat
+// block/unblock.
 func (s *Service) invalidateBlockedUserCaches(ctx context.Context, blockerID string) {
 	if blockerID == "" {
 		return
@@ -28,7 +32,7 @@ func (s *Service) invalidateBlockedUserCaches(ctx context.Context, blockerID str
 	if c == nil {
 		return
 	}
-	_ = c.Delete(ctx, cache.UserBlockedIDsKey(blockerID))
+	s.bumpSocialListCacheGen(ctx, blockerID)
 	for limit := 20; limit <= 100; limit += 20 {
 		for offset := 0; offset < 200; offset += limit {
 			_ = c.Delete(ctx, cache.UserBlockedListKey(blockerID, limit, offset))
@@ -48,6 +52,9 @@ func (s *Service) writeThroughBlockedID(ctx context.Context, blockerID, blockedI
 		_ = c.SAdd(ctx, key, blockedID)
 	} else {
 		_ = c.SRem(ctx, key, blockedID)
+		if members, err := c.SMembers(ctx, key); err == nil && len(members) == 0 {
+			_ = c.SAdd(ctx, key, blockedIDsEmptyMember)
+		}
 	}
 	_ = c.Expire(ctx, key, blockedIDsCacheTTL)
 }
@@ -58,6 +65,11 @@ func (s *Service) populateBlockedIDsCache(ctx context.Context, blockerID string,
 		return
 	}
 	key := cache.UserBlockedIDsKey(blockerID)
+	exists, err := c.Exists(ctx, key)
+	if err == nil && exists {
+		// A concurrent block/unblock may have write-through updated the SET while we read DB.
+		return
+	}
 	if len(ids) == 0 {
 		_ = c.SAdd(ctx, key, blockedIDsEmptyMember)
 	} else {

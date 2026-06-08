@@ -14,6 +14,22 @@ func (s *Service) FollowUser(ctx context.Context, followerID, followeeID string)
 		zap.String("followerID", followerID),
 		zap.String("followeeID", followeeID))
 
+	if followerID == followeeID {
+		return fmt.Errorf("cannot follow yourself")
+	}
+
+	already, err := s.repo.IsFollowing(ctx, followerID, followeeID)
+	if err != nil {
+		s.logger.Error("failed to check follow status before follow",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID),
+			zap.Error(err))
+		return fmt.Errorf("failed to follow user: %w", err)
+	}
+	if already {
+		return nil
+	}
+
 	if err := s.repo.FollowUser(ctx, followerID, followeeID); err != nil {
 		s.logger.Error("failed to follow user",
 			zap.String("followerID", followerID),
@@ -22,28 +38,15 @@ func (s *Service) FollowUser(ctx context.Context, followerID, followeeID string)
 		return fmt.Errorf("failed to follow user: %w", err)
 	}
 
-	// 使相关缓存失效
-	c := s.getCache()
-	if c != nil {
-		_ = c.Delete(ctx, cache.UserKey(followerID))
-		_ = c.Delete(ctx, cache.UserKey(followeeID))
-		// 清除关注者和被关注者的关注列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.UserFollowingKey(followerID)+fmt.Sprintf(":%d:%d", limit, offset))
-				_ = c.Delete(ctx, cache.UserFollowersKey(followeeID)+fmt.Sprintf(":%d:%d", limit, offset))
-			}
-		}
-		s.logger.Debug("follow/unfollow cache invalidated",
-			zap.String("followerID", followerID),
-			zap.String("followeeID", followeeID))
-	}
+	s.invalidateUserFollowListCaches(ctx, followerID, followeeID)
+	s.logger.Debug("follow cache invalidated",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
 
 	s.logger.Info("user followed successfully",
 		zap.String("followerID", followerID),
 		zap.String("followeeID", followeeID))
 
-	// Create notification
 	followee, _ := s.repo.UserByID(ctx, followeeID)
 	follower, _ := s.repo.UserByID(ctx, followerID)
 	if followee != nil && follower != nil {
@@ -58,6 +61,18 @@ func (s *Service) UnfollowUser(ctx context.Context, followerID, followeeID strin
 		zap.String("followerID", followerID),
 		zap.String("followeeID", followeeID))
 
+	already, err := s.repo.IsFollowing(ctx, followerID, followeeID)
+	if err != nil {
+		s.logger.Error("failed to check follow status before unfollow",
+			zap.String("followerID", followerID),
+			zap.String("followeeID", followeeID),
+			zap.Error(err))
+		return fmt.Errorf("failed to unfollow user: %w", err)
+	}
+	if !already {
+		return nil
+	}
+
 	if err := s.repo.UnfollowUser(ctx, followerID, followeeID); err != nil {
 		s.logger.Error("failed to unfollow user",
 			zap.String("followerID", followerID),
@@ -66,22 +81,10 @@ func (s *Service) UnfollowUser(ctx context.Context, followerID, followeeID strin
 		return fmt.Errorf("failed to unfollow user: %w", err)
 	}
 
-	// 使相关缓存失效
-	c := s.getCache()
-	if c != nil {
-		_ = c.Delete(ctx, cache.UserKey(followerID))
-		_ = c.Delete(ctx, cache.UserKey(followeeID))
-		// 清除关注者和被关注者的关注列表缓存
-		for limit := 20; limit <= 100; limit += 20 {
-			for offset := 0; offset < 200; offset += limit {
-				_ = c.Delete(ctx, cache.UserFollowingKey(followerID)+fmt.Sprintf(":%d:%d", limit, offset))
-				_ = c.Delete(ctx, cache.UserFollowersKey(followeeID)+fmt.Sprintf(":%d:%d", limit, offset))
-			}
-		}
-		s.logger.Debug("follow/unfollow cache invalidated",
-			zap.String("followerID", followerID),
-			zap.String("followeeID", followeeID))
-	}
+	s.invalidateUserFollowListCaches(ctx, followerID, followeeID)
+	s.logger.Debug("unfollow cache invalidated",
+		zap.String("followerID", followerID),
+		zap.String("followeeID", followeeID))
 
 	s.logger.Info("user unfollowed successfully",
 		zap.String("followerID", followerID),
@@ -123,7 +126,7 @@ func (s *Service) GetFollowers(ctx context.Context, userID string, limit, offset
 		}
 	}
 
-	// 从数据库获取
+	genAtRead := s.readSocialListCacheGen(ctx, userID)
 	followers, err := s.repo.Followers(ctx, userID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get followers",
@@ -132,18 +135,9 @@ func (s *Service) GetFollowers(ctx context.Context, userID string, limit, offset
 		return nil, err
 	}
 
-	// 写入缓存
 	if c != nil && len(followers) > 0 {
 		cacheKey := cache.UserFollowersKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
-		if err := c.Set(ctx, cacheKey, followers, listCacheTTL); err != nil {
-			s.logger.Warn("failed to cache followers",
-				zap.String("userID", userID),
-				zap.Error(err))
-		} else {
-			s.logger.Debug("followers cached",
-				zap.String("userID", userID),
-				zap.Int("count", len(followers)))
-		}
+		s.setSocialListCacheIfUnchanged(ctx, userID, cacheKey, followers, listCacheTTL, genAtRead)
 	}
 
 	return followers, nil
@@ -179,7 +173,7 @@ func (s *Service) GetFollowing(ctx context.Context, userID string, limit, offset
 		}
 	}
 
-	// 从数据库获取
+	genAtRead := s.readSocialListCacheGen(ctx, userID)
 	following, err := s.repo.Following(ctx, userID, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get following",
@@ -188,18 +182,9 @@ func (s *Service) GetFollowing(ctx context.Context, userID string, limit, offset
 		return nil, err
 	}
 
-	// 写入缓存
 	if c != nil && len(following) > 0 {
 		cacheKey := cache.UserFollowingKey(userID) + fmt.Sprintf(":%d:%d", limit, offset)
-		if err := c.Set(ctx, cacheKey, following, listCacheTTL); err != nil {
-			s.logger.Warn("failed to cache following",
-				zap.String("userID", userID),
-				zap.Error(err))
-		} else {
-			s.logger.Debug("following cached",
-				zap.String("userID", userID),
-				zap.Int("count", len(following)))
-		}
+		s.setSocialListCacheIfUnchanged(ctx, userID, cacheKey, following, listCacheTTL, genAtRead)
 	}
 
 	return following, nil
@@ -1049,6 +1034,7 @@ func (s *Service) ListBlockedUsers(ctx context.Context, blockerID string, limit,
 		}
 	}
 
+	genAtRead := s.readSocialListCacheGen(ctx, blockerID)
 	users, total, err := s.repo.ListBlockedUsers(ctx, blockerID, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -1057,11 +1043,7 @@ func (s *Service) ListBlockedUsers(ctx context.Context, blockerID string, limit,
 	if c != nil {
 		cacheKey := cache.UserBlockedListKey(blockerID, limit, offset)
 		payload := blockedListCachePayload{Users: users, Total: total}
-		if err := c.Set(ctx, cacheKey, payload, listCacheTTL); err != nil {
-			s.logger.Warn("failed to cache blocked users list",
-				zap.String("blockerID", blockerID),
-				zap.Error(err))
-		}
+		s.setSocialListCacheIfUnchanged(ctx, blockerID, cacheKey, payload, listCacheTTL, genAtRead)
 	}
 	return users, total, nil
 }

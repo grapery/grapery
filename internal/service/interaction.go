@@ -827,16 +827,11 @@ func (s *interactionService) checkLikeableExists(ctx context.Context, likeableTy
 
 // InvalidateFollowCache 使关注相关缓存失效
 func (s *interactionService) InvalidateFollowCache(ctx context.Context, c cache.Cache, followerID string, followableType domain.FollowableType, followableID string) {
-	if c == nil {
+	if followableType != domain.FollowableTypeUser || s.social == nil {
 		return
 	}
-	// 清除关注者和被关注者的关注列表缓存
-	for limit := 20; limit <= 100; limit += 20 {
-		for offset := 0; offset < 200; offset += limit {
-			_ = c.Delete(ctx, cache.UserFollowingKey(followerID)+fmt.Sprintf(":%d:%d", limit, offset))
-			_ = c.Delete(ctx, cache.UserFollowersKey(followableID)+fmt.Sprintf(":%d:%d", limit, offset))
-		}
-	}
+	_ = c
+	s.social.invalidateUserFollowListCaches(ctx, followerID, followableID)
 }
 
 // InvalidateLikeCache 使点赞相关缓存失效
