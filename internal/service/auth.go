@@ -445,6 +445,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 			Following: 0,
 		},
 	}
+	ApplyNewUserWelcomePoints(user)
 
 	// 使用事务确保原子性：用户创建、邀请码使用、设置创建、会员创建
 	var settings *domain.UserSettings
@@ -494,21 +495,8 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 			// 不阻塞注册流程
 		}
 
-		// 创建默认会员信息（免费会员）
-		membership = &domain.Membership{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			Tier:         "free",
-			Status:       string(common.MembershipStatusActive),
-			StartDate:    time.Now().Unix(),
-			AutoRenew:    false,
-			TokenQuota:   common.DefaultFreeTierTokenQuota,
-			TokenUsed:    0,
-			StorageQuota: common.DefaultFreeTierStorageBytes,
-			StorageUsed:  0,
-			CreatedAt:    time.Now().Unix(),
-			UpdatedAt:    time.Now().Unix(),
-		}
+		// 创建默认会员信息（免费会员，含新用户欢迎点数）
+		membership = NewUserWelcomeMembership(user.ID, now)
 
 		if err := tx.CreateMembership(ctx, membership); err != nil {
 			s.logger.Warn("failed to create membership", zap.Error(err))

@@ -166,6 +166,11 @@ const (
 	DefaultFreeTierTokenQuota   = 25000
 	DefaultFreeTierStorageBytes = 100 * 1024 * 1024 // 100 MiB
 
+	// NewUserWelcomeCredits 首次注册/登录赠送点数（展示为 credits，可用于 AI 生成）。
+	NewUserWelcomeCredits = 20
+	// NewUserWelcomeTokenQuota 新用户会员 token 额度，与 NewUserWelcomeCredits 对齐。
+	NewUserWelcomeTokenQuota = NewUserWelcomeCredits * CreditToTokenRatio
+
 	// AIImageBillingUnitTokens 图片生成预检与 usage 缺失时的单张参考（与常见 TotalTokens 量级一致）。
 	AIImageBillingUnitTokens = 4096
 

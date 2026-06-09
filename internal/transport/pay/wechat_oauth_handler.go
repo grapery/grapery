@@ -230,6 +230,7 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 			ReferralCode:         appservice.GenerateUserReferralCode(newUserID),
 			LastLoginAt:          &now,
 		}
+		appservice.ApplyNewUserWelcomePoints(newUser)
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
 			if recovered, recErr := h.resolveExistingWeChatUser(ctx, userInfo, now); recErr == nil && recovered != nil {
@@ -287,20 +288,7 @@ func (h *WeChatOAuthHandler) findOrCreateUser(ctx context.Context, userInfo *pay
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
-		membership := &domain.Membership{
-			ID:           uuid.New().String(),
-			UserID:       newUser.ID,
-			Tier:         "free",
-			Status:       "active",
-			StartDate:    now,
-			AutoRenew:    false,
-			TokenQuota:   common.DefaultFreeTierTokenQuota,
-			TokenUsed:    0,
-			StorageQuota: 1024 * 1024 * 100,
-			StorageUsed:  0,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
+		membership := appservice.NewUserWelcomeMembership(newUser.ID, now)
 		_ = h.repo.CreateMembership(ctx, membership)
 
 		return newUser, true, nil

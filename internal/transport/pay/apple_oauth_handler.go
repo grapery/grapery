@@ -445,6 +445,7 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 			ReferralCode:         appservice.GenerateUserReferralCode(newUserID),
 			LastLoginAt:          &now,
 		}
+		appservice.ApplyNewUserWelcomePoints(newUser)
 
 		if err := h.repo.CreateUser(ctx, newUser); err != nil {
 			return nil, false, err
@@ -490,21 +491,8 @@ func (h *AppleOAuthHandler) findOrCreateUser(ctx context.Context, providerUserID
 		}
 		_ = h.repo.CreateUserSettings(ctx, settings)
 
-		// 创建默认会员信息
-		membership := &domain.Membership{
-			ID:           uuid.New().String(),
-			UserID:       newUser.ID,
-			Tier:         "free",
-			Status:       "active",
-			StartDate:    now,
-			AutoRenew:    false,
-			TokenQuota:   common.DefaultFreeTierTokenQuota,
-			TokenUsed:    0,
-			StorageQuota: 1024 * 1024 * 100,
-			StorageUsed:  0,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
+		// 创建默认会员信息（含新用户欢迎点数）
+		membership := appservice.NewUserWelcomeMembership(newUser.ID, now)
 		_ = h.repo.CreateMembership(ctx, membership)
 
 		logrus.WithFields(logrus.Fields{

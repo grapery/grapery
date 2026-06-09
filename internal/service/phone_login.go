@@ -287,6 +287,7 @@ func (s *Service) createPhoneLoginUser(ctx context.Context, phone string, now in
 		ReferralCode:         GenerateUserReferralCode(userID),
 		LastLoginAt:          &now,
 	}
+	ApplyNewUserWelcomePoints(user)
 
 	err := s.repo.WithTransaction(ctx, func(tx domain.Repository) error {
 		if err := tx.CreateUser(ctx, user); err != nil {
@@ -321,20 +322,7 @@ func (s *Service) createPhoneLoginUser(ctx context.Context, phone string, now in
 			// 不阻塞注册
 		}
 
-		membership := &domain.Membership{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			Tier:         "free",
-			Status:       string(common.MembershipStatusActive),
-			StartDate:    now,
-			AutoRenew:    false,
-			TokenQuota:   common.DefaultFreeTierTokenQuota,
-			TokenUsed:    0,
-			StorageQuota: common.DefaultFreeTierStorageBytes,
-			StorageUsed:  0,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
+		membership := NewUserWelcomeMembership(user.ID, now)
 		if err := tx.CreateMembership(ctx, membership); err != nil {
 			s.logger.Warn("phone login auto-register: create membership failed", zap.Error(err))
 			// 不阻塞注册
