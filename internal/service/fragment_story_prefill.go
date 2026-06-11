@@ -182,8 +182,11 @@ func (s *Service) ExpandFragmentStoryPrefillAI(ctx context.Context, userID, frag
 
 约束：
 - tags 最多 3 个，每个不超过 10 字
-- suggestedCharacters 最多 5 个，name 必填
+- suggestedCharacters 最多 5 个，name 必填（人物、动物、拟人器物均可；静物主角用简短识别名如「红伞小满」「窗台橘猫」）
 - description 不超过 200 字，承接碎片内容，可补充世界观与冲突，不要与碎片明显矛盾
+- 扩写须做剧情合理拓展：description 在 200 字内包含「主体想要什么 / 主要阻碍 / 行动或误会 / 代价或悬念」中的至少三项，让读者感到故事可继续分镜；不要只复述碎片画面
+- 若碎片主角非人类，扩写保持物种/器物身份一致，用可观察行为表达执念，避免硬套人类社会剧情；例如动物守护、器物逃离遗忘、静物争夺光线或位置
+- suggestedCharacters 的 background 不只是外观，也应一句话写出可推动剧情的目标、恐惧或执念
 - 扩写与 summary 须与上文碎片创作风格一致
 
 【碎片正文】

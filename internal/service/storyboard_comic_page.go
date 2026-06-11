@@ -661,7 +661,7 @@ Page-level rules:
 Same product rules as fragment multi-panel Reference → Plan → Image pipeline; you MUST reflect them in the JSON.
 
 `)
-	b.WriteString(structuredMangaLanguageGuidance())
+	b.WriteString(structuredStoryPanelGuidance())
 	b.WriteString(`
 
 ### 一致性
@@ -669,8 +669,12 @@ Same product rules as fragment multi-panel Reference → Plan → Image pipeline
 - artStyle MUST be ONE executable English art-direction paragraph (medium, ink/paint workflow, era, lineage) reusable as the signature for every panel on this page — comparable to fragment visualBible.styleBible.artStyle.
 
 ### Narrative beats (per panel is a NEW beat within the SAME scene arc)
+- Each panel must advance plot logic: answer part of a prior question, reveal a rule/cost, or reframe what the reader assumed — not only a new camera angle on the same frozen moment.
+- Protagonists may be human, animal, anthropomorphized object, or static-object personification; express goals/fears through visible acting (tilt, crack, roll, chase light, compete for space), not abstract mood labels alone.
+- Internally assign panel roles such as setup, inciting beat, attempt, reversal, cost, payoff; reflect the role in keyElements wording and composition, without adding extra schema fields.
+- If the page has three or more panels, at least one panel must be a real situation change (inciting/reversal/cost), and at least one later panel must show consequence or payoff.
 - Do NOT redraw the same shot with tiny tweaks panel after panel — especially after panel 1. Panel 1 may establish geography; subsequent panels MUST change framing, rhythm, blocking, emotion, or time beat.
-- Atmosphere-only panels (no progression) are allowed as rhythmic breathers — still need distinct framing vs neighbors.
+- Atmosphere-only panels (no event progression) are allowed as rhythmic breathers — still need distinct framing vs neighbors and an emotional/information gap vs adjacent panels.
 - Build a real manga rhythm, not a contact sheet: include clear panel roles such as setup, reaction, inner thought, turning point, shock, anticipation, release/celebration, or transition when the scene supports them.
 - If the page has four or more panels and is not purely atmospheric, at least one panel should carry an emotional punctuation beat (shock / anticipation / turning_point / celebration / inner_monologue / dialogue) with matching panel language.
 
@@ -687,6 +691,7 @@ Same product rules as fragment multi-panel Reference → Plan → Image pipeline
 ### Panel description quality (maps to keyElements[])
 - Each entry is 1–2 Chinese sentences readable as a screenplay beat (who / doing what / vibe / narrative moment) PLUS an inline English cue for shot_scale + angle pairs, e.g. …（close_up + low_angle）.
 - Comparable to fragment "sceneDesc" + shot vocabulary; NOT a bland plot summary ("第二幕发生冲突").
+- keyElements read in order must form a because/but/therefore chain; avoid entries that are all static descriptions of the same subject in the same mood.
 
 ### English fields for downstream image synthesis
 - "lighting": page-level + note if shifts per region/panel strip.
@@ -874,7 +879,7 @@ The server prepends full scene narrative; each keyElements line must embed both 
 				return plannedScene.ComicTexts
 			}(),
 		},
-		GlobalConfig: structuredMangaLanguageGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance(),
 		Sections: []PromptDSLSection{
 			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
 		},

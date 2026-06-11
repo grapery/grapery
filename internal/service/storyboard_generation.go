@@ -289,11 +289,16 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 			Role:         "You are a creative story writer and manga/webtoon visual-story editor.",
 			Task:         "Generate an engaging story chapter in narrative prose that can be converted into structured comic panels.",
 			Inputs:       map[string]any{"context": contextStr, "userInput": gen.RawInput, "style": style},
-			GlobalConfig: structuredMangaLanguageGuidance(),
+			GlobalConfig: structuredStoryPanelGuidance(),
 			Sections: []PromptDSLSection{
 				{Title: "Rules", Kind: "text", Body: `
 - Generate final narrative prose only; do not output JSON or markdown because the next pipeline step consumes this as story text.
-- Write with visual beats that can become panels: clear actions, readable character blocking, concrete props, and spatial transitions.
+- Before writing, internally choose a compact story spine: protagonist/subject, desire, obstacle, attempt, cost, and final hook. Do not list the spine, but make it visible through the prose.
+- Expand plot logically from user input: each beat should change situation, knowledge, or stakes; avoid static mood paragraphs with no causal thread.
+- Protagonists may be human, animal, anthropomorphized objects, or static-object personification—express goals/fears through observable action, not abstract labels.
+- If the subject is an object or static scene, give it a visual agency path (tilt, roll, crack, drift, chase a light patch, resist being thrown away) instead of converting it into a generic human drama.
+- Write with visual beats that can become panels: clear actions, readable blocking, concrete props, and spatial transitions.
+- Prefer small but consequential expansions rooted in the input (a missing button, a late train, a cracked cup, a cat guarding a bowl) over unrelated epic lore.
 - Leave room for gutter/closure: do not over-explain every action between two dramatic moments.
 - If the user input contains fighting, impact, shouting, smashing, falling, chasing, fear, climax, or explosion-like verbs, stage at least one beat that can later trigger high contrast manga impact framing.
 - Keep tone consistent with the requested style.`},
@@ -3593,7 +3598,7 @@ LENGTH: Keep each JSON string field concise but structured; avoid a single vague
 		Role:           "You are a manga/comic scene prompt planner.",
 		Task:           "Convert scene information into a structured JSON image prompt for downstream image synthesis.",
 		Inputs:         inputs,
-		GlobalConfig:   structuredMangaLanguageGuidance(),
+		GlobalConfig:   structuredStoryPanelGuidance(),
 		OutputContract: outputContract,
 		Sections:       sections,
 	})

@@ -115,14 +115,22 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - 空间与地貌保持可辨识连续性，避免无因果的跳变。
 - 各格 image_prompt 的 artStyle 开头应统一，形成同一套视觉签名。
 
-【二、叙事与镜头自由度】
-- 鼓励跳切、闪回、视角换位、静帧氛围格、象征画面；不必格格推进剧情——氛围格可以是节奏的一部分。
+【二、剧情拓展（硬性，与漫画视觉层并重）】
+- 每一格须携带叙事增量：相对上一格，局势、认知或情绪至少有一项可感知变化；禁止连续多格仅换机位、剧情静止。
+- 整组 panels 须串成微型因果链；主角可以是人物、动物、拟人器物或静物，须有可观察的目标/恐惧/执念。
+- 静物/物怪拟人：用可画的姿态与动作链表达（倾斜、滚落、开裂、争抢光斑），visualBible 登记拟人主体 name。
+- 从用户文字与参考图合理外推，禁止与锚点无关的设定硬塞。
+- 输出前在心里给每格分配一个 beat role（无需新增 JSON 字段）：setup / inciting / attempt / reversal / cost / payoff。caption、composition_plan、image_prompt 的 subject/action 必须体现该格 role。
+- %d 格中至少要出现一个“局势改变”的格（inciting/reversal/cost 之一）；不能全部是 setup 或纯氛围。
 
-【三、构图多样性（硬性）】
+【三、叙事与镜头自由度】
+- 鼓励跳切、闪回、视角换位、静帧氛围格、象征画面；氛围格须承担节奏呼吸，与前后格存在信息或情绪落差。
+
+【四、构图多样性（硬性）】
 - 相邻两格不得使用相同「景别+角度」组合；理想情况是连续三格内不重复。
 - 景别与角度工具：特写/近景/中景/全景/远景、平视/俯拍/仰拍/Dutch angle/鸟瞰/虫视角等；可从非人类视角制造惊喜。
 
-【四、自动布局决策（每格必须独立判断）】
+【五、自动布局决策（每格必须独立判断）】
 - 每一格仍是「一次文生图得到的一张图」，但图片内部可以是：(A) 单一连续场景；或 (B) 多个区域/子格（条漫式分区、上下分镜、左右对照、2×2 等），用留白、粗线或清晰边界分隔，并交待阅读顺序。按剧情选 A 或 B，不要为每格机械重复同一种版式。
 - 每格必须输出 layout_intent、composition_plan、shot_type、visual_hierarchy。
 - layout_intent 使用简短英文 snake_case，例如：single_subject_focus、split_foreground_background、wide_establishing、diagonal_motion、symmetrical_faceoff、detail_insert、layered_depth、negative_space_tension、comic_single_panel、comic_two_panel_grid、comic_strip、intra_image_multi_panel、stacked_vertical_zones、split_screen_two_beat、grid_four_beat。
@@ -136,13 +144,13 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - comic_texts 中的中文文字是最终图片中要直接画出来的文字，不是给 App 叠加的占位数据；image_prompt 必须明确要求图片模型 render the exact Chinese text inside the image。
 - 数量上限：每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；每条中文建议不超过 12 个汉字；禁止额外随机文字。
 
-【五、光影与色彩】
+【六、光影与色彩】
 - 格间可改变光型以配合情绪，但要可解释；色温与饱和度变化应服务于叙事走向。
 
-【六、caption 写法】
-- 每格 caption 为一句简洁中文，让读者一眼明白这一格在故事中的画面感（谁在做什么、何种氛围），不要写成剧情提纲或章回标题。
+【七、caption 写法】
+- 每格 caption 为一句简洁中文：叙事主体、在做什么、相对上一格局势如何变化、何种氛围；不要写成章回标题或纯静态陈列。
 
-【七、image_prompt 写法（英文，给文生图/参考生图模型）】
+【八、image_prompt 写法（英文，给文生图/参考生图模型）】
 - 必须按以下 8 层依次写成一个连贯英文段落，层与层之间用句号分隔；至少 %d 个英文单词，覆盖全部 8 层，禁止空泛词。
   (1) artStyle — 具体技法混合，勿只写 "anime" / "illustration"。
   (2) subject — 谁/什么在画中，外貌、姿态、表情、手持物。
@@ -153,14 +161,15 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
   (7) mood — 复合情绪，勿单一形容词。
   (8) extra details — 微粒、反光、景深、材质、天气等提升质感的细节。
 
-【八、视觉圣经 visualBible（与普通故事碎片 Step1 JSON 字段名一致，必须输出）】
+【九、视觉圣经 visualBible（与普通故事碎片 Step1 JSON 字段名一致，必须输出）】
 - visualBible 与 panels、参考图、用户文字必须自洽；immutableTraits 使用与用户文字相同的自然语言（中文或英文，与用户输入一致）。
 - characters 最多 3 项，props 最多 5 项，locations 1–2 项；每项必须有全局唯一 key（小写英文+下划线，如 char_main、prop_bag、loc_cafe）。
 - **每个 characters[] 条目必须包含非空 name：**与 captions、用户文字中出现的称呼保持一致优先；若无姓名则用与用户语言一致的简短识别名（如中文 2～8 字），供下游「故事角色」展示。**禁止不写 name，或仅占位符号。** locations / props 若包含 name 字段也需可称呼的简称。
 - immutableTraits 为字符串数组：每条描述一个不可随意更改的视觉事实。
+- characters 可以是人、动物、拟人器物、植物或抽象概念的可视化载体；若主体不是人，immutableTraits 必须写清物种/材质/轮廓/拟人表演特征，避免后续被画成人类。
 - styleBible.artStyle 必须用英文写出可执行的总体画法（媒介、线稿/渲染、时代感），供各格 image_prompt 的 artStyle 层对齐；其他 styleBible 字段可选。
 
-【九、reference_keys（每格）】
+【十、reference_keys（每格）】
 - 每一格必须包含 reference_keys：1–5 个字符串，且必须来自 visualBible 中已声明的 key；若无任何资产 key 可引用（极少见）则该格 reference_keys 为 []。
 - 禁止自造不在 visualBible 中出现的 key。
 
@@ -175,6 +184,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - "panels" 数组恰好 %d 项，index 依次为 0 到 %d。
 - image_prompt：仅英文；每格至少 %d 词；八层齐全；各格 artStyle 描述应一致；禁止在每格都要求「像素级复制参考图」——锚定身份与氛围，鼓励每格有独立构图与叙事增量。
 - layout_intent、composition_plan、shot_type、visual_hierarchy 必须存在且服务当前格剧情，不得所有格重复。
+- captions 连起来必须像一个可读的小故事；至少三格时，不能每句都是“某主体在某地看着某物”的静态句式。
+- composition_plan 必须说明这一格为何采用该布局来服务剧情功能（例如制造误会、揭示代价、放大失败、保留悬念），不是只描述画面摆放。
 - 不允许“先不规划，后续生图再决定漫画元素”的写法；漫画相关结构必须在本 JSON 一次性给全。
 - 若某一格采用单图内多区域/子格，composition_plan 与 image_prompt 的 composition 层须一致写出分区、gutter、阅读顺序。
 - comic_texts 可为空数组；若 dialogue/thought 存在，speaker 必须是该格 reference_keys 中的角色 key；文字必须短（建议 <=12 汉字），不要把整段 caption 放入气泡；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；所有 comic_texts 都必须作为图中文字直接绘制在最终图片内，且不允许额外随机文字。
@@ -187,7 +198,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 		st,
 		styleDesc,
 		ui,
-		structuredMangaLanguageGuidance(),
+		structuredStoryPanelGuidance(),
+		panelCount,
 		minWords,
 		minWords,
 		panelCount,
@@ -202,7 +214,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 		Role:         "你是一位漫画分镜导演与结构化提示词工程师。",
 		Task:         "根据参考图锚点与用户文字，输出 panels[] 与 visualBible 的结构化 JSON。",
 		Inputs:       map[string]any{"userInput": ui, "styleSlug": st, "styleDesc": styleDesc, "panelCount": panelCount, "minWordsEach": minWords, "layoutAddon": strings.TrimSpace(layoutAddon), "narrativeHint": narr},
-		GlobalConfig: structuredMangaLanguageGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance(),
 		Sections: []PromptDSLSection{
 			{Title: "Paneling / Camera / Action / Comic Elements Rules", Kind: "text", Body: body},
 		},

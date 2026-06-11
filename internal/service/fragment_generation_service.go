@@ -614,12 +614,13 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
    好的示例："高铁站的 7 号站台，电子屏显示着已经发车的班次，不锈钢长椅上只剩一个没喝完的纸杯"
    差的示例："游乐场" / "火车站"
 
-6. characters（人物）—— 视觉身份卡（最多 3 个）
-   想象你在给一位从未见过这个角色的画师做口头描述。包含：体型轮廓、穿着（款式+颜色+材质）、标志性视觉特征、当前在做的事情和表情。
-   **若用户输入或正文中已有姓名、昵称或稳定称呼，描述开头须用括号注明（如「（阿明）」），且须与 visualBible 中对应角色的 name 字段完全一致，不得另起别名。**
-   好的示例："瘦高的女生，穿oversized黑卫衣帽子压得很低，露出一截染了蓝色的发尾，手里攥着一杯已经凉透的拿铁，站在斑马线中间像在犹豫要不要过去"
-   好的示例："中年男人，头发灰白但梳得整齐，穿着一件洗到发白的蓝色工装外套，右手插在口袋里，左手拎着一个系着红绳的旧皮箱"
-   差的示例："一个女生" / "一个男人"
+6. characters（叙事主体）—— 视觉身份卡（最多 3 个；不限人类）
+   叙事主体可以是人物、动物、拟人化器物或静物主角。想象你在给画师做口头描述：体型/轮廓、材质与颜色、标志性特征、当前动作与「情绪表演」（表情、倾斜、裂纹、拟人五官暗示等）。
+   **若用户输入或正文中已有姓名、昵称或稳定称呼，描述开头须用括号注明（如「（阿明）」或「（老橡台灯）」），且须与 visualBible 中对应条目的 name 字段完全一致。**
+   好的示例（人）："瘦高的女生，穿oversized黑卫衣帽子压得很低，露出一截染了蓝色的发尾，手里攥着一杯已经凉透的拿铁，站在斑马线中间像在犹豫要不要过去"
+   好的示例（动物）："（橘猫豆包）三花橘猫，尾巴尖有一撮白，蹲在窗台外侧，瞳孔缩成细线盯着楼下空车位，耳朵一只前倾一只后折"
+   好的示例（拟人器物）："（红伞小满）一把半透明红伞，伞骨弯折处像皱眉，伞尖滴水在台阶上画出一道歪线，整把伞斜靠在门边像在偷听屋里争吵"
+   差的示例："一个女生" / "一只猫" / "一把伞"（缺少可画细节与叙事姿态）
 
 7. tendency（倾向）—— 这段故事的一行宣发语
    不是分类标签，而是"如果这是一张专辑封面，封面上只印这一句话"。要让读者看到这句话就想点进去看故事。
@@ -644,8 +645,16 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 
 创作优先级（从高到低，不能颠倒）：
 - 第一优先级：贴合用户输入与参考图锚点
-- 第二优先级：画面感与可传播性
-- 第三优先级：反转、奇观和风格实验
+- 第二优先级：剧情合理拓展——有动机、冲突或代价的暗示，读完能感到「发生了什么/将要发生什么」
+- 第三优先级：画面感与可传播性
+- 第四优先级：反转、奇观和风格实验
+
+剧情拓展要求（与画面感并重）：
+- 碎片虽短，仍须有微型因果：开局局面 → 张力或异常 → 余韵/反转/悬念，不要只堆氛围形容词。
+- 主角不必是人类；动物、器物拟人、静物主角同样要有「想要什么/害怕什么」的可观察线索。
+- 新增细节须从用户输入或参考图合理外推，禁止与锚点无关的宏大设定硬塞进来。
+- 写作前先在心里确定：主体是谁/想要什么/阻碍是什么/采取了什么动作/付出什么代价或留下什么悬念；正文无需显式列出这些问题，但读者应能感受到。
+- 若使用反转，反转须来自前文细节回收；不要用「原来是一场梦」「忽然全知旁白解释」这类廉价收束。
 
 故事创作心法（这是你的创作工具箱，按主题分类）：
 
@@ -718,7 +727,7 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
     "scenes": ["场景1：五感空间描述（视觉+听觉+嗅觉+触感+温度）", "场景2"],
     "timeOfDay": "时段+该时段特有的光线氛围（与上方语言要求一致）",
     "location": "具体地点+时代感+空间性格（开阔/封闭/纵深）+标志性细节（与上方语言要求一致）",
-    "characters": ["角色1：体型+穿着（款式颜色材质）+标志性特征+当前动作和表情", "角色2"],
+    "characters": ["叙事主体1：人物/动物/拟人器物均可，写清体型轮廓+材质/穿着+标志性特征+当前动作和情绪表演", "叙事主体2"],
     "tendency": "核心感受一句话——像专辑封面或电影海报上印的那一行字（与上方语言要求一致）"
   },
   "visualBible": {
@@ -743,13 +752,13 @@ func (s *FragmentGenerationService) buildExtractionAndStoryPrompt(req domain.Fra
 }`,
 		imgNote,
 		req.UserInput, styleDesc, moodDesc, lengthDesc, language,
-		structuredMangaLanguageGuidance())
+		structuredStoryPanelGuidance())
 
 	return renderPromptDSL(PromptDSL{
 		Role:         "你是一位兼具文学叙事与漫画视觉导演能力的故事碎片创作大师。",
 		Task:         "先做元素提取与视觉圣经，再生成可传播的故事碎片正文，并保证后续可用于分镜/配图。",
 		Inputs:       map[string]any{"userInput": req.UserInput, "styleSlug": req.Style, "styleDescription": styleDesc, "mood": req.Mood, "moodDescription": moodDesc, "length": req.Length, "lengthDescription": lengthDesc, "language": language, "hasReferenceImages": hasImages},
-		GlobalConfig: structuredMangaLanguageGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance(),
 		Sections: []PromptDSLSection{
 			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
 		},
@@ -1677,7 +1686,14 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - imagePrompt 中应给气泡/旁白框预留干净空间，避免遮挡人物脸部和关键道具。
 - 漫画文字必须由图片模型直接画进最终图片中，不能依赖 App 后续叠加；imagePrompt 要明确要求 render the exact Chinese text inside the image，字体清晰、可读、与漫画风格一致；禁止额外随机文字或英文假字。
 
-【二、叙事自由度——打破常规才是你的常规】
+【二、剧情拓展——格与格之间必须推进故事（硬性）】
+- 每一格须携带叙事增量：回答上一格留下的疑问之一，或改写读者对局势的理解；禁止连续两格只有机位变化、剧情静止。
+- 整组分镜须能串成微型因果链（触发→反应→后果 / 误解→揭穿 / 蓄力→爆发 等至少一种）。
+- 主角可以是人物、动物、拟人器物或静物；无人类时 sceneDesc 仍要写清「这一格局势如何变化」，拟人表演须可画（姿态、裂纹、倾斜、贴纸眼、拟声旁白）。
+- 从碎片正文与 elements 合理外推，新增道具/角色/地点须与已有锚点可解释关联。
+- 氛围格允许不推进事件，但须承担节奏呼吸，且与前后格存在情绪或信息落差。
+
+【三、叙事自由度——打破常规才是你的常规】
 - 允许并且鼓励：
   · 跳切：时间突然推进，中间的过程留白让读者脑补
   · 闪回：突然回到过去，揭示之前没展示的信息
@@ -1694,7 +1710,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
   · 象征/隐喻画面（断裂的桥、倒走的钟、镜中不同的自己）
 - 不必每一格都在推进剧情——有时一格氛围画面比剧情画面更有力量。读者会在安静的画面中感受到前面积累的情绪
 
-【三、构图多样性——你的镜头语言词库】
+【四、构图多样性——你的镜头语言词库】
 每格必须使用不同的镜头语言，以下是你可用的完整构图类型库（混搭使用，拒绝连续两格相同组合）：
 
   景别工具箱：
@@ -1723,7 +1739,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 
   硬性规则：相邻两格不能使用相同的景别+角度组合。这是最低要求——理想状态是每 3 格内不重复
 
-【四、光影与色彩——情绪的精密调色板】
+【五、光影与色彩——情绪的精密调色板】
   光影工具（选择与场景情绪匹配的光影方案）：
   - 逆光/轮廓光：主体变成剪影或边缘发光 → 神秘、英雄感、告别、未知
   - 侧光：一半亮一半暗，强烈的明暗对比 → 戏剧冲突、内心矛盾、揭示秘密
@@ -1751,16 +1767,16 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
   - 例如：故事走向释然 → 从冷色调逐渐回暖，阴影变柔和
   - 允许一格突然跳到完全不同的光影方案（如闪回用怀旧柔光，回到现实用冷硬侧光）
 
-【五、sceneDesc 写法——面向读者的画面脚本】
+【六、sceneDesc 写法——面向读者的画面脚本】
 - 一到两句话，让读者在脑中"看到"这一格的画面
-- 要传达四个信息：谁在画面里、在做什么、什么氛围、在故事的哪个节点
+- 要传达五个信息：叙事主体是谁、在做什么、局势相对上一格如何变化、什么氛围、这一格在微型剧情链上的位置
 - 不要写成剧情概要，要写成"如果你闭上眼睛想象这一格，你会看到什么"
 - 好的示例："她站在空荡荡的站台，身后是已经驶远的列车尾灯，手里还攥着没来得及递出去的信"
 - 差的示例："第二幕，她错过了火车"（这是剧情概要，不是画面描述）
 - 好的示例："特写：一只手慢慢松开，信封从指缝间滑落，背面写着'已过期'三个字"
 - 差的示例："信掉了"（太简略，没有画面感）
 
-【六、imagePrompt 写法——给图片模型下达的精确视觉指令】
+【七、imagePrompt 写法——给图片模型下达的精确视觉指令】
 - 这是在给一位顶级概念艺术家下 brief，必须具体到每个视觉决策
 - 必须按以下 8 层结构依次描述，每层用句号分隔，形成一段完整的英文视觉描述：
 
@@ -1807,7 +1823,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
   好的示例："dust particles drifting through the beams of neon light, faint blurry reflection of the carousel lights on the glossy floor, shallow depth of field with bokeh balls on the background neon signs, a single old ticket caught mid-air as if just dropped"
   差的示例："some dust"（太简单）
 
-【七、entityBindings 写法——多人物/多物品一致性的结构化约束】
+【八、entityBindings 写法——多人物/多物品一致性的结构化约束】
 - 每格必须列出 referenceKeys 中实际出现的实体绑定。不要只写 key，要写清楚该实体在本格的角色、画面位置、动作、道具归属。
 - 多人物同框时必须区分位置与外观归属，例如 char_a 在左侧拿 prop_key，char_b 在右侧，不要交换服装/发型/道具。
 - 物品必须写 ownerKey；地点写空间作用（background / main location / memory location）。
@@ -1848,6 +1864,8 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - 所有格的 artStyle 必须以相同的风格描述开头，确保视觉风格统一
 - 角色外貌（发型、服装颜色款式、体型、标志性特征）在各格之间完全一致
 - 相邻两格的 composition 必须有明显差异（不同景别或不同角度，不能连续两格正面中景）
+- 整组 scenes 必须至少包含 setup / attempt / reversal 或 cost / payoff 中的三类叙事功能；这些功能不需要新增字段，但必须体现在 sceneDesc 的局势变化里。
+- sceneDesc 必须能用“因为/但是/所以”连接上一格或下一格；禁止每格只写静态美术陈列。
 - 每一格必须引用至少 2 个可追溯锚点（来自 elements 或故事正文的具体角色/物品/场景细节），禁止无依据“硬反转”
 - 每一格必须包含 referenceKeys：1–5 个字符串，且必须是上方「稳定 key 列表」中的 key；若列表为空则 referenceKeys 为 []
 - 每一格必须包含 entityBindings；其 key 必须来自本格 referenceKeys，不允许自造实体
@@ -1865,7 +1883,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 		req.Style,
 		req.Mood,
 		aspectRatio,
-		structuredMangaLanguageGuidance(),
+		structuredStoryPanelGuidance(),
 		sceneCount,
 		sceneCount-1)
 
@@ -1873,7 +1891,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 		Role:         "你是一位视觉叙事导演，负责将故事正文转为结构化分镜 JSON。",
 		Task:         "输出 scenes[]，每格包含 sceneDesc/imagePrompt/referenceKeys/entityBindings/comicTexts。",
 		Inputs:       map[string]any{"sceneCount": sceneCount, "aspectRatio": aspectRatio, "style": req.Style, "mood": req.Mood, "narrativeHint": narrativeHint, "storyElements": json.RawMessage(elementsJSON), "visualBible": json.RawMessage(vbJSON), "referenceKeysHint": keyHint, "storyContent": elemResult.Content},
-		GlobalConfig: structuredMangaLanguageGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance(),
 		Sections: []PromptDSLSection{
 			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
 		},
