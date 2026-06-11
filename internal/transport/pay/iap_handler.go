@@ -194,9 +194,10 @@ func (h *IAPHandler) VerifyAppleReceipt(c *gin.Context) {
 				"endpoint":       "VerifyAppleReceipt",
 				"error":          err.Error(),
 			}).Error("Failed to verify Apple transaction")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  "failed to verify transaction",
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":  400,
+				"msg":   "failed to verify transaction",
+				"error": "Could not verify your App Store purchase. Please try again later.",
 			})
 			return
 		}
