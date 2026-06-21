@@ -16,30 +16,31 @@ const (
 	PrefixChatThread  = "chat_thread:"
 	PrefixChatMessage = "chat_message:"
 
-	PrefixUserStories       = "user_stories:"
-	PrefixUserCharacters    = "user_characters:"
-	PrefixStoryPanels       = "story_panels:"
-	PrefixStoryComments     = "story_comments:"
-	PrefixUserStoryboards   = "user_storyboards:"
+	PrefixUserStories     = "user_stories:"
+	PrefixUserCharacters  = "user_characters:"
+	PrefixStoryPanels     = "story_panels:"
+	PrefixStoryComments   = "story_comments:"
+	PrefixUserStoryboards = "user_storyboards:"
 
-	PrefixStoryLikes    = "story_likes:"
-	PrefixStoryViews    = "story_views:"
+	PrefixStoryLikes       = "story_likes:"
+	PrefixStoryViews       = "story_views:"
 	PrefixCreatorAnalytics = "creator_analytics:"
 
 	PrefixTrendingStories   = "trending:stories"
 	PrefixPopularCharacters = "popular:characters"
 
-	PrefixSession       = "session:"
-	PrefixPasswordReset = "pwd_reset:"
-	PrefixEmailVerify   = "email_verify:"
+	PrefixSession              = "session:"
+	PrefixAgentAccessJTI       = "agent:access:jti:"
+	PrefixPasswordReset        = "pwd_reset:"
+	PrefixEmailVerify          = "email_verify:"
 	PrefixEmailVerifyCode      = "email_verify_code:"
 	PrefixEmailVerifySendLimit = "email_verify_send_limit:"
 	PrefixEmailVerifyIPLimit   = "email_verify_ip_limit:"
 
-	PrefixSmsPhoneIPLimit  = "sms:phone:limit:ip:"
-	PrefixSmsPhoneUserSend = "sms:phone:send:user:"
+	PrefixSmsPhoneIPLimit   = "sms:phone:limit:ip:"
+	PrefixSmsPhoneUserSend  = "sms:phone:send:user:"
 	PrefixSmsPhonePhoneSend = "sms:phone:send:phone:"
-	PrefixSmsPhoneOTP      = "sms:phone:otp:"
+	PrefixSmsPhoneOTP       = "sms:phone:otp:"
 
 	// Phone login (unauthenticated): 手机号验证码登录/自动注册，独立于 OAuth 绑定门禁。
 	PrefixSmsPhoneLoginIPLimit   = "sms:phone:login:limit:ip:"
@@ -47,43 +48,43 @@ const (
 	PrefixSmsPhoneLoginOTP       = "sms:phone:login:otp:"
 
 	// Account deletion SMS / proof (独立于 OAuth 首次注册门禁)
-	PrefixAcctDelOTP         = "acctdel:otp:v1:"
-	PrefixAcctDelProof       = "acctdel:ok:v1:"
-	PrefixAcctDelSendUser    = "acctdel:sms:send:user:"
-	PrefixAcctDelSendIP      = "acctdel:sms:send:ip:"
-	PrefixAcctDelSendPhone   = "acctdel:sms:send:phone:"
+	PrefixAcctDelOTP       = "acctdel:otp:v1:"
+	PrefixAcctDelProof     = "acctdel:ok:v1:"
+	PrefixAcctDelSendUser  = "acctdel:sms:send:user:"
+	PrefixAcctDelSendIP    = "acctdel:sms:send:ip:"
+	PrefixAcctDelSendPhone = "acctdel:sms:send:phone:"
 
 	// Account settings contact bind (phone/email) — independent of OAuth gate SMS
-	PrefixAcctBindPhoneOTP      = "acctbind:phone:otp:"
-	PrefixAcctBindPhoneLock     = "acctbind:phone:lock:"
-	PrefixAcctBindPhoneSendUser = "acctbind:phone:send:user:"
-	PrefixAcctBindPhoneSendIP   = "acctbind:phone:send:ip:"
-	PrefixAcctBindPhoneSendPhone = "acctbind:phone:send:phone:"
+	PrefixAcctBindPhoneOTP         = "acctbind:phone:otp:"
+	PrefixAcctBindPhoneLock        = "acctbind:phone:lock:"
+	PrefixAcctBindPhoneSendUser    = "acctbind:phone:send:user:"
+	PrefixAcctBindPhoneSendIP      = "acctbind:phone:send:ip:"
+	PrefixAcctBindPhoneSendPhone   = "acctbind:phone:send:phone:"
 	PrefixAcctBindPhoneChangeDaily = "acctbind:phone:change:daily:"
-	PrefixAcctBindEmailCode     = "acctbind:email:code:"
-	PrefixAcctBindEmailLock     = "acctbind:email:lock:"
-	PrefixAcctBindEmailSendUser = "acctbind:email:send:user:"
-	PrefixAcctBindEmailSendIP   = "acctbind:email:send:ip:"
-	PrefixAcctBindEmailSendEmail = "acctbind:email:send:email:"
+	PrefixAcctBindEmailCode        = "acctbind:email:code:"
+	PrefixAcctBindEmailLock        = "acctbind:email:lock:"
+	PrefixAcctBindEmailSendUser    = "acctbind:email:send:user:"
+	PrefixAcctBindEmailSendIP      = "acctbind:email:send:ip:"
+	PrefixAcctBindEmailSendEmail   = "acctbind:email:send:email:"
 
-	PrefixSearchStories    = "search:stories:"
-	PrefixSearchCharacters = "search:characters:"
-	PrefixSearchUsers      = "search:users:"
-	PrefixSearchAll        = "search:all:"
+	PrefixSearchStories         = "search:stories:"
+	PrefixSearchCharacters      = "search:characters:"
+	PrefixSearchUsers           = "search:users:"
+	PrefixSearchAll             = "search:all:"
 	PrefixSearchIndexStories    = "search:index:stories:"
 	PrefixSearchIndexCharacters = "search:index:characters:"
 	PrefixSearchIndexUsers      = "search:index:users:"
 
-	PrefixStyleConfigByID   = "style_config:id:"
+	PrefixStyleConfigByID    = "style_config:id:"
 	PrefixStyleConfigByStyle = "style_config:style:"
 	PrefixStyleConfigsList   = "style_configs:list:"
 )
 
 const (
-	PrefixRateLimitAI     = "ratelimit:ai:"
-	PrefixRateLimitAuth   = "ratelimit:auth:"
-	PrefixRateLimitAPI    = "ratelimit:api:"
-	PrefixRateLimitShare  = "ratelimit:share:"
+	PrefixRateLimitAI    = "ratelimit:ai:"
+	PrefixRateLimitAuth  = "ratelimit:auth:"
+	PrefixRateLimitAPI   = "ratelimit:api:"
+	PrefixRateLimitShare = "ratelimit:share:"
 )
 
 func searchHash(query, searchType string, limit, offset int) string {
@@ -222,6 +223,11 @@ func EmailVerifyCodeKey(emailLower string) string {
 
 func PasswordResetKey(token string) string {
 	return PrefixPasswordReset + token
+}
+
+// AgentAccessJTIKey 用于记录已签发/已撤销的 Agent Access Token jti（重放/撤销保护）。
+func AgentAccessJTIKey(jti string) string {
+	return PrefixAgentAccessJTI + jti
 }
 
 func SMSPhoneIPLimitKey(ip string) string {

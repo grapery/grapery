@@ -16,6 +16,11 @@ type Handler struct {
 	aiService         *service.AIService
 	storyboardPathSvc *service.StoryboardPathService
 	shareSigner       *service.ShareLinkSigner
+	agentTokenSigner  *service.AgentAccessTokenSigner
+	agentTokenReplay  bool
+	agentPolicy       *service.AgentAccessPolicyService
+	generationAudit   *service.GenerationAuditService
+	cache             cache.Cache
 	logger            *zap.Logger
 }
 
@@ -31,6 +36,10 @@ type HandlerDependencies struct {
 	Logger                *zap.Logger
 	Cache                 cache.Cache
 	ShareSigner           *service.ShareLinkSigner
+	AgentTokenSigner      *service.AgentAccessTokenSigner
+	AgentTokenReplay      bool
+	AgentPolicy           *service.AgentAccessPolicyService
+	GenerationAudit       *service.GenerationAuditService
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
@@ -49,6 +58,11 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 		aiService:         deps.AIService,
 		storyboardPathSvc: deps.StoryboardPathService,
 		shareSigner:       deps.ShareSigner,
+		agentTokenSigner:  deps.AgentTokenSigner,
+		agentTokenReplay:  deps.AgentTokenReplay,
+		agentPolicy:       deps.AgentPolicy,
+		generationAudit:   deps.GenerationAudit,
+		cache:             deps.Cache,
 		logger:            deps.Logger,
 	}
 }
@@ -299,6 +313,11 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/referrals/share", h.GetInviteShareContent)
 			authenticated.POST("/share/issue", h.IssueShareLink)
 			authenticated.GET("/referrals/stats", h.GetReferralStats)
+
+			// Agent Access Token：客户端凭此 token 直连 grapery-agent 的聊天/生成流。
+			authenticated.POST("/agent-access-tokens", h.IssueAgentAccessToken)
+			authenticated.POST("/agent-access-tokens/:requestId/cancel", h.CancelAgentAccessToken)
+			authenticated.GET("/generation-audits", h.ListGenerationAudits)
 			authenticated.GET("/referrals", h.GetReferrals)
 			authenticated.POST("/referrals/use", h.UseReferralCode)
 

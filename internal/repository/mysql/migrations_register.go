@@ -764,6 +764,15 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_generation_step_audit_records",
+		Description: "Create generation_step_audit_records for agent generation audit",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &GenerationStepAuditRecordDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_generation_assets",
 		Description: "Create and migrate fragment_generation_assets table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

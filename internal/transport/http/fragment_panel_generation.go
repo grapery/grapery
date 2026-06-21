@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -123,15 +124,20 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 		return
 	}
 
+	imageSlots, imageProgress := fragmentPanelImageSnapshot(task)
 	resp := gin.H{
 		"taskId":          task.ID,
 		"status":          task.Status,
 		"progress":        task.Progress,
 		"currentStep":     task.CurrentStep,
+		"stage":           fragmentPanelGenerationStage(task),
 		"draftFragmentId": task.DraftFragmentID,
 		"createdAt":       task.CreatedAt,
 		"startedAt":       task.StartedAt,
 		"completedAt":     task.CompletedAt,
+		"imageSlots":      imageSlots,
+		"imageProgress":   imageProgress,
+		"cost":            fragmentPanelGenerationCostSnapshot(task),
 		// 客户端生成记录页展示原始提示词与风格等（来自任务表 request_json）
 		"request": gin.H{
 			"userInput":             task.Request.UserInput,
@@ -147,6 +153,8 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 
 	if len(task.Plan) > 0 {
 		resp["plan"] = task.Plan
+		resp["imagePlan"] = fragmentPanelImagePlan(task)
+		resp["chatMessages"] = fragmentPanelChatMessages(task)
 	}
 
 	if task.Result != nil && len(task.Result.Panels) > 0 {
@@ -161,6 +169,7 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 		resp["panels"] = panels
 		if task.Result.CombinedContent != "" {
 			resp["combinedContent"] = task.Result.CombinedContent
+			resp["storyText"] = task.Result.CombinedContent
 		}
 		resp["visualBible"] = task.Result.VisualBible
 		resp["anchorImages"] = task.Result.AnchorImages
@@ -194,6 +203,137 @@ func (h *FragmentPanelGenerationHandler) GetPanelGeneration(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func fragmentPanelGenerationStage(task *domain.FragmentPanelGenerationTask) string {
+	step := strings.TrimSpace(task.CurrentStep)
+	switch {
+	case step == "understanding_reference" || step == "plan_ready":
+		return "story"
+	case step == "generating_reference_assets":
+		return "style"
+	case strings.HasPrefix(step, "generating_panel_") || step == "panel_render":
+		return "images"
+	case step == "checking_consistency":
+		return "review"
+	case step == "completed" || task.Status == "completed":
+		return "completed"
+	default:
+		if task.Status == "failed" || task.Status == "cancelled" {
+			return task.Status
+		}
+		return "preparing"
+	}
+}
+
+func fragmentPanelImageSnapshot(task *domain.FragmentPanelGenerationTask) ([]gin.H, gin.H) {
+	total := task.Request.PanelCount
+	if total < 1 {
+		total = 1
+	}
+	if len(task.Plan) > total {
+		total = len(task.Plan)
+	}
+	var panels []domain.FragmentPanelResultItem
+	if task.Result != nil {
+		panels = task.Result.Panels
+		if len(panels) > total {
+			total = len(panels)
+		}
+	}
+
+	slots := make([]gin.H, 0, total)
+	completed := 0
+	for i := 0; i < total; i++ {
+		title := "第" + strconv.Itoa(i+1) + "页"
+		caption := ""
+		if i < len(task.Plan) {
+			caption = strings.TrimSpace(task.Plan[i].Caption)
+			if caption == "" {
+				caption = strings.TrimSpace(task.Plan[i].ImagePrompt)
+			}
+		}
+		imageURL := ""
+		if i < len(panels) {
+			imageURL = strings.TrimSpace(panels[i].ImageURL)
+			if caption == "" {
+				caption = strings.TrimSpace(panels[i].Caption)
+			}
+		}
+		status := "planned"
+		if imageURL != "" {
+			status = "completed"
+			completed++
+		} else if task.Status == "failed" {
+			status = "failed"
+		} else if strings.HasPrefix(task.CurrentStep, "generating_panel_") && i == completed {
+			status = "generating"
+		}
+		slots = append(slots, gin.H{
+			"index":    i + 1,
+			"title":    title,
+			"caption":  caption,
+			"status":   status,
+			"imageUrl": imageURL,
+		})
+	}
+	return slots, gin.H{
+		"completedCount": completed,
+		"totalCount":     total,
+	}
+}
+
+func fragmentPanelImagePlan(task *domain.FragmentPanelGenerationTask) []gin.H {
+	out := make([]gin.H, 0, len(task.Plan))
+	for i, panel := range task.Plan {
+		caption := strings.TrimSpace(panel.Caption)
+		if caption == "" {
+			caption = strings.TrimSpace(panel.ImagePrompt)
+		}
+		out = append(out, gin.H{
+			"index":   i + 1,
+			"caption": caption,
+			"status":  "planned",
+		})
+	}
+	return out
+}
+
+func fragmentPanelChatMessages(task *domain.FragmentPanelGenerationTask) []gin.H {
+	if len(task.Plan) == 0 {
+		return []gin.H{}
+	}
+	lines := make([]string, 0, len(task.Plan))
+	for i, panel := range task.Plan {
+		caption := strings.TrimSpace(panel.Caption)
+		if caption == "" {
+			caption = strings.TrimSpace(panel.ImagePrompt)
+		}
+		if caption != "" {
+			lines = append(lines, "第"+strconv.Itoa(i+1)+"页："+caption)
+		}
+	}
+	if len(lines) == 0 {
+		return []gin.H{}
+	}
+	return []gin.H{{
+		"id":   task.ID + ":image_plan",
+		"type": "image_plan",
+		"text": strings.Join(lines, "\n"),
+	}}
+}
+
+func fragmentPanelGenerationCostSnapshot(task *domain.FragmentPanelGenerationTask) gin.H {
+	count := task.Request.PanelCount
+	if count < 1 {
+		count = 1
+	}
+	points := count * 8
+	return gin.H{
+		"amount": points,
+		"unit":   "点数",
+		"text":   "本次创作消耗 " + strconv.Itoa(points) + " 点数",
+	}
 }
 
 // ResumePanelGeneration POST /fragment-panels/generate/:taskId/resume

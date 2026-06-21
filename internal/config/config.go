@@ -26,11 +26,12 @@ type Config struct {
 	Recommendation RecommendationConfig `yaml:"recommendation"`
 	// AccountDeletion system placeholder user ID and grace period (env: SYSTEM_ANONYMOUS_USER_ID, ACCOUNT_DELETION_GRACE_SECONDS).
 	AccountDeletion AccountDeletionConfig `yaml:"account_deletion"`
-	AI             AIConfig             `yaml:"ai"`
-	JWT            JWTConfig            `yaml:"jwt"`
-	Aliyun         AliyunConfig         `yaml:"aliyun"`
-	APNs           APNsConfig           `yaml:"apns"`
-	Telemetry      TelemetryConfig      `yaml:"telemetry"`
+	AI              AIConfig              `yaml:"ai"`
+	JWT             JWTConfig             `yaml:"jwt"`
+	AgentToken      AgentTokenConfig      `yaml:"agent_token"`
+	Aliyun          AliyunConfig          `yaml:"aliyun"`
+	APNs            APNsConfig            `yaml:"apns"`
+	Telemetry       TelemetryConfig       `yaml:"telemetry"`
 }
 
 // APNsConfig Apple Push Notification service (HTTP/2 API, .p8 auth key).
@@ -69,6 +70,9 @@ type AccountDeletionConfig struct {
 
 // DefaultSystemAnonymousUserID is created by migration unless overridden by SYSTEM_ANONYMOUS_USER_ID.
 const DefaultSystemAnonymousUserID = "00000000-0000-4000-8000-000000000001"
+
+// DefaultAgentTokenSigningKey 与 grapery-agent 的 AGENT_TOKEN_VERIFY_KEY 默认值一致。
+const DefaultAgentTokenSigningKey = "voyager1990"
 
 // RecommendationConfig holds recommendation and feed cache configuration
 type RecommendationConfig struct {
@@ -144,6 +148,24 @@ func NormalizeAITextDefaultProvider(p string) (normalized string, warn bool) {
 type JWTConfig struct {
 	Secret string        `yaml:"secret"`
 	Expiry time.Duration `yaml:"expiry"` // Token 过期时间
+}
+
+// AgentTokenConfig 控制 grapery 签发的短期 Agent Access Token。
+// grapery 是 auth/quota 的权威方，签发这些 token 后客户端凭 token 直连 grapery-agent。
+type AgentTokenConfig struct {
+	// SigningKey 用于 HMAC-SHA256 签名（env: AGENT_TOKEN_SIGNING_KEY）。
+	// 必须与 grapery-agent 的 AGENT_TOKEN_VERIFY_KEY 一致。务必独立于 JWT_SECRET。
+	SigningKey string `yaml:"signing_key"`
+	// TTLSeconds token 有效期（秒，env: AGENT_TOKEN_TTL_SEC），用于启动一次流式会话。
+	TTLSeconds int `yaml:"ttl_seconds"`
+	// ReplayCacheEnabled 是否在 Redis 记录 jti 以做一次性/重放保护（env: AGENT_TOKEN_REPLAY_CACHE_ENABLED）。
+	ReplayCacheEnabled bool `yaml:"replay_cache_enabled"`
+	// PublicParallelEnabled 是否开启「agent 平行对外」模式（env: AGENT_PUBLIC_PARALLEL_ENABLED）。
+	PublicParallelEnabled bool `yaml:"public_parallel_enabled"`
+	// ExecFragmentPanelEnabled fragment-panel 试点执行迁移开关（env: AGENT_EXEC_FRAGMENT_PANEL_ENABLED）。
+	ExecFragmentPanelEnabled bool `yaml:"exec_fragment_panel_enabled"`
+	// InternalAPIKey 供 grapery-agent 调用 policy API（env: GRAPERY_INTERNAL_API_KEY）。
+	InternalAPIKey string `yaml:"internal_api_key"`
 }
 
 // AliyunConfig holds Aliyun OSS configuration
@@ -295,6 +317,14 @@ func Load(app string) Config {
 			Secret: getEnv("JWT_SECRET", ""), // SECURITY: No default - must be set via env
 			Expiry: time.Duration(jwtExpiry) * time.Hour,
 		},
+		AgentToken: AgentTokenConfig{
+			SigningKey:               EffectiveAgentTokenSigningKey(getEnv("AGENT_TOKEN_SIGNING_KEY", "")),
+			TTLSeconds:               getEnvInt("AGENT_TOKEN_TTL_SEC", 300),
+			ReplayCacheEnabled:       getEnvBool("AGENT_TOKEN_REPLAY_CACHE_ENABLED", false),
+			PublicParallelEnabled:    getEnvBool("AGENT_PUBLIC_PARALLEL_ENABLED", false),
+			ExecFragmentPanelEnabled: getEnvBool("AGENT_EXEC_FRAGMENT_PANEL_ENABLED", true),
+			InternalAPIKey:           getEnv("GRAPERY_INTERNAL_API_KEY", ""),
+		},
 		Aliyun: AliyunConfig{
 			APIKey:    getEnv("ALIYUN_API_KEY", ""),
 			SecretKey: getEnv("ALIYUN_SECRET_KEY", ""),
@@ -349,6 +379,14 @@ func Load(app string) Config {
 	}
 
 	return cfg
+}
+
+// EffectiveAgentTokenSigningKey 在 env/配置未设置时回落到 DefaultAgentTokenSigningKey。
+func EffectiveAgentTokenSigningKey(key string) string {
+	if strings.TrimSpace(key) != "" {
+		return strings.TrimSpace(key)
+	}
+	return DefaultAgentTokenSigningKey
 }
 
 // EffectiveSystemAnonymousUserID normalizes SYSTEM_ANONYMOUS_USER_ID; empty resolves to DefaultSystemAnonymousUserID.
@@ -480,6 +518,11 @@ func getDefaultConfig() Config {
 			Secret: "", // SECURITY: No default secret - must be set via JWT_SECRET env var
 			Expiry: 24 * time.Hour,
 		},
+		AgentToken: AgentTokenConfig{
+			SigningKey:               DefaultAgentTokenSigningKey,
+			TTLSeconds:               300,
+			ExecFragmentPanelEnabled: true,
+		},
 		Aliyun: AliyunConfig{
 			APIKey:    "",
 			SecretKey: "",
@@ -587,6 +630,17 @@ func overrideWithEnv(cfg Config, app string) Config {
 	if jwtExpiry, _ := strconv.Atoi(getEnv("JWT_EXPIRY_HOURS", "")); jwtExpiry > 0 {
 		cfg.JWT.Expiry = time.Duration(jwtExpiry) * time.Hour
 	}
+
+	// Agent Access Token config
+	cfg.AgentToken.SigningKey = EffectiveAgentTokenSigningKey(getEnv("AGENT_TOKEN_SIGNING_KEY", cfg.AgentToken.SigningKey))
+	cfg.AgentToken.TTLSeconds = getEnvInt("AGENT_TOKEN_TTL_SEC", cfg.AgentToken.TTLSeconds)
+	if cfg.AgentToken.TTLSeconds <= 0 {
+		cfg.AgentToken.TTLSeconds = 300
+	}
+	cfg.AgentToken.ReplayCacheEnabled = getEnvBool("AGENT_TOKEN_REPLAY_CACHE_ENABLED", cfg.AgentToken.ReplayCacheEnabled)
+	cfg.AgentToken.PublicParallelEnabled = getEnvBool("AGENT_PUBLIC_PARALLEL_ENABLED", cfg.AgentToken.PublicParallelEnabled)
+	cfg.AgentToken.ExecFragmentPanelEnabled = getEnvBool("AGENT_EXEC_FRAGMENT_PANEL_ENABLED", cfg.AgentToken.ExecFragmentPanelEnabled)
+	cfg.AgentToken.InternalAPIKey = getEnv("GRAPERY_INTERNAL_API_KEY", cfg.AgentToken.InternalAPIKey)
 
 	// Aliyun OSS config
 	cfg.Aliyun.APIKey = getEnv("ALIYUN_API_KEY", cfg.Aliyun.APIKey)

@@ -378,6 +378,26 @@ func main() {
 	shareSigner := service.NewShareLinkSigner(jwtSecret)
 	svc.SetShareLinkSigner(shareSigner)
 
+	// Agent Access Token signer: env/配置未设置时使用 config.DefaultAgentTokenSigningKey。
+	agentTokenSigner := service.NewAgentAccessTokenSigner(cfg.AgentToken.SigningKey, time.Duration(cfg.AgentToken.TTLSeconds)*time.Second)
+	if agentTokenSigner.IsConfigured() {
+		logger.Info("agent access token signer initialized",
+			zap.Int("ttlSeconds", cfg.AgentToken.TTLSeconds),
+			zap.Bool("replayCacheEnabled", cfg.AgentToken.ReplayCacheEnabled),
+			zap.Bool("publicParallelEnabled", cfg.AgentToken.PublicParallelEnabled),
+		)
+	} else {
+		logger.Warn("agent access token signing key is blank after normalization")
+	}
+
+	agentPolicy := service.NewAgentAccessPolicyService(repo, redisCache, svc.AIGenerationService(), logger, service.AgentAccessPolicyConfig{
+		PublicParallelEnabled:      cfg.AgentToken.PublicParallelEnabled,
+		ExecFragmentPanelEnabled:   cfg.AgentToken.ExecFragmentPanelEnabled,
+		ReplayCacheEnabled:         cfg.AgentToken.ReplayCacheEnabled,
+	})
+
+	genAuditService := service.NewGenerationAuditService(repo, logger)
+
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
 		AIService:             aiSvc,
@@ -389,13 +409,18 @@ func main() {
 		Logger:                logger,
 		Cache:                 redisCache,
 		ShareSigner:           shareSigner,
+		AgentTokenSigner:      agentTokenSigner,
+		AgentTokenReplay:      cfg.AgentToken.ReplayCacheEnabled,
+		AgentPolicy:           agentPolicy,
+		GenerationAudit:       genAuditService,
 	}
 	router := transport.SetupRouter(deps)
 
+	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, cfg.AgentToken.InternalAPIKey)
+	agentPolicyHandler.RegisterRoutes(router)
+
 	// Create API group for route registration
 	apiGroup := router.Group("/api")
-
-	// Register Fragment Generation routes
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
 	// AI rate limiter for fragment generation endpoints
 	fragGenGroup := apiGroup.Group("/v1/fragments")

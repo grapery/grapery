@@ -22,6 +22,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	apnsTokenLifetime      = 50 * time.Minute
+	apnsTokenRefreshBefore = 10 * time.Minute
+)
+
 // APNsService Apple Push Notification Service
 type APNsService struct {
 	bundleID    string
@@ -220,10 +225,21 @@ type APNsAlert struct {
 	LocArgs      []string `json:"loc-args,omitempty"`
 }
 
+func (a *APNsService) authTokenStillValid() bool {
+	return a.authToken != "" && time.Now().Before(a.tokenExpiry.Add(-apnsTokenRefreshBefore))
+}
+
+func (a *APNsService) invalidateAuthToken() {
+	a.tokenMutex.Lock()
+	defer a.tokenMutex.Unlock()
+	a.authToken = ""
+	a.tokenExpiry = time.Time{}
+}
+
 // getAuthToken 获取 APNs JWT 认证令牌
 func (a *APNsService) getAuthToken() (string, error) {
 	a.tokenMutex.RLock()
-	if a.authToken != "" && time.Now().Before(a.tokenExpiry.Add(-5*time.Minute)) {
+	if a.authTokenStillValid() {
 		token := a.authToken
 		a.tokenMutex.RUnlock()
 		return token, nil
@@ -234,15 +250,17 @@ func (a *APNsService) getAuthToken() (string, error) {
 	defer a.tokenMutex.Unlock()
 
 	// 双重检查
-	if a.authToken != "" && time.Now().Before(a.tokenExpiry.Add(-5*time.Minute)) {
+	if a.authTokenStillValid() {
 		return a.authToken, nil
 	}
 
-	// 生成新的 JWT
+	// 生成新的 JWT（Apple 最长 60 分钟；提前刷新并带 exp 避免时钟漂移导致 ExpiredProviderToken）
 	now := time.Now()
+	expiresAt := now.Add(apnsTokenLifetime)
 	claims := jwt.MapClaims{
 		"iss": a.teamID,
 		"iat": now.Unix(),
+		"exp": expiresAt.Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
@@ -254,7 +272,7 @@ func (a *APNsService) getAuthToken() (string, error) {
 	}
 
 	a.authToken = signedToken
-	a.tokenExpiry = now.Add(50 * time.Minute) // Apple 建议每 60 分钟刷新一次
+	a.tokenExpiry = expiresAt
 
 	return a.authToken, nil
 }
@@ -322,6 +340,22 @@ func (a *APNsService) SendToDevice(ctx context.Context, deviceToken string, payl
 
 // sendNotification 发送 APNs 通知
 func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, payload *APNsPayload) (*domain.PushNotificationResult, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		result, reason, err := a.sendNotificationOnce(ctx, deviceToken, payload)
+		if err == nil {
+			return result, nil
+		}
+		if reason == "ExpiredProviderToken" && attempt == 0 {
+			a.logger.Warn("APNs provider token expired, refreshing and retrying once")
+			a.invalidateAuthToken()
+			continue
+		}
+		return result, err
+	}
+	return nil, fmt.Errorf("APNs request failed after token refresh")
+}
+
+func (a *APNsService) sendNotificationOnce(ctx context.Context, deviceToken string, payload *APNsPayload) (*domain.PushNotificationResult, string, error) {
 	startTime := time.Now()
 
 	authToken, err := a.getAuthToken()
@@ -335,7 +369,7 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 			DeviceToken: deviceToken,
 			Success:     false,
 			Error:       err.Error(),
-		}, err
+		}, "", err
 	}
 
 	// 序列化载荷
@@ -344,14 +378,14 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
 			metrics.RecordNotificationError("push", "apns", "payload_too_large")
 		}
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// 创建请求
 	url := a.getAPNsURL(deviceToken)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "bearer "+authToken)
@@ -374,7 +408,7 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 			DeviceToken: deviceToken,
 			Success:     false,
 			Error:       err.Error(),
-		}, err
+		}, "", err
 	}
 	defer resp.Body.Close()
 
@@ -393,7 +427,7 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 			DeviceToken: deviceToken,
 			Success:     true,
 			MessageID:   apnsID,
-		}, nil
+		}, "", nil
 	}
 
 	// 解析错误响应
@@ -432,6 +466,8 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 			errorType = "rate_limit"
 		case "BadEnvironmentKeyInToken":
 			errorType = "bad_environment_key"
+		case "ExpiredProviderToken":
+			errorType = "expired_provider_token"
 		}
 		metrics.RecordNotificationError("push", "apns", errorType)
 	}
@@ -440,7 +476,7 @@ func (a *APNsService) sendNotification(ctx context.Context, deviceToken string, 
 		DeviceToken: deviceToken,
 		Success:     false,
 		Error:       errorResp.Reason,
-	}, fmt.Errorf("APNs request failed: %s", errorResp.Reason)
+	}, errorResp.Reason, fmt.Errorf("APNs request failed: %s", errorResp.Reason)
 }
 
 // SendBatch 批量发送通知
@@ -497,24 +533,40 @@ func (a *APNsService) SendSilentNotification(ctx context.Context, deviceToken st
 
 // sendSilentNotification 发送静默通知
 func (a *APNsService) sendSilentNotification(ctx context.Context, deviceToken string, payload *APNsPayload) (*domain.PushNotificationResult, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		result, reason, err := a.sendSilentNotificationOnce(ctx, deviceToken, payload)
+		if err == nil {
+			return result, nil
+		}
+		if reason == "ExpiredProviderToken" && attempt == 0 {
+			a.logger.Warn("APNs provider token expired, refreshing and retrying once")
+			a.invalidateAuthToken()
+			continue
+		}
+		return result, err
+	}
+	return nil, fmt.Errorf("APNs silent request failed after token refresh")
+}
+
+func (a *APNsService) sendSilentNotificationOnce(ctx context.Context, deviceToken string, payload *APNsPayload) (*domain.PushNotificationResult, string, error) {
 	authToken, err := a.getAuthToken()
 	if err != nil {
 		return &domain.PushNotificationResult{
 			DeviceToken: deviceToken,
 			Success:     false,
 			Error:       err.Error(),
-		}, err
+		}, "", err
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	url := a.getAPNsURL(deviceToken)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "bearer "+authToken)
@@ -529,7 +581,7 @@ func (a *APNsService) sendSilentNotification(ctx context.Context, deviceToken st
 			DeviceToken: deviceToken,
 			Success:     false,
 			Error:       err.Error(),
-		}, err
+		}, "", err
 	}
 	defer resp.Body.Close()
 
@@ -540,15 +592,23 @@ func (a *APNsService) sendSilentNotification(ctx context.Context, deviceToken st
 			DeviceToken: deviceToken,
 			Success:     true,
 			MessageID:   apnsID,
-		}, nil
+		}, "", nil
 	}
 
 	respBody, _ := io.ReadAll(resp.Body)
+	var errorResp struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.Unmarshal(respBody, &errorResp)
+	reason := errorResp.Reason
+	if reason == "" {
+		reason = string(respBody)
+	}
 	return &domain.PushNotificationResult{
 		DeviceToken: deviceToken,
 		Success:     false,
-		Error:       string(respBody),
-	}, nil
+		Error:       reason,
+	}, reason, fmt.Errorf("APNs request failed: %s", reason)
 }
 
 // UpdateBadge 更新应用徽章

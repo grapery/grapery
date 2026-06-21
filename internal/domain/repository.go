@@ -315,6 +315,13 @@ type Repository interface {
 	ListAIPromptAuditRecords(ctx context.Context, runID string) ([]*AIPromptAuditRecord, error)
 	ListAIPromptAuditRecordsByEntity(ctx context.Context, entityType, entityID string, limit, offset int) ([]*AIPromptAuditRecord, error)
 
+	// Generation step audit (agent-orchestrated runs)
+	CreateGenerationStepAuditRecord(ctx context.Context, record *GenerationStepAuditRecord) error
+	CreateGenerationStepAuditRecords(ctx context.Context, records []*GenerationStepAuditRecord) error
+	ListGenerationStepAuditsByRunID(ctx context.Context, runID string, limit int) ([]*GenerationStepAuditRecord, error)
+	ListGenerationStepAuditsByTaskID(ctx context.Context, taskID string, limit int) ([]*GenerationStepAuditRecord, error)
+	ListGenerationStepAuditsByUserID(ctx context.Context, userID string, runID, taskID string, limit int) ([]*GenerationStepAuditRecord, error)
+
 	// ========== Comment operations ==========
 	CommentByID(ctx context.Context, id string) (*Comment, error)
 	CreateComment(ctx context.Context, comment *Comment) error

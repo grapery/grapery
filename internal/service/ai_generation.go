@@ -74,6 +74,22 @@ func (s *AIGenerationService) SetQuotaReservationEnabled(enabled bool) {
 		zap.Bool("enabled", enabled))
 }
 
+// ConfirmQuotaReservation 确认 agent 生成完成后的实际 token 扣减。
+func (s *AIGenerationService) ConfirmQuotaReservation(ctx context.Context, reservationID string, actualTokens int) error {
+	if s == nil || !s.enableQuotaReservation || s.quotaReservation == nil {
+		return fmt.Errorf("quota reservation is not enabled")
+	}
+	return s.quotaReservation.ConfirmQuota(ctx, reservationID, actualTokens)
+}
+
+// ReleaseQuotaReservation 释放未消费的 agent 配额预留。
+func (s *AIGenerationService) ReleaseQuotaReservation(ctx context.Context, reservationID string) error {
+	if s == nil || !s.enableQuotaReservation || s.quotaReservation == nil {
+		return fmt.Errorf("quota reservation is not enabled")
+	}
+	return s.quotaReservation.ReleaseQuota(ctx, reservationID)
+}
+
 // SetAITextAdmission wires the global text-provider concurrency gate (nil disables).
 func (s *AIGenerationService) SetAITextAdmission(g *AITextAdmissionGate) {
 	s.textAdmission = g

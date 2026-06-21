@@ -60,10 +60,61 @@ type FragmentGenerationRequest struct {
 	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
 	Visibility string   `json:"visibility"` // 可见性：public, followers, private
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
-	AspectRatio            string `json:"aspectRatio,omitempty"`
-	ConsistencyLevel       string `json:"consistencyLevel,omitempty"`       // off | standard | strong
-	EnableReferenceAssets  *bool  `json:"enableReferenceAssets,omitempty"`  // nil 时由 consistencyLevel 决定
-	IncludeGenerationTrace bool   `json:"includeGenerationTrace,omitempty"` // 返回完整生成 trace
+	AspectRatio            string                  `json:"aspectRatio,omitempty"`
+	ConsistencyLevel       string                  `json:"consistencyLevel,omitempty"`       // off | standard | strong
+	EnableReferenceAssets  *bool                   `json:"enableReferenceAssets,omitempty"`  // nil 时由 consistencyLevel 决定
+	IncludeGenerationTrace bool                    `json:"includeGenerationTrace,omitempty"` // 返回完整生成 trace
+	ReferenceSlots         []FragmentReferenceSlot `json:"referenceSlots,omitempty"`         // 语义参考槽位（可选）
+	TargetDraftFragmentID  string                  `json:"targetDraftFragmentId,omitempty"`  // 修改/续写时写回的现有草稿碎片
+	ReplaceImageIndex      int                     `json:"replaceImageIndex,omitempty"`      // 单张重绘时替换的 1-based 图片位置
+}
+
+// FragmentReferenceSlot 描述用户可为某个故事实体提供的语义参考图。
+type FragmentReferenceSlot struct {
+	Key        string `json:"key"`
+	Label      string `json:"label"`
+	Kind       string `json:"kind"` // character | prop | location | scene | object
+	Required   bool   `json:"required,omitempty"`
+	InputType  string `json:"inputType,omitempty"` // image
+	ImageURL   string `json:"imageUrl,omitempty"`
+	HelperText string `json:"helperText,omitempty"`
+}
+
+// FragmentGenerationIntent 是分析阶段返回给客户端/agent 的标准生成意图。
+type FragmentGenerationIntent struct {
+	UserInput   string `json:"userInput"`
+	ImageCount  int    `json:"imageCount"`
+	Style       string `json:"style"`
+	Mood        string `json:"mood,omitempty"`
+	Length      string `json:"length,omitempty"`
+	Language    string `json:"language"`
+	Visibility  string `json:"visibility"`
+	AspectRatio string `json:"aspectRatio"`
+	Topic       string `json:"topic,omitempty"`
+}
+
+// FragmentAnalyzeRequest 是第一阶段文本分析请求。
+type FragmentAnalyzeRequest struct {
+	UserInput   string `json:"userInput"`
+	Language    string `json:"language,omitempty"`
+	AspectRatio string `json:"aspectRatio,omitempty"`
+	ImageCount  int    `json:"imageCount,omitempty"`
+	Style       string `json:"style,omitempty"`
+}
+
+// FragmentRecommendedOptions 是客户端展示配置建议。
+type FragmentRecommendedOptions struct {
+	StyleCandidates []string `json:"styleCandidates,omitempty"`
+	CanStart        bool     `json:"canStart"`
+}
+
+// FragmentAnalyzeResponse 是第一阶段文本分析响应。
+type FragmentAnalyzeResponse struct {
+	AssistantMessage   string                     `json:"assistantMessage"`
+	IntentType         string                     `json:"intentType,omitempty"` // new_fragment | revise_current | adjust_options | chat_only | ask_clarification
+	GenerationIntent   FragmentGenerationIntent   `json:"generationIntent"`
+	StoryElements      []FragmentReferenceSlot    `json:"storyElements"`
+	RecommendedOptions FragmentRecommendedOptions `json:"recommendedOptions"`
 }
 
 // FragmentVisualStyleBible 视觉圣经：全局画风锚点（英文描述为主，便于出图模型对齐）。
@@ -255,6 +306,7 @@ type FragmentGenerationResult struct {
 	ConsistencyPolicy *FragmentConsistencyPolicy `json:"consistencyPolicy,omitempty"` // 一致性策略
 	GenerationTrace   *FragmentGenerationTrace   `json:"generationTrace,omitempty"`   // 完整生成 trace
 	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"` // 一致性检查（best-effort）
+	StoryElements     []FragmentReferenceSlot    `json:"storyElements,omitempty"`     // 分析/生成时使用的语义元素槽位
 }
 
 // FragmentContentGenerationRequest 碎片故事内容生成请求

@@ -67,9 +67,9 @@ func (r *Repository) SaveUserStatistics(ctx context.Context, stats *domain.UserS
 		return err
 	}
 
-	// 更新现有记录
+	// 更新现有记录（保留 created_at，避免零值写入 MySQL）
 	dbStats.ID = existing.ID
-	return r.db.WithContext(ctx).Save(dbStats).Error
+	return r.db.WithContext(ctx).Omit("CreatedAt").Save(dbStats).Error
 }
 
 // userStatisticsToDomain 转换数据库模型到领域模型

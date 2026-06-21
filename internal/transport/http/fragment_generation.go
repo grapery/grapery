@@ -42,10 +42,34 @@ type GenerateFragmentRequest struct {
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
 	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	// AspectRatio 配图长宽比；空表示由多模态（有参考图时）推断，否则默认 16:9
-	AspectRatio            string `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
-	ConsistencyLevel       string `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
-	EnableReferenceAssets  *bool  `json:"enableReferenceAssets"`
-	IncludeGenerationTrace bool   `json:"includeGenerationTrace"`
+	AspectRatio            string                         `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	ConsistencyLevel       string                         `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
+	EnableReferenceAssets  *bool                          `json:"enableReferenceAssets"`
+	IncludeGenerationTrace bool                           `json:"includeGenerationTrace"`
+	ReferenceSlots         []domain.FragmentReferenceSlot `json:"referenceSlots" binding:"max=10"`
+	TargetDraftFragmentID  string                         `json:"targetDraftFragmentId"`
+	ReplaceImageIndex      int                            `json:"replaceImageIndex" binding:"min=0,max=10"`
+}
+
+// AnalyzeFragment handles POST /fragments/analyze
+func (h *FragmentGenerationHandler) AnalyzeFragment(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req domain.FragmentAnalyzeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	resp, err := h.fragmentGenService.AnalyzeFragmentStory(c.Request.Context(), userID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // GenerateFragment handles POST /fragments/generate
@@ -81,6 +105,9 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		ConsistencyLevel:       strings.TrimSpace(req.ConsistencyLevel),
 		EnableReferenceAssets:  req.EnableReferenceAssets,
 		IncludeGenerationTrace: req.IncludeGenerationTrace,
+		ReferenceSlots:         normalizeFragmentReferenceSlots(req.ReferenceSlots),
+		TargetDraftFragmentID:  strings.TrimSpace(req.TargetDraftFragmentID),
+		ReplaceImageIndex:      req.ReplaceImageIndex,
 	}
 
 	// 如果用户没有指定图片数量，默认生成1张
@@ -107,6 +134,12 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 
 // GetGenerationStatus handles GET /fragments/generate/:taskId
 func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	taskID := c.Param("taskId")
 	if taskID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "task id is required"})
@@ -118,17 +151,31 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
+	if task.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized"})
+		return
+	}
 
+	imageSlots, imageProgress := fragmentGenerationImageSnapshot(task)
 	response := gin.H{
-		"taskId":      task.ID,
-		"status":      task.Status,
-		"progress":    task.Progress,
-		"currentStep": task.CurrentStep,
-		"createdAt":   task.CreatedAt,
+		"taskId":        task.ID,
+		"status":        task.Status,
+		"progress":      task.Progress,
+		"currentStep":   task.CurrentStep,
+		"messageKey":    fragmentGenerationStepMessageKey(task.CurrentStep),
+		"stage":         fragmentGenerationStage(task),
+		"createdAt":     task.CreatedAt,
+		"imageSlots":    imageSlots,
+		"imageProgress": imageProgress,
+		"cost":          fragmentGenerationCostSnapshot(task, strings.TrimSpace(task.Request.TargetDraftFragmentID) != ""),
 	}
 
 	if task.Result != nil {
 		response["result"] = fragmentGenerationResultResponse(task)
+		response["storyText"] = task.Result.Content
+		response["imagePlan"] = fragmentGenerationImagePlan(task)
+		response["generatedImages"] = task.Result.ImageUrls
+		response["chatMessages"] = fragmentGenerationChatMessages(task)
 	}
 
 	if task.ErrorMessage != "" {
@@ -173,6 +220,7 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 			"status":      task.Status,
 			"progress":    task.Progress,
 			"currentStep": task.CurrentStep,
+			"messageKey":  fragmentGenerationStepMessageKey(task.CurrentStep),
 			"createdAt":   task.CreatedAt,
 		}
 		if task.Result != nil {
@@ -199,6 +247,7 @@ func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H
 		"referenceAssets":   task.Result.ReferenceAssets,
 		"consistencyPolicy": task.Result.ConsistencyPolicy,
 		"consistencyIssues": task.Result.ConsistencyIssues,
+		"storyElements":     task.Result.StoryElements,
 	}
 	if task.Result.AspectRatio != "" {
 		res["aspectRatio"] = task.Result.AspectRatio
@@ -207,6 +256,207 @@ func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H
 		res["generationTrace"] = task.Result.GenerationTrace
 	}
 	return res
+}
+
+func fragmentGenerationStage(task *domain.FragmentGenerationTask) string {
+	switch strings.TrimSpace(task.CurrentStep) {
+	case "extracting_elements", "expanding_scenes":
+		return "story"
+	case "generating_reference_assets":
+		return "style"
+	case "generating_images":
+		return "images"
+	case "checking_consistency":
+		return "review"
+	case "completed":
+		return "completed"
+	default:
+		if task.Status == "completed" {
+			return "completed"
+		}
+		if task.Status == "failed" || task.Status == "cancelled" {
+			return task.Status
+		}
+		return "preparing"
+	}
+}
+
+func fragmentGenerationImageSnapshot(task *domain.FragmentGenerationTask) ([]gin.H, gin.H) {
+	total := task.Request.ImageCount
+	if total < 1 {
+		total = 1
+	}
+	var scenes []domain.FragmentScenePlan
+	var urls []string
+	if task.Result != nil {
+		scenes = task.Result.ScenePlan
+		urls = task.Result.ImageUrls
+		if len(scenes) > total {
+			total = len(scenes)
+		}
+		if len(urls) > total {
+			total = len(urls)
+		}
+	}
+
+	slots := make([]gin.H, 0, total)
+	completed := 0
+	for i := 0; i < total; i++ {
+		imageURL := ""
+		title := "第" + strconv.Itoa(i+1) + "页"
+		caption := ""
+		if i < len(scenes) {
+			if strings.TrimSpace(scenes[i].SceneDesc) != "" {
+				caption = strings.TrimSpace(scenes[i].SceneDesc)
+			}
+			if strings.TrimSpace(scenes[i].GeneratedImageURL) != "" {
+				imageURL = strings.TrimSpace(scenes[i].GeneratedImageURL)
+			}
+		}
+		if imageURL == "" && i < len(urls) {
+			imageURL = strings.TrimSpace(urls[i])
+		}
+		status := "planned"
+		if imageURL != "" {
+			status = "completed"
+			completed++
+		} else if task.Status == "failed" {
+			status = "failed"
+		} else if task.CurrentStep == "generating_images" && i == completed {
+			status = "generating"
+		}
+		slots = append(slots, gin.H{
+			"index":    i + 1,
+			"title":    title,
+			"caption":  caption,
+			"status":   status,
+			"imageUrl": imageURL,
+		})
+	}
+	return slots, gin.H{
+		"completedCount": completed,
+		"totalCount":     total,
+	}
+}
+
+func fragmentGenerationImagePlan(task *domain.FragmentGenerationTask) []gin.H {
+	if task.Result == nil || len(task.Result.ScenePlan) == 0 {
+		return []gin.H{}
+	}
+	out := make([]gin.H, 0, len(task.Result.ScenePlan))
+	for i, scene := range task.Result.ScenePlan {
+		index := scene.Index
+		if index <= 0 {
+			index = i + 1
+		}
+		out = append(out, gin.H{
+			"index":   index,
+			"caption": strings.TrimSpace(scene.SceneDesc),
+			"status":  "planned",
+		})
+	}
+	return out
+}
+
+func fragmentGenerationChatMessages(task *domain.FragmentGenerationTask) []gin.H {
+	var out []gin.H
+	if task.Result != nil && strings.TrimSpace(task.Result.Content) != "" {
+		out = append(out, gin.H{
+			"id":   task.ID + ":story",
+			"type": "story",
+			"text": task.Result.Content,
+		})
+	}
+	if task.Result != nil && len(task.Result.ScenePlan) > 0 {
+		lines := make([]string, 0, len(task.Result.ScenePlan))
+		for i, scene := range task.Result.ScenePlan {
+			caption := strings.TrimSpace(scene.SceneDesc)
+			if caption == "" {
+				continue
+			}
+			lines = append(lines, "第"+strconv.Itoa(i+1)+"页："+caption)
+		}
+		if len(lines) > 0 {
+			out = append(out, gin.H{
+				"id":   task.ID + ":image_plan",
+				"type": "image_plan",
+				"text": strings.Join(lines, "\n"),
+			})
+		}
+	}
+	return out
+}
+
+func fragmentGenerationCostSnapshot(task *domain.FragmentGenerationTask, revision bool) gin.H {
+	count := task.Request.ImageCount
+	if count < 1 {
+		count = 1
+	}
+	points := count * 8
+	label := "本次创作消耗 "
+	if revision {
+		label = "本次修改消耗 "
+	}
+	return gin.H{
+		"amount": points,
+		"unit":   "点数",
+		"text":   label + strconv.Itoa(points) + " 点数",
+	}
+}
+
+func normalizeFragmentReferenceSlots(slots []domain.FragmentReferenceSlot) []domain.FragmentReferenceSlot {
+	if len(slots) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]domain.FragmentReferenceSlot, 0, len(slots))
+	for _, slot := range slots {
+		key := strings.TrimSpace(slot.Key)
+		label := strings.TrimSpace(slot.Label)
+		kind := strings.TrimSpace(slot.Kind)
+		if key == "" || label == "" || kind == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		inputType := strings.TrimSpace(slot.InputType)
+		if inputType == "" {
+			inputType = "image"
+		}
+		out = append(out, domain.FragmentReferenceSlot{
+			Key:        key,
+			Label:      label,
+			Kind:       kind,
+			Required:   slot.Required,
+			InputType:  inputType,
+			ImageURL:   strings.TrimSpace(slot.ImageURL),
+			HelperText: strings.TrimSpace(slot.HelperText),
+		})
+	}
+	return out
+}
+
+func fragmentGenerationStepMessageKey(step string) string {
+	switch strings.TrimSpace(step) {
+	case "starting":
+		return "fragment_generation_starting"
+	case "extracting_elements":
+		return "fragment_generation_analyzing_story"
+	case "expanding_scenes":
+		return "fragment_generation_writing_story"
+	case "generating_reference_assets":
+		return "fragment_generation_designing_style"
+	case "generating_images":
+		return "fragment_generation_generating_images"
+	case "checking_consistency":
+		return "fragment_generation_checking_consistency"
+	case "completed":
+		return "fragment_generation_completed"
+	default:
+		return ""
+	}
 }
 
 // CancelGeneration handles DELETE /fragments/generate/:taskId
@@ -244,6 +494,8 @@ func (h *FragmentGenerationHandler) CancelGeneration(c *gin.Context) {
 
 // RegisterRoutes registers the fragment generation routes
 func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
+	router.POST("/analyze", h.AnalyzeFragment)
+
 	fragmentGenGroup := router.Group("/generate")
 	if authMiddleware != nil {
 		fragmentGenGroup.Use(authMiddleware)

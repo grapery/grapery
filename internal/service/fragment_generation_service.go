@@ -46,6 +46,59 @@ func (s *FragmentGenerationService) SetNotify(svc *Service) {
 	s.notify = svc
 }
 
+// AnalyzeFragmentStory performs the lightweight phase-one planning used by Voyager before image generation.
+func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, userID string, req domain.FragmentAnalyzeRequest) (*domain.FragmentAnalyzeResponse, error) {
+	input := strings.TrimSpace(req.UserInput)
+	if input == "" {
+		return nil, fmt.Errorf("userInput is required")
+	}
+
+	language := strings.TrimSpace(req.Language)
+	if language == "" {
+		language = "zh-Hans"
+	}
+	aspectRatio := domain.NormalizeFragmentAspectRatio(req.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = "9:16"
+	}
+	imageCount := req.ImageCount
+	if imageCount <= 0 {
+		imageCount = 4
+	}
+	if imageCount > 10 {
+		imageCount = 10
+	}
+	style := strings.TrimSpace(req.Style)
+	if style == "" {
+		style = inferFragmentAnalyzeStyle(input)
+	}
+	slots := inferFragmentReferenceSlots(input)
+
+	resp := &domain.FragmentAnalyzeResponse{
+		AssistantMessage: summarizeFragmentAnalyzeMessage(input),
+		IntentType:       inferFragmentInputIntent(input),
+		GenerationIntent: domain.FragmentGenerationIntent{
+			UserInput:   input,
+			ImageCount:  imageCount,
+			Style:       style,
+			Mood:        "mysterious",
+			Length:      "medium",
+			Language:    language,
+			Visibility:  domain.FragmentVisibilityPrivate,
+			AspectRatio: aspectRatio,
+			Topic:       inferFragmentTopic(input),
+		},
+		StoryElements: slots,
+		RecommendedOptions: domain.FragmentRecommendedOptions{
+			StyleCandidates: []string{style, "smart_recommend"},
+			CanStart:        true,
+		},
+	}
+	_ = ctx
+	_ = userID
+	return resp, nil
+}
+
 // GenerateFragment 创建生成任务并立即落库占位草稿（与多格参考图流程对齐），返回 task 与 draftFragmentId。
 func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentGenerationTask, string, error) {
 	taskID := uuid.New().String()
@@ -67,41 +120,64 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	if ar == "" {
 		ar = domain.FragmentAspectDefault
 	}
-	draft := &domain.Fragment{
-		BaseModel: common.BaseModel{
-			ID:        uuid.New().String(),
-			CreatedAt: nowMs,
-			UpdatedAt: nowMs,
-		},
-		UserID:          userID,
-		CreatorID:       userID,
-		Content:         "生成中…",
-		MediaURLs:       []string{},
-		ImageUrls:       "[]",
-		Visibility:      domain.FragmentVisibilityPrivate,
-		IsDraft:         true,
-		SourceType:      string(domain.FragmentSourceAIGeneration),
-		SourceID:        taskID,
-		AspectRatio:     ar,
-		EngagementStats: common.EngagementStats{},
-	}
-	if err := s.fragmentRepo.Create(ctx, draft); err != nil {
-		if delErr := s.fragmentGenRepo.Delete(ctx, taskID); delErr != nil {
-			s.logger.Warn("rollback: failed to delete generation task after draft create error",
-				zap.String("task_id", taskID), zap.Error(delErr))
+	draftID := strings.TrimSpace(req.TargetDraftFragmentID)
+	if draftID != "" {
+		draft, err := s.fragmentRepo.GetByID(ctx, draftID)
+		if err != nil {
+			_ = s.fragmentGenRepo.Delete(ctx, taskID)
+			return nil, "", fmt.Errorf("target draft not found: %w", err)
 		}
-		return nil, "", fmt.Errorf("failed to create placeholder draft: %w", err)
+		if draft.UserID != userID || !draft.IsDraft {
+			_ = s.fragmentGenRepo.Delete(ctx, taskID)
+			return nil, "", fmt.Errorf("target draft is not writable")
+		}
+		draft.SourceType = string(domain.FragmentSourceAIGeneration)
+		draft.SourceID = taskID
+		draft.GenerationTaskID = taskID
+		draft.AspectRatio = ar
+		draft.UpdatedAt = nowMs
+		if err := s.fragmentRepo.Update(ctx, draft); err != nil {
+			_ = s.fragmentGenRepo.Delete(ctx, taskID)
+			return nil, "", fmt.Errorf("failed to attach generation task to draft: %w", err)
+		}
+	} else {
+		draft := &domain.Fragment{
+			BaseModel: common.BaseModel{
+				ID:        uuid.New().String(),
+				CreatedAt: nowMs,
+				UpdatedAt: nowMs,
+			},
+			UserID:          userID,
+			CreatorID:       userID,
+			Content:         "生成中…",
+			MediaURLs:       []string{},
+			ImageUrls:       "[]",
+			Visibility:      domain.FragmentVisibilityPrivate,
+			IsDraft:         true,
+			SourceType:      string(domain.FragmentSourceAIGeneration),
+			SourceID:        taskID,
+			AspectRatio:     ar,
+			EngagementStats: common.EngagementStats{},
+		}
+		if err := s.fragmentRepo.Create(ctx, draft); err != nil {
+			if delErr := s.fragmentGenRepo.Delete(ctx, taskID); delErr != nil {
+				s.logger.Warn("rollback: failed to delete generation task after draft create error",
+					zap.String("task_id", taskID), zap.Error(delErr))
+			}
+			return nil, "", fmt.Errorf("failed to create placeholder draft: %w", err)
+		}
+		draftID = draft.ID
 	}
 
 	s.logger.Info("Fragment generation task created",
 		zap.String("task_id", taskID),
-		zap.String("draft_id", draft.ID),
+		zap.String("draft_id", draftID),
 		zap.String("user_id", userID),
 		zap.Int("image_count", req.ImageCount))
 
 	go s.processFragmentGeneration(context.Background(), taskID)
 
-	return task, draft.ID, nil
+	return task, draftID, nil
 }
 
 const (
@@ -110,6 +186,191 @@ const (
 	fragmentMaxAnchorLocations      = 2
 	fragmentMaxSceneReferenceImages = 6
 )
+
+func inferFragmentInputIntent(input string) string {
+	lower := strings.ToLower(strings.TrimSpace(input))
+	if lower == "" {
+		return "ask_clarification"
+	}
+	for _, word := range []string{"天气", "你是谁", "代码", "编程", "新闻", "股票", "笑话"} {
+		if strings.Contains(lower, word) {
+			return "chat_only"
+		}
+	}
+	for _, word := range []string{"换个故事", "新故事", "重新开始", "另一个故事", "新建"} {
+		if strings.Contains(lower, word) {
+			return "new_fragment"
+		}
+	}
+	for _, word := range []string{"画风", "比例", "张", "页", "公开", "私密"} {
+		if strings.Contains(lower, word) {
+			return "adjust_options"
+		}
+	}
+	return "new_fragment"
+}
+
+func inferFragmentAnalyzeStyle(input string) string {
+	if strings.Contains(input, "积木") || strings.Contains(strings.ToLower(input), "lego") {
+		return "vintage_clay"
+	}
+	if strings.Contains(input, "水墨") {
+		return "ink_wash"
+	}
+	if strings.Contains(input, "80") || strings.Contains(strings.ToLower(input), "tv") {
+		return "eighties_tv"
+	}
+	return "fantasy"
+}
+
+func inferFragmentTopic(input string) string {
+	runes := []rune(strings.TrimSpace(input))
+	if len(runes) <= 8 {
+		return string(runes)
+	}
+	return string(runes[:8])
+}
+
+func summarizeFragmentAnalyzeMessage(input string) string {
+	topic := inferFragmentTopic(input)
+	if topic == "" {
+		return "我会先帮你整理故事里的关键元素。"
+	}
+	return fmt.Sprintf("我理解了，这是关于「%s」的故事。", topic)
+}
+
+func inferFragmentReferenceSlots(input string) []domain.FragmentReferenceSlot {
+	type candidate struct {
+		label string
+		kind  string
+		words []string
+		help  string
+	}
+	candidates := []candidate{
+		{label: "自走炮", kind: "prop", words: []string{"自走炮", "坦克", "炮车"}, help: "可上传自走炮参考图，让造型更稳定"},
+		{label: "炮弹", kind: "prop", words: []string{"炮弹", "导弹", "弹药"}, help: "可上传炮弹或发射效果参考"},
+		{label: "对方阵地", kind: "location", words: []string{"阵地", "堡垒", "城墙", "战壕"}, help: "可上传敌方阵地或战场布局参考"},
+		{label: "添加角色", kind: "character", words: []string{"士兵", "角色", "人物", "敌人", "队友"}, help: "可上传故事角色参考图"},
+		{label: "主要道具", kind: "prop", words: []string{"道具", "物品", "武器", "伞", "手机"}, help: "可上传关键道具参考图"},
+		{label: "故事场景", kind: "location", words: []string{"场景", "地点", "房间", "森林", "城市"}, help: "可上传故事发生地点参考图"},
+	}
+	seen := map[string]bool{}
+	var slots []domain.FragmentReferenceSlot
+	for _, c := range candidates {
+		matched := false
+		for _, w := range c.words {
+			if strings.Contains(input, w) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		key := fragmentReferenceSlotKey(c.kind, c.label)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		slots = append(slots, domain.FragmentReferenceSlot{
+			Key:        key,
+			Label:      c.label,
+			Kind:       c.kind,
+			InputType:  "image",
+			HelperText: c.help,
+		})
+	}
+	if len(slots) == 0 {
+		slots = []domain.FragmentReferenceSlot{
+			{Key: "character_main", Label: "添加角色", Kind: "character", InputType: "image", HelperText: "可上传主角或重要角色参考图"},
+			{Key: "location_main", Label: "故事场景", Kind: "location", InputType: "image", HelperText: "可上传主要场景参考图"},
+			{Key: "prop_main", Label: "主要道具", Kind: "prop", InputType: "image", HelperText: "可上传关键道具参考图"},
+		}
+	}
+	if len(slots) < 4 {
+		key := "character_extra"
+		if !seen[key] {
+			slots = append(slots, domain.FragmentReferenceSlot{Key: key, Label: "添加角色", Kind: "character", InputType: "image", HelperText: "可继续补充角色参考图"})
+		}
+	}
+	if len(slots) > 4 {
+		return slots[:4]
+	}
+	return slots
+}
+
+func fragmentReferenceSlotKey(kind, label string) string {
+	switch label {
+	case "自走炮":
+		return "prop_self_propelled_cannon"
+	case "炮弹":
+		return "prop_shell"
+	case "对方阵地":
+		return "location_enemy_position"
+	case "添加角色":
+		return "character_extra"
+	case "故事场景":
+		return "location_main"
+	case "主要道具":
+		return "prop_main"
+	default:
+		return kind + "_main"
+	}
+}
+
+func fragmentGenerationReferenceImageURLs(req domain.FragmentGenerationRequest) []string {
+	seen := map[string]struct{}{}
+	var urls []string
+	for _, slot := range req.ReferenceSlots {
+		u := strings.TrimSpace(slot.ImageURL)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		urls = append(urls, u)
+	}
+	for _, raw := range req.ImageUrls {
+		u := strings.TrimSpace(raw)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		urls = append(urls, u)
+	}
+	return urls
+}
+
+func formatFragmentReferenceSlotsForPrompt(slots []domain.FragmentReferenceSlot) string {
+	if len(slots) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("【用户参考图槽位语义】\n")
+	b.WriteString("这些槽位说明用户上传的每张参考图对应哪个故事实体。生成 visualBible、视觉证据和场景 referenceKeys 时必须尽量沿用 key，不要把不同槽位的实体混淆。\n")
+	for i, slot := range slots {
+		label := strings.TrimSpace(slot.Label)
+		key := strings.TrimSpace(slot.Key)
+		kind := strings.TrimSpace(slot.Kind)
+		if label == "" || key == "" {
+			continue
+		}
+		if kind == "" {
+			kind = "object"
+		}
+		imageURL := strings.TrimSpace(slot.ImageURL)
+		if imageURL == "" {
+			imageURL = "未上传"
+		}
+		fmt.Fprintf(&b, "%d. key=%s, label=%s, kind=%s, imageUrl=%s\n", i+1, key, label, kind, imageURL)
+	}
+	return strings.TrimSpace(b.String())
+}
 
 // processFragmentGeneration 处理碎片生成流程（方案 B）：
 // Step 1: 元素提取 + 文案 + VisualBible
@@ -185,6 +446,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		ScenePlan:         append([]domain.FragmentScenePlan(nil), scenePlans...),
 		ConsistencyPolicy: policy,
 		GenerationTrace:   trace,
+		StoryElements:     task.Request.ReferenceSlots,
 	}
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
 		s.logger.Warn("failed to persist fragment generation trace after planning", zap.Error(err))
@@ -205,9 +467,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	// ── Step 4: 逐场景生成图片 ──
 	s.fragmentGenRepo.UpdateStatus(ctx, taskID, "processing", 62, "generating_images")
-	userRefs := fragmentPrefillHTTPImageURLs(task.Request.ImageUrls, 2)
+	userRefs := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(task.Request), 2)
 	imageStart := time.Now()
-	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy)
+	imageTokenBase := totalTokens
+	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy, partial, imageTokenBase)
 	if err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Image generation failed: %v", err))
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("配图生成失败：%v", err))
@@ -249,6 +512,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		ConsistencyPolicy: policy,
 		GenerationTrace:   trace,
 		ConsistencyIssues: issues,
+		StoryElements:     task.Request.ReferenceSlots,
 	}
 
 	// 更新占位草稿
@@ -263,11 +527,27 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	existing, gerr := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID)
 	if gerr == nil && existing != nil {
-		existing.Content = result.Content
-		existing.MediaURLs = append([]string(nil), result.ImageUrls...)
-		existing.ImageUrls = stringifyGenerationImageURLs(result.ImageUrls)
+		finalContent := result.Content
+		finalImages := append([]string(nil), result.ImageUrls...)
+		if strings.TrimSpace(task.Request.TargetDraftFragmentID) != "" {
+			finalContent = mergeFragmentDraftContent(existing.Content, result.Content)
+			if task.Request.ReplaceImageIndex > 0 {
+				finalImages = replaceFragmentDraftImageURL(existing.MediaURLs, result.ImageUrls, task.Request.ReplaceImageIndex)
+			} else {
+				finalImages = mergeFragmentDraftImageURLs(existing.MediaURLs, result.ImageUrls)
+			}
+			result.Content = finalContent
+			result.ImageUrls = append([]string(nil), finalImages...)
+		}
+		existing.Content = finalContent
+		existing.MediaURLs = append([]string(nil), finalImages...)
+		existing.ImageUrls = stringifyGenerationImageURLs(finalImages)
 		existing.Style = &style
-		existing.FragmentCount = &imgCount
+		finalImgCount := len(finalImages)
+		if finalImgCount < 1 {
+			finalImgCount = imgCount
+		}
+		existing.FragmentCount = &finalImgCount
 		existing.GenerationTaskID = taskID
 		existing.GenerationMetadata = generationMetadata
 		existing.UpdatedAt = now
@@ -426,12 +706,12 @@ type fragmentStoryElements struct {
 }
 
 func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx context.Context, userID, taskID string, req domain.FragmentGenerationRequest) (*fragmentElementExtractionResult, error) {
-	imageURLs := fragmentPrefillHTTPImageURLs(req.ImageUrls, 10)
+	imageURLs := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(req), 10)
 	hasImages := len(imageURLs) > 0
 	var visualEvidence []domain.FragmentVisualEvidence
 	visionTokens := 0
 	if hasImages {
-		evidence, tokens, err := s.analyzeFragmentVisualEvidence(ctx, taskID, imageURLs, req.UserInput, req.Style, "")
+		evidence, tokens, err := s.analyzeFragmentVisualEvidence(ctx, taskID, imageURLs, req.UserInput+"\n\n"+formatFragmentReferenceSlotsForPrompt(req.ReferenceSlots), req.Style, "")
 		if err != nil {
 			s.logger.Warn("fragment visual evidence analysis failed; falling back to legacy multimodal extraction", zap.Error(err))
 		} else {
@@ -442,6 +722,9 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 	prompt := s.buildExtractionAndStoryPrompt(req, hasImages)
 	if len(visualEvidence) > 0 {
 		prompt = prompt + "\n\n" + formatFragmentVisualEvidenceForPrompt(visualEvidence)
+	}
+	if slotText := formatFragmentReferenceSlotsForPrompt(req.ReferenceSlots); slotText != "" {
+		prompt = prompt + "\n\n" + slotText
 	}
 
 	payload := map[string]interface{}{"prompt": prompt}
@@ -1183,7 +1466,7 @@ func (s *FragmentGenerationService) generateReferenceAssets(ctx context.Context,
 	}
 	styleZH := fragmentStyleDesc(req.Style)
 	moodZH := fragmentMoodDesc(req.Mood)
-	userRef := fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)
+	userRef := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(req), 1)
 	firstChar := true
 	totalTok := 0
 	assets := make([]domain.FragmentReferenceAsset, 0, len(candidates))
@@ -1371,7 +1654,7 @@ func (s *FragmentGenerationService) generateAnchorImages(ctx context.Context, us
 	}
 	styleZH := fragmentStyleDesc(req.Style)
 	moodZH := fragmentMoodDesc(req.Mood)
-	userRef := fragmentPrefillHTTPImageURLs(req.ImageUrls, 1)
+	userRef := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(req), 1)
 
 	totalTok := 0
 	var records []domain.FragmentAnchorImage
@@ -2093,7 +2376,7 @@ func sanitizeComicPromptText(text string) string {
 	return truncateRunes(text, 40)
 }
 
-func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy) (*domain.FragmentImageGenerationResult, error) {
+func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy, partial *domain.FragmentGenerationResult, tokenBase int) (*domain.FragmentImageGenerationResult, error) {
 	if len(scenes) == 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
@@ -2124,6 +2407,7 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 				scenes[i].FinalImagePrompt = buildFragmentSceneImagePrompt(bible, scenes[i])
 				scenes[i].GeneratedImageURL = urls[i]
 			}
+			s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, urls, tokenBase, tok)
 			return &domain.FragmentImageGenerationResult{
 				ImageUrls:  urls,
 				TokensUsed: tok,
@@ -2181,12 +2465,73 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 		scene.GeneratedImageURL = imageURL
 		allImageUrls = append(allImageUrls, imageURL)
 		totalTokens += tokens
+		s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, allImageUrls, tokenBase, totalTokens)
 	}
 
 	return &domain.FragmentImageGenerationResult{
 		ImageUrls:  allImageUrls,
 		TokensUsed: totalTokens,
 	}, nil
+}
+
+func (s *FragmentGenerationService) persistFragmentImagePartial(ctx context.Context, taskID string, partial *domain.FragmentGenerationResult, scenes []domain.FragmentScenePlan, imageURLs []string, tokenBase, imageTokens int) {
+	if partial == nil {
+		return
+	}
+	partial.ImageUrls = append([]string(nil), imageURLs...)
+	partial.ScenePlan = append([]domain.FragmentScenePlan(nil), scenes...)
+	partial.TokensUsed = tokenBase + imageTokens
+	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
+		s.logger.Warn("failed to persist fragment generation partial images",
+			zap.String("task_id", taskID),
+			zap.Int("image_count", len(imageURLs)),
+			zap.Error(err))
+	}
+}
+
+func mergeFragmentDraftContent(base, next string) string {
+	base = strings.TrimSpace(base)
+	next = strings.TrimSpace(next)
+	if base == "" || base == "生成中…" || base == "生成中..." {
+		return next
+	}
+	if next == "" || next == base {
+		return base
+	}
+	return base + "\n" + next
+}
+
+func mergeFragmentDraftImageURLs(base, next []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(base)+len(next))
+	for _, raw := range append(append([]string{}, base...), next...) {
+		url := strings.TrimSpace(raw)
+		if url == "" {
+			continue
+		}
+		if _, ok := seen[url]; ok {
+			continue
+		}
+		seen[url] = struct{}{}
+		out = append(out, url)
+	}
+	return out
+}
+
+func replaceFragmentDraftImageURL(base, next []string, oneBasedIndex int) []string {
+	out := append([]string(nil), base...)
+	if len(next) == 0 {
+		return out
+	}
+	idx := oneBasedIndex - 1
+	if idx < 0 {
+		return mergeFragmentDraftImageURLs(out, next)
+	}
+	for len(out) <= idx {
+		out = append(out, "")
+	}
+	out[idx] = strings.TrimSpace(next[0])
+	return mergeFragmentDraftImageURLs(nil, out)
 }
 
 // ────────────────────── 风格/情绪/长度映射 ──────────────────────
