@@ -33,7 +33,7 @@ func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGeneration
 
 // GenerateFragmentRequest 生成碎片故事的请求
 type GenerateFragmentRequest struct {
-	UserInput  string   `json:"userInput" binding:"required,min=1,max=500"`
+	UserInput  string   `json:"userInput" binding:"required,min=1,max=2000"`
 	ImageUrls  []string `json:"imageUrls" binding:"max=10"`
 	ImageCount int      `json:"imageCount" binding:"min=0,max=10"`
 	Style      string   `json:"style" binding:"omitempty,max=64"`

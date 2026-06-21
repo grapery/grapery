@@ -23,21 +23,21 @@ type RateLimitConfig struct {
 var (
 	RateLimitAIGeneration = RateLimitConfig{
 		Window:       time.Minute,
-		MaxRequests:  20,
+		MaxRequests:  40,
 		KeyPrefix:    cache.PrefixRateLimitAI,
 		ErrorMessage: "AI generation rate limit exceeded, please try again later",
 	}
 
 	RateLimitAuth = RateLimitConfig{
 		Window:       time.Minute,
-		MaxRequests:  10,
+		MaxRequests:  20,
 		KeyPrefix:    cache.PrefixRateLimitAuth,
 		ErrorMessage: "too many auth attempts, please try again later",
 	}
 
 	RateLimitGeneral = RateLimitConfig{
 		Window:       time.Minute,
-		MaxRequests:  60,
+		MaxRequests:  180,
 		KeyPrefix:    cache.PrefixRateLimitAPI,
 		ErrorMessage: "rate limit exceeded, please slow down",
 	}
@@ -45,7 +45,7 @@ var (
 	// RateLimitSharePreview throttles anonymous share landing / OG preview fetches.
 	RateLimitSharePreview = RateLimitConfig{
 		Window:       time.Minute,
-		MaxRequests:  30,
+		MaxRequests:  60,
 		KeyPrefix:    cache.PrefixRateLimitShare,
 		ErrorMessage: "share preview rate limit exceeded, please try again later",
 	}
