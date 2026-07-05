@@ -409,8 +409,8 @@ func (h *InteractionHandler) DeleteBookmark(c *gin.Context) {
 
 // CheckBookmarkStatusRequest 检查收藏状态请求
 type CheckBookmarkStatusRequest struct {
-	BookmarkType string `json:"bookmarkType" binding:"required"`
-	BookmarkID   string `json:"bookmarkId" binding:"required"`
+	BookmarkType string `json:"bookmarkType" form:"bookmarkType" binding:"required"`
+	BookmarkID   string `json:"bookmarkId" form:"bookmarkId" binding:"required"`
 }
 
 // CheckBookmarkStatus 检查收藏状态
@@ -421,7 +421,7 @@ func (h *InteractionHandler) CheckBookmarkStatus(c *gin.Context) {
 	}
 
 	var req CheckBookmarkStatusRequest
-	if !BindJSON(c, &req) {
+	if !BindQuery(c, &req) {
 		return
 	}
 
