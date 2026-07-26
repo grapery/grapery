@@ -9,6 +9,8 @@ type FragmentGenerationAssetDB struct {
 	Kind         string `gorm:"size:40;not null;index:idx_fga_fragment_kind"`
 	EntityKind   string `gorm:"size:40;index"`
 	EntityKey    string `gorm:"size:80;index:idx_fga_fragment_entity"`
+	SlotID       string `gorm:"size:36;index:idx_fga_slot"`
+	SlotIndex    *int   `gorm:"type:int;index:idx_fga_slot_index"`
 	SceneIndex   *int   `gorm:"type:int;index"`
 	URL          string `gorm:"type:text;not null"`
 	StorageKey   string `gorm:"size:500"`

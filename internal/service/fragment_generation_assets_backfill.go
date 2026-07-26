@@ -149,7 +149,7 @@ func (s *Service) buildFragmentAssetsFromPanelTask(ctx context.Context, fragment
 	if u := strings.TrimSpace(task.Request.ReferenceImageURL); u != "" {
 		userRefs = append(userRefs, u)
 	}
-	return buildFragmentGenerationAssets(fragment.ID, task.ID, domain.FragmentGenerationAssetSourcePanelGeneration, task.Request.AspectRatio, userRefs, result, panels)
+	return buildFragmentGenerationAssets(fragment.ID, task.ID, domain.FragmentGenerationAssetSourcePanelGeneration, task.Request.AspectRatio, fragmentUserReferenceAssetsFromURLs(userRefs), result, panels)
 }
 
 func fragmentAssetSourceForFragment(fragment *domain.Fragment) string {

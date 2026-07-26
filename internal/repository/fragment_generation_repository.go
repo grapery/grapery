@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type FragmentGenerationRepository struct {
@@ -82,6 +84,18 @@ func taskFromDB(row *mysql.FragmentGenerationTaskDB) (*domain.FragmentGeneration
 	return task, nil
 }
 
+func fragmentGenerationTasksFromRows(rows []*mysql.FragmentGenerationTaskDB) ([]*domain.FragmentGenerationTask, error) {
+	tasks := make([]*domain.FragmentGenerationTask, 0, len(rows))
+	for _, row := range rows {
+		task, err := taskFromDB(row)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
 // Create 创建碎片生成任务
 func (r *FragmentGenerationRepository) Create(ctx context.Context, task *domain.FragmentGenerationTask) error {
 	dbTask, err := taskToDB(task)
@@ -122,16 +136,63 @@ func (r *FragmentGenerationRepository) GetByUserID(ctx context.Context, userID s
 		return nil, 0, err
 	}
 
-	tasks := make([]*domain.FragmentGenerationTask, 0, len(rows))
-	for _, row := range rows {
-		task, err := taskFromDB(row)
-		if err != nil {
-			return nil, 0, err
-		}
-		tasks = append(tasks, task)
+	tasks, err := fragmentGenerationTasksFromRows(rows)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return tasks, total, nil
+}
+
+func (r *FragmentGenerationRepository) FindByClientMessageID(ctx context.Context, userID, clientMessageID string) (*domain.FragmentGenerationTask, error) {
+	if userID == "" || clientMessageID == "" {
+		return nil, nil
+	}
+	var rows []*mysql.FragmentGenerationTaskDB
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Limit(100).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		task, err := taskFromDB(row)
+		if err != nil {
+			return nil, err
+		}
+		if task.Request.ClientMessageID == clientMessageID {
+			return task, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *FragmentGenerationRepository) FindActiveByDraftID(ctx context.Context, userID, draftID string) (*domain.FragmentGenerationTask, error) {
+	if userID == "" || draftID == "" {
+		return nil, nil
+	}
+	var rows []*mysql.FragmentGenerationTaskDB
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ? AND status IN ?", userID, []string{
+			string(common.TaskStatusPending),
+			string(common.TaskStatusProcessing),
+		}).
+		Order("created_at DESC").
+		Limit(100).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		task, err := taskFromDB(row)
+		if err != nil {
+			return nil, err
+		}
+		if task.Request.TargetDraftFragmentID == draftID {
+			return task, nil
+		}
+	}
+	return nil, nil
 }
 
 // Update 更新任务
@@ -161,9 +222,17 @@ func (r *FragmentGenerationRepository) UpdateStatus(ctx context.Context, id stri
 		updates["completed_at"] = &now
 	}
 
-	return r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
-		Where("id = ?", id).
-		Updates(updates).Error
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).Where("id = ?", id)
+	if status == string(common.TaskStatusCancelled) {
+		query = query.Where("status IN ?", []string{string(common.TaskStatusPending), string(common.TaskStatusProcessing)})
+	} else {
+		query = query.Where("status NOT IN ?", []string{
+			string(common.TaskStatusCompleted),
+			string(common.TaskStatusFailed),
+			string(common.TaskStatusCancelled),
+		})
+	}
+	return query.Updates(updates).Error
 }
 
 // UpdateResult 更新任务结果
@@ -174,7 +243,11 @@ func (r *FragmentGenerationRepository) UpdateResult(ctx context.Context, id stri
 	}
 
 	return r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
-		Where("id = ?", id).
+		Where("id = ? AND status NOT IN ?", id, []string{
+			string(common.TaskStatusCompleted),
+			string(common.TaskStatusFailed),
+			string(common.TaskStatusCancelled),
+		}).
 		Updates(map[string]interface{}{
 			"result_json": string(resultJSON),
 			"tokens_used": result.TokensUsed,
@@ -182,11 +255,137 @@ func (r *FragmentGenerationRepository) UpdateResult(ctx context.Context, id stri
 		}).Error
 }
 
+// UpsertImageSlots stores the durable per-image state for a fragment generation task.
+func (r *FragmentGenerationRepository) UpsertImageSlots(ctx context.Context, taskID, fragmentID string, slots []domain.FragmentGenerationImageSlot) error {
+	if len(slots) == 0 {
+		return nil
+	}
+	existingByIndex, err := r.fragmentGenerationImageSlotsByIndex(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	rows := make([]*mysql.FragmentGenerationImageSlotDB, 0, len(slots))
+	now := time.Now().Unix()
+	for _, slot := range slots {
+		if slot.Index <= 0 {
+			continue
+		}
+		id := slot.ID
+		if id == "" {
+			id = stableFragmentGenerationImageSlotID(taskID, slot.Index)
+		}
+		slotTaskID := slot.TaskID
+		if slotTaskID == "" {
+			slotTaskID = taskID
+		}
+		slotFragmentID := slot.FragmentID
+		if slotFragmentID == "" {
+			slotFragmentID = fragmentID
+		}
+		status := slot.Status
+		if status == "" {
+			status = "planned"
+		}
+		imageURL := slot.ImageURL
+		assetID := slot.AssetID
+		errorMessage := slot.ErrorMessage
+		if existing, ok := existingByIndex[slot.Index]; ok {
+			if assetID == "" {
+				assetID = existing.AssetID
+			}
+			if imageURL == "" && existing.ImageURL != "" {
+				imageURL = existing.ImageURL
+			}
+			if status != "completed" && existing.Status == "completed" && existing.ImageURL != "" && imageURL != "" {
+				status = existing.Status
+			}
+			if errorMessage == "" {
+				errorMessage = existing.ErrorMessage
+			}
+		}
+		rows = append(rows, &mysql.FragmentGenerationImageSlotDB{
+			ID:           id,
+			TaskID:       slotTaskID,
+			FragmentID:   slotFragmentID,
+			Index:        slot.Index,
+			Title:        slot.Title,
+			Caption:      slot.Caption,
+			Status:       status,
+			ImageURL:     imageURL,
+			AssetID:      assetID,
+			ErrorMessage: errorMessage,
+			MetadataJSON: "{}",
+			UpdatedAt:    now,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "task_id"}, {Name: "slot_index"}},
+			UpdateAll: true,
+		}).
+		Create(&rows).Error
+}
+
+func (r *FragmentGenerationRepository) fragmentGenerationImageSlotsByIndex(ctx context.Context, taskID string) (map[int]mysql.FragmentGenerationImageSlotDB, error) {
+	out := map[int]mysql.FragmentGenerationImageSlotDB{}
+	if taskID == "" {
+		return out, nil
+	}
+	var rows []mysql.FragmentGenerationImageSlotDB
+	if err := r.db.WithContext(ctx).
+		Where("task_id = ?", taskID).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load existing image slots: %w", err)
+	}
+	for _, row := range rows {
+		out[row.Index] = row
+	}
+	return out, nil
+}
+
+// ListImageSlots returns durable image slots for a task in display order.
+func (r *FragmentGenerationRepository) ListImageSlots(ctx context.Context, taskID string) ([]domain.FragmentGenerationImageSlot, error) {
+	var rows []mysql.FragmentGenerationImageSlotDB
+	if err := r.db.WithContext(ctx).
+		Where("task_id = ?", taskID).
+		Order("slot_index ASC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	slots := make([]domain.FragmentGenerationImageSlot, 0, len(rows))
+	for _, row := range rows {
+		slots = append(slots, domain.FragmentGenerationImageSlot{
+			ID:           row.ID,
+			TaskID:       row.TaskID,
+			FragmentID:   row.FragmentID,
+			Index:        row.Index,
+			Title:        row.Title,
+			Caption:      row.Caption,
+			Status:       row.Status,
+			ImageURL:     row.ImageURL,
+			AssetID:      row.AssetID,
+			ErrorMessage: row.ErrorMessage,
+		})
+	}
+	return slots, nil
+}
+
+func stableFragmentGenerationImageSlotID(taskID string, index int) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(fmt.Sprintf("%s|%d", taskID, index))).String()
+}
+
 // UpdateError 更新错误信息
 func (r *FragmentGenerationRepository) UpdateError(ctx context.Context, id string, status string, errorMsg string) error {
 	now := time.Now().Unix()
 	return r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
-		Where("id = ?", id).
+		Where("id = ? AND status NOT IN ?", id, []string{
+			string(common.TaskStatusCompleted),
+			string(common.TaskStatusFailed),
+			string(common.TaskStatusCancelled),
+		}).
 		Updates(map[string]interface{}{
 			"status":        status,
 			"error_message": errorMsg,
@@ -211,13 +410,5 @@ func (r *FragmentGenerationRepository) GetPendingTasks(ctx context.Context, limi
 	if err != nil {
 		return nil, err
 	}
-	tasks := make([]*domain.FragmentGenerationTask, 0, len(rows))
-	for _, row := range rows {
-		task, err := taskFromDB(row)
-		if err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-	return tasks, nil
+	return fragmentGenerationTasksFromRows(rows)
 }

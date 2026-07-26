@@ -781,6 +781,24 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_generation_image_slots",
+		Description: "Create fragment_generation_image_slots for durable per-image generation state",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentGenerationImageSlotDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_fragment_conversation_messages",
+		Description: "Create and migrate fragment_conversation_messages for creator AI chat history",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentConversationMessageDB{})
+		},
+		Required: true,
+	})
+
 	// ========== Fragment Interaction 相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_likes",
@@ -1084,9 +1102,9 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 
 	registry.RegisterSchemaFixStep(migrations.MigrationStep{
 		Name:        "ensure_fragment_generation_trace_schema",
-		Description: "Ensure fragments and fragment_generation_tasks can store generation trace metadata",
+		Description: "Ensure fragments, generation tasks, slots, and assets can store generation trace metadata",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
-			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{}, &FragmentGenerationTaskDB{})
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{}, &FragmentGenerationTaskDB{}, &FragmentGenerationImageSlotDB{}, &FragmentGenerationAssetDB{})
 		},
 		Required: false,
 	})

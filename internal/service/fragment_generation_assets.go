@@ -6,20 +6,38 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
+
+type fragmentUserReferenceAsset struct {
+	URL        string
+	EntityKind string
+	EntityKey  string
+	Label      string
+	HelperText string
+}
 
 func (s *FragmentGenerationService) persistFragmentGenerationAssets(ctx context.Context, fragmentID, taskID string, req domain.FragmentGenerationRequest, result *domain.FragmentGenerationResult) {
 	if s == nil || s.repo == nil || result == nil || strings.TrimSpace(fragmentID) == "" {
 		return
 	}
-	assets := buildFragmentGenerationAssets(fragmentID, taskID, domain.FragmentGenerationAssetSourceAIGeneration, req.AspectRatio, req.ImageUrls, result, nil)
+	userRefs := fragmentUserReferenceAssetsFromRequest(req)
+	assets := buildFragmentGenerationAssets(fragmentID, taskID, domain.FragmentGenerationAssetSourceAIGeneration, req.AspectRatio, userRefs, result, nil)
 	if len(assets) == 0 {
 		return
 	}
+	linkFragmentGenerationSceneAssetsToSlots(result, assets)
 	if err := s.repo.CreateFragmentGenerationAssets(ctx, assets); err != nil {
 		s.logger.Warn("failed to persist fragment generation assets", zap.String("fragmentID", fragmentID), zap.String("taskID", taskID), zap.Error(err))
+		return
+	}
+	if s.fragmentGenRepo != nil {
+		s.persistFragmentGenerationSlots(ctx, taskID, fragmentID, result)
+		if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
+			s.logger.Warn("failed to persist fragment generation result after asset slot linking", zap.String("fragmentID", fragmentID), zap.String("taskID", taskID), zap.Error(err))
+		}
 	}
 }
 
@@ -39,16 +57,118 @@ func (s *FragmentPanelGenerationService) persistPanelGenerationAssets(ctx contex
 		ConsistencyPolicy: policy,
 		GenerationTrace:   task.Result.GenerationTrace,
 	}
-	assets := buildFragmentGenerationAssets(fragmentID, task.ID, domain.FragmentGenerationAssetSourcePanelGeneration, aspectRatio, userRefs, result, task.Result.Panels)
+	assets := buildFragmentGenerationAssets(fragmentID, task.ID, domain.FragmentGenerationAssetSourcePanelGeneration, aspectRatio, fragmentUserReferenceAssetsFromURLs(userRefs), result, task.Result.Panels)
 	if len(assets) == 0 {
 		return
 	}
+	linkFragmentGenerationSceneAssetsToSlots(result, assets)
 	if err := s.repo.CreateFragmentGenerationAssets(ctx, assets); err != nil {
 		s.logger.Warn("failed to persist panel generation assets", zap.String("fragmentID", fragmentID), zap.String("taskID", task.ID), zap.Error(err))
 	}
 }
 
-func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio string, userRefURLs []string, result *domain.FragmentGenerationResult, panels []domain.FragmentPanelResultItem) []*domain.FragmentGenerationAsset {
+func linkFragmentGenerationSceneAssetsToSlots(result *domain.FragmentGenerationResult, assets []*domain.FragmentGenerationAsset) {
+	if result == nil || len(result.ImageSlots) == 0 || len(assets) == 0 {
+		return
+	}
+	slotByIndex := map[int]int{}
+	for i, slot := range result.ImageSlots {
+		slotByIndex[slot.Index] = i
+	}
+	for _, asset := range assets {
+		if asset == nil || asset.Kind != domain.FragmentGenerationAssetKindSceneFinal {
+			continue
+		}
+		slotIndex := 0
+		if asset.SlotIndex != nil {
+			slotIndex = *asset.SlotIndex
+		} else if asset.SceneIndex != nil {
+			slotIndex = *asset.SceneIndex
+		}
+		if slotIndex <= 0 {
+			continue
+		}
+		slotPos, ok := slotByIndex[slotIndex]
+		if !ok {
+			continue
+		}
+		if asset.SlotID == "" {
+			asset.SlotID = result.ImageSlots[slotPos].ID
+		}
+		if asset.SlotIndex == nil {
+			asset.SlotIndex = &slotIndex
+		}
+		if asset.ID == "" {
+			asset.ID = stableFragmentGenerationAssetID(asset)
+		}
+		result.ImageSlots[slotPos].AssetID = asset.ID
+	}
+	result.ImageProgress = fragmentGenerationProgressFromSlots(result.ImageSlots)
+}
+
+func stableFragmentGenerationAssetID(asset *domain.FragmentGenerationAsset) string {
+	if asset == nil {
+		return ""
+	}
+	idx := -1
+	if asset.SlotIndex != nil {
+		idx = *asset.SlotIndex
+	} else if asset.SceneIndex != nil {
+		idx = *asset.SceneIndex
+	}
+	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%d|%d|%s",
+		asset.FragmentID, asset.Source, asset.TaskID, asset.Kind, asset.EntityKey,
+		idx, asset.DisplayOrder, asset.URL)
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(raw)).String()
+}
+
+func fragmentUserReferenceAssetsFromRequest(req domain.FragmentGenerationRequest) []fragmentUserReferenceAsset {
+	seen := map[string]struct{}{}
+	refs := make([]fragmentUserReferenceAsset, 0, len(req.ReferenceSlots)+len(req.ImageUrls))
+	for _, slot := range req.ReferenceSlots {
+		u := strings.TrimSpace(slot.ImageURL)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		refs = append(refs, fragmentUserReferenceAsset{
+			URL:        u,
+			EntityKind: strings.TrimSpace(slot.Kind),
+			EntityKey:  strings.TrimSpace(slot.Key),
+			Label:      strings.TrimSpace(slot.Label),
+			HelperText: strings.TrimSpace(slot.HelperText),
+		})
+	}
+	for _, raw := range req.ImageUrls {
+		u := strings.TrimSpace(raw)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		refs = append(refs, fragmentUserReferenceAsset{URL: u})
+	}
+	return refs
+}
+
+func fragmentUserReferenceAssetsFromURLs(urls []string) []fragmentUserReferenceAsset {
+	normalized := fragmentPrefillHTTPImageURLs(urls, len(urls))
+	refs := make([]fragmentUserReferenceAsset, 0, len(normalized))
+	for _, u := range normalized {
+		if strings.TrimSpace(u) == "" {
+			continue
+		}
+		refs = append(refs, fragmentUserReferenceAsset{URL: strings.TrimSpace(u)})
+	}
+	return refs
+}
+
+func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio string, userRefs []fragmentUserReferenceAsset, result *domain.FragmentGenerationResult, panels []domain.FragmentPanelResultItem) []*domain.FragmentGenerationAsset {
 	if result == nil {
 		return nil
 	}
@@ -69,16 +189,22 @@ func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio strin
 	taskTokenTotal := result.TokensUsed
 	var assets []*domain.FragmentGenerationAsset
 	order := 0
-	for _, u := range fragmentPrefillHTTPImageURLs(userRefURLs, len(userRefURLs)) {
+	for _, ref := range userRefs {
+		u := strings.TrimSpace(ref.URL)
+		if u == "" {
+			continue
+		}
 		assets = append(assets, &domain.FragmentGenerationAsset{
 			FragmentID:   fragmentID,
 			Source:       source,
 			TaskID:       taskID,
 			Kind:         domain.FragmentGenerationAssetKindUserReference,
+			EntityKind:   strings.TrimSpace(ref.EntityKind),
+			EntityKey:    strings.TrimSpace(ref.EntityKey),
 			URL:          u,
 			AspectRatio:  ar,
 			DisplayOrder: order,
-			MetadataJSON: "{}",
+			MetadataJSON: fragmentUserReferenceMetadata(ref),
 		})
 		order++
 	}
@@ -151,13 +277,24 @@ func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio strin
 				metadata["tokensScope"] = "task_total"
 				metadata["taskTokensUsed"] = taskTokenTotal
 			}
+			slotIndex := idx
+			if slotIndex <= 0 {
+				slotIndex = i + 1
+			}
+			slotID := fragmentAssetSlotID(result.ImageSlots, slotIndex)
+			metadata["slotIndex"] = slotIndex
+			if slotID != "" {
+				metadata["slotId"] = slotID
+			}
 			assets = append(assets, &domain.FragmentGenerationAsset{
 				FragmentID:   fragmentID,
 				Source:       source,
 				TaskID:       taskID,
 				Kind:         domain.FragmentGenerationAssetKindSceneFinal,
 				EntityKind:   domain.FragmentGenerationAssetEntityScene,
-				SceneIndex:   &idx,
+				SlotID:       slotID,
+				SlotIndex:    &slotIndex,
+				SceneIndex:   &slotIndex,
 				URL:          strings.TrimSpace(panel.ImageURL),
 				AspectRatio:  ar,
 				TokensUsed:   tokenUsed,
@@ -179,10 +316,18 @@ func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio strin
 			continue
 		}
 		idx := scene.Index
+		if idx <= 0 {
+			idx = i + 1
+		}
+		slotID := fragmentAssetSlotID(result.ImageSlots, idx)
 		metadata := map[string]interface{}{
 			"scene":          scene,
+			"slotIndex":      idx,
 			"tokensScope":    "task_total",
 			"taskTokensUsed": taskTokenTotal,
+		}
+		if slotID != "" {
+			metadata["slotId"] = slotID
 		}
 		provider := ""
 		model := ""
@@ -201,6 +346,8 @@ func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio strin
 			TaskID:       taskID,
 			Kind:         domain.FragmentGenerationAssetKindSceneFinal,
 			EntityKind:   domain.FragmentGenerationAssetEntityScene,
+			SlotID:       slotID,
+			SlotIndex:    &idx,
 			SceneIndex:   &idx,
 			URL:          u,
 			AspectRatio:  ar,
@@ -213,6 +360,15 @@ func buildFragmentGenerationAssets(fragmentID, taskID, source, aspectRatio strin
 		})
 	}
 	return assets
+}
+
+func fragmentAssetSlotID(slots []domain.FragmentGenerationImageSlot, index int) string {
+	for _, slot := range slots {
+		if slot.Index == index {
+			return strings.TrimSpace(slot.ID)
+		}
+	}
+	return ""
 }
 
 func panelResultImageURLs(panels []domain.FragmentPanelResultItem) []string {
@@ -231,6 +387,26 @@ func assetMustJSON(v interface{}) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+func fragmentUserReferenceMetadata(ref fragmentUserReferenceAsset) string {
+	meta := map[string]interface{}{}
+	if key := strings.TrimSpace(ref.EntityKey); key != "" {
+		meta["slotKey"] = key
+	}
+	if kind := strings.TrimSpace(ref.EntityKind); kind != "" {
+		meta["slotKind"] = kind
+	}
+	if label := strings.TrimSpace(ref.Label); label != "" {
+		meta["slotLabel"] = label
+	}
+	if helper := strings.TrimSpace(ref.HelperText); helper != "" {
+		meta["helperText"] = helper
+	}
+	if len(meta) == 0 {
+		return "{}"
+	}
+	return assetMustJSON(meta)
 }
 
 func fragmentAssetMetadata(raw interface{}, bible *domain.FragmentVisualBible, kind, key string) string {

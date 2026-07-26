@@ -241,6 +241,9 @@ func DeleteFragmentRelatedData(ctx context.Context, db *gorm.DB, fragmentID, gen
 		Delete(&FragmentGenerationAssetDB{}).Error; err != nil {
 		return fmt.Errorf("delete fragment generation assets: %w", err)
 	}
+	if err := deleteFragmentConversationMessages(ctx, db, fragmentID); err != nil {
+		return fmt.Errorf("delete fragment conversation messages: %w", err)
+	}
 
 	hardDeleteModels := []interface{}{
 		&FragmentLikeDB{},

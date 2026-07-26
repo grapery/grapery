@@ -80,6 +80,8 @@ func domainFragmentGenerationAssetToDB(asset *domain.FragmentGenerationAsset) *F
 		Kind:         asset.Kind,
 		EntityKind:   asset.EntityKind,
 		EntityKey:    asset.EntityKey,
+		SlotID:       asset.SlotID,
+		SlotIndex:    asset.SlotIndex,
 		SceneIndex:   asset.SceneIndex,
 		URL:          asset.URL,
 		StorageKey:   asset.StorageKey,
@@ -108,6 +110,8 @@ func domainFragmentGenerationAssetFromDB(row *FragmentGenerationAssetDB) *domain
 		Kind:         row.Kind,
 		EntityKind:   row.EntityKind,
 		EntityKey:    row.EntityKey,
+		SlotID:       row.SlotID,
+		SlotIndex:    row.SlotIndex,
 		SceneIndex:   row.SceneIndex,
 		URL:          row.URL,
 		StorageKey:   row.StorageKey,
@@ -127,7 +131,7 @@ func domainFragmentGenerationAssetFromDB(row *FragmentGenerationAssetDB) *domain
 func stableDomainFragmentGenerationAssetID(asset *domain.FragmentGenerationAsset) string {
 	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%d|%d|%s",
 		asset.FragmentID, asset.Source, asset.TaskID, asset.Kind, asset.EntityKey,
-		domainAssetSceneIndexValue(asset.SceneIndex), asset.DisplayOrder, asset.URL)
+		domainAssetSceneIndexValue(firstNonNilInt(asset.SlotIndex, asset.SceneIndex)), asset.DisplayOrder, asset.URL)
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(raw)).String()
 }
 
@@ -136,6 +140,15 @@ func domainAssetSceneIndexValue(idx *int) int {
 		return -1
 	}
 	return *idx
+}
+
+func firstNonNilInt(values ...*int) *int {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }
 
 type domainFragmentAssetScope struct {

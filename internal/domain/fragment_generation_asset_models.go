@@ -26,6 +26,8 @@ type FragmentGenerationAsset struct {
 	Kind         string `json:"kind"`
 	EntityKind   string `json:"entityKind,omitempty"`
 	EntityKey    string `json:"entityKey,omitempty"`
+	SlotID       string `json:"slotId,omitempty"`
+	SlotIndex    *int   `json:"slotIndex,omitempty"`
 	SceneIndex   *int   `json:"sceneIndex,omitempty"`
 	URL          string `json:"url"`
 	StorageKey   string `json:"storageKey,omitempty"`

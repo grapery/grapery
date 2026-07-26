@@ -391,9 +391,9 @@ func main() {
 	}
 
 	agentPolicy := service.NewAgentAccessPolicyService(repo, redisCache, svc.AIGenerationService(), logger, service.AgentAccessPolicyConfig{
-		PublicParallelEnabled:      cfg.AgentToken.PublicParallelEnabled,
-		ExecFragmentPanelEnabled:   cfg.AgentToken.ExecFragmentPanelEnabled,
-		ReplayCacheEnabled:         cfg.AgentToken.ReplayCacheEnabled,
+		PublicParallelEnabled:    cfg.AgentToken.PublicParallelEnabled,
+		ExecFragmentPanelEnabled: cfg.AgentToken.ExecFragmentPanelEnabled,
+		ReplayCacheEnabled:       cfg.AgentToken.ReplayCacheEnabled,
 	})
 
 	genAuditService := service.NewGenerationAuditService(repo, logger)
@@ -447,6 +447,8 @@ func main() {
 	apiGroup.GET("/v1/fragments", authPkg.OptionalAuthMiddleware(), fragmentHandler.ListFragments)
 	apiGroup.GET("/v1/fragments/styles", fragmentHandler.GetFragmentStyles)
 	apiGroup.POST("/v1/fragments/styles/next", authPkg.AuthMiddleware(), fragmentHandler.PostFragmentStylesNext)
+	apiGroup.GET("/v1/fragments/:id/conversation", authPkg.AuthMiddleware(), fragmentHandler.GetFragmentConversation)
+	apiGroup.PUT("/v1/fragments/:id/conversation/messages", authPkg.AuthMiddleware(), fragmentHandler.SyncFragmentConversationMessages)
 	apiGroup.GET("/v1/fragments/:id", authPkg.OptionalAuthMiddleware(), fragmentHandler.GetFragment)
 	apiGroup.POST("/v1/fragments", authPkg.AuthMiddleware(), fragmentHandler.CreateFragment)
 	apiGroup.PUT("/v1/fragments/:id", authPkg.AuthMiddleware(), fragmentHandler.UpdateFragment)

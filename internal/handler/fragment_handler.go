@@ -711,6 +711,129 @@ func stringifyArray(arr []string) string {
 	return string(bytes)
 }
 
+type syncFragmentConversationRequest struct {
+	Messages []syncFragmentConversationMessage `json:"messages" binding:"required,max=200,dive"`
+}
+
+type syncFragmentConversationMessage struct {
+	ClientMessageID string `json:"clientMessageId" binding:"required,max=64"`
+	Role            string `json:"role" binding:"required,oneof=user assistant status"`
+	Type            string `json:"type" binding:"omitempty,max=40"`
+	Text            string `json:"text" binding:"required,max=8000"`
+	TaskID          string `json:"taskId" binding:"omitempty,max=36"`
+	CreatedAt       int64  `json:"createdAt"`
+}
+
+// GetFragmentConversation handles GET /fragments/:id/conversation (creator only).
+func (h *FragmentHandler) GetFragmentConversation(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	fragmentID := strings.TrimSpace(c.Param("id"))
+	if fragmentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "fragment id is required"})
+		return
+	}
+	fragment, err := h.fragmentRepo.GetByID(c.Request.Context(), fragmentID)
+	if err != nil || fragment == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "fragment not found"})
+		return
+	}
+	if fragment.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	var beforeCreatedAt int64
+	if raw := strings.TrimSpace(c.Query("before")); raw != "" {
+		if n, err := strconv.ParseInt(raw, 10, 64); err == nil && n > 0 {
+			beforeCreatedAt = n
+		}
+	}
+	messages, hasMore, err := h.repo.ListFragmentConversationMessagesPage(c.Request.Context(), fragmentID, limit, beforeCreatedAt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conversation"})
+		return
+	}
+	out := make([]gin.H, 0, len(messages))
+	for _, msg := range messages {
+		if msg == nil {
+			continue
+		}
+		out = append(out, gin.H{
+			"id":              msg.ID,
+			"clientMessageId": msg.ClientMessageID,
+			"role":            msg.Role,
+			"type":            msg.MessageType,
+			"text":            msg.Text,
+			"taskId":          msg.TaskID,
+			"createdAt":       msg.CreatedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"fragmentId": fragmentID,
+		"messages":   out,
+		"hasMore":    hasMore,
+	})
+}
+
+// SyncFragmentConversationMessages handles PUT /fragments/:id/conversation/messages (creator only).
+func (h *FragmentHandler) SyncFragmentConversationMessages(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	fragmentID := strings.TrimSpace(c.Param("id"))
+	if fragmentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "fragment id is required"})
+		return
+	}
+	var req syncFragmentConversationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	fragment, err := h.fragmentRepo.GetByID(c.Request.Context(), fragmentID)
+	if err != nil || fragment == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "fragment not found"})
+		return
+	}
+	if fragment.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	toSave := make([]*domain.FragmentConversationMessage, 0, len(req.Messages))
+	for _, item := range req.Messages {
+		msgType := strings.TrimSpace(item.Type)
+		if msgType == "" {
+			msgType = domain.FragmentConversationTypeStatus
+		}
+		toSave = append(toSave, &domain.FragmentConversationMessage{
+			FragmentID:      fragmentID,
+			UserID:          userID,
+			Role:            strings.TrimSpace(item.Role),
+			MessageType:     msgType,
+			Text:            strings.TrimSpace(item.Text),
+			TaskID:          strings.TrimSpace(item.TaskID),
+			ClientMessageID: strings.TrimSpace(item.ClientMessageID),
+			CreatedAt:       item.CreatedAt,
+		})
+	}
+	if err := h.repo.UpsertFragmentConversationMessages(c.Request.Context(), toSave); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync conversation"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "synced": len(toSave)})
+}
+
 // RegisterRoutes registers the fragment CRUD routes
 func (h *FragmentHandler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	// Fragment CRUD routes

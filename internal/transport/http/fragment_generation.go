@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,11 +32,30 @@ func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGeneration
 	}
 }
 
+func fragmentGenerationHTTPError(err error) (int, string, string) {
+	var genErr *domain.FragmentGenerationError
+	if errors.As(err, &genErr) {
+		switch genErr.Code {
+		case domain.FragmentGenerationErrorInvalidRequest:
+			return http.StatusBadRequest, genErr.Code, genErr.Message
+		case domain.FragmentGenerationErrorForbidden:
+			return http.StatusForbidden, genErr.Code, genErr.Message
+		case domain.FragmentGenerationErrorNotFound:
+			return http.StatusNotFound, genErr.Code, genErr.Message
+		case domain.FragmentGenerationErrorConflict, domain.FragmentGenerationErrorCancelled:
+			return http.StatusConflict, genErr.Code, genErr.Message
+		default:
+			return http.StatusBadRequest, genErr.Code, genErr.Message
+		}
+	}
+	return http.StatusInternalServerError, "internal_error", "failed to create generation task"
+}
+
 // GenerateFragmentRequest 生成碎片故事的请求
 type GenerateFragmentRequest struct {
 	UserInput  string   `json:"userInput" binding:"required,min=1,max=2000"`
 	ImageUrls  []string `json:"imageUrls" binding:"max=10"`
-	ImageCount int      `json:"imageCount" binding:"min=0,max=10"`
+	ImageCount int      `json:"imageCount" binding:"min=0,max=8"`
 	Style      string   `json:"style" binding:"omitempty,max=64"`
 	Mood       string   `json:"mood" binding:"omitempty,oneof=happy sad mysterious romantic"`
 	Length     string   `json:"length" binding:"omitempty,oneof=short medium long"`
@@ -48,7 +68,8 @@ type GenerateFragmentRequest struct {
 	IncludeGenerationTrace bool                           `json:"includeGenerationTrace"`
 	ReferenceSlots         []domain.FragmentReferenceSlot `json:"referenceSlots" binding:"max=10"`
 	TargetDraftFragmentID  string                         `json:"targetDraftFragmentId"`
-	ReplaceImageIndex      int                            `json:"replaceImageIndex" binding:"min=0,max=10"`
+	ReplaceImageIndex      int                            `json:"replaceImageIndex" binding:"min=0,max=99"`
+	ClientMessageID        string                         `json:"clientMessageId" binding:"omitempty,max=128"`
 }
 
 // AnalyzeFragment handles POST /fragments/analyze
@@ -108,16 +129,28 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		ReferenceSlots:         normalizeFragmentReferenceSlots(req.ReferenceSlots),
 		TargetDraftFragmentID:  strings.TrimSpace(req.TargetDraftFragmentID),
 		ReplaceImageIndex:      req.ReplaceImageIndex,
+		ClientMessageID:        strings.TrimSpace(req.ClientMessageID),
 	}
 
-	// 如果用户没有指定图片数量，默认生成1张
+	// 如果用户没有指定图片数量，默认生成1张；显式数量由后端作为 slot 任务目标，不由 agent 覆盖。
 	if domainReq.ImageCount == 0 {
+		domainReq.ImageCount = 1
+	}
+	if domainReq.ImageCount > 8 {
+		domainReq.ImageCount = 8
+	}
+	if domainReq.ReplaceImageIndex > 0 {
+		if domainReq.TargetDraftFragmentID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "targetDraftFragmentId is required when replaceImageIndex is set"})
+			return
+		}
 		domainReq.ImageCount = 1
 	}
 
 	task, draftFragmentID, err := h.fragmentGenService.GenerateFragment(c.Request.Context(), userID, domainReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create generation task"})
+		status, code, message := fragmentGenerationHTTPError(err)
+		c.JSON(status, gin.H{"error": message, "code": code})
 		return
 	}
 
@@ -157,6 +190,10 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 	}
 
 	imageSlots, imageProgress := fragmentGenerationImageSnapshot(task)
+	slotMode := "delta"
+	if strings.TrimSpace(task.Request.TargetDraftFragmentID) != "" && task.Result != nil && len(task.Result.ImageUrls) > task.Request.ImageCount {
+		slotMode = "full"
+	}
 	response := gin.H{
 		"taskId":        task.ID,
 		"status":        task.Status,
@@ -166,6 +203,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 		"stage":         fragmentGenerationStage(task),
 		"createdAt":     task.CreatedAt,
 		"imageSlots":    imageSlots,
+		"slotMode":      slotMode,
 		"imageProgress": imageProgress,
 		"cost":          fragmentGenerationCostSnapshot(task, strings.TrimSpace(task.Request.TargetDraftFragmentID) != ""),
 	}
@@ -215,13 +253,16 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 	// Convert tasks to response format
 	taskResponses := make([]gin.H, len(tasks))
 	for i, task := range tasks {
+		imageSlots, imageProgress := fragmentGenerationImageSnapshot(task)
 		taskResponses[i] = gin.H{
-			"taskId":      task.ID,
-			"status":      task.Status,
-			"progress":    task.Progress,
-			"currentStep": task.CurrentStep,
-			"messageKey":  fragmentGenerationStepMessageKey(task.CurrentStep),
-			"createdAt":   task.CreatedAt,
+			"taskId":        task.ID,
+			"status":        task.Status,
+			"progress":      task.Progress,
+			"currentStep":   task.CurrentStep,
+			"messageKey":    fragmentGenerationStepMessageKey(task.CurrentStep),
+			"createdAt":     task.CreatedAt,
+			"imageSlots":    imageSlots,
+			"imageProgress": imageProgress,
 		}
 		if task.Result != nil {
 			taskResponses[i]["result"] = fragmentGenerationResultResponse(task)
@@ -238,16 +279,19 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 
 func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H {
 	res := gin.H{
-		"content":           task.Result.Content,
-		"imageUrls":         task.Result.ImageUrls,
-		"tokensUsed":        task.Result.TokensUsed,
-		"draftFragmentId":   task.Result.DraftFragmentID,
-		"visualBible":       task.Result.VisualBible,
-		"scenePlan":         task.Result.ScenePlan,
-		"referenceAssets":   task.Result.ReferenceAssets,
-		"consistencyPolicy": task.Result.ConsistencyPolicy,
-		"consistencyIssues": task.Result.ConsistencyIssues,
-		"storyElements":     task.Result.StoryElements,
+		"content":            task.Result.Content,
+		"imageUrls":          task.Result.ImageUrls,
+		"tokensUsed":         task.Result.TokensUsed,
+		"draftFragmentId":    task.Result.DraftFragmentID,
+		"expectedImageCount": fragmentGenerationExpectedImageCount(task),
+		"imageSlots":         task.Result.ImageSlots,
+		"imageProgress":      fragmentGenerationProgressFromResult(task),
+		"visualBible":        task.Result.VisualBible,
+		"scenePlan":          task.Result.ScenePlan,
+		"referenceAssets":    task.Result.ReferenceAssets,
+		"consistencyPolicy":  task.Result.ConsistencyPolicy,
+		"consistencyIssues":  task.Result.ConsistencyIssues,
+		"storyElements":      task.Result.StoryElements,
 	}
 	if task.Result.AspectRatio != "" {
 		res["aspectRatio"] = task.Result.AspectRatio
@@ -282,9 +326,34 @@ func fragmentGenerationStage(task *domain.FragmentGenerationTask) string {
 }
 
 func fragmentGenerationImageSnapshot(task *domain.FragmentGenerationTask) ([]gin.H, gin.H) {
-	total := task.Request.ImageCount
+	total := fragmentGenerationExpectedImageCount(task)
 	if total < 1 {
 		total = 1
+	}
+	if task.Result != nil && len(task.Result.ImageSlots) > 0 {
+		slots := make([]gin.H, 0, len(task.Result.ImageSlots))
+		completed := 0
+		for _, slot := range task.Result.ImageSlots {
+			if slot.Status == "completed" && strings.TrimSpace(slot.ImageURL) != "" {
+				completed++
+			}
+			slots = append(slots, gin.H{
+				"id":           slot.ID,
+				"taskId":       slot.TaskID,
+				"fragmentId":   slot.FragmentID,
+				"index":        slot.Index,
+				"title":        slot.Title,
+				"caption":      slot.Caption,
+				"status":       slot.Status,
+				"imageUrl":     slot.ImageURL,
+				"assetId":      slot.AssetID,
+				"errorMessage": slot.ErrorMessage,
+			})
+		}
+		return slots, gin.H{
+			"completedCount": completed,
+			"totalCount":     maxInt(total, len(task.Result.ImageSlots)),
+		}
 	}
 	var scenes []domain.FragmentScenePlan
 	var urls []string
@@ -337,6 +406,41 @@ func fragmentGenerationImageSnapshot(task *domain.FragmentGenerationTask) ([]gin
 		"completedCount": completed,
 		"totalCount":     total,
 	}
+}
+
+func fragmentGenerationExpectedImageCount(task *domain.FragmentGenerationTask) int {
+	if task == nil {
+		return 1
+	}
+	if task.Result != nil && task.Result.ExpectedImageCount > 0 {
+		return task.Result.ExpectedImageCount
+	}
+	count := task.Request.ImageCount
+	if count < 1 {
+		count = 1
+	}
+	if count > 8 {
+		count = 8
+	}
+	return count
+}
+
+func fragmentGenerationProgressFromResult(task *domain.FragmentGenerationTask) gin.H {
+	if task != nil && task.Result != nil && task.Result.ImageProgress != nil {
+		return gin.H{
+			"completedCount": task.Result.ImageProgress.CompletedCount,
+			"totalCount":     task.Result.ImageProgress.TotalCount,
+		}
+	}
+	_, progress := fragmentGenerationImageSnapshot(task)
+	return progress
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func fragmentGenerationImagePlan(task *domain.FragmentGenerationTask) []gin.H {

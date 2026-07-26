@@ -53,7 +53,7 @@ func FragmentImagePixelSizeForAspectRatio(ar string) string {
 type FragmentGenerationRequest struct {
 	UserInput  string   `json:"userInput"`  // 用户输入的描述
 	ImageUrls  []string `json:"imageUrls"`  // 用户提供的参考图片（可选）
-	ImageCount int      `json:"imageCount"` // 需要生成的图片数量 (1-10)
+	ImageCount int      `json:"imageCount"` // 本次需要生成的图片数量 (1-8)；草稿可通过续写不断追加
 	Style      string   `json:"style"`      // 风格：fantasy, realistic, anime, etc.
 	Mood       string   `json:"mood"`       // 情绪：happy, sad, mysterious, etc.
 	Length     string   `json:"length"`     // 内容长度：short, medium, long
@@ -67,6 +67,7 @@ type FragmentGenerationRequest struct {
 	ReferenceSlots         []FragmentReferenceSlot `json:"referenceSlots,omitempty"`         // 语义参考槽位（可选）
 	TargetDraftFragmentID  string                  `json:"targetDraftFragmentId,omitempty"`  // 修改/续写时写回的现有草稿碎片
 	ReplaceImageIndex      int                     `json:"replaceImageIndex,omitempty"`      // 单张重绘时替换的 1-based 图片位置
+	ClientMessageID        string                  `json:"clientMessageId,omitempty"`        // 客户端消息幂等键，避免重复提交创建多个任务
 }
 
 // FragmentReferenceSlot 描述用户可为某个故事实体提供的语义参考图。
@@ -95,11 +96,12 @@ type FragmentGenerationIntent struct {
 
 // FragmentAnalyzeRequest 是第一阶段文本分析请求。
 type FragmentAnalyzeRequest struct {
-	UserInput   string `json:"userInput"`
-	Language    string `json:"language,omitempty"`
-	AspectRatio string `json:"aspectRatio,omitempty"`
-	ImageCount  int    `json:"imageCount,omitempty"`
-	Style       string `json:"style,omitempty"`
+	UserInput             string `json:"userInput"`
+	Language              string `json:"language,omitempty"`
+	AspectRatio           string `json:"aspectRatio,omitempty"`
+	ImageCount            int    `json:"imageCount,omitempty"`
+	Style                 string `json:"style,omitempty"`
+	TargetDraftFragmentID string `json:"targetDraftFragmentId,omitempty"`
 }
 
 // FragmentRecommendedOptions 是客户端展示配置建议。
@@ -293,20 +295,44 @@ type FragmentGenerationTrace struct {
 
 // FragmentGenerationResult 碎片故事生成结果
 type FragmentGenerationResult struct {
-	Content           string                     `json:"content"`                     // 生成的文字内容
-	ImageUrls         []string                   `json:"imageUrls"`                   // 生成的图片URL列表
-	AspectRatio       string                     `json:"aspectRatio,omitempty"`       // 实际使用的配图长宽比
-	TokensUsed        int                        `json:"tokensUsed"`                  // 使用的token数量
-	DraftFragmentID   string                     `json:"draftFragmentId,omitempty"`   // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
-	VisualBible       *FragmentVisualBible       `json:"visualBible,omitempty"`       // 结构化视觉设定（方案 B）
-	VisualEvidence    []FragmentVisualEvidence   `json:"visualEvidence,omitempty"`    // 多模态参考图事实
-	AnchorImages      []FragmentAnchorImage      `json:"anchorImages,omitempty"`      // 锚点参考图
-	ReferenceAssets   []FragmentReferenceAsset   `json:"referenceAssets,omitempty"`   // 按需参考资产
-	ScenePlan         []FragmentScenePlan        `json:"scenePlan,omitempty"`         // 可追踪场景计划
-	ConsistencyPolicy *FragmentConsistencyPolicy `json:"consistencyPolicy,omitempty"` // 一致性策略
-	GenerationTrace   *FragmentGenerationTrace   `json:"generationTrace,omitempty"`   // 完整生成 trace
-	ConsistencyIssues []FragmentConsistencyIssue `json:"consistencyIssues,omitempty"` // 一致性检查（best-effort）
-	StoryElements     []FragmentReferenceSlot    `json:"storyElements,omitempty"`     // 分析/生成时使用的语义元素槽位
+	Content            string                           `json:"content"`                      // 生成的文字内容
+	ImageUrls          []string                         `json:"imageUrls"`                    // 生成的图片URL列表
+	AspectRatio        string                           `json:"aspectRatio,omitempty"`        // 实际使用的配图长宽比
+	TokensUsed         int                              `json:"tokensUsed"`                   // 使用的token数量
+	DraftFragmentID    string                           `json:"draftFragmentId,omitempty"`    // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	ExpectedImageCount int                              `json:"expectedImageCount,omitempty"` // 用户/客户端请求的权威目标张数
+	ImageSlots         []FragmentGenerationImageSlot    `json:"imageSlots,omitempty"`         // 逐张图片任务槽位，作为生成状态事实源
+	ImageProgress      *FragmentGenerationImageProgress `json:"imageProgress,omitempty"`      // 基于 slot 的进度
+	VisualBible        *FragmentVisualBible             `json:"visualBible,omitempty"`        // 结构化视觉设定（方案 B）
+	VisualEvidence     []FragmentVisualEvidence         `json:"visualEvidence,omitempty"`     // 多模态参考图事实
+	AnchorImages       []FragmentAnchorImage            `json:"anchorImages,omitempty"`       // 锚点参考图
+	ReferenceAssets    []FragmentReferenceAsset         `json:"referenceAssets,omitempty"`    // 按需参考资产
+	ScenePlan          []FragmentScenePlan              `json:"scenePlan,omitempty"`          // 可追踪场景计划
+	ConsistencyPolicy  *FragmentConsistencyPolicy       `json:"consistencyPolicy,omitempty"`  // 一致性策略
+	GenerationTrace    *FragmentGenerationTrace         `json:"generationTrace,omitempty"`    // 完整生成 trace
+	ConsistencyIssues  []FragmentConsistencyIssue       `json:"consistencyIssues,omitempty"`  // 一致性检查（best-effort）
+	StoryElements      []FragmentReferenceSlot          `json:"storyElements,omitempty"`      // 分析/生成时使用的语义元素槽位
+}
+
+// FragmentGenerationImageSlot 是故事碎片生成的单张图片槽位。
+// 后端把 slots 作为事实源：只有所有槽位 completed，任务才可以 completed/发布。
+type FragmentGenerationImageSlot struct {
+	ID           string `json:"id,omitempty"`
+	TaskID       string `json:"taskId,omitempty"`
+	FragmentID   string `json:"fragmentId,omitempty"`
+	Index        int    `json:"index"`
+	Title        string `json:"title,omitempty"`
+	Caption      string `json:"caption,omitempty"`
+	Status       string `json:"status,omitempty"` // planned | generating | completed | failed
+	ImageURL     string `json:"imageUrl,omitempty"`
+	AssetID      string `json:"assetId,omitempty"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}
+
+// FragmentGenerationImageProgress 汇总图片槽位完成情况。
+type FragmentGenerationImageProgress struct {
+	CompletedCount int `json:"completedCount"`
+	TotalCount     int `json:"totalCount"`
 }
 
 // FragmentContentGenerationRequest 碎片故事内容生成请求

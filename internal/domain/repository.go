@@ -552,6 +552,14 @@ type Repository interface {
 	CreateFragmentGenerationAssets(ctx context.Context, assets []*FragmentGenerationAsset) error
 	// ListFragmentGenerationAssets lists all stored image assets for a fragment.
 	ListFragmentGenerationAssets(ctx context.Context, fragmentID string) ([]*FragmentGenerationAsset, error)
+	// AppendFragmentConversationMessage stores one creator chat turn for a fragment (idempotent by clientMessageId).
+	AppendFragmentConversationMessage(ctx context.Context, msg *FragmentConversationMessage) error
+	// UpsertFragmentConversationMessages batch-appends chat turns (skips duplicates by clientMessageId).
+	UpsertFragmentConversationMessages(ctx context.Context, messages []*FragmentConversationMessage) error
+	// ListFragmentConversationMessages returns ordered chat history for a fragment.
+	ListFragmentConversationMessages(ctx context.Context, fragmentID string) ([]*FragmentConversationMessage, error)
+	// ListFragmentConversationMessagesPage returns a chronological page of chat history (newest page when beforeCreatedAt is 0).
+	ListFragmentConversationMessagesPage(ctx context.Context, fragmentID string, limit int, beforeCreatedAt int64) ([]*FragmentConversationMessage, bool, error)
 
 	// ========== User Device operations ==========
 	// 用户设备管理（APNs/FCM 推送通知）
