@@ -69,8 +69,18 @@ run-agent:
 	@echo "🚀 Starting Grapery Agent on port $(AGENT_PORT)..."
 	@echo "   Tip: [ ! -f $(AGENT_DIR)/.env ] && cp $(AGENT_DIR)/env.grapery-agent.dev.example $(AGENT_DIR)/.env"
 	@echo "   Or:  make sync-agent-env  (create if missing; only fill empty keys)"
-	@set -a; [ -f .env ] && . ./.env; set +a; \
-	cd $(AGENT_DIR) && set -a; [ -f .env ] && . ./.env; set +a; \
+	@set -a; \
+	cli_huoshan="$${HUOSHAN_API_KEY-}"; cli_gemini="$${GEMINI_API_KEY-}"; \
+	[ -f .env ] && . ./.env; \
+	[ -n "$$cli_huoshan" ] && export HUOSHAN_API_KEY="$$cli_huoshan"; \
+	[ -n "$$cli_gemini" ] && export GEMINI_API_KEY="$$cli_gemini"; \
+	set +a; \
+	cd $(AGENT_DIR) && set -a; \
+	cli_huoshan2="$${HUOSHAN_API_KEY-}"; cli_gemini2="$${GEMINI_API_KEY-}"; \
+	[ -f .env ] && . ./.env; \
+	[ -n "$$cli_huoshan2" ] && export HUOSHAN_API_KEY="$$cli_huoshan2"; \
+	[ -n "$$cli_gemini2" ] && export GEMINI_API_KEY="$$cli_gemini2"; \
+	set +a; \
 	if [ -z "$${AGENT_TOKEN_VERIFY_KEY:-}" ] && [ -n "$${AGENT_TOKEN_SIGNING_KEY:-}" ]; then \
 		export AGENT_TOKEN_VERIFY_KEY="$${AGENT_TOKEN_SIGNING_KEY}"; \
 	fi; \
