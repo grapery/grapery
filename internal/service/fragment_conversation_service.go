@@ -70,15 +70,23 @@ func (s *FragmentGenerationService) recordFragmentAnalyzeConversation(
 
 func (s *FragmentGenerationService) recordFragmentGenerationUserInput(
 	ctx context.Context,
-	fragmentID, userID, taskID, userInput string,
+	fragmentID, userID, taskID, userInput, clientMessageID string,
 ) {
 	if taskID == "" {
 		return
 	}
+	clientMessageID = fragmentGenerationConversationClientMessageID(taskID, clientMessageID)
 	s.recordFragmentConversationTurn(ctx, fragmentID, userID,
 		domain.FragmentConversationRoleUser,
 		domain.FragmentConversationTypeUserInput,
-		userInput, taskID, taskID+":user_input")
+		userInput, taskID, clientMessageID)
+}
+
+func fragmentGenerationConversationClientMessageID(taskID, clientMessageID string) string {
+	if clientMessageID = strings.TrimSpace(clientMessageID); clientMessageID != "" {
+		return clientMessageID
+	}
+	return strings.TrimSpace(taskID) + ":user_input"
 }
 
 func (s *FragmentGenerationService) recordFragmentGenerationOutputs(

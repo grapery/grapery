@@ -44,6 +44,8 @@ func fragmentGenerationHTTPError(err error) (int, string, string) {
 			return http.StatusNotFound, genErr.Code, genErr.Message
 		case domain.FragmentGenerationErrorConflict, domain.FragmentGenerationErrorCancelled:
 			return http.StatusConflict, genErr.Code, genErr.Message
+		case domain.FragmentGenerationErrorInsufficient:
+			return http.StatusPaymentRequired, genErr.Code, genErr.Message
 		default:
 			return http.StatusBadRequest, genErr.Code, genErr.Message
 		}

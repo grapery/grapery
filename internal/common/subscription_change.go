@@ -54,6 +54,27 @@ func DetectSubscriptionChangeKind(oldProductID, newProductID string) Subscriptio
 	return ChangeRenewal
 }
 
+// NormalizeGoogleNotificationAction 将 Google Play RTDN 订阅通知类型映射为内部 action。
+func NormalizeGoogleNotificationAction(notificationType string) SubscriptionChangeKind {
+	nt := strings.ToUpper(strings.TrimSpace(notificationType))
+	switch nt {
+	case "SUBSCRIPTION_PURCHASED":
+		return ChangeInitial
+	case "SUBSCRIPTION_RENEWED", "SUBSCRIPTION_RECOVERED", "SUBSCRIPTION_RESTARTED":
+		return ChangeRenewal
+	case "SUBSCRIPTION_CANCELED", "SUBSCRIPTION_PAUSED", "SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED",
+		"SUBSCRIPTION_ON_HOLD", "SUBSCRIPTION_IN_GRACE_PERIOD", "SUBSCRIPTION_DEFERRED",
+		"SUBSCRIPTION_PRICE_CHANGE_CONFIRMED":
+		return ChangeCancelRenewal
+	case "SUBSCRIPTION_EXPIRED":
+		return ChangeExpired
+	case "SUBSCRIPTION_REVOKED":
+		return ChangeRevoked
+	default:
+		return ""
+	}
+}
+
 // NormalizeAppleNotificationAction 将 ASC V2（及 legacy）通知映射为内部 action。
 func NormalizeAppleNotificationAction(notificationType, subtype string) SubscriptionChangeKind {
 	nt := strings.ToUpper(strings.TrimSpace(notificationType))

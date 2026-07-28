@@ -48,6 +48,21 @@ func (s *FragmentGenerationService) SetNotify(svc *Service) {
 	s.notify = svc
 }
 
+// settleFragmentGenerationTextTokens 结算碎片生成链路中的非图片 token（图片已由 AIGenerationService 扣费）。
+func (s *FragmentGenerationService) settleFragmentGenerationTextTokens(ctx context.Context, userID, taskID string, tokens int) {
+	if s == nil || s.repo == nil || tokens <= 0 || strings.TrimSpace(userID) == "" {
+		return
+	}
+	if _, err := s.repo.UpdateTokenBalance(ctx, userID, -tokens, "fragment_generation_text",
+		fmt.Sprintf("Fragment generation text/audit consumed %d tokens (task %s)", tokens, taskID)); err != nil {
+		s.logger.Warn("failed to settle fragment generation text tokens",
+			zap.String("user_id", userID),
+			zap.String("task_id", taskID),
+			zap.Int("tokens", tokens),
+			zap.Error(err))
+	}
+}
+
 // AnalyzeFragmentStory performs the lightweight phase-one planning used by Voyager before image generation.
 func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, userID string, req domain.FragmentAnalyzeRequest) (*domain.FragmentAnalyzeResponse, error) {
 	input := strings.TrimSpace(req.UserInput)
@@ -269,6 +284,23 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		}
 		req.ImageCount = 1
 	}
+	if s.repo != nil {
+		balance, balErr := s.repo.GetTokenBalance(ctx, userID)
+		if balErr != nil {
+			return nil, "", fmt.Errorf("failed to check token balance: %w", balErr)
+		}
+		minNeed := req.ImageCount * common.AIImageBillingUnitTokens
+		if minNeed < common.AIImageBillingUnitTokens {
+			minNeed = common.AIImageBillingUnitTokens
+		}
+		if balance < minNeed {
+			return nil, "", domain.NewFragmentGenerationError(
+				domain.FragmentGenerationErrorInsufficient,
+				fmt.Sprintf("insufficient token balance: have %d, need at least %d", balance, minNeed),
+				nil,
+			)
+		}
+	}
 	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" {
 		unlock := s.lockFragmentDraftGeneration(draftID)
 		defer unlock()
@@ -381,7 +413,7 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		s.persistFragmentGenerationSlots(ctx, taskID, draftID, task.Result)
 	}
 
-	s.recordFragmentGenerationUserInput(ctx, draftID, userID, taskID, req.UserInput)
+	s.recordFragmentGenerationUserInput(ctx, draftID, userID, taskID, req.UserInput, req.ClientMessageID)
 
 	go s.processFragmentGeneration(context.Background(), taskID)
 
@@ -1051,6 +1083,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		s.persistFragmentGenerationAssets(ctx, result.DraftFragmentID, taskID, task.Request, result)
 		s.recordFragmentGenerationOutputs(ctx, result.DraftFragmentID, task.UserID, taskID, result)
 	}
+
+	// 图片已在 GenerateImageForFragment → AIGenerationService 扣费；此处只结算文本/审计 token。
+	nonImageTokens := totalTokens - imageResult.TokensUsed
+	s.settleFragmentGenerationTextTokens(ctx, task.UserID, taskID, nonImageTokens)
 
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
 		s.logger.Error("Failed to update result", zap.Error(err))

@@ -69,6 +69,7 @@ type AppleNotification struct {
 type GooglePurchase struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
 	UserID           uint64         `gorm:"index" json:"user_id"`
+	AppUserID        string         `gorm:"column:app_user_id;size:64;index;comment:应用用户UUID" json:"app_user_id"`
 	PurchaseToken    string         `gorm:"type:varchar(512);uniqueIndex;not null;comment:购买令牌" json:"purchase_token"` // 增加长度冗余
 	ProductID        string         `gorm:"type:varchar(255);not null;index;comment:产品ID" json:"product_id"`
 	PackageName      string         `gorm:"type:varchar(255);not null;index;comment:包名" json:"package_name"`
@@ -89,6 +90,7 @@ type GooglePurchase struct {
 type GoogleSubscription struct {
 	ID                   uint           `gorm:"primaryKey" json:"id"`
 	UserID               uint64         `gorm:"index" json:"user_id"`
+	AppUserID            string         `gorm:"column:app_user_id;size:64;index;comment:应用用户UUID" json:"app_user_id"`
 	PurchaseToken        string         `gorm:"type:varchar(512);uniqueIndex;not null;comment:购买令牌" json:"purchase_token"` // 增加长度冗余
 	ProductID            string         `gorm:"type:varchar(255);not null;index;comment:产品ID" json:"product_id"`
 	PackageName          string         `gorm:"type:varchar(255);not null;index;comment:包名" json:"package_name"`

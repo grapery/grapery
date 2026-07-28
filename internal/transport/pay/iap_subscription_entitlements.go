@@ -14,6 +14,7 @@ import (
 	payservice "github.com/grapestree/fgrapery/grapery/internal/service/pay"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type membershipRow struct {
@@ -85,8 +86,48 @@ func (h *IAPHandler) lookupAppleSubAppUserID(ctx context.Context, originalTx str
 	return strings.TrimSpace(rows[0].AppUserID)
 }
 
-// applyApplePurchaseGrants 购买/通知成功后写入主库权益（统一入口）。
-func (h *IAPHandler) applyApplePurchaseGrants(ctx context.Context, userIDStr string, receipt *payservice.IAPReceipt) {
+func (h *IAPHandler) lookupGoogleSubAppUserID(ctx context.Context, purchaseToken string) string {
+	purchaseToken = strings.TrimSpace(purchaseToken)
+	if purchaseToken == "" {
+		return ""
+	}
+	var rows []paymodels.GoogleSubscription
+	if err := paymodels.DataBase().WithContext(ctx).
+		Where("purchase_token = ?", purchaseToken).
+		Limit(1).
+		Find(&rows).Error; err != nil || len(rows) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(rows[0].AppUserID)
+}
+
+func (h *IAPHandler) lookupGoogleSubProductID(ctx context.Context, purchaseToken string) string {
+	purchaseToken = strings.TrimSpace(purchaseToken)
+	if purchaseToken == "" {
+		return ""
+	}
+	var rows []paymodels.GoogleSubscription
+	if err := paymodels.DataBase().WithContext(ctx).
+		Where("purchase_token = ?", purchaseToken).
+		Limit(1).
+		Find(&rows).Error; err != nil || len(rows) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(rows[0].ProductID)
+}
+
+func receiptIdempotencyKey(receipt *payservice.IAPReceipt) string {
+	if receipt == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(receipt.SubscriptionTransactionID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(receipt.OriginalTransactionID)
+}
+
+// applyPurchaseGrants 购买/通知成功后写入主库权益（Apple/Google 统一入口）。
+func (h *IAPHandler) applyPurchaseGrants(ctx context.Context, userIDStr string, receipt *payservice.IAPReceipt) {
 	if userIDStr == "" || receipt == nil || receipt.ProductID == "" {
 		return
 	}
@@ -102,15 +143,30 @@ func (h *IAPHandler) applyApplePurchaseGrants(ctx context.Context, userIDStr str
 	grantTokens := common.SubscriptionBillingPeriodGrantTokens(normalizedQuota, product.Duration)
 
 	if grantTokens > 0 && !product.IsSubscription() {
-		if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens); topUpErr != nil {
+		txID := receiptIdempotencyKey(receipt)
+		if topUpErr := h.topUpUserTokens(ctx, userIDStr, grantTokens, txID, receipt.ProductID); topUpErr != nil {
 			h.logger.WithError(topUpErr).Error("top up tokens after IAP failed")
 		}
 		return
 	}
 
-	oldProductID := h.lookupAppleSubProductID(ctx, receipt.OriginalTransactionID)
+	oldProductID := ""
+	switch receipt.Platform {
+	case payservice.IAPPlatformGoogle:
+		oldProductID = h.lookupGoogleSubProductID(ctx, receipt.OriginalTransactionID)
+		if oldProductID == "" {
+			oldProductID = h.lookupGoogleSubProductID(ctx, strings.TrimSpace(receipt.ReceiptData))
+		}
+	default:
+		oldProductID = h.lookupAppleSubProductID(ctx, receipt.OriginalTransactionID)
+	}
 	kind := common.DetectSubscriptionChangeKind(oldProductID, receipt.ProductID)
 	h.applySubscriptionEntitlements(ctx, userIDStr, receipt, kind, oldProductID)
+}
+
+// applyApplePurchaseGrants 兼容旧调用名。
+func (h *IAPHandler) applyApplePurchaseGrants(ctx context.Context, userIDStr string, receipt *payservice.IAPReceipt) {
+	h.applyPurchaseGrants(ctx, userIDStr, receipt)
 }
 
 // applySubscriptionEntitlements 按变更类型更新 memberships 并写入 pending notice。
@@ -138,6 +194,22 @@ func (h *IAPHandler) applySubscriptionEntitlements(
 		}
 	}
 
+	// 消耗型退款：只 clawback 该笔充值，不整单降为 free。
+	if kind == common.ChangeRevoked {
+		isSubscription := product != nil && product.IsSubscription()
+		if !isSubscription {
+			txID := receiptIdempotencyKey(receipt)
+			clawed, clawErr := h.clawbackConsumableTopUp(ctx, userIDStr, txID)
+			if clawErr != nil {
+				h.logger.WithError(clawErr).Error("clawback consumable top-up failed")
+			}
+			if product != nil || clawed {
+				return
+			}
+			// product 未知且无消耗型账本：按订阅退款继续走 expire。
+		}
+	}
+
 	var grantTokens int
 	membershipTier := common.MembershipTierFromIAPProductID(receipt.ProductID)
 	if product != nil && product.IsSubscription() {
@@ -145,10 +217,12 @@ func (h *IAPHandler) applySubscriptionEntitlements(
 		grantTokens = common.SubscriptionBillingPeriodGrantTokens(normalized, product.Duration)
 	}
 
-	txID := strings.TrimSpace(receipt.SubscriptionTransactionID)
-	needsClaim := kind == common.ChangeInitial || kind == common.ChangeUpgrade ||
-		kind == common.ChangeRenewal || kind == common.ChangeRevoked
-	if needsClaim && txID != "" {
+	txID := receiptIdempotencyKey(receipt)
+	needsGrantClaim := kind == common.ChangeInitial || kind == common.ChangeUpgrade || kind == common.ChangeRenewal
+	needsRevokeClaim := kind == common.ChangeRevoked || kind == common.ChangeExpired
+
+	var claimedGrant, claimedRevoke bool
+	if needsGrantClaim && txID != "" {
 		claimed, claimErr := paymodels.TryClaimSubscriptionCreditGrant(ctx, txID, userIDStr, receipt.ProductID)
 		if claimErr != nil {
 			h.logger.WithError(claimErr).Error("claim subscription credit grant failed")
@@ -157,6 +231,22 @@ func (h *IAPHandler) applySubscriptionEntitlements(
 		if !claimed {
 			return
 		}
+		claimedGrant = true
+	}
+	if needsRevokeClaim && txID != "" {
+		action := "expired"
+		if kind == common.ChangeRevoked {
+			action = "revoked"
+		}
+		claimed, claimErr := paymodels.TryClaimSubscriptionCreditRevoke(ctx, action, txID, userIDStr, receipt.ProductID)
+		if claimErr != nil {
+			h.logger.WithError(claimErr).Error("claim subscription credit revoke failed")
+			return
+		}
+		if !claimed {
+			return
+		}
+		claimedRevoke = true
 	}
 
 	var applyErr error
@@ -176,6 +266,16 @@ func (h *IAPHandler) applySubscriptionEntitlements(
 	}
 	if applyErr != nil {
 		h.logger.WithError(applyErr).Error("apply membership quota failed")
+		if claimedGrant {
+			_ = paymodels.ReleaseSubscriptionCreditGrant(ctx, txID)
+		}
+		if claimedRevoke {
+			action := "expired"
+			if kind == common.ChangeRevoked {
+				action = "revoked"
+			}
+			_ = paymodels.ReleaseSubscriptionCreditRevoke(ctx, action, txID)
+		}
 		return
 	}
 
@@ -197,6 +297,18 @@ const (
 	quotaExpireToFree
 )
 
+func (h *IAPHandler) activeConsumableTopUpTokens(ctx context.Context, userIDStr string) int {
+	sum, err := paymodels.SumActiveConsumableTopUpTokens(ctx, userIDStr)
+	if err != nil {
+		h.logger.WithError(err).Warn("sum consumable top-up tokens failed")
+		return 0
+	}
+	if sum < 0 {
+		return 0
+	}
+	return sum
+}
+
 func (h *IAPHandler) applyMembershipQuota(
 	ctx context.Context,
 	userIDStr string,
@@ -217,15 +329,17 @@ func (h *IAPHandler) applyMembershipQuota(
 		tier = "free"
 	}
 	now := time.Now()
+	topUp := h.activeConsumableTopUpTokens(ctx, userIDStr)
+	baseline := common.DefaultFreeTierTokenQuota
 
 	err := h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var m membershipRow
-		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			totalQuota := common.DefaultFreeTierTokenQuota
-			tokenUsed := 0
+			totalQuota := baseline + topUp
 			if mode != quotaExpireToFree {
-				totalQuota = common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
+				totalQuota = baseline + subscriptionGrantTokens + topUp
 			}
 			m = membershipRow{
 				ID:           uuid.New().String(),
@@ -234,7 +348,7 @@ func (h *IAPHandler) applyMembershipQuota(
 				Status:       string(common.MembershipStatusActive),
 				StartDate:    now,
 				TokenQuota:   totalQuota,
-				TokenUsed:    tokenUsed,
+				TokenUsed:    0,
 				StorageQuota: common.DefaultFreeTierStorageBytes,
 				CreatedAt:    now,
 				UpdatedAt:    now,
@@ -249,14 +363,15 @@ func (h *IAPHandler) applyMembershipQuota(
 
 		switch mode {
 		case quotaExpireToFree:
+			totalQuota := baseline + topUp
 			updates["tier"] = "free"
 			updates["status"] = string(common.MembershipStatusExpired)
-			updates["token_quota"] = common.DefaultFreeTierTokenQuota
-			if m.TokenUsed > common.DefaultFreeTierTokenQuota {
-				updates["token_used"] = common.DefaultFreeTierTokenQuota
+			updates["token_quota"] = totalQuota
+			if m.TokenUsed > totalQuota {
+				updates["token_used"] = totalQuota
 			}
 		case quotaPreserveUsed:
-			totalQuota := common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
+			totalQuota := baseline + subscriptionGrantTokens + topUp
 			updates["tier"] = tier
 			updates["status"] = string(common.MembershipStatusActive)
 			updates["token_quota"] = totalQuota
@@ -266,7 +381,7 @@ func (h *IAPHandler) applyMembershipQuota(
 			}
 			updates["token_used"] = tokenUsed
 		case quotaResetUsed:
-			totalQuota := common.DefaultFreeTierTokenQuota + subscriptionGrantTokens
+			totalQuota := baseline + subscriptionGrantTokens + topUp
 			updates["tier"] = tier
 			updates["status"] = string(common.MembershipStatusActive)
 			updates["token_quota"] = totalQuota
@@ -386,7 +501,6 @@ func (h *IAPHandler) applyEntitlementsFromAppleNotification(ctx context.Context,
 	fields, err := payservice.ExtractAppleTransactionFromNotificationPayload(signedPayload)
 	if err != nil {
 		h.logger.WithError(err).Debug("skip entitlements: no signedTransactionInfo in notification")
-		// cancel_renewal may only have renewal info — still try status-only path below
 	}
 
 	kind := common.NormalizeAppleNotificationAction(notificationType, subtype)
@@ -396,7 +510,11 @@ func (h *IAPHandler) applyEntitlementsFromAppleNotification(ctx context.Context,
 
 	var userIDStr string
 	var oldProductID string
-	receipt := &payservice.IAPReceipt{ProductID: "", Status: "Active"}
+	receipt := &payservice.IAPReceipt{
+		Platform: payservice.IAPPlatformApple,
+		ProductID: "",
+		Status:    "Active",
+	}
 
 	if fields != nil {
 		receipt.ProductID = fields.ProductID
@@ -427,6 +545,102 @@ func (h *IAPHandler) applyEntitlementsFromAppleNotification(ctx context.Context,
 	}
 
 	h.applySubscriptionEntitlements(ctx, userIDStr, receipt, kind, oldProductID)
+}
+
+// applyEntitlementsFromGoogleNotification RTDN 成功后同步主库权益。
+func (h *IAPHandler) applyEntitlementsFromGoogleNotification(ctx context.Context, data *payservice.GoogleNotificationData) {
+	if data == nil {
+		return
+	}
+	nt := strings.TrimSpace(data.NotificationType)
+	kind := common.NormalizeGoogleNotificationAction(nt)
+	if kind == "" {
+		// 一次性商品取消：按消耗型退款 clawback
+		if strings.EqualFold(nt, "ONE_TIME_PRODUCT_CANCELED") {
+			purchaseToken := strings.TrimSpace(data.OneTimeProductNotification.PurchaseToken)
+			sku := strings.TrimSpace(data.OneTimeProductNotification.SKU)
+			userIDStr := h.lookupGooglePurchaseAppUserID(ctx, purchaseToken)
+			if userIDStr == "" {
+				return
+			}
+			orderID := h.lookupGooglePurchaseOrderID(ctx, purchaseToken)
+			if orderID == "" {
+				orderID = purchaseToken
+			}
+			receipt := &payservice.IAPReceipt{
+				Platform:                  payservice.IAPPlatformGoogle,
+				ProductID:                 sku,
+				SubscriptionTransactionID: orderID,
+				OriginalTransactionID:     purchaseToken,
+				ReceiptData:               purchaseToken,
+			}
+			h.applySubscriptionEntitlements(ctx, userIDStr, receipt, common.ChangeRevoked, "")
+		}
+		return
+	}
+
+	purchaseToken := strings.TrimSpace(data.SubscriptionNotification.PurchaseToken)
+	if purchaseToken == "" {
+		purchaseToken = strings.TrimSpace(data.SubscriptionNotification.SubscriptionID)
+	}
+	productID := strings.TrimSpace(data.SubscriptionNotification.SubscriptionID)
+	userIDStr := h.lookupGoogleSubAppUserID(ctx, purchaseToken)
+	if userIDStr == "" {
+		h.logger.WithFields(logrus.Fields{
+			"notification_type": nt,
+			"purchase_token":    purchaseToken,
+		}).Warn("skip entitlements: app_user_id not found for Google subscription")
+		return
+	}
+	if productID == "" {
+		productID = h.lookupGoogleSubProductID(ctx, purchaseToken)
+	}
+	oldProductID := productID
+	txKey := purchaseToken
+	if data.EventTimeMillis > 0 {
+		txKey = purchaseToken + ":" + strconv.FormatInt(data.EventTimeMillis, 10)
+	} else {
+		txKey = purchaseToken + ":" + string(kind)
+	}
+	receipt := &payservice.IAPReceipt{
+		Platform:                  payservice.IAPPlatformGoogle,
+		ProductID:                 productID,
+		SubscriptionTransactionID: txKey,
+		OriginalTransactionID:     purchaseToken,
+		ReceiptData:               purchaseToken,
+		Status:                    "Active",
+	}
+	h.applySubscriptionEntitlements(ctx, userIDStr, receipt, kind, oldProductID)
+}
+
+func (h *IAPHandler) lookupGooglePurchaseAppUserID(ctx context.Context, purchaseToken string) string {
+	purchaseToken = strings.TrimSpace(purchaseToken)
+	if purchaseToken == "" {
+		return ""
+	}
+	var rows []paymodels.GooglePurchase
+	if err := paymodels.DataBase().WithContext(ctx).
+		Where("purchase_token = ?", purchaseToken).
+		Limit(1).
+		Find(&rows).Error; err != nil || len(rows) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(rows[0].AppUserID)
+}
+
+func (h *IAPHandler) lookupGooglePurchaseOrderID(ctx context.Context, purchaseToken string) string {
+	purchaseToken = strings.TrimSpace(purchaseToken)
+	if purchaseToken == "" {
+		return ""
+	}
+	var rows []paymodels.GooglePurchase
+	if err := paymodels.DataBase().WithContext(ctx).
+		Where("purchase_token = ?", purchaseToken).
+		Limit(1).
+		Find(&rows).Error; err != nil || len(rows) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(rows[0].OrderID)
 }
 
 func (h *IAPHandler) markAppleSubWillExpire(ctx context.Context, originalTx string) {
@@ -460,9 +674,11 @@ func (h *IAPHandler) ExpireStaleAppleSubscriptions(ctx context.Context) {
 			continue
 		}
 		receipt := &payservice.IAPReceipt{
-			ProductID:             row.ProductID,
-			OriginalTransactionID: row.OriginalTransactionID,
-			ExpirationDate:        row.ExpiresDate,
+			Platform:                  payservice.IAPPlatformApple,
+			ProductID:                 row.ProductID,
+			OriginalTransactionID:     row.OriginalTransactionID,
+			SubscriptionTransactionID: row.OriginalTransactionID + ":expired",
+			ExpirationDate:            row.ExpiresDate,
 		}
 		h.applySubscriptionEntitlements(ctx, userIDStr, receipt, common.ChangeExpired, row.ProductID)
 		_ = paymodels.DataBase().WithContext(ctx).Model(&paymodels.AppleSubscription{}).

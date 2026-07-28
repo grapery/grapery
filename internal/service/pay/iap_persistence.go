@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grapestree/fgrapery/grapery/internal/common"
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -309,7 +310,7 @@ func (s *IAPPersistenceService) PersistUserSubscription(ctx context.Context, rec
 	}
 
 	// 从产品表查询实际的 QuotaLimit（tokens）；查询失败时使用合理默认值
-	quotaLimit := 25000 // 与 DefaultFreeTierTokenQuota 同量级的安全默认值
+	quotaLimit := common.DefaultFreeTierTokenQuota
 	if product, err := paymodels.GetIAPProductByProductID(ctx, productID); err == nil && product != nil && product.QuotaLimit > 0 {
 		quotaLimit = product.QuotaLimit
 	}

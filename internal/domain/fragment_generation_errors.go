@@ -8,6 +8,7 @@ const (
 	FragmentGenerationErrorNotFound       = "not_found"
 	FragmentGenerationErrorConflict       = "conflict"
 	FragmentGenerationErrorCancelled      = "cancelled"
+	FragmentGenerationErrorInsufficient   = "insufficient_quota"
 )
 
 // FragmentGenerationError carries a stable code so clients and the agent can

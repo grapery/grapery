@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
@@ -71,29 +72,67 @@ func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt 
 		return nil, fmt.Errorf("收据中缺少productId")
 	}
 
-	// 验证购买
+	// 验证购买：先试一次性商品，失败则试订阅。
 	purchaseInfo, err := googleClient.GetPurchaseInfo(ctx, purchaseToken, productID)
 	if err != nil {
-		s.logger.WithError(err).Error("验证Google购买失败")
-		// 记录验证失败的指标
-		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
-			metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+		subInfo, subErr := googleClient.GetSubscriptionInfo(ctx, purchaseToken, productID)
+		if subErr != nil {
+			s.logger.WithError(err).Error("验证Google购买失败")
+			if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+				metrics.RecordPaymentVerify("google", "failed", time.Since(startTime))
+			}
+			return nil, fmt.Errorf("验证购买失败: %w", err)
 		}
-		return nil, fmt.Errorf("验证购买失败: %w", err)
+		var exp *time.Time
+		if subInfo.ExpiryTimeMillis > 0 {
+			t := time.Unix(subInfo.ExpiryTimeMillis/1000, 0)
+			exp = &t
+		}
+		start := time.Now()
+		if subInfo.StartTimeMillis > 0 {
+			start = time.Unix(subInfo.StartTimeMillis/1000, 0)
+		}
+		orderID := strings.TrimSpace(subInfo.OrderId)
+		if orderID == "" {
+			orderID = purchaseToken
+		}
+		iapReceipt := &IAPReceipt{
+			Platform:                  IAPPlatformGoogle,
+			ReceiptData:               receipt,
+			BundleID:                  s.config.Google.PackageName,
+			ProductID:                 productID,
+			OriginalTransactionID:     purchaseToken,
+			SubscriptionTransactionID: orderID,
+			CreationDate:              start,
+			ExpirationDate:            exp,
+			Status:                    s.mapGooglePaymentState(subInfo.PaymentState),
+			Environment:               map[bool]string{true: "Sandbox", false: "Production"}[sandbox],
+			CreatedAt:                 time.Now(),
+			UpdatedAt:                 time.Now(),
+		}
+		if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
+			metrics.RecordPaymentVerify("google", "success", time.Since(startTime))
+		}
+		return iapReceipt, nil
 	}
 
-	// 转换为统一格式
 	iapReceipt := &IAPReceipt{
-		Platform:       IAPPlatformGoogle,
-		UserID:         0, // 需要从其他地方获取
-		ReceiptData:    receipt,
-		BundleID:       s.config.Google.PackageName,
-		CreationDate:   time.Unix(purchaseInfo.PurchaseTime/1000, 0),
-		ExpirationDate: nil, // 一次性购买没有过期时间
-		Status:         s.mapGooglePaymentState(purchaseInfo.PurchaseState),
-		Environment:    map[bool]string{true: "Sandbox", false: "Production"}[sandbox],
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		Platform:                  IAPPlatformGoogle,
+		UserID:                    0,
+		ReceiptData:               receipt,
+		BundleID:                  s.config.Google.PackageName,
+		ProductID:                 productID,
+		OriginalTransactionID:     purchaseToken,
+		SubscriptionTransactionID: purchaseInfo.OrderId,
+		CreationDate:              time.Unix(purchaseInfo.PurchaseTime/1000, 0),
+		ExpirationDate:            nil,
+		Status:                    s.mapGooglePaymentState(purchaseInfo.PurchaseState),
+		Environment:               map[bool]string{true: "Sandbox", false: "Production"}[sandbox],
+		CreatedAt:                 time.Now(),
+		UpdatedAt:                 time.Now(),
+	}
+	if strings.TrimSpace(iapReceipt.SubscriptionTransactionID) == "" {
+		iapReceipt.SubscriptionTransactionID = purchaseToken
 	}
 
 	s.logger.WithFields(logrus.Fields{
@@ -103,7 +142,6 @@ func (s *GoogleIAPServiceRefactored) VerifyReceipt(ctx context.Context, receipt 
 		"environment":    iapReceipt.Environment,
 	}).Info("Google收据验证成功")
 
-	// 记录验证成功的指标
 	if metrics := telemetry.GetDefaultMetrics(); metrics != nil {
 		metrics.RecordPaymentVerify("google", "success", time.Since(startTime))
 	}

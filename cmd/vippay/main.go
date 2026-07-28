@@ -771,8 +771,7 @@ func registerRoutes(router *gin.Engine) {
 
 				// 从主库读取真实 token 余量（token_quota / token_used）
 				tokenQuota, tokenUsed := getMainDBTokenInfo(ctx, userIDStr)
-				creditLimit := ceilDiv(tokenQuota, common.CreditToTokenRatio)
-				creditUsed := ceilDiv(tokenUsed, common.CreditToTokenRatio)
+				creditLimit, creditUsed, creditRemaining := computeCreditDisplay(tokenQuota, tokenUsed)
 
 				// 查询用户活跃订阅
 				subscription, err := paymodels.GetUserActiveSubscriptionByUserID(ctx, userID)
@@ -782,18 +781,19 @@ func registerRoutes(router *gin.Engine) {
 						"code": 0,
 						"msg":  "success",
 						"data": gin.H{
-							"user_id":      userID,
-							"is_vip":       false,
-							"level":        0,
-							"status":       0,
-							"auto_renew":   false,
-							"quota_used":   tokenUsed,
-							"quota_limit":  tokenQuota,
-							"credit_used":  creditUsed,
-							"credit_limit": creditLimit,
-							"max_roles":    2, // 免费用户默认值
-							"max_contexts": 5, // 免费用户默认值
-							"expires_at":   nil,
+							"user_id":           userID,
+							"is_vip":            false,
+							"level":             0,
+							"status":            0,
+							"auto_renew":        false,
+							"quota_used":        tokenUsed,
+							"quota_limit":       tokenQuota,
+							"credit_used":       creditUsed,
+							"credit_limit":      creditLimit,
+							"credit_remaining":  creditRemaining,
+							"max_roles":         2, // 免费用户默认值
+							"max_contexts":      5, // 免费用户默认值
+							"expires_at":        nil,
 						},
 					})
 					return
@@ -813,18 +813,19 @@ func registerRoutes(router *gin.Engine) {
 					"code": 0,
 					"msg":  "success",
 					"data": gin.H{
-						"user_id":      userID,
-						"is_vip":       subscription.IsActive(),
-						"level":        vipLevel,
-						"status":       int(subscription.Status),
-						"auto_renew":   subscription.AutoRenew,
-						"quota_used":   tokenUsed,
-						"quota_limit":  tokenQuota,
-						"credit_used":  creditUsed,
-						"credit_limit": creditLimit,
-						"max_roles":    subscription.MaxRoles,
-						"max_contexts": subscription.MaxContexts,
-						"expires_at":   expiresAt,
+						"user_id":          userID,
+						"is_vip":           subscription.IsActive(),
+						"level":            vipLevel,
+						"status":           int(subscription.Status),
+						"auto_renew":       subscription.AutoRenew,
+						"quota_used":       tokenUsed,
+						"quota_limit":      tokenQuota,
+						"credit_used":      creditUsed,
+						"credit_limit":     creditLimit,
+						"credit_remaining": creditRemaining,
+						"max_roles":        subscription.MaxRoles,
+						"max_contexts":     subscription.MaxContexts,
+						"expires_at":       expiresAt,
 					},
 				})
 			})
@@ -1216,7 +1217,27 @@ func ceilDiv(a, b int) int {
 	if b <= 0 {
 		return 0
 	}
+	if a <= 0 {
+		return 0
+	}
 	return (a + b - 1) / b
+}
+
+// computeCreditDisplay 保证 credit_limit - credit_used == credit_remaining，
+// 且 credit_remaining = ceil(max(0, quota-used) / ratio)。
+func computeCreditDisplay(tokenQuota, tokenUsed int) (limit, used, remaining int) {
+	ratio := common.CreditToTokenRatio
+	remainingTokens := tokenQuota - tokenUsed
+	if remainingTokens < 0 {
+		remainingTokens = 0
+	}
+	limit = ceilDiv(tokenQuota, ratio)
+	remaining = ceilDiv(remainingTokens, ratio)
+	used = limit - remaining
+	if used < 0 {
+		used = 0
+	}
+	return limit, used, remaining
 }
 
 // mainDBMembership 用于从主库读取 membership 行

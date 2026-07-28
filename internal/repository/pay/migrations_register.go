@@ -106,6 +106,24 @@ func init() {
 	})
 
 	registry.RegisterPaymentStep(migrations.MigrationStep{
+		Name:        "migrate_iap_subscription_credit_revokes",
+		Description: "Idempotent revoke/expire claims separated from subscription credit grants",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&IAPSubscriptionCreditRevoke{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterPaymentStep(migrations.MigrationStep{
+		Name:        "migrate_iap_consumable_credit_grants",
+		Description: "Idempotent consumable IAP top-ups with refund clawback",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&IAPConsumableCreditGrant{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterPaymentStep(migrations.MigrationStep{
 		Name:        "migrate_google_purchases",
 		Description: "Create and migrate google_purchases table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

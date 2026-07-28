@@ -394,11 +394,21 @@ type AppleNotificationData struct {
 // GoogleNotificationData Google通知数据
 type GoogleNotificationData struct {
 	Version                  string `json:"version"`
+	PackageName              string `json:"packageName"`
 	NotificationType         string `json:"notificationType"`
 	EventTimeMillis          int64  `json:"eventTimeMillis"`
 	SubscriptionNotification struct {
-		SubscriptionID string `json:"subscriptionId"`
+		Version          string `json:"version"`
+		NotificationType int    `json:"notificationType"`
+		PurchaseToken    string `json:"purchaseToken"`
+		SubscriptionID   string `json:"subscriptionId"`
 	} `json:"subscriptionNotification"`
+	OneTimeProductNotification struct {
+		Version          string `json:"version"`
+		NotificationType int    `json:"notificationType"`
+		PurchaseToken    string `json:"purchaseToken"`
+		SKU              string `json:"sku"`
+	} `json:"oneTimeProductNotification"`
 }
 
 // DecodeAppleJWSPayload 解码 Apple JWS 中间 payload 段（不验证签名）。
@@ -470,15 +480,128 @@ func ParseAppleNotification(signedPayload string) (*AppleNotificationData, error
 	return out, nil
 }
 
-// ParseGoogleNotification 解析Google通知
+// googleSubscriptionNotificationTypeName maps RTDN subscriptionNotification.notificationType ints.
+func googleSubscriptionNotificationTypeName(code int) string {
+	switch code {
+	case 1:
+		return "SUBSCRIPTION_RECOVERED"
+	case 2:
+		return "SUBSCRIPTION_RENEWED"
+	case 3:
+		return "SUBSCRIPTION_CANCELED"
+	case 4:
+		return "SUBSCRIPTION_PURCHASED"
+	case 5:
+		return "SUBSCRIPTION_ON_HOLD"
+	case 6:
+		return "SUBSCRIPTION_IN_GRACE_PERIOD"
+	case 7:
+		return "SUBSCRIPTION_RESTARTED"
+	case 8:
+		return "SUBSCRIPTION_PRICE_CHANGE_CONFIRMED"
+	case 9:
+		return "SUBSCRIPTION_DEFERRED"
+	case 10:
+		return "SUBSCRIPTION_PAUSED"
+	case 11:
+		return "SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED"
+	case 12:
+		return "SUBSCRIPTION_REVOKED"
+	case 13:
+		return "SUBSCRIPTION_EXPIRED"
+	default:
+		return ""
+	}
+}
+
+func googleOneTimeNotificationTypeName(code int) string {
+	switch code {
+	case 1:
+		return "ONE_TIME_PRODUCT_PURCHASED"
+	case 2:
+		return "ONE_TIME_PRODUCT_CANCELED"
+	default:
+		return ""
+	}
+}
+
+// ParseGoogleNotification 解析 Google Play RTDN（支持 Pub/Sub envelope 或已解码 JSON）。
 func ParseGoogleNotification(data string) (*GoogleNotificationData, error) {
-	// 简化的Google通知解析实现
-	// 实际应用中需要解析JSON数据
-	return &GoogleNotificationData{
-		Version:          "1.0",
-		NotificationType: "SUBSCRIPTION_PURCHASED",
-		EventTimeMillis:  time.Now().UnixMilli(),
-	}, nil
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return nil, fmt.Errorf("empty google notification data")
+	}
+
+	raw := []byte(data)
+	// Pub/Sub push: {"message":{"data":"<base64>"},...}
+	var envelope struct {
+		Message struct {
+			Data string `json:"data"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err == nil && strings.TrimSpace(envelope.Message.Data) != "" {
+		decoded, decErr := base64.StdEncoding.DecodeString(envelope.Message.Data)
+		if decErr != nil {
+			decoded, decErr = base64.RawStdEncoding.DecodeString(envelope.Message.Data)
+		}
+		if decErr != nil {
+			return nil, fmt.Errorf("decode google pubsub data: %w", decErr)
+		}
+		raw = decoded
+	}
+
+	var payload struct {
+		Version                  string `json:"version"`
+		PackageName              string `json:"packageName"`
+		EventTimeMillis          string `json:"eventTimeMillis"`
+		SubscriptionNotification *struct {
+			Version          string `json:"version"`
+			NotificationType int    `json:"notificationType"`
+			PurchaseToken    string `json:"purchaseToken"`
+			SubscriptionID   string `json:"subscriptionId"`
+		} `json:"subscriptionNotification"`
+		OneTimeProductNotification *struct {
+			Version          string `json:"version"`
+			NotificationType int    `json:"notificationType"`
+			PurchaseToken    string `json:"purchaseToken"`
+			SKU              string `json:"sku"`
+		} `json:"oneTimeProductNotification"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("parse google notification json: %w", err)
+	}
+
+	out := &GoogleNotificationData{
+		Version:     payload.Version,
+		PackageName: payload.PackageName,
+	}
+	if ms, err := strconv.ParseInt(strings.TrimSpace(payload.EventTimeMillis), 10, 64); err == nil {
+		out.EventTimeMillis = ms
+	}
+	if out.EventTimeMillis == 0 {
+		out.EventTimeMillis = time.Now().UnixMilli()
+	}
+
+	if payload.SubscriptionNotification != nil {
+		out.SubscriptionNotification.Version = payload.SubscriptionNotification.Version
+		out.SubscriptionNotification.NotificationType = payload.SubscriptionNotification.NotificationType
+		out.SubscriptionNotification.PurchaseToken = payload.SubscriptionNotification.PurchaseToken
+		out.SubscriptionNotification.SubscriptionID = payload.SubscriptionNotification.SubscriptionID
+		out.NotificationType = googleSubscriptionNotificationTypeName(payload.SubscriptionNotification.NotificationType)
+	}
+	if payload.OneTimeProductNotification != nil {
+		out.OneTimeProductNotification.Version = payload.OneTimeProductNotification.Version
+		out.OneTimeProductNotification.NotificationType = payload.OneTimeProductNotification.NotificationType
+		out.OneTimeProductNotification.PurchaseToken = payload.OneTimeProductNotification.PurchaseToken
+		out.OneTimeProductNotification.SKU = payload.OneTimeProductNotification.SKU
+		if out.NotificationType == "" {
+			out.NotificationType = googleOneTimeNotificationTypeName(payload.OneTimeProductNotification.NotificationType)
+		}
+	}
+	if out.NotificationType == "" {
+		return nil, fmt.Errorf("unsupported google notification payload")
+	}
+	return out, nil
 }
 
 // ConvertToAppleReceipt 转换为Apple收据模型

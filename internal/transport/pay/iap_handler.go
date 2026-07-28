@@ -23,6 +23,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/transport/pay/middleware"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // IAPHandler IAP 处理器
@@ -571,7 +572,12 @@ func (h *IAPHandler) VerifyGooglePurchase(c *gin.Context) {
 		"endpoint":       "VerifyGooglePurchase",
 	}).Info("Starting Google purchase verification")
 
-	purchase, err := h.iapService.VerifyReceipt(ctx, req.PurchaseToken, false) // Google通常不使用sandbox
+	userIDStr := getUserIDString(c)
+	receiptPayload, _ := json.Marshal(map[string]string{
+		"purchaseToken": req.PurchaseToken,
+		"productId":     req.ProductID,
+	})
+	purchase, err := h.iapService.VerifyReceipt(ctx, string(receiptPayload), false)
 	if err != nil {
 		h.logger.WithFields(logrus.Fields{
 			"user_id":        userID,
@@ -589,6 +595,15 @@ func (h *IAPHandler) VerifyGooglePurchase(c *gin.Context) {
 
 	// 设置用户 ID
 	purchase.UserID = userID
+	if strings.TrimSpace(purchase.ProductID) == "" {
+		purchase.ProductID = req.ProductID
+	}
+	if strings.TrimSpace(purchase.OriginalTransactionID) == "" {
+		purchase.OriginalTransactionID = req.PurchaseToken
+	}
+
+	h.applyPurchaseGrants(ctx, userIDStr, purchase)
+	h.persistGooglePurchaseRecords(ctx, userID, userIDStr, purchase, req.PurchaseToken)
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id":        userID,
@@ -752,7 +767,10 @@ func (h *IAPHandler) HandleGoogleNotification(c *gin.Context) {
 	}
 
 	if notificationData.SubscriptionNotification.SubscriptionID != "" {
-		notification.SubscriptionID = notificationData.SubscriptionNotification.SubscriptionID
+		notification.SubscriptionID = notificationData.SubscriptionNotification.PurchaseToken
+		if notification.SubscriptionID == "" {
+			notification.SubscriptionID = notificationData.SubscriptionNotification.SubscriptionID
+		}
 	}
 
 	// 处理通知
@@ -781,6 +799,7 @@ func (h *IAPHandler) HandleGoogleNotification(c *gin.Context) {
 			"endpoint":          "HandleGoogleNotification",
 		}).Info("Google notification processed successfully")
 		notification.Status = "Success"
+		h.applyEntitlementsFromGoogleNotification(ctx, notificationData)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1543,13 +1562,195 @@ func (h *IAPHandler) persistApplePurchaseRecords(ctx context.Context, userID uin
 	}
 }
 
-// topUpUserTokens 非订阅类 IAP：在主库 memberships 上增量增加 token_quota。
-func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, tokens int) error {
+// persistGooglePurchaseRecords 写入 vippay 库中的 Google 购买/订阅记录，并保存 AppUserID 供 RTDN 权益发放。
+func (h *IAPHandler) persistGooglePurchaseRecords(ctx context.Context, userID uint64, appUserID string, receipt *pay.IAPReceipt, purchaseToken string) {
+	if receipt == nil || receipt.ProductID == "" {
+		return
+	}
+	purchaseToken = strings.TrimSpace(purchaseToken)
+	if purchaseToken == "" {
+		purchaseToken = strings.TrimSpace(receipt.OriginalTransactionID)
+	}
+	if purchaseToken == "" {
+		return
+	}
+
+	product, err := h.productService.GetProductByProductID(ctx, receipt.ProductID)
+	if err != nil || product == nil {
+		return
+	}
+
+	now := time.Now()
+	if product.IsSubscription() {
+		start := receipt.CreationDate
+		if start.IsZero() {
+			start = now
+		}
+		end := subscriptionEndTimeFromProduct(product, start)
+		if receipt.ExpirationDate != nil {
+			end = *receipt.ExpirationDate
+		}
+
+		var row paymodels.GoogleSubscription
+		qErr := paymodels.DataBase().WithContext(ctx).
+			Where("purchase_token = ?", purchaseToken).
+			First(&row).Error
+		if errors.Is(qErr, gorm.ErrRecordNotFound) {
+			row = paymodels.GoogleSubscription{
+				UserID:        userID,
+				AppUserID:     strings.TrimSpace(appUserID),
+				PurchaseToken: purchaseToken,
+				ProductID:     receipt.ProductID,
+				PackageName:   receipt.BundleID,
+				StartTime:     start,
+				ExpiryTime:    end,
+				AutoRenewing:  true,
+				PaymentState:  1,
+				CreatedAt:     now,
+				UpdatedAt:     now,
+			}
+			if createErr := paymodels.DataBase().WithContext(ctx).Create(&row).Error; createErr != nil {
+				h.logger.WithError(createErr).Warn("Failed to create google_subscriptions row")
+			}
+		} else if qErr == nil {
+			row.UserID = userID
+			if strings.TrimSpace(appUserID) != "" {
+				row.AppUserID = strings.TrimSpace(appUserID)
+			}
+			row.ProductID = receipt.ProductID
+			row.ExpiryTime = end
+			row.PaymentState = 1
+			row.UpdatedAt = now
+			if saveErr := paymodels.DataBase().WithContext(ctx).Save(&row).Error; saveErr != nil {
+				h.logger.WithError(saveErr).Warn("Failed to update google_subscriptions row")
+			}
+		}
+
+		userIDInt := int64(userID)
+		active, activeErr := paymodels.GetUserActiveSubscriptionByUserID(ctx, userIDInt)
+		if activeErr == nil && active != nil {
+			active.PackagePlanID = product.ID
+			active.EndTime = end
+			active.ProviderSubID = purchaseToken
+			active.MaxRoles = product.MaxRoles
+			active.MaxContexts = product.MaxContexts
+			active.QuotaLimit = product.QuotaLimit
+			_ = paymodels.UpdateUserSubscription(ctx, active)
+			return
+		}
+		sub := &paymodels.UserSubscription{
+			UserID:          userIDInt,
+			PackagePlanID:   product.ID,
+			Status:          paymodels.UserSubscriptionStatusActive,
+			StartTime:       start,
+			EndTime:         end,
+			AutoRenew:       true,
+			PaymentMethod:   paymodels.PaymentMethodGooglePay,
+			PaymentProvider: "Google Play",
+			ProviderSubID:   purchaseToken,
+			Currency:        "USD",
+			QuotaLimit:      product.QuotaLimit,
+			MaxRoles:        product.MaxRoles,
+			MaxContexts:     product.MaxContexts,
+		}
+		if createErr := paymodels.CreateUserSubscription(ctx, sub); createErr != nil {
+			h.logger.WithError(createErr).Warn("Failed to create user_subscriptions row for Google")
+		}
+		return
+	}
+
+	orderID := strings.TrimSpace(receipt.SubscriptionTransactionID)
+	var row paymodels.GooglePurchase
+	qErr := paymodels.DataBase().WithContext(ctx).
+		Where("purchase_token = ?", purchaseToken).
+		First(&row).Error
+	if errors.Is(qErr, gorm.ErrRecordNotFound) {
+		row = paymodels.GooglePurchase{
+			UserID:        userID,
+			AppUserID:     strings.TrimSpace(appUserID),
+			PurchaseToken: purchaseToken,
+			ProductID:     receipt.ProductID,
+			PackageName:   receipt.BundleID,
+			PurchaseTime:  receipt.CreationDate,
+			PurchaseState: 0,
+			OrderID:       orderID,
+			RawData:       receipt.ReceiptData,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		if createErr := paymodels.DataBase().WithContext(ctx).Create(&row).Error; createErr != nil {
+			h.logger.WithError(createErr).Warn("Failed to create google_purchases row")
+		}
+		return
+	}
+	if qErr == nil {
+		row.UserID = userID
+		if strings.TrimSpace(appUserID) != "" {
+			row.AppUserID = strings.TrimSpace(appUserID)
+		}
+		row.ProductID = receipt.ProductID
+		if orderID != "" {
+			row.OrderID = orderID
+		}
+		row.UpdatedAt = now
+		_ = paymodels.DataBase().WithContext(ctx).Save(&row).Error
+	}
+}
+
+// topUpUserTokens 非订阅类 IAP：在主库 memberships 上增量增加 token_quota（按交易 ID 幂等）。
+func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, tokens int, transactionID, productID string) error {
 	if h.mainDB == nil {
 		h.logger.Warn("mainDB not configured, skipping token top-up")
 		return nil
 	}
 	if tokens <= 0 || userIDStr == "" {
+		return nil
+	}
+
+	transactionID = strings.TrimSpace(transactionID)
+	var claimed bool
+	if transactionID != "" {
+		ok, claimErr := paymodels.TryClaimConsumableCreditGrant(ctx, transactionID, userIDStr, productID, tokens)
+		if claimErr != nil {
+			return claimErr
+		}
+		if !ok {
+			return nil
+		}
+		claimed = true
+	}
+
+	if err := h.adjustUserTokenQuota(ctx, userIDStr, tokens); err != nil {
+		if claimed {
+			_ = paymodels.ReleaseConsumableCreditGrant(ctx, transactionID)
+		}
+		return err
+	}
+	return nil
+}
+
+// clawbackConsumableTopUp 消耗型退款：按交易 ID 回收对应充值额度。返回是否实际回收。
+func (h *IAPHandler) clawbackConsumableTopUp(ctx context.Context, userIDStr, transactionID string) (bool, error) {
+	transactionID = strings.TrimSpace(transactionID)
+	if userIDStr == "" || transactionID == "" {
+		return false, nil
+	}
+	tokens, err := paymodels.MarkConsumableCreditRevoked(ctx, transactionID)
+	if err != nil {
+		return false, err
+	}
+	if tokens <= 0 {
+		return false, nil
+	}
+	if err := h.adjustUserTokenQuota(ctx, userIDStr, -tokens); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// adjustUserTokenQuota 增减 memberships.token_quota；负向时同步夹紧 token_used。
+func (h *IAPHandler) adjustUserTokenQuota(ctx context.Context, userIDStr string, delta int) error {
+	if h.mainDB == nil || userIDStr == "" || delta == 0 {
 		return nil
 	}
 
@@ -1571,15 +1772,20 @@ func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, toke
 	now := time.Now()
 	err := h.mainDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var m membership
-		err := tx.Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		qErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Table("memberships").Where("user_id = ?", userIDStr).First(&m).Error
+		if errors.Is(qErr, gorm.ErrRecordNotFound) {
+			quota := common.DefaultFreeTierTokenQuota
+			if delta > 0 {
+				quota += delta
+			}
 			m = membership{
 				ID:           uuid.New().String(),
 				UserID:       userIDStr,
 				Tier:         "free",
 				Status:       string(common.MembershipStatusActive),
 				StartDate:    now,
-				TokenQuota:   common.DefaultFreeTierTokenQuota + tokens,
+				TokenQuota:   quota,
 				TokenUsed:    0,
 				StorageQuota: common.DefaultFreeTierStorageBytes,
 				StorageUsed:  0,
@@ -1588,15 +1794,22 @@ func (h *IAPHandler) topUpUserTokens(ctx context.Context, userIDStr string, toke
 			}
 			return tx.Table("memberships").Create(&m).Error
 		}
-		if err != nil {
-			return fmt.Errorf("query membership: %w", err)
+		if qErr != nil {
+			return fmt.Errorf("query membership: %w", qErr)
 		}
-		return tx.Table("memberships").
-			Where("user_id = ?", userIDStr).
-			Updates(map[string]interface{}{
-				"token_quota": gorm.Expr("token_quota + ?", tokens),
-				"updated_at":  time.Now(),
-			}).Error
+
+		newQuota := m.TokenQuota + delta
+		if newQuota < 0 {
+			newQuota = 0
+		}
+		updates := map[string]interface{}{
+			"token_quota": newQuota,
+			"updated_at":  now,
+		}
+		if m.TokenUsed > newQuota {
+			updates["token_used"] = newQuota
+		}
+		return tx.Table("memberships").Where("user_id = ?", userIDStr).Updates(updates).Error
 	})
 	if err == nil {
 		h.invalidateMembershipCache(ctx, userIDStr)

@@ -14,6 +14,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // 这个文件包含所有其他repository方法的实现
@@ -1194,12 +1195,11 @@ func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, e
 func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amount int, source, description string) (*domain.TokenTransaction, error) {
 	var resultTx *domain.TokenTransaction
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 获取当前余额
 		var membership Membership
-		err := tx.Where("user_id = ?", userID).First(&membership).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ?", userID).First(&membership).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// 创建新的会员记录
 				membership = Membership{
 					ID:           uuid.New().String(),
 					UserID:       userID,
@@ -1223,7 +1223,6 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			return err
 		}
 
-		// 计算新余额
 		currentBalance := membership.TokenQuota - membership.TokenUsed
 		newBalance := currentBalance + amount
 
@@ -1231,12 +1230,18 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			return errors.New("insufficient token balance")
 		}
 
-		// 更新会员信息
 		if amount > 0 {
-			// 充值，增加配额
-			membership.TokenQuota += amount
+			if isTokenUsageRestoreSource(source) {
+				// 预留退还/释放：减少已占用的 token_used，而不是抬高 token_quota。
+				used := membership.TokenUsed - amount
+				if used < 0 {
+					used = 0
+				}
+				membership.TokenUsed = used
+			} else {
+				membership.TokenQuota += amount
+			}
 		} else {
-			// 消费，增加使用量
 			membership.TokenUsed += -amount
 		}
 		membership.UpdatedAt = time.Now()
@@ -1245,7 +1250,6 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			return err
 		}
 
-		// 创建交易记录
 		transaction := &TokenTransaction{
 			ID:          uuid.New().String(),
 			UserID:      userID,
@@ -1270,6 +1274,11 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 	}
 	cache.InvalidateMembership(ctx, r.cache, userID)
 	return resultTx, nil
+}
+
+func isTokenUsageRestoreSource(source string) bool {
+	s := strings.ToLower(strings.TrimSpace(source))
+	return strings.HasSuffix(s, "_refund") || strings.HasSuffix(s, "_release")
 }
 
 func (r *Repository) CreateSubscriptionPlan(ctx context.Context, plan *domain.SubscriptionPlan) error {
