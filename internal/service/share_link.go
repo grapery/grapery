@@ -27,6 +27,51 @@ const (
 	ShareKindCharacter  ShareKind = "character"
 )
 
+// Share funnel dimensions. Both end up as Prometheus labels, so they must come from a
+// closed set — anything a client sends that is not listed collapses to "other".
+const (
+	SharePlatformApp = "app"
+	SharePlatformWeb = "web"
+
+	ShareSourceAPIIssue      = "api_issue"
+	ShareSourceContentGet    = "content_get"
+	ShareSourceUniversalLink = "universal_link"
+
+	shareDimensionOther = "other"
+)
+
+var (
+	allowedSharePlatforms = map[string]struct{}{
+		SharePlatformApp: {}, SharePlatformWeb: {},
+		"ios": {}, "android": {}, "wechat": {}, "moments": {}, "copy": {}, "system": {},
+	}
+	allowedShareSources = map[string]struct{}{
+		ShareSourceAPIIssue: {}, ShareSourceContentGet: {}, ShareSourceUniversalLink: {},
+		"deeplink": {}, "qrcode": {},
+	}
+)
+
+// NormalizeSharePlatform maps a client-supplied platform onto the allowed label set.
+func NormalizeSharePlatform(raw, fallback string) string {
+	return normalizeShareDimension(raw, fallback, allowedSharePlatforms)
+}
+
+// NormalizeShareSource maps a client-supplied source onto the allowed label set.
+func NormalizeShareSource(raw, fallback string) string {
+	return normalizeShareDimension(raw, fallback, allowedShareSources)
+}
+
+func normalizeShareDimension(raw, fallback string, allowed map[string]struct{}) string {
+	v := strings.TrimSpace(strings.ToLower(raw))
+	if v == "" {
+		return fallback
+	}
+	if _, ok := allowed[v]; ok {
+		return v
+	}
+	return shareDimensionOther
+}
+
 // ShareLinkIssue holds a signed public share URL.
 type ShareLinkIssue struct {
 	ShareURL string `json:"shareUrl"`
@@ -67,12 +112,27 @@ func (s *ShareLinkSigner) Issue(kind ShareKind, id string, ttl time.Duration) (*
 	}
 	exp := time.Now().Add(ttl).Unix()
 	token := s.sign(kind, id, exp)
-	shareURL := fmt.Sprintf("https://%s/%s/%s?t=%s&exp=%d", shareLinkCanonicalHost, kind, id, token, exp)
+	// Land on the public website with the grant so H5 can pass t/exp to content APIs.
+	// Open tracking is recorded when Grapery serves the content GET with a valid grant.
+	shareURL := WebLandingURL(kind, id, token, exp)
 	return &ShareLinkIssue{
 		ShareURL: shareURL,
 		Token:    token,
 		Exp:      exp,
 	}, nil
+}
+
+// WebLandingURL builds the public website URL for a signed share (after open redirect).
+func WebLandingURL(kind ShareKind, id, token string, exp int64) string {
+	id = strings.TrimSpace(id)
+	token = strings.TrimSpace(token)
+	if id == "" {
+		return fmt.Sprintf("https://%s/", shareLinkCanonicalHost)
+	}
+	if token != "" && exp > 0 {
+		return fmt.Sprintf("https://%s/%s/%s?t=%s&exp=%d", shareLinkCanonicalHost, kind, id, token, exp)
+	}
+	return fmt.Sprintf("https://%s/%s/%s", shareLinkCanonicalHost, kind, id)
 }
 
 // Verify checks token and expiry for a share link grant.

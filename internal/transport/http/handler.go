@@ -125,6 +125,17 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 		storyboardFeed.Use(authPkg.OptionalAuthMiddleware())
 		storyboardFeed.GET("/storyboards/feed", h.GetStoryboardFeed)
 
+		// 分享落地 / 微信内打开：详情接口允许匿名 + 签名授权访问，但仍保留 401 语义——
+		// 带了过期 token 的请求必须拿到 401 才能触发客户端 refresh，而不是静默降级成游客。
+		shareLanding := api.Group("/v1")
+		if apiLimiter != nil {
+			shareLanding.Use(apiLimiter)
+		}
+		shareLanding.Use(authPkg.OptionalAuthStrictMiddleware())
+		shareLanding.GET("/stories/:id", h.GetStory)
+		shareLanding.GET("/storyboards/:id", h.GetStoryboard)
+		shareLanding.GET("/characters/:id", h.GetCharacter)
+
 		// 需要认证的路由（使用 /api/v1 前缀）
 		authenticated := api.Group("/v1")
 		if apiLimiter != nil {
@@ -160,12 +171,10 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/tags/popular", h.GetPopularTags)
 			authenticated.GET("/tags/:id/stories", h.GetStoriesByTag)
 			authenticated.GET("/stories", h.ListStories)
-			authenticated.GET("/stories/:id", h.GetStory)
 			authenticated.GET("/stories/:id/tags", h.GetStoryTags)
 			authenticated.GET("/stories/:id/stats", h.GetStoryStats)
 			authenticated.GET("/storyboards", h.ListStoryboards)
 			// REMOVED: Dashboard storyboard feeds - not in StoryCreationAppUI design
-			authenticated.GET("/storyboards/:id", h.GetStoryboard)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
 
@@ -177,7 +186,6 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// 角色相关
 			authenticated.GET("/characters", h.ListCharacters)
-			authenticated.GET("/characters/:id", h.GetCharacter)
 			authenticated.GET("/characters/:id/analytics", h.GetCharacterAnalytics)
 			// REMOVED: /characters/:id/posters - not in StoryCreationAppUI design
 			authenticated.GET("/characters/:id/storyboards", h.GetCharacterStoryboards)
@@ -440,15 +448,35 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// Public Trending (guest-accessible)
 			public.GET("/public/stories/trending", h.GetTrendingStoriesPublic)
 			public.GET("/public/trending/storyboards", h.GetPublicTrendingStoryboards)
-			sharePublic := public.Group("/public/share")
-			if sharePreviewLimiter != nil {
-				sharePublic.Use(sharePreviewLimiter)
-			}
-			sharePublic.GET("/preview", h.GetPublicSharePreview)
 			if deps.FeedbackService != nil {
 				feedbackHandler := NewFeedbackHandler(deps.FeedbackService)
 				feedbackHandler.RegisterPublicSupportRoutes(public)
 			}
+		}
+
+		// Share open/preview: issued URLs + clients use /api/v1/public/share/*
+		sharePublicV1 := api.Group("/v1/public/share")
+		if apiLimiter != nil {
+			sharePublicV1.Use(apiLimiter)
+		}
+		if sharePreviewLimiter != nil {
+			sharePublicV1.Use(sharePreviewLimiter)
+		}
+		{
+			sharePublicV1.GET("/preview", h.GetPublicSharePreview)
+			sharePublicV1.POST("/open", h.TrackShareOpen)
+		}
+		// Alias without /v1 for older proxies / rewrites
+		sharePublicAlias := api.Group("/public/share")
+		if apiLimiter != nil {
+			sharePublicAlias.Use(apiLimiter)
+		}
+		if sharePreviewLimiter != nil {
+			sharePublicAlias.Use(sharePreviewLimiter)
+		}
+		{
+			sharePublicAlias.GET("/preview", h.GetPublicSharePreview)
+			sharePublicAlias.POST("/open", h.TrackShareOpen)
 		}
 
 	}

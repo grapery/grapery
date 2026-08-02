@@ -1364,3 +1364,17 @@ type FragmentShareDB struct {
 func (FragmentShareDB) TableName() string {
 	return "fragment_shares"
 }
+
+// ShareEventDB persists share issue/open funnel events for admin analytics.
+type ShareEventDB struct {
+	ID        string `gorm:"primaryKey;size:36"`
+	EventType string `gorm:"size:16;not null;index:idx_share_events_type_created"`
+	Kind      string `gorm:"size:32;not null;index:idx_share_events_kind_created"`
+	ContentID string `gorm:"size:64;not null;index:idx_share_events_content"`
+	UserID    string `gorm:"size:36;index:idx_share_events_user"`
+	Platform  string `gorm:"size:32"`
+	Source    string `gorm:"size:32"`
+	CreatedAt int64  `gorm:"type:bigint;autoCreateTime;index:idx_share_events_type_created;index:idx_share_events_kind_created"`
+}
+
+func (ShareEventDB) TableName() string { return "share_events" }

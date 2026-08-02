@@ -211,6 +211,15 @@ func (h *Handler) GetStoryboard(c *gin.Context) {
 		return
 	}
 
+	shareGrant := h.ShareGrantFromRequest(c, service.ShareKindStoryboard, id)
+	if !h.svc.CanViewerSeeStoryboard(c.Request.Context(), GetUserID(c), storyboard, shareGrant) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
+	if shareGrant {
+		h.recordShareEvent(c.Request.Context(), domain.ShareEventOpen, service.ShareKindStoryboard, id, GetUserID(c), service.SharePlatformWeb, service.ShareSourceContentGet)
+	}
+
 	if uid := GetUserID(c); uid != "" {
 		go func(sbID, viewer string) {
 			h.svc.RecordStoryboardFeedSeen(context.Background(), viewer, sbID)

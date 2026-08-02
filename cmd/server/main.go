@@ -377,6 +377,8 @@ func main() {
 	// Initialize HTTP handler with dependencies (V1/V2 MVP - removed WritersRoom and GroupShowcase)
 	shareSigner := service.NewShareLinkSigner(jwtSecret)
 	svc.SetShareLinkSigner(shareSigner)
+	shareEventRepo := repository.NewShareEventRepository(repo.DB())
+	svc.SetShareEventRepository(shareEventRepo)
 
 	// Agent Access Token signer: env/配置未设置时使用 config.DefaultAgentTokenSigningKey。
 	agentTokenSigner := service.NewAgentAccessTokenSigner(cfg.AgentToken.SigningKey, time.Duration(cfg.AgentToken.TTLSeconds)*time.Second)

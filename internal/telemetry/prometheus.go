@@ -112,6 +112,9 @@ type Metrics struct {
 	StoryboardWorkflowCompleted *prometheus.CounterVec
 	StoryboardWorkflowDuration  *prometheus.HistogramVec
 
+	// Share funnel metrics (issue / open)
+	ShareEventsTotal *prometheus.CounterVec
+
 	config    PrometheusConfig
 	pusher    *push.Pusher
 	stopChan  chan struct{}
@@ -619,6 +622,14 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 			},
 			[]string{"workflow_status"},
 		),
+
+		ShareEventsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "share_events_total",
+				Help: "[business] Share funnel events (issue / open) by kind, platform, and source",
+			},
+			[]string{"event_type", "kind", "platform", "source"},
+		),
 	}
 
 	// Register all metrics
@@ -688,6 +699,7 @@ func NewMetrics(config PrometheusConfig) *Metrics {
 		m.AIGenerationRetries,
 		m.StoryboardWorkflowCompleted,
 		m.StoryboardWorkflowDuration,
+		m.ShareEventsTotal,
 	)
 
 	// Note: Go collectors (NewGoCollector, NewProcessCollector) are not registered
@@ -1155,6 +1167,26 @@ func (m *Metrics) RecordStoryboardWorkflowCompleted(workflowStatus string, durat
 	if duration > 0 {
 		m.StoryboardWorkflowDuration.WithLabelValues(workflowStatus).Observe(duration.Seconds())
 	}
+}
+
+// RecordShareEvent records a share funnel event (issue / open).
+func (m *Metrics) RecordShareEvent(eventType, kind, platform, source string) {
+	if m == nil || m.ShareEventsTotal == nil {
+		return
+	}
+	if eventType == "" {
+		eventType = "unknown"
+	}
+	if kind == "" {
+		kind = "unknown"
+	}
+	if platform == "" {
+		platform = "unknown"
+	}
+	if source == "" {
+		source = "unknown"
+	}
+	m.ShareEventsTotal.WithLabelValues(eventType, kind, platform, source).Inc()
 }
 
 // DefaultMetrics is the global metrics instance

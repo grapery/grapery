@@ -78,10 +78,14 @@ func (h *Handler) GetStory(c *gin.Context) {
 		return
 	}
 
-	// 可见性鉴权：private 仅作者、followers 仅关注者可见。
-	if !h.svc.CanViewerSeeStory(c.Request.Context(), GetUserID(c), story) {
+	shareGrant := h.ShareGrantFromRequest(c, service.ShareKindStory, storyID)
+	// 可见性鉴权：public / 有效分享签名 / 作者或关注者
+	if !h.svc.CanViewerSeeStoryWithGrant(c.Request.Context(), GetUserID(c), story, shareGrant) {
 		HandleError(c, domain.ErrForbidden)
 		return
+	}
+	if shareGrant {
+		h.recordShareEvent(c.Request.Context(), domain.ShareEventOpen, service.ShareKindStory, storyID, GetUserID(c), service.SharePlatformWeb, service.ShareSourceContentGet)
 	}
 
 	h.attachStoryViewerState(c, story)

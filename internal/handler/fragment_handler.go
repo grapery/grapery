@@ -264,6 +264,10 @@ func (h *FragmentHandler) GetFragment(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
+	if shareGrant && h.svc != nil {
+		h.svc.RecordShareEvent(c.Request.Context(), domain.ShareEventOpen, coreservice.ShareKindFragment, id, userID,
+			coreservice.SharePlatformWeb, coreservice.ShareSourceContentGet)
+	}
 	if stats, statsErr := h.fragmentRepo.GetEngagementStats(c.Request.Context(), id, userID); statsErr == nil {
 		fragment.Likes = stats.Likes
 		fragment.Comments = stats.Comments

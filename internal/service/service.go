@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/cache"
 	"github.com/grapestree/fgrapery/grapery/internal/config"
@@ -33,6 +35,7 @@ type Service struct {
 	accountDeletionCfg        config.AccountDeletionConfig // grace period & system anon user ID
 	terminationFragmentRepo   *repository.FragmentRepository
 	shareSigner               *ShareLinkSigner
+	shareEvents               *repository.ShareEventRepository
 
 	// structureResumeLocks serializes POST .../generate/structure per storyboard ID (TryLock = busy).
 	structureResumeLocks sync.Map // string -> *sync.Mutex
@@ -97,6 +100,82 @@ func (s *Service) ConfigureAITextAdmission(c cache.Cache, maxConcurrent int) {
 // SetShareLinkSigner wires HMAC signing for public share URLs.
 func (s *Service) SetShareLinkSigner(signer *ShareLinkSigner) {
 	s.shareSigner = signer
+}
+
+// SetShareEventRepository wires share issue/open event persistence for admin analytics.
+func (s *Service) SetShareEventRepository(repo *repository.ShareEventRepository) {
+	s.shareEvents = repo
+}
+
+// shareOpenDedupeTTL collapses repeated opens of the same link by the same viewer
+// (page reloads, client retries, the landing page refetching content) into one event.
+const shareOpenDedupeTTL = 30 * time.Minute
+
+// RecordShareEvent persists a share funnel event and updates Prometheus counters.
+// Persistence happens off the request goroutine: this sits on anonymous read paths and
+// must never add latency or fail the response.
+func (s *Service) RecordShareEvent(ctx context.Context, eventType domain.ShareEventType, kind ShareKind, contentID, userID, platform, source string) {
+	if s == nil {
+		return
+	}
+	if eventType == domain.ShareEventOpen && s.shareOpenAlreadyCounted(ctx, kind, contentID, userID, platform) {
+		return
+	}
+	s.RecordShareMetric(eventType, kind, platform, source)
+	if s.shareEvents == nil {
+		return
+	}
+	ev := &domain.ShareEvent{
+		EventType: eventType,
+		Kind:      string(kind),
+		ContentID: contentID,
+		UserID:    userID,
+		Platform:  platform,
+		Source:    source,
+	}
+	go func() {
+		writeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.shareEvents.Create(writeCtx, ev); err != nil && s.logger != nil {
+			s.logger.Warn("share event persist failed",
+				zap.String("eventType", string(ev.EventType)),
+				zap.String("kind", ev.Kind),
+				zap.String("contentID", ev.ContentID),
+				zap.Error(err))
+		}
+	}()
+}
+
+// shareOpenAlreadyCounted returns true when this viewer already produced an open for
+// the same content within the dedupe window. Without a cache it never dedupes.
+func (s *Service) shareOpenAlreadyCounted(ctx context.Context, kind ShareKind, contentID, userID, platform string) bool {
+	c := s.getCache()
+	if c == nil || contentID == "" {
+		return false
+	}
+	viewer := userID
+	if viewer == "" {
+		// Anonymous opens can only be grouped by platform; good enough to absorb reloads.
+		viewer = "anon:" + platform
+	}
+	key := fmt.Sprintf("share:open:%s:%s:%s", kind, contentID, viewer)
+	n, err := c.Incr(ctx, key)
+	if err != nil {
+		return false
+	}
+	if n == 1 {
+		_ = c.Expire(ctx, key, shareOpenDedupeTTL)
+		return false
+	}
+	return true
+}
+
+// RecordShareMetric increments Prometheus share counters (no DB write).
+func (s *Service) RecordShareMetric(eventType domain.ShareEventType, kind ShareKind, platform, source string) {
+	if s == nil || s.metrics == nil {
+		return
+	}
+	s.metrics.RecordShareEvent(string(eventType), string(kind), platform, source)
 }
 
 // HasValidShareGrant returns true when query token matches kind/id/exp.

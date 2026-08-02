@@ -191,6 +191,15 @@ func (h *Handler) GetCharacter(c *gin.Context) {
 		return
 	}
 
+	shareGrant := h.ShareGrantFromRequest(c, service.ShareKindCharacter, characterID)
+	if !h.svc.CanViewerSeeCharacter(c.Request.Context(), userID, character, shareGrant) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
+	if shareGrant {
+		h.recordShareEvent(c.Request.Context(), domain.ShareEventOpen, service.ShareKindCharacter, characterID, userID, service.SharePlatformWeb, service.ShareSourceContentGet)
+	}
+
 	Success(c, character)
 }
 

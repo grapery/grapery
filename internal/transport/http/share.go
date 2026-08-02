@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,9 @@ func (h *Handler) IssueShareLink(c *gin.Context) {
 	}
 
 	var req struct {
-		Kind string `json:"kind" binding:"required"`
-		ID   string `json:"id" binding:"required"`
+		Kind     string `json:"kind" binding:"required"`
+		ID       string `json:"id" binding:"required"`
+		Platform string `json:"platform"`
 	}
 	if !BindJSON(c, &req) {
 		return
@@ -45,7 +47,49 @@ func (h *Handler) IssueShareLink(c *gin.Context) {
 		return
 	}
 
+	h.recordShareEvent(c.Request.Context(), domain.ShareEventIssue, kind, id, userID,
+		service.NormalizeSharePlatform(req.Platform, service.SharePlatformApp), service.ShareSourceAPIIssue)
+
 	Success(c, issue)
+}
+
+// TrackShareOpen POST /api/v1/public/share/open
+// Used by iOS Universal Link handlers (and future clients) to report a share open.
+func (h *Handler) TrackShareOpen(c *gin.Context) {
+	var req struct {
+		Kind     string `json:"kind" binding:"required"`
+		ID       string `json:"id" binding:"required"`
+		Token    string `json:"t"`
+		Exp      string `json:"exp"`
+		Platform string `json:"platform"`
+		Source   string `json:"source"`
+	}
+	if !BindJSON(c, &req) {
+		return
+	}
+
+	kind := service.ShareKind(strings.TrimSpace(strings.ToLower(req.Kind)))
+	id := strings.TrimSpace(req.ID)
+	if id == "" || !validShareKindQuery(kind) {
+		InvalidParams(c, "kind and id are required")
+		return
+	}
+
+	token, exp, hasGrant := service.ParseShareGrantFromQuery(req.Token, req.Exp)
+	shareGrant := false
+	if hasGrant && h.shareSigner != nil {
+		shareGrant = h.shareSigner.Verify(kind, id, token, exp)
+	}
+
+	if !h.canPublicPreview(c, kind, id, shareGrant) {
+		Forbidden(c, "content is not publicly shareable")
+		return
+	}
+
+	h.recordShareEvent(c.Request.Context(), domain.ShareEventOpen, kind, id, GetUserID(c),
+		service.NormalizeSharePlatform(req.Platform, service.SharePlatformApp),
+		service.NormalizeShareSource(req.Source, service.ShareSourceUniversalLink))
+	Success(c, gin.H{"ok": true})
 }
 
 // GetPublicSharePreview GET /api/v1/public/share/preview?kind=fragment&id=...&t=...&exp=...
@@ -74,6 +118,8 @@ func (h *Handler) GetPublicSharePreview(c *gin.Context) {
 		return
 	}
 
+	// No share-open event here: preview is fetched by link crawlers (WeChat, IM cards)
+	// rather than by a human opening the content, and counting it inflates the funnel.
 	Success(c, preview)
 }
 
@@ -101,18 +147,16 @@ func (h *Handler) ensureShareIssuerCanAccess(c *gin.Context, userID string, kind
 		if err != nil {
 			return err
 		}
-		if sb.StoryID != "" {
-			st, err := h.svc.GetStory(ctx, sb.StoryID)
-			if err != nil {
-				return err
-			}
-			if !h.svc.CanViewerSeeStory(ctx, userID, st) {
-				return domain.ErrForbidden
-			}
+		if !h.svc.CanViewerSeeStoryboard(ctx, userID, sb, false) {
+			return domain.ErrForbidden
 		}
 	case service.ShareKindCharacter:
-		if _, err := h.svc.GetCharacter(ctx, id); err != nil {
+		ch, err := h.svc.GetCharacter(ctx, id)
+		if err != nil {
 			return err
+		}
+		if !h.svc.CanViewerSeeCharacter(ctx, userID, ch, false) {
+			return domain.ErrForbidden
 		}
 	default:
 		return domain.ErrNotFound
@@ -135,28 +179,19 @@ func (h *Handler) canPublicPreview(c *gin.Context, kind service.ShareKind, id st
 		if err != nil {
 			return false
 		}
-		if shareGrant {
-			return true
-		}
-		return h.svc.CanViewerSeeStory(ctx, viewerID, st)
+		return h.svc.CanViewerSeeStoryWithGrant(ctx, viewerID, st, shareGrant)
 	case service.ShareKindStoryboard:
 		sb, err := h.svc.GetStoryboard(ctx, id)
 		if err != nil {
 			return false
 		}
-		if shareGrant {
-			return true
-		}
-		if sb.StoryID == "" {
-			return true
-		}
-		st, err := h.svc.GetStory(ctx, sb.StoryID)
+		return h.svc.CanViewerSeeStoryboard(ctx, viewerID, sb, shareGrant)
+	case service.ShareKindCharacter:
+		ch, err := h.svc.GetCharacter(ctx, id)
 		if err != nil {
 			return false
 		}
-		return h.svc.CanViewerSeeStory(ctx, viewerID, st)
-	case service.ShareKindCharacter:
-		return true
+		return h.svc.CanViewerSeeCharacter(ctx, viewerID, ch, shareGrant)
 	default:
 		return false
 	}
@@ -181,4 +216,16 @@ func (h *Handler) ShareGrantFromRequest(c *gin.Context, kind service.ShareKind, 
 		return false
 	}
 	return h.shareSigner.Verify(kind, id, token, exp)
+}
+
+func (h *Handler) recordShareEvent(
+	ctx context.Context,
+	eventType domain.ShareEventType,
+	kind service.ShareKind,
+	contentID, userID, platform, source string,
+) {
+	if h.svc == nil {
+		return
+	}
+	h.svc.RecordShareEvent(ctx, eventType, kind, contentID, userID, platform, source)
 }

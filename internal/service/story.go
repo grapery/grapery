@@ -705,6 +705,64 @@ func filterPublicPublishedStories(stories []*domain.Story) []*domain.Story {
 	return out
 }
 
+// CanViewerSeeStoryWithGrant extends CanViewerSeeStory with signed share-link grants.
+func (s *Service) CanViewerSeeStoryWithGrant(ctx context.Context, viewerUserID string, st *domain.Story, shareGrant bool) bool {
+	if shareGrant {
+		return st != nil
+	}
+	return s.CanViewerSeeStory(ctx, viewerUserID, st)
+}
+
+// CanViewerSeeStoryboard determines whether viewer may read a storyboard.
+// shareGrant is true when a valid signed share link is presented.
+func (s *Service) CanViewerSeeStoryboard(ctx context.Context, viewerUserID string, sb *domain.Storyboard, shareGrant bool) bool {
+	if sb == nil {
+		return false
+	}
+	if shareGrant {
+		return true
+	}
+	if viewerUserID != "" && viewerUserID == sb.UserID {
+		return true
+	}
+	if sb.StoryID == "" {
+		// Orphan boards have no story to inherit visibility from; only published ones
+		// (the same state the public feed exposes) are readable by non-owners.
+		return sb.WorkflowStatus == domain.WorkflowStatusPublished
+	}
+	st, err := s.GetStory(ctx, sb.StoryID)
+	if err != nil || st == nil {
+		return false
+	}
+	return s.CanViewerSeeStory(ctx, viewerUserID, st)
+}
+
+// CanViewerSeeCharacter determines whether viewer may read a character.
+// Characters are authored by the story owner, so a non-public character inherits
+// the visibility of its parent story. shareGrant is true for a valid signed link.
+func (s *Service) CanViewerSeeCharacter(ctx context.Context, viewerUserID string, ch *domain.Character, shareGrant bool) bool {
+	if ch == nil {
+		return false
+	}
+	if shareGrant {
+		return true
+	}
+	if viewerUserID != "" && viewerUserID == ch.UserID {
+		return true
+	}
+	if ch.IsPublic {
+		return true
+	}
+	if ch.StoryID == "" {
+		return false
+	}
+	st, err := s.GetStory(ctx, ch.StoryID)
+	if err != nil || st == nil {
+		return false
+	}
+	return s.CanViewerSeeStory(ctx, viewerUserID, st)
+}
+
 // CanViewerSeeStory 判断 viewerUserID 是否有权查看 st（基于已加载的故事对象）：
 // - 作者本人：始终可见
 // - public：所有人可见

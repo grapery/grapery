@@ -827,6 +827,15 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_share_events",
+		Description: "Create share_events table for share issue/open analytics",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &ShareEventDB{})
+		},
+		Required: true,
+	})
+
 	// ========== 多态关注/点赞表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_legacy_polymorphic_follows_then_drop",

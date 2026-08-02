@@ -233,6 +233,61 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// OptionalAuthStrictMiddleware 允许匿名访问，但拒绝"带了凭证却无效"的请求。
+// 用于既要支持分享落地页游客访问、又不能让客户端 token 过期后静默降级为游客的接口：
+// 无 Authorization 头 → 匿名放行；带头但格式错误 / token 无效 → 401，客户端据此触发 refresh。
+func OptionalAuthStrictMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		method := c.Request.Method
+		path := c.Request.URL.Path
+
+		authHeader := c.GetHeader("Authorization")
+		if strings.TrimSpace(authHeader) == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			authLogger.WithFields(logrus.Fields{
+				"method": method,
+				"path":   path,
+			}).Warn("Invalid authorization header format (strict optional auth)")
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    -9,
+				"message": "invalid authorization header format",
+				"data":    nil,
+			})
+			c.Abort()
+			return
+		}
+
+		claims, err := ParseToken(parts[1])
+		if err != nil {
+			authLogger.WithFields(logrus.Fields{
+				"method": method,
+				"path":   path,
+				"error":  err,
+			}).Warn("Strict optional auth token validation failed")
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    -2,
+				"message": "invalid or expired token",
+				"data":    nil,
+			})
+			c.Abort()
+			return
+		}
+
+		c.Set("userID", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("email", claims.Email)
+		c.Request = c.Request.WithContext(
+			ContextWithUserInfo(c.Request.Context(), claims.UserID, claims.Username, claims.Email),
+		)
+		c.Next()
+	}
+}
+
 // GetUserID 从上下文获取用户 ID
 func GetUserID(c *gin.Context) string {
 	if userID, exists := c.Get("userID"); exists {
