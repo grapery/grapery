@@ -1,0 +1,102 @@
+services:
+  # 主应用服务
+  grapes:
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapery-app:latest
+    container_name: grapery-app
+    # 移除端口暴露，只通过nginx访问
+    env_file:
+      - .env
+    command: ["./grapes-app", "--config", "/app/app.json"]
+    restart: unless-stopped
+    networks:
+      - grapery-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+      placement:
+        max_replicas_per_node: 4
+
+  # llmchat 服务
+  grapes-llmchat:
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-llmchat:latest
+    container_name: grapes-llmchat
+    # 移除端口暴露，只通过nginx访问
+    env_file:
+      - .env
+    command: ["./grapes-llmchat", "--config", "/app/llmchat.json"]
+    restart: unless-stopped
+    networks:
+      - grapery-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+      placement:
+        max_replicas_per_node: 4
+
+  # vippay 服务
+  grapes-vippay:
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-vippay:latest
+    container_name: grapes-vippay
+    env_file:
+      - .env
+    command: ["./grapes-vippay", "--config", "/app/vippay.json"]
+    restart: unless-stopped
+    networks:
+      - grapery-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+      placement:
+        max_replicas_per_node: 4
+
+  # asynctask 服务
+  grapes-asynctask:
+    image: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com/grapery-dev/grapes-asynctask:latest
+    container_name: grapes-asynctask
+    env_file:
+      - .env
+    command: ["./grapes-asynctask", "--config", "/app/asynctask.json"]
+    restart: unless-stopped
+    networks:
+      - grapery-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+      placement:
+        max_replicas_per_node: 4
+
+  # Nginx 反向代理服务
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: grapery-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - grapes
+      - grapes-llmchat
+      - grapes-vippay
+      - grapes-asynctask
+    restart: unless-stopped
+    networks:
+      - grapery-network
+
+networks:
+  grapery-network:
+    driver: bridge

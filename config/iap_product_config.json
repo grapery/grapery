@@ -1,0 +1,20 @@
+{
+  "apple": {
+    "issuer_id": "YOUR_APPLE_ISSUER_ID",
+    "key_id": "YOUR_APPLE_KEY_ID", 
+    "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_APPLE_PRIVATE_KEY_PEM\n-----END PRIVATE KEY-----",
+    "bundle_id": "com.yourapp.bundleid",
+    "api_base_url": "https://api.appstoreconnect.apple.com",
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "retry_delay_ms": 1000
+  },
+  "google": {
+    "service_account_key": "{\n  \"type\": \"service_account\",\n  \"project_id\": \"your-project-id\",\n  \"private_key_id\": \"your-private-key-id\",\n  \"private_key\": \"-----BEGIN PRIVATE KEY-----\\nYOUR_PRIVATE_KEY\\n-----END PRIVATE KEY-----\\n\",\n  \"client_email\": \"your-service-account@your-project.iam.gserviceaccount.com\",\n  \"client_id\": \"your-client-id\",\n  \"auth_uri\": \"https://accounts.google.com/o/oauth2/auth\",\n  \"token_uri\": \"https://oauth2.googleapis.com/token\",\n  \"auth_provider_x509_cert_url\": \"https://www.googleapis.com/oauth2/v1/certs\",\n  \"client_x509_cert_url\": \"https://www.googleapis.com/robot/v1/metadata/x509/your-service-account%40your-project.iam.gserviceaccount.com\"\n}",
+    "package_name": "com.yourapp.packagename",
+    "api_base_url": "https://androidpublisher.googleapis.com",
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "retry_delay_ms": 1000
+  }
+}

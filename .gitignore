@@ -1,0 +1,23 @@
+grapes-app
+grapes-worker
+grapes-mcps
+grapes-vippay
+grapes-pay
+grapes-llmchat
+grapes-admin
+grapes-asynctask
+vippay
+.idea/*
+.DS_Store
+.vscode
+dev.session.sql
+.idea/vcs.xml
+# Secrets / local credentials
+.env
+.env.*
+!.env.example
+certs/
+*.key
+*.pem
+*.p12
+*.pfx

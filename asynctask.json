@@ -1,0 +1,54 @@
+{
+  "sql_db": {
+    "database": "grapery",
+    "username": "root",
+    "password": "12345678",
+    "address": "localhost"
+  },
+  "redis": {
+    "address": "localhost:6379",
+    "password": "",
+    "database": "0",
+    "ping_interval": 30
+  },
+  "asynctask": {
+    "http_port": "8050",
+    "providers": {
+      "hailuo": {
+        "enabled": false,
+        "api_key": "HAILUO_API_KEY",
+        "base_url": "https://api.minimax.com",
+        "model": "MiniMax-Hailuo-2.3",
+        "image_model": "image-01",
+        "timeout": 600
+      },
+      "huoshan": {
+        "enabled": true,
+        "api_key": "HUOSHAN_API_KEY",
+        "base_url": "https://open.byteplusapi.com",
+        "image_base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "workflow": "doubao-seedance-1-0-pro-250528",
+        "image_model": "doubao-seedream-4-0-250828",
+        "timeout": 600
+      },
+      "gemini": {
+        "enabled": true,
+        "api_key": "GEMINI_API_KEY",
+        "model": "veo-3.1-generate-preview",
+        "image_model": "gemini-2.5-flash-image",
+        "timeout": 600
+      }
+    }
+  },
+  "rate_limit": {
+    "window_seconds": 60,
+    "default_limit": 120,
+    "per_route": {},
+    "prefer_user": true,
+    "per_user": {}
+  },
+  "log_level": "info",
+  "rpc_port": "8090",
+  "http_port": "8080"
+}
+

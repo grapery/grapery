@@ -1,0 +1,36 @@
+{
+  "sql_db": {
+    "database": "grapery",
+    "username": "root",
+    "password": "12345678",
+    "address": "localhost"
+  },
+  "redis": {
+    "address": "localhost:6379",
+    "password": "",
+    "database": "0",
+    "ping_interval": 30
+  },
+  "llmchat": {
+    "http_port": "8060"
+  },
+  "vippay": {
+    "http_port": "8088"
+  },
+  "rate_limit": {
+    "window_seconds": 60,
+    "default_limit": 120,
+    "per_route": {
+      "/common.TeamsAPI/Login": 30,
+      "/common.TeamsAPI/Register": 15,
+      "/common.TeamsAPI/Reset_password": 20
+    },
+    "prefer_user": true,
+    "per_user": {
+      "10001": 300
+    }
+  },
+  "log_level": "info",
+  "rpc_port": "8090",
+  "http_port": "8080"
+}

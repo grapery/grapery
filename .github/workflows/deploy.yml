@@ -1,0 +1,293 @@
+name: CI/CD Deploy
+
+on:
+  push:
+    branches: [main, develop,feature/coze]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: '要部署的服务（逗号分隔，可选：nginx,redis,grapes-app,grapes-pay,grapes-llmchat,grapes-asynctask）'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  detect-services:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.parse.outputs.services }}
+      should_deploy: ${{ steps.parse.outputs.should_deploy }}
+    steps:
+      - name: Parse deploy services from commit message or input
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            SERVICES="${{ github.event.inputs.services }}"
+          else
+            # 从 commit message 中解析 [deploy:service1,service2] 格式
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            if echo "$COMMIT_MSG" | grep -qE '\[deploy:[^]]+\]'; then
+              SERVICES=$(echo "$COMMIT_MSG" | grep -oE '\[deploy:[^]]+\]' | sed 's/\[deploy://' | sed 's/\]//')
+            else
+              SERVICES=""
+            fi
+          fi
+          
+          if [ -z "$SERVICES" ] || [ "$SERVICES" == "" ]; then
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            echo "services=" >> $GITHUB_OUTPUT
+            echo "⚠️  未指定要部署的服务，跳过部署"
+            echo "💡 提示：在 commit message 中使用 [deploy:service1,service2] 格式指定要部署的服务"
+            echo "💡 或使用 workflow_dispatch 手动触发并指定服务"
+            exit 0
+          fi
+          
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          echo "✅ 检测到要部署的服务: $SERVICES"
+
+  build-and-deploy:
+    needs: detect-services
+    if: needs.detect-services.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: env
+    env:
+      REGISTRY: crpi-kz6w8hb0pa94yvgy.cn-hangzhou.personal.cr.aliyuncs.com
+      IMAGE_NAME: grapery-app
+      TAG: ${{ github.sha }}
+      DEPLOY_SERVICES: ${{ needs.detect-services.outputs.services }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate .env file with secrets
+        run: |
+          export ALIPAY_APP_ID=${{ vars.ALIPAY_APP_ID }}
+          export ALIPAY_NOTIFY_URL=${{ vars.ALIPAY_NOTIFY_URL }}
+          export ALIPAY_PRIVATE_KEY=${{ vars.ALIPAY_PRIVATE_KEY }}
+          export ALIPAY_PUBLIC_KEY=${{ vars.ALIPAY_PUBLIC_KEY }}
+          export ALIPAY_RETURN_URL=${{ vars.ALIPAY_RETURN_URL }}
+          export ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
+          export ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
+          export ALIYUN_OSS_BUCKET=${{ vars.ALIYUN_OSS_BUCKET }}
+          export ALIYUN_OSS_ENDPOINT=${{ vars.ALIYUN_OSS_ENDPOINT }}
+          export ALIYUN_REGION=${{ vars.ALIYUN_REGION }}
+          export ALIYUN_ROLE_ARN=${{ vars.ALIYUN_ROLE_ARN }}
+          export ALIYUN_API_KEY=${{ vars.ALIYUN_API_KEY }}
+          export ALIYUN_SECRET_KEY=${{ vars.ALIYUN_SECRET_KEY }}
+          export ALIYUN_OSS_BUCKET=${{ vars.ALIYUN_OSS_BUCKET }}
+
+          export COZE_API_KEY=${{ vars.COZE_API_KEY }}
+          export COZE_WORKSPACE_ID=${{ vars.COZE_WORKSPACE_ID }}
+
+          export DB_NAME=${{ vars.DB_NAME }}
+          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          export DB_USER=${{ vars.DB_USER }}
+          export DB_ADDR=${{ vars.DB_ADDR }}
+
+          export DOCKERHUB_TOKEN=${{ vars.DOCKERHUB_TOKEN }}
+          export DOCKERHUB_USERNAME=${{ vars.DOCKERHUB_USERNAME }}
+          
+          export DOMAIN_NAME=${{ vars.DOMAIN_NAME }}
+          export JWT_SECRET=${{ vars.JWT_SECRET }}
+         
+          export SERVER_HOST=${{ vars.SERVER_HOST }}
+          export SERVER_PORT=${{ vars.SERVER_PORT }}
+          export SMTP_HOST=${{ vars.SMTP_HOST }}
+          export SMTP_PASSWORD=${{ vars.SMTP_PASSWORD }}
+          export SMTP_PORT=${{ vars.SMTP_PORT }}
+          export SMTP_USERNAME=${{ vars.SMTP_USERNAME }}
+          export SSL_EMAIL=${{ vars.SSL_EMAIL }}
+          export STRIPE_PUBLISHABLE_KEY=${{ vars.STRIPE_PUBLISHABLE_KEY }}
+          export STRIPE_SECRET_KEY=${{ vars.STRIPE_SECRET_KEY }}
+          export STRIPE_WEBHOOK_SECRET=${{ vars.STRIPE_WEBHOOK_SECRET }}
+          export DEPLOY_ENV=${{ vars.DEPLOY_ENV }}
+          export REDIS_PASSWORD=${{ vars.REDIS_PASSWORD }}
+          export REDIS_SERVER=${{ vars.REDIS_SERVER }}
+          
+          export DASHSCOPE_API_KEY=${{ vars.DASHSCOPE_API_KEY }}
+          export DOUBAO_API_KEY=${{ vars.DOUBAO_API_KEY }}
+          export GOOGLE_API_KEY=${{ vars.GOOGLE_API_KEY }}
+
+          export HAILUO_API_KEY=${{ vars.HAILUO_API_KEY }}
+          export HUOSHAN_API_KEY=${{ vars.HUOSHAN_API_KEY }}
+          export GEMINI_API_KEY=${{ vars.GEMINI_API_KEY }}
+
+          bash generate_env.sh
+          cat .env
+
+      - name: Parse services to deploy
+        id: parse-services
+        run: |
+          SERVICES="${{ env.DEPLOY_SERVICES }}"
+          echo "📋 解析要部署的服务: $SERVICES"
+          
+          # 标准化服务名称（支持多种命名方式）
+          SERVICES=$(echo "$SERVICES" | tr '[:upper:]' '[:lower:]' | tr ',' ' ')
+          
+          # 服务名称映射
+          DEPLOY_NGINX=false
+          DEPLOY_REDIS=false
+          DEPLOY_GRAPES_APP=false
+          DEPLOY_GRAPES_PAY=false
+          DEPLOY_GRAPES_LLMCHAT=false
+          DEPLOY_GRAPES_ASYNCTASK=false
+          
+          for service in $SERVICES; do
+            case "$service" in
+              nginx)
+                DEPLOY_NGINX=true
+                ;;
+              redis)
+                DEPLOY_REDIS=true
+                ;;
+              grapes-app|grapes_app|app)
+                DEPLOY_GRAPES_APP=true
+                ;;
+              grapes-pay|grapes_pay|vippay|pay)
+                DEPLOY_GRAPES_PAY=true
+                ;;
+              grapes-llmchat|grapes_llmchat|llmchat)
+                DEPLOY_GRAPES_LLMCHAT=true
+                ;;
+              grapes-asynctask|grapes_asynctask|asynctask)
+                DEPLOY_GRAPES_ASYNCTASK=true
+                ;;
+            esac
+          done
+          
+          echo "deploy_nginx=$DEPLOY_NGINX" >> $GITHUB_OUTPUT
+          echo "deploy_redis=$DEPLOY_REDIS" >> $GITHUB_OUTPUT
+          echo "deploy_grapes_app=$DEPLOY_GRAPES_APP" >> $GITHUB_OUTPUT
+          echo "deploy_grapes_pay=$DEPLOY_GRAPES_PAY" >> $GITHUB_OUTPUT
+          echo "deploy_grapes_llmchat=$DEPLOY_GRAPES_LLMCHAT" >> $GITHUB_OUTPUT
+          echo "deploy_grapes_asynctask=$DEPLOY_GRAPES_ASYNCTASK" >> $GITHUB_OUTPUT
+          
+          echo "✅ 部署计划:"
+          echo "   nginx: $DEPLOY_NGINX"
+          echo "   redis: $DEPLOY_REDIS"
+          echo "   grapes-app: $DEPLOY_GRAPES_APP"
+          echo "   grapes-pay: $DEPLOY_GRAPES_PAY"
+          echo "   grapes-llmchat: $DEPLOY_GRAPES_LLMCHAT"
+          echo "   grapes-asynctask: $DEPLOY_GRAPES_ASYNCTASK"
+
+      - name: Login to Aliyun ACR
+        run: echo ${{ secrets.ACR_PASSWORD }} | docker login $REGISTRY -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+      - name: Build and push grapes-app Docker image
+        if: steps.parse-services.outputs.deploy_grapes_app == 'true'
+        run: |
+          echo "🔨 构建 grapes-app 镜像..."
+          docker build -f dockerfiles/Dockerfile.grapes -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} .
+          docker tag $REGISTRY/$IMAGE_NAME:${{ github.sha }} $REGISTRY/grapery-dev/$IMAGE_NAME:latest
+          docker push $REGISTRY/grapery-dev/$IMAGE_NAME:latest
+          echo "✅ grapes-app 镜像构建并推送完成"
+
+      - name: Build and push grapes-llmchat Docker image
+        if: steps.parse-services.outputs.deploy_grapes_llmchat == 'true'
+        run: |
+          echo "🔨 构建 grapes-llmchat 镜像..."
+          docker build -f dockerfiles/Dockerfile.llmchat -t $REGISTRY/grapes-llmchat:${{ github.sha }} .
+          docker tag $REGISTRY/grapes-llmchat:${{ github.sha }} $REGISTRY/grapery-dev/grapes-llmchat:latest
+          docker push $REGISTRY/grapery-dev/grapes-llmchat:latest
+          echo "✅ grapes-llmchat 镜像构建并推送完成"
+      
+      - name: Build and push grapes-vippay Docker image
+        if: steps.parse-services.outputs.deploy_grapes_pay == 'true'
+        run: |
+          echo "🔨 构建 grapes-vippay 镜像..."
+          docker build -f dockerfiles/Dockerfile.vippay -t $REGISTRY/grapes-vippay:${{ github.sha }} .
+          docker tag $REGISTRY/grapes-vippay:${{ github.sha }} $REGISTRY/grapery-dev/grapes-vippay:latest
+          docker push $REGISTRY/grapery-dev/grapes-vippay:latest
+          echo "✅ grapes-vippay 镜像构建并推送完成"
+
+      - name: Build and push grapes-asynctask Docker image
+        if: steps.parse-services.outputs.deploy_grapes_asynctask == 'true'
+        run: |
+          echo "🔨 构建 grapes-asynctask 镜像..."
+          docker build -f dockerfiles/Dockerfile.asynctask -t $REGISTRY/grapes-asynctask:${{ github.sha }} .
+          docker tag $REGISTRY/grapes-asynctask:${{ github.sha }} $REGISTRY/grapery-dev/grapes-asynctask:latest
+          docker push $REGISTRY/grapery-dev/grapes-asynctask:latest
+          echo "✅ grapes-asynctask 镜像构建并推送完成"
+
+      - name: Upload .env to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: ".env"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Upload docker-compose.yml to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Upload deploy script to ECS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "deploy-ci.sh"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Upload homepage files to ECS
+        if: steps.parse-services.outputs.deploy_nginx == 'true'
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "index.html,Dockerfile.nginx,nginx.conf,fix-nginx.sh"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Upload SSL certificates to ECS
+        if: steps.parse-services.outputs.deploy_nginx == 'true'
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "certs/"
+          target: "/home/ubuntu/grapery/"
+
+      - name: Remote Deploy to Aliyun ECS (docker-compose)
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: 121.40.176.39
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/ubuntu/grapery
+            
+            # 设置执行权限
+            chmod +x deploy-ci.sh fix-nginx.sh
+            
+            # 设置环境变量
+            export REGISTRY=${{ env.REGISTRY }}
+            export ACR_USERNAME=${{ secrets.ACR_USERNAME }}
+            export ACR_PASSWORD=${{ secrets.ACR_PASSWORD }}
+            export DEPLOY_SERVICES="${{ env.DEPLOY_SERVICES }}"
+            
+            # 执行CI部署脚本（传入要部署的服务列表）
+            ./deploy-ci.sh "$DEPLOY_SERVICES"
+            
+            # 如果部署成功且包含nginx，运行nginx修复脚本
+            if [ $? -eq 0 ]; then
+                if echo "$DEPLOY_SERVICES" | grep -qi "nginx"; then
+                    echo "🔧 运行nginx配置修复..."
+                    ./fix-nginx.sh
+                fi
+            fi

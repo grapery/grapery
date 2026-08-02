@@ -1,0 +1,32 @@
+{
+  "sql_db": {
+    "database": "grapery",
+    "username": "root",
+    "password": "your_password",
+    "address": "localhost:3306"
+  },
+  "redis": {
+    "address": "localhost:6379",
+    "password": "",
+    "database": "0",
+    "ping_interval": 60
+  },
+  "log_level": "info",
+  "rpc_port": "50051",
+  "http_port": "8080",
+  "vippay": {
+    "http_port": "8081",
+    "domain": "https://api.example.com",
+    "apple_oauth": {
+      "bundle_id": "com.rankquantity.voyager",
+      "timeout_seconds": 30,
+      "cache_duration": 1
+    },
+    "google_oauth": {
+      "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+      "timeout_seconds": 30,
+      "cache_duration": 1
+    }
+  }
+}
+

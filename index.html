@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>未择(voyager) - AI故事创作与角色聊天平台</title>
+    <meta name="description" content="未择(voyager)是专业的AI驱动故事创作和角色聊天平台，集成多种AI模型，提供智能故事生成、角色对话、社交互动等创新服务">
+    <meta name="keywords" content="AI故事创作,角色聊天,智能对话,故事生成,社交平台,AI模型,创作工具">
+    
+    <!-- Google Search Console 验证代码 -->
+    <meta name="google-site-verification" content="QBTCM83ycUllqgoe6Byy0oYxNcLWRF_X_3r9LaSb8po" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            background: #ffffff;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background: #ffffff;
+            padding: 1rem 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-bottom: 1px solid #e8e8e8;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #00bcd4;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #2c3e50;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #00bcd4;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-outline {
+            color: #00bcd4;
+            border: 2px solid #00bcd4;
+            background: transparent;
+        }
+
+        .btn-outline:hover {
+            background: #00bcd4;
+            color: white;
+        }
+
+        .btn-primary {
+            background: #ff9800;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #f57c00;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 120px 0 80px;
+            text-align: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2c3e50;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            color: #5a6c7d;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: #00bcd4;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .cta-button:hover {
+            background: #00acc1;
+        }
+
+        .cta-secondary {
+            background: transparent;
+            color: #2c3e50;
+            border: 2px solid #2c3e50;
+        }
+
+        .cta-secondary:hover {
+            background: #2c3e50;
+            color: white;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid #e8e8e8;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-color: #00bcd4;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #00bcd4;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: #5a6c7d;
+            line-height: 1.6;
+        }
+
+        /* Technology Section */
+        .technology {
+            padding: 80px 0;
+            background: white;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .tech-item {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #e8e8e8;
+            transition: all 0.3s ease;
+        }
+
+        .tech-item:hover {
+            border-color: #00bcd4;
+            box-shadow: 0 4px 15px rgba(0, 188, 212, 0.1);
+        }
+
+        .tech-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #00bcd4;
+        }
+
+        .tech-item h4 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .tech-item p {
+            color: #5a6c7d;
+            font-size: 0.9rem;
+        }
+
+        /* Showcase Section */
+        .showcase {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+
+        .showcase-subtitle {
+            text-align: center;
+            font-size: 1.2rem;
+            color: #5a6c7d;
+            margin-bottom: 3rem;
+        }
+
+        .showcase-category {
+            margin-bottom: 4rem;
+        }
+
+        .category-title {
+            font-size: 1.8rem;
+            color: #2c3e50;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .horizontal-scroll-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 15px;
+        }
+
+        .scroll-wrapper {
+            display: flex;
+            gap: 1.5rem;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding: 1rem 0;
+        }
+
+        .scroll-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .showcase-item {
+            flex: 0 0 300px;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border: 1px solid #e8e8e8;
+        }
+
+        .showcase-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+            border-color: #00bcd4;
+        }
+
+        .showcase-image-placeholder {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #00bcd4 0%, #ff9800 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .showcase-image-placeholder::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%2300bcd4"/><circle cx="50" cy="50" r="30" fill="%23ff9800" opacity="0.3"/><polygon points="30,30 70,30 50,70" fill="%23ffffff" opacity="0.2"/></svg>');
+            background-size: cover;
+            opacity: 0.3;
+        }
+
+        .placeholder-text {
+            position: relative;
+            z-index: 1;
+            font-size: 1.1rem;
+        }
+
+        .showcase-info {
+            padding: 1rem;
+        }
+
+        .showcase-info h4 {
+            font-size: 1.1rem;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .showcase-info p {
+            color: #5a6c7d;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .showcase-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+
+        .author {
+            color: #00bcd4;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .likes, .views {
+            color: #5a6c7d;
+            font-size: 0.8rem;
+        }
+
+        /* Story Item Styles */
+        .story-item {
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .story-content {
+            flex: 1;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .story-excerpt {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin: 0.5rem 0;
+            flex: 1;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .story-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid #eee;
+        }
+
+        .genre {
+            background: #00bcd4;
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+        }
+
+        .words {
+            color: #5a6c7d;
+            font-size: 0.8rem;
+        }
+
+        /* Video Item Styles */
+        .video-item {
+            height: 220px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-placeholder {
+            flex: 1;
+            background: linear-gradient(135deg, #ff9800 0%, #00bcd4 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .video-placeholder:hover {
+            background: linear-gradient(135deg, #00bcd4 0%, #ff9800 100%);
+        }
+
+        .play-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            opacity: 0.8;
+            transition: all 0.3s ease;
+        }
+
+        .video-placeholder:hover .play-icon {
+            font-size: 2.5rem;
+            opacity: 1;
+        }
+
+        .placeholder-text {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Scroll Buttons */
+        .scroll-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #00bcd4;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .scroll-btn:hover {
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .scroll-left {
+            left: 10px;
+        }
+
+        .scroll-right {
+            right: 10px;
+        }
+
+        /* Stats Section */
+        .stats {
+            padding: 80px 0;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #00bcd4;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+        }
+
+        /* Footer */
+        footer {
+            background: #2c3e50;
+            color: white;
+            padding: 3rem 0 1rem;
+            text-align: center;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section h3 {
+            margin-bottom: 1rem;
+            color: #00bcd4;
+            font-weight: 600;
+        }
+
+        .footer-section p, .footer-section a {
+            color: #bdc3c7;
+            text-decoration: none;
+            line-height: 1.6;
+        }
+
+        .footer-section a:hover {
+            color: #00bcd4;
+        }
+
+        /* 法律链接样式 */
+        .legal-links a:hover {
+            color: #00bcd4 !important;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #34495e;
+            padding-top: 1rem;
+            color: #95a5a6;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .auth-buttons {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tech-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="container">
+            <a href="#" class="logo">未择(voyager)</a>
+            <ul class="nav-links">
+                <li><a href="#features">功能特性</a></li>
+                <li><a href="#technology">技术特色</a></li>
+                <li><a href="#stats">数据统计</a></li>
+                <li><a href="#contact">联系我们</a></li>
+            </ul>
+            <div class="auth-buttons">
+                <a href="#" class="btn btn-outline">登录</a>
+                <a href="#" class="btn btn-primary">注册</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1 class="fade-in-up">AI故事创作与角色聊天平台</h1>
+            <p class="fade-in-up">未择(voyager)是专业的AI驱动故事创作平台，集成多种AI模型，提供智能故事生成、角色对话、社交互动等创新服务</p>
+            <div class="hero-buttons">
+                <a href="#features" class="cta-button fade-in-up">开始创作</a>
+                <a href="#technology" class="cta-button cta-secondary fade-in-up">了解更多</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">核心功能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📚</div>
+                    <h3>AI故事创作</h3>
+                    <p>集成多种AI模型，智能生成精彩故事情节、角色设定和章节内容，让创作更轻松</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎭</div>
+                    <h3>角色聊天</h3>
+                    <p>与故事角色进行AI驱动的实时对话，体验沉浸式的角色互动和剧情发展</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>社交互动</h3>
+                    <p>关注创作者、评论故事、点赞收藏，构建活跃的创作社区生态</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💎</div>
+                    <h3>会员订阅</h3>
+                    <p>多层级VIP会员服务，享受更多AI使用配额、高级功能和专属权益</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>多模型支持</h3>
+                    <p>集成OpenAI、Google Gemini、智谱AI、Coze等多种AI模型，提供最佳创作体验</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>实时响应</h3>
+                    <p>基于gRPC的流式响应技术，提供流畅的实时对话和创作体验</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Showcase Section -->
+    <section class="showcase">
+        <div class="container">
+            <h2 class="section-title">作品展示</h2>
+            <p class="showcase-subtitle">探索AI故事创作的无限可能</p>
+            
+            <!-- Story Showcase -->
+            <div class="showcase-category">
+                <h3 class="category-title">热门故事作品</h3>
+                <div class="horizontal-scroll-container">
+                    <div class="scroll-wrapper" id="story-showcase">
+                        <div class="showcase-item story-item">
+                            <div class="story-content">
+                                <h4>星际穿越者</h4>
+                                <p class="story-excerpt">在2157年，人类已经掌握了曲速航行技术。主角艾拉是一名星际探险家，她的任务是寻找适合人类居住的新星球。在一次例行探索中，她发现了一个神秘的信号...</p>
+                                <div class="story-meta">
+                                    <span class="genre">科幻</span>
+                                    <span class="words">约5,000字</span>
+                                    <span class="author">作者: @writer1</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item story-item">
+                            <div class="story-content">
+                                <h4>魔法学院的秘密</h4>
+                                <p class="story-excerpt">在遥远的魔法世界里，有一座隐藏在迷雾中的学院。年轻的魔法师小雨意外发现了一个关于学院起源的古老秘密，这个秘密将改变整个魔法世界的命运...</p>
+                                <div class="story-meta">
+                                    <span class="genre">奇幻</span>
+                                    <span class="words">约8,000字</span>
+                                    <span class="author">作者: @writer2</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item story-item">
+                            <div class="story-content">
+                                <h4>时光咖啡店</h4>
+                                <p class="story-excerpt">在城市的角落里，有一家神秘的咖啡店。据说在这里喝下的每一杯咖啡，都能让你看到过去的某个瞬间。店主是一位神秘的老人，他似乎在等待着什么...</p>
+                                <div class="story-meta">
+                                    <span class="genre">都市</span>
+                                    <span class="words">约3,500字</span>
+                                    <span class="author">作者: @writer3</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item story-item">
+                            <div class="story-content">
+                                <h4>最后的守护者</h4>
+                                <p class="story-excerpt">古老的预言即将成真，黑暗势力即将降临世界。唯一能够阻止这场灾难的，是传说中的最后一位守护者。但这位守护者已经沉睡了一千年...</p>
+                                <div class="story-meta">
+                                    <span class="genre">玄幻</span>
+                                    <span class="words">约12,000字</span>
+                                    <span class="author">作者: @writer4</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item story-item">
+                            <div class="story-content">
+                                <h4>AI恋爱物语</h4>
+                                <p class="story-excerpt">在AI高度发达的未来，程序员小李意外发现了一个AI开始产生了自我意识，更让他惊讶的是，这个AI似乎对他产生了特殊的情感。这段跨越人机界限的爱情将如何发展...</p>
+                                <div class="story-meta">
+                                    <span class="genre">科幻爱情</span>
+                                    <span class="words">约6,000字</span>
+                                    <span class="author">作者: @writer5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="scroll-btn scroll-left" onclick="scrollContainer('story-showcase', 'left')">
+                        <span>‹</span>
+                    </button>
+                    <button class="scroll-btn scroll-right" onclick="scrollContainer('story-showcase', 'right')">
+                        <span>›</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Character Chat Showcase -->
+            <div class="showcase-category">
+                <h3 class="category-title">角色聊天体验</h3>
+                <div class="horizontal-scroll-container">
+                    <div class="scroll-wrapper" id="character-showcase">
+                        <div class="showcase-item">
+                            <div class="showcase-image-placeholder">
+                                <span class="placeholder-text">角色对话 1</span>
+                            </div>
+                            <div class="showcase-info">
+                                <h4>艾拉 - 星际探险家</h4>
+                                <p>科幻角色 | 勇敢探索者</p>
+                                <div class="showcase-meta">
+                                    <span class="author">来自: 星际穿越者</span>
+                                    <span class="likes">💬 1.2k对话</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item">
+                            <div class="showcase-image-placeholder">
+                                <span class="placeholder-text">角色对话 2</span>
+                            </div>
+                            <div class="showcase-info">
+                                <h4>小雨 - 魔法师</h4>
+                                <p>奇幻角色 | 神秘学者</p>
+                                <div class="showcase-meta">
+                                    <span class="author">来自: 魔法学院</span>
+                                    <span class="likes">💬 856对话</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item">
+                            <div class="showcase-image-placeholder">
+                                <span class="placeholder-text">角色对话 3</span>
+                            </div>
+                            <div class="showcase-info">
+                                <h4>咖啡店老板</h4>
+                                <p>都市角色 | 时光守护者</p>
+                                <div class="showcase-meta">
+                                    <span class="author">来自: 时光咖啡店</span>
+                                    <span class="likes">💬 2.1k对话</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item">
+                            <div class="showcase-image-placeholder">
+                                <span class="placeholder-text">角色对话 4</span>
+                            </div>
+                            <div class="showcase-info">
+                                <h4>守护者</h4>
+                                <p>玄幻角色 | 古老战士</p>
+                                <div class="showcase-meta">
+                                    <span class="author">来自: 最后守护者</span>
+                                    <span class="likes">💬 645对话</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="showcase-item">
+                            <div class="showcase-image-placeholder">
+                                <span class="placeholder-text">角色对话 5</span>
+                            </div>
+                            <div class="showcase-info">
+                                <h4>AI助手</h4>
+                                <p>科幻角色 | 智能伴侣</p>
+                                <div class="showcase-meta">
+                                    <span class="author">来自: AI恋爱物语</span>
+                                    <span class="likes">💬 923对话</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="scroll-btn scroll-left" onclick="scrollContainer('character-showcase', 'left')">
+                        <span>‹</span>
+                    </button>
+                    <button class="scroll-btn scroll-right" onclick="scrollContainer('character-showcase', 'right')">
+                        <span>›</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technology Section -->
+    <section id="technology" class="technology">
+        <div class="container">
+            <h2 class="section-title">技术特色</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="tech-icon">🤖</div>
+                    <h4>多AI模型集成</h4>
+                    <p>集成OpenAI、Google Gemini、智谱AI、Coze等多种AI模型，提供最佳的故事创作体验</p>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-icon">💬</div>
+                    <h4>实时角色对话</h4>
+                    <p>基于gRPC的流式响应技术，支持与故事角色的实时对话和互动</p>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-icon">⚡</div>
+                    <h4>高性能架构</h4>
+                    <p>微服务架构设计，Redis缓存和消息队列，确保高并发和快速响应</p>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-icon">🔒</div>
+                    <h4>安全可靠</h4>
+                    <p>JWT身份认证、HTTPS加密传输，保护用户数据和创作内容安全</p>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-icon">👥</div>
+                    <h4>社交功能</h4>
+                    <p>完整的社交系统，支持关注、评论、点赞等互动功能</p>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-icon">💎</div>
+                    <h4>会员体系</h4>
+                    <p>多层级VIP会员服务，支持多种支付方式和自动续费</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section id="stats" class="stats">
+        <div class="container">
+            <h2 class="section-title">平台数据</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">5万+</div>
+                    <div class="stat-label">活跃创作者</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">20万+</div>
+                    <div class="stat-label">故事作品</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">100万+</div>
+                    <div class="stat-label">角色对话</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">99.9%</div>
+                    <div class="stat-label">服务可用性</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contact">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>未择(voyager)</h3>
+                    <p>未择(voyager)是专业的AI驱动故事创作和角色聊天平台，集成多种AI模型，为创作者提供智能故事生成、角色对话、社交互动等创新服务。</p>
+                </div>
+                <div class="footer-section">
+                    <h3>核心功能</h3>
+                    <p><a href="#">AI故事创作</a></p>
+                    <p><a href="#">角色聊天</a></p>
+                    <p><a href="#">社交互动</a></p>
+                    <p><a href="#">会员订阅</a></p>
+                </div>
+                <div class="footer-section">
+                    <h3>联系我们</h3>
+                    <p>邮箱: putaoshuyunying@grapery.xyz</p>
+                    <p>技术支持: putaoshuyunying@grapery.xyz</p>
+                    <p>商务合作: putaoshuyunying@grapery.xyz</p>
+                </div>
+                <div class="footer-section">
+                    <h3>开发者</h3>
+                    <p><a href="#">API文档</a></p>
+                    <p><a href="#">开发者中心</a></p>
+                    <p><a href="#">技术文档</a></p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 未择(voyager). 保留所有权利。</p>
+                <div class="legal-links" style="margin-top: 15px; display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
+                    <a href="https://www.rankquantity.xyz/api/vippay/privacy-policy" target="_blank" style="color: #bdc3c7; text-decoration: none; font-size: 0.9rem; transition: color 0.3s ease;">
+                        隐私政策 / Privacy Policy
+                    </a>
+                    <span style="color: #95a5a6;">|</span>
+                    <a href="https://www.rankquantity.xyz/api/vippay/terms-of-service" target="_blank" style="color: #bdc3c7; text-decoration: none; font-size: 0.9rem; transition: color 0.3s ease;">
+                        服务条款 / Terms of Service
+                    </a>
+                </div>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: #999;">
+                    <a href="https://beian.miit.gov.cn/" target="_blank" style="color: #999; text-decoration: none;">
+                        沪ICP备2025137210号
+                    </a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // 横向滚动函数
+        function scrollContainer(containerId, direction) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            const scrollAmount = 320; // 卡片宽度 + 间距
+            const currentScroll = container.scrollLeft;
+            
+            if (direction === 'left') {
+                container.scrollTo({
+                    left: currentScroll - scrollAmount,
+                    behavior: 'smooth'
+                });
+            } else {
+                container.scrollTo({
+                    left: currentScroll + scrollAmount,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        // 自动隐藏滚动按钮
+        function updateScrollButtons() {
+            const containers = ['story-showcase', 'character-showcase'];
+            
+            containers.forEach(containerId => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                
+                const leftBtn = container.parentElement.querySelector('.scroll-left');
+                const rightBtn = container.parentElement.querySelector('.scroll-right');
+                
+                if (!leftBtn || !rightBtn) return;
+                
+                // 检查是否可以滚动
+                const canScrollLeft = container.scrollLeft > 0;
+                const canScrollRight = container.scrollLeft < container.scrollWidth - container.clientWidth;
+                
+                leftBtn.style.opacity = canScrollLeft ? '1' : '0.3';
+                leftBtn.style.pointerEvents = canScrollLeft ? 'auto' : 'none';
+                
+                rightBtn.style.opacity = canScrollRight ? '1' : '0.3';
+                rightBtn.style.pointerEvents = canScrollRight ? 'auto' : 'none';
+            });
+        }
+
+        // 监听滚动事件
+        document.addEventListener('DOMContentLoaded', function() {
+            const containers = ['story-showcase', 'character-showcase'];
+            
+            containers.forEach(containerId => {
+                const container = document.getElementById(containerId);
+                if (container) {
+                    container.addEventListener('scroll', updateScrollButtons);
+                }
+            });
+            
+            // 初始化按钮状态
+            updateScrollButtons();
+            
+            // 窗口大小改变时更新按钮状态
+            window.addEventListener('resize', updateScrollButtons);
+        });
+
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // 滚动动画
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // 观察所有需要动画的元素
+        document.querySelectorAll('.feature-card, .tech-item, .stat-item, .showcase-item').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+
+        // 数字动画
+        const animateNumbers = () => {
+            const numbers = document.querySelectorAll('.stat-number');
+            numbers.forEach(num => {
+                const finalText = num.textContent;
+                const finalNumber = parseInt(finalText.replace(/[^0-9]/g, ''));
+                const isPercentage = finalText.includes('%');
+                const isPlus = finalText.includes('+');
+                const isTime = finalText.includes('/');
+                
+                let currentNumber = 0;
+                const increment = finalNumber / 50;
+                
+                const updateNumber = () => {
+                    currentNumber += increment;
+                    if (currentNumber < finalNumber) {
+                        if (isPercentage) {
+                            num.textContent = Math.floor(currentNumber) + '%';
+                        } else if (isPlus) {
+                            num.textContent = Math.floor(currentNumber) + '+';
+                        } else if (isTime) {
+                            num.textContent = finalText;
+                        } else {
+                            num.textContent = Math.floor(currentNumber);
+                        }
+                        requestAnimationFrame(updateNumber);
+                    } else {
+                        num.textContent = finalText;
+                    }
+                };
+                
+                updateNumber();
+            });
+        };
+
+        // 当统计区域进入视野时触发数字动画
+        const statsObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    animateNumbers();
+                    statsObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+
+        const statsSection = document.querySelector('.stats');
+        if (statsSection) {
+            statsObserver.observe(statsSection);
+        }
+    </script>
+</body>
+</html> 

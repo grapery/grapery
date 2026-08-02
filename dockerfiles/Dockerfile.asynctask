@@ -1,0 +1,18 @@
+FROM golang:1.24 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ENV GO111MODULE=on GOPROXY=https://goproxy.cn,direct CGO_ENABLED=0 GOOS=linux
+RUN go build -o grapes-asynctask ./app/asynctask
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata
+ENV TZ=Asia/Shanghai
+WORKDIR /app
+COPY --from=builder /app/grapes-asynctask .
+COPY asynctask.json .
+
+EXPOSE 8050
+CMD ["./grapes-asynctask", "--config", "/app/asynctask.json"]
+
