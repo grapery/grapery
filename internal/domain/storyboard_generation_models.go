@@ -403,9 +403,9 @@ type GenerationPipelineStep struct {
 // When scenes already exist the server returns the full storyboard synchronously (asyncAccepted=false).
 // When scenes must be rebuilt, work runs in the background (asyncAccepted=true) and clients should poll GET .../generation-progress.
 type StoryboardStructureGenerationResponse struct {
-	AsyncAccepted        bool                         `json:"asyncAccepted"`
-	Storyboard           *Storyboard                  `json:"storyboard,omitempty"`
-	GenerationProgress   *StoryboardGenerationProgress `json:"generationProgress,omitempty"`
+	AsyncAccepted      bool                          `json:"asyncAccepted"`
+	Storyboard         *Storyboard                   `json:"storyboard,omitempty"`
+	GenerationProgress *StoryboardGenerationProgress `json:"generationProgress,omitempty"`
 }
 
 // StoryboardGenerationProgress aggregates all generation records for a storyboard
@@ -428,4 +428,10 @@ type StoryboardGenerationProgress struct {
 	LatestRun             *StoryboardGenerationRun `json:"latestRun,omitempty"`
 	ConsistencyIssuesJSON string                   `json:"consistencyIssuesJson,omitempty"`
 	PromptAuditRecordIDs  []string                 `json:"promptAuditRecordIds,omitempty"`
+
+	// Fine-grained progress for conversational creation timeline (additive; CurrentStep int retained for legacy clients).
+	StepKey         string `json:"stepKey,omitempty"`         // context | bible_plan | scene_plan | image | consistency_audit
+	MessageKey      string `json:"messageKey,omitempty"`      // storyboard_generation_* localization key
+	Stage           string `json:"stage,omitempty"`           // outline | scenes | images | review | completed | preparing
+	ProgressPercent int    `json:"progressPercent,omitempty"` // 0-100
 }

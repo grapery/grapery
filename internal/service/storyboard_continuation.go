@@ -319,41 +319,6 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 			b.WriteString("\n\n")
 		}
 
-		if len(storyboard.CharacterRefs) > 0 {
-			b.WriteString("【用户本次指定优先角色】\n")
-			for _, ref := range storyboard.CharacterRefs {
-				line := fmt.Sprintf("- 角色ID: %s", ref.CharacterID)
-				if ch, err := s.repo.CharacterByID(ctx, ref.CharacterID); err == nil && ch != nil {
-					line = fmt.Sprintf("- %s [角色ID: %s]", ch.Name, ch.ID)
-					if ch.Description != "" {
-						line += fmt.Sprintf("：%s", truncateStringToMaxRunes(ch.Description, userRefDescriptionMaxRunes))
-					}
-				}
-				b.WriteString(line)
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-
-		if len(storyboard.SceneRefs) > 0 {
-			b.WriteString("【用户本次指定优先场景（故事地点）】\n")
-			for _, ref := range storyboard.SceneRefs {
-				line := fmt.Sprintf("- 场景ID: %s", ref.StorySceneID)
-				if sc, err := s.repo.StorySceneByID(ctx, story.ID, ref.StorySceneID); err == nil && sc != nil {
-					line = fmt.Sprintf("- %s [场景ID: %s]", sc.Title, sc.ID)
-					if sc.Description != "" {
-						line += fmt.Sprintf("：%s", truncateStringToMaxRunes(sc.Description, userRefDescriptionMaxRunes))
-					}
-					if sc.Location != "" {
-						line += fmt.Sprintf(" (地点: %s)", sc.Location)
-					}
-				}
-				b.WriteString(line)
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-
 		if parent != nil {
 			summaryRunes := utf8.RuneCountInString(strings.TrimSpace(parent.ContinuationSummary))
 			tailBudget := parentContentTailMaxRunes
@@ -470,12 +435,56 @@ func (s *Service) buildStoryboardContext(ctx context.Context, storyboard *domain
 		b.WriteString("重要提示：AI 应根据用户描述的故事情节，智能选择合适的场景。如果场景地点与剧情相关，应在storySceneId字段中提供对应的场景ID。\n\n")
 	}
 
+	// 放在"可用角色/场景"清单之后：用户本轮亲手勾选的优先级要盖住上面"智能选择"的措辞。
+	// 新建与续写都需要，因此不放在 continuation 分支里。
+	s.writeStoryboardUserRefPriority(ctx, &b, storyboard, story)
+
 	out := b.String()
 	s.logger.Debug("storyboard context built",
 		zap.String("storyboardId", storyboard.ID),
 		zap.Int("contextLength", len(out)),
 		zap.Int("contextRunes", utf8.RuneCountInString(out)))
 	return out
+}
+
+// writeStoryboardUserRefPriority states which characters and locations the user explicitly
+// picked for this turn. Without it the model only sees a neutral "available" list and may
+// silently ignore the selection made on the planning card.
+func (s *Service) writeStoryboardUserRefPriority(ctx context.Context, b *strings.Builder, storyboard *domain.Storyboard, story *domain.Story) {
+	if len(storyboard.CharacterRefs) > 0 {
+		b.WriteString("【用户本次指定优先角色（必须出镜）】\n")
+		for _, ref := range storyboard.CharacterRefs {
+			line := fmt.Sprintf("- 角色ID: %s", ref.CharacterID)
+			if ch, err := s.repo.CharacterByID(ctx, ref.CharacterID); err == nil && ch != nil {
+				line = fmt.Sprintf("- %s [角色ID: %s]", ch.Name, ch.ID)
+				if ch.Description != "" {
+					line += fmt.Sprintf("：%s", truncateStringToMaxRunes(ch.Description, userRefDescriptionMaxRunes))
+				}
+			}
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+		b.WriteString("以上角色优先于「可用角色」清单：除非剧情明确不允许，都应在分镜中出现。\n\n")
+	}
+
+	if len(storyboard.SceneRefs) > 0 {
+		b.WriteString("【用户本次指定优先场景（故事地点）】\n")
+		for _, ref := range storyboard.SceneRefs {
+			line := fmt.Sprintf("- 场景ID: %s", ref.StorySceneID)
+			if sc, err := s.repo.StorySceneByID(ctx, story.ID, ref.StorySceneID); err == nil && sc != nil {
+				line = fmt.Sprintf("- %s [场景ID: %s]", sc.Title, sc.ID)
+				if sc.Description != "" {
+					line += fmt.Sprintf("：%s", truncateStringToMaxRunes(sc.Description, userRefDescriptionMaxRunes))
+				}
+				if sc.Location != "" {
+					line += fmt.Sprintf(" (地点: %s)", sc.Location)
+				}
+			}
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+		b.WriteString("以上地点优先于「可用场景」清单。\n\n")
+	}
 }
 
 func (s *Service) generateOrRefreshStoryboardSummary(ctx context.Context, storyboardID string) {

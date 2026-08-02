@@ -258,6 +258,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 
 			// Storyboard 相关
 			authenticated.POST("/storyboards", h.CreateStoryboard)
+			aiGen.POST("/storyboards/analyze", h.AnalyzeStoryboard)
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
 			authenticated.PUT("/storyboards/:id/scenes/:sceneId", h.UpdateStoryboardPlotScene)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)
@@ -265,6 +266,8 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
 			authenticated.POST("/storyboards/:id/like", h.LikeStoryboard)
 			authenticated.DELETE("/storyboards/:id/like", h.UnlikeStoryboard)
+			authenticated.GET("/storyboards/:id/conversation", h.GetStoryboardConversation)
+			authenticated.PUT("/storyboards/:id/conversation/messages", h.SyncStoryboardConversationMessages)
 
 			// Storyboard Panels 相关
 			authenticated.GET("/storyboards/:id/panels", h.ListStoryboardPanels)

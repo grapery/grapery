@@ -105,6 +105,10 @@ type Storyboard struct {
 	// UseComicPagePipeline 为 true 时：分镜就绪后不自动拉 GenerateSceneImage，由客户端走 generate/comic-page(s)，避免单图抢跑导致漫画管线被 skip
 	UseComicPagePipeline bool `json:"useComicPagePipeline,omitempty"`
 
+	// TurnDirective 对话式创作中「本轮修改要求」。瞬时字段，不入库，只作用于当次生成的提示词：
+	// RawInput 保留首轮完整描述，本字段承载"改成雨夜"这类增量指令。
+	TurnDirective string `json:"-"`
+
 	// Engagement stats fields
 	common.EngagementStats
 

@@ -224,6 +224,8 @@ type Repository interface {
 	StoryboardByID(ctx context.Context, id string) (*Storyboard, error)
 	CreateStoryboard(ctx context.Context, storyboard *Storyboard) error
 	UpdateStoryboard(ctx context.Context, storyboard *Storyboard) error
+	// UpdateStoryboardTurnOptions writes sceneCount / comicStyle only; zero values are skipped.
+	UpdateStoryboardTurnOptions(ctx context.Context, storyboardID string, sceneCount int, comicStyle string) error
 	// UpdateStoryboardContinuationSummary updates only continuation_summary (and updated_at).
 	UpdateStoryboardContinuationSummary(ctx context.Context, storyboardID string, summary string) error
 	DeleteStoryboard(ctx context.Context, id string) error
@@ -560,6 +562,15 @@ type Repository interface {
 	ListFragmentConversationMessages(ctx context.Context, fragmentID string) ([]*FragmentConversationMessage, error)
 	// ListFragmentConversationMessagesPage returns a chronological page of chat history (newest page when beforeCreatedAt is 0).
 	ListFragmentConversationMessagesPage(ctx context.Context, fragmentID string, limit int, beforeCreatedAt int64) ([]*FragmentConversationMessage, bool, error)
+
+	// AppendStoryboardConversationMessage stores one creator chat turn for a storyboard (idempotent by clientMessageId).
+	AppendStoryboardConversationMessage(ctx context.Context, msg *StoryboardConversationMessage) error
+	// UpsertStoryboardConversationMessages batch-appends chat turns (skips duplicates by clientMessageId).
+	UpsertStoryboardConversationMessages(ctx context.Context, messages []*StoryboardConversationMessage) error
+	// ListStoryboardConversationMessages returns ordered chat history for a storyboard.
+	ListStoryboardConversationMessages(ctx context.Context, storyboardID string) ([]*StoryboardConversationMessage, error)
+	// ListStoryboardConversationMessagesPage returns a chronological page of chat history (newest page when beforeCreatedAt is 0).
+	ListStoryboardConversationMessagesPage(ctx context.Context, storyboardID string, limit int, beforeCreatedAt int64) ([]*StoryboardConversationMessage, bool, error)
 
 	// ========== User Device operations ==========
 	// 用户设备管理（APNs/FCM 推送通知）

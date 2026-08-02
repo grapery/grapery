@@ -52,6 +52,23 @@ func applyStoryboardScenePlanFallbacks(scenePlan *domain.StoryboardScenePlan, bi
 	}
 }
 
+// writeStoryboardTurnDirectives appends the two conversational inputs that the
+// single RawInput string cannot express: this turn's revision instruction and the
+// style the user picked on the planning card.
+func writeStoryboardTurnDirectives(b *strings.Builder, storyboard *domain.Storyboard) {
+	if directive := strings.TrimSpace(storyboard.TurnDirective); directive != "" {
+		b.WriteString("\n\n【本轮修改要求（最高优先级）】\n")
+		b.WriteString(directive)
+		b.WriteString("\n约束：只改动本轮要求指向的部分；未被提及的角色设定、已确定情节、视觉基线保持不变，不要整体重写。\n")
+	}
+	if style := strings.TrimSpace(storyboard.ContinuationComicStyle); style != "" {
+		b.WriteString("\n\n【视觉风格优先级】\n")
+		b.WriteString(fmt.Sprintf("1. 用户本次选择的漫画风格 slug：%s（最高优先）\n", style))
+		b.WriteString("2. 故事自身的 style 配置\n")
+		b.WriteString("3. 题材默认风格\n")
+	}
+}
+
 func buildStoryboardBiblePlanSystemPrompt() string {
 	return `You are a senior storyboard continuity planner. Produce strict JSON only.
 Your job is to create a storyboard visual bible and narrative beats before scene writing.
@@ -93,6 +110,7 @@ func buildStoryboardBiblePlanUserPrompt(story *domain.Story, storyboard *domain.
 	for _, sc := range snapshot.Scenes {
 		b.WriteString(fmt.Sprintf("- key=%s id=%s title=%s location=%s time=%s description=%s\n", sc.Key, sc.ID, sc.Title, sc.Location, sc.TimeOfDay, sc.Description))
 	}
+	writeStoryboardTurnDirectives(&b, storyboard)
 	b.WriteString(`\nJSON schema:
 {
   "storyboardBible": {
@@ -143,6 +161,7 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
 	for _, sc := range snapshot.ParentTail {
 		b.WriteString(fmt.Sprintf("- %s: %s image=%s\n", sc.Title, sc.Description, sc.Image))
 	}
+	writeStoryboardTurnDirectives(&b, storyboard)
 	b.WriteString(`\nOutput schema:
 {
   "content": "Chinese polished storyboard summary, <= 420 Unicode chars recommended",

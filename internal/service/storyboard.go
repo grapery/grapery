@@ -801,7 +801,7 @@ func (s *Service) syncLatestContentGenerationCompleted(ctx context.Context, stor
 
 // resumeStoryboardStructureGenerationWork runs bible + scene-plan pipeline and persists scenes.
 // Caller must hold structureResumeMutex for storyboardID for the full duration of this call.
-func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, userID, storyboardID string) error {
+func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, userID, storyboardID string, opts StoryboardStructureGenerationOptions) error {
 	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
 		return fmt.Errorf("storyboard not found: %w", err)
@@ -810,11 +810,12 @@ func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, u
 		return fmt.Errorf("permission denied: not the creator")
 	}
 
+	directive := strings.TrimSpace(opts.UserDirective)
 	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
 	if err != nil {
 		return fmt.Errorf("load storyboard scenes: %w", err)
 	}
-	if len(scenes) > 0 {
+	if len(scenes) > 0 && directive == "" {
 		return nil
 	}
 
@@ -822,11 +823,18 @@ func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, u
 	if err != nil {
 		return err
 	}
+	sb.TurnDirective = directive
 	if strings.TrimSpace(sb.RawInput) == "" && strings.TrimSpace(sb.Content) != "" {
 		sb.RawInput = strings.TrimSpace(sb.Content)
 	}
 	if !s.canGenerateStoryboardText() {
 		return fmt.Errorf("storyboard AI generation is not configured")
+	}
+	// 改稿要整体替换分镜：CreateStoryboardScenes 是纯插入，不先清理会留下两套分镜。
+	if len(scenes) > 0 {
+		if err := s.repo.DeleteStoryboardScenes(ctx, storyboardID); err != nil {
+			return fmt.Errorf("clear existing scenes before revision: %w", err)
+		}
 	}
 
 	if err := s.GenerateStoryboardWithAI(ctx, sb); err != nil {
@@ -862,9 +870,51 @@ func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, u
 	return nil
 }
 
-// StartStoryboardStructureGeneration starts structure regeneration when DB has zero scenes.
+// applyStoryboardTurnOptions persists the options the user adjusted on the planning card
+// so the regenerated structure and the follow-up image stage both see them.
+func (s *Service) applyStoryboardTurnOptions(ctx context.Context, sb *domain.Storyboard, opts StoryboardStructureGenerationOptions) error {
+	sceneCount := 0
+	if opts.SceneCount > 0 {
+		normalized, err := NormalizeStoryboardSceneCount(opts.SceneCount)
+		if err != nil {
+			return err
+		}
+		if normalized != sb.SceneCount {
+			sceneCount = normalized
+		}
+	}
+	comicStyle := ""
+	if style := strings.TrimSpace(opts.ComicStyle); style != "" && style != sb.ContinuationComicStyle {
+		comicStyle = style
+	}
+	if sceneCount == 0 && comicStyle == "" {
+		return nil
+	}
+	if err := s.repo.UpdateStoryboardTurnOptions(ctx, sb.ID, sceneCount, comicStyle); err != nil {
+		return err
+	}
+	if sceneCount > 0 {
+		sb.SceneCount = sceneCount
+	}
+	if comicStyle != "" {
+		sb.ContinuationComicStyle = comicStyle
+	}
+	return nil
+}
+
+// StoryboardStructureGenerationOptions 承载对话式创作中「本轮」的增量参数，全部可选。
+// 三个字段都为零值时，本接口行为与旧的无参调用完全一致。
+type StoryboardStructureGenerationOptions struct {
+	// UserDirective 本轮修改要求。非空表示这是一次改稿：即使已有分镜也会重跑，并整体替换分镜。
+	UserDirective string
+	SceneCount    int
+	ComicStyle    string
+}
+
+// StartStoryboardStructureGeneration starts structure regeneration when DB has zero scenes,
+// or when opts.UserDirective asks for an explicit revision of an existing draft.
 // The HTTP handler returns immediately with asyncAccepted=true while work continues in-process.
-func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID, storyboardID string) (*domain.StoryboardStructureGenerationResponse, error) {
+func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID, storyboardID string, opts StoryboardStructureGenerationOptions) (*domain.StoryboardStructureGenerationResponse, error) {
 	sb, err := s.repo.StoryboardByID(ctx, storyboardID)
 	if err != nil {
 		return nil, fmt.Errorf("storyboard not found: %w", err)
@@ -873,11 +923,18 @@ func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID
 		return nil, fmt.Errorf("permission denied: not the creator")
 	}
 
+	opts.UserDirective = strings.TrimSpace(opts.UserDirective)
+	revise := opts.UserDirective != ""
+	// 已发布内容不接受重写，避免读者看到的分镜被静默替换。
+	if revise && sb.WorkflowStatus == domain.WorkflowStatusPublished {
+		return nil, fmt.Errorf("published storyboard cannot be revised")
+	}
+
 	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
 	if err != nil {
 		return nil, fmt.Errorf("load storyboard scenes: %w", err)
 	}
-	if len(scenes) > 0 {
+	if len(scenes) > 0 && !revise {
 		full, err := s.GetStoryboard(ctx, storyboardID)
 		if err != nil {
 			return nil, err
@@ -886,6 +943,12 @@ func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID
 			AsyncAccepted: false,
 			Storyboard:    full,
 		}, nil
+	}
+
+	if revise {
+		if err := s.applyStoryboardTurnOptions(ctx, sb, opts); err != nil {
+			return nil, err
+		}
 	}
 
 	if prog, err := s.GetGenerationProgress(ctx, storyboardID); err == nil && prog != nil && prog.IsGenerating {
@@ -897,16 +960,16 @@ func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID
 		return nil, fmt.Errorf("storyboard structure generation already in progress")
 	}
 
-	go func(sbID, uid string) {
+	go func(sbID, uid string, turnOpts StoryboardStructureGenerationOptions) {
 		defer mu.Unlock()
 		workCtx := context.Background()
-		if err := s.resumeStoryboardStructureGenerationWork(workCtx, uid, sbID); err != nil {
+		if err := s.resumeStoryboardStructureGenerationWork(workCtx, uid, sbID, turnOpts); err != nil {
 			s.logger.Error("async storyboard structure generation failed",
 				zap.String("storyboardId", sbID),
 				zap.String("userId", uid),
 				zap.Error(err))
 		}
-	}(storyboardID, userID)
+	}(storyboardID, userID, opts)
 
 	var progSnap *domain.StoryboardGenerationProgress
 	if prog, err := s.GetGenerationProgress(ctx, storyboardID); err == nil {

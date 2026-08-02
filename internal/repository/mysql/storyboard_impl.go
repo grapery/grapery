@@ -182,6 +182,28 @@ func (r *Repository) UpdateStoryboard(ctx context.Context, storyboard *domain.St
 	return nil
 }
 
+// UpdateStoryboardTurnOptions persists the per-turn creation options a conversational
+// revision can change. UpdateStoryboard intentionally does not touch these columns.
+func (r *Repository) UpdateStoryboardTurnOptions(ctx context.Context, storyboardID string, sceneCount int, comicStyle string) error {
+	updates := map[string]interface{}{"updated_at": time.Now().UTC()}
+	if sceneCount > 0 {
+		updates["scene_count"] = sceneCount
+	}
+	if strings.TrimSpace(comicStyle) != "" {
+		updates["continuation_comic_style"] = strings.TrimSpace(comicStyle)
+	}
+	if len(updates) == 1 {
+		return nil
+	}
+	if err := r.db.WithContext(ctx).
+		Model(&Storyboard{}).
+		Where("id = ?", storyboardID).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update storyboard turn options: %w", err)
+	}
+	return nil
+}
+
 // DeleteStoryboard deletes a storyboard
 func (r *Repository) DeleteStoryboard(ctx context.Context, id string) error {
 	if err := r.db.WithContext(ctx).Delete(&Storyboard{}, "id = ?", id).Error; err != nil {

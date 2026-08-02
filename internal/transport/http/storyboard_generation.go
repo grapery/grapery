@@ -2,8 +2,10 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -70,7 +72,26 @@ func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.StartStoryboardStructureGeneration(c.Request.Context(), userID, storyboardID)
+	// Body is optional: legacy callers resume a stalled draft with no payload, while the
+	// conversational flow sends this turn's revision instruction.
+	var req struct {
+		UserDirective string `json:"userDirective"`
+		SceneCount    int    `json:"sceneCount"`
+		ComicStyle    string `json:"comicStyle"`
+	}
+	if c.Request.Body != nil {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			InvalidParams(c, err.Error())
+			return
+		}
+	}
+
+	resp, err := h.svc.StartStoryboardStructureGeneration(c.Request.Context(), userID, storyboardID,
+		service.StoryboardStructureGenerationOptions{
+			UserDirective: req.UserDirective,
+			SceneCount:    req.SceneCount,
+			ComicStyle:    req.ComicStyle,
+		})
 	if err != nil {
 		HandleError(c, err)
 		return
@@ -843,4 +864,144 @@ func (h *Handler) buildCombinedHLSPlaylist(videoGens []*service.VideoGenerationI
 
 	sb.WriteString("#EXT-X-ENDLIST\n")
 	return sb.String()
+}
+
+// AnalyzeStoryboard handles POST /api/v1/storyboards/analyze
+func (h *Handler) AnalyzeStoryboard(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	var req domain.StoryboardAnalyzeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	resp, err := h.svc.AnalyzeStoryboardDirection(c.Request.Context(), userID, req)
+	if err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	Success(c, resp)
+}
+
+type syncStoryboardConversationRequest struct {
+	Messages []syncStoryboardConversationMessage `json:"messages" binding:"required,min=1,dive"`
+}
+
+type syncStoryboardConversationMessage struct {
+	ClientMessageID string `json:"clientMessageId" binding:"required,max=64"`
+	Role            string `json:"role" binding:"required,oneof=user assistant status"`
+	Type            string `json:"type" binding:"omitempty,max=40"`
+	Text            string `json:"text" binding:"required,max=8000"`
+	TaskID          string `json:"taskId" binding:"omitempty,max=36"`
+	CreatedAt       int64  `json:"createdAt"`
+}
+
+// GetStoryboardConversation handles GET /api/v1/storyboards/:id/conversation (creator only).
+func (h *Handler) GetStoryboardConversation(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	storyboardID := strings.TrimSpace(c.Param("id"))
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+	sb, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
+	if err != nil || sb == nil {
+		HandleError(c, err)
+		return
+	}
+	if sb.UserID != userID {
+		Error(c, CodeForbidden, "forbidden")
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	var beforeCreatedAt int64
+	if raw := strings.TrimSpace(c.Query("before")); raw != "" {
+		if n, err := strconv.ParseInt(raw, 10, 64); err == nil && n > 0 {
+			beforeCreatedAt = n
+		}
+	}
+	messages, hasMore, err := h.svc.ListStoryboardConversationPage(c.Request.Context(), storyboardID, limit, beforeCreatedAt)
+	if err != nil {
+		Error(c, CodeInternalError, "failed to load conversation")
+		return
+	}
+	out := make([]gin.H, 0, len(messages))
+	for _, msg := range messages {
+		if msg == nil {
+			continue
+		}
+		out = append(out, gin.H{
+			"id":              msg.ID,
+			"clientMessageId": msg.ClientMessageID,
+			"role":            msg.Role,
+			"type":            msg.MessageType,
+			"text":            msg.Text,
+			"taskId":          msg.TaskID,
+			"createdAt":       msg.CreatedAt,
+		})
+	}
+	Success(c, gin.H{
+		"storyboardId": storyboardID,
+		"messages":     out,
+		"hasMore":      hasMore,
+	})
+}
+
+// SyncStoryboardConversationMessages handles PUT /api/v1/storyboards/:id/conversation/messages (creator only).
+func (h *Handler) SyncStoryboardConversationMessages(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	storyboardID := strings.TrimSpace(c.Param("id"))
+	if storyboardID == "" {
+		Error(c, CodeInvalidParams, "storyboard id required")
+		return
+	}
+	var req syncStoryboardConversationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	sb, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
+	if err != nil || sb == nil {
+		HandleError(c, err)
+		return
+	}
+	if sb.UserID != userID {
+		Error(c, CodeForbidden, "forbidden")
+		return
+	}
+	toSave := make([]*domain.StoryboardConversationMessage, 0, len(req.Messages))
+	for _, item := range req.Messages {
+		msgType := strings.TrimSpace(item.Type)
+		if msgType == "" {
+			msgType = domain.StoryboardConversationTypeStatus
+		}
+		toSave = append(toSave, &domain.StoryboardConversationMessage{
+			StoryboardID:    storyboardID,
+			UserID:          userID,
+			Role:            strings.TrimSpace(item.Role),
+			MessageType:     msgType,
+			Text:            strings.TrimSpace(item.Text),
+			TaskID:          strings.TrimSpace(item.TaskID),
+			ClientMessageID: strings.TrimSpace(item.ClientMessageID),
+			CreatedAt:       item.CreatedAt,
+		})
+	}
+	if err := h.svc.SyncStoryboardConversationMessages(c.Request.Context(), toSave); err != nil {
+		Error(c, CodeInternalError, "failed to sync conversation")
+		return
+	}
+	Success(c, gin.H{"ok": true, "synced": len(toSave)})
 }

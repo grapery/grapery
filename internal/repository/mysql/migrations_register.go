@@ -799,6 +799,15 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_storyboard_conversation_messages",
+		Description: "Create and migrate storyboard_conversation_messages for creator AI chat history",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &StoryboardConversationMessageDB{})
+		},
+		Required: true,
+	})
+
 	// ========== Fragment Interaction 相关表 ==========
 	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_fragment_likes",

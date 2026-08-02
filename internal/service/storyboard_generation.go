@@ -2402,6 +2402,8 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 		}
 	}
 
+	enrichStoryboardProgressFineGrain(progress)
+
 	return progress, nil
 }
 

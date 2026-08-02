@@ -93,3 +93,42 @@ func TestStoryboardRedesignPromptsMentionEmotionalComicBeats(t *testing.T) {
 	}
 }
 
+// 对话式创作的本轮指令与风格选择必须真正进入两段提示词，否则聊天与规划卡就是空转。
+func TestStoryboardPromptsCarryTurnDirectiveAndStyle(t *testing.T) {
+	storyboard := &domain.Storyboard{
+		RawInput:               "少年在营地发现秘密。",
+		TurnDirective:          "改成雨夜，并让同伴提前登场。",
+		ContinuationComicStyle: "ink_wash",
+	}
+	story := &domain.Story{Title: "T", Genre: "adventure"}
+
+	bible := buildStoryboardBiblePlanUserPrompt(story, storyboard, storyboardGenerationContextSnapshot{}, 3)
+	scene := buildStoryboardSceneWriterUserPrompt(story, storyboard, storyboardGenerationContextSnapshot{}, &domain.StoryboardBiblePlan{}, 3)
+
+	for name, prompt := range map[string]string{"biblePlan": bible, "sceneWriter": scene} {
+		for _, want := range []string{"本轮修改要求", "改成雨夜，并让同伴提前登场。", "ink_wash", "视觉风格优先级"} {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("%s prompt missing %q", name, want)
+			}
+		}
+		// 原始描述必须与本轮指令并存，改稿不能丢掉首轮意图。
+		if !strings.Contains(prompt, "少年在营地发现秘密。") {
+			t.Fatalf("%s prompt dropped the original raw input", name)
+		}
+	}
+}
+
+// 无指令、无风格时提示词不应出现空的指令段，避免污染旧的一次性生成路径。
+func TestStoryboardPromptsOmitEmptyTurnSections(t *testing.T) {
+	prompt := buildStoryboardBiblePlanUserPrompt(
+		&domain.Story{Title: "T"},
+		&domain.Storyboard{RawInput: "普通描述"},
+		storyboardGenerationContextSnapshot{},
+		3,
+	)
+	for _, unwanted := range []string{"本轮修改要求", "视觉风格优先级"} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("prompt should not contain %q when no directive/style is set", unwanted)
+		}
+	}
+}
