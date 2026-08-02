@@ -20,6 +20,7 @@ type Handler struct {
 	agentTokenReplay  bool
 	agentPolicy       *service.AgentAccessPolicyService
 	generationAudit   *service.GenerationAuditService
+	chatService       *service.ChatService
 	cache             cache.Cache
 	logger            *zap.Logger
 }
@@ -33,6 +34,7 @@ type HandlerDependencies struct {
 	UserSettingsService   service.UserSettingsService
 	GenreCatalogService   *service.GenreCatalogService
 	FeedbackService       service.FeedbackService
+	ChatService           *service.ChatService
 	Logger                *zap.Logger
 	Cache                 cache.Cache
 	ShareSigner           *service.ShareLinkSigner
@@ -62,6 +64,7 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 		agentTokenReplay:  deps.AgentTokenReplay,
 		agentPolicy:       deps.AgentPolicy,
 		generationAudit:   deps.GenerationAudit,
+		chatService:       deps.ChatService,
 		cache:             deps.Cache,
 		logger:            deps.Logger,
 	}
@@ -328,6 +331,13 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/generation-audits", h.ListGenerationAudits)
 			authenticated.GET("/referrals", h.GetReferrals)
 			authenticated.POST("/referrals/use", h.UseReferralCode)
+
+			// Chat (character + direct messages)
+			authenticated.GET("/chat/sessions", h.ListChatSessions)
+			authenticated.POST("/chat/sessions", h.StartChatSession)
+			authenticated.GET("/chat/sessions/:id", h.GetChatSession)
+			authenticated.GET("/chat/sessions/:id/messages", h.ListChatMessages)
+			authenticated.POST("/chat/sessions/:id/messages", h.SendChatMessage)
 
 			// 角色相关
 			authenticated.POST("/characters", h.CreateCharacter)

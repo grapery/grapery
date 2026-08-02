@@ -399,6 +399,7 @@ func main() {
 	})
 
 	genAuditService := service.NewGenerationAuditService(repo, logger)
+	chatService := service.NewChatService(repo.DB(), svc, logger)
 
 	deps := &transport.HandlerDependencies{
 		Service:               svc,
@@ -408,6 +409,7 @@ func main() {
 		UserSettingsService:   userSettingsService,
 		GenreCatalogService:   genreCatalogService,
 		FeedbackService:       feedbackService,
+		ChatService:           chatService,
 		Logger:                logger,
 		Cache:                 redisCache,
 		ShareSigner:           shareSigner,

@@ -293,3 +293,22 @@ func (h *WebPaymentHandler) HandleAlipayWebhook(c *gin.Context) {
 		"msg":  "Notification processed successfully",
 	})
 }
+
+// HandleWechatWebhook handles WeChat Pay Native payment notifications.
+// POST /api/vippay/web/webhooks/wechat
+func (h *WebPaymentHandler) HandleWechatWebhook(c *gin.Context) {
+	if err := h.service.HandleWechatNotify(c.Request.Context(), c.Request); err != nil {
+		h.logger.WithError(err).Error("Failed to handle WeChat Pay notify")
+		// WeChat retries on non-SUCCESS; return 500 with failure body.
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "FAIL",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "SUCCESS",
+		"message": "成功",
+	})
+}

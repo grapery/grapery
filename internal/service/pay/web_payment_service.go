@@ -7,7 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	paymodels "github.com/grapestree/fgrapery/grapery/internal/repository/pay"
@@ -25,13 +29,15 @@ type WebPaymentConfig struct {
 	AlipayAppID          string
 	AlipayPrivateKey     string
 	AlipayPublicKey      string
+	Wechat               *WechatPayConfig
 }
 
 // WebPaymentService provides web payment operations
 type WebPaymentService struct {
-	repo   *paymodels.WebPaymentRepository
-	logger *logrus.Logger
-	config *WebPaymentConfig
+	repo      *paymodels.WebPaymentRepository
+	logger    *logrus.Logger
+	config    *WebPaymentConfig
+	wechatPay *wechatPayRuntime
 }
 
 // NewWebPaymentService creates a new web payment service
@@ -39,10 +45,14 @@ func NewWebPaymentService(logger *logrus.Logger, config *WebPaymentConfig) *WebP
 	if config == nil {
 		config = &WebPaymentConfig{}
 	}
+	if config.Wechat == nil {
+		config.Wechat = wechatPayConfigFromEnv()
+	}
 	return &WebPaymentService{
-		repo:   paymodels.NewWebPaymentRepository(),
-		logger: logger,
-		config: config,
+		repo:      paymodels.NewWebPaymentRepository(),
+		logger:    logger,
+		config:    config,
+		wechatPay: newWechatPayRuntime(logger, config.Wechat),
 	}
 }
 
@@ -114,6 +124,13 @@ func (s *WebPaymentService) CreatePayment(ctx context.Context, req *CreatePaymen
 		}
 		payment.StripeClientSecret = clientSecret
 
+	case paymodels.WebPaymentMethodWechat:
+		qrCodeURL, err = s.createWechatPayment(ctx, payment, req)
+		if err != nil {
+			return nil, err
+		}
+		payment.WechatCodeURL = qrCodeURL
+
 	case paymodels.WebPaymentMethodAlipay:
 		qrCodeURL, err = s.createAlipayPayment(ctx, payment, req)
 		if err != nil {
@@ -151,6 +168,11 @@ func (s *WebPaymentService) CreatePayment(ctx context.Context, req *CreatePaymen
 		Metadata:     payment.Metadata,
 	}
 
+	// Prefer WeChat code_url when present
+	if payment.WechatCodeURL != "" {
+		response.QRCodeURL = payment.WechatCodeURL
+	}
+
 	// Add Stripe publishable key if applicable
 	if req.Method == paymodels.WebPaymentMethodStripe {
 		response.PublishableKey = getStripePublishableKey()
@@ -169,10 +191,35 @@ func (s *WebPaymentService) createStripePayment(ctx context.Context, payment *pa
 
 	stripe.Key = stripeKey
 
+	currency := strings.ToLower(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "usd"
+	}
+	amount := int64(req.Amount)
+	// Typical US/EU Stripe accounts do not accept CNY PaymentIntents.
+	// Convert fen → USD cents using STRIPE_CNY_USD_RATE (major-unit rate, default 0.14).
+	if currency == "cny" {
+		rate := stripeCNYToUSDRate()
+		yuan := float64(req.Amount) / 100.0
+		amount = int64(math.Round(yuan * rate * 100))
+		if amount < 50 {
+			amount = 50 // Stripe USD minimum
+		}
+		currency = "usd"
+		if payment.Metadata == nil {
+			payment.Metadata = map[string]interface{}{}
+		}
+		payment.Metadata["original_amount"] = req.Amount
+		payment.Metadata["original_currency"] = "cny"
+		payment.Metadata["charged_currency"] = "usd"
+		payment.Currency = "usd"
+		payment.Amount = int(amount)
+	}
+
 	// Create Payment Intent
 	params := &stripe.PaymentIntentParams{
-		Amount:   stripe.Int64(int64(req.Amount)),
-		Currency: stripe.String(string(req.Currency)),
+		Amount:   stripe.Int64(amount),
+		Currency: stripe.String(currency),
 		Params: stripe.Params{
 			Metadata: map[string]string{
 				"user_id":    req.UserID,
@@ -195,24 +242,97 @@ func (s *WebPaymentService) createStripePayment(ctx context.Context, payment *pa
 	return pi.ClientSecret, nil
 }
 
-// createAlipayPayment creates an Alipay payment
+// createAlipayPayment — web Alipay is not productized; refuse rather than return a demo QR URL.
 func (s *WebPaymentService) createAlipayPayment(ctx context.Context, payment *paymodels.WebPayment, req *CreatePaymentRequest) (string, error) {
-	// Generate unique out trade no
-	outTradeNo := fmt.Sprintf("PAY_%s_%d", payment.ID, time.Now().UnixNano())
+	return "", errors.New("Alipay web payments are not available; use Stripe or WeChat Pay")
+}
 
-	// TODO: Integrate with Alipay SDK
-	// For now, return a placeholder QR code URL
-	qrCodeURL := fmt.Sprintf("https://qr.alipay.com/demo/%s", outTradeNo)
+// createWechatPayment creates a WeChat Native (QR) order. Amount must be CNY fen.
+func (s *WebPaymentService) createWechatPayment(ctx context.Context, payment *paymodels.WebPayment, req *CreatePaymentRequest) (string, error) {
+	if s.wechatPay == nil {
+		return "", errors.New("WeChat Pay is not available")
+	}
 
-	payment.AlipayOutTradeNo = outTradeNo
+	currency := strings.ToLower(strings.TrimSpace(req.Currency))
+	amountFen := int64(req.Amount)
+	// Plans may be quoted in USD; convert to CNY fen for WeChat (inverse of Stripe path).
+	if currency == "usd" || currency == "" {
+		rate := stripeCNYToUSDRate()
+		if rate <= 0 {
+			rate = 0.14
+		}
+		usd := float64(req.Amount) / 100.0
+		amountFen = int64(math.Round(usd / rate * 100))
+		if amountFen < 1 {
+			amountFen = 1
+		}
+		payment.Currency = "CNY"
+		payment.Amount = int(amountFen)
+		if payment.Metadata == nil {
+			payment.Metadata = map[string]interface{}{}
+		}
+		payment.Metadata["original_amount"] = req.Amount
+		payment.Metadata["original_currency"] = strings.ToUpper(firstNonEmpty(currency, "usd"))
+		payment.Metadata["charged_currency"] = "cny"
+	} else if currency != "cny" {
+		return "", fmt.Errorf("WeChat Pay only supports CNY (got %s)", req.Currency)
+	} else {
+		payment.Currency = "CNY"
+	}
+
+	outTradeNo := wechatOutTradeNoFromPaymentID(payment.ID)
+	desc := fmt.Sprintf("Membership %s", req.PlanID)
+	codeURL, err := s.wechatPay.CreateNativeOrder(ctx, outTradeNo, desc, amountFen)
+	if err != nil {
+		return "", err
+	}
+
+	payment.WechatOutTradeNo = outTradeNo
+	payment.WechatCodeURL = codeURL
 	payment.Status = paymodels.WebPaymentStatusProcessing
+	return codeURL, nil
+}
 
-	s.logger.WithFields(logrus.Fields{
-		"payment_id":   payment.ID,
-		"out_trade_no": outTradeNo,
-	}).Info("Alipay payment created (demo mode)")
+// HandleWechatNotify processes WeChat Pay payment result notifications.
+func (s *WebPaymentService) HandleWechatNotify(ctx context.Context, request *http.Request) error {
+	if s.wechatPay == nil {
+		return errors.New("WeChat Pay is not available")
+	}
+	_, transaction, err := s.wechatPay.ParseNotify(ctx, request)
+	if err != nil {
+		return fmt.Errorf("parse WeChat notify: %w", err)
+	}
+	if transaction == nil || transaction.OutTradeNo == nil {
+		return errors.New("WeChat notify missing out_trade_no")
+	}
 
-	return qrCodeURL, nil
+	outTradeNo := *transaction.OutTradeNo
+	payment, err := s.repo.GetPaymentByWechatOutTradeNo(outTradeNo)
+	if err != nil {
+		return fmt.Errorf("payment not found for WeChat out_trade_no %s: %w", outTradeNo, err)
+	}
+
+	tradeState := ""
+	if transaction.TradeState != nil {
+		tradeState = *transaction.TradeState
+	}
+
+	switch tradeState {
+	case "SUCCESS":
+		return s.UpdatePaymentStatus(ctx, payment.ID, paymodels.WebPaymentStatusSucceeded, map[string]interface{}{
+			"wechat_out_trade_no": outTradeNo,
+		})
+	case "CLOSED", "REVOKED", "PAYERROR":
+		return s.UpdatePaymentStatus(ctx, payment.ID, paymodels.WebPaymentStatusFailed, map[string]interface{}{
+			"failure_reason": tradeState,
+		})
+	default:
+		s.logger.WithFields(logrus.Fields{
+			"payment_id":  payment.ID,
+			"trade_state": tradeState,
+		}).Info("WeChat notify ignored (non-terminal state)")
+		return nil
+	}
 }
 
 // GetPayment retrieves a payment by ID
@@ -350,6 +470,16 @@ func getStripeAPIKey() string {
 	// Return empty string if not configured - this will cause Stripe calls to fail
 	// which is safer than using a placeholder key
 	return ""
+}
+
+// stripeCNYToUSDRate returns CNY→USD rate for major units (¥1 → $rate).
+func stripeCNYToUSDRate() float64 {
+	if v := os.Getenv("STRIPE_CNY_USD_RATE"); v != "" {
+		if rate, err := strconv.ParseFloat(v, 64); err == nil && rate > 0 {
+			return rate
+		}
+	}
+	return 0.14
 }
 
 func getStripePublishableKey() string {

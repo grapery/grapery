@@ -50,6 +50,15 @@ func init() {
 		Required: true,
 	})
 
+	registry.RegisterPaymentStep(migrations.MigrationStep{
+		Name:        "migrate_web_payments_wechat_columns",
+		Description: "Add WeChat Pay columns to web_payments",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return db.AutoMigrate(&WebPayment{})
+		},
+		Required: true,
+	})
+
 	// ========== IAP (应用内购买) 表 ==========
 	registry.RegisterPaymentStep(migrations.MigrationStep{
 		Name:        "migrate_iap_products",

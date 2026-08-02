@@ -1146,6 +1146,16 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 		},
 		Required: false,
 	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_chat_sessions_messages",
+		Description: "Create chat_sessions and chat_messages tables",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			_ = ctx
+			return EnsureChatTables(db)
+		},
+		Required: false,
+	})
 }
 
 // registerIndexSteps 注册索引创建步骤

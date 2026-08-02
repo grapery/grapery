@@ -26,6 +26,7 @@ const (
 	WebPaymentMethodGooglePay WebPaymentMethod = "google_pay"
 	WebPaymentMethodApplePay  WebPaymentMethod = "apple_pay"
 	WebPaymentMethodAlipay    WebPaymentMethod = "alipay"
+	WebPaymentMethodWechat    WebPaymentMethod = "wechat"
 )
 
 // WebPayment represents a web payment record
@@ -44,6 +45,8 @@ type WebPayment struct {
 	StripeClientSecret    string                 `json:"stripeClientSecret,omitempty" gorm:"size:512;comment:Stripe客户端密钥"`
 	AlipayOutTradeNo      string                 `json:"alipayOutTradeNo,omitempty" gorm:"size:128;uniqueIndex:idx_web_payments_alipay_trade;comment:支付宝商户订单号"`
 	AlipayQRCodeURL       string                 `json:"alipayQRCodeURL,omitempty" gorm:"size:1024;comment:支付宝二维码URL"`
+	WechatOutTradeNo      string                 `json:"wechatOutTradeNo,omitempty" gorm:"size:64;uniqueIndex:idx_web_payments_wechat_trade;comment:微信商户订单号"`
+	WechatCodeURL         string                 `json:"wechatCodeURL,omitempty" gorm:"size:1024;comment:微信Native支付code_url"`
 	FailureReason         string                 `json:"failureReason,omitempty" gorm:"size:512;comment:失败原因"`
 	FailureCode           string                 `json:"failureCode,omitempty" gorm:"size:100;comment:失败错误码"`
 }
@@ -94,6 +97,16 @@ func (r *WebPaymentRepository) GetPaymentByStripePaymentIntentID(stripePI string
 func (r *WebPaymentRepository) GetPaymentByAlipayOutTradeNo(tradeNo string) (*WebPayment, error) {
 	var payment WebPayment
 	err := r.db.Where("alipay_out_trade_no = ?", tradeNo).First(&payment).Error
+	if err != nil {
+		return nil, err
+	}
+	return &payment, nil
+}
+
+// GetPaymentByWechatOutTradeNo retrieves a payment by WeChat out_trade_no
+func (r *WebPaymentRepository) GetPaymentByWechatOutTradeNo(tradeNo string) (*WebPayment, error) {
+	var payment WebPayment
+	err := r.db.Where("wechat_out_trade_no = ?", tradeNo).First(&payment).Error
 	if err != nil {
 		return nil, err
 	}

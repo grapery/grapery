@@ -802,11 +802,16 @@ func registerRoutes(router *gin.Engine) {
 				// 计算VIP等级（根据订阅套餐）
 				vipLevel := calculateVIPLevel(subscription.PackagePlanID)
 
-				// 格式化过期时间
+				// 格式化订阅周期
 				var expiresAt *string
 				if !subscription.EndTime.IsZero() {
 					expiresAtStr := subscription.EndTime.Format(time.RFC3339)
 					expiresAt = &expiresAtStr
+				}
+				var startsAt *string
+				if !subscription.StartTime.IsZero() {
+					startsAtStr := subscription.StartTime.Format(time.RFC3339)
+					startsAt = &startsAtStr
 				}
 
 				c.JSON(http.StatusOK, gin.H{
@@ -825,7 +830,9 @@ func registerRoutes(router *gin.Engine) {
 						"credit_remaining": creditRemaining,
 						"max_roles":        subscription.MaxRoles,
 						"max_contexts":     subscription.MaxContexts,
+						"starts_at":        startsAt,
 						"expires_at":       expiresAt,
+						"plan_id":          subscription.PackagePlanID,
 					},
 				})
 			})
@@ -1079,6 +1086,7 @@ func registerRoutes(router *gin.Engine) {
 			// Webhook 接口（无需鉴权，由支付服务商直接调用）
 			web.POST("/webhooks/stripe", webPaymentHandler.HandleStripeWebhook)
 			web.POST("/webhooks/alipay", webPaymentHandler.HandleAlipayWebhook)
+			web.POST("/webhooks/wechat", webPaymentHandler.HandleWechatWebhook)
 		}
 	}
 }
