@@ -339,6 +339,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/agent-access-tokens", h.IssueAgentAccessToken)
 			authenticated.POST("/agent-access-tokens/:requestId/cancel", h.CancelAgentAccessToken)
 			authenticated.GET("/generation-audits", h.ListGenerationAudits)
+			authenticated.GET("/generations/latest", h.FindLatestGenerationExecution)
 			authenticated.GET("/generations/:id", h.GetGenerationExecution)
 			authenticated.GET("/generations/:id/events", h.ListGenerationExecutionEvents)
 			authenticated.POST("/generations/:id/cancel", h.CancelGenerationExecution)

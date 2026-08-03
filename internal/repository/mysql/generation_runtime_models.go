@@ -4,8 +4,8 @@ import "time"
 
 type GenerationExecutionDB struct {
 	ID                  string     `gorm:"primaryKey;size:64"`
-	UserID              string     `gorm:"size:36;index"`
-	Kind                string     `gorm:"size:40;not null;index;uniqueIndex:idx_generation_execution_idempotency,priority:2"`
+	UserID              string     `gorm:"size:36;index;index:idx_generation_execution_content,priority:1"`
+	Kind                string     `gorm:"size:40;not null;index;uniqueIndex:idx_generation_execution_idempotency,priority:2;index:idx_generation_execution_content,priority:2"`
 	Status              string     `gorm:"size:24;not null;index"`
 	Phase               string     `gorm:"size:80;index"`
 	Progress            int        `gorm:"default:0"`
@@ -23,6 +23,7 @@ type GenerationExecutionDB struct {
 	BranchIndex         int        `gorm:"default:0"`
 	Strategy            string     `gorm:"size:120"`
 	ContentIDsJSON      string     `gorm:"type:text"`
+	PrimaryContentID    string     `gorm:"size:64;index:idx_generation_execution_content,priority:3"`
 	ToolCallsJSON       string     `gorm:"type:longtext"`
 	Error               string     `gorm:"type:text"`
 	ErrorCode           string     `gorm:"size:80;index"`

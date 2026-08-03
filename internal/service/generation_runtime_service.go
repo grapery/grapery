@@ -128,6 +128,13 @@ func (s *GenerationRuntimeService) ListExecutions(ctx context.Context, kind stri
 	return s.repo.ListGenerationExecutions(ctx, kind, limit)
 }
 
+func (s *GenerationRuntimeService) FindLatestExecution(ctx context.Context, userID, kind, contentID string) (*domain.GenerationExecution, error) {
+	if s == nil || s.repo == nil {
+		return nil, fmt.Errorf("generation runtime service unavailable")
+	}
+	return s.repo.FindLatestGenerationExecution(ctx, strings.TrimSpace(userID), strings.TrimSpace(kind), strings.TrimSpace(contentID))
+}
+
 func (s *GenerationRuntimeService) ListEvents(ctx context.Context, runID string, afterSequence int64, limit int) ([]*domain.GenerationEvent, error) {
 	return s.repo.ListGenerationEvents(ctx, runID, afterSequence, limit)
 }

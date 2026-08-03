@@ -20,6 +20,30 @@ func (h *Handler) GetGenerationExecution(c *gin.Context) {
 	Success(c, run)
 }
 
+// FindLatestGenerationExecution recovers the durable run for a content draft
+// when the client has lost its local run ID (for example after reinstalling).
+func (h *Handler) FindLatestGenerationExecution(c *gin.Context) {
+	if h.generationRuntime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	kind, contentID := strings.TrimSpace(c.Query("kind")), strings.TrimSpace(c.Query("contentId"))
+	if kind == "" || contentID == "" {
+		InvalidParams(c, "kind and contentId are required")
+		return
+	}
+	run, err := h.generationRuntime.FindLatestExecution(c.Request.Context(), userID, kind, contentID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, run)
+}
+
 func (h *Handler) ListGenerationExecutionEvents(c *gin.Context) {
 	run, ok := h.authorizedGenerationExecution(c)
 	if !ok {

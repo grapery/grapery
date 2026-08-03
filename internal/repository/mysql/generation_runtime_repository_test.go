@@ -73,6 +73,27 @@ func TestGenerationRuntimeRepository_CheckpointRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGenerationRuntimeRepository_FindsLatestExecutionByContent(t *testing.T) {
+	repo := newGenerationRuntimeTestRepository(t)
+	ctx := context.Background()
+	for _, run := range []*domain.GenerationExecution{
+		{ID: "run-old", UserID: "user-1", Kind: "fragment", Status: "failed", ContentIDs: map[string]any{"fragmentId": "fragment-1"}, CreatedAt: time.Now().Add(-time.Minute)},
+		{ID: "run-latest", UserID: "user-1", Kind: "fragment", Status: "running", ContentIDs: map[string]any{"fragmentId": "fragment-1"}, CreatedAt: time.Now()},
+		{ID: "run-other-user", UserID: "user-2", Kind: "fragment", Status: "running", ContentIDs: map[string]any{"fragmentId": "fragment-1"}, CreatedAt: time.Now().Add(time.Minute)},
+	} {
+		if _, err := repo.SaveGenerationExecution(ctx, run, "run.created"); err != nil {
+			t.Fatalf("save %s: %v", run.ID, err)
+		}
+	}
+	got, err := repo.FindLatestGenerationExecution(ctx, "user-1", "fragment", "fragment-1")
+	if err != nil {
+		t.Fatalf("find latest: %v", err)
+	}
+	if got.ID != "run-latest" {
+		t.Fatalf("latest id = %q, want run-latest", got.ID)
+	}
+}
+
 func TestGenerationRuntimeRepository_ReusesCanonicalRunForClientRequest(t *testing.T) {
 	repo := newGenerationRuntimeTestRepository(t)
 	ctx := context.Background()

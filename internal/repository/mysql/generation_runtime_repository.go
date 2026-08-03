@@ -116,6 +116,42 @@ func (r *GenerationRuntimeRepository) GetGenerationExecution(ctx context.Context
 	return generationExecutionFromDB(&row)
 }
 
+func (r *GenerationRuntimeRepository) FindLatestGenerationExecution(ctx context.Context, userID, kind, contentID string) (*domain.GenerationExecution, error) {
+	userID, kind, contentID = strings.TrimSpace(userID), strings.TrimSpace(kind), strings.TrimSpace(contentID)
+	if userID == "" || kind == "" || contentID == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var row GenerationExecutionDB
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND kind = ? AND primary_content_id = ?", userID, kind, contentID).
+		Order("created_at DESC").Take(&row).Error
+	if err == nil {
+		return generationExecutionFromDB(&row)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// Compatibility for executions written before primary_content_id existed.
+	var legacy []GenerationExecutionDB
+	if err := r.db.WithContext(ctx).Where("user_id = ? AND kind = ?", userID, kind).
+		Order("created_at DESC").Limit(500).Find(&legacy).Error; err != nil {
+		return nil, err
+	}
+	for i := range legacy {
+		run, decodeErr := generationExecutionFromDB(&legacy[i])
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		for _, value := range run.ContentIDs {
+			if fmt.Sprint(value) == contentID {
+				return run, nil
+			}
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
 func (r *GenerationRuntimeRepository) ListGenerationExecutions(ctx context.Context, kind string, limit int) ([]*domain.GenerationExecution, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -224,12 +260,22 @@ func generationExecutionToDB(run *domain.GenerationExecution) (*GenerationExecut
 		PromptSnapshotsJSON: string(mustMarshalGenerationJSON(run.PromptSnapshots)),
 		InputJSON:           string(input), OutputJSON: string(output), ParentRunID: run.ParentRunID,
 		BranchIndex: run.BranchIndex, Strategy: run.Strategy, ContentIDsJSON: string(contentIDs),
-		ToolCallsJSON: string(toolCalls), Error: run.Error, ErrorCode: run.ErrorCode,
+		PrimaryContentID: generationPrimaryContentID(run.ContentIDs),
+		ToolCallsJSON:    string(toolCalls), Error: run.Error, ErrorCode: run.ErrorCode,
 		TokensUsed: run.TokensUsed, ModelProvider: run.ModelProvider, ModelName: run.ModelName,
 		CheckpointID: run.CheckpointID, ClientRequestID: requestID, IdempotencyUserID: idempotencyUserID,
 		SourceTaskID: run.SourceTaskID, Sequence: run.Sequence, CreatedAt: run.CreatedAt,
 		UpdatedAt: run.UpdatedAt, CompletedAt: run.CompletedAt,
 	}, nil
+}
+
+func generationPrimaryContentID(contentIDs map[string]any) string {
+	for _, key := range []string{"fragmentId", "storyboardId", "storyId", "branchId", "characterId"} {
+		if value := strings.TrimSpace(fmt.Sprint(contentIDs[key])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
 }
 
 func generationExecutionFromDB(row *GenerationExecutionDB) (*domain.GenerationExecution, error) {

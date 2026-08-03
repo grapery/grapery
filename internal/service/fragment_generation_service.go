@@ -3558,9 +3558,10 @@ func (s *FragmentGenerationService) CancelTask(ctx context.Context, taskID, user
 		return fmt.Errorf("unauthorized: task does not belong to user")
 	}
 
-	// Only pending or processing tasks can be cancelled
+	// Cancellation is idempotent. A terminal task no longer has work that can
+	// continue in the background, so clients may safely treat it as cancelled.
 	if task.Status != "pending" && task.Status != "processing" {
-		return fmt.Errorf("task cannot be cancelled: current status is %s", task.Status)
+		return nil
 	}
 
 	// Update status to cancelled
