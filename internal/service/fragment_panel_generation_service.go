@@ -610,7 +610,8 @@ func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug
 	order := fmt.Sprintf("Panel %d of %d.", panelIndex+1, totalPanels)
 	layout := buildPanelLayoutDirective(planItem)
 	comic := buildPanelComicTextDirective(planItem)
-	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout, comic))
+	canvas := fullBleedCanvasDirective()
+	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout, comic, canvas))
 }
 
 func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
@@ -628,11 +629,11 @@ func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
 		parts = append(parts, "visual_hierarchy="+v)
 	}
 	if len(parts) == 0 {
-		return "Layout directive: one output image. Use either a unified continuous illustration or multiple clearly separated intra-image regions/sub-panels (comic-style zones with gutters / spacing) when the story beat gains clarity; prioritize readable order (e.g. top-to-bottom or left-to-right within the canvas). Maintain one consistent art treatment across zones."
+		return "Layout directive: one output image. Use either a unified continuous illustration or multiple clearly separated intra-image regions/sub-panels (comic-style zones separated by gutters / spacing) when the story beat gains clarity; prioritize readable order (e.g. top-to-bottom or left-to-right within the canvas). Maintain one consistent art treatment across zones, and keep every separation inside the canvas instead of framing the whole image."
 	}
-	out := "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible separation/gutters; if it implies one integrated scene, avoid unnecessary outer panel borders."
+	out := "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible internal separation/gutters; if it implies one integrated scene, keep it a single uninterrupted illustration. In both cases never draw an outer panel border around the image."
 	if panelPlanWantsComicLayout(planItem) {
-		out += " Full comic panel rendering: bold black panel borders, gutter spacing between sub-panels, sequential reading order (left-to-right, top-to-bottom), and reserved speech bubble/caption box areas. Any comic text must be painted directly into the final image, not left as placeholders for app overlay. Keep text count tight (<=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble), use large legible Chinese lettering, and do not add random extra words."
+		out += " Comic rendering: strong ink line weight, screentones, gutter spacing between internal sub-panels, sequential reading order (left-to-right, top-to-bottom), and reserved speech bubble/caption box areas. Sub-panel dividers stay inside the canvas and the outermost zones bleed off the edges. Any comic text must be painted directly into the final image, not left as placeholders for app overlay. Keep text count tight (<=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble), use large legible Chinese lettering, and do not add random extra words."
 	}
 	return out
 }

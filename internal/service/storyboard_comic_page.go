@@ -417,10 +417,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		}
 		genReq.Operation = imgOp
 		genReq.ReferenceImageURL = refPrimary
-		imageProvider := s.imageProvider
-		if imageProvider == "" {
-			imageProvider = "huoshan"
-		}
+		imageProvider := s.effectiveImageProvider()
 		if strings.EqualFold(imageProvider, "huoshan") {
 			PrepareHuoshanGenAPIImageRequest(genReq)
 		}
@@ -489,7 +486,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 			s.metrics.RecordImageGenerationWithCharacters(gen.Status, characterCount)
 		}
 		s.metrics.RecordImageGenerationWithStyle(gen.Status, gen.StoryStyle != nil)
-		s.metrics.RecordAIGeneration("gemini", "comic_page")
+		s.metrics.RecordAIGeneration(s.effectiveImageProvider(), "comic_page")
 		if gen.TotalTokens > 0 {
 			s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
 		}
@@ -589,7 +586,7 @@ func prependComicPageImagePromptGuard(prompt string, opts ComicPagePipelineOptio
 	if aspect == "" {
 		aspect = "9:16"
 	}
-	guard := fmt.Sprintf("[HARD OUTPUT REQUIREMENT] Generate ONE single image that is a complete comic page, NOT one cinematic illustration. The page must contain exactly %d visibly separated comic panel(s) using layout %s (%s), clear gutters/panel borders when panelCount > 1, reading order left-to-right then top-to-bottom, and page aspect ratio %s. Each panel must show a distinct beat from the same scene; do not add extra panels beyond this exact count.", panelCount, layout, comicPageLayoutDescription(layout, panelCount), aspect)
+	guard := fmt.Sprintf("[HARD OUTPUT REQUIREMENT] Generate ONE single image that is a complete comic page, NOT one cinematic illustration. The page must contain exactly %d visibly separated comic panel(s) using layout %s (%s), clear gutters/panel borders between panels when panelCount > 1, reading order left-to-right then top-to-bottom, and page aspect ratio %s. Each panel must show a distinct beat from the same scene; do not add extra panels beyond this exact count. %s", panelCount, layout, comicPageLayoutDescription(layout, panelCount), aspect, fullBleedCanvasDirective())
 	if strings.TrimSpace(opts.DialogueMode) != "none" {
 		guard += " FORBIDDEN: empty speech balloons or empty thought bubbles — either omit bubbles entirely or fill them with the exact Chinese strings required in the COMIC LETTERING section (no blank outlines)."
 	}

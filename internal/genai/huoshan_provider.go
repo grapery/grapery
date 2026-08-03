@@ -201,7 +201,7 @@ func (p *huoshanProvider) textToImage(ctx context.Context, req *GenerateRequest)
 	payload := &huoshanprovider.ImageGenerationRequest{
 		Model:                            strings.TrimSpace(req.Model),
 		Prompt:                           prompt,
-		Size:                             strings.TrimSpace(req.Size),
+		Size:                             huoshanImageSize(req),
 		Seed:                             int64(req.Seed),
 		Stream:                           false,
 		GuidanceScale:                    req.GuidanceScale,
@@ -235,7 +235,7 @@ func (p *huoshanProvider) imageToImage(ctx context.Context, req *GenerateRequest
 		Model:                            strings.TrimSpace(req.Model),
 		Prompt:                           prompt,
 		Image:                            references,
-		Size:                             strings.TrimSpace(req.Size),
+		Size:                             huoshanImageSize(req),
 		Seed:                             int64(req.Seed),
 		GuidanceScale:                    req.GuidanceScale,
 		ResponseFormat:                   strings.TrimSpace(req.ResponseFormat),

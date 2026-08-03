@@ -2712,8 +2712,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		coverResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
 			Prompt:            finalPrompt,
-			Provider:          "gemini",
-			Model:             "",
+			Provider:          s.effectiveImageProvider(),
 			AspectRatio:       req.AspectRatio,
 			Quality:           "high",
 			OutputCount:       1,
@@ -2742,8 +2741,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		posterResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
 			Prompt:            finalPrompt,
-			Provider:          "gemini",
-			Model:             "",
+			Provider:          s.effectiveImageProvider(),
 			AspectRatio:       "2:3", // 海报通常是竖版
 			Quality:           "high",
 			OutputCount:       1,
@@ -2772,8 +2770,7 @@ func (s *Service) GenerateStoryCover(ctx context.Context, userID, storyID string
 		bgResult, err := s.aiGenService.GenerateImage(ctx, &GenerateImageRequest{
 			UserID:            userID,
 			Prompt:            finalPrompt,
-			Provider:          "gemini",
-			Model:             "",
+			Provider:          s.effectiveImageProvider(),
 			AspectRatio:       "21:9", // 宽幅背景
 			Quality:           "standard",
 			OutputCount:       1,
@@ -3493,11 +3490,7 @@ func (s *Service) generateVideoFromImage(ctx context.Context, userID string, ima
 		Style:             style,
 	}
 
-	// Use configured video provider or default
-	providerName := s.videoProvider
-	if providerName == "" {
-		providerName = "huoshan"
-	}
+	providerName := s.effectiveVideoProvider()
 
 	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
 	if err != nil {
@@ -3547,11 +3540,7 @@ func (s *Service) generateEnhancedImage(ctx context.Context, userID string, desc
 		Metadata:    map[string]interface{}{"user_id": userID},
 	}
 
-	// Use configured image provider or default
-	providerName := s.imageProvider
-	if providerName == "" {
-		providerName = "huoshan" // Default to Huoshan for image
-	}
+	providerName := s.effectiveImageProvider()
 
 	if strings.EqualFold(providerName, "huoshan") {
 		PrepareHuoshanGenAPIImageRequest(genReq)
@@ -3614,10 +3603,7 @@ func (s *Service) generateAnimationFromImage(ctx context.Context, userID string,
 		Metadata:          map[string]interface{}{"user_id": userID},
 	}
 
-	providerName := s.videoProvider
-	if providerName == "" {
-		providerName = "huoshan"
-	}
+	providerName := s.effectiveVideoProvider()
 
 	resp, err := s.genAPI.GenerateVideo(ctx, providerName, genReq)
 	if err != nil {

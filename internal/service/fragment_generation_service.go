@@ -2519,10 +2519,11 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - 色彩基调可以随情绪渐变，但不要突然跳到完全不同的色彩体系
 
 【一补、漫画版式与文字层——让画面像真实漫画】
-- 如果风格、故事或用户输入适合漫画表达，imagePrompt 必须描述 manga/comic panel layout：清晰格框、粗墨线边框、gutter 间距、从左到右/从上到下的阅读顺序。
+- 如果风格、故事或用户输入适合漫画表达，imagePrompt 必须描述 manga/comic 的镜头与文字语言：景别节奏、内部分区、从左到右/从上到下的阅读顺序。
+%s
 - 每一格可以包含漫画文字元素，但必须分类：旁白 narration 放在 caption box；角色台词 dialogue 放在 speech bubble，气泡尾巴指向 speaker；内心独白 thought 放在 thought bubble；语气词/拟声词 sfx 用夸张音效字。
 - 文字数量必须严格受限：每格最多 1 个 narration、1-2 个 dialogue、最多 1 个 sfx；thought 仅在必要时出现且最多 1 个。单条中文建议不超过 12 个汉字，不要把整段 sceneDesc 塞进气泡。
-- imagePrompt 中应给气泡/旁白框预留干净空间，避免遮挡人物脸部和关键道具。
+- imagePrompt 中应给气泡/旁白框预留干净空间，避免遮挡人物脸部和关键道具；气泡本身有轮廓，但不要因此在画面外圈再补一层边框。
 - 漫画文字必须由图片模型直接画进最终图片中，不能依赖 App 后续叠加；imagePrompt 要明确要求 render the exact Chinese text inside the image，字体清晰、可读、与漫画风格一致；禁止额外随机文字或英文假字。
 
 【二、剧情拓展——格与格之间必须推进故事（硬性）】
@@ -2711,6 +2712,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 - comicTexts 可为空数组；若有 dialogue/thought，speaker 必须来自本格 referenceKeys 中的角色 key；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought，单条中文建议 <=12 汉字
 - imagePrompt 必须把 comicTexts 对应的旁白框、对话气泡、思想气泡、拟声词版式写成英文视觉指令；不要只在 JSON 里列文字而不影响画面
 - imagePrompt 中绝对不要出现"copy the reference image"或"exactly like the reference"——每格都应该是原创的视觉创作
+- imagePrompt 必须是满幅出血描述：不得出现 outer frame / border / keyline / page margin / white border / black bars / rounded corners / drop shadow / polaroid frame 等外框词；画面延伸出画布四边
 - sceneDesc 中不要出现格式化标记（不要 #、不要 **、不要列表符号）
 - 不要在 JSON 之外输出任何文字（包括开头和结尾的说明）`,
 		sceneCount,
@@ -2724,6 +2726,7 @@ referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集�
 		req.Mood,
 		aspectRatio,
 		structuredStoryPanelGuidance(),
+		fullBleedPlanningRule(),
 		minPromptWords,
 		sceneCount,
 		sceneCount-1,
@@ -2916,6 +2919,12 @@ func cloneFragmentProviderOptions(policy *domain.FragmentConsistencyPolicy) map[
 }
 
 func buildFragmentSceneImagePrompt(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) string {
+	return strings.TrimSpace(buildFragmentSceneImagePromptCore(bible, scene) + "\n" + fullBleedCanvasDirective())
+}
+
+// buildFragmentSceneImagePromptCore 是不含画布出血指令的场景描述部分。
+// 组图路径会把出血指令提到整条 prompt 的开头统一声明一次，避免逐场景重复。
+func buildFragmentSceneImagePromptCore(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) string {
 	var b strings.Builder
 	if bible != nil && bible.StyleBible != nil && strings.TrimSpace(bible.StyleBible.ArtStyle) != "" {
 		fmt.Fprintf(&b, "Global art style: %s.\n", strings.TrimSpace(bible.StyleBible.ArtStyle))
@@ -2976,7 +2985,7 @@ func writeFragmentComicLayoutDirective(b *strings.Builder, bible *domain.Fragmen
 	if !fragmentSceneWantsComicLayout(bible, scene) {
 		return
 	}
-	b.WriteString("Comic layout directive: render the image as a manga/comic panel with bold ink panel borders, clear gutters or internal comic-style zones when useful, and a readable left-to-right/top-to-bottom flow. Paint all comic text directly into the final image, not as placeholders and not for app overlay. Render the exact Chinese characters inside bubbles/caption boxes/SFX lettering as clearly as possible with large legible hand-lettered glyphs. Reserve clean negative space for text elements; do not cover faces, hands, or key props with bubbles. Do not add random extra words.\n")
+	b.WriteString("Comic layout directive: render manga/comic visual language — expressive shot scale, ink line weight, screentones, and a readable left-to-right/top-to-bottom flow. When several beats help the scene, separate them as internal zones inside the canvas; never enclose the image in an outer panel frame and never leave a margin around the art. Paint all comic text directly into the final image, not as placeholders and not for app overlay. Render the exact Chinese characters inside bubbles/caption boxes/SFX lettering as clearly as possible with large legible hand-lettered glyphs. Reserve clean negative space for text elements; do not cover faces, hands, or key props with bubbles. Do not add random extra words.\n")
 	if len(scene.ComicTexts) == 0 {
 		b.WriteString("Include at most 1 narration box, 1-2 dialogue bubbles, and at most 1 SFX lettering. If text appears, it must be drawn directly in-image, each Chinese phrase short (about <=12 characters), legible, and visually readable.\n")
 		return

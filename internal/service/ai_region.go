@@ -17,11 +17,12 @@ func IsOverseasUserRegion(region string) bool {
 }
 
 // ResolvePanelGenerationAIProviders chooses Step1 plan + Step2 image providers.
-// Text/plan and default image routing prioritize Huoshan; explicit AI_IMAGE_PROVIDER still applies to image when set.
+// Text/plan and default image routing prioritize Huoshan; explicit AI_IMAGE_PROVIDER still applies to image
+// as long as it is a provider still used for media (Gemini is text-only and falls back to Huoshan).
 func ResolvePanelGenerationAIProviders(_ string, defaultImage string, _ *AIGenerationService) (planProvider, imageProvider string) {
 	imageProvider = strings.TrimSpace(defaultImage)
-	if imageProvider == "" {
-		imageProvider = "huoshan"
+	if imageProvider == "" || genapi.MediaGenerationDenied(imageProvider) {
+		imageProvider = genapi.MediaGenerationProvider
 	}
 	return "huoshan", imageProvider
 }
@@ -42,25 +43,28 @@ func NormalizeTextPlanProvider(requested, userRegion string, ai *AIGenerationSer
 }
 
 // CoalesceRegisteredVideoProvider returns a video provider name registered on GenAPI, preferring preferred then huoshan.
+// Providers no longer used for media (Gemini) never win, even when explicitly requested.
 func CoalesceRegisteredVideoProvider(g *genapi.GenAPI, preferred string) string {
 	if g == nil {
-		p := strings.TrimSpace(preferred)
-		if p == "" {
-			return "huoshan"
-		}
-		return p
+		return fallbackMediaProvider(preferred)
 	}
 	return g.CoalesceVideoProvider(preferred)
 }
 
 // CoalesceRegisteredImageProvider returns a provider name that is actually registered on GenAPI, preferring preferred then huoshan.
+// Providers no longer used for media (Gemini) never win, even when explicitly requested.
 func CoalesceRegisteredImageProvider(g *genapi.GenAPI, preferred string) string {
 	if g == nil {
-		p := strings.TrimSpace(preferred)
-		if p == "" {
-			return "huoshan"
-		}
-		return p
+		return fallbackMediaProvider(preferred)
 	}
 	return g.CoalesceImageProvider(preferred)
+}
+
+// fallbackMediaProvider 在没有 GenAPI 注册表可查时（单测、未初始化）给出媒体生成的 provider。
+func fallbackMediaProvider(preferred string) string {
+	p := strings.TrimSpace(preferred)
+	if p == "" || genapi.MediaGenerationDenied(p) {
+		return genapi.MediaGenerationProvider
+	}
+	return p
 }

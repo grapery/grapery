@@ -1576,6 +1576,7 @@ func (s *AIService) GenerateBatchImagesForFragment(ctx context.Context, userID, 
 	imgReq := &GenerateImageRequest{
 		UserID:            strings.TrimSpace(userID),
 		Prompt:            prompt,
+		NegativePrompt:    fragmentImageNegativePrompt(),
 		Provider:          provider,
 		Quality:           "standard",
 		OutputCount:       sceneCount,
@@ -1652,6 +1653,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 	imgReq := &GenerateImageRequest{
 		UserID:            strings.TrimSpace(aiTask.UserID),
 		Prompt:            prompt,
+		NegativePrompt:    fragmentImageNegativePrompt(),
 		Provider:          provider,
 		Quality:           "standard",
 		OutputCount:       1,

@@ -706,7 +706,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			if baseURL == "" {
 				baseURL = "(default)"
 			}
-			logger.Info("✅ Gemini provider registered",
+			logger.Info("✅ Gemini provider registered (text / multimodal only — image and video are routed to Huoshan)",
 				zap.String("baseURL", baseURL),
 				zap.Int("apiKeyLength", len(cfg.AI.GeminiAPIKey)),
 			)

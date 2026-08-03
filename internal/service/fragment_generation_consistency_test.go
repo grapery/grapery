@@ -77,6 +77,37 @@ func TestFragmentScenePromptBindsEntities(t *testing.T) {
 	}
 }
 
+// Feed 里图片贴边全屏展示，模型自绘的外框会被读成 UI 缺陷，所以出血约束必须出现在最终提示词里。
+func TestFragmentImagePromptsForbidOuterFrame(t *testing.T) {
+	comicScene := domain.FragmentScenePlan{
+		ImagePrompt: "manga panel. A dog watches the sunset over dunes.",
+		ComicTexts:  []domain.FragmentComicText{{Type: "narration", Text: "風還在吹着"}},
+	}
+	scenePrompt := buildFragmentSceneImagePrompt(nil, comicScene)
+	panelPrompt := buildPanelFinalImagePrompt(domain.FragmentPanelPlanItem{
+		ImagePrompt:     "comic panel. A dog watches the sunset over dunes.",
+		LayoutIntent:    "comic_single_panel",
+		CompositionPlan: "single continuous scene, subject lower right",
+	}, "manga", "4:3", 0, 3)
+	batchPrompt := buildFragmentScenesBatchHuoshanPrompt(nil, []domain.FragmentScenePlan{comicScene}, 1)
+
+	for name, prompt := range map[string]string{"scene": scenePrompt, "panel": panelPrompt, "batch": batchPrompt} {
+		if !containsFragmentTestString(prompt, "bleed off all four edges") {
+			t.Fatalf("%s prompt missing full-bleed canvas directive, got:\n%s", name, prompt)
+		}
+		for _, banned := range []string{"bold ink panel borders", "bold black panel borders"} {
+			if containsFragmentTestString(prompt, banned) {
+				t.Fatalf("%s prompt still asks for %q, got:\n%s", name, banned, prompt)
+			}
+		}
+	}
+
+	// 组图路径把出血规则提到开头统一声明，逐场景不再重复。
+	if strings.Count(batchPrompt, "bleed off all four edges") != 1 {
+		t.Fatalf("batch prompt should declare the canvas rule exactly once, got:\n%s", batchPrompt)
+	}
+}
+
 func TestFragmentStoryImageSeedUsesSeriesSeed(t *testing.T) {
 	policy := &domain.FragmentConsistencyPolicy{Level: "standard", SeriesSeed: 12345}
 	if got := fragmentStoryImageSeed(policy); got != 12345 {

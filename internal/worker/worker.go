@@ -387,6 +387,15 @@ func (w *Worker) processPromptEnhancement(ctx context.Context, task *domain.AITa
 	return w.repo.UpdateAITask(ctx, task)
 }
 
+// prepareImageRequest 选定出图 provider（默认并收敛到火山），并补齐该 provider 需要的请求字段。
+func (w *Worker) prepareImageRequest(genReq *genapi.GenerateRequest, requested string) string {
+	provider := grafysvc.CoalesceRegisteredImageProvider(w.genAPI, requested)
+	if strings.EqualFold(strings.TrimSpace(provider), "huoshan") {
+		grafysvc.PrepareHuoshanGenAPIImageRequest(genReq)
+	}
+	return provider
+}
+
 // processImageGeneration 处理图片生成
 func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask) error {
 	w.logger.Info("processing image generation task",
@@ -426,20 +435,12 @@ func (w *Worker) processImageGeneration(ctx context.Context, task *domain.AITask
 		w.logger.Warn("failed to update progress", zap.Error(err))
 	}
 
-	// 使用指定的提供商或默认提供商
-	providerName := task.Provider
-	if providerName == "" {
-		providerName = "gemini" // 默认使用 gemini
-	}
+	providerName := w.prepareImageRequest(genReq, task.Provider)
 
 	w.logger.Info("calling image generation API",
 		zap.String("taskId", task.ID),
 		zap.String("provider", providerName),
 		zap.String("prompt", req.Prompt))
-
-	if strings.EqualFold(strings.TrimSpace(providerName), "huoshan") {
-		grafysvc.PrepareHuoshanGenAPIImageRequest(genReq)
-	}
 
 	// 调用 GenAPI 生成图片
 	resp, err := w.genAPI.GenerateImage(ctx, providerName, genReq)
@@ -1072,7 +1073,7 @@ func (w *Worker) renderImageSet(ctx context.Context, task *domain.RenderTask, st
 		genReq := &genapi.GenerateRequest{
 			Operation:   genapi.OperationTextToImage,
 			Prompt:      prompt,
-			Size:        "1024x1024",
+			AspectRatio: "1:1",
 			Quality:     config.Quality,
 			OutputCount: 1,
 			Metadata: map[string]interface{}{
@@ -1083,7 +1084,7 @@ func (w *Worker) renderImageSet(ctx context.Context, task *domain.RenderTask, st
 		}
 
 		// 调用图片生成
-		resp, err := w.genAPI.GenerateImage(ctx, "gemini", genReq)
+		resp, err := w.genAPI.GenerateImage(ctx, w.prepareImageRequest(genReq, ""), genReq)
 		if err != nil {
 			w.logger.Error("failed to generate image for storyboard",
 				zap.String("taskId", task.ID),
@@ -1173,7 +1174,7 @@ func (w *Worker) renderAnimation(ctx context.Context, task *domain.RenderTask, s
 		genReq := &genapi.GenerateRequest{
 			Operation:   genapi.OperationTextToImage,
 			Prompt:      prompt,
-			Size:        "512x512", // 动画使用较小尺寸
+			AspectRatio: "1:1",
 			Quality:     "standard",
 			OutputCount: 1,
 			Metadata: map[string]interface{}{
@@ -1183,7 +1184,7 @@ func (w *Worker) renderAnimation(ctx context.Context, task *domain.RenderTask, s
 			},
 		}
 
-		resp, err := w.genAPI.GenerateImage(ctx, "gemini", genReq)
+		resp, err := w.genAPI.GenerateImage(ctx, w.prepareImageRequest(genReq, ""), genReq)
 		if err != nil {
 			w.logger.Error("failed to generate animation frame",
 				zap.String("taskId", task.ID),

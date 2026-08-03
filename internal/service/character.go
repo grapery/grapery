@@ -1711,8 +1711,7 @@ func (s *Service) GenerateCharacterAvatar(ctx context.Context, userID, character
 	imageReq := &GenerateImageRequest{
 		UserID:            userID,
 		Prompt:            prompt,
-		Provider:          "gemini",
-		Model:             "imagen-3.0-generate-001",
+		Provider:          s.effectiveImageProvider(),
 		AspectRatio:       aspectRatio,
 		Quality:           "high",
 		OutputCount:       1,
@@ -1990,11 +1989,7 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		referenceImages = []string{req.ReferenceImage}
 	}
 
-	// 设置默认 provider 为 huoshan（火山引擎）
-	provider := "huoshan"
-	if s.imageProvider != "" {
-		provider = s.imageProvider
-	}
+	provider := s.effectiveImageProvider()
 
 	imageReq := &GenerateImageRequest{
 		UserID:            userID,
@@ -2013,20 +2008,10 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		},
 	}
 
-	// 根据不同的 provider 设置相应的参数
-	switch provider {
-	case "huoshan":
-		// huoshan 使用 Size 而不是 AspectRatio
+	// huoshan 只认像素尺寸，其余 provider 用长宽比；Model 留空以走 provider 默认模型。
+	if strings.EqualFold(provider, "huoshan") {
 		imageReq.Size = aspectRatioToSize(aspectRatio)
-		// Model 留空，使用 huoshan provider 的默认模型 (doubao-seedream)
-	case "gemini":
-		imageReq.Model = "imagen-3.0-generate-001"
-		imageReq.AspectRatio = aspectRatio
-	case "nana", "banana":
-		// nana/banana 使用 AspectRatio
-		imageReq.AspectRatio = aspectRatio
-	default:
-		// 其他 provider 使用 AspectRatio
+	} else {
 		imageReq.AspectRatio = aspectRatio
 	}
 
@@ -2126,10 +2111,7 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 		return nil, fmt.Errorf("insufficient token balance: need at least %d tokens for three-view sheet", common.AIImageBillingUnitTokens)
 	}
 
-	provider := "huoshan"
-	if s.imageProvider != "" {
-		provider = s.imageProvider
-	}
+	provider := s.effectiveImageProvider()
 	aspectRatio := "16:9"
 
 	baseDesc := strings.TrimSpace(character.Name)
@@ -2173,13 +2155,9 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 			"characterId": characterID,
 		},
 	}
-	switch provider {
-	case "huoshan":
+	if strings.EqualFold(provider, "huoshan") {
 		imageReq.Size = aspectRatioToSize(aspectRatio)
-	case "gemini":
-		imageReq.Model = "imagen-3.0-generate-001"
-		imageReq.AspectRatio = aspectRatio
-	default:
+	} else {
 		imageReq.AspectRatio = aspectRatio
 	}
 

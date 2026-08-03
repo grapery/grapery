@@ -1155,14 +1155,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				zap.Int("narrativeRunes", narrativeRunes))
 		}
 
-		// Use configured image provider (default: huoshan)
-		imageProvider := s.imageProvider
-		if imageProvider == "" {
-			imageProvider = "huoshan"
-			s.logger.Debug("using default image provider",
-				zap.String("generationId", gen.ID),
-				zap.String("provider", imageProvider))
-		}
+		imageProvider := s.effectiveImageProvider()
 
 		s.logger.Info("generating scene image",
 			zap.String("generationId", gen.ID),
@@ -1364,7 +1357,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		hasStyle := gen.StoryStyle != nil
 		s.metrics.RecordImageGenerationWithStyle(status, hasStyle)
 		// Record AI generation
-		s.metrics.RecordAIGeneration("gemini", "image")
+		s.metrics.RecordAIGeneration(s.effectiveImageProvider(), "image")
 		if gen.TotalTokens > 0 {
 			s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
 		}
@@ -1823,18 +1816,10 @@ LENGTH: When merged into one video prompt, keep the total substantive Chinese te
 			Metadata:        s.usageRecordMetadataForStoryboard(ctx, gen.StoryboardID),
 		}
 
-		// Use configured video provider (default: hailuo)
-		videoProvider := s.videoProvider
-		if videoProvider == "" {
-			videoProvider = "huoshan"
-			s.logger.Debug("using default video provider",
-				zap.String("generationId", gen.ID),
-				zap.String("provider", videoProvider))
-		} else {
-			s.logger.Debug("using configured video provider",
-				zap.String("generationId", gen.ID),
-				zap.String("provider", videoProvider))
-		}
+		videoProvider := s.effectiveVideoProvider()
+		s.logger.Debug("using video provider",
+			zap.String("generationId", gen.ID),
+			zap.String("provider", videoProvider))
 
 		// Choose operation type based on whether reference images are provided
 		if gen.ReferenceImageURL != "" && gen.EndFrameURL != "" {
@@ -2083,7 +2068,7 @@ updateGeneration:
 			s.metrics.RecordStoryboardVideoGeneration("completed", isSubdivided, duration)
 			s.metrics.RecordVideoGenerationSubdivided(isSubdivided, "completed")
 			// Record AI generation
-			s.metrics.RecordAIGeneration("gemini", "video")
+			s.metrics.RecordAIGeneration(s.effectiveVideoProvider(), "video")
 			if gen.TotalTokens > 0 {
 				s.metrics.RecordStoryboardTokenConsumed(gen.StoryboardID, float64(gen.TotalTokens))
 			}

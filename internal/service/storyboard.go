@@ -2972,8 +2972,7 @@ func (s *Service) generateSceneImages(ctx context.Context, storyboard *domain.St
 		imageReq := &GenerateImageRequest{
 			UserID:            storyboard.UserID,
 			Prompt:            prompt,
-			Provider:          "gemini",
-			Model:             "imagen-3.0-generate-001",
+			Provider:          s.effectiveImageProvider(),
 			AspectRatio:       "16:9",
 			Quality:           "high",
 			OutputCount:       1,

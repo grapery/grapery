@@ -194,10 +194,10 @@ func (g *GenAPI) CoalesceImageProvider(preferred string) string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	n := normalizeProviderName(p)
-	if _, ok := g.imageProviders[n]; ok {
+	if _, ok := g.imageProviders[n]; ok && !mediaGenerationDenied(n) {
 		return n
 	}
-	huoshanKey := normalizeProviderName("huoshan")
+	huoshanKey := normalizeProviderName(MediaGenerationProvider)
 	if n != huoshanKey {
 		if _, ok := g.imageProviders[huoshanKey]; ok {
 			return huoshanKey
@@ -241,10 +241,10 @@ func (g *GenAPI) CoalesceVideoProvider(preferred string) string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	n := normalizeProviderName(p)
-	if _, ok := g.videoProviders[n]; ok {
+	if _, ok := g.videoProviders[n]; ok && !mediaGenerationDenied(n) {
 		return n
 	}
-	huoshanKey := normalizeProviderName("huoshan")
+	huoshanKey := normalizeProviderName(MediaGenerationProvider)
 	if n != huoshanKey {
 		if _, ok := g.videoProviders[huoshanKey]; ok {
 			return huoshanKey
@@ -258,12 +258,16 @@ func (g *GenAPI) GenerateImage(ctx context.Context, providerName string, req *Ge
 	if req == nil {
 		return nil, errors.New("generate request cannot be nil")
 	}
+	providerName, rerouted := g.resolveImageGenerationProvider(providerName)
 	provider := g.GetImageProvider(providerName)
 	if provider == nil {
 		return nil, fmt.Errorf("image provider %s not registered", providerName)
 	}
 
 	cloned := req.Clone()
+	if rerouted {
+		dropForeignMediaModel(cloned)
+	}
 	if cloned.Operation == OperationUnknown {
 		cloned.Operation = defaultImageOperation(cloned)
 	}
@@ -300,12 +304,16 @@ func (g *GenAPI) GenerateVideo(ctx context.Context, providerName string, req *Ge
 	if req == nil {
 		return nil, errors.New("generate request cannot be nil")
 	}
+	providerName, rerouted := g.resolveVideoGenerationProvider(providerName)
 	provider := g.GetVideoProvider(providerName)
 	if provider == nil {
 		return nil, fmt.Errorf("video provider %s not registered", providerName)
 	}
 
 	cloned := req.Clone()
+	if rerouted {
+		dropForeignMediaModel(cloned)
+	}
 	if cloned.Operation == OperationUnknown {
 		cloned.Operation = defaultVideoOperation(cloned)
 	}

@@ -561,6 +561,10 @@ resp, err := api.GenerateVideo(ctx, "hailuo", req)
 
 ### 示例4：文本生成图片
 
+> 媒体生成策略：图片与视频统一走 `huoshan`（Seedream / Seedance）。Gemini 只用于文本与多模态理解，
+> `GenerateImage` / `GenerateVideo` 收到 `"gemini"` 时会自动改判到 `huoshan` 并清掉 imagen / veo 之类的模型名。
+> 详见 `media_routing.go`。
+
 ```go
 req := &genapi.GenerateRequest{
     Prompt:      "一只戴着墨镜的猫，赛博朋克风格",
@@ -569,7 +573,7 @@ req := &genapi.GenerateRequest{
     Style:       "cyberpunk",
 }
 
-resp, err := api.GenerateImage(ctx, "gemini", req)
+resp, err := api.GenerateImage(ctx, "huoshan", req)
 
 for i, url := range resp.ImageURLs {
     fmt.Printf("图片%d: %s\n", i+1, url)
@@ -601,7 +605,7 @@ req := &genapi.GenerateRequest{
     Prompt:        "添加动态效果",
 }
 
-resp, err := api.GenerateVideo(ctx, "gemini", req)
+resp, err := api.GenerateVideo(ctx, "huoshan", req)
 ```
 
 ### 示例7：分镜生成视频

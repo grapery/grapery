@@ -101,8 +101,8 @@ type AIConfig struct {
 	KlingSecretKey   string `yaml:"kling_secret_key"`
 	KlingBaseURL     string `yaml:"kling_base_url"`
 	DefaultProvider  string `yaml:"default_provider"` // Default provider for text generation
-	ImageProvider    string `yaml:"image_provider"`   // Provider for image generation (gemini, huoshan, kling)
-	VideoProvider    string `yaml:"video_provider"`   // Provider for video generation (gemini, huoshan, hailuo, kling)
+	ImageProvider    string `yaml:"image_provider"`   // Provider for image generation (huoshan, kling); gemini is text-only and gets rerouted to huoshan
+	VideoProvider    string `yaml:"video_provider"`   // Provider for video generation (huoshan, hailuo, kling); gemini is text-only and gets rerouted to huoshan
 	// RequestTimeoutSeconds is the HTTP client timeout (seconds) for outbound AI provider calls registered in initAIClients
 	// (Gemini, Huoshan, Kling). 0 or negative means default 180 (multimodal / 分镜规划常需更久).
 	RequestTimeoutSeconds int `yaml:"request_timeout_seconds"`

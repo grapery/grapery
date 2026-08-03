@@ -131,7 +131,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - 景别与角度工具：特写/近景/中景/全景/远景、平视/俯拍/仰拍/Dutch angle/鸟瞰/虫视角等；可从非人类视角制造惊喜。
 
 【五、自动布局决策（每格必须独立判断）】
-- 每一格仍是「一次文生图得到的一张图」，但图片内部可以是：(A) 单一连续场景；或 (B) 多个区域/子格（条漫式分区、上下分镜、左右对照、2×2 等），用留白、粗线或清晰边界分隔，并交待阅读顺序。按剧情选 A 或 B，不要为每格机械重复同一种版式。
+- 每一格仍是「一次文生图得到的一张贴边全屏图」，但图片内部可以是：(A) 单一连续场景；或 (B) 多个区域/子格（条漫式分区、上下分镜、左右对照、2×2 等），用留白、粗线或清晰边界分隔，并交待阅读顺序。按剧情选 A 或 B，不要为每格机械重复同一种版式。
 - 每格必须输出 layout_intent、composition_plan、shot_type、visual_hierarchy。
 - layout_intent 使用简短英文 snake_case，例如：single_subject_focus、split_foreground_background、wide_establishing、diagonal_motion、symmetrical_faceoff、detail_insert、layered_depth、negative_space_tension、comic_single_panel、comic_two_panel_grid、comic_strip、intra_image_multi_panel、stacked_vertical_zones、split_screen_two_beat、grid_four_beat。
 - composition_plan 用中文或英文自然语言写清「区域怎么分、每块放什么」：若多区域，说明上下/左右/网格位置、每区主体与动作、gutter/间距、阅读顺序；若单场景，说明主体位置、前中后景、留白、引导线、视觉重心。
@@ -139,8 +139,8 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 - shot_type 使用英文短语，例如 close_up、medium_shot、wide_shot、overhead、low_angle、dutch_angle、detail_insert；多区域时可用 wide_shot 概括整图或注明 per-zone。
 - 布局必须服务该格剧情功能（例如铺垫+反转可在一张图内用上下两区完成）。
 - 这四个字段是“文本阶段的前置漫画规划”，后续图片阶段会直接消费：不得留空、不得用模板占位、不得所有格重复同一值。
-- 若故事含「冲击/对抗/追逐/坠落/爆发」语义，至少两格必须在 layout_intent 或 composition_plan 中显式体现冲击镜头语法（如 diagonal_motion、extreme_angle、impact_burst、radial_lines、border_breaking）。
-- 如该格适合漫画表达，必须在 composition_plan / image_prompt 中写清漫画格框、gutter、气泡预留位置，并输出 comic_texts：narration=旁白框、dialogue=角色对白气泡、thought=内心气泡、sfx=拟声/语气音效字。
+- 若故事含「冲击/对抗/追逐/坠落/爆发」语义，至少两格必须在 layout_intent 或 composition_plan 中显式体现冲击镜头语法（如 diagonal_motion、extreme_angle、impact_burst、radial_lines、subject_overflowing_frame_edge）。
+- 如该格适合漫画表达，必须在 composition_plan / image_prompt 中写清内部分区、gutter、气泡预留位置，并输出 comic_texts：narration=旁白框、dialogue=角色对白气泡、thought=内心气泡、sfx=拟声/语气音效字。
 - comic_texts 中的中文文字是最终图片中要直接画出来的文字，不是给 App 叠加的占位数据；image_prompt 必须明确要求图片模型 render the exact Chinese text inside the image。
 - 数量上限：每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought；每条中文建议不超过 12 个汉字；禁止额外随机文字。
 
@@ -206,6 +206,7 @@ func buildFragmentPanelPlanUserPrompt(userInput, style string, panelCount int, l
 		panelCount-1,
 		minWords,
 	)
+	body += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n画布与出血（硬性，优先级高于任何版式偏好）\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" + fullBleedPlanningRule() + "\n"
 	if a := strings.TrimSpace(layoutAddon); a != "" {
 		body += "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n版式与对白（用户指定；须融入分镜规划与 caption）\n" + a + "\n"
 	}

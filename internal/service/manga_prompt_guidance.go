@@ -5,6 +5,28 @@ func structuredStoryPanelGuidance() string {
 	return structuredNarrativeExpansionGuidance() + "\n\n" + structuredMangaLanguageGuidance()
 }
 
+// fullBleedCanvasDirective 是「成图必须满幅出血」的唯一出处，拼进发给图片模型的英文最终提示。
+// App 里每张生成图都贴屏展示，模型自绘的外框/页边距会被读成 UI 缺陷而不是画风。
+func fullBleedCanvasDirective() string {
+	return "Canvas directive (hard requirement): the artwork must bleed off all four edges and fill the requested output aspect ratio completely. " +
+		"Do NOT draw an outer panel frame, border, keyline, rounded corners, page margin, mat or passe-partout, drop shadow around the artwork, letterbox or pillarbox bars, or any solid color band along an edge. " +
+		"No paper / photo / polaroid / sticker frame, no torn-paper edge, no vignette ring, no watermark, signature, logo, caption strip, or UI chrome. " +
+		"If the composition uses several internal zones, keep every separation strictly inside the canvas and still let the outermost zones run off all four edges."
+}
+
+// fragmentImageNegativePrompt 是碎片配图的反向约束，只有支持 negative prompt 的 provider 会用到；
+// 与 fullBleedCanvasDirective 表达同一条规则，一正一反双重兜底。
+func fragmentImageNegativePrompt() string {
+	return "outer frame, picture frame, border, keyline, stroke outline around the image, page margin, white margin, black margin, matting, passe-partout, letterbox bars, pillarbox bars, rounded corners, drop shadow around artwork, vignette ring, polaroid frame, photo frame, sticker border, torn paper edge, scan edge, collage background, watermark, signature, logo, UI overlay, cropped-in artwork with empty edges"
+}
+
+// fullBleedPlanningRule 是同一条约束的中文规划版，拼进中文 LLM 规划模板，
+// 让模型产出的 image_prompt / composition_plan 从源头就不描述外框。
+func fullBleedPlanningRule() string {
+	return `- 满幅出血（硬性）：每张图都会在 App 里贴边全屏展示，因此 image_prompt / composition_plan 禁止描述外框、边框线、描边、页边距、白边黑边、上下黑条、圆角、投影、相纸/拍立得/贴纸边框；画面内容必须延伸出画布四边。
+- 若这一格用多区域/子格表达，分隔只能发生在画布内部（靠留白、色块、构图线、明暗或景深切换），最外圈区域仍要出血到画布边缘。`
+}
+
 // structuredNarrativeExpansionGuidance is shared by fragment and storyboard text/planning prompts.
 // Complements structuredMangaLanguageGuidance: plot causality and subject imagination, not panel ink/SFX.
 func structuredNarrativeExpansionGuidance() string {
@@ -62,9 +84,14 @@ func structuredMangaLanguageGuidance() string {
 	return `【漫画视觉叙事语言（必须结构化落到 prompt 字段里）】
 漫画不是“插画配文字”，而是“空间化时间”的视觉叙事。生成时必须把下面六个元素转译为可执行字段，而不是只写一句 manga style：
 
+0. 画布与出血（先于一切版式规则）
+- 一次生成得到的是「一张贴边全屏展示的图」，不是「一页带页边距的漫画书内页」。
+- 画面必须出血到画布四边：不描述也不绘制外框、边框线、页边距、白边黑边、圆角、投影、上下黑条。
+- 分格线、gutter、子格边界只允许存在于画布内部；最外圈的格必须被画布边缘裁掉，而不是被一圈边框包住。
+
 1. Paneling / Koma（分镜语法）
 - 分镜大小、形状、排列控制读者脑内时间：大框=慢镜头/关键时刻，小碎框=快节奏动作。
-- composition / composition_plan 必须说明格框、跨格、阅读顺序、视线移动速度；若是单图多区域，写清上下/左右/网格与 gutter。
+- composition / composition_plan 必须说明内部分区、跨格、阅读顺序、视线移动速度；若是单图多区域，写清上下/左右/网格与内部 gutter（仍不含外框）。
 
 2. Speech bubbles（声音视觉化）
 - dialogue=椭圆对白气泡，tail 指向 speaker；thought=云朵/串泡；低语可用虚线，喊叫可用锯齿气泡。
@@ -76,7 +103,7 @@ func structuredMangaLanguageGuidance() string {
 - 语气词/反应词也是漫画节奏：疑惑/震惊用「啊？」「诶？」；沉默/压迫用「……」；期待用「要来了」「终于」；庆祝用「太好了！」；必须短、准、可读，不随机造无关文字。
 
 3.5. Emotional beat staging（重点情绪场）
-- turning_point（主要转折）：用大格/断裂边框/强剪影/突变光色/停顿旁白，把“局面变了”的瞬间视觉化。
+- turning_point（主要转折）：用大格/强剪影/突变光色/停顿旁白，把“局面变了”的瞬间视觉化。
 - shock（震惊）：用极近景、瞳孔高光、汗滴、速度线/放射线、背景抽离、粗黑阴影、短促 sfx/interjection。
 - anticipation（期待）：用留白、视线朝向画外、门缝/包裹/倒计时/手指停顿、低饱和静默、旁白框制造悬念。
 - celebration（庆祝）：用上扬构图、暖色光、碎纸/星形高光/群像反应、开阔空间、短对白或欢呼 SFX。
@@ -91,14 +118,14 @@ func structuredMangaLanguageGuidance() string {
 - 冲击感模式使用 high contrast、chiaroscuro shading、deep shadows、noir lighting、gritty texture，避免 soft / bland / gentle-only 描述。
 
 6. Gutter / closure（沟壑与闭合）
-- gutter 不是空白装饰，而是让读者补全动作的时间缝隙。
+- gutter 不是空白装饰，而是让读者补全动作的时间缝隙；它只出现在格与格之间，不出现在画布与画面之间。
 - 相邻格之间要设计“前一瞬/后一瞬”的闭合关系：挥刀→倒下、开门前→门后异常、拳头蓄力→碎片飞散。不要把所有动作解释完。
 
 【结构化字段要求】
 - 全局层：artStyle / styleBible.artStyle 负责媒介、线稿、网点、阴影、质感与调色。
 - 镜头层：shot_type 或 composition 必须显式包含 shot scale + camera angle；相邻格不得重复同一组合。
-- 版式层：layout_intent / composition_plan / composition 负责 panel grid、border、gutter、reading order。
+- 版式层：layout_intent / composition_plan / composition 负责 panel grid、内部分隔、gutter、reading order；一律满幅出血，不写外框。
 - 动作层：subject/action/entityBindings 负责角色位置、动作爆发瞬间、道具归属。
-- 漫画元素层：comicTexts、additionalNotes 或 imagePrompt 必须落入 bubbles、SFX、effect lines、border breaking、negative space for lettering。
+- 漫画元素层：comicTexts、additionalNotes 或 imagePrompt 必须落入 bubbles、SFX、effect lines、negative space for lettering；border breaking 仅当画布内部确实存在子格时才可用，不得为此凭空加一圈外框。
 - 冲击感触发：检测到战斗、爆发、大喊、击碎、坠落、追逐、撞击、恐惧、高潮等语义时，必须自动加入 extreme low-angle / dramatic high-angle / Dutch angle / wide-angle distortion / radial action lines / debris / sparks / heavy ink contrast 中的合适组合。`
 }

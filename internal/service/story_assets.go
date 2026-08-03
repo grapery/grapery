@@ -281,11 +281,7 @@ func (s *Service) GenerateStorySceneImage(ctx context.Context, storyID, sceneID,
 		return "", "", fmt.Errorf("AI image generation service not available")
 	}
 
-	// Generate image using genAPI
-	imageProvider := s.imageProvider
-	if imageProvider == "" {
-		imageProvider = "huoshan"
-	}
+	imageProvider := s.effectiveImageProvider()
 
 	genReq := &genapi.GenerateRequest{
 		Prompt:      finalPrompt,

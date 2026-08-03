@@ -73,6 +73,17 @@ func (s *Service) SetAIConfig(cfg config.AIConfig) {
 		zap.String("videoProvider", s.videoProvider))
 }
 
+// effectiveImageProvider 返回真正用于出图的 provider：配置值优先，否则火山；
+// 配置值未注册或不再用于出图（如 Gemini）时同样收敛到火山。
+func (s *Service) effectiveImageProvider() string {
+	return CoalesceRegisteredImageProvider(s.genAPI, s.imageProvider)
+}
+
+// effectiveVideoProvider 返回真正用于出片的 provider，规则同 effectiveImageProvider。
+func (s *Service) effectiveVideoProvider() string {
+	return CoalesceRegisteredVideoProvider(s.genAPI, s.videoProvider)
+}
+
 // SetFragmentComicStyleService 注入碎片风格目录服务（用于预填等按 value 解析展示名）。
 func (s *Service) SetFragmentComicStyleService(svc *FragmentComicStyleService) {
 	s.comicStyleSvc = svc

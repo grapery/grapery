@@ -548,6 +548,7 @@ func (s *AIGenerationService) recordTextPromptAudit(ctx context.Context, req *Ge
 type GenerateImageRequest struct {
 	UserID            string
 	Prompt            string
+	NegativePrompt    string // 反向约束；仅部分 provider 支持，不支持时静默忽略
 	Provider          string // gemini, hailuo, huoshan
 	Model             string
 	AspectRatio       string
@@ -696,6 +697,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	// 保存输入参数
 	inputParams := map[string]interface{}{
 		"prompt":          req.Prompt,
+		"negativePrompt":  req.NegativePrompt,
 		"provider":        req.Provider,
 		"model":           req.Model,
 		"aspectRatio":     req.AspectRatio,
@@ -726,7 +728,8 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	operation := genapi.OperationTextToImage
 	referenceImageURL := ""
 	refURLs := req.ReferenceImages
-	if isImagenImageModel(req.Model) && len(refURLs) > 0 {
+	isGeminiProvider := strings.EqualFold(strings.TrimSpace(req.Provider), string(genapi.ProviderGemini))
+	if isGeminiProvider && isImagenImageModel(req.Model) && len(refURLs) > 0 {
 		// Imagen GenerateImages 为纯文生图；URL 参考无法走当前 gemini_provider 的 imageToImage 路径。
 		s.logger.Debug("imagen model: omitting reference image URLs (text-to-image only)",
 			zap.String("model", req.Model),
@@ -739,6 +742,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 
 	genReq := &genapi.GenerateRequest{
 		Prompt:            req.Prompt,
+		NegativePrompt:    strings.TrimSpace(req.NegativePrompt),
 		AspectRatio:       req.AspectRatio,
 		Size:              req.Size,
 		Quality:           req.Quality,
@@ -754,7 +758,8 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	// Gemini 对话式多参考合成：需内联字节，否则仅 URL 的 imageToImage 会失败。
-	if strings.EqualFold(strings.TrimSpace(req.Provider), string(genapi.ProviderGemini)) &&
+	// 出图已统一改判到火山，这里只是保留 provider 自身的能力，正常不会命中。
+	if isGeminiProvider &&
 		len(genReq.ReferenceImages) > 0 &&
 		!isImagenImageModel(req.Model) {
 		var assets []genapi.ReferenceImageAsset
@@ -1575,11 +1580,7 @@ Requirements:
 3. Only change the pose/position to the described middle state
 4. Preserve lighting and color palette`, req.MiddleAction)
 
-	// Determine provider
-	provider := req.Provider
-	if provider == "" {
-		provider = "gemini" // Default to gemini for image generation
-	}
+	provider := CoalesceRegisteredImageProvider(s.genAPI, req.Provider)
 
 	// Build image-to-image request
 	genReq := &genapi.GenerateRequest{
