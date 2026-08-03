@@ -21,6 +21,7 @@ type Handler struct {
 	agentPolicy       *service.AgentAccessPolicyService
 	generationAudit   *service.GenerationAuditService
 	generationRuntime *service.GenerationRuntimeService
+	workflowRegistry  *service.WorkflowRegistryService
 	chatService       *service.ChatService
 	cache             cache.Cache
 	logger            *zap.Logger
@@ -44,6 +45,7 @@ type HandlerDependencies struct {
 	AgentPolicy           *service.AgentAccessPolicyService
 	GenerationAudit       *service.GenerationAuditService
 	GenerationRuntime     *service.GenerationRuntimeService
+	WorkflowRegistry      *service.WorkflowRegistryService
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
@@ -67,6 +69,7 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 		agentPolicy:       deps.AgentPolicy,
 		generationAudit:   deps.GenerationAudit,
 		generationRuntime: deps.GenerationRuntime,
+		workflowRegistry:  deps.WorkflowRegistry,
 		chatService:       deps.ChatService,
 		cache:             deps.Cache,
 		logger:            deps.Logger,
@@ -279,6 +282,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			// Storyboard AI Generation 相关 (rate-limited)
 			aiGen.POST("/storyboards/:id/generate/content", h.GenerateContent)
 			aiGen.POST("/storyboards/:id/generate/structure", h.GenerateStoryboardStructure)
+			aiGen.POST("/storyboards/:id/generate/stages/:stage", h.ExecuteStoryboardWorkflowStage)
 			aiGen.POST("/storyboards/:id/generate/scene-details", h.GenerateSceneDetails)
 			aiGen.POST("/storyboards/:id/generate/image", h.GenerateStoryboardImage)
 			aiGen.POST("/storyboards/:id/generate/images", h.GenerateAllStoryboardImages)

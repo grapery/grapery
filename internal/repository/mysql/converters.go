@@ -337,6 +337,9 @@ func StoryboardToModel(d *domain.Storyboard) *Storyboard {
 		WorkflowStatus:      d.WorkflowStatus,
 		CurrentStep:         d.CurrentStep,
 		ContinuationSummary: d.ContinuationSummary,
+		WorkflowReleaseID:   d.WorkflowReleaseID,
+		WorkflowChecksum:    d.WorkflowChecksum,
+		PromptSnapshotsJSON: string(mustMarshalGenerationJSON(d.PromptSnapshots)),
 		Likes:               d.Likes,
 		Comments:            d.Comments,
 		Shares:              d.Shares,
@@ -373,6 +376,8 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 		WorkflowStatus:      m.WorkflowStatus,
 		CurrentStep:         m.CurrentStep,
 		ContinuationSummary: m.ContinuationSummary,
+		WorkflowReleaseID:   m.WorkflowReleaseID,
+		WorkflowChecksum:    m.WorkflowChecksum,
 		EngagementStats: common.EngagementStats{
 			Likes:    m.Likes,
 			Comments: m.Comments,
@@ -381,6 +386,9 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 		},
 		ForkCount:        m.ForkCount,
 		TokenConsumption: m.TokenConsumption,
+	}
+	if raw := strings.TrimSpace(m.PromptSnapshotsJSON); raw != "" && raw != "null" {
+		_ = json.Unmarshal([]byte(raw), &d.PromptSnapshots)
 	}
 	// AfterFind hook will populate transient fields
 	return d

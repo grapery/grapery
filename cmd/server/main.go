@@ -401,6 +401,8 @@ func main() {
 	genAuditService := service.NewGenerationAuditService(repo, logger)
 	generationRuntimeRepo := mysql.NewGenerationRuntimeRepository(repo.DB())
 	generationRuntimeService := service.NewGenerationRuntimeService(generationRuntimeRepo, aiRedisClient, logger)
+	workflowRegistryRepo := mysql.NewWorkflowRegistryRepository(repo.DB())
+	workflowRegistryService := service.NewWorkflowRegistryService(workflowRegistryRepo, aiRedisClient, logger)
 	chatService := service.NewChatService(repo.DB(), svc, logger)
 
 	deps := &transport.HandlerDependencies{
@@ -420,14 +422,20 @@ func main() {
 		AgentPolicy:           agentPolicy,
 		GenerationAudit:       genAuditService,
 		GenerationRuntime:     generationRuntimeService,
+		WorkflowRegistry:      workflowRegistryService,
 	}
 	router := transport.SetupRouter(deps)
 
 	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, generationRuntimeService, cfg.AgentToken.InternalAPIKey)
 	agentPolicyHandler.RegisterRoutes(router)
+	workflowRegistryHandler := transport.NewWorkflowRegistryHandler(workflowRegistryService, cfg.AgentToken.InternalAPIKey)
+	workflowRegistryHandler.RegisterInternalRoutes(router)
 
 	// Create API group for route registration
 	apiGroup := router.Group("/api")
+	workflowPublicGroup := apiGroup.Group("/v1")
+	workflowPublicGroup.Use(authPkg.AuthMiddleware())
+	workflowRegistryHandler.RegisterPublicRoutes(workflowPublicGroup)
 	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
 	// AI rate limiter for fragment generation endpoints
 	fragGenGroup := apiGroup.Group("/v1/fragments")

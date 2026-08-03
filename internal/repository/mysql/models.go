@@ -163,6 +163,9 @@ type Storyboard struct {
 	GenerateVideoAfterImages bool        `gorm:"column:generate_video_after_images;default:false;index"`
 	ContinuationComicStyle   string      `gorm:"column:continuation_comic_style;size:80;default:''"`
 	UseComicPagePipeline     bool        `gorm:"column:use_comic_page_pipeline;default:false;index"`
+	WorkflowReleaseID        string      `gorm:"column:workflow_release_id;size:80;index"`
+	WorkflowChecksum         string      `gorm:"column:workflow_checksum;size:64"`
+	PromptSnapshotsJSON      string      `gorm:"column:prompt_snapshots_json;type:longtext"`
 	ContinuationSummary      string      `gorm:"column:continuation_summary;type:text"`
 	Likes                    int         `gorm:"default:0;index"`
 	Comments                 int         `gorm:"default:0"`

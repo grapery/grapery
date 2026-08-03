@@ -99,6 +99,46 @@ func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
 	Success(c, resp)
 }
 
+// ExecuteStoryboardWorkflowStage runs one idempotent, durable text-generation
+// stage. Workflow runtimes checkpoint the small result and keep prompt/output
+// snapshots inside Grapery.
+// POST /api/v1/storyboards/:id/generate/stages/:stage
+func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	storyboardID := strings.TrimSpace(c.Param("id"))
+	stage := strings.TrimSpace(c.Param("stage"))
+	if storyboardID == "" || stage == "" {
+		InvalidParams(c, "storyboard id and stage are required")
+		return
+	}
+	var req struct {
+		GenerationRunID     string `json:"generationRunId"`
+		ClientRequestID     string `json:"clientRequestId"`
+		RegenerateStructure bool   `json:"regenerateStructure"`
+		UserDirective       string `json:"userDirective"`
+		SceneCount          int    `json:"sceneCount"`
+		ComicStyle          string `json:"comicStyle"`
+	}
+	if c.Request.Body != nil {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			InvalidParams(c, err.Error())
+			return
+		}
+	}
+	result, err := h.svc.ExecuteStoryboardWorkflowStage(c.Request.Context(), userID, storyboardID, stage, service.StoryboardWorkflowStageOptions{
+		GenerationRunID: req.GenerationRunID, ClientRequestID: req.ClientRequestID, RegenerateStructure: req.RegenerateStructure,
+		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle,
+	})
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, result)
+}
+
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 // POST /api/storyboards/:id/generate/scene-details
 func (h *Handler) GenerateSceneDetails(c *gin.Context) {

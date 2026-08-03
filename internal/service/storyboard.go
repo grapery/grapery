@@ -298,8 +298,12 @@ func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Story
 			s.logger.Warn("failed to create initial content generation record",
 				zap.String("storyboardId", storyboard.ID),
 				zap.Error(err))
-		} else {
+		} else if !storyboard.WorkflowManagedGeneration {
 			go s.processStoryboardInitialGeneration(context.Background(), storyboard.ID, contentGen.ID)
+		} else {
+			s.logger.Info("initial storyboard generation delegated to durable workflow stages",
+				zap.String("storyboardId", storyboard.ID),
+				zap.String("workflowReleaseId", storyboard.WorkflowReleaseID))
 		}
 	}
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
+	"go.uber.org/zap"
 )
 
 type storyboardGenerationContextSnapshot struct {
@@ -183,31 +184,35 @@ func (s *Service) repairStoryboardJSONResponse(
 	if len(snippet) > maxRepairSnippet {
 		snippet = snippet[:maxRepairSnippet]
 	}
-	systemPrompt := `You are a strict JSON repair tool. Output ONE JSON value only (a single JSON object as required). No markdown fences, no commentary before or after.
-Rules:
-- Preserve semantics when possible.
-- If input is truncated, minimally close brackets/braces so the JSON parses.
-- Never output prose outside JSON.`
-	userPrompt := fmt.Sprintf("Repair into valid JSON. Failure detail:\n%s\n\nBroken model output:\n%s", detail, snippet)
+	prompt := resolveStoryboardJSONRepairPrompt(storyboard, snippet, detail, step, metadataOp)
+	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
+		s.logger.Warn("storyboard JSON repair workflow prompt fallback",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("workflowReleaseId", storyboard.WorkflowReleaseID),
+			zap.String("reason", prompt.FallbackReason))
+	}
 
 	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
 		UserID:                storyboard.UserID,
-		OriginalPrompt:        userPrompt,
-		SystemPrompt:          systemPrompt,
-		Model:                 "gemini-2.5-flash",
-		Temperature:           0.1,
-		MaxTokens:             8192,
+		OriginalPrompt:        prompt.UserPrompt,
+		SystemPrompt:          prompt.SystemPrompt,
+		Model:                 prompt.Model,
+		Temperature:           prompt.Temperature,
+		MaxTokens:             prompt.MaxTokens,
 		RelatedEntityID:       storyboard.ID,
 		RelatedEntityType:     "storyboard",
 		RunID:                 run.ID,
 		Step:                  step,
 		PromptKind:            promptKind,
-		PromptTemplateVersion: storyboardPromptTemplateVersion,
+		PromptTemplateVersion: prompt.TemplateVersion,
 		AlignmentPrompt:       "",
 		Metadata: map[string]interface{}{
-			"operation":    metadataOp,
-			"storyboardId": storyboard.ID,
-			"storyId":      storyboard.StoryID,
+			"operation":                    metadataOp,
+			"storyboardId":                 storyboard.ID,
+			"storyId":                      storyboard.StoryID,
+			"workflowReleaseId":            storyboard.WorkflowReleaseID,
+			"workflowPromptApplied":        prompt.Applied,
+			"workflowPromptFallbackReason": prompt.FallbackReason,
 		},
 	})
 	if err != nil {
@@ -217,26 +222,34 @@ Rules:
 }
 
 func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, alignmentPrompt string, sceneCount int) (*domain.StoryboardBiblePlan, string, int, error) {
-	systemPrompt := buildStoryboardBiblePlanSystemPrompt()
-	userPrompt := buildStoryboardBiblePlanUserPrompt(story, storyboard, snapshot, sceneCount)
+	prompt := resolveStoryboardBiblePrompt(story, storyboard, snapshot, alignmentPrompt, sceneCount)
+	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
+		s.logger.Warn("storyboard workflow prompt fallback",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("workflowReleaseId", storyboard.WorkflowReleaseID),
+			zap.String("reason", prompt.FallbackReason))
+	}
 	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
 		UserID:                storyboard.UserID,
-		OriginalPrompt:        userPrompt,
-		SystemPrompt:          systemPrompt,
-		Model:                 "gemini-2.5-flash",
-		Temperature:           0.32,
-		MaxTokens:             5000,
+		OriginalPrompt:        prompt.UserPrompt,
+		SystemPrompt:          prompt.SystemPrompt,
+		Model:                 prompt.Model,
+		Temperature:           prompt.Temperature,
+		MaxTokens:             prompt.MaxTokens,
 		RelatedEntityID:       storyboard.ID,
 		RelatedEntityType:     "storyboard",
 		RunID:                 run.ID,
 		Step:                  domain.StoryboardGenerationStepBiblePlan,
 		PromptKind:            domain.PromptKindBiblePlanUser,
-		PromptTemplateVersion: storyboardPromptTemplateVersion,
+		PromptTemplateVersion: prompt.TemplateVersion,
 		AlignmentPrompt:       alignmentPrompt,
 		Metadata: map[string]interface{}{
-			"operation":    "storyboard_bible_plan",
-			"storyboardId": storyboard.ID,
-			"storyId":      storyboard.StoryID,
+			"operation":                    "storyboard_bible_plan",
+			"storyboardId":                 storyboard.ID,
+			"storyId":                      storyboard.StoryID,
+			"workflowReleaseId":            storyboard.WorkflowReleaseID,
+			"workflowPromptApplied":        prompt.Applied,
+			"workflowPromptFallbackReason": prompt.FallbackReason,
 		},
 	})
 	if err != nil {
@@ -287,26 +300,34 @@ func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.S
 }
 
 func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int) (*domain.StoryboardScenePlan, string, int, error) {
-	systemPrompt := buildStoryboardSceneWriterSystemPrompt()
-	userPrompt := buildStoryboardSceneWriterUserPrompt(story, storyboard, snapshot, plan, sceneCount)
+	prompt := resolveStoryboardScenePrompt(story, storyboard, snapshot, plan, alignmentPrompt, sceneCount)
+	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
+		s.logger.Warn("storyboard scene plan workflow prompt fallback",
+			zap.String("storyboardId", storyboard.ID),
+			zap.String("workflowReleaseId", storyboard.WorkflowReleaseID),
+			zap.String("reason", prompt.FallbackReason))
+	}
 	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
 		UserID:                storyboard.UserID,
-		OriginalPrompt:        userPrompt,
-		SystemPrompt:          systemPrompt,
-		Model:                 "gemini-2.5-flash",
-		Temperature:           0.28,
-		MaxTokens:             6500,
+		OriginalPrompt:        prompt.UserPrompt,
+		SystemPrompt:          prompt.SystemPrompt,
+		Model:                 prompt.Model,
+		Temperature:           prompt.Temperature,
+		MaxTokens:             prompt.MaxTokens,
 		RelatedEntityID:       storyboard.ID,
 		RelatedEntityType:     "storyboard",
 		RunID:                 run.ID,
 		Step:                  domain.StoryboardGenerationStepScenePlan,
 		PromptKind:            domain.PromptKindSceneWriterUser,
-		PromptTemplateVersion: storyboardPromptTemplateVersion,
+		PromptTemplateVersion: prompt.TemplateVersion,
 		AlignmentPrompt:       alignmentPrompt,
 		Metadata: map[string]interface{}{
-			"operation":    "storyboard_scene_plan",
-			"storyboardId": storyboard.ID,
-			"storyId":      storyboard.StoryID,
+			"operation":                    "storyboard_scene_plan",
+			"storyboardId":                 storyboard.ID,
+			"storyId":                      storyboard.StoryID,
+			"workflowReleaseId":            storyboard.WorkflowReleaseID,
+			"workflowPromptApplied":        prompt.Applied,
+			"workflowPromptFallbackReason": prompt.FallbackReason,
 		},
 	})
 	if err != nil {

@@ -214,6 +214,7 @@ func (h *AgentPolicyHandler) saveGenerationCheckpoint(c *gin.Context) {
 	}
 	var body struct {
 		State string `json:"state" binding:"required"`
+		RunID string `json:"runId"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		Error(c, CodeInvalidParams, err.Error())
@@ -223,6 +224,22 @@ func (h *AgentPolicyHandler) saveGenerationCheckpoint(c *gin.Context) {
 	if err != nil {
 		Error(c, CodeInvalidParams, "state must be base64 encoded")
 		return
+	}
+	if body.RunID = strings.TrimSpace(body.RunID); body.RunID != "" {
+		leaseValue := strings.TrimSpace(c.GetHeader("X-Generation-Lease"))
+		if leaseValue == "" {
+			Error(c, CodeConflict, "generation checkpoint lease is required")
+			return
+		}
+		valid, verifyErr := h.runtime.VerifyLease(c.Request.Context(), body.RunID, leaseValue)
+		if verifyErr != nil {
+			HandleError(c, verifyErr)
+			return
+		}
+		if !valid {
+			Error(c, CodeConflict, "generation checkpoint lease lost")
+			return
+		}
 	}
 	if err := h.runtime.SaveCheckpoint(c.Request.Context(), c.Param("id"), state); err != nil {
 		HandleError(c, err)

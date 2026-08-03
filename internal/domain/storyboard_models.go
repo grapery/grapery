@@ -105,6 +105,16 @@ type Storyboard struct {
 	// UseComicPagePipeline 为 true 时：分镜就绪后不自动拉 GenerateSceneImage，由客户端走 generate/comic-page(s)，避免单图抢跑导致漫画管线被 skip
 	UseComicPagePipeline bool `json:"useComicPagePipeline,omitempty"`
 
+	// Resolved from an active product binding. Prompt contents are persisted for
+	// deterministic generation but never returned by storyboard APIs.
+	WorkflowReleaseID string                           `json:"workflowReleaseId,omitempty"`
+	WorkflowChecksum  string                           `json:"workflowChecksum,omitempty"`
+	PromptSnapshots   map[string]PromptTemplateVersion `json:"-"`
+	// WorkflowManagedGeneration is request-scoped. Grapery derives it from the
+	// pinned immutable release and uses it to suppress the legacy in-process
+	// background pipeline. It is deliberately not persisted or client-controlled.
+	WorkflowManagedGeneration bool `json:"-"`
+
 	// TurnDirective 对话式创作中「本轮修改要求」。瞬时字段，不入库，只作用于当次生成的提示词：
 	// RawInput 保留首轮完整描述，本字段承载"改成雨夜"这类增量指令。
 	TurnDirective string `json:"-"`

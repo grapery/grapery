@@ -103,6 +103,9 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 		GenerateVideoAfterImages: storyboard.GenerateVideoAfterImages,
 		ContinuationComicStyle:   comicStyle,
 		UseComicPagePipeline:     storyboard.UseComicPagePipeline,
+		WorkflowReleaseID:        strings.TrimSpace(storyboard.WorkflowReleaseID),
+		WorkflowChecksum:         strings.TrimSpace(storyboard.WorkflowChecksum),
+		PromptSnapshotsJSON:      string(mustMarshalGenerationJSON(storyboard.PromptSnapshots)),
 		ContinuationSummary:      storyboard.ContinuationSummary,
 		Likes:                    0,
 		Comments:                 0,
@@ -801,6 +804,12 @@ func (r *Repository) storyboardsToDomain(ctx context.Context, storyboards []Stor
 		if t := strings.TrimSpace(sb.FateSnapshot); t != "" && t != "{}" {
 			fateSnap = &t
 		}
+		var promptSnapshots map[string]domain.PromptTemplateVersion
+		if raw := strings.TrimSpace(sb.PromptSnapshotsJSON); raw != "" && raw != "null" {
+			if err := json.Unmarshal([]byte(raw), &promptSnapshots); err != nil {
+				return nil, fmt.Errorf("decode storyboard %s prompt snapshots: %w", sb.ID, err)
+			}
+		}
 		result = append(result, domain.Storyboard{
 			BaseModel: common.BaseModel{
 				ID:        sb.ID,
@@ -823,6 +832,9 @@ func (r *Repository) storyboardsToDomain(ctx context.Context, storyboards []Stor
 			GenerateVideoAfterImages: sb.GenerateVideoAfterImages,
 			ContinuationComicStyle:   sb.ContinuationComicStyle,
 			UseComicPagePipeline:     sb.UseComicPagePipeline,
+			WorkflowReleaseID:        sb.WorkflowReleaseID,
+			WorkflowChecksum:         sb.WorkflowChecksum,
+			PromptSnapshots:          promptSnapshots,
 			ContinuationSummary:      sb.ContinuationSummary,
 			FateSnapshot:             fateSnap,
 			FateSnapshotHash:         sb.FateSnapshotHash,

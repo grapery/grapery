@@ -330,6 +330,16 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_workflow_registry",
+		Description: "Create immutable workflow releases, prompt versions, and product bindings",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log,
+				&WorkflowReleaseDB{}, &PromptTemplateVersionDB{}, &WorkflowBindingDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_storyboard_generation_assets",
 		Description: "Create and migrate storyboard_generation_assets table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

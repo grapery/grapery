@@ -218,7 +218,11 @@ func generationExecutionToDB(run *domain.GenerationExecution) (*GenerationExecut
 	return &GenerationExecutionDB{
 		ID: run.ID, UserID: run.UserID, Kind: run.Kind, Status: run.Status, Phase: run.Phase,
 		Progress: run.Progress, AgentVersion: run.AgentVersion, UserIntent: run.UserIntent,
-		InputJSON: string(input), OutputJSON: string(output), ParentRunID: run.ParentRunID,
+		WorkflowReleaseID: run.WorkflowReleaseID, WorkflowKey: run.WorkflowKey,
+		WorkflowVersion: run.WorkflowVersion, WorkflowChecksum: run.WorkflowChecksum,
+		PromptBundleJSON:    string(mustMarshalGenerationJSON(run.PromptBundle)),
+		PromptSnapshotsJSON: string(mustMarshalGenerationJSON(run.PromptSnapshots)),
+		InputJSON:           string(input), OutputJSON: string(output), ParentRunID: run.ParentRunID,
 		BranchIndex: run.BranchIndex, Strategy: run.Strategy, ContentIDsJSON: string(contentIDs),
 		ToolCallsJSON: string(toolCalls), Error: run.Error, ErrorCode: run.ErrorCode,
 		TokensUsed: run.TokensUsed, ModelProvider: run.ModelProvider, ModelName: run.ModelName,
@@ -232,6 +236,8 @@ func generationExecutionFromDB(row *GenerationExecutionDB) (*domain.GenerationEx
 	run := &domain.GenerationExecution{
 		ID: row.ID, UserID: row.UserID, Kind: row.Kind, Status: row.Status, Phase: row.Phase,
 		Progress: row.Progress, AgentVersion: row.AgentVersion, UserIntent: row.UserIntent,
+		WorkflowReleaseID: row.WorkflowReleaseID, WorkflowKey: row.WorkflowKey,
+		WorkflowVersion: row.WorkflowVersion, WorkflowChecksum: row.WorkflowChecksum,
 		ParentRunID: row.ParentRunID, BranchIndex: row.BranchIndex, Strategy: row.Strategy,
 		Error: row.Error, ErrorCode: row.ErrorCode, TokensUsed: row.TokensUsed,
 		ModelProvider: row.ModelProvider, ModelName: row.ModelName, CheckpointID: row.CheckpointID,
@@ -253,7 +259,18 @@ func generationExecutionFromDB(row *GenerationExecutionDB) (*domain.GenerationEx
 	if err := decodeGenerationJSON(row.ID, "toolCalls", row.ToolCallsJSON, &run.ToolCalls); err != nil {
 		return nil, err
 	}
+	if err := decodeGenerationJSON(row.ID, "promptBundle", row.PromptBundleJSON, &run.PromptBundle); err != nil {
+		return nil, err
+	}
+	if err := decodeGenerationJSON(row.ID, "promptSnapshots", row.PromptSnapshotsJSON, &run.PromptSnapshots); err != nil {
+		return nil, err
+	}
 	return run, nil
+}
+
+func mustMarshalGenerationJSON(value any) []byte {
+	b, _ := json.Marshal(value)
+	return b
 }
 
 func decodeGenerationJSON(id, field, raw string, target any) error {
