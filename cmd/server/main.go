@@ -399,6 +399,8 @@ func main() {
 	})
 
 	genAuditService := service.NewGenerationAuditService(repo, logger)
+	generationRuntimeRepo := mysql.NewGenerationRuntimeRepository(repo.DB())
+	generationRuntimeService := service.NewGenerationRuntimeService(generationRuntimeRepo, aiRedisClient, logger)
 	chatService := service.NewChatService(repo.DB(), svc, logger)
 
 	deps := &transport.HandlerDependencies{
@@ -417,10 +419,11 @@ func main() {
 		AgentTokenReplay:      cfg.AgentToken.ReplayCacheEnabled,
 		AgentPolicy:           agentPolicy,
 		GenerationAudit:       genAuditService,
+		GenerationRuntime:     generationRuntimeService,
 	}
 	router := transport.SetupRouter(deps)
 
-	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, cfg.AgentToken.InternalAPIKey)
+	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, generationRuntimeService, cfg.AgentToken.InternalAPIKey)
 	agentPolicyHandler.RegisterRoutes(router)
 
 	// Create API group for route registration

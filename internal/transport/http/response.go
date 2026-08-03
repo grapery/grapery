@@ -18,17 +18,18 @@ type Response struct {
 
 // 错误码定义
 const (
-	CodeSuccess         = 1  // 成功
-	CodeError           = 0  // 通用失败
-	CodeInvalidParams   = -1 // 参数错误
-	CodeUnauthorized    = -2 // 认证失败
-	CodeForbidden       = -3 // 权限不足
-	CodeNotFound        = -4 // 资源不存在
-	CodeInternalError   = -5 // 服务器错误
-	CodeDuplicateEntry  = -6 // 重复记录
-	CodeRateLimitExceed = -7 // 超过速率限制
-	CodeTokenExpired    = -8 // Token 过期
-	CodeInvalidToken    = -9 // Token 无效
+	CodeSuccess         = 1   // 成功
+	CodeError           = 0   // 通用失败
+	CodeInvalidParams   = -1  // 参数错误
+	CodeUnauthorized    = -2  // 认证失败
+	CodeForbidden       = -3  // 权限不足
+	CodeNotFound        = -4  // 资源不存在
+	CodeInternalError   = -5  // 服务器错误
+	CodeDuplicateEntry  = -6  // 重复记录
+	CodeRateLimitExceed = -7  // 超过速率限制
+	CodeTokenExpired    = -8  // Token 过期
+	CodeInvalidToken    = -9  // Token 无效
+	CodeConflict        = -10 // 资源状态冲突
 )
 
 // Success 成功响应
@@ -61,6 +62,8 @@ func Error(c *gin.Context, code int, message string) {
 		statusCode = http.StatusForbidden
 	case CodeNotFound:
 		statusCode = http.StatusNotFound
+	case CodeConflict:
+		statusCode = http.StatusConflict
 	case CodeInternalError:
 		statusCode = http.StatusInternalServerError
 	}

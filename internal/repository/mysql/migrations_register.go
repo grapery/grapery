@@ -320,6 +320,16 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name:        "migrate_generation_runtime",
+		Description: "Create unified generation executions, replay events, and checkpoints",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log,
+				&GenerationExecutionDB{}, &GenerationEventDB{}, &GenerationCheckpointDB{})
+		},
+		Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "migrate_storyboard_generation_assets",
 		Description: "Create and migrate storyboard_generation_assets table",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {

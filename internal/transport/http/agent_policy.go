@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strconv"
@@ -19,6 +20,7 @@ type AgentPolicyHandler struct {
 	signer   *service.AgentAccessTokenSigner
 	audit    *service.GenerationAuditService
 	panelGen *service.FragmentPanelGenerationService
+	runtime  *service.GenerationRuntimeService
 	apiKey   string
 }
 
@@ -27,6 +29,7 @@ func NewAgentPolicyHandler(
 	signer *service.AgentAccessTokenSigner,
 	audit *service.GenerationAuditService,
 	panelGen *service.FragmentPanelGenerationService,
+	runtime *service.GenerationRuntimeService,
 	apiKey string,
 ) *AgentPolicyHandler {
 	return &AgentPolicyHandler{
@@ -34,6 +37,7 @@ func NewAgentPolicyHandler(
 		signer:   signer,
 		audit:    audit,
 		panelGen: panelGen,
+		runtime:  runtime,
 		apiKey:   strings.TrimSpace(apiKey),
 	}
 }
@@ -48,6 +52,15 @@ func (h *AgentPolicyHandler) RegisterRoutes(r *gin.Engine) {
 
 		g.POST("/generation-audits", h.recordGenerationAudits)
 		g.GET("/generation-audits", h.listGenerationAudits)
+		g.PUT("/generation-executions/:id", h.saveGenerationExecution)
+		g.GET("/generation-executions/:id", h.getGenerationExecution)
+		g.GET("/generation-executions", h.listGenerationExecutions)
+		g.GET("/generation-executions/:id/events", h.listGenerationExecutionEvents)
+		g.POST("/generation-executions/:id/lease", h.acquireGenerationLease)
+		g.PUT("/generation-executions/:id/lease", h.renewGenerationLease)
+		g.DELETE("/generation-executions/:id/lease", h.releaseGenerationLease)
+		g.PUT("/generation-checkpoints/:id", h.saveGenerationCheckpoint)
+		g.GET("/generation-checkpoints/:id", h.getGenerationCheckpoint)
 
 		g.POST("/quota/reservations/:id/confirm", h.confirmQuotaReservation)
 		g.POST("/quota/reservations/:id/release", h.releaseQuotaReservation)
@@ -58,6 +71,181 @@ func (h *AgentPolicyHandler) RegisterRoutes(r *gin.Engine) {
 			pg.GET("/generate/:taskId", h.agentGetPanelGeneration)
 		}
 	}
+}
+
+func (h *AgentPolicyHandler) acquireGenerationLease(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	var body struct {
+		Owner      string `json:"owner"`
+		TTLSeconds int    `json:"ttlSeconds"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	lease, acquired, err := h.runtime.AcquireLease(c.Request.Context(), c.Param("id"), body.Owner, time.Duration(body.TTLSeconds)*time.Second)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"acquired": acquired, "lease": lease})
+}
+
+func (h *AgentPolicyHandler) renewGenerationLease(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	var body struct {
+		Value      string `json:"value"`
+		TTLSeconds int    `json:"ttlSeconds"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	renewed, err := h.runtime.RenewLease(c.Request.Context(), c.Param("id"), body.Value, time.Duration(body.TTLSeconds)*time.Second)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"renewed": renewed})
+}
+
+func (h *AgentPolicyHandler) releaseGenerationLease(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	var body struct {
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	if err := h.runtime.ReleaseLease(c.Request.Context(), c.Param("id"), body.Value); err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"released": true})
+}
+
+func (h *AgentPolicyHandler) saveGenerationExecution(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	var run domain.GenerationExecution
+	if err := c.ShouldBindJSON(&run); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	run.ID = strings.TrimSpace(c.Param("id"))
+	if leaseValue := strings.TrimSpace(c.GetHeader("X-Generation-Lease")); leaseValue != "" {
+		valid, err := h.runtime.VerifyLease(c.Request.Context(), run.ID, leaseValue)
+		if err != nil {
+			HandleError(c, err)
+			return
+		}
+		if !valid {
+			Error(c, CodeConflict, "generation execution lease lost")
+			return
+		}
+	}
+	eventType := strings.TrimSpace(c.Query("eventType"))
+	saved, err := h.runtime.SaveExecution(c.Request.Context(), &run, eventType)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, saved)
+}
+
+func (h *AgentPolicyHandler) getGenerationExecution(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	run, err := h.runtime.GetExecution(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, run)
+}
+
+func (h *AgentPolicyHandler) listGenerationExecutions(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	runs, err := h.runtime.ListExecutions(c.Request.Context(), c.Query("kind"), limit)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"runs": runs})
+}
+
+func (h *AgentPolicyHandler) listGenerationExecutionEvents(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	after, _ := strconv.ParseInt(c.DefaultQuery("afterSequence", "0"), 10, 64)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "500"))
+	events, err := h.runtime.ListEvents(c.Request.Context(), c.Param("id"), after, limit)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"events": events})
+}
+
+func (h *AgentPolicyHandler) saveGenerationCheckpoint(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	var body struct {
+		State string `json:"state" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	state, err := base64.StdEncoding.DecodeString(body.State)
+	if err != nil {
+		Error(c, CodeInvalidParams, "state must be base64 encoded")
+		return
+	}
+	if err := h.runtime.SaveCheckpoint(c.Request.Context(), c.Param("id"), state); err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"checkpointId": c.Param("id"), "saved": true})
+}
+
+func (h *AgentPolicyHandler) getGenerationCheckpoint(c *gin.Context) {
+	if h.runtime == nil {
+		InternalError(c, "generation runtime unavailable")
+		return
+	}
+	state, ok, err := h.runtime.GetCheckpoint(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	if !ok {
+		Error(c, CodeNotFound, "checkpoint not found")
+		return
+	}
+	Success(c, gin.H{"checkpointId": c.Param("id"), "state": base64.StdEncoding.EncodeToString(state)})
 }
 
 func (h *AgentPolicyHandler) internalAPIKeyMiddleware() gin.HandlerFunc {

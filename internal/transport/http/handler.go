@@ -20,6 +20,7 @@ type Handler struct {
 	agentTokenReplay  bool
 	agentPolicy       *service.AgentAccessPolicyService
 	generationAudit   *service.GenerationAuditService
+	generationRuntime *service.GenerationRuntimeService
 	chatService       *service.ChatService
 	cache             cache.Cache
 	logger            *zap.Logger
@@ -42,6 +43,7 @@ type HandlerDependencies struct {
 	AgentTokenReplay      bool
 	AgentPolicy           *service.AgentAccessPolicyService
 	GenerationAudit       *service.GenerationAuditService
+	GenerationRuntime     *service.GenerationRuntimeService
 }
 
 // NewHandler creates a new HTTP handler (legacy constructor)
@@ -64,6 +66,7 @@ func NewHandlerWithDeps(deps *HandlerDependencies) *Handler {
 		agentTokenReplay:  deps.AgentTokenReplay,
 		agentPolicy:       deps.AgentPolicy,
 		generationAudit:   deps.GenerationAudit,
+		generationRuntime: deps.GenerationRuntime,
 		chatService:       deps.ChatService,
 		cache:             deps.Cache,
 		logger:            deps.Logger,
@@ -332,6 +335,9 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.POST("/agent-access-tokens", h.IssueAgentAccessToken)
 			authenticated.POST("/agent-access-tokens/:requestId/cancel", h.CancelAgentAccessToken)
 			authenticated.GET("/generation-audits", h.ListGenerationAudits)
+			authenticated.GET("/generations/:id", h.GetGenerationExecution)
+			authenticated.GET("/generations/:id/events", h.ListGenerationExecutionEvents)
+			authenticated.POST("/generations/:id/cancel", h.CancelGenerationExecution)
 			authenticated.GET("/referrals", h.GetReferrals)
 			authenticated.POST("/referrals/use", h.UseReferralCode)
 
