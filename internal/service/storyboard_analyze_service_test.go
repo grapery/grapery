@@ -9,6 +9,7 @@ func TestInferStoryboardInputIntent(t *testing.T) {
 	}{
 		{"", "ask_clarification"},
 		{"今天天气怎么样", "chat_only"},
+		{"今天天气很好，我请假休息了", "new_storyboard"},
 		{"换个故事板重新开始", "new_storyboard"},
 		{"把格数改成 6", "adjust_options"},
 		{"改一下画风更暗一点", "adjust_options"},

@@ -1,11 +1,57 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 )
+
+func TestAnalyzeFragmentStoryKeepsIntentAndCanStartConsistent(t *testing.T) {
+	service := &FragmentGenerationService{}
+	for _, tc := range []struct {
+		input    string
+		intent   string
+		canStart bool
+	}{
+		{input: "今天天气很好，我请假休息了", intent: "new_fragment", canStart: true},
+		{input: "今天天气怎么样", intent: "chat_only", canStart: false},
+	} {
+		response, err := service.AnalyzeFragmentStory(context.Background(), "user-1", domain.FragmentAnalyzeRequest{UserInput: tc.input})
+		if err != nil {
+			t.Fatalf("AnalyzeFragmentStory(%q): %v", tc.input, err)
+		}
+		if response.IntentType != tc.intent || response.RecommendedOptions.CanStart != tc.canStart {
+			t.Fatalf(
+				"AnalyzeFragmentStory(%q) intent=%q canStart=%v want intent=%q canStart=%v",
+				tc.input,
+				response.IntentType,
+				response.RecommendedOptions.CanStart,
+				tc.intent,
+				tc.canStart,
+			)
+		}
+	}
+}
+
+func TestInferFragmentInputIntentDistinguishesStoryFromUtilityChat(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "今天天气很好，我请假休息了", want: "new_fragment"},
+		{input: "今天天气怎么样", want: "chat_only"},
+		{input: "新闻主播下班后发现城市停电了", want: "new_fragment"},
+		{input: "帮我写一段 Go 代码", want: "chat_only"},
+		{input: "", want: "ask_clarification"},
+	}
+	for _, tc := range cases {
+		if got := inferFragmentInputIntent(tc.input); got != tc.want {
+			t.Fatalf("inferFragmentInputIntent(%q)=%q want %q", tc.input, got, tc.want)
+		}
+	}
+}
 
 func TestExpandScenesFallbackKeepsRequestedImageCount(t *testing.T) {
 	scenes := buildFallbackFragmentExpandedScenes(4, "少年在瀑布边发现一块旧铭牌", "fantasy", "mysterious", "9:16")

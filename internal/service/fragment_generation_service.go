@@ -89,9 +89,10 @@ func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, us
 	}
 	slots := inferFragmentReferenceSlots(input)
 
+	intentType := inferFragmentInputIntent(input)
 	resp := &domain.FragmentAnalyzeResponse{
 		AssistantMessage: summarizeFragmentAnalyzeMessage(input),
-		IntentType:       inferFragmentInputIntent(input),
+		IntentType:       intentType,
 		GenerationIntent: domain.FragmentGenerationIntent{
 			UserInput:   input,
 			ImageCount:  imageCount,
@@ -106,7 +107,7 @@ func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, us
 		StoryElements: slots,
 		RecommendedOptions: domain.FragmentRecommendedOptions{
 			StyleCandidates: []string{style, "smart_recommend"},
-			CanStart:        true,
+			CanStart:        intentType != "chat_only" && intentType != "ask_clarification",
 		},
 	}
 	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" {
@@ -572,10 +573,8 @@ func inferFragmentInputIntent(input string) string {
 	if lower == "" {
 		return "ask_clarification"
 	}
-	for _, word := range []string{"天气", "你是谁", "代码", "编程", "新闻", "股票", "笑话"} {
-		if strings.Contains(lower, word) {
-			return "chat_only"
-		}
+	if isCreativeInputChatOnly(lower) {
+		return "chat_only"
 	}
 	for _, word := range []string{"换个故事", "新故事", "重新开始", "另一个故事", "新建"} {
 		if strings.Contains(lower, word) {
@@ -588,6 +587,35 @@ func inferFragmentInputIntent(input string) string {
 		}
 	}
 	return "new_fragment"
+}
+
+// isCreativeInputChatOnly only matches explicit utility/chat requests. Creative input often
+// mentions weather, news, code, or stocks as story material, so keyword presence alone must not
+// suppress the creation plan (for example: "今天天气很好，我请假休息了").
+func isCreativeInputChatOnly(input string) bool {
+	lower := strings.ToLower(strings.TrimSpace(input))
+	if lower == "" {
+		return false
+	}
+	for _, phrase := range []string{
+		"天气怎么样", "天气如何", "天气预报", "天气好吗", "天气好不好", "气温多少", "今天几度", "会下雨吗", "下雨吗",
+		"你是谁", "你叫什么",
+		"最新新闻", "今日新闻", "新闻是什么",
+		"股票行情", "股票怎么样", "股价多少",
+		"讲个笑话", "说个笑话", "来个笑话",
+	} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	if strings.Contains(lower, "代码") || strings.Contains(lower, "编程") {
+		for _, marker := range []string{"怎么", "如何", "为什么", "报错", "帮我写", "帮我改"} {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func inferFragmentAnalyzeStyle(input string) string {

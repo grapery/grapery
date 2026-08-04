@@ -103,10 +103,8 @@ func inferStoryboardInputIntent(input string) string {
 	if lower == "" {
 		return "ask_clarification"
 	}
-	for _, word := range []string{"天气", "你是谁", "代码", "编程", "新闻", "股票", "笑话"} {
-		if strings.Contains(lower, word) {
-			return "chat_only"
-		}
+	if isCreativeInputChatOnly(lower) {
+		return "chat_only"
 	}
 	for _, word := range []string{"换个故事板", "新故事板", "重新开始", "另一个故事板", "新建故事板", "另开分支"} {
 		if strings.Contains(lower, word) {
