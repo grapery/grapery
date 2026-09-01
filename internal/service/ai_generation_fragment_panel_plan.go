@@ -26,6 +26,7 @@ type GenerateFragmentPanelPlanRequest struct {
 	ReferenceImageURL string
 	UserInput         string
 	Style             string
+	Language          string
 	PanelCount        int
 	RelatedEntityID   string
 	RelatedEntityType string
@@ -216,7 +217,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanGemini(ctx context.Contex
 		return nil, fmt.Errorf("encode reference image: %w", err)
 	}
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence), req.Language)
 	record.OriginalPrompt = userText
 	record.SystemPrompt = fragmentPanelGeminiReferenceImagePreamble
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
@@ -386,7 +387,7 @@ func (s *AIGenerationService) generateFragmentPanelPlanHuoshan(ctx context.Conte
 	record.StartedAt = &processingTime
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 
-	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence))
+	userText := buildFragmentPanelPlanUserPrompt(req.UserInput, req.Style, req.PanelCount, panelPlanLayoutWithVisualEvidence(req.LayoutAddon, req.VisualEvidence), req.Language)
 	record.OriginalPrompt = userText
 	_ = s.repo.UpdateAIGenerationRecord(ctx, record)
 	maxHuoshanTok := 8192

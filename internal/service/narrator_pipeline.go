@@ -75,20 +75,13 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		return nil, fmt.Errorf("parent storyboard not found: %w", err)
 	}
 
-	// Verify user has permission to create storyboards in this story
-	story, err := s.repo.StoryByID(ctx, parentStoryboard.StoryID)
-	if err != nil {
-		return nil, fmt.Errorf("story not found: %w", err)
-	}
-
-	// Check permissions based on collaboration status
-	canContinue := s.canUserContinueStoryboard(ctx, userID, story)
-	if !canContinue {
+	// Continue and Fork share one server-authoritative permission contract.
+	if err := s.enforceCanForkStoryboard(ctx, req.ParentStoryboardID, userID); err != nil {
 		s.logger.Warn("user does not have permission to continue storyboard",
 			zap.String("userId", userID),
 			zap.String("storyboardId", req.ParentStoryboardID),
-			zap.String("storyId", story.ID))
-		return nil, fmt.Errorf("user does not have permission to continue this storyboard")
+			zap.Error(err))
+		return nil, err
 	}
 
 	// Step 2: Trace the path from root to parent (collect all ancestor scenes)
@@ -246,36 +239,6 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		FateSnapshot:    fateSnapshot,
 		TokensUsed:      tokensUsed,
 	}, nil
-}
-
-// canUserContinueStoryboard checks if user can continue the storyboard based on story permissions
-func (s *Service) canUserContinueStoryboard(ctx context.Context, userID string, story *domain.Story) bool {
-	// Story creator can always continue
-	if story.UserID == userID {
-		return true
-	}
-
-	// Check if collaboration is open
-	if story.IsCollaborationOpen {
-		return true
-	}
-
-	// Check if user is a contributor
-	contributors, err := s.repo.GetStoryContributors(ctx, story.ID, 0, 100)
-	if err != nil {
-		s.logger.Warn("failed to check story contributors",
-			zap.String("storyId", story.ID),
-			zap.Error(err))
-		return false
-	}
-
-	for _, contributor := range contributors {
-		if contributor.UserID == userID {
-			return true
-		}
-	}
-
-	return false
 }
 
 // generateContinuationTitle generates a title for the continuation

@@ -76,23 +76,61 @@ func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, us
 	}
 	aspectRatio := domain.NormalizeFragmentAspectRatio(req.AspectRatio)
 	if aspectRatio == "" {
-		aspectRatio = "9:16"
+		aspectRatio = domain.FragmentComicPageAspectDefault
 	}
 	imageCount := req.ImageCount
 	if imageCount <= 0 {
 		imageCount = 4
 	}
 	imageCount = normalizeFragmentGenerationImageCount(imageCount)
+	if explicit := explicitCreativeCount(input); explicit > 0 {
+		imageCount = normalizeFragmentGenerationImageCount(explicit)
+	}
+	if explicit := explicitCreativeAspectRatio(input); explicit != "" {
+		aspectRatio = explicit
+	}
 	style := strings.TrimSpace(req.Style)
-	if style == "" {
+	if explicit := explicitCreativeStyle(input); explicit != "" {
+		style = explicit
+	} else if style == "" {
 		style = inferFragmentAnalyzeStyle(input)
 	}
 	slots := inferFragmentReferenceSlots(input)
 
 	intentType := inferFragmentInputIntent(input)
+	editPlan := planCreativeEdit(input, strings.TrimSpace(req.TargetDraftFragmentID) != "", "张")
+	switch strings.TrimSpace(req.EditOperation) {
+	case "replace":
+		if req.SelectedImageIndex > 0 {
+			editPlan = domain.CreativeEditPlan{
+				Operation:                  "replace",
+				TargetIndexes:              []int{req.SelectedImageIndex},
+				RequestedChanges:           []string{input},
+				Preserve:                   []string{"未选中的画面", "角色身份与核心外观", "既有世界设定"},
+				EstimatedRegenerationCount: 1,
+			}
+			intentType = "revise_current"
+		}
+	case "append":
+		editPlan = domain.CreativeEditPlan{
+			Operation:                  "append",
+			RequestedChanges:           []string{input},
+			Preserve:                   []string{"全部已有画面", "角色连续性", "世界设定", "前序因果"},
+			EstimatedRegenerationCount: 1,
+		}
+		intentType = "revise_current"
+	}
+	if editPlan.NeedsClarification {
+		intentType = "ask_clarification"
+	} else if editPlan.Operation == "replace" {
+		intentType = "revise_current"
+	} else if editPlan.Operation == "adjust_options" {
+		intentType = "adjust_options"
+	}
 	resp := &domain.FragmentAnalyzeResponse{
 		AssistantMessage: summarizeFragmentAnalyzeMessage(input),
 		IntentType:       intentType,
+		EditPlan:         editPlan,
 		GenerationIntent: domain.FragmentGenerationIntent{
 			UserInput:   input,
 			ImageCount:  imageCount,
@@ -110,7 +148,10 @@ func (s *FragmentGenerationService) AnalyzeFragmentStory(ctx context.Context, us
 			CanStart:        intentType != "chat_only" && intentType != "ask_clarification",
 		},
 	}
-	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" {
+	if editPlan.NeedsClarification {
+		resp.AssistantMessage = editPlan.ClarificationQuestion
+	}
+	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" && s.fragmentRepo != nil {
 		if draft, err := s.fragmentRepo.GetByID(ctx, draftID); err == nil && draft != nil && draft.UserID == userID {
 			s.recordFragmentAnalyzeConversation(ctx, draftID, userID, input, resp.AssistantMessage)
 		}
@@ -245,6 +286,7 @@ type fragmentDraftContinuationContext struct {
 	PreviousContent    string
 	PreviousImageURLs  []string
 	ExistingImageCount int
+	PreviousTrace      *domain.FragmentGenerationTrace
 }
 
 func isFragmentAppendRequest(req domain.FragmentGenerationRequest) bool {
@@ -256,6 +298,57 @@ func fragmentContinuationExistingImageCount(ctx *fragmentDraftContinuationContex
 		return 0
 	}
 	return ctx.ExistingImageCount
+}
+
+func continuationPreviousTrace(ctx *fragmentDraftContinuationContext) *domain.FragmentGenerationTrace {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.PreviousTrace
+}
+
+func fragmentContinuationReferenceImageURLs(ctx *fragmentDraftContinuationContext, maxCount int) []string {
+	if ctx == nil || maxCount <= 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, maxCount)
+	add := func(raw string) {
+		url := strings.TrimSpace(raw)
+		if url == "" || len(out) >= maxCount {
+			return
+		}
+		if _, ok := seen[url]; ok {
+			return
+		}
+		seen[url] = struct{}{}
+		out = append(out, url)
+	}
+	if ctx.PreviousTrace != nil {
+		for _, kind := range []string{"character", "prop", "location"} {
+			for _, asset := range ctx.PreviousTrace.ReferenceAssets {
+				if strings.EqualFold(strings.TrimSpace(asset.Kind), kind) {
+					add(asset.ImageURL)
+				}
+			}
+		}
+	}
+	if len(ctx.PreviousImageURLs) > 0 {
+		add(ctx.PreviousImageURLs[len(ctx.PreviousImageURLs)-1])
+		add(ctx.PreviousImageURLs[0])
+	}
+	return out
+}
+
+func fragmentGenerationRequestWithContinuation(req domain.FragmentGenerationRequest, ctx *fragmentDraftContinuationContext) domain.FragmentGenerationRequest {
+	if ctx == nil {
+		return req
+	}
+	req.ImageUrls = compactNonEmptyStrings(append(
+		append([]string(nil), req.ImageUrls...),
+		fragmentContinuationReferenceImageURLs(ctx, 3)...,
+	))
+	return req
 }
 
 // GenerateFragment 创建生成任务并立即落库占位草稿（与多格参考图流程对齐），返回 task 与 draftFragmentId。
@@ -285,6 +378,20 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		}
 		req.ImageCount = 1
 	}
+	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" {
+		unlock := s.lockFragmentDraftGeneration(draftID)
+		defer unlock()
+		active, err := s.fragmentGenRepo.FindActiveByDraftID(ctx, userID, draftID)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to check active fragment generation task: %w", err)
+		}
+		if active != nil {
+			// A client can lose its polling connection while the durable task keeps running.
+			// Treat a follow-up request as a join of that task instead of creating a second
+			// writer for the same draft or surfacing a misleading 409 failure.
+			return active, draftID, nil
+		}
+	}
 	if s.repo != nil {
 		balance, balErr := s.repo.GetTokenBalance(ctx, userID)
 		if balErr != nil {
@@ -298,21 +405,6 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 			return nil, "", domain.NewFragmentGenerationError(
 				domain.FragmentGenerationErrorInsufficient,
 				fmt.Sprintf("insufficient token balance: have %d, need at least %d", balance, minNeed),
-				nil,
-			)
-		}
-	}
-	if draftID := strings.TrimSpace(req.TargetDraftFragmentID); draftID != "" {
-		unlock := s.lockFragmentDraftGeneration(draftID)
-		defer unlock()
-		active, err := s.fragmentGenRepo.FindActiveByDraftID(ctx, userID, draftID)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to check active fragment generation task: %w", err)
-		}
-		if active != nil {
-			return nil, "", domain.NewFragmentGenerationError(
-				domain.FragmentGenerationErrorConflict,
-				"fragment draft already has an active generation task",
 				nil,
 			)
 		}
@@ -341,7 +433,7 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	nowMs := time.Now().UnixMilli()
 	ar := domain.NormalizeFragmentAspectRatio(strings.TrimSpace(req.AspectRatio))
 	if ar == "" {
-		ar = domain.FragmentAspectDefault
+		ar = domain.FragmentComicPageAspectDefault
 	}
 	draftID := strings.TrimSpace(req.TargetDraftFragmentID)
 	if draftID != "" {
@@ -443,6 +535,27 @@ func decorateFragmentGenerationSlots(taskID, fragmentID string, slots []domain.F
 	return out
 }
 
+func markFragmentComicPagePlanningSlots(slots []domain.FragmentGenerationImageSlot, existingCount, plannedCount, newPageCount int) []domain.FragmentGenerationImageSlot {
+	out := append([]domain.FragmentGenerationImageSlot(nil), slots...)
+	for i := range out {
+		relative := out[i].Index - existingCount
+		if relative < 1 || relative > newPageCount || out[i].Status == "completed" {
+			continue
+		}
+		switch {
+		case relative <= plannedCount:
+			out[i].Status = "planned"
+			out[i].ErrorMessage = ""
+		case relative == plannedCount+1:
+			out[i].Status = "planning"
+			out[i].Caption = firstNonBlank(strings.TrimSpace(out[i].Caption), "正在编排本页分镜…")
+		default:
+			out[i].Status = "planned"
+		}
+	}
+	return out
+}
+
 func (s *FragmentGenerationService) persistFragmentGenerationSlots(ctx context.Context, taskID, fragmentID string, result *domain.FragmentGenerationResult) {
 	if s == nil || s.fragmentGenRepo == nil || result == nil || len(result.ImageSlots) == 0 {
 		return
@@ -502,11 +615,18 @@ func (s *FragmentGenerationService) loadFragmentDraftContinuationContext(ctx con
 	if len(imageURLs) == 0 && strings.TrimSpace(draft.ImageUrls) != "" {
 		_ = json.Unmarshal([]byte(draft.ImageUrls), &imageURLs)
 	}
+	previousTrace := parseFragmentGenerationTraceMetadata(draft.GenerationMetadata)
+	if previousTrace != nil {
+		previousTrace.ComicDocument = fragmentComicDocumentFromExistingDraft(
+			req, draft.ID, draft.Content, draft.AspectRatio, compactNonEmptyStrings(imageURLs), previousTrace,
+		)
+	}
 	return &fragmentDraftContinuationContext{
 		DraftID:            draft.ID,
 		PreviousContent:    strings.TrimSpace(draft.Content),
 		PreviousImageURLs:  compactNonEmptyStrings(imageURLs),
 		ExistingImageCount: len(compactNonEmptyStrings(imageURLs)),
+		PreviousTrace:      previousTrace,
 	}
 }
 
@@ -554,11 +674,184 @@ func formatFragmentContinuationContextForPrompt(ctx *fragmentDraftContinuationCo
 			fmt.Fprintf(&b, "- 第%d页：%s\n", i+1, ctx.PreviousImageURLs[i])
 		}
 	}
+	if ctx.PreviousTrace != nil && ctx.PreviousTrace.VisualBible != nil {
+		if raw, err := json.Marshal(ctx.PreviousTrace.VisualBible); err == nil {
+			fmt.Fprintf(&b, "既有视觉圣经（重复出现的角色、道具和地点必须沿用相同 key 与不可变特征）：\n%s\n", string(raw))
+		}
+	}
 	b.WriteString("\n本次任务要求：\n")
 	b.WriteString("- 只创作用户本次补充对应的新增故事片段，不要输出完整旧故事。\n")
 	b.WriteString("- 新片段必须从现有最后一页之后自然发生，承接已有角色、地点、道具、情绪和未完成的因果。\n")
 	b.WriteString("- 如果用户只是补充一个结果或动作，把它写成有画面感的后续场景，并为新图片提供明确可画的瞬间。\n")
 	return strings.TrimSpace(b.String())
+}
+
+func mergeFragmentVisualBible(previous, current *domain.FragmentVisualBible) *domain.FragmentVisualBible {
+	if previous == nil {
+		return current
+	}
+	if current == nil {
+		return previous
+	}
+	merged := &domain.FragmentVisualBible{
+		StyleBible:     previous.StyleBible,
+		Characters:     append([]domain.FragmentVisualCharacter(nil), previous.Characters...),
+		Props:          append([]domain.FragmentVisualProp(nil), previous.Props...),
+		Locations:      append([]domain.FragmentVisualLocation(nil), previous.Locations...),
+		SourceEvidence: mergeFragmentVisualEvidence(previous.SourceEvidence, current.SourceEvidence),
+	}
+	if merged.StyleBible == nil {
+		merged.StyleBible = current.StyleBible
+	}
+	charKeys := map[string]struct{}{}
+	charNames := map[string]struct{}{}
+	for _, item := range merged.Characters {
+		charKeys[strings.TrimSpace(item.Key)] = struct{}{}
+		if name := strings.ToLower(strings.TrimSpace(item.Name)); name != "" {
+			charNames[name] = struct{}{}
+		}
+	}
+	for _, item := range current.Characters {
+		key := strings.TrimSpace(item.Key)
+		name := strings.ToLower(strings.TrimSpace(item.Name))
+		_, keyExists := charKeys[key]
+		_, nameExists := charNames[name]
+		if (key != "" && keyExists) || (name != "" && nameExists) {
+			continue
+		}
+		merged.Characters = append(merged.Characters, item)
+		if key != "" {
+			charKeys[key] = struct{}{}
+		}
+		if name != "" {
+			charNames[name] = struct{}{}
+		}
+	}
+	propKeys := map[string]struct{}{}
+	propNames := map[string]struct{}{}
+	for _, item := range merged.Props {
+		propKeys[strings.TrimSpace(item.Key)] = struct{}{}
+		if name := strings.ToLower(strings.TrimSpace(item.Name)); name != "" {
+			propNames[name] = struct{}{}
+		}
+	}
+	for _, item := range current.Props {
+		key := strings.TrimSpace(item.Key)
+		name := strings.ToLower(strings.TrimSpace(item.Name))
+		_, keyExists := propKeys[key]
+		_, nameExists := propNames[name]
+		if (key != "" && keyExists) || (name != "" && nameExists) {
+			continue
+		}
+		merged.Props = append(merged.Props, item)
+		if key != "" {
+			propKeys[key] = struct{}{}
+		}
+		if name != "" {
+			propNames[name] = struct{}{}
+		}
+	}
+	locationKeys := map[string]struct{}{}
+	locationNames := map[string]struct{}{}
+	for _, item := range merged.Locations {
+		locationKeys[strings.TrimSpace(item.Key)] = struct{}{}
+		if name := strings.ToLower(strings.TrimSpace(item.Name)); name != "" {
+			locationNames[name] = struct{}{}
+		}
+	}
+	for _, item := range current.Locations {
+		key := strings.TrimSpace(item.Key)
+		name := strings.ToLower(strings.TrimSpace(item.Name))
+		_, keyExists := locationKeys[key]
+		_, nameExists := locationNames[name]
+		if (key != "" && keyExists) || (name != "" && nameExists) {
+			continue
+		}
+		merged.Locations = append(merged.Locations, item)
+		if key != "" {
+			locationKeys[key] = struct{}{}
+		}
+		if name != "" {
+			locationNames[name] = struct{}{}
+		}
+	}
+	return merged
+}
+
+func mergeFragmentVisualEvidence(groups ...[]domain.FragmentVisualEvidence) []domain.FragmentVisualEvidence {
+	seen := map[string]struct{}{}
+	var out []domain.FragmentVisualEvidence
+	for _, items := range groups {
+		for _, item := range items {
+			key := strings.TrimSpace(item.ImageURL)
+			if key == "" {
+				key = strings.TrimSpace(item.Summary)
+			}
+			if key != "" {
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+			}
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func mergeFragmentReferenceAssets(groups ...[]domain.FragmentReferenceAsset) []domain.FragmentReferenceAsset {
+	seen := map[string]struct{}{}
+	var out []domain.FragmentReferenceAsset
+	for _, items := range groups {
+		for _, item := range items {
+			key := strings.TrimSpace(item.Kind) + "|" + strings.TrimSpace(item.Key)
+			if strings.TrimSpace(item.Key) == "" {
+				key = strings.TrimSpace(item.ImageURL)
+			}
+			if key != "" {
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+			}
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func inheritFragmentConsistencyPolicy(current *domain.FragmentConsistencyPolicy, previous *domain.FragmentGenerationTrace, draftID string) *domain.FragmentConsistencyPolicy {
+	if current == nil || previous == nil || previous.ConsistencyPolicy == nil {
+		return current
+	}
+	prior := previous.ConsistencyPolicy
+	if prior.SeriesSeed > 0 {
+		current.SeriesSeed = prior.SeriesSeed
+	}
+	options := cloneFragmentProviderOptions(current)
+	if options == nil {
+		options = map[string]interface{}{}
+	}
+	if prior.ProviderOptions != nil {
+		if group, ok := prior.ProviderOptions["consistency_group_id"]; ok {
+			options["consistency_group_id"] = group
+		}
+	}
+	if _, ok := options["consistency_group_id"]; !ok && strings.TrimSpace(draftID) != "" {
+		options["consistency_group_id"] = strings.TrimSpace(draftID)
+	}
+	if current.SeriesSeed > 0 {
+		options["series_seed"] = current.SeriesSeed
+	}
+	current.ProviderOptions = options
+	return current
+}
+
+func mergeFragmentTraceScenes(previous *domain.FragmentGenerationTrace, current []domain.FragmentScenePlan) []domain.FragmentScenePlan {
+	if previous == nil || len(previous.Scenes) == 0 {
+		return append([]domain.FragmentScenePlan(nil), current...)
+	}
+	return append(append([]domain.FragmentScenePlan(nil), previous.Scenes...), current...)
 }
 
 const (
@@ -806,7 +1099,8 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	}
 
 	continuation := s.loadFragmentDraftContinuationContext(ctx, task.UserID, task.Request)
-	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, taskID, task.Request, continuation)
+	effectiveRequest := fragmentGenerationRequestWithContinuation(task.Request, continuation)
+	elemResult, err := s.extractElementsAndGenerateContent(ctx, task.UserID, taskID, effectiveRequest, continuation)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
@@ -814,6 +1108,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Element extraction failed: %v", err))
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, fmt.Sprintf("元素提取失败：%v", err))
 		return
+	}
+	if continuation != nil && continuation.PreviousTrace != nil {
+		elemResult.VisualBible = mergeFragmentVisualBible(continuation.PreviousTrace.VisualBible, elemResult.VisualBible)
+		elemResult.VisualEvidence = mergeFragmentVisualEvidence(continuation.PreviousTrace.VisualEvidence, elemResult.VisualEvidence)
 	}
 
 	totalTokens := elemResult.TokensUsed
@@ -823,7 +1121,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		resolvedAR = domain.NormalizeFragmentAspectRatio(elemResult.AspectRatio)
 	}
 	if resolvedAR == "" {
-		resolvedAR = domain.FragmentAspectDefault
+		resolvedAR = domain.FragmentComicPageAspectDefault
 	}
 
 	// ── Step 2: 场景扩展 ──
@@ -835,7 +1133,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	if sceneCount <= 0 {
 		sceneCount = 1
 	}
-	scenesResult, err := s.expandScenes(ctx, task.UserID, taskID, task.Request, elemResult, sceneCount, resolvedAR, continuation)
+	scenesResult, err := s.expandScenes(ctx, task.UserID, taskID, effectiveRequest, elemResult, sceneCount, resolvedAR, continuation)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
@@ -848,9 +1146,66 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 
 	scenePlans := fragmentScenesToPlans(scenesResult.Scenes)
 	scenePlans = ensureFragmentScenePlanCount(scenePlans, sceneCount, elemResult.Content, task.Request.Style, task.Request.Mood, resolvedAR)
-	plannedSlots := buildFragmentGenerationImageSlots(sceneCount, scenePlans, nil, nil)
+	scenePlans = constrainFragmentScenePlansToBible(scenePlans, elemResult.VisualBible, task.Request.Language)
+	scenePlans = strengthenFragmentScenePlans(scenePlans, elemResult.VisualBible, elemResult.Elements, elemResult.Content, resolvedAR)
+	partial := &domain.FragmentGenerationResult{
+		Content:            elemResult.Content,
+		AspectRatio:        resolvedAR,
+		TokensUsed:         totalTokens,
+		ExpectedImageCount: sceneCount,
+		VisualBible:        elemResult.VisualBible,
+		VisualEvidence:     elemResult.VisualEvidence,
+		StoryElements:      task.Request.ReferenceSlots,
+	}
+	if continuation != nil {
+		partial.DraftFragmentID = continuation.DraftID
+		partial.ExpectedImageCount = continuation.ExistingImageCount + sceneCount
+	} else if targetDraftID := strings.TrimSpace(task.Request.TargetDraftFragmentID); targetDraftID != "" {
+		partial.DraftFragmentID = targetDraftID
+	} else if frag, err := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID); err == nil && frag != nil {
+		partial.DraftFragmentID = frag.ID
+	}
+	persistPlanningProgress := func(plans []domain.FragmentScenePlan, plannedCount int) {
+		displayPlans := append([]domain.FragmentScenePlan(nil), plans...)
+		if continuation != nil {
+			displayPlans = remapFragmentAppendedScenePlan(plans, continuation.ExistingImageCount)
+			plannedImages := appendFragmentDraftImagePlaceholders(continuation.PreviousImageURLs, sceneCount)
+			partial.ImageSlots = buildFragmentAppendImageSlots(taskID, continuation.DraftID, continuation.PreviousImageURLs, plannedImages, displayPlans)
+			partial.ImageSlots = markFragmentComicPagePlanningSlots(partial.ImageSlots, continuation.ExistingImageCount, plannedCount, sceneCount)
+		} else {
+			partial.ImageSlots = buildFragmentGenerationImageSlots(sceneCount, displayPlans, nil, nil)
+			partial.ImageSlots = markFragmentComicPagePlanningSlots(partial.ImageSlots, 0, plannedCount, sceneCount)
+		}
+		partial.ScenePlan = displayPlans
+		partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
+		s.persistFragmentGenerationSlots(ctx, taskID, partial.DraftFragmentID, partial)
+		if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
+			s.logger.Warn("failed to persist fragment comic page planning progress",
+				zap.String("task_id", taskID), zap.Int("planned_count", plannedCount), zap.Error(err))
+		}
+	}
+	if !s.updateFragmentGenerationStep(ctx, taskID, 34, "planning_comic_pages") {
+		return
+	}
+	persistPlanningProgress(scenePlans, 0)
+	pagePlanStart := time.Now()
+	var pagePlanTokens int
+	scenePlans, pagePlanTokens = s.planFragmentComicPages(
+		ctx, task.UserID, taskID, effectiveRequest, elemResult.Content, elemResult.VisualBible, scenePlans,
+		func(pageIndex int, plans []domain.FragmentScenePlan) {
+			persistPlanningProgress(plans, pageIndex+1)
+		},
+	)
+	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
+		return
+	}
+	totalTokens += pagePlanTokens
+	persistPlanningProgress(scenePlans, sceneCount)
 	entityUsage := analyzeFragmentSceneEntityUsage(scenePlans)
 	policy := s.resolveFragmentConsistencyPolicy(task, elemResult.VisualBible, resolvedAR, scenePlans, entityUsage)
+	if continuation != nil {
+		policy = inheritFragmentConsistencyPolicy(policy, continuation.PreviousTrace, continuation.DraftID)
+	}
 	trace := &domain.FragmentGenerationTrace{
 		VisualBible:       elemResult.VisualBible,
 		VisualEvidence:    elemResult.VisualEvidence,
@@ -861,36 +1216,43 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		Metrics: []domain.FragmentGenerationStepMetric{
 			{Name: "extracting_elements", Tokens: elemResult.TokensUsed},
 			{Name: "expanding_scenes", Tokens: scenesResult.TokensUsed},
+			{Name: "planning_comic_pages", Tokens: pagePlanTokens, DurationMs: time.Since(pagePlanStart).Milliseconds()},
 		},
 	}
-	partial := &domain.FragmentGenerationResult{
-		Content:            elemResult.Content,
-		AspectRatio:        resolvedAR,
-		TokensUsed:         totalTokens,
-		ExpectedImageCount: sceneCount,
-		ImageSlots:         plannedSlots,
-		ImageProgress:      fragmentGenerationProgressFromSlots(plannedSlots),
-		VisualBible:        elemResult.VisualBible,
-		VisualEvidence:     elemResult.VisualEvidence,
-		ScenePlan:          append([]domain.FragmentScenePlan(nil), scenePlans...),
-		ConsistencyPolicy:  policy,
-		GenerationTrace:    trace,
-		StoryElements:      task.Request.ReferenceSlots,
-	}
+	partial.TokensUsed = totalTokens
+	partial.ConsistencyPolicy = policy
+	partial.GenerationTrace = trace
 	if continuation != nil {
-		partial.DraftFragmentID = continuation.DraftID
-		partial.ExpectedImageCount = continuation.ExistingImageCount + sceneCount
 		displayScenes := remapFragmentAppendedScenePlan(scenePlans, continuation.ExistingImageCount)
 		plannedImages := appendFragmentDraftImagePlaceholders(continuation.PreviousImageURLs, sceneCount)
 		partial.ImageSlots = buildFragmentAppendImageSlots(taskID, continuation.DraftID, continuation.PreviousImageURLs, plannedImages, displayScenes)
 		partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
 		partial.ScenePlan = displayScenes
 		trace.Scenes = displayScenes
-	} else if targetDraftID := strings.TrimSpace(task.Request.TargetDraftFragmentID); targetDraftID != "" {
-		partial.DraftFragmentID = targetDraftID
-	} else if frag, err := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), taskID); err == nil && frag != nil {
-		partial.DraftFragmentID = frag.ID
+	} else {
+		partial.ImageSlots = buildFragmentGenerationImageSlots(sceneCount, scenePlans, nil, nil)
+		partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
+		partial.ScenePlan = append([]domain.FragmentScenePlan(nil), scenePlans...)
 	}
+	currentComicDocument := buildFragmentComicDocument(
+		effectiveRequest, partial.DraftFragmentID, elemResult.Content, resolvedAR,
+		elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, nil,
+	)
+	var previousComicDocument *domain.FragmentComicDocument
+	if continuation != nil && continuation.PreviousTrace != nil {
+		previousComicDocument = continuation.PreviousTrace.ComicDocument
+	}
+	trace.ComicDocument = applyFragmentComicDocumentEdit(
+		previousComicDocument, currentComicDocument,
+		func() int {
+			if continuation != nil {
+				return continuation.ExistingImageCount
+			}
+			return 0
+		}(),
+		task.Request.ReplaceImageIndex,
+	)
+	partial.ComicDocument = trace.ComicDocument
 	s.persistFragmentGenerationSlots(ctx, taskID, partial.DraftFragmentID, partial)
 	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, partial); err != nil {
 		s.logger.Warn("failed to persist fragment generation trace after planning", zap.Error(err))
@@ -901,12 +1263,21 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		return
 	}
 	assetStart := time.Now()
-	referenceAssets, refTok := s.generateReferenceAssets(ctx, task.UserID, taskID, task.Request, elemResult.VisualBible, elemResult.VisualEvidence, resolvedAR, scenePlans, policy)
+	generatedReferenceAssets, refTok := s.generateReferenceAssets(ctx, task.UserID, taskID, effectiveRequest, elemResult.VisualBible, elemResult.VisualEvidence, resolvedAR, scenePlans, policy)
+	var previousReferenceAssets []domain.FragmentReferenceAsset
+	if continuation != nil && continuation.PreviousTrace != nil {
+		previousReferenceAssets = continuation.PreviousTrace.ReferenceAssets
+	}
+	referenceAssets := mergeFragmentReferenceAssets(previousReferenceAssets, generatedReferenceAssets)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
 	totalTokens += refTok
 	trace.ReferenceAssets = referenceAssets
+	if trace.ComicDocument != nil {
+		trace.ComicDocument.ReferenceAssets = append([]domain.FragmentReferenceAsset(nil), referenceAssets...)
+		partial.ComicDocument = trace.ComicDocument
+	}
 	trace.Metrics = append(trace.Metrics, domain.FragmentGenerationStepMetric{Name: "reference_assets", Tokens: refTok, DurationMs: time.Since(assetStart).Milliseconds()})
 	partial.TokensUsed = totalTokens
 	partial.ReferenceAssets = referenceAssets
@@ -918,10 +1289,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	if !s.updateFragmentGenerationStep(ctx, taskID, 62, "generating_images") {
 		return
 	}
-	userRefs := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(task.Request), fragmentMaxSceneReferenceImages)
+	userRefs := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(effectiveRequest), fragmentMaxSceneReferenceImages)
 	imageStart := time.Now()
 	imageTokenBase := totalTokens
-	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy, partial, imageTokenBase)
+	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, task.Request.Language, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy, partial, imageTokenBase)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
@@ -934,16 +1305,65 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	trace.Scenes = scenePlans
 	trace.Metrics = append(trace.Metrics, domain.FragmentGenerationStepMetric{Name: "scene_images", Tokens: imageResult.TokensUsed, DurationMs: time.Since(imageStart).Milliseconds()})
 
-	// ── Step 5: 一致性检查（不阻断） ──
+	// ── Step 5: 逐页一致性检查；high severity 漫画页自动纠正一次 ──
 	if !s.updateFragmentGenerationStep(ctx, taskID, 82, "checking_consistency") {
 		return
 	}
 	checkStart := time.Now()
-	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, imageResult.ImageUrls, policy)
+	baselineURLs := fragmentContinuationReferenceImageURLs(continuation, 1)
+	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
 	totalTokens += checkTok
+	if fragmentPlansContainComicPages(scenePlans) && len(fragmentHighSeverityComicPageIndexes(issues, imageResult.ImageUrls, len(scenePlans))) > 0 {
+		if !s.updateFragmentGenerationStep(ctx, taskID, 88, "repairing_consistency") {
+			return
+		}
+		var repairTokens, repairedCount int
+		scenePlans, imageResult.ImageUrls, repairTokens, repairedCount = s.repairHighSeverityFragmentComicPages(
+			ctx,
+			task.UserID,
+			taskID,
+			resolvedAR,
+			task.Request.Language,
+			elemResult.VisualBible,
+			scenePlans,
+			referenceAssets,
+			userRefs,
+			policy,
+			issues,
+			imageResult.ImageUrls,
+			partial,
+			totalTokens,
+		)
+		if repairTokens > 0 {
+			imageResult.TokensUsed += repairTokens
+			totalTokens += repairTokens
+		}
+		if repairedCount > 0 {
+			if !s.updateFragmentGenerationStep(ctx, taskID, 93, "checking_consistency") {
+				return
+			}
+			rechecked, retryCheckTokens, retryProvider, retryAuditedCount, retrySkipped := s.checkFragmentConsistency(
+				ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy,
+			)
+			totalTokens += retryCheckTokens
+			checkTok += retryCheckTokens
+			if retrySkipped == "" || len(rechecked) > 0 {
+				issues = rechecked
+				auditProvider = retryProvider
+				auditedCount = retryAuditedCount
+				skippedAuditReason = retrySkipped
+			}
+		}
+	}
+	appendIssueOffset := 0
+	if continuation != nil {
+		appendIssueOffset = continuation.ExistingImageCount
+	}
+	issues = remapFragmentConsistencyIssuesForResult(issues, appendIssueOffset, task.Request.ReplaceImageIndex)
+	trace.Scenes = scenePlans
 	trace.ConsistencyIssues = issues
 	trace.VisionAuditProvider = auditProvider
 	trace.AuditedImageCount = auditedCount
@@ -958,6 +1378,20 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 				zap.String("detail", iss.Detail))
 		}
 	}
+	currentComicDocument = buildFragmentComicDocument(
+		effectiveRequest, partial.DraftFragmentID, elemResult.Content, resolvedAR,
+		elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets,
+	)
+	trace.ComicDocument = applyFragmentComicDocumentEdit(
+		previousComicDocument, currentComicDocument,
+		func() int {
+			if continuation != nil {
+				return continuation.ExistingImageCount
+			}
+			return 0
+		}(),
+		task.Request.ReplaceImageIndex,
+	)
 
 	result := &domain.FragmentGenerationResult{
 		Content:            elemResult.Content,
@@ -975,6 +1409,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		GenerationTrace:    trace,
 		ConsistencyIssues:  issues,
 		StoryElements:      task.Request.ReferenceSlots,
+		ComicDocument:      trace.ComicDocument,
 	}
 	result.ImageProgress = fragmentGenerationProgressFromSlots(result.ImageSlots)
 	if !fragmentGenerationSlotsCompleted(result.ImageSlots, sceneCount) {
@@ -1008,6 +1443,18 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		return
 	}
 	if existing != nil {
+		existingTrace := parseFragmentGenerationTraceMetadata(existing.GenerationMetadata)
+		existingDocument := fragmentComicDocumentFromExistingDraft(
+			effectiveRequest, existing.ID, existing.Content, existing.AspectRatio,
+			existing.MediaURLs, existingTrace,
+		)
+		result.ComicDocument = applyFragmentComicDocumentEdit(
+			existingDocument, currentComicDocument, len(compactNonEmptyStrings(existing.MediaURLs)), task.Request.ReplaceImageIndex,
+		)
+		trace.ComicDocument = result.ComicDocument
+		if result.ComicDocument != nil {
+			result.ComicDocument.FragmentID = existing.ID
+		}
 		finalContent := result.Content
 		finalImages := append([]string(nil), result.ImageUrls...)
 		if strings.TrimSpace(task.Request.TargetDraftFragmentID) != "" {
@@ -1033,7 +1480,14 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			result.Content = finalContent
 			result.ImageUrls = append([]string(nil), finalImages...)
 			if result.GenerationTrace != nil {
-				result.GenerationTrace.Scenes = append([]domain.FragmentScenePlan(nil), result.ScenePlan...)
+				if task.Request.ReplaceImageIndex > 0 {
+					result.GenerationTrace.Scenes = append([]domain.FragmentScenePlan(nil), result.ScenePlan...)
+				} else {
+					result.GenerationTrace.Scenes = mergeFragmentTraceScenes(
+						continuationPreviousTrace(continuation),
+						result.ScenePlan,
+					)
+				}
 			}
 			if task.Request.ReplaceImageIndex > 0 {
 				result.ExpectedImageCount = len(finalImages)
@@ -1074,9 +1528,13 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			result.DraftFragmentID = existing.ID
 		}
 	} else {
+		fragmentID := uuid.New().String()
+		if result.ComicDocument != nil {
+			result.ComicDocument.FragmentID = fragmentID
+		}
 		fragment := &domain.Fragment{
 			BaseModel: common.BaseModel{
-				ID:        uuid.New().String(),
+				ID:        fragmentID,
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
@@ -1291,6 +1749,7 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 			result.AspectRatio = ar
 		}
 	}
+	ensureFragmentVisualBibleFallback(req, result)
 	result.VisualEvidence = visualEvidence
 	if result.VisualBible != nil && len(result.VisualBible.SourceEvidence) == 0 {
 		result.VisualBible.SourceEvidence = visualEvidence
@@ -1882,14 +2341,20 @@ func normalizeFragmentKeyList(keys []string) []string {
 }
 
 func normalizeFragmentComicTexts(texts []domain.FragmentComicText) []domain.FragmentComicText {
+	return normalizeFragmentComicTextsForLanguage(texts, "zh-Hans")
+}
+
+func normalizeFragmentComicTextsForLanguage(texts []domain.FragmentComicText, language string) []domain.FragmentComicText {
 	if len(texts) == 0 {
 		return nil
 	}
 	out := make([]domain.FragmentComicText, 0, len(texts))
+	counts := map[string]int{}
+	limits := map[string]int{"narration": 1, "dialogue": 2, "thought": 1, "sfx": 2, "interjection": 2}
 	for _, item := range texts {
 		typ := strings.TrimSpace(strings.ToLower(item.Type))
 		switch typ {
-		case "narration", "dialogue", "thought", "sfx":
+		case "narration", "dialogue", "thought", "sfx", "interjection":
 		default:
 			continue
 		}
@@ -1897,15 +2362,104 @@ func normalizeFragmentComicTexts(texts []domain.FragmentComicText) []domain.Frag
 		if text == "" {
 			continue
 		}
+		if counts[typ] >= limits[typ] {
+			continue
+		}
+		counts[typ]++
+		renderMode := strings.TrimSpace(strings.ToLower(item.RenderMode))
+		if renderMode != "overlay" && renderMode != "image" {
+			if typ == "sfx" {
+				renderMode = "image"
+			} else {
+				renderMode = "overlay"
+			}
+		}
 		out = append(out, domain.FragmentComicText{
-			Type:     typ,
-			Text:     truncateRunes(text, 40),
-			Speaker:  strings.TrimSpace(item.Speaker),
-			Position: strings.TrimSpace(item.Position),
+			ID:           strings.TrimSpace(item.ID),
+			Type:         typ,
+			Text:         truncateRunes(text, comicTextRuneLimit(language)),
+			Speaker:      strings.TrimSpace(item.Speaker),
+			Target:       strings.TrimSpace(item.Target),
+			Position:     strings.TrimSpace(item.Position),
+			Tone:         strings.TrimSpace(item.Tone),
+			Volume:       strings.TrimSpace(item.Volume),
+			Rhythm:       strings.TrimSpace(item.Rhythm),
+			BalloonStyle: strings.TrimSpace(item.BalloonStyle),
+			TailTarget:   strings.TrimSpace(item.TailTarget),
+			Emphasis:     normalizeFragmentKeyList(item.Emphasis),
+			RenderMode:   renderMode,
 		})
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+// constrainFragmentScenePlansToBible makes model-generated relationships safe
+// before reference selection. Unknown keys are dropped and a dialogue/thought
+// speaker must be an active character in that scene.
+func constrainFragmentScenePlansToBible(plans []domain.FragmentScenePlan, bible *domain.FragmentVisualBible, languages ...string) []domain.FragmentScenePlan {
+	language := "zh-Hans"
+	if len(languages) > 0 {
+		language = normalizeGenerationLanguage(languages[0])
+	}
+	valid := map[string]struct{}{}
+	characters := map[string]struct{}{}
+	if bible != nil {
+		for _, ch := range bible.Characters {
+			key := strings.TrimSpace(ch.Key)
+			if key != "" {
+				valid[key] = struct{}{}
+				characters[key] = struct{}{}
+			}
+		}
+		for _, prop := range bible.Props {
+			if key := strings.TrimSpace(prop.Key); key != "" {
+				valid[key] = struct{}{}
+			}
+		}
+		for _, location := range bible.Locations {
+			if key := strings.TrimSpace(location.Key); key != "" {
+				valid[key] = struct{}{}
+			}
+		}
+	}
+	out := append([]domain.FragmentScenePlan(nil), plans...)
+	for i := range out {
+		if out[i].ComicPage != nil {
+			panelCount := out[i].ComicPage.PanelCount
+			if panelCount <= 0 {
+				panelCount = len(out[i].ComicPage.Panels)
+			}
+			normalized := normalizeFragmentComicPagePlan(*out[i].ComicPage, out[i], panelCount, bible, language)
+			out[i].ComicPage = &normalized
+			out[i].ReferenceKeys = mergeFragmentPageReferenceKeys(out[i].ReferenceKeys, normalized.Panels)
+			out[i].EntityBindings = mergeFragmentPageEntityBindings(out[i].EntityBindings, normalized.Panels)
+		}
+		refs := make([]string, 0, len(out[i].ReferenceKeys))
+		activeCharacters := map[string]struct{}{}
+		for _, key := range normalizeFragmentKeyList(out[i].ReferenceKeys) {
+			if _, ok := valid[key]; !ok {
+				continue
+			}
+			refs = append(refs, key)
+			if _, ok := characters[key]; ok {
+				activeCharacters[key] = struct{}{}
+			}
+		}
+		out[i].ReferenceKeys = refs
+		texts := normalizeFragmentComicTextsForLanguage(out[i].ComicTexts, language)
+		for j := range texts {
+			if texts[j].Type != "dialogue" && texts[j].Type != "thought" {
+				texts[j].Speaker = ""
+				continue
+			}
+			if _, ok := activeCharacters[texts[j].Speaker]; !ok {
+				texts[j].Speaker = ""
+			}
+		}
+		out[i].ComicTexts = texts
 	}
 	return out
 }
@@ -2347,8 +2901,9 @@ func (s *FragmentGenerationService) generateOneFragmentImageWithOptions(ctx cont
 	return s.aiService.GenerateImageForFragment(ctx, &aiReq)
 }
 
-func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, taskID string, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
-	auditURLs, skipped := selectFragmentAuditImageURLs(imageURLs, scenes, policy)
+func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, taskID string, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, baselineURLs, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
+	comparisonURLs := compactNonEmptyStrings(append(append([]string(nil), baselineURLs...), imageURLs...))
+	auditURLs, skipped := selectFragmentAuditImageURLs(comparisonURLs, scenes, policy)
 	if len(auditURLs) == 0 {
 		return nil, 0, "", 0, skipped
 	}
@@ -2360,7 +2915,9 @@ func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context
 	for i, u := range auditURLs {
 		fmt.Fprintf(&urlLines, "%d: %s\n", i, u)
 	}
-	prompt := fmt.Sprintf(`你是视觉一致性审计员。请直接查看最终配图，基于「视觉圣经」、入口视觉事实、各格场景描述与参考资产，列出可能的不一致（角色外观漂移、关键道具缺失、环境与圣经矛盾等）。无问题时 issues 为空数组。
+	prompt := fmt.Sprintf(`你是完整漫画页质量与视觉一致性审计员。请直接查看最终配图，基于「视觉圣经」、入口视觉事实、页面/页内分格计划与参考资产，列出可能的问题。除角色外观漂移、关键道具缺失、环境矛盾外，还要核对：每张图片是否本身就是一张完整漫画页、内部实际格数是否等于 comicPage.panelCount、是否有清晰分格线和 gutter、阅读顺序是否明确、相邻格是否重复、文字是否被移动到错误格或出现空白气泡/乱码。无问题时 issues 为空数组；格数错误、输出成单幅插图、角色身份交换属于 high severity。issue.sceneIndex 必须填写本轮新增 scenes 数组中的 0-based 下标；既有视觉基线不产生 issue。issue.imageUrl 必须填写对应问题图片 URL。
+
+其中前 %d 张图片是既有故事的视觉基线，只用于比较；后续图片是本轮新增画面。新增画面中的同一角色、服装、道具和画风必须与视觉基线一致。
 
 视觉圣经 JSON：
 %s
@@ -2378,7 +2935,7 @@ func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context
 %s
 
 只输出 JSON：{"issues":[{"sceneIndex":0,"entityKey":"可为空","imageUrl":"问题图片URL","severity":"low|medium|high","expected":"应保持的视觉事实","observed":"实际观察","confidence":0.0,"detail":"中文简述"}]}`,
-		string(vbBytes), string(evidenceBytes), string(scenesBytes), string(assetBytes), urlLines.String())
+		len(baselineURLs), string(vbBytes), string(evidenceBytes), string(scenesBytes), string(assetBytes), urlLines.String())
 
 	resp, err := s.aiService.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
 		Prompt:            prompt,
@@ -2398,6 +2955,7 @@ func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context
 		s.logger.Warn("fragment consistency check parse failed", zap.Error(perr), zap.String("snippet", truncateRunes(resp.Raw, 200)))
 		return nil, resp.TokensUsed, resp.Provider, len(auditURLs), "parse_failed"
 	}
+	issues = normalizeFragmentConsistencyIssuesForGeneratedImages(issues, imageURLs, len(scenes))
 	return issues, resp.TokensUsed, resp.Provider, len(auditURLs), skipped
 }
 
@@ -2415,6 +2973,57 @@ func parseFragmentConsistencyIssues(raw string) ([]domain.FragmentConsistencyIss
 	return env.Issues, nil
 }
 
+func normalizeFragmentConsistencyIssuesForGeneratedImages(issues []domain.FragmentConsistencyIssue, imageURLs []string, sceneCount int) []domain.FragmentConsistencyIssue {
+	byURL := make(map[string]int, len(imageURLs))
+	for i, raw := range imageURLs {
+		if url := strings.TrimSpace(raw); url != "" && i < sceneCount {
+			byURL[url] = i
+		}
+	}
+	seen := map[string]struct{}{}
+	out := make([]domain.FragmentConsistencyIssue, 0, len(issues))
+	for _, issue := range issues {
+		issue.Detail = strings.TrimSpace(issue.Detail)
+		if issue.Detail == "" {
+			continue
+		}
+		url := strings.TrimSpace(issue.ImageURL)
+		index := issue.SceneIndex
+		if url != "" {
+			mapped, ok := byURL[url]
+			if !ok {
+				// Baseline images are comparison evidence, never repair targets.
+				continue
+			}
+			index = mapped
+		} else {
+			if index < 0 || index >= sceneCount || index >= len(imageURLs) {
+				continue
+			}
+			url = strings.TrimSpace(imageURLs[index])
+			if url == "" {
+				continue
+			}
+		}
+		severity := strings.ToLower(strings.TrimSpace(issue.Severity))
+		switch severity {
+		case "low", "medium", "high":
+		default:
+			severity = "medium"
+		}
+		issue.SceneIndex = index
+		issue.ImageURL = url
+		issue.Severity = severity
+		key := fmt.Sprintf("%d|%s|%s|%s", index, url, severity, issue.Detail)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, issue)
+	}
+	return out
+}
+
 func selectFragmentAuditImageURLs(imageURLs []string, scenes []domain.FragmentScenePlan, policy *domain.FragmentConsistencyPolicy) ([]string, string) {
 	if len(imageURLs) == 0 {
 		return nil, "no_images"
@@ -2423,6 +3032,9 @@ func selectFragmentAuditImageURLs(imageURLs []string, scenes []domain.FragmentSc
 		return nil, "consistency_off"
 	}
 	if policy != nil && policy.Level == "strong" {
+		return append([]string(nil), imageURLs...), ""
+	}
+	if fragmentPlansContainComicPages(scenes) {
 		return append([]string(nil), imageURLs...), ""
 	}
 	seen := map[int]struct{}{}
@@ -2462,10 +3074,10 @@ type fragmentSceneExpansionResult struct {
 	TokensUsed int
 }
 
-// fragmentExpandedScene 扩展出的单个场景，含中文描述、实体绑定和英文图片提示词。
+// fragmentExpandedScene is a locale-aware scene script plus an English image prompt.
 type fragmentExpandedScene struct {
 	Index          int                            `json:"index"`
-	SceneDesc      string                         `json:"sceneDesc"`               // 中文场景描述（面向读者）
+	SceneDesc      string                         `json:"sceneDesc"`               // localized scene description
 	ImagePrompt    string                         `json:"imagePrompt"`             // 英文图片生成提示词（面向图片模型）
 	ReferenceKeys  []string                       `json:"referenceKeys,omitempty"` // 引用 visualBible / 参考资产的 key
 	EntityBindings []domain.FragmentEntityBinding `json:"entityBindings,omitempty"`
@@ -2473,305 +3085,7 @@ type fragmentExpandedScene struct {
 }
 
 func (s *FragmentGenerationService) expandScenes(ctx context.Context, userID, taskID string, req domain.FragmentGenerationRequest, elemResult *fragmentElementExtractionResult, sceneCount int, aspectRatio string, continuation *fragmentDraftContinuationContext) (*fragmentSceneExpansionResult, error) {
-	elementsJSON, _ := json.Marshal(elemResult.Elements)
-	vbJSON := "{}"
-	if elemResult.VisualBible != nil {
-		if b, err := json.Marshal(elemResult.VisualBible); err == nil {
-			vbJSON = string(b)
-		}
-	}
-	keyHint := formatVisualBibleKeyListForPrompt(elemResult.VisualBible)
-	minPromptWords := fragmentScenePromptMinWords(sceneCount)
-	continuationNote := ""
-	if continuation != nil {
-		continuationNote = fmt.Sprintf(`
-
-续写约束：
-- 现有草稿已有 %d 张图片；本次只规划新增的 %d 张图片。
-- 新增场景必须发生在现有最后一页之后，承接旧草稿的角色、地点、道具和情绪。
-- 输出 scenes 数组仍只包含本次新增场景，index 从 0 开始即可；服务端会在落库时映射到最终页码。
-- 不要把旧草稿已经发生过的画面再规划一遍。`, continuation.ExistingImageCount, sceneCount)
-	}
-
-	var narrativeHint string
-	switch {
-	case sceneCount == 1:
-		narrativeHint = "1 格：这一帧必须是整条故事中最有视觉冲击力的瞬间。不要选平淡的叙述时刻——选悬念最浓的那一秒、反转刚发生的那一帧、或者一个让人立刻想问\"之前到底发生了什么\"的定格。想象电影海报：一个画面就让观众脑补出一整部电影。让这一帧的构图、光影、角色表情本身就在讲故事。如果故事有高潮，这就是高潮被凝固的那一毫秒；如果故事没有高潮，这就是最让人不安的那一秒——一切看似正常但有什么东西不太对。"
-	case sceneCount == 2:
-		narrativeHint = "2 格：核心技法是\"认知落差\"——第一格建立预期，第二格打破它。具体可以用的落差类型：视角落差（第一格是人眼中的世界，第二格是虫子眼中的同一场景——完全不同的尺度，完全不同的恐惧）、情绪落差（温馨 → 惊悚，平静 → 狂喜，搞笑 → 心碎）、尺度落差（微观 → 宏观，一只蚂蚁的特写 → 整个城市的俯瞰）、时间落差（现在 → 十年前，白天 → 深夜，春天 → 冬天）。观众看完两格后的反应应该是\"等等，怎么会这样？\"或\"所以第一格里那个其实是……\"。第二格的第一反应应该是意外，第二反应才是理解。"
-	case sceneCount == 3:
-		narrativeHint = "3 格：不要三幕式！三幕式会产出四平八稳但无趣的内容。自由节奏才是王道——第一格抛出引子（一个画面就让人好奇\"这是哪里/这个人是谁/发生了什么\"），第二格可以突然转向（换视角、换时空、换叙事者、或者一个完全出乎意料的元素闯入），第三格收束但不给答案——留一个让人回味的尾巴。可以尝试的高级结构：假结局（第三格看似结束但其实暗示了更大的故事）、环形结构（第三格呼应第一格但信息量不同，读者对比两格才发现真相）、打破第四面墙（角色意识到了读者的存在）、时间嵌套（第三格揭示第一格其实是回忆中的回忆）。惊喜感比工整重要十倍。"
-	default:
-		narrativeHint = fmt.Sprintf("%d 格：一条故事线但绝不要线性平铺直叙。在格与格之间可以大胆穿插——视角突变（从人类视角突然切到猫的视角、从地面仰视突然变卫星俯瞰、从一个角色的POV切到另一个角色的POV看着同一个场景）、时空跳跃或闪回（这一格还是现在，下一格突然是十年前，再下一格又回到现在但时间已过）、打破第四面墙（角色看向\"镜头\"外、文字溢出画框、角色似乎在跟读者说话）、超现实梦境（前一秒还在教室，下一秒教室漂浮在星空中、水面变成了天空、书本里的文字活了过来）、意料之外的新元素闯入（一个路过的蝴蝶改变了整条故事线、一只手从画外伸进来拿走了桌上的杯子）。开头建立世界观和角色，中间尽情放飞制造\"没想到\"的惊喜，结尾可以呼应开头、可以留悬念、可以推翻之前所有设定——只要让观众看完觉得\"这趟旅程值了\"。中间某些格可以是氛围画面——不推进剧情但传递情绪（空椅子、飘落的羽毛、雨中的路灯）——这种\"停顿\"本身是节奏的一部分。", sceneCount)
-	}
-
-	legacyPrompt := fmt.Sprintf(`你是一位脑洞大开、同时精通电影摄影和漫画分镜的视觉故事创作者，兼具导演的叙事把控力、摄影师的画面敏感度和概念艺术家的想象力。你的任务是把一段故事文字拆解为 %d 个画面格——每一格都是一幅能独立吸引目光、按顺序浏览又能串联成完整故事的视觉作品。你不是在"配图"，你是在"用画面重新讲故事"。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-叙事节奏指引
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-%s
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-输入素材
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-故事元素（从用户输入中提取的结构化元素）：
-%s
-
-视觉圣经 visualBible（JSON；用于每格 referenceKeys；若无则为 {}）：
-%s
-
-referenceKeys 可用的稳定 key 列表（必须从下列 key 中选择子集填入每格；禁止自造 key；若列表说明为无 key 则每格 referenceKeys=[]）：
-%s
-
-故事正文（AI 生成的碎片故事文案）：
-%s
-%s
-
-风格：%s
-情绪：%s
-画面长宽比：%s
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-创作方法论（你的导演工具箱）
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-%s
-
-【一、世界观一致性——这是底线，不是上限】
-- 角色的外貌（发型、服装、体型、标志性特征）必须在每一格中完全一致——除非剧情需要角色发生变化（被雨淋湿、受伤、换装等需要明确交代）
-- 空间设定（室内布局、城市天际线、自然地貌）保持可辨识的连续性——读者应该感觉这些格发生在同一个世界里
-- artStyle（艺术风格）全程统一——如果第一格是"水彩插画风"，最后一格也必须是水彩插画风。风格是故事的视觉签名
-- 色彩基调可以随情绪渐变，但不要突然跳到完全不同的色彩体系
-
-【一补、漫画版式与文字层——让画面像真实漫画】
-- 如果风格、故事或用户输入适合漫画表达，imagePrompt 必须描述 manga/comic 的镜头与文字语言：景别节奏、内部分区、从左到右/从上到下的阅读顺序。
-%s
-- 每一格可以包含漫画文字元素，但必须分类：旁白 narration 放在 caption box；角色台词 dialogue 放在 speech bubble，气泡尾巴指向 speaker；内心独白 thought 放在 thought bubble；语气词/拟声词 sfx 用夸张音效字。
-- 文字数量必须严格受限：每格最多 1 个 narration、1-2 个 dialogue、最多 1 个 sfx；thought 仅在必要时出现且最多 1 个。单条中文建议不超过 12 个汉字，不要把整段 sceneDesc 塞进气泡。
-- imagePrompt 中应给气泡/旁白框预留干净空间，避免遮挡人物脸部和关键道具；气泡本身有轮廓，但不要因此在画面外圈再补一层边框。
-- 漫画文字必须由图片模型直接画进最终图片中，不能依赖 App 后续叠加；imagePrompt 要明确要求 render the exact Chinese text inside the image，字体清晰、可读、与漫画风格一致；禁止额外随机文字或英文假字。
-
-【二、剧情拓展——格与格之间必须推进故事（硬性）】
-- 每一格须携带叙事增量：回答上一格留下的疑问之一，或改写读者对局势的理解；禁止连续两格只有机位变化、剧情静止。
-- 整组分镜须能串成微型因果链（触发→反应→后果 / 误解→揭穿 / 蓄力→爆发 等至少一种）。
-- 主角可以是人物、动物、拟人器物或静物；无人类时 sceneDesc 仍要写清「这一格局势如何变化」，拟人表演须可画（姿态、裂纹、倾斜、贴纸眼、拟声旁白）。
-- 从碎片正文与 elements 合理外推，新增道具/角色/地点须与已有锚点可解释关联。
-- 氛围格允许不推进事件，但须承担节奏呼吸，且与前后格存在情绪或信息落差。
-
-【三、叙事自由度——打破常规才是你的常规】
-- 允许并且鼓励：
-  · 跳切：时间突然推进，中间的过程留白让读者脑补
-  · 闪回：突然回到过去，揭示之前没展示的信息
-  · 视角反转：突然换成配角、动物、甚至无生命物体的视角
-  · 超现实片段：梦境/幻觉/想象——可以让光影与空间反常，但仍保持同一主风格体系
-  · 意外闯入：可以有新角色/物体突然出现，但必须与已有元素或故事正文存在因果关联
-  · 静帧与留白：一格完全静止的画面（空房间、雨中的长椅、桌面上的物品）——不推进剧情但传递情绪，这种"停顿"本身就是节奏
-- 每一格都可以是不同类型的画面：
-  · 写实叙事场景（角色在行动）
-  · 氛围/意境画面（雨滴落在水洼、风铃在摇晃、夕阳照进空教室）
-  · 特写细节（一只手、一封信、地上的影子）
-  · 全景鸟瞰（城市天际线、从太空看地球）
-  · 角色内心可视化（恐惧具象化成黑色的手、回忆用虚线勾勒、想象用不同的色调区分）
-  · 象征/隐喻画面（断裂的桥、倒走的钟、镜中不同的自己）
-- 不必每一格都在推进剧情——有时一格氛围画面比剧情画面更有力量。读者会在安静的画面中感受到前面积累的情绪
-
-【四、构图多样性——你的镜头语言词库】
-每格必须使用不同的镜头语言，以下是你可用的完整构图类型库（混搭使用，拒绝连续两格相同组合）：
-
-  景别工具箱：
-  - 极特写：一只眼睛、嘴唇、手指尖、物品的某个局部——传递极度的亲密或紧张
-  - 特写：面部表情、手部动作、物品全貌——情绪和细节的放大镜
-  - 近景：胸部以上，能看到表情和上半身动作——对话和情感交流的标配
-  - 中景：膝盖以上，能看到角色全身姿态和环境的一小部分——叙事的主力景别
-  - 全景：全身 + 周围环境，角色与环境的关系清晰——交代场景和空间关系
-  - 远景：人物在画面中很小，环境占据主导——表达孤独、渺小、天地之大
-  - 极远景/大远景：地标级画面，几乎看不到人物——故事的"呼吸"，给读者喘息的空间
-
-  角度工具箱：
-  - 平视：最接近人眼的日常视角，真实感最强
-  - 俯拍/高角度：上帝视角，角色显得渺小无助，或展示场景的空间布局
-  - 仰拍/低角度：角色显得高大/威严/压迫，或者模拟儿童/动物视角
-  - Dutch angle（倾斜角度）：画面歪斜，制造不安、失衡、精神异常的感觉
-  - 鸟瞰：正上方往下拍，展示平面的图案和布局（桌面、街道、棋盘）
-  - 虫眼：贴地往上拍，夸大物体的高度和压迫感
-
-  非人类视角工具箱（这是制造惊喜的秘密武器）：
-  - 猫/狗视角：低角度，人类的腿变成了柱子，世界变得巨大
-  - 鸟的视角：高空俯瞰，一切变得像模型，人变成了小点
-  - 鱼的视角：从水下往上看，水面是扭曲的亮面，岸上的世界是摇晃的
-  - 物品视角：钥匙孔视角（窥视感）、镜中倒影（虚实对照）、手机屏幕视角（被观看的感觉）、时钟视角（往下看人）、书本视角（被翻开的感觉）
-  - 完全抽象：用色块和线条表达情绪而非具象画面——适合内心独白或超现实段落
-
-  硬性规则：相邻两格不能使用相同的景别+角度组合。这是最低要求——理想状态是每 3 格内不重复
-
-【五、光影与色彩——情绪的精密调色板】
-  光影工具（选择与场景情绪匹配的光影方案）：
-  - 逆光/轮廓光：主体变成剪影或边缘发光 → 神秘、英雄感、告别、未知
-  - 侧光：一半亮一半暗，强烈的明暗对比 → 戏剧冲突、内心矛盾、揭示秘密
-  - 顶光：从正上方打下来，眼窝和鼻子下方投下浓重阴影 → 压抑、审判、精神压力
-  - 底光：从下方照亮面部（鬼故事经典打光） → 恐怖、诡异、非自然
-  - 散射光/柔光：没有明确方向，阴影柔和 → 日常、平静、回忆、安全
-  - 剪影：完全背光，只剩轮廓 → 未知、威胁、悬念、分离
-  - 斑驳光：透过树叶/窗户/格栅的碎光 → 怀旧、监狱/困住、梦境
-
-  色温与情绪的映射：
-  - 暖黄/橙色（日落、烛火） → 安全、怀旧、温馨、即将结束
-  - 冷蓝/青色（月光、荧光灯） → 疏离、科技、忧郁、冷静
-  - 中性白（正午日光） → 真实、日常、客观
-  - 红色（灯光、血色、警报） → 危险、激情、愤怒、警告
-  - 绿色（自然、毒气、监控） → 自然、生长、毒性、被监视
-
-  色彩饱和度的情绪曲线：
-  - 高饱和 → 活力、梦境、奇幻、童年回忆
-  - 中饱和 → 现实、日常、叙事进行时
-  - 低饱和/去饱和 → 压抑、回忆褪色、末日、疲惫
-
-  格间光影变化规则：
-  - 光源方向和强度在格间可以变化，但要服务于情绪走向
-  - 例如：故事走向紧张 → 光线从明亮逐步变暗，阴影逐渐拉长
-  - 例如：故事走向释然 → 从冷色调逐渐回暖，阴影变柔和
-  - 允许一格突然跳到完全不同的光影方案（如闪回用怀旧柔光，回到现实用冷硬侧光）
-
-【六、sceneDesc 写法——面向读者的画面脚本】
-- 一到两句话，让读者在脑中"看到"这一格的画面
-- 要传达五个信息：叙事主体是谁、在做什么、局势相对上一格如何变化、什么氛围、这一格在微型剧情链上的位置
-- 不要写成剧情概要，要写成"如果你闭上眼睛想象这一格，你会看到什么"
-- 好的示例："她站在空荡荡的站台，身后是已经驶远的列车尾灯，手里还攥着没来得及递出去的信"
-- 差的示例："第二幕，她错过了火车"（这是剧情概要，不是画面描述）
-- 好的示例："特写：一只手慢慢松开，信封从指缝间滑落，背面写着'已过期'三个字"
-- 差的示例："信掉了"（太简略，没有画面感）
-
-【七、imagePrompt 写法——给图片模型下达的精确视觉指令】
-- 这是在给一位顶级概念艺术家下 brief，必须具体到每个视觉决策
-- 必须按以下 8 层结构依次描述，每层用句号分隔，形成一段完整的英文视觉描述：
-
-  第 (1) 层 artStyle —— 整体艺术风格
-  不要用笼统的"anime"或"illustration"。要写出具体的混合风格，让画师一眼知道用什么技法。
-  好的示例："cinematic watercolor with digital color grading, muted palette with selective vivid accents"
-  好的示例："charcoal sketch style with selective watercolor highlights, rough texture, visible stroke marks"
-  好的示例："hyperrealistic 3D render with soft bloom lighting, slight lens aberration"
-  好的示例："retro cel-shaded animation style, flat colors with bold ink outlines, 90s anime aesthetic"
-  差的示例："anime style" / "illustration"
-
-  第 (2) 层 subject —— 画面核心主体
-  谁或什么在画面中，具体到可以被直接画出来。包括：角色完整外貌（发型发色、服装款式颜色材质、体型年龄）、当前姿态（站/坐/跑/蹲/转身）、表情或情绪暗示、手中持有的物品。
-  好的示例："a tall slender woman in her mid-20s with shoulder-length dyed blue hair tips, wearing an oversized black hoodie with the hood down, standing still at the center of a pedestrian crossing, holding a paper coffee cup with both hands, her gaze directed slightly downward, expression neutral but tired"
-  差的示例："a woman standing"（缺少所有视觉细节）
-
-  第 (3) 层 environment —— 背景和场景空间
-  角色所处的完整空间，包括空间类型、建筑/自然特征、前景中景背景的层次。
-  好的示例："an abandoned indoor amusement park at night, a faded carousel with peeling paint horses slowly rotating in the midground, only red and blue neon tubes still flickering, dusty concrete floor scattered with old admission tickets and collapsed cotton candy cones, a collapsed banner reading GRAND OPENING visible in the far background"
-  差的示例："an amusement park"（没有细节、没有层次）
-
-  第 (4) 层 composition —— 镜头构图
-  景别 + 角度 + 画面重心位置 + 引导线（如有）。
-  好的示例："medium shot from a low angle, subject positioned at the right third of the frame, the carousel filling the left two-thirds of the background, leading lines from the floor tiles converging toward the subject"
-  差的示例："medium shot"（缺少角度和构图位置）
-
-  第 (5) 层 lighting —— 光照方案
-  光源方向、类型、色温、阴影特征、高光位置。要具体到画师能据此画出光影。
-  好的示例："primary light from the red neon sign on the left casting warm crimson shadows across the subject's face, secondary cool blue light from a flickering neon tube behind creating a rim light on the subject's hair, no ambient natural light, deep shadows in the background with no visible detail"
-  差的示例："neon lights"（方向？色温？阴影？）
-
-  第 (6) 层 colorPalette —— 完整色彩方案
-  主色调 + 点缀色 + 对比度 + 色彩分布。
-  好的示例："dominant dark teal and navy blue in the shadows, accent warm red from the neon sign creating high-contrast focal points, muted purple undertones in the midtones, skin tones slightly desaturated, overall low-key color scheme"
-  差的示例："dark colors with red"（太笼统）
-
-  第 (7) 层 mood —— 情绪氛围
-  这一格应该让观众感受到什么。用复合情绪词，不要只写一个形容词。
-  好的示例："melancholic solitude with a hint of nostalgia, quiet and still, the feeling of being the last person in a place that used to be full of laughter"
-  差的示例："sad"（太简单）
-
-  第 (8) 层 extra details —— 额外的画面丰富层
-  让画面从"正确"升级到"有灵魂"的细节：微粒、反光、景深、材质质感、天气效果。
-  好的示例："dust particles drifting through the beams of neon light, faint blurry reflection of the carousel lights on the glossy floor, shallow depth of field with bokeh balls on the background neon signs, a single old ticket caught mid-air as if just dropped"
-  差的示例："some dust"（太简单）
-
-【八、entityBindings 写法——多人物/多物品一致性的结构化约束】
-- 每格必须列出 referenceKeys 中实际出现的实体绑定。不要只写 key，要写清楚该实体在本格的角色、画面位置、动作、道具归属。
-- 多人物同框时必须区分位置与外观归属，例如 char_a 在左侧拿 prop_key，char_b 在右侧，不要交换服装/发型/道具。
-- 物品必须写 ownerKey；地点写空间作用（background / main location / memory location）。
-- consistencyNote 要明确“不能和谁混淆、哪些特征必须保持”。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-输出格式
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-请只输出一个 JSON 对象（不要 markdown 代码围栏、不要其他说明文字、不要注释）：
-{
-  "scenes": [
-    {
-      "index": 0,
-      "sceneDesc": "中文：这格画面的内容描述，1-2句，让读者脑中浮现画面",
-      "imagePrompt": "English: (1) artStyle. (2) subject. (3) environment. (4) composition. (5) lighting. (6) colorPalette. (7) mood. (8) extra details. At least %d words total. Be specific and concrete — every word should help the image model make a visual decision. Do not use vague terms.",
-      "referenceKeys": ["char_main", "prop_laptop", "loc_office"],
-      "entityBindings": [
-        { "key": "char_main", "kind": "character", "role": "main subject", "position": "left foreground", "action": "holding prop_laptop", "ownerKey": "", "consistencyNote": "keep all immutableTraits; do not swap clothing or facial traits with other characters" },
-        { "key": "prop_laptop", "kind": "prop", "role": "story clue", "position": "in char_main hands", "action": "screen glowing", "ownerKey": "char_main", "consistencyNote": "belongs only to char_main" }
-      ],
-      "comicTexts": [
-        { "type": "narration", "text": "三分钟前，一切还很安静。", "position": "top-left" },
-        { "type": "dialogue", "text": "你听见了吗？", "speaker": "char_main", "position": "speech-bubble" },
-        { "type": "sfx", "text": "砰！", "position": "mid-frame" }
-      ]
-    }
-  ]
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-硬性规则（不可违反）
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-- scenes 数组恰好 %d 项，index 从 0 到 %d
-- imagePrompt 必须是英文，sceneDesc 必须是中文
-- 每个 imagePrompt 至少 %d 个英文单词，必须覆盖上述全部 8 个视觉层
-- 所有格的 artStyle 必须以相同的风格描述开头，确保视觉风格统一
-- 角色外貌（发型、服装颜色款式、体型、标志性特征）在各格之间完全一致
-- 相邻两格的 composition 必须有明显差异（不同景别或不同角度，不能连续两格正面中景）
-- 整组 scenes 必须至少包含 setup / attempt / reversal 或 cost / payoff 中的三类叙事功能；这些功能不需要新增字段，但必须体现在 sceneDesc 的局势变化里。
-- sceneDesc 必须能用“因为/但是/所以”连接上一格或下一格；禁止每格只写静态美术陈列。
-- 每一格必须引用至少 2 个可追溯锚点（来自 elements 或故事正文的具体角色/物品/场景细节），禁止无依据“硬反转”
-- 每一格必须包含 referenceKeys：1–5 个字符串，且必须是上方「稳定 key 列表」中的 key；若列表为空则 referenceKeys 为 []
-- 每一格必须包含 entityBindings；其 key 必须来自本格 referenceKeys，不允许自造实体
-- comicTexts 可为空数组；若有 dialogue/thought，speaker 必须来自本格 referenceKeys 中的角色 key；每格最多 1 narration、1-2 dialogue、最多 1 sfx、最多 1 thought，单条中文建议 <=12 汉字
-- imagePrompt 必须把 comicTexts 对应的旁白框、对话气泡、思想气泡、拟声词版式写成英文视觉指令；不要只在 JSON 里列文字而不影响画面
-- imagePrompt 中绝对不要出现"copy the reference image"或"exactly like the reference"——每格都应该是原创的视觉创作
-- imagePrompt 必须是满幅出血描述：不得出现 outer frame / border / keyline / page margin / white border / black bars / rounded corners / drop shadow / polaroid frame 等外框词；画面延伸出画布四边
-- sceneDesc 中不要出现格式化标记（不要 #、不要 **、不要列表符号）
-- 不要在 JSON 之外输出任何文字（包括开头和结尾的说明）`,
-		sceneCount,
-		narrativeHint,
-		string(elementsJSON),
-		vbJSON,
-		keyHint,
-		elemResult.Content,
-		continuationNote,
-		req.Style,
-		req.Mood,
-		aspectRatio,
-		structuredStoryPanelGuidance(),
-		fullBleedPlanningRule(),
-		minPromptWords,
-		sceneCount,
-		sceneCount-1,
-		minPromptWords)
-
-	prompt := renderPromptDSL(PromptDSL{
-		Role:         "你是一位视觉叙事导演，负责将故事正文转为结构化分镜 JSON。",
-		Task:         "输出 scenes[]，每格包含 sceneDesc/imagePrompt/referenceKeys/entityBindings/comicTexts。",
-		Inputs:       map[string]any{"sceneCount": sceneCount, "aspectRatio": aspectRatio, "style": req.Style, "mood": req.Mood, "minPromptWords": minPromptWords, "narrativeHint": narrativeHint, "storyElements": json.RawMessage(elementsJSON), "visualBible": json.RawMessage(vbJSON), "referenceKeysHint": keyHint, "storyContent": elemResult.Content, "continuationMode": continuation != nil, "existingImageCount": fragmentContinuationExistingImageCount(continuation)},
-		GlobalConfig: structuredStoryPanelGuidance(),
-		OutputContract: `Output one JSON object only. Shape:
-{"scenes":[{"index":0,"sceneDesc":"中文画面脚本","imagePrompt":"English image prompt","referenceKeys":[],"entityBindings":[],"comicTexts":[]}]}
-No markdown fences, no commentary, no trailing prose. scenes length must equal sceneCount.`,
-		Sections: []PromptDSLSection{
-			{Title: "Detailed Instructions", Kind: "text", Body: legacyPrompt},
-		},
-	})
+	prompt := buildFragmentSceneExpansionPrompt(req, elemResult, sceneCount, aspectRatio, continuation)
 
 	payloadBytes, _ := json.Marshal(map[string]interface{}{
 		"prompt": prompt,
@@ -2834,16 +3148,6 @@ func parseSceneExpansion(raw string, want int) ([]fragmentExpandedScene, error) 
 		env.Scenes[i] = sc
 	}
 	return env.Scenes, nil
-}
-
-func fragmentScenePromptMinWords(sceneCount int) int {
-	if sceneCount >= 5 {
-		return 52
-	}
-	if sceneCount >= 4 {
-		return 60
-	}
-	return 70
 }
 
 func ensureFragmentExpandedSceneCount(scenes []fragmentExpandedScene, want int, content, style, mood, aspectRatio string) []fragmentExpandedScene {
@@ -2946,20 +3250,55 @@ func cloneFragmentProviderOptions(policy *domain.FragmentConsistencyPolicy) map[
 	return out
 }
 
-func buildFragmentSceneImagePrompt(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) string {
-	return strings.TrimSpace(buildFragmentSceneImagePromptCore(bible, scene) + "\n" + fullBleedCanvasDirective())
+func buildFragmentSceneImagePrompt(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan, languages ...string) string {
+	if scene.ComicPage != nil {
+		return strings.TrimSpace(buildFragmentSceneImagePromptCore(bible, scene, languages...))
+	}
+	return strings.TrimSpace(buildFragmentSceneImagePromptCore(bible, scene, languages...) + "\n" + fullBleedCanvasDirective())
 }
 
 // buildFragmentSceneImagePromptCore 是不含画布出血指令的场景描述部分。
 // 组图路径会把出血指令提到整条 prompt 的开头统一声明一次，避免逐场景重复。
-func buildFragmentSceneImagePromptCore(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) string {
-	var b strings.Builder
-	if bible != nil && bible.StyleBible != nil && strings.TrimSpace(bible.StyleBible.ArtStyle) != "" {
-		fmt.Fprintf(&b, "Global art style: %s.\n", strings.TrimSpace(bible.StyleBible.ArtStyle))
+func buildFragmentSceneImagePromptCore(bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan, languages ...string) string {
+	language := "zh-Hans"
+	if len(languages) > 0 {
+		language = normalizeGenerationLanguage(languages[0])
 	}
-	fmt.Fprintf(&b, "Scene: %s.\n", strings.TrimSpace(scene.ImagePrompt))
+	spec := visualSceneSpec{
+		ContentLanguage:   language,
+		LetteringLanguage: language,
+		NarrativeBeat:     strings.TrimSpace(scene.SceneDesc),
+		VisualPrompt:      strings.TrimSpace(scene.ImagePrompt),
+		ComicTexts:        fragmentComicTextsToVisual(scene.ComicTexts, language),
+	}
+	var b strings.Builder
+	if scene.ComicPage != nil {
+		b.WriteString(fragmentComicPageOutputDirective(scene.ComicPage))
+		b.WriteString("\n")
+	}
+	if bible != nil && bible.StyleBible != nil && strings.TrimSpace(bible.StyleBible.ArtStyle) != "" {
+		spec.ArtStyle = strings.TrimSpace(bible.StyleBible.ArtStyle)
+		fmt.Fprintf(&b, "Global art style: %s.\n", spec.ArtStyle)
+		if v := strings.TrimSpace(bible.StyleBible.LineQuality); v != "" {
+			fmt.Fprintf(&b, "Line and rendering discipline: %s.\n", v)
+		}
+		if v := strings.TrimSpace(bible.StyleBible.Palette); v != "" {
+			fmt.Fprintf(&b, "Series color script: %s.\n", v)
+		}
+		if v := strings.TrimSpace(bible.StyleBible.LightingMood); v != "" {
+			fmt.Fprintf(&b, "Series lighting rule: %s.\n", v)
+		}
+	}
+	if spec.NarrativeBeat != "" {
+		fmt.Fprintf(&b, "Narrative beat (%s; must be preserved): %s.\n", generationLanguageName(language), spec.NarrativeBeat)
+	}
+	fmt.Fprintf(&b, "Visual execution (English): %s.\n", spec.VisualPrompt)
 	writeFragmentActiveEntities(&b, bible, scene.ReferenceKeys)
-	writeFragmentComicLayoutDirective(&b, bible, scene)
+	if scene.ComicPage != nil {
+		writeFragmentComicPagePrompt(&b, scene.ComicPage, language)
+	} else {
+		writeFragmentComicLayoutDirective(&b, bible, scene, language)
+	}
 	if len(scene.EntityBindings) > 0 {
 		b.WriteString("Entity binding rules:\n")
 		for _, bind := range scene.EntityBindings {
@@ -2970,7 +3309,9 @@ func buildFragmentSceneImagePromptCore(bible *domain.FragmentVisualBible, scene 
 	if len(scene.ReferenceKeys) > 1 {
 		b.WriteString("Do not merge or swap identities, clothing, props, positions, or ownership between the listed entities.\n")
 	}
-	b.WriteString("Keep immutable traits exactly consistent across the whole image series while still creating an original scene.\n")
+	if len(scene.ReferenceKeys) > 0 {
+		b.WriteString("Keep the listed immutable traits exactly consistent across the whole image series while still creating an original scene.\n")
+	}
 	return strings.TrimSpace(b.String())
 }
 
@@ -3006,20 +3347,28 @@ func writeFragmentActiveEntities(b *strings.Builder, bible *domain.FragmentVisua
 	}
 }
 
-func writeFragmentComicLayoutDirective(b *strings.Builder, bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan) {
+func writeFragmentComicLayoutDirective(b *strings.Builder, bible *domain.FragmentVisualBible, scene domain.FragmentScenePlan, languages ...string) {
 	if b == nil {
 		return
 	}
+	language := "zh-Hans"
+	if len(languages) > 0 {
+		language = normalizeGenerationLanguage(languages[0])
+	}
+	visualTexts := fragmentComicTextsToVisual(scene.ComicTexts, language)
 	if !fragmentSceneWantsComicLayout(bible, scene) {
+		b.WriteString(visualSceneLetteringPolicy(language, visualTexts))
+		b.WriteByte('\n')
 		return
 	}
-	b.WriteString("Comic layout directive: render manga/comic visual language — expressive shot scale, ink line weight, screentones, and a readable left-to-right/top-to-bottom flow. When several beats help the scene, separate them as internal zones inside the canvas; never enclose the image in an outer panel frame and never leave a margin around the art. Paint all comic text directly into the final image, not as placeholders and not for app overlay. Render the exact Chinese characters inside bubbles/caption boxes/SFX lettering as clearly as possible with large legible hand-lettered glyphs. Reserve clean negative space for text elements; do not cover faces, hands, or key props with bubbles. Do not add random extra words.\n")
+	b.WriteString("Comic layout directive: use expressive shot scale, ink line weight, screentones, and a readable left-to-right/top-to-bottom flow. Use internal zones only when the scene contains multiple beats; never enclose the image in an outer panel frame or margin.\n")
+	b.WriteString(visualSceneLetteringPolicy(language, visualTexts))
+	b.WriteByte('\n')
 	if len(scene.ComicTexts) == 0 {
-		b.WriteString("Include at most 1 narration box, 1-2 dialogue bubbles, and at most 1 SFX lettering. If text appears, it must be drawn directly in-image, each Chinese phrase short (about <=12 characters), legible, and visually readable.\n")
 		return
 	}
 	b.WriteString("Comic text elements:\n")
-	for _, item := range normalizeFragmentComicTexts(scene.ComicTexts) {
+	for _, item := range normalizeFragmentComicTextsForLanguage(scene.ComicTexts, language) {
 		text := sanitizeComicPromptText(item.Text)
 		speaker := strings.TrimSpace(item.Speaker)
 		position := strings.TrimSpace(item.Position)
@@ -3028,21 +3377,21 @@ func writeFragmentComicLayoutDirective(b *strings.Builder, bible *domain.Fragmen
 		}
 		switch item.Type {
 		case "narration":
-			fmt.Fprintf(b, "- Caption/narration box at %s: rectangular comic caption box, paint the exact Chinese text %q inside the box.\n", position, text)
+			fmt.Fprintf(b, "- Caption/narration box at %s: rectangular comic caption box, paint only the exact supplied text %q inside the box.\n", position, text)
 		case "dialogue":
 			if speaker == "" {
-				fmt.Fprintf(b, "- Speech bubble at %s: oval white bubble, paint the exact Chinese dialogue %q inside the bubble, tail pointing to the speaking character.\n", position, text)
+				fmt.Fprintf(b, "- Speech bubble at %s: oval white bubble, paint only the exact supplied dialogue %q inside the bubble, tail pointing to the speaking character.\n", position, text)
 			} else {
-				fmt.Fprintf(b, "- Speech bubble for %s at %s: oval white bubble, paint the exact Chinese dialogue %q inside the bubble, tail pointing to entity key %s.\n", speaker, position, text, speaker)
+				fmt.Fprintf(b, "- Speech bubble for %s at %s: oval white bubble, paint only the exact supplied dialogue %q inside the bubble, tail pointing to entity key %s.\n", speaker, position, text, speaker)
 			}
 		case "thought":
 			if speaker == "" {
-				fmt.Fprintf(b, "- Thought bubble at %s: cloud-shaped bubble, paint the exact Chinese inner monologue %q inside the bubble.\n", position, text)
+				fmt.Fprintf(b, "- Thought bubble at %s: cloud-shaped bubble, paint only the exact supplied inner monologue %q inside the bubble.\n", position, text)
 			} else {
-				fmt.Fprintf(b, "- Thought bubble for %s at %s: cloud-shaped bubble, paint the exact Chinese inner monologue %q inside the bubble, linked to entity key %s.\n", speaker, position, text, speaker)
+				fmt.Fprintf(b, "- Thought bubble for %s at %s: cloud-shaped bubble, paint only the exact supplied inner monologue %q inside the bubble, linked to entity key %s.\n", speaker, position, text, speaker)
 			}
 		case "sfx":
-			fmt.Fprintf(b, "- Sound effect lettering at %s: paint the exact Chinese SFX text %q as bold stylized comic lettering, integrated into the action without a speech bubble.\n", position, text)
+			fmt.Fprintf(b, "- Sound effect lettering at %s: paint only the exact supplied SFX text %q as bold stylized comic lettering, integrated into the action without a speech bubble.\n", position, text)
 		}
 	}
 }
@@ -3071,7 +3420,7 @@ func sanitizeComicPromptText(text string) string {
 	return truncateRunes(text, 40)
 }
 
-func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy, partial *domain.FragmentGenerationResult, tokenBase int) (*domain.FragmentImageGenerationResult, error) {
+func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context, userID, genTaskID, aspectRatio, language string, bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, userRefURLs []string, policy *domain.FragmentConsistencyPolicy, partial *domain.FragmentGenerationResult, tokenBase int) (*domain.FragmentImageGenerationResult, error) {
 	if len(scenes) == 0 {
 		return &domain.FragmentImageGenerationResult{
 			ImageUrls:  []string{},
@@ -3085,9 +3434,9 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 	}
 
 	imgProv := s.aiService.ResolveFragmentImageProvider(ctx, userID, "")
-	if strings.EqualFold(imgProv, "huoshan") {
+	if strings.EqualFold(imgProv, "huoshan") && !fragmentPlansContainComicPages(scenes) {
 		n := len(scenes)
-		batchPrompt := buildFragmentScenesBatchHuoshanPrompt(bible, scenes, n)
+		batchPrompt := buildFragmentScenesBatchHuoshanPrompt(bible, scenes, n, language)
 		refBatch := mergeFragmentScenesBatchReferenceImages(userRefURLs, scenes, referenceAssets, fragmentMaxSceneReferenceImages)
 		sharedSeed := fragmentStoryImageSeed(policy)
 		options := cloneFragmentProviderOptions(policy)
@@ -3099,7 +3448,7 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 			for i := range scenes {
 				scenes[i].Seed = sharedSeed
 				scenes[i].ProviderOptions = options
-				scenes[i].FinalImagePrompt = buildFragmentSceneImagePrompt(bible, scenes[i])
+				scenes[i].FinalImagePrompt = buildFragmentSceneImagePrompt(bible, scenes[i], language)
 				scenes[i].GeneratedImageURL = urls[i]
 			}
 			partial.ImageSlots = buildFragmentGenerationProgressSlots(genTaskID, partial, scenes, urls, nil)
@@ -3127,7 +3476,7 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 		scene := &scenes[i]
 		scene.Seed = fragmentStoryImageSeed(policy)
 		scene.ProviderOptions = cloneFragmentProviderOptions(policy)
-		scene.FinalImagePrompt = buildFragmentSceneImagePrompt(bible, *scene)
+		scene.FinalImagePrompt = buildFragmentSceneImagePrompt(bible, *scene, language)
 		refImgs := mergeFragmentSceneReferenceAssets(userRefURLs, *scene, referenceAssets, fragmentMaxSceneReferenceImages)
 		payload := map[string]interface{}{
 			"prompt":      scene.FinalImagePrompt,
@@ -3149,6 +3498,33 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 			)
 			partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
 			s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, compactNonEmptyStrings(indexedImageURLs), tokenBase, totalTokens)
+		}
+		if scene.ComicPage != nil {
+			pageURL, panelURLs, panelTokens, panelErr := s.generateFragmentComicPageFromPanels(
+				ctx, userID, genTaskID, language, bible, scene, referenceAssets, userRefURLs, policy,
+			)
+			totalTokens += panelTokens
+			if panelErr == nil && strings.TrimSpace(pageURL) != "" {
+				scene.GeneratedImageURL = pageURL
+				scene.PanelImageURLs = append([]string(nil), panelURLs...)
+				indexedImageURLs[i] = pageURL
+				if partial != nil {
+					partial.ImageSlots = buildFragmentGenerationProgressSlots(genTaskID, partial, scenes, indexedImageURLs, failedScenes)
+					partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
+				}
+				s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, compactNonEmptyStrings(indexedImageURLs), tokenBase, totalTokens)
+				continue
+			}
+			s.logger.Warn("deterministic comic page render failed; preserving panels for retry",
+				zap.Error(panelErr), zap.Int("scene_index", scene.Index), zap.Int("rendered_panels", len(panelURLs)))
+			scene.PanelImageURLs = append([]string(nil), panelURLs...)
+			failedScenes[fragmentGenerationProgressSlotIndex(partial, len(scenes), i)] = "comic page rendering incomplete"
+			if partial != nil {
+				partial.ImageSlots = buildFragmentGenerationProgressSlots(genTaskID, partial, scenes, indexedImageURLs, failedScenes)
+				partial.ImageProgress = fragmentGenerationProgressFromSlots(partial.ImageSlots)
+			}
+			s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, compactNonEmptyStrings(indexedImageURLs), tokenBase, totalTokens)
+			continue
 		}
 
 		aiReq := domain.AITask{
@@ -3284,8 +3660,15 @@ func (s *FragmentGenerationService) persistFragmentImagePartial(ctx context.Cont
 	}
 	partial.ImageUrls = append([]string(nil), imageURLs...)
 	partial.ScenePlan = append([]domain.FragmentScenePlan(nil), scenes...)
+	pageOffset := 0
 	if partial.ExpectedImageCount > len(scenes) {
-		partial.ScenePlan = remapFragmentAppendedScenePlan(scenes, partial.ExpectedImageCount-len(scenes))
+		pageOffset = partial.ExpectedImageCount - len(scenes)
+		partial.ScenePlan = remapFragmentAppendedScenePlan(scenes, pageOffset)
+	}
+	syncFragmentComicDocumentPageAssets(partial.ComicDocument, scenes, pageOffset)
+	if partial.GenerationTrace != nil {
+		partial.GenerationTrace.Scenes = partial.ScenePlan
+		partial.GenerationTrace.ComicDocument = partial.ComicDocument
 	}
 	if len(partial.ImageSlots) == 0 {
 		partial.ImageSlots = buildFragmentGenerationProgressSlots(taskID, partial, scenes, imageURLs, nil)

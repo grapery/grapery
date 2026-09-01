@@ -44,6 +44,7 @@ type CreatePanelGenerationRequest struct {
 	UserInput              string `json:"userInput" binding:"required,min=1,max=2000"`
 	ReferenceImageURL      string `json:"referenceImageUrl" binding:"required"`
 	Style                  string `json:"style"`
+	Language               string `json:"language" binding:"omitempty,oneof=zh-Hans en ja"`
 	PanelCount             int    `json:"panelCount"`
 	Visibility             string `json:"visibility"`
 	Topic                  string `json:"topic"`
@@ -72,6 +73,7 @@ func (h *FragmentPanelGenerationHandler) CreatePanelGeneration(c *gin.Context) {
 		UserInput:              strings.TrimSpace(req.UserInput),
 		ReferenceImageURL:      strings.TrimSpace(req.ReferenceImageURL),
 		Style:                  strings.TrimSpace(req.Style),
+		Language:               strings.TrimSpace(req.Language),
 		PanelCount:             req.PanelCount,
 		Visibility:             strings.TrimSpace(req.Visibility),
 		Topic:                  normalizePanelTopicLabel(req.Topic),

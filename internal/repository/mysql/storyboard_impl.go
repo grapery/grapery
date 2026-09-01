@@ -370,15 +370,19 @@ func (r *Repository) StoryboardsByStory(ctx context.Context, storyID string, lim
 	return result, nil
 }
 
-// RootStoryboardsByStory retrieves all published storyboards for a story
+// RootStoryboardsByStory retrieves root storyboards for a story. Draft nodes are
+// included only for an author or invited contributor request.
 // Returns storyboards ordered by created_at DESC (newest first)
-func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*domain.Storyboard, error) {
+func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int, includeUnpublished bool) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("story_id = ?", storyID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished). // Only return published storyboards
-		Order("created_at DESC")                                      // 最新的在前
+		Where("parent_id IS NULL OR parent_id = '' OR parent_id = ?", domain.StoryboardRootMarker).
+		Order("created_at DESC") // 最新的在前
+	if !includeUnpublished {
+		query = query.Where("workflow_status = ?", domain.WorkflowStatusPublished)
+	}
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
@@ -386,6 +390,7 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 
 	r.log.Info("RootStoryboardsByStory query",
 		zap.String("storyId", storyID),
+		zap.Bool("includeUnpublished", includeUnpublished),
 		zap.Int("limit", limit),
 		zap.Int("offset", offset))
 
@@ -410,15 +415,17 @@ func (r *Repository) RootStoryboardsByStory(ctx context.Context, storyID string,
 	return result, nil
 }
 
-// StoryboardsByParent retrieves published child storyboards for a parent (sub-storyboard list / fork rail).
-func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*domain.Storyboard, error) {
+// StoryboardsByParent retrieves child storyboards for a parent (sub-storyboard list / continuation rail).
+func (r *Repository) StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int, includeUnpublished bool) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
 	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("story_id = ?", storyID).
 		Where("parent_id = ?", parentID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished).
 		Order("created_at DESC")
+	if !includeUnpublished {
+		query = query.Where("workflow_status = ?", domain.WorkflowStatusPublished)
+	}
 
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
@@ -552,15 +559,17 @@ func (r *Repository) CharacterStoryboardCountsByStory(ctx context.Context, story
 	return out, nil
 }
 
-// StoryboardChildren retrieves child storyboards (forks/continuations)
-func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([]*domain.Storyboard, error) {
+// StoryboardChildren retrieves child storyboards (continuations).
+func (r *Repository) StoryboardChildren(ctx context.Context, parentID string, includeUnpublished bool) ([]*domain.Storyboard, error) {
 	var storyboards []Storyboard
-	if err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Preload("Creator").
 		Where("parent_id = ?", parentID).
-		Where("workflow_status = ?", domain.WorkflowStatusPublished). // Only return published storyboards
-		Order("created_at DESC").
-		Find(&storyboards).Error; err != nil {
+		Order("created_at DESC")
+	if !includeUnpublished {
+		query = query.Where("workflow_status = ?", domain.WorkflowStatusPublished)
+	}
+	if err := query.Find(&storyboards).Error; err != nil {
 		return nil, fmt.Errorf("failed to get child storyboards: %w", err)
 	}
 	domainRows, err := r.storyboardsToDomain(ctx, storyboards)
@@ -577,7 +586,7 @@ func (r *Repository) StoryboardChildren(ctx context.Context, parentID string) ([
 }
 
 // StoryboardTree retrieves the entire tree starting from a root
-func (r *Repository) StoryboardTree(ctx context.Context, rootID string) ([]*domain.Storyboard, error) {
+func (r *Repository) StoryboardTree(ctx context.Context, rootID string, includeUnpublished bool) ([]*domain.Storyboard, error) {
 	// 递归查询所有子节点
 	var result []*domain.Storyboard
 	visited := make(map[string]bool)
@@ -597,7 +606,7 @@ func (r *Repository) StoryboardTree(ctx context.Context, rootID string) ([]*doma
 		result = append(result, sb)
 
 		// 获取子节点
-		children, err := r.StoryboardChildren(ctx, parentID)
+		children, err := r.StoryboardChildren(ctx, parentID, includeUnpublished)
 		if err != nil {
 			return err
 		}

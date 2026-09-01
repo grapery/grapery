@@ -31,6 +31,7 @@ type User struct {
 	EmailVerified        bool           `gorm:"default:false"`
 	Phone                string         `gorm:"size:20;index"`
 	PhoneVerifiedAt      int64          `gorm:"type:bigint;default:0;index"`
+	CredentialsChangedAt int64          `gorm:"type:bigint;default:0;index"`
 	PendingOAuthPhoneSMS bool           `gorm:"default:false;index"`
 	LastLoginAt          int64          `gorm:"type:bigint;default:0;index"`
 	Points               int            `gorm:"default:0;index"`     // StoryCreationAppUI - 未择积分

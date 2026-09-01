@@ -132,3 +132,25 @@ func TestStoryboardPromptsOmitEmptyTurnSections(t *testing.T) {
 		}
 	}
 }
+
+func TestStoryboardContinuationConsistencyRequiresParentHandoff(t *testing.T) {
+	service := &Service{}
+	plan := &domain.StoryboardBiblePlan{
+		Beats: []domain.StoryboardBeat{{Summary: "继续前行"}},
+	}
+	scenePlan := &domain.StoryboardScenePlan{
+		Scenes: []domain.StoryboardScenePlanItem{{ImagePrompt: "cinematic continuation"}},
+	}
+	issues := service.auditStoryboardGenerationConsistency(plan, scenePlan, nil, 1, true)
+	if firstHighStoryboardConsistencyIssue(issues) == "" {
+		t.Fatalf("continuation without inherited handoff must be blocked: %+v", issues)
+	}
+
+	plan.StoryboardBible.ContinuityRules = []string{"承接父节点营地被暴雨冲毁的事实"}
+	plan.Beats[0].ContinuityNote = "从父节点沿河撤离的决定继续"
+	scenePlan.Scenes[0].ContinuityNote = "角色仍在沿河撤离，没有重置位置或状态"
+	issues = service.auditStoryboardGenerationConsistency(plan, scenePlan, nil, 1, true)
+	if detail := firstHighStoryboardConsistencyIssue(issues); detail != "" {
+		t.Fatalf("explicit parent handoff should pass: %s (%+v)", detail, issues)
+	}
+}

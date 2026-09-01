@@ -268,6 +268,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.PUT("/storyboards/:id", h.UpdateStoryboard)
 			authenticated.PUT("/storyboards/:id/scenes/:sceneId", h.UpdateStoryboardPlotScene)
 			authenticated.DELETE("/storyboards/:id", h.DeleteStoryboard)
+			authenticated.GET("/storyboards/:id/fork-permission", h.GetStoryboardForkPermission)
 			authenticated.POST("/storyboards/:id/fork", h.ForkStoryboard)
 			authenticated.POST("/storyboards/:id/continue", h.ContinueStoryboard) // 平行宇宙续写
 			authenticated.POST("/storyboards/:id/like", h.LikeStoryboard)
@@ -701,13 +702,14 @@ func (h *Handler) VerifyEmail(c *gin.Context) {
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refreshToken" binding:"required"`
+		DeviceID     string `json:"deviceId,omitempty"`
 	}
 
 	if !BindJSON(c, &req) {
 		return
 	}
 
-	resp, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken)
+	resp, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken, req.DeviceID)
 	if err != nil {
 		HandleError(c, err)
 		return

@@ -45,6 +45,8 @@ type ImageGenerationRequest struct {
 	SceneCharacters []string `json:"sceneCharacters,omitempty"`
 	// 场景关联的角色图片（用于 AI 生成时作为参考）
 	CharacterReferenceImages []string `json:"characterReferenceImages,omitempty"`
+	// AspectRatio is the user-selected output frame ratio for this generation turn.
+	AspectRatio string `json:"aspectRatio,omitempty"`
 
 	// 故事风格配置
 	StoryStyle *domain.StyleConfig `json:"storyStyle,omitempty"`
@@ -280,10 +282,13 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
 	geminiOK := s.geminiClient != nil
 	if !huoshanOK && !geminiOK {
-		s.logger.Warn("no AI client available, using raw input as content",
+		s.logger.Error("no AI client available for content generation",
 			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", gen.StoryboardID))
-		gen.GeneratedContent = gen.RawInput
+		gen.Status = domain.GenerationStatusFailed
+		gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "storyboard AI generation is not configured")
+		_ = s.repo.UpdateContentGeneration(ctx, gen)
+		return
 	} else {
 		prompt := renderPromptDSL(PromptDSL{
 			Role:         "You are a creative story writer and manga/webtoon visual-story editor.",
@@ -652,7 +657,9 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("storyId", storyboard.StoryID))
 
+	plannedScene := s.lookupStoryboardSceneForComicPage(ctx, req.StoryboardID, req.SceneID)
 	mergedSceneDescription := s.MergedStoryboardSceneDescriptionForImage(ctx, req.StoryboardID, req.SceneID, req.SceneDescription)
+	mergedSceneDescription = mergeStoryboardPlannedSceneForImage(mergedSceneDescription, plannedScene)
 
 	// 获取故事信息和风格配置
 	var storyStyle *domain.StyleConfig
@@ -688,35 +695,27 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 
 	panelURL := strings.TrimSpace(s.previousStoryboardScenePanelImageURL(ctx, req.StoryboardID, req.SceneID))
 
-	// 合并参考图：显式 identity references（三视图优先）→ 上一格成图（连贯性）→ 角色 portrait；去重并限制总数
+	// Build a typed reference manifest. URL ordering and prompt semantics now
+	// come from the same source of truth instead of positional guesses.
 	const maxSceneRefURLs = 6
-	allReferenceImages := make([]string, 0, maxSceneRefURLs)
+	referenceManifest := make([]domain.StoryboardImageReference, 0, maxSceneRefURLs)
 	seen := make(map[string]struct{})
-	addRef := func(u string) {
-		u = strings.TrimSpace(u)
-		if u == "" {
-			return
-		}
-		if _, ok := seen[u]; ok {
-			return
-		}
-		if len(allReferenceImages) >= maxSceneRefURLs {
-			return
-		}
-		seen[u] = struct{}{}
-		allReferenceImages = append(allReferenceImages, u)
-	}
-	for _, u := range req.ReferenceImages {
-		addRef(u)
-	}
 	if panelURL != "" {
-		addRef(panelURL)
+		referenceManifest = appendStoryboardImageReference(referenceManifest, seen, panelURL, domain.StoryboardImageReferencePreviousPanel, req.SceneID, maxSceneRefURLs)
 	}
 	if !isTransitionScene {
-		for _, u := range characterRefImages {
-			addRef(u)
+		for i, u := range characterRefImages {
+			key := ""
+			if len(characterRefImages) == len(req.SceneCharacters) && i < len(req.SceneCharacters) {
+				key = req.SceneCharacters[i]
+			}
+			referenceManifest = appendStoryboardImageReference(referenceManifest, seen, u, domain.StoryboardImageReferenceCharacter, key, maxSceneRefURLs)
 		}
 	}
+	for _, u := range req.ReferenceImages {
+		referenceManifest = appendStoryboardImageReference(referenceManifest, seen, u, domain.StoryboardImageReferenceUser, "", maxSceneRefURLs)
+	}
+	allReferenceImages := storyboardReferenceURLs(referenceManifest)
 
 	// Create generation record
 	gen := &domain.StoryboardImageGeneration{
@@ -733,6 +732,9 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		ComicStyle:               strings.TrimSpace(req.ComicStyle),
 		PipelineKind:             domain.StoryboardImagePipelineScene,
 		SkipPeerFailureGate:      req.SkipPeerFailureGate,
+		PlannedScene:             plannedScene,
+		ReferenceManifest:        referenceManifest,
+		ContentLanguage:          s.storyboardSceneContentLanguage(ctx, plannedScene, req.SceneTitle+"\n"+mergedSceneDescription),
 		Status:                   domain.GenerationStatusPending,
 		CreatedAt:                time.Now().Unix(),
 	}
@@ -764,7 +766,7 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 	s.logger.Info("starting async image generation process",
 		zap.String("generationId", gen.ID),
 		zap.String("sceneId", gen.SceneID))
-	go s.processImageGeneration(context.Background(), gen)
+	go s.processImageGeneration(context.Background(), gen, req.AspectRatio)
 
 	return gen, nil
 }
@@ -926,7 +928,7 @@ func (s *Service) cancelInFlightSiblingStoryboardImageGenerations(ctx context.Co
 }
 
 // processImageGeneration processes image generation in background
-func (s *Service) processImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration) {
+func (s *Service) processImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration, requestedAspectRatio string) {
 	startTime := time.Now()
 	s.logger.Info("processing image generation",
 		zap.String("generationId", gen.ID),
@@ -969,24 +971,15 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 	}
 
 	// 同批其它分镜仍显示失败、但属于用户主动「重试失败项」时置为 true，避免误杀新任务。
-	if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
-		gen.Status = domain.GenerationStatusFailed
-		gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
-			"another panel image failed first; stopping remaining image jobs in this batch")
-		now := time.Now().Unix()
-		gen.CompletedAt = &now
-		if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
-			s.logger.Warn("failed to persist peer-aborted image generation",
-				zap.String("generationId", gen.ID),
-				zap.Error(err))
-		}
-		return
-	}
-
 	// First, generate image prompt using text AI — 火山优先，失败再 Gemini（JSON 提示词）
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
 	geminiOK := s.geminiClient != nil
-	if huoshanOK || geminiOK {
+	if compileStoryboardImagePromptFromPlan(s, gen) {
+		s.logger.Info("compiled image prompt directly from persisted scene plan",
+			zap.String("generationId", gen.ID),
+			zap.String("sceneId", gen.SceneID),
+			zap.String("promptContract", visualSceneContractVersion))
+	} else if huoshanOK || geminiOK {
 		s.logger.Info("generating image prompt with AI",
 			zap.String("generationId", gen.ID),
 			zap.String("sceneId", gen.SceneID),
@@ -1015,9 +1008,6 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 					zap.String("generationId", gen.ID),
 					zap.Error(updateErr))
 			}
-			if !gen.SkipPeerFailureGate {
-				s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
-			}
 			s.recordStoryboardTextGeneration(ctx, gen.StoryboardID, "image_prompt", prov, promptGen, "", 0, 0, domain.AITaskStatusFailed, err.Error())
 			if s.metrics != nil {
 				duration := time.Since(startTime)
@@ -1030,12 +1020,15 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			return
 		}
 
-		plannedScene := s.lookupStoryboardSceneForComicPage(ctx, gen.StoryboardID, gen.SceneID)
+		plannedScene := gen.PlannedScene
+		if plannedScene == nil {
+			plannedScene = s.lookupStoryboardSceneForComicPage(ctx, gen.StoryboardID, gen.SceneID)
+		}
 		promptDetails, _ := s.parseImagePromptDetails(text, gen.SceneTitle, gen.SceneDescription)
 		if promptDetails != nil {
-			mergePlannedStoryboardComicTextsIntoDetails(promptDetails, plannedScene)
+			applyPlannedStoryboardComicTextsToDetails(promptDetails, plannedScene, gen.ContentLanguage)
 			gen.PromptDetails = promptDetails
-			gen.GeneratedPrompt = s.combineImagePrompt(promptDetails, gen.SceneTitle, gen.SceneDescription)
+			gen.GeneratedPrompt = s.combineImagePrompt(promptDetails, gen.SceneTitle, gen.SceneDescription, gen.ContentLanguage)
 			s.logger.Debug("structured prompt details parsed successfully",
 				zap.String("generationId", gen.ID),
 				zap.String("provider", prov),
@@ -1046,10 +1039,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			}
 		} else if plannedScene != nil && len(plannedScene.ComicTexts) > 0 {
 			fallback := &domain.ImagePromptDetails{
-				ComicTexts: append([]domain.StoryboardComicText(nil), plannedScene.ComicTexts...),
+				ComicTexts: normalizeStoryboardComicTextsForLanguage(plannedScene.ComicTexts, gen.ContentLanguage),
 			}
 			gen.PromptDetails = fallback
-			gen.GeneratedPrompt = s.combineImagePrompt(fallback, gen.SceneTitle, gen.SceneDescription)
+			gen.GeneratedPrompt = s.combineImagePrompt(fallback, gen.SceneTitle, gen.SceneDescription, gen.ContentLanguage)
 			s.logger.Warn("failed to parse structured prompt; using scene comicTexts only",
 				zap.String("generationId", gen.ID),
 				zap.String("provider", prov))
@@ -1131,9 +1124,13 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 	// Generate actual image using genAPI directly
 	// TokenUsageRecorder 会自动将 token 消耗和成功/失败记录到 AIGenerationRecord
 	if s.genAPI != nil && finalPrompt != "" {
+		aspectRatio := domain.NormalizeFragmentAspectRatio(requestedAspectRatio)
+		if aspectRatio == "" {
+			aspectRatio = "16:9"
+		}
 		genReq := &genapi.GenerateRequest{
 			Prompt:          finalPrompt,
-			AspectRatio:     "16:9",
+			AspectRatio:     aspectRatio,
 			Quality:         "high",
 			OutputCount:     1,
 			ReferenceImages: refURLs,
@@ -1282,14 +1279,6 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		return
 	}
 
-	if gen.GeneratedImageURL != "" {
-		if !gen.SkipPeerFailureGate && s.storyboardPeerSceneHasLatestFailedImageGen(ctx, gen.StoryboardID, gen.SceneID) {
-			gen.GeneratedImageURL = ""
-			gen.ErrorMessage = formatGenerationError(GenerationErrorCancelled,
-				"another panel image failed; discarding generated image for this batch")
-		}
-	}
-
 	if gen.GeneratedImageURL == "" {
 		gen.Status = domain.GenerationStatusFailed
 		if gen.ErrorMessage == "" {
@@ -1309,10 +1298,6 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		s.logger.Debug("image generation final status updated",
 			zap.String("generationId", gen.ID),
 			zap.String("status", gen.Status))
-	}
-
-	if gen.Status == domain.GenerationStatusFailed && !gen.SkipPeerFailureGate {
-		s.cancelInFlightSiblingStoryboardImageGenerations(ctx, gen.StoryboardID, gen.ID)
 	}
 
 	s.logger.Debug("updating storyboard token consumption",
@@ -3467,131 +3452,6 @@ func (s *Service) convertToVideoGenerationInfo(gen *domain.StoryboardVideoGenera
 	return info
 }
 
-// buildImageGenerationPrompt 构建场景图片生成的AI提示词，包含故事风格配置和场景类型信息
-func (s *Service) buildImageGenerationPrompt(gen *domain.StoryboardImageGeneration) string {
-	inputs := map[string]any{
-		"sceneTitle":             gen.SceneTitle,
-		"sceneDescription":       gen.SceneDescription,
-		"isTransitionScene":      gen.IsTransitionScene,
-		"sceneCharacters":        gen.SceneCharacters,
-		"referenceImages":        gen.ReferenceImages,
-		"characterReferenceImgs": gen.CharacterReferenceImages,
-		"comicStyleSlug":         strings.TrimSpace(gen.ComicStyle),
-	}
-	if gen.StoryStyle != nil {
-		inputs["storyStyle"] = map[string]any{
-			"style":       gen.StoryStyle.Style,
-			"description": gen.StoryStyle.Description,
-		}
-	}
-	sections := make([]PromptDSLSection, 0, 6)
-
-	if cs := strings.TrimSpace(gen.ComicStyle); cs != "" {
-		sections = append(sections, PromptDSLSection{
-			Title: "Comic Style Continuation",
-			Kind:  "text",
-			Body:  fmt.Sprintf("The output MUST visually align with the comic style slug: %s\n(Fragment-style zh summary for this slug: %s)\nApply this style consistently with line work, coloring, and overall visual temperament.\nThis slug implies manga/comic panels: favor readable speech balloons, thought bubbles, caption boxes, reaction marks, effect lines, and SFX/interjections where the scene calls for dialogue, inner monologue, shock, anticipation, celebration, or turning-point beats; render short on-image Chinese text in a matching comic hand.", cs, fragmentStyleDesc(cs)),
-		})
-	}
-
-	if len(gen.ReferenceImages) > 0 {
-		sections = append(sections, PromptDSLSection{
-			Title: "Reference Policy",
-			Kind:  "text",
-			Body:  "When multiple reference images are provided, the FIRST image is usually the immediately previous storyboard panel: use it for shot-to-shot continuity (palette, environment, recurring wardrobe) when the scene follows the prior beat.\nAdditional images are character identity references: main cast must match those references.",
-		})
-	}
-
-	if gen.IsTransitionScene {
-		sections = append(sections, PromptDSLSection{
-			Title: "Scene Type",
-			Kind:  "text",
-			Body:  "This is a TRANSITION SCENE with no characters appearing. Focus on environment, atmosphere, and mood. Do NOT include any human figures or characters in the image.",
-		})
-	} else if len(gen.SceneCharacters) > 0 {
-		maxMainCharacters := 5
-		mainCharacters := gen.SceneCharacters
-		if len(mainCharacters) > maxMainCharacters {
-			mainCharacters = mainCharacters[:maxMainCharacters]
-		}
-		sections = append(sections, PromptDSLSection{
-			Title: "Main Characters",
-			Kind:  "json",
-			Payload: map[string]any{
-				"maxMainCharacters": maxMainCharacters,
-				"characters":        mainCharacters,
-				"totalCharacters":   len(gen.SceneCharacters),
-			},
-		})
-		if len(gen.CharacterReferenceImages) > 0 {
-			sections = append(sections, PromptDSLSection{
-				Title: "Character Reference Policy",
-				Kind:  "text",
-				Body:  "Character reference images are provided for MAIN CHARACTERS. The generated image MUST accurately depict these main characters consistent with the reference images (appearance, clothing style, identity). Background characters can be freely designed.",
-			})
-		}
-	}
-
-	if gen.IsTransitionScene {
-		sections = append(sections, PromptDSLSection{
-			Title: "On-image Text Policy",
-			Kind:  "text",
-			Body:  "Do NOT add speech bubbles, dialogue, thought bubbles, or comic SFX unless the scene description explicitly mentions environmental text (sign, poster, screen UI). Keep the frame atmospheric.",
-		})
-	} else {
-		sections = append(sections, PromptDSLSection{Title: "Comic Typography & On-image Text", Kind: "text", Body: `
-## Comic typography & on-image text (align with story-fragment image prompts)
-When the scene description, story style, or comic-style slug suggests manga/comic/strip panels — or when characters speak, react with interjections, or have a salient inner thought — you MUST carry that into the JSON so the image model paints text inside the picture (no reliance on app overlays):
-- In keyElements and/or additionalNotes: specify speech balloons with tails to the correct speaker; thought bubbles / cloud outlines for inner monologue; bold SFX or short interjections (e.g. Chinese 啊？ / 砰) where they add punch; optional rectangular narration captions for time/place or a beat of omniscient voice.
-- Turning points, shock, anticipation, and celebration are comic-emphasis beats, not plain illustrations. Add at least one concrete device where appropriate: jagged shock bubble, radial shock lines, held-breath caption, thought bubble, cheering dialogue, celebratory SFX, border breaking, or large negative space.
-- Prefer short natural Chinese phrases for on-image text: 啊？ / …… / 要来了 / 终于 / 太好了！ / 别动！ / 原来如此. Do not invent random signage or filler words.
-- Reserve negative space for lettering; avoid covering eyes or story-critical props.
-- Keep embedded language snippets short (about ≤12 Chinese characters per balloon or caption where applicable); state the exact string that must appear in-image (the renderer should draw it legibly in a comic-appropriate hand).
-- Cap density per panel: at most about 1 narration box, 1–2 dialogue balloons, at most 1 SFX, at most 1 thought bubble — omit if the beat is silent or purely atmospheric.
-- If the scene is wordless, state explicitly "no on-image dialogue" and rely on acting and composition.
- -`})
-	}
-
-	outputContract := `
-Please return a structured JSON object (without markdown code blocks) with the following format:
-{
-  "artStyle": "English: structured global style, medium + line quality + tones/shading + texture; e.g. high contrast manga ink, dynamic screentones, gritty etching, or story-style equivalent",
-  "lighting": "English: specific lighting; use chiaroscuro/deep shadows/noir lighting when impact semantics are present",
-  "colorPalette": "English: palette and grading; concrete hues, accent color, saturation, black ink mass strategy",
-  "composition": "English: camera + panel-language composition. Must include shot scale + camera angle + perspective/lens; may include dynamic panel border/gutter/effect-line plan",
-  "keyElements": ["English or Chinese: concrete visual elements, character/action/prop anchors, effect lines/SFX/bubble plan if present"],
-  "mood": "English: compound emotional tone, not one vague adjective",
-  "additionalNotes": "English: micro-expression, body tension, SFX typography, speech/thought bubble placement, screentone/shading, gutter/closure or border-breaking notes",
-  "comicTexts": [
-    {"type":"narration|dialogue|thought|sfx","text":"画面内的精确中文短句（≤12字）","speaker":"dialogue/thought时填角色名，其余留空","position":"top-left|top-right|bottom-left|bottom-right|mid-frame|speech-bubble|thought-bubble"}
-  ]
-}
-
-comicTexts rules:
-- narration = rectangular caption box (time/place/omniscient voice), usually top or bottom of panel.
-- dialogue = speech balloon with pointed tail toward speaker; specify tail direction in additionalNotes.
-- thought = cloud/bubble chain balloon; speaker is the character whose inner voice it is.
-- sfx = oversized onomatopoeia / interjection drawn directly on image (e.g. 砰！ 啊？ ……), no fixed balloon shape.
-- Each text <= 12 Chinese characters. Per-panel cap: ~1 narration, 1-2 dialogue, 1 sfx, 1 thought.
-- For silent/atmospheric/transition scenes output "comicTexts": [].
-- The image model must render the exact Chinese text inside the image (legible comic hand); do NOT rely on app-side overlay.
-- If the scene contains explicit speech, private thought, surprise, anticipation, victory/release, or a major reversal, comicTexts should usually be non-empty unless the JSON states a deliberate wordless device in additionalNotes.
-- If impact semantics are present, composition/additionalNotes must include at least two concrete impact controls: extreme low-angle, dramatic high-angle, Dutch angle, wide-angle distortion, fish-eye effect, radial action lines, motion streaking, debris, sparks, heavy ink contrast, dynamic screentones, border breaking.
-
-Important: Return ONLY the JSON object, no explanations or markdown formatting.
-LENGTH: Keep each JSON string field concise but structured; avoid a single vague natural-language paragraph. The server will prepend the full scene narrative separately.`
-
-	return renderPromptDSL(PromptDSL{
-		Role:           "You are a manga/comic scene prompt planner.",
-		Task:           "Convert scene information into a structured JSON image prompt for downstream image synthesis.",
-		Inputs:         inputs,
-		GlobalConfig:   structuredStoryPanelGuidance(),
-		OutputContract: outputContract,
-		Sections:       sections,
-	})
-}
-
-// parseImagePromptDetails 解析AI返回的结构化提示词JSON
 func (s *Service) parseImagePromptDetails(text, sceneTitle, sceneDescription string) (*domain.ImagePromptDetails, string) {
 	// Clean the text - remove markdown code blocks if present
 	cleanedText := strings.TrimSpace(text)
@@ -3631,8 +3491,12 @@ func (s *Service) parseImagePromptDetails(text, sceneTitle, sceneDescription str
 }
 
 // combineImagePrompt 将结构化的提示词详情组合成最终的文本提示词
-func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTitle, sceneDescription string) string {
+func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTitle, sceneDescription string, languages ...string) string {
 	var parts []string
+	language := inferGenerationLanguage(sceneTitle + "\n" + sceneDescription)
+	if len(languages) > 0 && strings.TrimSpace(languages[0]) != "" {
+		language = normalizeGenerationLanguage(languages[0])
+	}
 
 	if details.ArtStyle != "" {
 		parts = append(parts, fmt.Sprintf("Art style: %s", details.ArtStyle))
@@ -3672,7 +3536,7 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if pos == "" {
 					pos = "top of panel"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a rectangular narration caption box%s at %s with the exact Chinese text 「%s」 in clean comic font", panelRef, pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a rectangular narration caption box%s at %s with only the exact supplied text 「%s」 in a clean comic font", panelRef, pos, ct.Text))
 			case "dialogue":
 				pos := ct.Position
 				if pos == "" {
@@ -3682,7 +3546,7 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if speaker == "" {
 					speaker = "the character"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a speech balloon%s (oval with pointed tail toward %s) at %s containing the exact Chinese text 「%s」", panelRef, speaker, pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a speech balloon%s (oval with pointed tail toward %s) at %s containing only the exact supplied text 「%s」", panelRef, speaker, pos, ct.Text))
 			case "thought":
 				pos := ct.Position
 				if pos == "" {
@@ -3692,7 +3556,7 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if speaker == "" {
 					speaker = "the character"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Draw a thought cloud%s (bubble-chain outline) near %s at %s with the exact Chinese text 「%s」", panelRef, speaker, pos, ct.Text))
+				letteringLines = append(letteringLines, fmt.Sprintf("Draw a thought cloud%s (bubble-chain outline) near %s at %s with only the exact supplied text 「%s」", panelRef, speaker, pos, ct.Text))
 			case "sfx":
 				pos := ct.Position
 				if pos == "" {
@@ -3704,7 +3568,7 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 				if pos == "" {
 					pos = "mid-frame"
 				}
-				letteringLines = append(letteringLines, fmt.Sprintf("Render legible Chinese text%s 「%s」 at %s", panelRef, ct.Text, pos))
+				letteringLines = append(letteringLines, fmt.Sprintf("Render only the exact supplied text%s 「%s」 at %s", panelRef, ct.Text, pos))
 			}
 		}
 		visualOnly := strings.Join(parts, ". ")
@@ -3714,7 +3578,8 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 			// Lettering MUST appear before the capped visual block inside 【画面与镜头】 so
 			// truncateStoryboardImagePromptPreservingNarrative (tail-truncates beauty) and
 			// capGeminiImageBeautyOutput do not drop comic text instructions.
-			letteringBlock := "[COMIC LETTERING — mandatory in-image; exact Chinese below]\n" + strings.Join(letteringLines, "; ")
+			visualTexts := storyboardComicTextsToVisual(details.ComicTexts, language)
+			letteringBlock := "[COMIC LETTERING — use only the supplied text]\n" + strings.Join(letteringLines, "; ") + "\n" + visualSceneLetteringPolicy(language, visualTexts)
 			if visualOnly != "" {
 				beauty = letteringBlock + "\n\n" + visualOnly
 			} else {
@@ -3727,56 +3592,59 @@ func (s *Service) combineImagePrompt(details *domain.ImagePromptDetails, sceneTi
 		return prependStoryboardImageNarrativeBlock(nb, beauty)
 	}
 
+	parts = append(parts, visualSceneLetteringPolicy(language, nil))
 	beauty := strings.Join(parts, ". ")
 	beauty = capGeminiImageBeautyOutput(beauty)
 	nb := storyboardSceneNarrativeBlock(sceneTitle, sceneDescription)
 	return prependStoryboardImageNarrativeBlock(nb, beauty)
 }
 
-// mergePlannedStoryboardComicTextsIntoDetails fills missing comic lettering from the persisted storyboard scene
-// (e.g. redesign / fragment pipeline) when the image-prompt LLM omits or empties comicTexts.
-func mergePlannedStoryboardComicTextsIntoDetails(details *domain.ImagePromptDetails, planned *domain.StoryboardScene) {
-	if details == nil || planned == nil || len(planned.ComicTexts) == 0 {
-		return
-	}
-	if len(details.ComicTexts) == 0 {
-		details.ComicTexts = append([]domain.StoryboardComicText(nil), planned.ComicTexts...)
-		return
-	}
-	var plannedNonEmpty []domain.StoryboardComicText
-	for _, ct := range planned.ComicTexts {
-		if strings.TrimSpace(ct.Text) != "" {
-			plannedNonEmpty = append(plannedNonEmpty, ct)
-		}
-	}
-	if len(plannedNonEmpty) == 0 {
-		return
-	}
-	pi := 0
-	for i := range details.ComicTexts {
-		if strings.TrimSpace(details.ComicTexts[i].Text) != "" {
+// normalizeStoryboardComicTexts enforces the same density contract used by the
+// fragment pipeline. Text length and type counts are deterministic product rules,
+// so they should not depend on whether a model remembered the prose instruction.
+func normalizeStoryboardComicTexts(texts []domain.StoryboardComicText) []domain.StoryboardComicText {
+	return normalizeStoryboardComicTextsForLanguage(texts, "zh-Hans")
+}
+
+func normalizeStoryboardComicTextsForLanguage(texts []domain.StoryboardComicText, language string) []domain.StoryboardComicText {
+	counts := map[string]int{}
+	limits := map[string]int{"narration": 1, "dialogue": 2, "thought": 1, "sfx": 1}
+	out := make([]domain.StoryboardComicText, 0, len(texts))
+	for _, item := range texts {
+		typ := strings.ToLower(strings.TrimSpace(item.Type))
+		if _, ok := limits[typ]; !ok || counts[typ] >= limits[typ] {
 			continue
 		}
-		if pi >= len(plannedNonEmpty) {
-			break
+		text := strings.TrimSpace(item.Text)
+		if text == "" {
+			continue
 		}
-		src := plannedNonEmpty[pi]
-		pi++
-		details.ComicTexts[i].Text = src.Text
-		if details.ComicTexts[i].Speaker == "" {
-			details.ComicTexts[i].Speaker = src.Speaker
-		}
-		if details.ComicTexts[i].Type == "" {
-			details.ComicTexts[i].Type = src.Type
-		}
-		if details.ComicTexts[i].Position == "" {
-			details.ComicTexts[i].Position = src.Position
-		}
-		if details.ComicTexts[i].PanelIndex == nil && src.PanelIndex != nil {
-			pidx := *src.PanelIndex
-			details.ComicTexts[i].PanelIndex = &pidx
-		}
+		counts[typ]++
+		item.Type = typ
+		item.Text = truncateRunes(text, comicTextRuneLimit(language))
+		item.Speaker = strings.TrimSpace(item.Speaker)
+		item.Position = strings.TrimSpace(item.Position)
+		out = append(out, item)
 	}
+	return out
+}
+
+// applyPlannedStoryboardComicTextsToDetails makes the persisted scene plan the
+// sole lettering authority. The normalizer may improve visual controls, but it
+// may not invent dialogue or signs during the second text-model pass.
+func applyPlannedStoryboardComicTextsToDetails(details *domain.ImagePromptDetails, planned *domain.StoryboardScene, languages ...string) {
+	if details == nil {
+		return
+	}
+	if planned == nil {
+		details.ComicTexts = nil
+		return
+	}
+	language := "zh-Hans"
+	if len(languages) > 0 && strings.TrimSpace(languages[0]) != "" {
+		language = normalizeGenerationLanguage(languages[0])
+	}
+	details.ComicTexts = normalizeStoryboardComicTextsForLanguage(planned.ComicTexts, language)
 }
 
 // parseVideoPromptDetails 解析AI返回的结构化视频提示词JSON

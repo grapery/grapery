@@ -141,8 +141,14 @@ func (s *Service) generateStoryboardWithRedesignPipeline(ctx context.Context, st
 	storyboard.IsAIGenerated = true
 	storyboard.StoryboardScenes = s.storyboardScenesFromScenePlan(run.ID, scenePlan)
 
-	issues := s.auditStoryboardGenerationConsistency(plan, scenePlan, assets, sceneCount)
+	issues := s.auditStoryboardGenerationConsistency(plan, scenePlan, assets, sceneCount, continuation)
 	run.ConsistencyIssuesJSON = mustJSON(issues, "[]")
+	if detail := firstHighStoryboardConsistencyIssue(issues); detail != "" {
+		_ = s.repo.UpdateStoryboardGenerationRun(ctx, run)
+		err := fmt.Errorf("story framework consistency check failed: %s", detail)
+		s.failStoryboardGenerationRun(ctx, run, "story_framework_conflict", err)
+		return err
+	}
 	run.Progress = 100
 	run.CurrentStep = domain.StoryboardGenerationStepConsistency
 	run.Status = domain.GenerationStatusCompleted
@@ -223,6 +229,7 @@ func (s *Service) repairStoryboardJSONResponse(
 
 func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, alignmentPrompt string, sceneCount int) (*domain.StoryboardBiblePlan, string, int, error) {
 	prompt := resolveStoryboardBiblePrompt(story, storyboard, snapshot, alignmentPrompt, sceneCount)
+	prompt.SystemPrompt += "\nWrite all user-facing narrative fields in " + storyboardWorkflowOutputLanguage(run) + ". Keep machine keys and executable image prompts in English."
 	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
 		s.logger.Warn("storyboard workflow prompt fallback",
 			zap.String("storyboardId", storyboard.ID),
@@ -301,6 +308,7 @@ func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.S
 
 func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int) (*domain.StoryboardScenePlan, string, int, error) {
 	prompt := resolveStoryboardScenePrompt(story, storyboard, snapshot, plan, alignmentPrompt, sceneCount)
+	prompt.SystemPrompt += "\nWrite content, scene titles, descriptions, dialogue and narration in " + storyboardWorkflowOutputLanguage(run) + ". Keep imagePrompt and machine-readable enum values in English."
 	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
 		s.logger.Warn("storyboard scene plan workflow prompt fallback",
 			zap.String("storyboardId", storyboard.ID),
@@ -518,7 +526,7 @@ func (s *Service) storyboardScenesFromScenePlan(runID string, plan *domain.Story
 			ReferenceKeys:   item.ReferenceKeys,
 			ImagePrompt:     item.ImagePrompt,
 			VisualStateJSON: visualState,
-			ComicTexts:      item.ComicTexts,
+			ComicTexts:      normalizeStoryboardComicTexts(item.ComicTexts),
 			LayoutIntent:    strings.TrimSpace(item.LayoutIntent),
 			CompositionPlan: strings.TrimSpace(item.CompositionPlan),
 			ShotType:        strings.TrimSpace(item.ShotType),

@@ -185,15 +185,19 @@ func TestBuildFragmentGenerationAssets_AppendUsesFinalSlotIndex(t *testing.T) {
 	}
 }
 
-func TestComicPromptDirectiveIncludesReadabilityLimits(t *testing.T) {
+func TestComicPromptDirectiveUsesAuthoritativeLetteringPolicy(t *testing.T) {
 	var b strings.Builder
 	writeFragmentComicLayoutDirective(&b, &domain.FragmentVisualBible{StyleBible: &domain.FragmentVisualStyleBible{ArtStyle: "manga"}}, domain.FragmentScenePlan{})
 	out := b.String()
-	if !strings.Contains(out, "at most 1 narration box") {
-		t.Fatalf("missing narration limit: %s", out)
+	if !strings.Contains(out, "this scene is wordless") || !strings.Contains(out, "Do not draw speech balloons") {
+		t.Fatalf("missing wordless lettering policy: %s", out)
 	}
-	if !strings.Contains(out, "<=12 characters") {
-		t.Fatalf("missing chinese length guard: %s", out)
+
+	b.Reset()
+	writeFragmentComicLayoutDirective(&b, nil, domain.FragmentScenePlan{ComicTexts: []domain.FragmentComicText{{Type: "dialogue", Text: "别走", Speaker: "hero"}}})
+	out = b.String()
+	if !strings.Contains(out, "render only the supplied") || !strings.Contains(out, "别走") || !strings.Contains(out, "Never invent") {
+		t.Fatalf("missing authoritative supplied-text policy: %s", out)
 	}
 }
 

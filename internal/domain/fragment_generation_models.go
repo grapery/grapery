@@ -17,6 +17,9 @@ const (
 	FragmentAspect3x4     = "3:4"
 	FragmentAspect4x3     = "4:3"
 	FragmentAspectDefault = FragmentAspect16x9
+	// FragmentComicPageAspectDefault 是故事碎片完整漫画页的默认画布；
+	// 保留 FragmentAspectDefault 给历史单幅插图和其他复用调用方。
+	FragmentComicPageAspectDefault = FragmentAspect3x4
 )
 
 // NormalizeFragmentAspectRatio 将输入规范为允许的比例；无法识别时返回空字符串。
@@ -102,6 +105,8 @@ type FragmentAnalyzeRequest struct {
 	ImageCount            int    `json:"imageCount,omitempty"`
 	Style                 string `json:"style,omitempty"`
 	TargetDraftFragmentID string `json:"targetDraftFragmentId,omitempty"`
+	EditOperation         string `json:"editOperation,omitempty"`      // replace | append, supplied by an explicit UI action.
+	SelectedImageIndex    int    `json:"selectedImageIndex,omitempty"` // 1-based target for replace.
 }
 
 // FragmentRecommendedOptions 是客户端展示配置建议。
@@ -114,6 +119,7 @@ type FragmentRecommendedOptions struct {
 type FragmentAnalyzeResponse struct {
 	AssistantMessage   string                     `json:"assistantMessage"`
 	IntentType         string                     `json:"intentType,omitempty"` // new_fragment | revise_current | adjust_options | chat_only | ask_clarification
+	EditPlan           CreativeEditPlan           `json:"editPlan"`
 	GenerationIntent   FragmentGenerationIntent   `json:"generationIntent"`
 	StoryElements      []FragmentReferenceSlot    `json:"storyElements"`
 	RecommendedOptions FragmentRecommendedOptions `json:"recommendedOptions"`
@@ -200,10 +206,30 @@ type FragmentAnchorImage struct {
 
 // FragmentComicText 描述单格漫画文字层，供图片 prompt 与客户端精确叠字复用。
 type FragmentComicText struct {
-	Type     string `json:"type"` // narration | dialogue | thought | sfx
-	Text     string `json:"text"`
-	Speaker  string `json:"speaker,omitempty"`
-	Position string `json:"position,omitempty"`
+	ID           string   `json:"id,omitempty"`
+	Type         string   `json:"type"` // narration | dialogue | thought | sfx | interjection
+	Text         string   `json:"text"`
+	Speaker      string   `json:"speaker,omitempty"`
+	Target       string   `json:"target,omitempty"`
+	Position     string   `json:"position,omitempty"`
+	Tone         string   `json:"tone,omitempty"`
+	Volume       string   `json:"volume,omitempty"` // whisper | normal | shout
+	Rhythm       string   `json:"rhythm,omitempty"`
+	BalloonStyle string   `json:"balloonStyle,omitempty"`
+	TailTarget   string   `json:"tailTarget,omitempty"`
+	Emphasis     []string `json:"emphasis,omitempty"`
+	RenderMode   string   `json:"renderMode,omitempty"` // overlay | image
+}
+
+// FragmentSpatialRelation describes narrative staging rather than physical
+// coordinates. The layout/render layer translates these relations into a
+// concrete composition while preserving the dramatic intent.
+type FragmentSpatialRelation struct {
+	Subject          string   `json:"subject"`
+	Relation         string   `json:"relation"` // dominates | looks_at | between | shields | follows | overlaps
+	Object           []string `json:"object,omitempty"`
+	VisualExpression string   `json:"visualExpression,omitempty"`
+	Priority         string   `json:"priority,omitempty"` // required | preferred
 }
 
 // FragmentReferenceAsset 是按策略生成或复用的实体参考资产。
@@ -220,16 +246,146 @@ type FragmentReferenceAsset struct {
 
 // FragmentEntityBinding 描述单格中实体的关系绑定，避免多人/多物品串位。
 type FragmentEntityBinding struct {
-	Key             string `json:"key"`
-	Kind            string `json:"kind"` // character | prop | location
-	Role            string `json:"role,omitempty"`
-	Position        string `json:"position,omitempty"`
-	Action          string `json:"action,omitempty"`
-	OwnerKey        string `json:"ownerKey,omitempty"`
-	ConsistencyNote string `json:"consistencyNote,omitempty"`
+	Key                    string  `json:"key"`
+	Kind                   string  `json:"kind"` // character | prop | location
+	Role                   string  `json:"role,omitempty"`
+	Position               string  `json:"position,omitempty"`
+	Action                 string  `json:"action,omitempty"`
+	OwnerKey               string  `json:"ownerKey,omitempty"`
+	ConsistencyNote        string  `json:"consistencyNote,omitempty"`
+	NarrativeRole          string  `json:"narrativeRole,omitempty"`
+	Region                 string  `json:"region,omitempty"`
+	Depth                  string  `json:"depth,omitempty"`
+	RelativeScale          string  `json:"relativeScale,omitempty"`
+	Facing                 string  `json:"facing,omitempty"`
+	GazeTarget             string  `json:"gazeTarget,omitempty"`
+	Pose                   string  `json:"pose,omitempty"`
+	Expression             string  `json:"expression,omitempty"`
+	Emotion                string  `json:"emotion,omitempty"`
+	EmotionIntensity       float64 `json:"emotionIntensity,omitempty"`
+	StagingIntent          string  `json:"stagingIntent,omitempty"`
+	AllowComicExaggeration bool    `json:"allowComicExaggeration,omitempty"`
 }
 
-// FragmentScenePlan 是可持久化的单格生成计划。
+// FragmentComicPanelPlan 描述一张故事碎片图片内部的单个漫画格。
+// 图片槽位仍是一张最终图片；Panels 只描述这张图片内部的阅读结构。
+type FragmentComicPanelPlan struct {
+	Index          int                       `json:"index"`
+	BeatPurpose    string                    `json:"beatPurpose,omitempty"`
+	SceneDesc      string                    `json:"sceneDesc"`
+	ImagePrompt    string                    `json:"imagePrompt"`
+	ShotType       string                    `json:"shotType,omitempty"`
+	CameraAngle    string                    `json:"cameraAngle,omitempty"`
+	Composition    string                    `json:"composition,omitempty"`
+	NewInformation string                    `json:"newInformation,omitempty"`
+	DramaticIntent string                    `json:"dramaticIntent,omitempty"`
+	SilentIntent   string                    `json:"silentIntent,omitempty"`
+	ReferenceKeys  []string                  `json:"referenceKeys,omitempty"`
+	EntityBindings []FragmentEntityBinding   `json:"entityBindings,omitempty"`
+	Relations      []FragmentSpatialRelation `json:"relations,omitempty"`
+	ComicTexts     []FragmentComicText       `json:"comicTexts,omitempty"`
+}
+
+type FragmentComicRect struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+type FragmentComicPanelLayout struct {
+	Index      int               `json:"index"`
+	Rect       FragmentComicRect `json:"rect"`
+	Importance string            `json:"importance,omitempty"`
+}
+
+type FragmentComicLayout struct {
+	PageAspectRatio string                     `json:"pageAspectRatio"`
+	Gutter          float64                    `json:"gutter"`
+	ReadingOrder    []int                      `json:"readingOrder"`
+	Panels          []FragmentComicPanelLayout `json:"panels"`
+}
+
+// FragmentComicPagePlan 描述一张最终图片内部的完整漫画页结构。
+// 它不能改变外层 ImageCount：ImageCount 始终表示最终输出图片/漫画页数量。
+type FragmentComicPagePlan struct {
+	PanelCount        int                      `json:"panelCount"`
+	LayoutPreset      string                   `json:"layoutPreset"`
+	LayoutDescription string                   `json:"layoutDescription,omitempty"`
+	ReadingOrder      string                   `json:"readingOrder,omitempty"`
+	Panels            []FragmentComicPanelPlan `json:"panels"`
+	Layout            *FragmentComicLayout     `json:"layout,omitempty"`
+	PlanningStatus    string                   `json:"planningStatus,omitempty"` // planned | revised | planned_with_review_notes | fallback
+	PlanningError     string                   `json:"planningError,omitempty"`
+}
+
+type FragmentCreativeFact struct {
+	Content string `json:"content"`
+	Source  string `json:"source"` // user_text | user_image | existing_story | agent_expansion
+	Mutable bool   `json:"mutable"`
+}
+
+type FragmentInputAsset struct {
+	URL          string  `json:"url"`
+	Role         string  `json:"role"` // character_reference | style_reference | scene_reference | prop_reference | existing_story_page | general_inspiration
+	ReferenceKey string  `json:"referenceKey,omitempty"`
+	UserDeclared bool    `json:"userDeclared,omitempty"`
+	Confidence   float64 `json:"confidence,omitempty"`
+}
+
+type FragmentCreativeContext struct {
+	UserText string                 `json:"userText"`
+	Language string                 `json:"language,omitempty"`
+	Style    string                 `json:"style,omitempty"`
+	Mood     string                 `json:"mood,omitempty"`
+	Inputs   []FragmentInputAsset   `json:"inputs,omitempty"`
+	Facts    []FragmentCreativeFact `json:"facts,omitempty"`
+}
+
+type FragmentCharacterState struct {
+	CharacterKey       string            `json:"characterKey"`
+	CurrentLocationKey string            `json:"currentLocationKey,omitempty"`
+	CurrentClothing    []string          `json:"currentClothing,omitempty"`
+	Holding            []string          `json:"holding,omitempty"`
+	Injuries           []string          `json:"injuries,omitempty"`
+	Knowledge          []string          `json:"knowledge,omitempty"`
+	Emotion            string            `json:"emotion,omitempty"`
+	Relationships      map[string]string `json:"relationships,omitempty"`
+}
+
+type FragmentStoryState struct {
+	Characters      []FragmentCharacterState `json:"characters,omitempty"`
+	CurrentLocation string                   `json:"currentLocation,omitempty"`
+	LastPageResult  string                   `json:"lastPageResult,omitempty"`
+}
+
+type FragmentComicPageDocument struct {
+	PageIndex          int                   `json:"pageIndex"`
+	PageIntent         string                `json:"pageIntent"`
+	Plan               FragmentComicPagePlan `json:"plan"`
+	TextLayers         []FragmentComicText   `json:"textLayers,omitempty"`
+	PanelImageURLs     []string              `json:"panelImageUrls,omitempty"`
+	BackgroundImageURL string                `json:"backgroundImageUrl,omitempty"`
+	FlattenedImageURL  string                `json:"flattenedImageUrl,omitempty"`
+	Status             string                `json:"status"`
+}
+
+// FragmentComicDocument is the versioned source of truth for generation,
+// continuation and editing. It is persisted inside the generation result so
+// older fragments remain readable without a schema migration.
+type FragmentComicDocument struct {
+	SchemaVersion   int                         `json:"schemaVersion"`
+	Revision        int                         `json:"revision"`
+	FragmentID      string                      `json:"fragmentId,omitempty"`
+	CreativeContext FragmentCreativeContext     `json:"creativeContext"`
+	VisualBible     *FragmentVisualBible        `json:"visualBible,omitempty"`
+	StoryState      FragmentStoryState          `json:"storyState"`
+	Pages           []FragmentComicPageDocument `json:"pages"`
+	ReferenceAssets []FragmentReferenceAsset    `json:"referenceAssets,omitempty"`
+}
+
+// FragmentScenePlan 是可持久化的单张图片（漫画页）生成计划。
+// 历史任务没有 ComicPage 时仍按旧的单幅插图逻辑回放。
 type FragmentScenePlan struct {
 	Index             int                     `json:"index"`
 	SceneDesc         string                  `json:"sceneDesc"`
@@ -238,9 +394,11 @@ type FragmentScenePlan struct {
 	ReferenceKeys     []string                `json:"referenceKeys,omitempty"`
 	EntityBindings    []FragmentEntityBinding `json:"entityBindings,omitempty"`
 	ComicTexts        []FragmentComicText     `json:"comicTexts,omitempty"`
+	ComicPage         *FragmentComicPagePlan  `json:"comicPage,omitempty"`
 	Seed              int                     `json:"seed,omitempty"`
 	ProviderOptions   map[string]interface{}  `json:"providerOptions,omitempty"`
 	GeneratedImageURL string                  `json:"generatedImageUrl,omitempty"`
+	PanelImageURLs    []string                `json:"panelImageUrls,omitempty"`
 }
 
 // FragmentConsistencyPolicy 记录一次任务实际采用的一致性策略。
@@ -279,6 +437,7 @@ type FragmentConsistencyIssue struct {
 
 // FragmentGenerationTrace 保存完整生成计划、策略、成本和审计信息。
 type FragmentGenerationTrace struct {
+	ComicDocument       *FragmentComicDocument         `json:"comicDocument,omitempty"`
 	VisualBible         *FragmentVisualBible           `json:"visualBible,omitempty"`
 	VisualEvidence      []FragmentVisualEvidence       `json:"visualEvidence,omitempty"`
 	Scenes              []FragmentScenePlan            `json:"scenes,omitempty"`
@@ -312,6 +471,7 @@ type FragmentGenerationResult struct {
 	GenerationTrace    *FragmentGenerationTrace         `json:"generationTrace,omitempty"`    // 完整生成 trace
 	ConsistencyIssues  []FragmentConsistencyIssue       `json:"consistencyIssues,omitempty"`  // 一致性检查（best-effort）
 	StoryElements      []FragmentReferenceSlot          `json:"storyElements,omitempty"`      // 分析/生成时使用的语义元素槽位
+	ComicDocument      *FragmentComicDocument           `json:"comicDocument,omitempty"`
 }
 
 // FragmentGenerationImageSlot 是故事碎片生成的单张图片槽位。
@@ -323,7 +483,7 @@ type FragmentGenerationImageSlot struct {
 	Index        int    `json:"index"`
 	Title        string `json:"title,omitempty"`
 	Caption      string `json:"caption,omitempty"`
-	Status       string `json:"status,omitempty"` // planned | generating | completed | failed
+	Status       string `json:"status,omitempty"` // planning | planned | generating | completed | needs_review | failed
 	ImageURL     string `json:"imageUrl,omitempty"`
 	AssetID      string `json:"assetId,omitempty"`
 	ErrorMessage string `json:"errorMessage,omitempty"`

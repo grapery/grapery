@@ -322,12 +322,14 @@ type RegisterRequest struct {
 	DateOfBirth    string `json:"dateOfBirth,omitempty"` // YYYY-MM-DD
 	AgreeTerms     bool   `json:"agreeTerms" binding:"required"`
 	InvitationCode string `json:"invitationCode,omitempty"` // 邀请码（可选）
+	DeviceID       string `json:"deviceId,omitempty"`
 }
 
 // LoginRequest 登录请求
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
+	DeviceID string `json:"deviceId,omitempty"`
 }
 
 // LoginResponse 登录响应
@@ -363,6 +365,7 @@ type LoginInfo struct {
 	OS        string // 操作系统
 	Browser   string // 浏览器
 	UserAgent string // 完整的 User-Agent 字符串
+	DeviceID  string // 客户端安装级设备标识（保存在 ThisDeviceOnly Keychain）
 }
 
 // Register 用户注册
@@ -517,7 +520,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*LoginRes
 		return nil, errors.New("failed to generate authentication token")
 	}
 
-	refreshToken, err := auth.GenerateRefreshToken(user.ID)
+	refreshToken, err := auth.GenerateRefreshTokenForDevice(user.ID, normalizeAuthDeviceID(req.DeviceID))
 	if err != nil {
 		s.logger.Error("failed to generate refresh token", zap.Error(err))
 		return nil, errors.New("failed to generate refresh token")
@@ -594,7 +597,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, loginInfo *Login
 		return nil, errors.New("failed to generate authentication token")
 	}
 
-	refreshToken, err := auth.GenerateRefreshToken(user.ID)
+	refreshToken, err := auth.GenerateRefreshTokenForDevice(user.ID, normalizeAuthDeviceID(req.DeviceID))
 	if err != nil {
 		s.logger.Error("failed to generate refresh token", zap.Error(err))
 		return nil, errors.New("failed to generate refresh token")
@@ -716,7 +719,9 @@ func (s *Service) ResetPassword(ctx context.Context, req *PasswordResetConfirm) 
 
 	// 更新密码
 	user.PasswordHash = passwordHash
-	user.UpdatedAt = time.Now().Unix()
+	now := time.Now().Unix()
+	user.CredentialsChangedAt = now
+	user.UpdatedAt = now
 
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		s.logger.Error("failed to update password", zap.Error(err))
@@ -759,7 +764,9 @@ func (s *Service) ChangePassword(ctx context.Context, userID string, req *Change
 
 	// 更新密码
 	user.PasswordHash = passwordHash
-	user.UpdatedAt = time.Now().Unix()
+	now := time.Now().Unix()
+	user.CredentialsChangedAt = now
+	user.UpdatedAt = now
 
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		s.logger.Error("failed to update password", zap.Error(err))
@@ -775,24 +782,34 @@ func (s *Service) ChangePassword(ctx context.Context, userID string, req *Change
 }
 
 // RefreshToken 刷新访问令牌
-func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
+func (s *Service) RefreshToken(ctx context.Context, refreshToken, requestDeviceID string) (*LoginResponse, error) {
 	// 解析刷新令牌
-	claims, err := auth.ParseToken(refreshToken)
+	claims, err := auth.ParseRefreshToken(refreshToken)
 	if err != nil {
 		return nil, errors.New("invalid refresh token")
+	}
+	requestDeviceID = normalizeAuthDeviceID(requestDeviceID)
+	if claims.DeviceID != "" && (requestDeviceID == "" || claims.DeviceID != requestDeviceID) {
+		return nil, errors.New("invalid refresh token: belongs to another device")
 	}
 
 	// 获取用户
 	user, err := s.repo.UserByID(ctx, claims.UserID)
-	if err != nil || user == nil {
-		return nil, errors.New("user not found")
+	if err != nil {
+		return nil, fmt.Errorf("load refresh-token user: %w", err)
+	}
+	if user == nil {
+		return nil, errors.New("invalid refresh token: user no longer exists")
+	}
+	if user.CredentialsChangedAt > 0 && (claims.IssuedAt == nil || claims.IssuedAt.Time.Unix() < user.CredentialsChangedAt) {
+		return nil, errors.New("invalid refresh token: revoked after credentials changed")
 	}
 
 	// 检查用户状态（注销冷静期仍允许刷新令牌）
 	switch user.Status {
 	case string(common.StatusActive), string(common.StatusPendingDeletion):
 	default:
-		return nil, fmt.Errorf("account is %s", user.Status)
+		return nil, fmt.Errorf("invalid refresh token: account is %s", user.Status)
 	}
 
 	// 生成新的访问令牌
@@ -802,7 +819,11 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 	}
 
 	// 生成新的刷新令牌
-	newRefreshToken, err := auth.GenerateRefreshToken(user.ID)
+	boundDeviceID := claims.DeviceID
+	if boundDeviceID == "" {
+		boundDeviceID = requestDeviceID // one-time migration from legacy unbound refresh tokens
+	}
+	newRefreshToken, err := auth.GenerateRefreshTokenForDevice(user.ID, boundDeviceID)
 	if err != nil {
 		return nil, errors.New("failed to generate refresh token")
 	}
@@ -815,6 +836,14 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Login
 		RefreshToken: newRefreshToken,
 		ExpiresIn:    24 * 3600,
 	}, nil
+}
+
+func normalizeAuthDeviceID(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if len(raw) > 128 {
+		return raw[:128]
+	}
+	return raw
 }
 
 // registrationCreateUserError maps known DB constraint failures to client-safe messages.

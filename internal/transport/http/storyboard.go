@@ -77,21 +77,6 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		return
 	}
 
-	// 检查用户是否有权限在该故事中创建 storyboard
-	canCreate, err := h.svc.CanCreateStoryboard(c.Request.Context(), req.StoryID, uid)
-	if err != nil {
-		h.logger.Error("failed to check create permission",
-			zap.String("storyId", req.StoryID),
-			zap.String("userId", uid),
-			zap.Error(err))
-		InternalError(c, "failed to check permission")
-		return
-	}
-	if !canCreate {
-		Forbidden(c, "you don't have permission to create storyboard in this story")
-		return
-	}
-
 	h.logger.Info("CreateStoryboard called",
 		zap.String("storyId", req.StoryID),
 		zap.String("title", req.Title),
@@ -107,8 +92,35 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 
 	// Set parentID from request
 	parentID := ""
-	if req.ParentID != nil && *req.ParentID != "" {
-		parentID = *req.ParentID
+	if req.ParentID != nil {
+		parentID = strings.TrimSpace(*req.ParentID)
+	}
+	if parentID == "root" {
+		parentID = domain.StoryboardRootMarker
+	}
+
+	// Root creation and continuation are separate capabilities. Only the Story
+	// owner may start a root; a real parent uses the parent-specific contract.
+	if parentID == "" || parentID == domain.StoryboardRootMarker {
+		canCreate, permissionErr := h.svc.CanCreateStoryboard(c.Request.Context(), req.StoryID, uid)
+		if permissionErr != nil {
+			HandleError(c, permissionErr)
+			return
+		}
+		if !canCreate {
+			Forbidden(c, "root_storyboard_author_only")
+			return
+		}
+	} else {
+		permission, permissionErr := h.svc.CanForkStoryboard(c.Request.Context(), parentID, uid)
+		if permissionErr != nil {
+			HandleError(c, permissionErr)
+			return
+		}
+		if !permission.Allowed {
+			Forbidden(c, permission.Reason)
+			return
+		}
 	}
 
 	storyboard := &domain.Storyboard{
@@ -130,7 +142,12 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 			InternalError(c, "workflow registry unavailable")
 			return
 		}
-		entry, promptSnapshots, err := h.workflowRegistry.ResolvePinnedPromptSnapshots(c.Request.Context(), "voyager.storyboard", "generate", "", releaseID)
+		routingInput := map[string]any{
+			"storyId": req.StoryID, "rawInput": req.RawInput, "chapterContent": req.Content,
+			"sceneCount": sceneCount, "comicStyle": req.ComicStyle,
+			"parentStoryboardId": parentID, "useComicPagePipeline": req.UseComicPagePipeline,
+		}
+		entry, promptSnapshots, err := h.workflowRegistry.ResolvePinnedPromptSnapshotsForInput(c.Request.Context(), "voyager.storyboard", "generate", "", releaseID, routingInput)
 		if err != nil {
 			h.logger.Warn("storyboard workflow context resolution failed", zap.String("releaseId", releaseID), zap.Error(err))
 			InvalidParams(c, "storyboard workflow release changed; refresh and retry")
@@ -178,7 +195,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		h.logger.Error("CreateStoryboard failed",
 			zap.String("storyId", req.StoryID),
 			zap.Error(err))
-		InternalError(c, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -510,6 +527,16 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 		InvalidParams(c, "storyId is required")
 		return
 	}
+	story, err := h.svc.GetStory(c.Request.Context(), storyID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	if !h.svc.CanViewerSeeStory(c.Request.Context(), GetUserID(c), story) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
+	includeUnpublished := h.svc.CanViewUnpublishedStoryboards(c.Request.Context(), story, GetUserID(c))
 
 	parentID := c.Query("parentId")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -523,13 +550,13 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 
 	var storyboards []*domain.Storyboard
 	var parentStoryboard *domain.Storyboard
-	var err error
+	err = nil
 
 	// 根据 parentId 参数决定获取哪些故事板
 	switch parentID {
-	case "", "root":
+	case "", "root", domain.StoryboardRootMarker:
 		// 获取根故事板（ParentID 为空或 "__root__"）
-		storyboards, err = h.svc.ListRootStoryboards(c.Request.Context(), storyID, limit, offset)
+		storyboards, err = h.svc.ListRootStoryboards(c.Request.Context(), storyID, limit, offset, includeUnpublished)
 	default:
 		parentStoryboard, err = h.svc.GetStoryboard(c.Request.Context(), parentID)
 		if err != nil {
@@ -544,8 +571,12 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 			InternalError(c, err.Error())
 			return
 		}
+		if parentStoryboard.StoryID != storyID || !h.svc.CanViewerSeeStoryboard(c.Request.Context(), GetUserID(c), parentStoryboard, false) {
+			HandleError(c, domain.ErrForbidden)
+			return
+		}
 		// 获取指定父级的子故事板
-		storyboards, err = h.svc.ListStoryboardsByParent(c.Request.Context(), storyID, parentID, limit, offset)
+		storyboards, err = h.svc.ListStoryboardsByParent(c.Request.Context(), storyID, parentID, limit, offset, includeUnpublished)
 	}
 
 	if err != nil {
@@ -589,8 +620,23 @@ func (h *Handler) ListStoryboards(c *gin.Context) {
 // GetStoryboardChildren 获取子 storyboards
 func (h *Handler) GetStoryboardChildren(c *gin.Context) {
 	parentID := c.Param("id")
+	parent, err := h.svc.GetStoryboard(c.Request.Context(), parentID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	if !h.svc.CanViewerSeeStoryboard(c.Request.Context(), GetUserID(c), parent, false) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
 
-	children, err := h.svc.GetStoryboardChildren(c.Request.Context(), parentID)
+	story, err := h.svc.GetStory(c.Request.Context(), parent.StoryID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	includeUnpublished := h.svc.CanViewUnpublishedStoryboards(c.Request.Context(), story, GetUserID(c))
+	children, err := h.svc.GetStoryboardChildren(c.Request.Context(), parentID, includeUnpublished)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -607,8 +653,23 @@ func (h *Handler) GetStoryboardChildren(c *gin.Context) {
 // GetStoryboardTree 获取完整的 storyboard 树
 func (h *Handler) GetStoryboardTree(c *gin.Context) {
 	rootID := c.Param("id")
+	root, err := h.svc.GetStoryboard(c.Request.Context(), rootID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	if !h.svc.CanViewerSeeStoryboard(c.Request.Context(), GetUserID(c), root, false) {
+		HandleError(c, domain.ErrForbidden)
+		return
+	}
 
-	tree, err := h.svc.GetStoryboardTree(c.Request.Context(), rootID)
+	story, err := h.svc.GetStory(c.Request.Context(), root.StoryID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	includeUnpublished := h.svc.CanViewUnpublishedStoryboards(c.Request.Context(), story, GetUserID(c))
+	tree, err := h.svc.GetStoryboardTree(c.Request.Context(), rootID, includeUnpublished)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
@@ -631,9 +692,8 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		Title         string                `json:"title" binding:"required"`
 		RawInput      string                `json:"rawInput" binding:"required"`
 		Content       string                `json:"content"`
-		IsStandalone  bool                  `json:"isStandalone"` // Independent plot, AI won't reference parent context
-		SceneCount    int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-8, default 3)
-		SceneRefs     []sceneRefPayload     `json:"sceneRefs"`    // References to story-level scenes
+		SceneCount    int                   `json:"sceneCount"` // Requested number of scenes to generate (2-8, default 3)
+		SceneRefs     []sceneRefPayload     `json:"sceneRefs"`  // References to story-level scenes
 		CharacterRefs []characterRefPayload `json:"characterRefs"`
 	}
 
@@ -652,7 +712,7 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 		Title:        req.Title,
 		RawInput:     req.RawInput,
 		Content:      req.Content,
-		IsStandalone: req.IsStandalone,
+		IsStandalone: false,
 		SceneCount:   sceneCount,
 		// StoryboardScenes are generated by AI, not passed in fork request
 	}
@@ -690,13 +750,33 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 
 	// AI generation is handled by ForkStoryboard service when content is empty and rawInput is provided
 	if err := h.svc.ForkStoryboard(c.Request.Context(), parentID, userID.(string), newStoryboard); err != nil {
-		InternalError(c, err.Error())
+		HandleError(c, err)
 		return
 	}
 
 	h.attachStoryboardIsLiked(c, newStoryboard)
 	domain.RedactStoryboardViewsUnlessCreator(newStoryboard, userID.(string))
 	Success(c, newStoryboard)
+}
+
+// GetStoryboardForkPermission returns the server-authoritative preflight result.
+// GET /api/v1/storyboards/:id/fork-permission
+func (h *Handler) GetStoryboardForkPermission(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	parentID, ok := RequireParam(c, "id")
+	if !ok {
+		return
+	}
+
+	permission, err := h.svc.CanForkStoryboard(c.Request.Context(), parentID, userID)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, permission)
 }
 
 // ContinueStoryboard 继续故事板（平行宇宙续写）
@@ -739,7 +819,7 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 		h.logger.Error("ContinueStoryboard failed",
 			zap.String("parentId", parentID),
 			zap.Error(err))
-		InternalError(c, err.Error())
+		HandleError(c, err)
 		return
 	}
 

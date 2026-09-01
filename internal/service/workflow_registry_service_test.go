@@ -73,6 +73,10 @@ func (r *workflowRegistryMemoryRepo) ListWorkflowCatalog(_ context.Context, surf
 	return out, nil
 }
 
+func (r *workflowRegistryMemoryRepo) ListWorkflowReleaseStats(_ context.Context, _ time.Time) ([]domain.WorkflowReleaseStats, error) {
+	return nil, nil
+}
+
 func TestWorkflowRegistryPublishResolveAndPinVersions(t *testing.T) {
 	ctx := context.Background()
 	repo := newWorkflowRegistryMemoryRepo()

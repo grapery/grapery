@@ -22,6 +22,122 @@ func TestMergeStoryboardSceneDescriptionForImage(t *testing.T) {
 	}
 }
 
+func TestMergeStoryboardPlannedSceneForImageCarriesVisualContract(t *testing.T) {
+	planned := &domain.StoryboardScene{
+		ImagePrompt:    "planned rain-station close-up",
+		ContinuityNote: "same red coat",
+		LayoutIntent:   "single_subject_focus", ShotType: "close_up",
+		CompositionPlan: "ticket in foreground", VisualHierarchy: "ticket first",
+	}
+	out := mergeStoryboardPlannedSceneForImage("她低头看票。", planned)
+	for _, want := range []string{"她低头看票", "planned rain-station close-up", "same red coat", "layout_intent=single_subject_focus", "shot_type=close_up"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected planned field %q in merged description: %s", want, out)
+		}
+	}
+}
+
+func TestCompileStoryboardImagePromptFromPlanAvoidsSecondRewrite(t *testing.T) {
+	svc := &Service{}
+	gen := &domain.StoryboardImageGeneration{
+		SceneTitle: "雨夜车站", SceneDescription: "她发现车票日期不对。", ContentLanguage: "zh-Hans",
+		PlannedScene: &domain.StoryboardScene{ImagePrompt: "close-up of a wet train ticket", ShotType: "close_up", CompositionPlan: "ticket dominates foreground"},
+	}
+	if !compileStoryboardImagePromptFromPlan(svc, gen) {
+		t.Fatal("expected deterministic compilation from persisted scene plan")
+	}
+	for _, want := range []string{"close-up of a wet train ticket", "ticket dominates foreground", "她发现车票日期不对"} {
+		if !strings.Contains(gen.GeneratedPrompt, want) {
+			t.Fatalf("expected %q in compiled prompt: %s", want, gen.GeneratedPrompt)
+		}
+	}
+}
+
+func TestStoryboardReferenceManifestKeepsSemanticOrderAndDeduplicates(t *testing.T) {
+	seen := map[string]struct{}{}
+	var refs []domain.StoryboardImageReference
+	refs = appendStoryboardImageReference(refs, seen, "https://img/previous.png", domain.StoryboardImageReferencePreviousPanel, "scene_0", 6)
+	refs = appendStoryboardImageReference(refs, seen, "https://img/hero.png", domain.StoryboardImageReferenceCharacter, "char_hero", 6)
+	refs = appendStoryboardImageReference(refs, seen, "https://img/previous.png", domain.StoryboardImageReferenceUser, "", 6)
+	refs = appendStoryboardImageReference(refs, seen, "https://img/mood.png", domain.StoryboardImageReferenceUser, "", 6)
+
+	if len(refs) != 3 {
+		t.Fatalf("expected duplicate URL to be removed, got %#v", refs)
+	}
+	wantRoles := []string{
+		domain.StoryboardImageReferencePreviousPanel,
+		domain.StoryboardImageReferenceCharacter,
+		domain.StoryboardImageReferenceUser,
+	}
+	for i, want := range wantRoles {
+		if refs[i].Role != want {
+			t.Fatalf("reference %d role = %q, want %q", i, refs[i].Role, want)
+		}
+	}
+	urls := storyboardReferenceURLs(refs)
+	if strings.Join(urls, ",") != "https://img/previous.png,https://img/hero.png,https://img/mood.png" {
+		t.Fatalf("unexpected provider URL order: %#v", urls)
+	}
+}
+
+func TestStoryboardVisualScenePromptInputCarriesTypedReferencesAndPlan(t *testing.T) {
+	gen := &domain.StoryboardImageGeneration{
+		SceneTitle:       "A silent arrival",
+		SceneDescription: "The traveler enters the empty station.",
+		ContentLanguage:  "en",
+		PlannedScene: &domain.StoryboardScene{
+			ImagePrompt:     "wide shot, rain-lit platform",
+			ContinuityNote:  "same red coat",
+			LayoutIntent:    "wide_establishing",
+			CompositionPlan: "traveler left, tracks lead right",
+			ShotType:        "wide_shot",
+			VisualHierarchy: "traveler, rails, station",
+		},
+		ReferenceManifest: []domain.StoryboardImageReference{
+			{URL: "https://img/previous.png", Role: domain.StoryboardImageReferencePreviousPanel},
+			{URL: "https://img/hero.png", Role: domain.StoryboardImageReferenceCharacter, Key: "char_hero"},
+		},
+	}
+	input := visualSceneSpecPromptInput(storyboardVisualSceneSpec(gen))
+	if input["plannedVisualPrompt"] != "wide shot, rain-lit platform" || input["contentLanguage"] != "en" {
+		t.Fatalf("planned scene contract was not preserved: %#v", input)
+	}
+	refs, ok := input["references"].([]map[string]string)
+	if !ok || len(refs) != 2 || refs[0]["role"] != domain.StoryboardImageReferencePreviousPanel || refs[1]["key"] != "char_hero" {
+		t.Fatalf("typed references missing from prompt input: %#v", input["references"])
+	}
+}
+
+func TestStoryboardComicTextLimitsFollowContentLanguage(t *testing.T) {
+	english := normalizeStoryboardComicTextsForLanguage([]domain.StoryboardComicText{{Type: "dialogue", Text: strings.Repeat("a", 40)}}, "en")
+	chinese := normalizeStoryboardComicTextsForLanguage([]domain.StoryboardComicText{{Type: "dialogue", Text: strings.Repeat("字", 20)}}, "zh-Hans")
+	if len([]rune(english[0].Text)) != 32 {
+		t.Fatalf("English comic text should allow 32 characters, got %q", english[0].Text)
+	}
+	if len([]rune(chinese[0].Text)) != 12 {
+		t.Fatalf("CJK comic text should allow 12 characters, got %q", chinese[0].Text)
+	}
+}
+
+func TestStoryboardFinalPromptPrefersExplicitLanguageOverTextGuess(t *testing.T) {
+	var svc Service
+	details := &domain.ImagePromptDetails{ComicTexts: []domain.StoryboardComicText{{Type: "dialogue", Text: "出発"}}}
+	out := svc.combineImagePrompt(details, "東京駅", "少年出発", "ja")
+	if !strings.Contains(out, "supplied Japanese text") {
+		t.Fatalf("explicit Japanese language should override Han-only text inference: %s", out)
+	}
+}
+
+func TestWordlessStoryboardPromptForbidsEmptyLetteringContainers(t *testing.T) {
+	var svc Service
+	out := svc.combineImagePrompt(&domain.ImagePromptDetails{Composition: "quiet wide shot"}, "Silent", "Empty station")
+	for _, want := range []string{"wordless", "Do not draw speech balloons", "caption boxes", "pseudo-readable text"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("wordless prompt missing %q: %s", want, out)
+		}
+	}
+}
+
 func TestPrependStoryboardImageNarrativeBlock(t *testing.T) {
 	nb := storyboardSceneNarrativeBlock("T", "Desc line")
 	out := prependStoryboardImageNarrativeBlock(nb, "Art style: x")
@@ -91,20 +207,18 @@ func TestCombineImagePrompt_SkipsEmptyComicText(t *testing.T) {
 	}
 }
 
-func TestMergePlannedStoryboardComicTextsIntoDetails(t *testing.T) {
-	details := &domain.ImagePromptDetails{
-		ComicTexts: []domain.StoryboardComicText{
-			{Type: "thought", Text: ""},
-		},
+func TestApplyPlannedStoryboardComicTextsIsAuthoritative(t *testing.T) {
+	details := &domain.ImagePromptDetails{ComicTexts: []domain.StoryboardComicText{{Type: "dialogue", Text: "模型擅自添加的对白"}}}
+	planned := &domain.StoryboardScene{ComicTexts: []domain.StoryboardComicText{
+		{Type: "narration", Text: "这是规划阶段确定且明显超过十二个汉字的旁白"},
+		{Type: "narration", Text: "第二条旁白应丢弃"},
+	}}
+	applyPlannedStoryboardComicTextsToDetails(details, planned)
+	if len(details.ComicTexts) != 1 || details.ComicTexts[0].Type != "narration" {
+		t.Fatalf("planned lettering should replace normalizer output: %#v", details.ComicTexts)
 	}
-	planned := &domain.StoryboardScene{
-		ComicTexts: []domain.StoryboardComicText{
-			{Type: "thought", Text: "从场景合并"},
-		},
-	}
-	mergePlannedStoryboardComicTextsIntoDetails(details, planned)
-	if details.ComicTexts[0].Text != "从场景合并" {
-		t.Fatalf("got %q", details.ComicTexts[0].Text)
+	if len([]rune(details.ComicTexts[0].Text)) > 12 {
+		t.Fatalf("planned lettering should be capped: %q", details.ComicTexts[0].Text)
 	}
 }
 

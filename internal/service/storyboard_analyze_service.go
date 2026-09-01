@@ -25,23 +25,46 @@ func (s *Service) AnalyzeStoryboardDirection(ctx context.Context, userID string,
 		sceneCount = 3
 	}
 	sceneCount = normalizeStoryboardSceneCount(sceneCount)
+	if explicit := explicitCreativeCount(input); explicit > 0 {
+		sceneCount = normalizeStoryboardSceneCount(explicit)
+	}
 	style := strings.TrimSpace(req.Style)
-	if style == "" {
+	if explicit := explicitCreativeStyle(input); explicit != "" {
+		style = explicit
+	} else if style == "" {
 		style = inferStoryboardAnalyzeStyle(input)
 	}
 	useComic := false
 	if req.UseComicPagePipeline != nil {
 		useComic = *req.UseComicPagePipeline
 	}
+	aspectRatio := domain.NormalizeFragmentAspectRatio(req.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = "16:9"
+	}
+	if explicit := explicitCreativeAspectRatio(input); explicit != "" {
+		aspectRatio = explicit
+	}
 
+	hasExisting := strings.TrimSpace(req.ParentStoryboardID) != "" || strings.TrimSpace(req.TargetDraftStoryboardID) != ""
+	editPlan := planCreativeEdit(input, hasExisting, "格")
 	intentType := inferStoryboardInputIntent(input)
+	if editPlan.NeedsClarification {
+		intentType = "ask_clarification"
+	} else if editPlan.Operation == "replace" {
+		intentType = "revise_current"
+	} else if editPlan.Operation == "adjust_options" {
+		intentType = "adjust_options"
+	}
 	resp := &domain.StoryboardAnalyzeResponse{
 		AssistantMessage: summarizeStoryboardAnalyzeMessage(input, req.ParentStoryboardID),
 		IntentType:       intentType,
+		EditPlan:         editPlan,
 		GenerationIntent: domain.StoryboardGenerationIntent{
 			UserInput:             input,
 			SceneCount:            sceneCount,
 			Style:                 style,
+			AspectRatio:           aspectRatio,
 			Language:              language,
 			StoryID:               strings.TrimSpace(req.StoryID),
 			ParentStoryboardID:    strings.TrimSpace(req.ParentStoryboardID),
@@ -53,8 +76,34 @@ func (s *Service) AnalyzeStoryboardDirection(ctx context.Context, userID string,
 			CanStart:        intentType != "chat_only" && intentType != "ask_clarification",
 		},
 	}
+	if editPlan.NeedsClarification {
+		resp.AssistantMessage = editPlan.ClarificationQuestion
+	}
 
 	if storyID := strings.TrimSpace(req.StoryID); storyID != "" && s.repo != nil {
+		story, err := s.repo.StoryByID(ctx, storyID)
+		if err != nil {
+			return nil, fmt.Errorf("load story framework: %w", err)
+		}
+		if story == nil {
+			return nil, fmt.Errorf("load story framework: story not found")
+		}
+		alignment := storyboardFrameworkAlignment(story)
+		var parent *domain.Storyboard
+		if parentID := strings.TrimSpace(req.ParentStoryboardID); parentID != "" {
+			parent, err = s.repo.StoryboardByID(ctx, parentID)
+			if err != nil {
+				return nil, fmt.Errorf("load parent storyboard framework: %w", err)
+			}
+			if parent == nil {
+				return nil, fmt.Errorf("load parent storyboard framework: storyboard not found")
+			}
+			if parent.StoryID != storyID {
+				return nil, fmt.Errorf("parent storyboard belongs to different story")
+			}
+			applyParentStoryboardFramework(alignment, parent)
+		}
+
 		if chars, err := s.repo.CharactersByStory(ctx, storyID); err == nil {
 			for _, ch := range chars {
 				if ch == nil {
@@ -64,13 +113,15 @@ func (s *Service) AnalyzeStoryboardDirection(ctx context.Context, userID string,
 				if name == "" {
 					continue
 				}
-				resp.CharacterCandidates = append(resp.CharacterCandidates, domain.StoryboardCharacterCandidate{
-					ID:   ch.ID,
-					Name: name,
-					Hint: "可选入镜角色",
-				})
-				if len(resp.CharacterCandidates) >= 10 {
-					break
+				if len(resp.CharacterCandidates) < 10 {
+					resp.CharacterCandidates = append(resp.CharacterCandidates, domain.StoryboardCharacterCandidate{
+						ID:   ch.ID,
+						Name: name,
+						Hint: "可选入镜角色",
+					})
+				}
+				if storyboardInputMentions(input, ch.Name) {
+					resp.GenerationIntent.CharacterIDs = appendUniqueString(resp.GenerationIntent.CharacterIDs, ch.ID)
 				}
 			}
 		} else {
@@ -78,6 +129,30 @@ func (s *Service) AnalyzeStoryboardDirection(ctx context.Context, userID string,
 				zap.String("storyId", storyID),
 				zap.Error(err))
 		}
+		if len(resp.GenerationIntent.CharacterIDs) == 0 && parent != nil {
+			for _, ref := range parent.CharacterRefs {
+				resp.GenerationIntent.CharacterIDs = appendUniqueString(resp.GenerationIntent.CharacterIDs, ref.CharacterID)
+			}
+		}
+		if scenes, err := s.repo.StoryScenes(ctx, storyID, 100, 0); err == nil {
+			for _, scene := range scenes {
+				if scene != nil && (storyboardInputMentions(input, scene.Title) || storyboardInputMentions(input, scene.Location)) {
+					resp.GenerationIntent.SceneIDs = appendUniqueString(resp.GenerationIntent.SceneIDs, scene.ID)
+				}
+			}
+		}
+		if len(resp.GenerationIntent.SceneIDs) == 0 && parent != nil {
+			for _, ref := range parent.SceneRefs {
+				resp.GenerationIntent.SceneIDs = appendUniqueString(resp.GenerationIntent.SceneIDs, ref.StorySceneID)
+			}
+		}
+		alignment.Warnings = append(alignment.Warnings, detectStoryboardFrameworkWarnings(input)...)
+		if len(alignment.Warnings) > 0 {
+			alignment.Status = "needs_confirmation"
+			alignment.RequiresConfirmation = true
+		}
+		resp.FrameworkAlignment = alignment
+		resp.RecommendedOptions.CanStart = resp.RecommendedOptions.CanStart && !alignment.Blocking
 	}
 
 	if draftID := strings.TrimSpace(req.TargetDraftStoryboardID); draftID != "" && s.repo != nil {
@@ -86,6 +161,66 @@ func (s *Service) AnalyzeStoryboardDirection(ctx context.Context, userID string,
 		}
 	}
 	return resp, nil
+}
+
+func storyboardFrameworkAlignment(story *domain.Story) *domain.StoryboardFrameworkAlignment {
+	alignment := &domain.StoryboardFrameworkAlignment{Status: "aligned"}
+	if story == nil {
+		return alignment
+	}
+	alignment.StoryTitle = strings.TrimSpace(story.Title)
+	alignment.StoryGenre = strings.TrimSpace(story.Genre)
+	alignment.StoryPremise = truncateStringToMaxRunes(strings.TrimSpace(story.Description), 180)
+	if alignment.StoryPremise != "" {
+		alignment.InheritedFacts = append(alignment.InheritedFacts, "遵循故事核心前提与世界设定")
+	}
+	if alignment.StoryGenre != "" {
+		alignment.InheritedFacts = append(alignment.InheritedFacts, "保持「"+alignment.StoryGenre+"」题材基调")
+	}
+	return alignment
+}
+
+func applyParentStoryboardFramework(alignment *domain.StoryboardFrameworkAlignment, parent *domain.Storyboard) {
+	if alignment == nil || parent == nil {
+		return
+	}
+	alignment.ParentStoryboardTitle = strings.TrimSpace(parent.Title)
+	alignment.ParentEnding = truncateStringToMaxRunes(strings.TrimSpace(firstNonEmpty(parent.ContinuationSummary, tailRunes(parent.Content, 240))), 180)
+	alignment.InheritedFacts = append(alignment.InheritedFacts, "承接父故事板结尾与人物当前状态")
+	if alignment.ParentEnding == "" {
+		alignment.Warnings = append(alignment.Warnings, "父故事板暂时没有可用的结尾摘要，请确认本次走向能够自然承接")
+	}
+}
+
+func detectStoryboardFrameworkWarnings(input string) []string {
+	lower := strings.ToLower(strings.TrimSpace(input))
+	if lower == "" {
+		return nil
+	}
+	for _, marker := range []string{"推翻设定", "重置世界", "重启世界", "全部重来", "其实没死", "复活", "retcon", "不再是"} {
+		if strings.Contains(lower, marker) {
+			return []string{"这次描述可能改写已有设定或人物状态；继续后会把它视为你明确允许的分支变化"}
+		}
+	}
+	return nil
+}
+
+func storyboardInputMentions(input, candidate string) bool {
+	candidate = strings.TrimSpace(candidate)
+	return candidate != "" && strings.Contains(strings.ToLower(input), strings.ToLower(candidate))
+}
+
+func appendUniqueString(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func normalizeStoryboardSceneCount(count int) int {

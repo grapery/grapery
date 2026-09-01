@@ -533,8 +533,8 @@ func (h *Handler) InviteStoryContributor(c *gin.Context) {
 			NotFound(c, "user not found")
 			return
 		}
-		if err.Error() == "permission denied: not a contributor" {
-			Forbidden(c, "you don't have permission to invite contributors")
+		if errors.Is(err, domain.ErrForbidden) {
+			Forbidden(c, "only story author can invite contributors")
 			return
 		}
 		if err.Error() == "user is already a contributor" {

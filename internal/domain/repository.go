@@ -236,8 +236,8 @@ type Repository interface {
 	// SoftDeleteStoryboardRelatedData soft-deletes scenes, links, generations, likes, comments, etc.
 	SoftDeleteStoryboardRelatedData(ctx context.Context, storyboardID string) error
 	StoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)
-	RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int) ([]*Storyboard, error)        // 获取故事的根故事板（ParentID 为空或 "__root__"）
-	StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int) ([]*Storyboard, error) // 按 ParentID 过滤（仅已发布）
+	RootStoryboardsByStory(ctx context.Context, storyID string, limit, offset int, includeUnpublished bool) ([]*Storyboard, error)        // 获取故事的根故事板（ParentID 为空或 "__root__"）
+	StoryboardsByParent(ctx context.Context, storyID, parentID string, limit, offset int, includeUnpublished bool) ([]*Storyboard, error) // 按 ParentID 过滤
 	RecountParentPublishedForkCount(ctx context.Context, parentID string) error
 	StoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
 	DraftStoryboardsByCreator(ctx context.Context, creatorID string, limit, offset int) ([]*Storyboard, error)
@@ -245,8 +245,8 @@ type Repository interface {
 	CountStoryboardsByStory(ctx context.Context, storyID string) (int64, error)
 	// CharacterStoryboardCountsByStory returns participation counts keyed by characterID, counting distinct storyboard IDs within the given story.
 	CharacterStoryboardCountsByStory(ctx context.Context, storyID string) (map[string]int64, error)
-	StoryboardChildren(ctx context.Context, parentID string) ([]*Storyboard, error)
-	StoryboardTree(ctx context.Context, rootID string) ([]*Storyboard, error)
+	StoryboardChildren(ctx context.Context, parentID string, includeUnpublished bool) ([]*Storyboard, error)
+	StoryboardTree(ctx context.Context, rootID string, includeUnpublished bool) ([]*Storyboard, error)
 	StoryboardFeed(ctx context.Context, limit, offset int) ([]*Storyboard, int64, error) // Community feed of published storyboards
 	// StoryboardFeedFromFollowedStories returns the following tab: reader-visible storyboards on followed stories (story_follows)
 	// and on the viewer’s own stories (author match; any story visibility). Users auto-follow their own stories.

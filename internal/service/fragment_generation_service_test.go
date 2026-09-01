@@ -53,6 +53,73 @@ func TestInferFragmentInputIntentDistinguishesStoryFromUtilityChat(t *testing.T)
 	}
 }
 
+func TestAnalyzeFragmentStoryBuildsExecutableEditPlan(t *testing.T) {
+	service := &FragmentGenerationService{}
+	response, err := service.AnalyzeFragmentStory(context.Background(), "user-1", domain.FragmentAnalyzeRequest{
+		UserInput:             "把第3张改成雨夜，保持其他画面不变，改成电影写实 16:9",
+		TargetDraftFragmentID: "draft-1",
+		ImageCount:            4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.IntentType != "revise_current" || response.EditPlan.Operation != "replace" {
+		t.Fatalf("unexpected plan: intent=%q plan=%+v", response.IntentType, response.EditPlan)
+	}
+	if len(response.EditPlan.TargetIndexes) != 1 || response.EditPlan.TargetIndexes[0] != 3 {
+		t.Fatalf("target indexes=%v", response.EditPlan.TargetIndexes)
+	}
+	if response.GenerationIntent.Style != "realistic" || response.GenerationIntent.AspectRatio != "16:9" {
+		t.Fatalf("explicit visual options were not applied: %+v", response.GenerationIntent)
+	}
+}
+
+func TestAnalyzeFragmentStoryAsksBeforeAmbiguousDestructiveEdit(t *testing.T) {
+	service := &FragmentGenerationService{}
+	response, err := service.AnalyzeFragmentStory(context.Background(), "user-1", domain.FragmentAnalyzeRequest{
+		UserInput:             "把画面重画一下",
+		TargetDraftFragmentID: "draft-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.IntentType != "ask_clarification" || !response.EditPlan.NeedsClarification || response.RecommendedOptions.CanStart {
+		t.Fatalf("ambiguous edit should pause: %+v", response)
+	}
+}
+
+func TestAnalyzeFragmentStoryUsesExplicitImageOperationContext(t *testing.T) {
+	service := &FragmentGenerationService{}
+
+	redraw, err := service.AnalyzeFragmentStory(context.Background(), "user-1", domain.FragmentAnalyzeRequest{
+		UserInput:             "改成清晨，人物看向海面",
+		TargetDraftFragmentID: "draft-1",
+		EditOperation:         "replace",
+		SelectedImageIndex:    2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if redraw.EditPlan.Operation != "replace" || len(redraw.EditPlan.TargetIndexes) != 1 || redraw.EditPlan.TargetIndexes[0] != 2 {
+		t.Fatalf("explicit redraw context was not preserved: %+v", redraw.EditPlan)
+	}
+	if redraw.EditPlan.NeedsClarification || !redraw.RecommendedOptions.CanStart {
+		t.Fatalf("explicit redraw context should be immediately executable: %+v", redraw)
+	}
+
+	appendPlan, err := service.AnalyzeFragmentStory(context.Background(), "user-1", domain.FragmentAnalyzeRequest{
+		UserInput:             "孩子打开地图，远处出现晨光",
+		TargetDraftFragmentID: "draft-1",
+		EditOperation:         "append",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appendPlan.EditPlan.Operation != "append" || appendPlan.EditPlan.EstimatedRegenerationCount != 1 {
+		t.Fatalf("explicit append context was not preserved: %+v", appendPlan.EditPlan)
+	}
+}
+
 func TestExpandScenesFallbackKeepsRequestedImageCount(t *testing.T) {
 	scenes := buildFallbackFragmentExpandedScenes(4, "少年在瀑布边发现一块旧铭牌", "fantasy", "mysterious", "9:16")
 	if len(scenes) != 4 {
@@ -275,6 +342,61 @@ func TestBuildFragmentAppendImageSlotsIncludesExistingAndNewPages(t *testing.T) 
 		if slots[i].Caption != "" {
 			t.Fatalf("old slot %d should not receive new caption: %#v", i, slots[i])
 		}
+	}
+}
+
+func TestFragmentContinuationReusesVisualIdentityAndReferenceImages(t *testing.T) {
+	previous := &domain.FragmentGenerationTrace{
+		VisualBible: &domain.FragmentVisualBible{
+			StyleBible: &domain.FragmentVisualStyleBible{ArtStyle: "ink manga"},
+			Characters: []domain.FragmentVisualCharacter{{
+				Key:             "char_boy",
+				Name:            "阿海",
+				ImmutableTraits: []string{"black bowl cut", "navy coat"},
+			}},
+		},
+		ReferenceAssets: []domain.FragmentReferenceAsset{{
+			Key:      "char_boy",
+			Kind:     "character",
+			ImageURL: "https://img.example/character.png",
+		}},
+		ConsistencyPolicy: &domain.FragmentConsistencyPolicy{
+			SeriesSeed:      42,
+			ProviderOptions: map[string]interface{}{"consistency_group_id": "original-task"},
+		},
+	}
+	continuation := &fragmentDraftContinuationContext{
+		DraftID:           "fragment-1",
+		PreviousImageURLs: []string{"https://img.example/page-1.png", "https://img.example/page-4.png"},
+		PreviousTrace:     previous,
+	}
+	refs := fragmentContinuationReferenceImageURLs(continuation, 3)
+	if len(refs) != 3 || refs[0] != "https://img.example/character.png" || refs[1] != "https://img.example/page-4.png" {
+		t.Fatalf("unexpected continuation references: %#v", refs)
+	}
+
+	current := &domain.FragmentVisualBible{
+		StyleBible: &domain.FragmentVisualStyleBible{ArtStyle: "different style"},
+		Characters: []domain.FragmentVisualCharacter{
+			{Key: "char_new_boy", Name: "阿海", ImmutableTraits: []string{"changed face"}},
+			{Key: "char_old_man", ImmutableTraits: []string{"white beard"}},
+		},
+	}
+	merged := mergeFragmentVisualBible(previous.VisualBible, current)
+	if merged.StyleBible.ArtStyle != "ink manga" {
+		t.Fatalf("expected original style bible, got %#v", merged.StyleBible)
+	}
+	if len(merged.Characters) != 2 || merged.Characters[0].ImmutableTraits[0] != "black bowl cut" {
+		t.Fatalf("expected original character identity plus new character, got %#v", merged.Characters)
+	}
+
+	policy := inheritFragmentConsistencyPolicy(
+		&domain.FragmentConsistencyPolicy{ProviderOptions: map[string]interface{}{}},
+		previous,
+		continuation.DraftID,
+	)
+	if policy.SeriesSeed != 42 || policy.ProviderOptions["consistency_group_id"] != "original-task" {
+		t.Fatalf("expected prior consistency identity, got %#v", policy)
 	}
 }
 

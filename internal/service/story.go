@@ -734,6 +734,9 @@ func (s *Service) CanViewerSeeStoryboard(ctx context.Context, viewerUserID strin
 	if err != nil || st == nil {
 		return false
 	}
+	if sb.WorkflowStatus != domain.WorkflowStatusPublished && !s.CanViewUnpublishedStoryboards(ctx, st, viewerUserID) {
+		return false
+	}
 	return s.CanViewerSeeStory(ctx, viewerUserID, st)
 }
 
@@ -764,10 +767,10 @@ func (s *Service) CanViewerSeeCharacter(ctx context.Context, viewerUserID string
 }
 
 // CanViewerSeeStory 判断 viewerUserID 是否有权查看 st（基于已加载的故事对象）：
-// - 作者本人：始终可见
+// - 作者本人或受邀贡献者：始终可见
 // - public：所有人可见
 // - followers：仅关注作者者可见
-// - private：仅作者可见
+// - private：仅作者与受邀贡献者可见
 func (s *Service) CanViewerSeeStory(ctx context.Context, viewerUserID string, st *domain.Story) bool {
 	if st == nil {
 		return false
@@ -775,6 +778,20 @@ func (s *Service) CanViewerSeeStory(ctx context.Context, viewerUserID string, st
 	ownerID := storyOwnerID(st)
 	if ownerID != "" && viewerUserID == ownerID {
 		return true
+	}
+	// Invited contributors belong to the Story's authoring boundary and need to
+	// read private/draft material in order to collaborate.
+	if viewerUserID != "" && st.ID != "" {
+		isContributor, err := s.repo.IsStoryContributor(ctx, st.ID, viewerUserID)
+		if err == nil && isContributor {
+			return true
+		}
+	}
+	// Visibility controls the audience of released content; it does not publish
+	// an in-progress Story. Draft/rendering Stories remain inside the authoring
+	// boundary handled above.
+	if st.Status == "draft" || st.Status == "rendering" {
+		return false
 	}
 	switch normalizeStoryVisibility(st.Visibility) {
 	case string(domain.StoryVisibilityPublic):
@@ -3150,13 +3167,11 @@ func (s *Service) InviteStoryContributor(ctx context.Context, inviterID, storyID
 		return nil, errors.New("failed to get story")
 	}
 
-	// 验证邀请者权限（必须是作者或贡献者）
-	isAuthor := story.Author != nil && story.Author.ID == inviterID
+	// Collaboration access is owned by the Story author. Contributors may
+	// leave by removing themselves, but cannot expand the authorization graph.
+	isAuthor := story.UserID == inviterID || (story.Author != nil && story.Author.ID == inviterID)
 	if !isAuthor {
-		isContributor, err := s.repo.IsStoryContributor(ctx, storyID, inviterID)
-		if err != nil || !isContributor {
-			return nil, errors.New("permission denied: not a contributor")
-		}
+		return nil, fmt.Errorf("%w: only story author can invite contributors", domain.ErrForbidden)
 	}
 
 	// 验证被邀请用户存在

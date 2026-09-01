@@ -41,7 +41,7 @@ func applyStoryboardScenePlanFallbacks(scenePlan *domain.StoryboardScenePlan, bi
 			sc.LayoutIntent = "comic_single_panel"
 		}
 		if strings.TrimSpace(sc.CompositionPlan) == "" {
-			sc.CompositionPlan = "单格竖构图，主体居中，留白满足字幕需求"
+			sc.CompositionPlan = "single vertical panel, centered subject, clean negative space for any supplied lettering"
 		}
 		if strings.TrimSpace(sc.ShotType) == "" {
 			sc.ShotType = "medium_shot"
@@ -127,6 +127,7 @@ Hard requirements:
 - Character entries must include turnaroundAssetKeys when three-view URLs are available.
 - All immutableTraits must be visual facts, not vague personality labels.
 - Beat summaries must form one continuous plot chain.
+- For a continuation, continuityRules must preserve the parent ending and the first beat continuityNote must explain the handoff from that ending.
 - Every beat must include comicFunction and a concise layoutHint so scene writing starts with comic grammar, not post-image patching.
 - Allowed comicFunction values: establish|dialogue|inner_monologue|action_impact|reaction|turning_point|shock|anticipation|celebration|transition|atmosphere.
 - Use comicFunction intentionally:
@@ -164,12 +165,12 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
 	writeStoryboardTurnDirectives(&b, storyboard)
 	b.WriteString(`\nOutput schema:
 {
-  "content": "Chinese polished storyboard summary, <= 420 Unicode chars recommended",
+  "content": "polished storyboard summary in the requested content language, <= 420 Unicode chars recommended",
   "scenes": [
     {
       "sequence": 0,
-      "title": "short Chinese scene title",
-      "description": "Chinese visual scene description, 100-220 chars, concrete camera, light, action, expression, environment",
+      "title": "short title in the requested content language",
+      "description": "visual scene description in the requested content language, 100-220 Unicode chars, concrete camera, light, action, expression, environment",
       "location": "place",
       "timeOfDay": "time",
       "characters": ["character display names visible in scene"],
@@ -180,21 +181,22 @@ func buildStoryboardSceneWriterUserPrompt(story *domain.Story, storyboard *domai
       "imagePrompt": "English final image prompt. Include narrative, styleBible art direction, immutable character traits, location traits, camera, lighting, color, mood. Explicitly say three-view references define identity, but do not copy the turnaround pose. For manga-emphasis beats, include concrete staging: speech/thought balloon placement, tail direction, SFX/interjection typography, reaction marks, effect lines, caption boxes, and negative space reserved for lettering — so the image model renders them directly in-image.",
       "visualState": {"characters":"wardrobe/emotion/injuries/props after this scene"},
       "layoutIntent": "short snake_case layout intent such as comic_single_panel, split_screen_two_beat, diagonal_motion, detail_insert",
-      "compositionPlan": "Chinese concise layout plan: panel/zones, gutters, reading order, bubble safe-space, focal flow",
+      "compositionPlan": "concise layout plan in the requested content language: panel/zones, gutters, reading order, lettering safe-space, focal flow",
       "shotType": "English shot type such as close_up, medium_shot, wide_shot, dutch_angle, overhead",
       "visualHierarchy": "what is primary, secondary, background information in this scene image",
       "panelShape": "one of: full | diagonal_left | diagonal_right | trapezoid_leading | trapezoid_trailing | triangle_tl | triangle_tr | triangle_bl | triangle_br | wide_panorama",
       "comicTexts": [
-        {"type":"narration","text":"中文旁白短句（≤12字）","speaker":"","position":"top-left"},
-        {"type":"dialogue","text":"台词（≤12字）","speaker":"char_1","position":"speech-bubble"},
-        {"type":"thought","text":"内心独白（≤12字）","speaker":"char_1","position":"thought-bubble"},
-        {"type":"sfx","text":"砰！","speaker":"","position":"mid-frame"}
+        {"type":"narration","text":"short exact narration in the requested language","speaker":"","position":"top-left"},
+        {"type":"dialogue","text":"short exact dialogue","speaker":"char_1","position":"speech-bubble"},
+        {"type":"thought","text":"short exact inner monologue","speaker":"char_1","position":"thought-bubble"},
+        {"type":"sfx","text":"short exact SFX","speaker":"","position":"mid-frame"}
       ]
     }
   ]
 }
 Hard requirements:
 - scenes length exactly matches requested count.
+- For a continuation, the first scene continuityNote must explicitly explain how it follows the parent ending without resetting character state.
 - referenceKeys must be declared in the bible.
 - imagePrompt must be English and include identity, action, environment, composition, lighting, palette, mood, texture.
 - layoutIntent/compositionPlan/shotType/visualHierarchy/panelShape are required for every scene and must be consistent with beat comicFunction/layoutHint.
@@ -210,10 +212,10 @@ Hard requirements:
   * triangle_bl   — transition, fading out: triangular crop bottom-left
   * triangle_br   — transition, fading out: triangular crop bottom-right
 - For a storyboard with N scenes, ensure the panelShape sequence creates a visually balanced collage (avoid N consecutive "full"; mix at least one non-rectangular shape per 3 scenes when the story supports it).
-- comicTexts may be omitted or an empty array only for silent/atmospheric/establishing scenes. When used: each text <= 12 Chinese characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
+- comicTexts is the sole authority for visible lettering. It may be omitted or empty for deliberately wordless scenes. When used: preserve the requested content language; keep CJK text <= 12 characters and English text <= 32 characters; speaker must be a character name from the scene; per-panel cap ~1 narration, 1-2 dialogue, 1 sfx, 1 thought; type must be one of narration|dialogue|thought|sfx.
 - For beats whose comicFunction is dialogue, inner_monologue, shock, anticipation, celebration, or turning_point, either provide comicTexts OR explicitly make imagePrompt describe a deliberate wordless comic device (large silence, empty balloon avoided, held breath, reaction-only close-up). Do not leave these as plain scenic descriptions.
-- Use short Chinese text examples naturally when appropriate: 啊？ / …… / 要来了 / 终于 / 太好了！ / 别动！ / 原来如此. Do not add random unrelated text.
-- imagePrompt must mirror any comicTexts as concrete English lettering instructions (balloon shape, tail direction, font weight, reserved white space).
+- Do not invent filler dialogue, captions, signs, labels, or pseudo-text. If comicTexts is empty, imagePrompt must explicitly forbid all readable text and empty bubble/box outlines.
+- imagePrompt must mirror any comicTexts as concrete English lettering instructions (exact supplied glyphs, balloon shape, tail direction, font weight, reserved white space). If exact lettering is unreliable, omit both glyphs and empty outlines rather than substituting garbled text.
 - Do not output Markdown or commentary.`)
 	return b.String()
 }
@@ -301,7 +303,7 @@ func storyboardBibleReferenceKeySet(bible *domain.StoryboardVisualBible) map[str
 	return keys
 }
 
-func (s *Service) auditStoryboardGenerationConsistency(plan *domain.StoryboardBiblePlan, scenePlan *domain.StoryboardScenePlan, assets []*domain.StoryboardGenerationAsset, sceneCount int) []domain.FragmentConsistencyIssue {
+func (s *Service) auditStoryboardGenerationConsistency(plan *domain.StoryboardBiblePlan, scenePlan *domain.StoryboardScenePlan, assets []*domain.StoryboardGenerationAsset, sceneCount int, continuation bool) []domain.FragmentConsistencyIssue {
 	var issues []domain.FragmentConsistencyIssue
 	if plan == nil || scenePlan == nil {
 		return []domain.FragmentConsistencyIssue{{Severity: "high", Detail: "missing plan or scene plan"}}
@@ -311,6 +313,17 @@ func (s *Service) auditStoryboardGenerationConsistency(plan *domain.StoryboardBi
 	}
 	if len(scenePlan.Scenes) != sceneCount {
 		issues = append(issues, domain.FragmentConsistencyIssue{Severity: "high", Detail: fmt.Sprintf("scene count mismatch: expected %d got %d", sceneCount, len(scenePlan.Scenes))})
+	}
+	if continuation {
+		if len(plan.StoryboardBible.ContinuityRules) == 0 {
+			issues = append(issues, domain.FragmentConsistencyIssue{Severity: "high", Detail: "continuation storyboard has no inherited continuity rules"})
+		}
+		if len(plan.Beats) > 0 && strings.TrimSpace(plan.Beats[0].ContinuityNote) == "" {
+			issues = append(issues, domain.FragmentConsistencyIssue{SceneIndex: 0, Severity: "high", Detail: "first continuation beat does not explain how it connects to the parent ending"})
+		}
+		if len(scenePlan.Scenes) > 0 && strings.TrimSpace(scenePlan.Scenes[0].ContinuityNote) == "" {
+			issues = append(issues, domain.FragmentConsistencyIssue{SceneIndex: 0, Severity: "high", Detail: "first continuation scene has no parent-ending continuity note"})
+		}
 	}
 	keys := storyboardBibleReferenceKeySet(&plan.StoryboardBible)
 	assetKeys := make(map[string]struct{})
@@ -335,4 +348,13 @@ func (s *Service) auditStoryboardGenerationConsistency(plan *domain.StoryboardBi
 		}
 	}
 	return issues
+}
+
+func firstHighStoryboardConsistencyIssue(issues []domain.FragmentConsistencyIssue) string {
+	for _, issue := range issues {
+		if issue.Severity == "high" {
+			return issue.Detail
+		}
+	}
+	return ""
 }

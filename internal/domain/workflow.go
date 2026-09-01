@@ -91,6 +91,43 @@ type WorkflowCatalogEntry struct {
 	Release WorkflowRelease `json:"release"`
 }
 
+const WorkflowRouterVersion = "workflow_router:v1"
+
+// WorkflowContentProfile is the stable, provider-neutral summary used to route
+// one creation request. It deliberately contains creative facts rather than a
+// prompt body so routing remains explainable and safe to persist.
+type WorkflowContentProfile map[string]any
+
+// WorkflowResolution records both the immutable executable artifact and the
+// reason it was selected. The complete value is persisted in the generation
+// run input by grapery-agent for later audit and release-level analytics.
+type WorkflowResolution struct {
+	Entry         WorkflowCatalogEntry   `json:"entry"`
+	RouterVersion string                 `json:"routerVersion"`
+	Profile       WorkflowContentProfile `json:"profile"`
+	RouteReason   string                 `json:"routeReason"`
+	Confidence    float64                `json:"confidence"`
+	Fallback      bool                   `json:"fallback"`
+	CandidateIDs  []string               `json:"candidateReleaseIds,omitempty"`
+}
+
+type WorkflowReleaseStats struct {
+	WorkflowReleaseID string    `json:"workflowReleaseId"`
+	WorkflowKey       string    `json:"workflowKey,omitempty"`
+	WorkflowVersion   int       `json:"workflowVersion,omitempty"`
+	TotalRuns         int64     `json:"totalRuns"`
+	SucceededRuns     int64     `json:"succeededRuns"`
+	FailedRuns        int64     `json:"failedRuns"`
+	CancelledRuns     int64     `json:"cancelledRuns"`
+	ActiveRuns        int64     `json:"activeRuns"`
+	FallbackRuns      int64     `json:"fallbackRuns"`
+	SuccessRate       float64   `json:"successRate"`
+	AverageDurationMs int64     `json:"averageDurationMs"`
+	AverageTokens     float64   `json:"averageTokens"`
+	TotalTokens       int64     `json:"totalTokens"`
+	LastRunAt         time.Time `json:"lastRunAt,omitempty"`
+}
+
 type WorkflowRegistryRepository interface {
 	SavePromptVersion(ctx context.Context, prompt *PromptTemplateVersion) error
 	GetPromptVersion(ctx context.Context, id string) (*PromptTemplateVersion, error)
@@ -98,6 +135,7 @@ type WorkflowRegistryRepository interface {
 	GetWorkflowRelease(ctx context.Context, id string) (*WorkflowRelease, error)
 	SaveWorkflowBinding(ctx context.Context, binding *WorkflowBinding) error
 	ListWorkflowCatalog(ctx context.Context, surface, action, tenantID string) ([]*WorkflowCatalogEntry, error)
+	ListWorkflowReleaseStats(ctx context.Context, since time.Time) ([]WorkflowReleaseStats, error)
 }
 
 func ValidateWorkflowRelease(release *WorkflowRelease) error {
@@ -132,6 +170,8 @@ func validateWorkflowGraph(nodes []WorkflowNode) error {
 	}
 	byID := make(map[string]WorkflowNode, len(nodes))
 	allowedActivities := map[string]bool{
+		"legacy.fragment.generate":       true,
+		"legacy.storyboard.branch":       true,
 		"legacy.storyboard.generate":     true,
 		"storyboard.ensure_draft":        true,
 		"storyboard.generate_bible_plan": true,

@@ -76,7 +76,7 @@ type StoryboardComicText struct {
 	//   thought    — 内心独白气泡（云朵形/虚线椭圆，尾巴为小圆泡）
 	//   sfx        — 拟声词/语气词（夸张字体，如「砰！」「啊？」「……」，无固定气泡形状）
 	Type     string `json:"type"`
-	Text     string `json:"text"`               // 实际要绘入图中的精确短句（建议 ≤12 汉字）
+	Text     string `json:"text"`               // 实际要绘入图中的精确原文；CJK 建议 ≤12 字符，英文建议 ≤32 字符
 	Speaker  string `json:"speaker,omitempty"`  // 气泡归属角色（dialogue/thought 时填写，其余可留空）
 	Position string `json:"position,omitempty"` // 建议排版区：top-left / top-right / bottom-left / bottom-right / mid-frame / speech-bubble / thought-bubble
 	// PanelIndex 仅漫画页管线使用：零基 panel 索引。单格故事板文字层可留空。
@@ -92,7 +92,22 @@ type ImagePromptDetails struct {
 	KeyElements     []string              `json:"keyElements"`               // 关键视觉元素列表
 	Mood            string                `json:"mood"`                      // 情绪氛围，如 "peaceful", "tense", "mysterious"
 	AdditionalNotes string                `json:"additionalNotes,omitempty"` // 其他补充说明（微表情、大气特效等）
-	ComicTexts      []StoryboardComicText `json:"comicTexts,omitempty"`      // 漫画文字层：对白/思想泡/拟声/旁白；图片模型须直接绘入
+	ComicTexts      []StoryboardComicText `json:"comicTexts,omitempty"`      // 唯一允许绘入的漫画文字；模型无法准确绘字时应连同空气泡一并省略
+}
+
+const (
+	StoryboardImageReferencePreviousPanel = "previous_panel"
+	StoryboardImageReferenceCharacter     = "character_identity"
+	StoryboardImageReferenceUser          = "user_reference"
+)
+
+// StoryboardImageReference gives every image reference an explicit semantic
+// role. Image providers still receive the ordered URL list; prompt compilers use
+// this manifest instead of guessing meaning from array position.
+type StoryboardImageReference struct {
+	URL  string `json:"url"`
+	Role string `json:"role"`
+	Key  string `json:"key,omitempty"`
 }
 
 // StoryboardImageGeneration - Step 3: Scene + refs → image
@@ -128,6 +143,10 @@ type StoryboardImageGeneration struct {
 	PipelineKind string `json:"pipelineKind,omitempty"`
 	// SkipPeerFailureGate 用户主动重试时跳过「兄弟分镜已失败则本任务放弃」闸门（仅内存传递，不入库）。
 	SkipPeerFailureGate bool `json:"-"`
+	// Transient prompt-compilation context; rebuilt from persisted scenes on retry.
+	PlannedScene      *StoryboardScene           `json:"-"`
+	ReferenceManifest []StoryboardImageReference `json:"-"`
+	ContentLanguage   string                     `json:"-"`
 
 	// Relations
 	Storyboard *Storyboard `json:"storyboard,omitempty"`

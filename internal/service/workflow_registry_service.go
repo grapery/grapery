@@ -203,6 +203,9 @@ func (s *WorkflowRegistryService) SaveBinding(ctx context.Context, binding *doma
 	if binding.WorkflowKey != release.Key {
 		return nil, errors.New("workflow binding key does not match release")
 	}
+	if err := ValidateWorkflowBindingConditions(binding.Conditions); err != nil {
+		return nil, fmt.Errorf("invalid workflow binding conditions: %w", err)
+	}
 	if binding.ID == "" {
 		binding.ID = "wfb_" + uuid.NewString()
 	}
@@ -221,25 +224,49 @@ func (s *WorkflowRegistryService) Catalog(ctx context.Context, surface, action, 
 	return s.repo.ListWorkflowCatalog(ctx, surface, action, tenantID)
 }
 
+func (s *WorkflowRegistryService) ReleaseStats(ctx context.Context, days int) ([]domain.WorkflowReleaseStats, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 365 {
+		return nil, errors.New("workflow stats range cannot exceed 365 days")
+	}
+	return s.repo.ListWorkflowReleaseStats(ctx, time.Now().UTC().Add(-time.Duration(days)*24*time.Hour))
+}
+
 func (s *WorkflowRegistryService) Resolve(ctx context.Context, surface, action, tenantID string) (*domain.WorkflowCatalogEntry, error) {
+	resolution, err := s.ResolveForInput(ctx, surface, action, tenantID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &resolution.Entry, nil
+}
+
+// ResolveForInput performs deterministic, explainable content-aware routing.
+// Catalog ordering remains the priority order; conditional bindings are tried
+// first and an unconditional binding is treated as the safe fallback.
+func (s *WorkflowRegistryService) ResolveForInput(ctx context.Context, surface, action, tenantID string, input map[string]any) (*domain.WorkflowResolution, error) {
 	entries, err := s.Catalog(ctx, surface, action, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) == 0 {
-		return nil, errors.New("no active workflow binding")
-	}
-	return entries[0], nil
+	profile := BuildWorkflowContentProfile(surface, action, input)
+	return ResolveWorkflowEntries(entries, profile)
 }
 
 // ResolvePinnedPromptSnapshots verifies that a client-discovered release is
 // still the active product binding, then resolves all immutable prompt content
 // server-side. Callers must never accept prompt bodies supplied by a client.
 func (s *WorkflowRegistryService) ResolvePinnedPromptSnapshots(ctx context.Context, surface, action, tenantID, releaseID string) (*domain.WorkflowCatalogEntry, map[string]domain.PromptTemplateVersion, error) {
-	entry, err := s.Resolve(ctx, surface, action, tenantID)
+	return s.ResolvePinnedPromptSnapshotsForInput(ctx, surface, action, tenantID, releaseID, nil)
+}
+
+func (s *WorkflowRegistryService) ResolvePinnedPromptSnapshotsForInput(ctx context.Context, surface, action, tenantID, releaseID string, input map[string]any) (*domain.WorkflowCatalogEntry, map[string]domain.PromptTemplateVersion, error) {
+	resolution, err := s.ResolveForInput(ctx, surface, action, tenantID, input)
 	if err != nil {
 		return nil, nil, err
 	}
+	entry := &resolution.Entry
 	if entry.Release.ID != strings.TrimSpace(releaseID) {
 		return nil, nil, errors.New("workflow release changed; refresh and retry")
 	}

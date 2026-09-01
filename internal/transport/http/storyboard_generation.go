@@ -121,6 +121,7 @@ func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
 		UserDirective       string `json:"userDirective"`
 		SceneCount          int    `json:"sceneCount"`
 		ComicStyle          string `json:"comicStyle"`
+		Language            string `json:"language"`
 	}
 	if c.Request.Body != nil {
 		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -130,7 +131,7 @@ func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
 	}
 	result, err := h.svc.ExecuteStoryboardWorkflowStage(c.Request.Context(), userID, storyboardID, stage, service.StoryboardWorkflowStageOptions{
 		GenerationRunID: req.GenerationRunID, ClientRequestID: req.ClientRequestID, RegenerateStructure: req.RegenerateStructure,
-		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle,
+		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle, Language: req.Language,
 	})
 	if err != nil {
 		HandleError(c, err)
@@ -456,6 +457,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 	var req struct {
 		RegenerateAll bool   `json:"regenerateAll"`
 		StoryStyleID  string `json:"storyStyleId"`
+		AspectRatio   string `json:"aspectRatio"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -463,6 +465,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 		req = struct {
 			RegenerateAll bool   `json:"regenerateAll"`
 			StoryStyleID  string `json:"storyStyleId"`
+			AspectRatio   string `json:"aspectRatio"`
 		}{}
 	}
 
@@ -539,6 +542,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 			ReferenceImages:          referenceImages,
 			SceneCharacters:          scene.Characters,
 			CharacterReferenceImages: referenceImages,
+			AspectRatio:              req.AspectRatio,
 			// StoryStyle 由服务层自动从故事中获取
 		}
 

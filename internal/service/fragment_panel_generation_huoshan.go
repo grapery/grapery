@@ -14,7 +14,7 @@ import (
 // Huoshan Panel 组图：单条合并 prompt + 多参考 + 一次 API 返回 N 张（与 Gemini 逐张循环分离）。
 
 // buildPanelBatchHuoshanPromptSlice 对 plan[sliceStart:sliceExclusive) 拼装组图文案；每张格的全局序号为全局 totalPanels。
-func buildPanelBatchHuoshanPromptSlice(plan []domain.FragmentPanelPlanItem, sliceStart, sliceExclusive int, styleSlug, aspectRatio string, totalPanels int) string {
+func buildPanelBatchHuoshanPromptSlice(plan []domain.FragmentPanelPlanItem, sliceStart, sliceExclusive int, styleSlug, aspectRatio string, totalPanels int, languages ...string) string {
 	batchLen := sliceExclusive - sliceStart
 	if batchLen < 1 || sliceStart < 0 || sliceExclusive > len(plan) || sliceStart >= sliceExclusive || totalPanels < 1 {
 		return ""
@@ -30,18 +30,18 @@ func buildPanelBatchHuoshanPromptSlice(plan []domain.FragmentPanelPlanItem, slic
 		b.WriteString(" / ")
 		b.WriteString(strconv.Itoa(totalPanels))
 		b.WriteString(" ---\n")
-		b.WriteString(buildPanelFinalImagePrompt(plan[i], styleSlug, aspectRatio, i, totalPanels))
+		b.WriteString(buildPanelFinalImagePrompt(plan[i], styleSlug, aspectRatio, i, totalPanels, languages...))
 		b.WriteString("\n\n")
 	}
 	return strings.TrimSpace(b.String())
 }
 
-func buildPanelBatchHuoshanPrompt(plan []domain.FragmentPanelPlanItem, styleSlug, aspectRatio string, totalPanels int) string {
+func buildPanelBatchHuoshanPrompt(plan []domain.FragmentPanelPlanItem, styleSlug, aspectRatio string, totalPanels int, languages ...string) string {
 	n := totalPanels
 	if n > len(plan) {
 		n = len(plan)
 	}
-	return buildPanelBatchHuoshanPromptSlice(plan, 0, n, styleSlug, aspectRatio, totalPanels)
+	return buildPanelBatchHuoshanPromptSlice(plan, 0, n, styleSlug, aspectRatio, totalPanels, languages...)
 }
 
 func mergePanelBatchReferenceImages(userRef string, plan []domain.FragmentPanelPlanItem, anchorMap map[string]string, maxN int) []string {
@@ -101,7 +101,7 @@ func (s *FragmentPanelGenerationService) runPanelImageBatchHuoshanRange(ctx cont
 	}
 	task.CurrentStep = stepName
 	den := max(n, 1)
-	prog := 28 + (61 * (startIdx + batchLen)) / den
+	prog := 28 + (61*(startIdx+batchLen))/den
 	if prog > 89 {
 		prog = 89
 	}
@@ -109,7 +109,7 @@ func (s *FragmentPanelGenerationService) runPanelImageBatchHuoshanRange(ctx cont
 	task.UpdatedAt = time.Now().Unix()
 	_ = s.panelRepo.Save(ctx, task)
 
-	prompt := buildPanelBatchHuoshanPromptSlice(task.Plan, startIdx, n, req.Style, req.AspectRatio, n)
+	prompt := buildPanelBatchHuoshanPromptSlice(task.Plan, startIdx, n, req.Style, req.AspectRatio, n, req.Language)
 	refURLs := mergePanelBatchReferenceImages(req.ReferenceImageURL, task.Plan[startIdx:n], anchorMap, panelMaxReferenceImages)
 
 	ar := domain.NormalizeFragmentAspectRatio(req.AspectRatio)

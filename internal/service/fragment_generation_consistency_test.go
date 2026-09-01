@@ -215,6 +215,72 @@ func TestSelectFragmentAuditImageURLsByPolicy(t *testing.T) {
 	}
 }
 
+func TestSelectFragmentAuditImageURLsAuditsEveryComicPage(t *testing.T) {
+	urls := []string{"u0", "u1", "u2", "u3", "u4"}
+	comicPage := buildFallbackFragmentComicPagePlan(domain.FragmentScenePlan{SceneDesc: "page", ImagePrompt: "page"}, 8, "zh-Hans")
+	scenes := make([]domain.FragmentScenePlan, len(urls))
+	for i := range scenes {
+		scenes[i] = domain.FragmentScenePlan{Index: i, ComicPage: &comicPage}
+	}
+
+	got, skipped := selectFragmentAuditImageURLs(urls, scenes, &domain.FragmentConsistencyPolicy{Level: "standard"})
+	if skipped != "" || len(got) != len(urls) {
+		t.Fatalf("expected every complete comic page to be audited, got %#v skipped=%q", got, skipped)
+	}
+}
+
+func TestFragmentComicPageRepairTargetsAndResultIndexes(t *testing.T) {
+	issues := []domain.FragmentConsistencyIssue{
+		{SceneIndex: 0, Severity: "high", ImageURL: "u2", Detail: "角色外观漂移"},
+		{SceneIndex: 1, Severity: "medium", ImageURL: "u1", Detail: "轻微偏差"},
+		{SceneIndex: 2, Severity: "HIGH", ImageURL: "u2", Detail: "分格数量错误"},
+	}
+	indexes := fragmentHighSeverityComicPageIndexes(issues, []string{"u0", "u1", "u2"}, 3)
+	if len(indexes) != 1 || indexes[0] != 2 {
+		t.Fatalf("expected exact image URL to identify one failed page, got %#v", indexes)
+	}
+
+	appended := remapFragmentConsistencyIssuesForResult([]domain.FragmentConsistencyIssue{{SceneIndex: 1}}, 5, 0)
+	if appended[0].SceneIndex != 6 {
+		t.Fatalf("expected appended issue to use full-gallery index, got %#v", appended)
+	}
+	replaced := remapFragmentConsistencyIssuesForResult([]domain.FragmentConsistencyIssue{{SceneIndex: 0}}, 0, 4)
+	if replaced[0].SceneIndex != 3 {
+		t.Fatalf("expected replacement issue to use target gallery index, got %#v", replaced)
+	}
+}
+
+func TestFragmentComicPageRepairDirectiveOnlyIncludesTargetPageIssues(t *testing.T) {
+	issues := []domain.FragmentConsistencyIssue{
+		{SceneIndex: 0, Severity: "high", ImageURL: "u0", Detail: "target failure"},
+		{SceneIndex: 1, Severity: "high", ImageURL: "u1", Detail: "other failure"},
+	}
+	directive := fragmentComicPageRepairDirective(0, "u0", issues)
+	if !strings.Contains(directive, "target failure") || strings.Contains(directive, "other failure") {
+		t.Fatalf("repair directive must contain only the target page failure: %s", directive)
+	}
+}
+
+func TestNormalizeFragmentConsistencyIssuesRejectsBaselineAndInvalidTargets(t *testing.T) {
+	issues := []domain.FragmentConsistencyIssue{
+		{SceneIndex: 0, Severity: "HIGH", ImageURL: "new-1", Detail: "  valid issue  "},
+		{SceneIndex: 0, Severity: "high", ImageURL: "baseline", Detail: "must be ignored"},
+		{SceneIndex: 8, Severity: "high", Detail: "invalid index"},
+		{SceneIndex: 1, Severity: "unexpected", Detail: "normalize severity"},
+	}
+
+	got := normalizeFragmentConsistencyIssuesForGeneratedImages(issues, []string{"new-0", "new-1"}, 2)
+	if len(got) != 2 {
+		t.Fatalf("expected only generated-image issues, got %#v", got)
+	}
+	if got[0].SceneIndex != 1 || got[0].Severity != "high" || got[0].Detail != "valid issue" {
+		t.Fatalf("expected URL mapping and normalized high issue, got %#v", got[0])
+	}
+	if got[1].SceneIndex != 1 || got[1].ImageURL != "new-1" || got[1].Severity != "medium" {
+		t.Fatalf("expected valid index fallback and normalized severity, got %#v", got[1])
+	}
+}
+
 func TestParseFragmentPanelPlanIncludesAILayoutFields(t *testing.T) {
 	raw := `{"visualBible":{"styleBible":{"artStyle":"cinematic watercolor"},"characters":[],"props":[],"locations":[]},"panels":[{"index":0,"image_prompt":"cinematic watercolor scene with a lonely station platform, layered depth, warm light, quiet mood, detailed materials, strong leading lines, textured brushwork, atmospheric particles","caption":"她站在站台边。","reference_keys":[],"layout_intent":"wide_establishing","composition_plan":"主角在左下三分之一，站台线条引向右上远处。","shot_type":"wide_shot","visual_hierarchy":"主角轮廓优先，站台透视其次，天空氛围最后"}]}`
 	plan, _, err := parseFragmentPanelPlanJSON(raw, 1)
@@ -315,10 +381,71 @@ func TestPanelPlanPromptNoLongerMentionsFixedStripLayout(t *testing.T) {
 
 func TestPanelPlanPromptUsesStructuredInputSections(t *testing.T) {
 	prompt := buildFragmentPanelPlanUserPrompt("女孩在雨夜车站等待", "fantasy", 4, "")
-	for _, want := range []string{"# PromptDSL", "prompt_dsl_v1", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Paneling / Camera / Action / Comic Elements Rules"} {
+	for _, want := range []string{"visual_scene_v2", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Paneling / Camera / Action / Comic Elements Rules"} {
 		if !containsFragmentTestString(prompt, want) {
 			t.Fatalf("expected structured section %q, got:\n%s", want, prompt)
 		}
+	}
+	for _, banned := range []string{"# PromptDSL", "prompt_dsl_v1", "```json"} {
+		if containsFragmentTestString(prompt, banned) {
+			t.Fatalf("model-facing prompt should omit DSL metadata %q", banned)
+		}
+	}
+}
+
+func TestFragmentScenePromptPreservesLocalizedNarrativeAndForbidsInventedText(t *testing.T) {
+	scene := domain.FragmentScenePlan{SceneDesc: "少女は濡れた切符を見つめる。", ImagePrompt: "close-up of a girl holding a rain-soaked ticket"}
+	prompt := buildFragmentSceneImagePrompt(nil, scene, "ja")
+	for _, want := range []string{"少女は濡れた切符", "Japanese", "Visual execution (English)", "this scene is wordless"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected %q in localized final image prompt: %s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "Include at most") {
+		t.Fatalf("wordless scene must not invite invented lettering: %s", prompt)
+	}
+}
+
+func TestCompactPanelPlanPromptAvoidsQualityByWordCount(t *testing.T) {
+	prompt := buildFragmentPanelPlanUserPrompt("女孩在雨夜车站等待", "fantasy", 5, "")
+	for _, banned := range []string{"至少 52", "至少 70", "minWordsEach", "八层齐全"} {
+		if containsFragmentTestString(prompt, banned) {
+			t.Fatalf("compact production prompt must not contain %q", banned)
+		}
+	}
+	if n := strings.Count(prompt, "【叙事规划契约】"); n != 1 {
+		t.Fatalf("expected narrative contract once, got %d", n)
+	}
+}
+
+func TestConstrainFragmentScenePlansToBible(t *testing.T) {
+	bible := &domain.FragmentVisualBible{
+		Characters: []domain.FragmentVisualCharacter{{Key: "char_main"}},
+		Props:      []domain.FragmentVisualProp{{Key: "prop_key"}},
+	}
+	plans := []domain.FragmentScenePlan{{
+		ReferenceKeys: []string{"char_main", "unknown", "prop_key"},
+		ComicTexts: []domain.FragmentComicText{
+			{Type: "dialogue", Text: "这是一句明显超过十二个汉字的对白内容", Speaker: "unknown"},
+			{Type: "dialogue", Text: "第二句", Speaker: "char_main"},
+			{Type: "dialogue", Text: "第三句应被丢弃", Speaker: "char_main"},
+			{Type: "narration", Text: "旁白一"},
+			{Type: "narration", Text: "旁白二应被丢弃"},
+		},
+	}}
+
+	got := constrainFragmentScenePlansToBible(plans, bible)
+	if len(got[0].ReferenceKeys) != 2 {
+		t.Fatalf("expected unknown reference key removed: %#v", got[0].ReferenceKeys)
+	}
+	if len(got[0].ComicTexts) != 3 {
+		t.Fatalf("expected comic type caps, got %#v", got[0].ComicTexts)
+	}
+	if got[0].ComicTexts[0].Speaker != "" {
+		t.Fatalf("expected inactive speaker cleared, got %q", got[0].ComicTexts[0].Speaker)
+	}
+	if len([]rune(got[0].ComicTexts[0].Text)) > 12 {
+		t.Fatalf("expected comic text capped at 12 runes, got %q", got[0].ComicTexts[0].Text)
 	}
 }
 

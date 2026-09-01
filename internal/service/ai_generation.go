@@ -560,6 +560,7 @@ type GenerateImageRequest struct {
 	Seed              int
 	Options           map[string]interface{}
 	GuidanceScale     float64
+	Watermark         *bool
 	RelatedEntityID   string
 	RelatedEntityType string
 	Metadata          map[string]interface{}
@@ -755,6 +756,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		Seed:              req.Seed,
 		Options:           req.Options,
 		GuidanceScale:     req.GuidanceScale,
+		Watermark:         req.Watermark,
 	}
 
 	// Gemini 对话式多参考合成：需内联字节，否则仅 URL 的 imageToImage 会失败。

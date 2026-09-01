@@ -29,6 +29,8 @@ type User struct {
 	LastLoginAt     *int64 `json:"lastLoginAt,omitempty"`
 	Phone           string `json:"phone,omitempty"`
 	PhoneVerifiedAt *int64 `json:"phoneVerifiedAt,omitempty"`
+	// CredentialsChangedAt invalidates refresh tokens issued before a password reset/change.
+	CredentialsChangedAt int64 `json:"-"`
 	// PendingOAuthPhoneSMS: 仅首次通过 Apple/微信注册时置 true，短信验证通过后清零；老用户与其它登录方式均为 false。
 	PendingOAuthPhoneSMS bool `json:"pendingOAuthPhoneSMS,omitempty"`
 	// RequiresPhoneVerification is computed for API responses (mirrors PendingOAuthPhoneSMS for current user).

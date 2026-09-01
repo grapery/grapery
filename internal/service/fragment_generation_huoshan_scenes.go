@@ -9,7 +9,7 @@ import (
 
 // narrative fragment：Huoshan 组图 — 单条合并 prompt + 合并参考图（与逐场景 Gemini 路径分离）。
 
-func buildFragmentScenesBatchHuoshanPrompt(bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, n int) string {
+func buildFragmentScenesBatchHuoshanPrompt(bible *domain.FragmentVisualBible, scenes []domain.FragmentScenePlan, n int, languages ...string) string {
 	if n < 1 || len(scenes) == 0 {
 		return ""
 	}
@@ -17,20 +17,36 @@ func buildFragmentScenesBatchHuoshanPrompt(bible *domain.FragmentVisualBible, sc
 		n = len(scenes)
 	}
 	var b strings.Builder
+	comicPages := true
+	for i := 0; i < n; i++ {
+		if scenes[i].ComicPage == nil {
+			comicPages = false
+			break
+		}
+	}
 	b.WriteString("Generate a coherent visual sequence of exactly ")
 	b.WriteString(strconv.Itoa(n))
-	b.WriteString(" separate full images in strict order (image 1, then image 2, ...). ")
-	b.WriteString("Each output corresponds to one narrative scene. Maintain consistent characters, wardrobe, and world rules across scenes where continuity applies.\n")
-	b.WriteString("The following canvas rule applies to every image in the batch. ")
-	b.WriteString(fullBleedCanvasDirective())
+	if comicPages {
+		b.WriteString(" separate complete comic-page images in strict order (page image 1, then page image 2, ...). ")
+		b.WriteString("Every output is independently a complete multi-panel comic page; never return loose panels or combine several requested page images into one output. Maintain consistent characters, wardrobe, props, locations, lettering language, and world rules across all page images.\n")
+	} else {
+		b.WriteString(" separate full images in strict order (image 1, then image 2, ...). ")
+		b.WriteString("Each output corresponds to one narrative scene. Maintain consistent characters, wardrobe, and world rules across scenes where continuity applies.\n")
+		b.WriteString("The following canvas rule applies to every image in the batch. ")
+		b.WriteString(fullBleedCanvasDirective())
+	}
 	b.WriteString("\n\n")
 	for i := 0; i < n; i++ {
-		b.WriteString("--- Scene ")
+		if comicPages {
+			b.WriteString("--- Complete Comic Page Image ")
+		} else {
+			b.WriteString("--- Scene ")
+		}
 		b.WriteString(strconv.Itoa(i + 1))
 		b.WriteString(" / ")
 		b.WriteString(strconv.Itoa(n))
 		b.WriteString(" ---\n")
-		b.WriteString(buildFragmentSceneImagePromptCore(bible, scenes[i]))
+		b.WriteString(buildFragmentSceneImagePromptCore(bible, scenes[i], languages...))
 		b.WriteString("\n\n")
 	}
 	return strings.TrimSpace(b.String())

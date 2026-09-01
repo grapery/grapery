@@ -39,3 +39,13 @@ func TestStoryboardWorkflowRevisionRunMatchesStableRequestIdentity(t *testing.T)
 		t.Fatal("revision marker was not restored from request checkpoint")
 	}
 }
+
+func TestStoryboardWorkflowOutputLanguageUsesCheckpoint(t *testing.T) {
+	run := &domain.StoryboardGenerationRun{RequestJSON: `{"language":"ja"}`}
+	if got := storyboardWorkflowOutputLanguage(run); got != "ja" {
+		t.Fatalf("unexpected output language: %q", got)
+	}
+	if got := storyboardWorkflowOutputLanguage(&domain.StoryboardGenerationRun{}); got != "zh-Hans" {
+		t.Fatalf("unexpected default output language: %q", got)
+	}
+}

@@ -54,8 +54,9 @@ func (h *Handler) PhoneLoginSendSMSCode(c *gin.Context) {
 // 未认证：校验验证码并按手机号登录（不存在则自动注册），返回登录令牌。
 func (h *Handler) PhoneLoginVerify(c *gin.Context) {
 	var req struct {
-		Phone string `json:"phone" binding:"required"`
-		Code  string `json:"code" binding:"required,len=6"`
+		Phone    string `json:"phone" binding:"required"`
+		Code     string `json:"code" binding:"required,len=6"`
+		DeviceID string `json:"deviceId,omitempty"`
 	}
 	if !BindJSON(c, &req) {
 		return
@@ -73,6 +74,7 @@ func (h *Handler) PhoneLoginVerify(c *gin.Context) {
 		OS:        os,
 		Browser:   browser,
 		UserAgent: userAgent,
+		DeviceID:  req.DeviceID,
 	}
 
 	h.logger.Info("phone login verify HTTP",

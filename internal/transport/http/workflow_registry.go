@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +30,19 @@ func (h *WorkflowRegistryHandler) RegisterInternalRoutes(r *gin.Engine) {
 		g.GET("/workflow-releases/:id", h.getRelease)
 		g.PUT("/workflow-bindings/:id", h.saveBinding)
 		g.GET("/workflow-catalog", h.catalog)
+		g.POST("/workflow-resolve", h.resolve)
+		g.GET("/workflow-stats", h.stats)
 	}
+}
+
+func (h *WorkflowRegistryHandler) stats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	items, err := h.registry.ReleaseStats(c.Request.Context(), days)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	Success(c, gin.H{"items": items, "days": days})
 }
 
 func (h *WorkflowRegistryHandler) RegisterPublicRoutes(g *gin.RouterGroup) {
@@ -129,20 +142,21 @@ func (h *WorkflowRegistryHandler) catalog(c *gin.Context) {
 
 func (h *WorkflowRegistryHandler) resolve(c *gin.Context) {
 	var body struct {
-		Surface  string `json:"surface" binding:"required"`
-		Action   string `json:"action" binding:"required"`
-		TenantID string `json:"tenantId"`
+		Surface  string         `json:"surface" binding:"required"`
+		Action   string         `json:"action" binding:"required"`
+		TenantID string         `json:"tenantId"`
+		Input    map[string]any `json:"input,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
-	entry, err := h.registry.Resolve(c.Request.Context(), body.Surface, body.Action, body.TenantID)
+	resolution, err := h.registry.ResolveForInput(c.Request.Context(), body.Surface, body.Action, body.TenantID, body.Input)
 	if err != nil {
 		h.handleError(c, err)
 		return
 	}
-	Success(c, entry)
+	Success(c, resolution)
 }
 
 func (h *WorkflowRegistryHandler) internalAPIKeyMiddleware() gin.HandlerFunc {

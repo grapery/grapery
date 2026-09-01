@@ -6,6 +6,7 @@ type FragmentPanelGenerationRequest struct {
 	UserInput         string `json:"userInput"`
 	ReferenceImageURL string `json:"referenceImageUrl"`
 	Style             string `json:"style"`
+	Language          string `json:"language,omitempty"`
 	PanelCount        int    `json:"panelCount"`
 	Visibility        string `json:"visibility"`
 	// Topic 话题标签（展示用，不含 #）；与碎片表 topic 对齐。

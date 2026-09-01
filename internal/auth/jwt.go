@@ -18,13 +18,23 @@ var (
 	ErrSecretNotSet = errors.New("JWT secret not configured")
 )
 
+const (
+	accessTokenIssuer  = "grapery"
+	refreshTokenIssuer = "grapery-refresh"
+	accessTokenType    = "access"
+	refreshTokenType   = "refresh"
+	refreshTokenTTL    = 90 * 24 * time.Hour
+)
+
 var jwtLogger = logrus.WithField("module", "jwt")
 
 // Claims JWT 声明
 type Claims struct {
-	UserID   string `json:"userId"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	UserID    string `json:"userId"`
+	Username  string `json:"username,omitempty"`
+	Email     string `json:"email,omitempty"`
+	TokenType string `json:"tokenType,omitempty"`
+	DeviceID  string `json:"deviceId,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -39,14 +49,15 @@ func GenerateToken(userID, username, email string) (string, error) {
 	expiresAt := now.Add(24 * time.Hour) // 24小时过期
 
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		Email:    email,
+		UserID:    userID,
+		Username:  username,
+		Email:     email,
+		TokenType: accessTokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "grapery",
+			Issuer:    accessTokenIssuer,
 		},
 	}
 
@@ -73,18 +84,30 @@ func GenerateToken(userID, username, email string) (string, error) {
 	return tokenString, err
 }
 
-// GenerateRefreshToken 生成刷新 Token（7天过期）
+// GenerateRefreshToken keeps compatibility with non-device-aware clients.
 func GenerateRefreshToken(userID string) (string, error) {
+	return GenerateRefreshTokenForDevice(userID, "")
+}
+
+// GenerateRefreshTokenForDevice creates a long-lived, device-bound refresh token.
+// The client keeps its device ID in a ThisDeviceOnly Keychain item, so a restored
+// backup cannot silently reuse the session on a different iPhone.
+func GenerateRefreshTokenForDevice(userID, deviceID string) (string, error) {
+	if len(jwtSecret) == 0 {
+		return "", ErrSecretNotSet
+	}
 	now := time.Now()
-	expiresAt := now.Add(7 * 24 * time.Hour) // 7天过期
+	expiresAt := now.Add(refreshTokenTTL)
 
 	claims := Claims{
-		UserID: userID,
+		UserID:    userID,
+		TokenType: refreshTokenType,
+		DeviceID:  deviceID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "grapery-refresh",
+			Issuer:    refreshTokenIssuer,
 		},
 	}
 
@@ -92,16 +115,30 @@ func GenerateRefreshToken(userID string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
-// ParseToken 解析 Token
+// ParseToken parses access tokens only. Legacy access tokens without tokenType
+// remain valid when (and only when) their issuer is the access-token issuer.
 func ParseToken(tokenString string) (*Claims, error) {
+	return parseTokenForPurpose(tokenString, accessTokenIssuer, accessTokenType)
+}
+
+// ParseRefreshToken parses refresh tokens only, preventing an access token from
+// being exchanged at /auth/refresh.
+func ParseRefreshToken(tokenString string) (*Claims, error) {
+	return parseTokenForPurpose(tokenString, refreshTokenIssuer, refreshTokenType)
+}
+
+func parseTokenForPurpose(tokenString, expectedIssuer, expectedType string) (*Claims, error) {
 	// SECURITY: Check if secret is configured
 	if len(jwtSecret) == 0 {
 		return nil, ErrSecretNotSet
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, ErrInvalidToken
+		}
 		return jwtSecret, nil
-	})
+	}, jwt.WithIssuer(expectedIssuer))
 
 	if err != nil {
 		jwtLogger.WithFields(logrus.Fields{
@@ -117,7 +154,8 @@ func ParseToken(tokenString string) (*Claims, error) {
 		return nil, ErrInvalidToken
 	}
 
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid && claims.UserID != "" &&
+		(claims.TokenType == expectedType || claims.TokenType == "") {
 		jwtLogger.WithFields(logrus.Fields{
 			"user_id":       claims.UserID,
 			"username":      claims.Username,

@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -28,6 +29,24 @@ const (
 	smsPhoneLoginIPMaxPerWindow   = 5
 )
 
+// debugPhoneLoginBypassCode returns an explicitly configured local development
+// code. It is deliberately disabled in release mode and when either environment
+// variable is missing, so production keeps using the normal SMS/Redis flow.
+func debugPhoneLoginBypassCode() string {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("GIN_MODE")), "release") {
+		return ""
+	}
+	enabled := strings.TrimSpace(os.Getenv("GRAPERY_DEBUG_PHONE_LOGIN_BYPASS"))
+	if enabled != "1" && !strings.EqualFold(enabled, "true") {
+		return ""
+	}
+	code := strings.TrimSpace(os.Getenv("GRAPERY_DEBUG_PHONE_LOGIN_CODE"))
+	if len(code) != 6 || !smsCodeDecimal6.MatchString(code) {
+		return ""
+	}
+	return code
+}
+
 // SendPhoneLoginSMSCode sends a login OTP to a mainland-China phone for the unauthenticated
 // phone-number login flow. A single phone maps to a single account (enforced at verify time);
 // here we only normalize, rate-limit (per phone + per IP) and dispatch the code.
@@ -39,18 +58,22 @@ func (s *Service) SendPhoneLoginSMSCode(ctx context.Context, rawPhone, clientIP 
 	)
 	log.Info("phone login sms send: request accepted")
 
-	c := s.getCache()
-	if c == nil {
-		log.Warn("phone login sms send: redis cache unavailable")
-		return errors.New("SMS verification requires Redis cache")
-	}
-
 	phone, err := NormalizeChinaPhone(rawPhone)
 	if err != nil {
 		log.Warn("phone login sms send: invalid phone format", zap.Error(err))
 		return err
 	}
 	log = log.With(zap.String("phone_masked", utils.MaskChinaPhone(phone)))
+	if debugPhoneLoginBypassCode() != "" {
+		log.Warn("phone login sms send: skipped by explicit development bypass")
+		return nil
+	}
+
+	c := s.getCache()
+	if c == nil {
+		log.Warn("phone login sms send: redis cache unavailable")
+		return errors.New("SMS verification requires Redis cache")
+	}
 
 	// Rate limits: phone once per window, IP a few times per window. Roll back the phone
 	// counter if the IP dimension trips so a blocked IP does not burn the phone quota.
@@ -147,37 +170,9 @@ func (s *Service) LoginWithPhoneSMS(ctx context.Context, rawPhone, code string, 
 		return nil, errors.New("verification code must be 6 digits")
 	}
 
-	c := s.getCache()
-	if c == nil {
-		log.Warn("phone login verify: redis cache unavailable")
-		return nil, errors.New("SMS verification requires Redis cache")
-	}
-
-	otpKey := cache.SMSPhoneLoginOTPKey(phone)
-	var stored smsOTPStoredData
-	if err := c.Get(ctx, otpKey, &stored); err != nil || stored.CodeHash == "" {
-		log.Warn("phone login verify: otp missing or expired", zap.Error(err))
-		return nil, errors.New("code expired or not found, please request a new one")
-	}
-	if stored.Attempts >= smsPhoneAttemptMax {
-		log.Warn("phone login verify: too many attempts", zap.Int("attempts", stored.Attempts))
-		return nil, errors.New("too many incorrect attempts")
-	}
-
-	wantHash, err := s.hashSMSCode(phoneLoginOTPSentinel, phone, code)
-	if err != nil {
-		log.Error("phone login verify: hash otp failed", zap.Error(err))
+	if err := s.verifyPhoneLoginCode(ctx, phone, code, log); err != nil {
 		return nil, err
 	}
-	if !hmac.Equal([]byte(wantHash), []byte(stored.CodeHash)) {
-		stored.Attempts++
-		_ = c.Set(ctx, otpKey, stored, smsPhoneOTPTTL)
-		log.Warn("phone login verify: incorrect code", zap.Int("attempts", stored.Attempts))
-		return nil, errors.New("invalid verification code")
-	}
-
-	// Code is correct — consume it before any account mutation.
-	_ = c.Delete(ctx, otpKey)
 
 	now := time.Now().Unix()
 	user, err := s.repo.UserByPhone(ctx, phone)
@@ -226,7 +221,11 @@ func (s *Service) LoginWithPhoneSMS(ctx context.Context, rawPhone, code string, 
 		log.Error("phone login verify: generate access token failed", zap.Error(err))
 		return nil, errors.New("failed to generate authentication token")
 	}
-	refreshToken, err := auth.GenerateRefreshToken(user.ID)
+	deviceID := ""
+	if loginInfo != nil {
+		deviceID = normalizeAuthDeviceID(loginInfo.DeviceID)
+	}
+	refreshToken, err := auth.GenerateRefreshTokenForDevice(user.ID, deviceID)
 	if err != nil {
 		log.Error("phone login verify: generate refresh token failed", zap.Error(err))
 		return nil, errors.New("failed to generate refresh token")
@@ -257,6 +256,46 @@ func (s *Service) LoginWithPhoneSMS(ctx context.Context, rawPhone, code string, 
 		RefreshToken: refreshToken,
 		ExpiresIn:    24 * 3600,
 	}, nil
+}
+
+func (s *Service) verifyPhoneLoginCode(ctx context.Context, phone, code string, log *zap.Logger) error {
+	if bypassCode := debugPhoneLoginBypassCode(); bypassCode != "" && hmac.Equal([]byte(code), []byte(bypassCode)) {
+		log.Warn("phone login verify: accepted explicit development bypass")
+		return nil
+	}
+
+	c := s.getCache()
+	if c == nil {
+		log.Warn("phone login verify: redis cache unavailable")
+		return errors.New("SMS verification requires Redis cache")
+	}
+
+	otpKey := cache.SMSPhoneLoginOTPKey(phone)
+	var stored smsOTPStoredData
+	if err := c.Get(ctx, otpKey, &stored); err != nil || stored.CodeHash == "" {
+		log.Warn("phone login verify: otp missing or expired", zap.Error(err))
+		return errors.New("code expired or not found, please request a new one")
+	}
+	if stored.Attempts >= smsPhoneAttemptMax {
+		log.Warn("phone login verify: too many attempts", zap.Int("attempts", stored.Attempts))
+		return errors.New("too many incorrect attempts")
+	}
+
+	wantHash, err := s.hashSMSCode(phoneLoginOTPSentinel, phone, code)
+	if err != nil {
+		log.Error("phone login verify: hash otp failed", zap.Error(err))
+		return err
+	}
+	if !hmac.Equal([]byte(wantHash), []byte(stored.CodeHash)) {
+		stored.Attempts++
+		_ = c.Set(ctx, otpKey, stored, smsPhoneOTPTTL)
+		log.Warn("phone login verify: incorrect code", zap.Int("attempts", stored.Attempts))
+		return errors.New("invalid verification code")
+	}
+
+	// Code is correct — consume it before any account mutation.
+	_ = c.Delete(ctx, otpKey)
+	return nil
 }
 
 // createPhoneLoginUser persists a new phone-verified account (settings + free membership)
@@ -303,19 +342,20 @@ func (s *Service) createPhoneLoginUser(ctx context.Context, phone string, now in
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
-			UserID:              user.ID,
-			Language:            "zh",
-			Theme:               "auto",
-			EmailNotifications:  true,
-			PushNotifications:   true,
-			ShowAdultContent:    false,
-			ProfileVisibility:   "public",
-			AllowComments:       true,
-			AllowMessages:       true,
-			ShowOnlineStatus:    true,
-			ShowPublicStories:   true,
-			ShowPublicFragments: true,
-			ShowPublicBookmarks: true,
+			UserID:               user.ID,
+			Language:             "zh",
+			Theme:                "auto",
+			EmailNotifications:   true,
+			PushNotifications:    true,
+			ShowAdultContent:     false,
+			ProfileVisibility:    "public",
+			AllowComments:        true,
+			AllowMessages:        true,
+			ShowOnlineStatus:     true,
+			ShowPublicStories:    true,
+			ShowPublicFragments:  true,
+			ShowPublicBookmarks:  true,
+			NotificationSettings: "{}",
 		}
 		if err := tx.CreateUserSettings(ctx, settings); err != nil {
 			s.logger.Warn("phone login auto-register: create settings failed", zap.Error(err))

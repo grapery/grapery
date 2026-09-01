@@ -103,6 +103,11 @@ func (s *FragmentPanelGenerationService) StartGeneration(ctx context.Context, us
 	if strings.TrimSpace(req.Style) == "" {
 		req.Style = "fantasy"
 	}
+	if strings.TrimSpace(req.Language) == "" {
+		req.Language = inferGenerationLanguage(req.UserInput)
+	} else {
+		req.Language = normalizeGenerationLanguage(req.Language)
+	}
 	vis := domain.NormalizeFragmentVisibility(strings.TrimSpace(req.Visibility))
 	if vis == "" {
 		vis = domain.FragmentVisibilityPrivate
@@ -378,6 +383,7 @@ func (s *FragmentPanelGenerationService) process(ctx context.Context, taskID str
 		ReferenceImageURL: req.ReferenceImageURL,
 		UserInput:         req.UserInput,
 		Style:             req.Style,
+		Language:          req.Language,
 		PanelCount:        req.PanelCount,
 		RelatedEntityID:   taskID,
 		RelatedEntityType: "fragment_panel_generation",
@@ -582,9 +588,13 @@ func (s *FragmentPanelGenerationService) processResume(ctx context.Context, task
 }
 
 // buildPanelFinalImagePrompt 将规划模型产出的英文 image_prompt 与风格、长宽比、AI 布局计划拼装为最终文生图/参考生图提示。
-func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug, aspectRatio string, panelIndex, totalPanels int) string {
+func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug, aspectRatio string, panelIndex, totalPanels int, languages ...string) string {
+	language := inferGenerationLanguage(planItem.Caption)
+	if len(languages) > 0 && strings.TrimSpace(languages[0]) != "" {
+		language = normalizeGenerationLanguage(languages[0])
+	}
 	planImagePrompt := strings.TrimSpace(planItem.ImagePrompt)
-	base := strings.TrimSpace(planImagePrompt)
+	base := strings.TrimSpace(fmt.Sprintf("Narrative beat (%s; must be preserved): %s.\nVisual execution (English): %s.", generationLanguageName(language), strings.TrimSpace(planItem.Caption), planImagePrompt))
 	ar := domain.NormalizeFragmentAspectRatio(aspectRatio)
 	if ar == "" {
 		ar = domain.FragmentAspectDefault
@@ -609,7 +619,7 @@ func buildPanelFinalImagePrompt(planItem domain.FragmentPanelPlanItem, styleSlug
 	}
 	order := fmt.Sprintf("Panel %d of %d.", panelIndex+1, totalPanels)
 	layout := buildPanelLayoutDirective(planItem)
-	comic := buildPanelComicTextDirective(planItem)
+	comic := buildPanelComicTextDirective(planItem, language)
 	canvas := fullBleedCanvasDirective()
 	return strings.TrimSpace(fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s", base, hdr, order, role, layout, comic, canvas))
 }
@@ -633,7 +643,7 @@ func buildPanelLayoutDirective(planItem domain.FragmentPanelPlanItem) string {
 	}
 	out := "Layout directive for this single output image: " + strings.Join(parts, "; ") + ". Honor composition_plan / visual_hierarchy: if composition_plan implies several zones or sub-panels, render them as distinct regions in one image with visible internal separation/gutters; if it implies one integrated scene, keep it a single uninterrupted illustration. In both cases never draw an outer panel border around the image."
 	if panelPlanWantsComicLayout(planItem) {
-		out += " Comic rendering: strong ink line weight, screentones, gutter spacing between internal sub-panels, sequential reading order (left-to-right, top-to-bottom), and reserved speech bubble/caption box areas. Sub-panel dividers stay inside the canvas and the outermost zones bleed off the edges. Any comic text must be painted directly into the final image, not left as placeholders for app overlay. Keep text count tight (<=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble), use large legible Chinese lettering, and do not add random extra words."
+		out += " Comic rendering: strong ink line weight, screentones, internal gutter spacing, and sequential reading order. Sub-panel dividers stay inside the canvas and outermost zones bleed off the edges. Lettering is governed only by the separate lettering policy."
 	}
 	return out
 }
@@ -651,18 +661,19 @@ func panelPlanWantsComicLayout(planItem domain.FragmentPanelPlanItem) bool {
 	return strings.Contains(probe, "comic") || strings.Contains(probe, "manga") || strings.Contains(probe, "manhua") || strings.Contains(probe, "漫画")
 }
 
-func buildPanelComicTextDirective(planItem domain.FragmentPanelPlanItem) string {
-	if !panelPlanWantsComicLayout(planItem) {
-		return ""
+func buildPanelComicTextDirective(planItem domain.FragmentPanelPlanItem, languages ...string) string {
+	language := inferGenerationLanguage(planItem.Caption)
+	if len(languages) > 0 && strings.TrimSpace(languages[0]) != "" {
+		language = normalizeGenerationLanguage(languages[0])
 	}
+	visualTexts := fragmentComicTextsToVisual(planItem.ComicTexts, language)
 	var b strings.Builder
-	b.WriteString("Comic text directive: include manga/comic speech bubbles, narration boxes, thought bubbles, and stylized SFX lettering only where they improve readability; paint the exact Chinese text directly into the generated image; leave clean space and avoid covering faces or important props; do not add any random extra words.")
-	if len(planItem.ComicTexts) == 0 {
-		b.WriteString(" Limit count to <=1 narration box, 1-2 dialogue bubbles, <=1 SFX, <=1 thought bubble; each Chinese phrase should usually be <=12 characters and clearly legible.")
+	b.WriteString(visualSceneLetteringPolicy(language, visualTexts))
+	if len(visualTexts) == 0 {
 		return b.String()
 	}
 	b.WriteString("\nComic text elements:\n")
-	for _, item := range normalizeFragmentComicTexts(planItem.ComicTexts) {
+	for _, item := range normalizeFragmentComicTextsForLanguage(planItem.ComicTexts, language) {
 		text := sanitizeComicPromptText(item.Text)
 		position := strings.TrimSpace(item.Position)
 		if position == "" {
@@ -671,13 +682,13 @@ func buildPanelComicTextDirective(planItem domain.FragmentPanelPlanItem) string 
 		speaker := strings.TrimSpace(item.Speaker)
 		switch item.Type {
 		case "narration":
-			fmt.Fprintf(&b, "- Caption/narration box at %s, paint the exact Chinese text %q inside the box.\n", position, text)
+			fmt.Fprintf(&b, "- Caption/narration box at %s, paint only the exact supplied text %q inside the box.\n", position, text)
 		case "dialogue":
-			fmt.Fprintf(&b, "- Speech bubble for %s at %s, paint the exact Chinese dialogue %q inside the bubble, tail pointing to the speaker.\n", speaker, position, text)
+			fmt.Fprintf(&b, "- Speech bubble for %s at %s, paint only the exact supplied dialogue %q inside the bubble, tail pointing to the speaker.\n", speaker, position, text)
 		case "thought":
-			fmt.Fprintf(&b, "- Thought bubble for %s at %s, paint the exact Chinese inner monologue %q inside the bubble.\n", speaker, position, text)
+			fmt.Fprintf(&b, "- Thought bubble for %s at %s, paint only the exact supplied inner monologue %q inside the bubble.\n", speaker, position, text)
 		case "sfx":
-			fmt.Fprintf(&b, "- Bold stylized comic SFX lettering at %s, paint the exact Chinese SFX text %q.\n", position, text)
+			fmt.Fprintf(&b, "- Bold stylized comic SFX lettering at %s, paint only the exact supplied SFX text %q.\n", position, text)
 		}
 	}
 	return strings.TrimSpace(b.String())
@@ -997,7 +1008,7 @@ func (s *FragmentPanelGenerationService) runPanelImageLoop(ctx context.Context, 
 		_ = s.panelRepo.Save(ctx, task)
 
 		planItem := task.Plan[i]
-		prompt := buildPanelFinalImagePrompt(planItem, req.Style, req.AspectRatio, i, n)
+		prompt := buildPanelFinalImagePrompt(planItem, req.Style, req.AspectRatio, i, n, req.Language)
 
 		prevURL := ""
 		if i > 0 && len(task.Result.Panels) > 0 && i-1 < len(task.Result.Panels) {

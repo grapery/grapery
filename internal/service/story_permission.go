@@ -3,16 +3,31 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"go.uber.org/zap"
 )
 
+const (
+	ForkPermissionAllowed             = "allowed"
+	ForkPermissionCollaborationClosed = "collaboration_closed"
+	ForkPermissionSourceNotPublished  = "source_not_published"
+	ForkPermissionSourceNotVisible    = "source_not_visible"
+)
+
+// StoryboardForkPermission is the server-authoritative result used by both
+// preflight UI and the actual fork/continue write paths.
+type StoryboardForkPermission struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
+}
+
 // CanViewStory 检查用户是否可以查看故事
 // 可见性规则：
 // 1. 已发布的故事 (status=published)：任何人都可以查看
-// 2. 草稿状态的故事 (status=draft)：只有作者和小组成员可以查看
-// 3. 作者永远可以查看自己的故事
+// 2. 草稿状态的故事 (status=draft)：只有作者和受邀贡献者可以查看
+// 3. 作者和受邀贡献者始终可以查看协作内容
 func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (bool, error) {
 	s.logger.Debug("checking story view permission",
 		zap.String("storyID", storyID),
@@ -35,6 +50,15 @@ func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (boo
 	// Case 1: Story author can always view
 	if story.Author != nil && story.Author.ID == userID {
 		return true, nil
+	}
+	if story.UserID == userID {
+		return true, nil
+	}
+	if userID != "" {
+		isContributor, contributorErr := s.repo.IsStoryContributor(ctx, story.ID, userID)
+		if contributorErr == nil && isContributor {
+			return true, nil
+		}
 	}
 
 	// Case 2: Check status
@@ -68,11 +92,8 @@ func (s *Service) CanViewStory(ctx context.Context, storyID, userID string) (boo
 	}
 }
 
-// CanEditStory 检查用户是否可以编辑故事
-// 编辑权限规则：
-// 1. 作者永远可以编辑
-// 2. 开放协作(IsCollaborationOpen=true)：任何人可以编辑
-// 3. 封闭协作(IsCollaborationOpen=false)：只有作者可以编辑
+// CanEditStory checks Story-level management permission. Open collaboration
+// grants content contribution, never permission to change Story metadata.
 func (s *Service) CanEditStory(ctx context.Context, userID, storyID string) (bool, error) {
 	s.logger.Info("checking story edit permission",
 		zap.String("userID", userID),
@@ -95,49 +116,22 @@ func (s *Service) CanEditStory(ctx context.Context, userID, storyID string) (boo
 		return false, errors.New("failed to get story")
 	}
 
-	// Case 1: Story author can always edit
-	if story.Author != nil && story.Author.ID == userID {
+	if story.UserID == userID || (story.Author != nil && story.Author.ID == userID) {
 		s.logger.Debug("user is story author, can edit",
 			zap.String("userID", userID),
 			zap.String("storyID", storyID))
 		return true, nil
 	}
 
-	// 使用 domain 层的权限检查逻辑
-	status := story.GetCollaborationStatus()
-
-	switch status {
-	case domain.CollaborationStatusOpen:
-		// 开放协作：任何人可以编辑
-		s.logger.Debug("story has open collaboration, user can edit",
-			zap.String("userID", userID),
-			zap.String("storyID", storyID))
-		return true, nil
-
-	case domain.CollaborationStatusRestricted:
-		// 受限协作：只有作者可以编辑（V1/V2 MVP 移除了小组功能）
-		s.logger.Warn("restricted collaboration - author only, denying edit",
-			zap.String("userID", userID),
-			zap.String("storyID", storyID))
-		return false, nil
-
-	case domain.CollaborationStatusClosed:
-		// 封闭创作：只有作者可以编辑
-		s.logger.Warn("story is closed collaboration, only author can edit",
-			zap.String("userID", userID),
-			zap.String("storyID", storyID))
-		return false, nil
-	}
-
-	// Default: No permission
-	s.logger.Warn("user does not have permission to edit story",
+	s.logger.Warn("story metadata is author-managed",
 		zap.String("userID", userID),
 		zap.String("storyID", storyID))
 	return false, nil
 }
 
-// CanCreateStoryboard 检查用户是否可以为故事创建故事板
-// 使用 domain 层的权限检查逻辑
+// CanCreateStoryboard checks permission to create a root storyboard. In the
+// current product contract only the Story owner may start a new root; other
+// users contribute by continuing an existing node.
 func (s *Service) CanCreateStoryboard(ctx context.Context, storyID, userID string) (bool, error) {
 	s.logger.Info("checking storyboard creation permission",
 		zap.String("storyID", storyID),
@@ -152,8 +146,7 @@ func (s *Service) CanCreateStoryboard(ctx context.Context, storyID, userID strin
 		return false, errors.New("failed to get story")
 	}
 
-	// Check if user can create storyboard based on collaboration status
-	canCreate := story.CanCreateStoryboard(userID, false)
+	canCreate := isStoryOwner(story, userID)
 
 	if canCreate {
 		s.logger.Debug("user can create storyboard",
@@ -168,4 +161,82 @@ func (s *Service) CanCreateStoryboard(ctx context.Context, storyID, userID strin
 	}
 
 	return canCreate, nil
+}
+
+// CanViewUnpublishedStoryboards reports whether the viewer belongs to the
+// Story's authoring boundary. Only the Story author and explicitly invited
+// contributors may discover draft/unpublished nodes in hierarchy responses.
+func (s *Service) CanViewUnpublishedStoryboards(ctx context.Context, story *domain.Story, userID string) bool {
+	if story == nil || userID == "" {
+		return false
+	}
+	if isStoryOwner(story, userID) {
+		return true
+	}
+	isContributor, err := s.repo.IsStoryContributor(ctx, story.ID, userID)
+	return err == nil && isContributor
+}
+
+// CanForkStoryboard checks permission against the parent node and its Story.
+// Fork remains inside the original Story; it never creates an independent Story.
+func (s *Service) CanForkStoryboard(ctx context.Context, parentID, userID string) (*StoryboardForkPermission, error) {
+	parent, err := s.repo.StoryboardByID(ctx, parentID)
+	if err != nil || parent == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	story, err := s.repo.StoryByID(ctx, parent.StoryID)
+	if err != nil || story == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	if isStoryOwner(story, userID) {
+		return &StoryboardForkPermission{Allowed: true, Reason: ForkPermissionAllowed}, nil
+	}
+
+	// Explicit collaborators are part of the authoring boundary, not the public
+	// audience boundary. They may continue private/draft Stories and draft nodes.
+	isContributor, err := s.repo.IsStoryContributor(ctx, story.ID, userID)
+	if err != nil {
+		s.logger.Warn("failed to check explicit story contributor",
+			zap.String("storyId", story.ID),
+			zap.String("userId", userID),
+			zap.Error(err))
+		return &StoryboardForkPermission{Allowed: false, Reason: ForkPermissionCollaborationClosed}, nil
+	}
+	if isContributor {
+		return &StoryboardForkPermission{Allowed: true, Reason: ForkPermissionAllowed}, nil
+	}
+
+	if story.Status != "published" {
+		return &StoryboardForkPermission{Allowed: false, Reason: ForkPermissionSourceNotPublished}, nil
+	}
+	if !s.CanViewerSeeStory(ctx, userID, story) {
+		return &StoryboardForkPermission{Allowed: false, Reason: ForkPermissionSourceNotVisible}, nil
+	}
+	if !story.IsCollaborationOpen {
+		return &StoryboardForkPermission{Allowed: false, Reason: ForkPermissionCollaborationClosed}, nil
+	}
+
+	if parent.WorkflowStatus != domain.WorkflowStatusPublished {
+		return &StoryboardForkPermission{Allowed: false, Reason: ForkPermissionSourceNotPublished}, nil
+	}
+
+	return &StoryboardForkPermission{Allowed: true, Reason: ForkPermissionAllowed}, nil
+}
+
+func isStoryOwner(story *domain.Story, userID string) bool {
+	return story != nil && userID != "" &&
+		(story.UserID == userID || (story.Author != nil && story.Author.ID == userID))
+}
+
+func (s *Service) enforceCanForkStoryboard(ctx context.Context, parentID, userID string) error {
+	permission, err := s.CanForkStoryboard(ctx, parentID, userID)
+	if err != nil {
+		return err
+	}
+	if !permission.Allowed {
+		return fmt.Errorf("%w: %s", domain.ErrForbidden, permission.Reason)
+	}
+	return nil
 }

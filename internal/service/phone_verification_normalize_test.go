@@ -35,3 +35,32 @@ func TestNormalizeChinaPhone(t *testing.T) {
 		}
 	}
 }
+
+func TestDebugPhoneLoginBypassCodeRequiresExplicitDevelopmentConfiguration(t *testing.T) {
+	t.Setenv("GIN_MODE", "debug")
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_BYPASS", "1")
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_CODE", "000000")
+	if got := debugPhoneLoginBypassCode(); got != "000000" {
+		t.Fatalf("debugPhoneLoginBypassCode() = %q, want configured code", got)
+	}
+
+	t.Setenv("GIN_MODE", "release")
+	if got := debugPhoneLoginBypassCode(); got != "" {
+		t.Fatalf("release mode must disable bypass, got %q", got)
+	}
+}
+
+func TestDebugPhoneLoginBypassCodeRejectsIncompleteConfiguration(t *testing.T) {
+	t.Setenv("GIN_MODE", "debug")
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_BYPASS", "")
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_CODE", "000000")
+	if got := debugPhoneLoginBypassCode(); got != "" {
+		t.Fatalf("missing opt-in flag must disable bypass, got %q", got)
+	}
+
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_BYPASS", "1")
+	t.Setenv("GRAPERY_DEBUG_PHONE_LOGIN_CODE", "123")
+	if got := debugPhoneLoginBypassCode(); got != "" {
+		t.Fatalf("invalid code must disable bypass, got %q", got)
+	}
+}

@@ -2,11 +2,8 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
-
-const promptDSLVersion = "prompt_dsl_v1"
 
 type PromptDSLSection struct {
 	Title   string `json:"title"`
@@ -16,7 +13,6 @@ type PromptDSLSection struct {
 }
 
 type PromptDSL struct {
-	Version        string             `json:"dslVersion"`
 	Role           string             `json:"role"`
 	Task           string             `json:"task"`
 	Inputs         any                `json:"inputs,omitempty"`
@@ -51,27 +47,11 @@ func promptSection(builder *strings.Builder, title, body string) {
 }
 
 func promptJSONSection(builder *strings.Builder, title string, payload any) {
-	promptSection(builder, title, "```json\n"+promptJSONBlock(payload)+"\n```")
+	promptSection(builder, title, promptJSONBlock(payload))
 }
 
 func renderPromptDSL(dsl PromptDSL) string {
-	if strings.TrimSpace(dsl.Version) == "" {
-		dsl.Version = promptDSLVersion
-	}
 	var b strings.Builder
-	b.WriteString("# PromptDSL\n")
-	b.WriteString("```json\n")
-	b.WriteString(promptJSONBlock(map[string]any{
-		"dslVersion":      dsl.Version,
-		"role":            dsl.Role,
-		"task":            dsl.Task,
-		"hasInputs":       dsl.Inputs != nil,
-		"hasGlobalConfig": dsl.GlobalConfig != nil,
-		"outputContract":  strings.TrimSpace(dsl.OutputContract) != "",
-		"sectionCount":    len(dsl.Sections),
-	}))
-	b.WriteString("\n```\n")
-
 	b.WriteString("# Role\n")
 	b.WriteString(strings.TrimSpace(dsl.Role))
 	b.WriteString("\n")
@@ -99,7 +79,7 @@ func renderPromptDSL(dsl PromptDSL) string {
 		}
 		body := strings.TrimSpace(sec.Body)
 		if body == "" && sec.Payload != nil {
-			body = fmt.Sprintf("```json\n%s\n```", promptJSONBlock(sec.Payload))
+			body = promptJSONBlock(sec.Payload)
 		}
 		promptSection(&b, title, body)
 	}

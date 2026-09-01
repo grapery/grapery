@@ -1276,6 +1276,82 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
 }
 
+// GenerateFragmentStructuredTextJSON runs a text-only JSON planning step with
+// an explicit output budget. Comic-page plans are substantially larger than
+// the legacy 1000-token fragment text response and must not share that cap.
+func (s *AIService) GenerateFragmentStructuredTextJSON(
+	ctx context.Context,
+	aiTask *domain.AITask,
+	maxTokens int32,
+	temperature float32,
+	step string,
+) (raw string, tokens int, err error) {
+	rel, admErr := s.acquireTextAdmission(ctx)
+	if admErr != nil {
+		return "", 0, admErr
+	}
+	if rel != nil {
+		defer rel()
+	}
+	prompt, imageURLs, err := s.parseFragmentTextInput(aiTask)
+	if err != nil {
+		return "", 0, err
+	}
+	if len(imageURLs) > 0 {
+		return "", 0, fmt.Errorf("structured text JSON does not accept image inputs")
+	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	if temperature <= 0 {
+		temperature = 0.35
+	}
+	step = strings.TrimSpace(step)
+	if step == "" {
+		step = "fragment_structured_text"
+	}
+
+	if s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
+		resp, huoshanErr := s.genAPI.HuoshanInternalClient().GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+			Prompt:       prompt,
+			MaxTokens:    int(maxTokens),
+			Temperature:  temperature,
+			JSONResponse: true,
+		})
+		if huoshanErr == nil && resp != nil && strings.TrimSpace(resp.Text) != "" {
+			tok := resp.TotalTokens
+			if tok == 0 {
+				tok = resp.InputTokens + resp.OutputTokens
+			}
+			text := strings.TrimSpace(resp.Text)
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, step, "text_json", "huoshan", strings.TrimSpace(resp.Model), float64(temperature), int(maxTokens), prompt, nil, text, tok, nil)
+			return text, tok, nil
+		}
+		if huoshanErr != nil {
+			s.logger.Warn("fragment structured JSON: huoshan failed", zap.String("step", step), zap.Error(huoshanErr))
+		}
+	}
+	if s.geminiClient == nil {
+		return "", 0, fmt.Errorf("no provider for fragment structured JSON")
+	}
+	cfg := &genai.GenerateContentConfig{
+		Temperature:      &temperature,
+		MaxOutputTokens:  maxTokens,
+		ResponseMIMEType: "application/json",
+	}
+	text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+	if err != nil {
+		return "", 0, fmt.Errorf("gemini structured JSON: %w", err)
+	}
+	tokensUsed := 0
+	if gemResp != nil && gemResp.UsageMetadata != nil {
+		tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
+	}
+	text = strings.TrimSpace(text)
+	s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, step, "text_json", "gemini", "", float64(temperature), int(maxTokens), prompt, nil, text, tokensUsed, nil)
+	return text, tokensUsed, nil
+}
+
 // GenerateFragmentAuxJSON 无参考图的 JSON 模式文本（一致性检查等辅助步骤）。
 func (s *AIService) GenerateFragmentAuxJSON(ctx context.Context, prompt string) (raw string, tokens int, err error) {
 	rel, admErr := s.acquireTextAdmission(ctx)
@@ -1565,14 +1641,15 @@ func (s *AIService) GenerateBatchImagesForFragment(ctx context.Context, userID, 
 		return nil, 0, fmt.Errorf("image provider %q is not registered", provider)
 	}
 	md := map[string]interface{}{
-		"source":       "fragment_generation_batch_huoshan",
-		"aspectRatio":  ar,
-		"scene_count":  sceneCount,
+		"source":        "fragment_generation_batch_huoshan",
+		"aspectRatio":   ar,
+		"scene_count":   sceneCount,
 		"batch_huoshan": true,
 	}
 	for k, v := range metadata {
 		md[k] = v
 	}
+	watermark := false
 	imgReq := &GenerateImageRequest{
 		UserID:            strings.TrimSpace(userID),
 		Prompt:            prompt,
@@ -1584,6 +1661,7 @@ func (s *AIService) GenerateBatchImagesForFragment(ctx context.Context, userID, 
 		Seed:              seed,
 		Options:           options,
 		GuidanceScale:     guidanceScale,
+		Watermark:         &watermark,
 		RelatedEntityID:   strings.TrimSpace(relatedEntityID),
 		RelatedEntityType: strings.TrimSpace(relatedEntityType),
 		Metadata:          md,
@@ -1640,6 +1718,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 	if s.genAPI != nil && s.genAPI.GetImageProvider(provider) == nil {
 		return "", 0, fmt.Errorf("image provider %q is not registered", provider)
 	}
+	watermark := false
 
 	relatedID := strings.TrimSpace(aiTask.RelatedEntityID)
 	if relatedID == "" {
@@ -1662,6 +1741,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 		Seed:              seed,
 		Options:           options,
 		GuidanceScale:     guidanceScale,
+		Watermark:         &watermark,
 		Metadata: map[string]interface{}{
 			"source":      "fragment_generation_image",
 			"aspectRatio": ar,

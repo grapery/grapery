@@ -349,13 +349,13 @@ func (s *Service) NotifyStoryboardForked(ctx context.Context, parentCreatorID, f
 	s.populateTargetRichContext(ctx, n, "storyboard", newStoryboardID)
 	child := strings.TrimSpace(n.StoryboardTitle)
 	if child == "" {
-		child = "新版本"
+		child = "新分支"
 	}
-	n.Title = "分镜被 Fork"
-	n.Content = fmt.Sprintf("%s 从你的分镜《%s》衍生出新分镜《%s》，所属故事《%s》。",
+	n.Title = "分镜有了新的续写分支"
+	n.Content = fmt.Sprintf("%s 从你的分镜《%s》继续创作了新分支《%s》，仍属于故事《%s》。",
 		forkerName, parentTitle, child, strings.TrimSpace(n.StoryTitle))
 	if strings.TrimSpace(n.StoryTitle) == "" {
-		n.Content = fmt.Sprintf("%s 从你的分镜《%s》衍生出新分镜《%s》。", forkerName, parentTitle, child)
+		n.Content = fmt.Sprintf("%s 从你的分镜《%s》继续创作了新分支《%s》。", forkerName, parentTitle, child)
 	}
 	return s.CreateNotificationWithPush(ctx, n)
 }

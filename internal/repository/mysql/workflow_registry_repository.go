@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
@@ -114,6 +116,82 @@ func (r *WorkflowRegistryRepository) ListWorkflowCatalog(ctx context.Context, su
 		}
 		out = append(out, &domain.WorkflowCatalogEntry{Binding: *binding, Release: *release})
 	}
+	return out, nil
+}
+
+func (r *WorkflowRegistryRepository) ListWorkflowReleaseStats(ctx context.Context, since time.Time) ([]domain.WorkflowReleaseStats, error) {
+	var rows []GenerationExecutionDB
+	query := r.db.WithContext(ctx).
+		Where("workflow_release_id <> ''").
+		Order("created_at ASC")
+	if !since.IsZero() {
+		query = query.Where("created_at >= ?", since)
+	}
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	byRelease := make(map[string]*domain.WorkflowReleaseStats)
+	durationTotals := make(map[string]int64)
+	durationCounts := make(map[string]int64)
+	for i := range rows {
+		row := &rows[i]
+		stats := byRelease[row.WorkflowReleaseID]
+		if stats == nil {
+			stats = &domain.WorkflowReleaseStats{
+				WorkflowReleaseID: row.WorkflowReleaseID,
+				WorkflowKey:       row.WorkflowKey,
+				WorkflowVersion:   row.WorkflowVersion,
+			}
+			byRelease[row.WorkflowReleaseID] = stats
+		}
+		stats.TotalRuns++
+		stats.TotalTokens += int64(row.TokensUsed)
+		if row.CreatedAt.After(stats.LastRunAt) {
+			stats.LastRunAt = row.CreatedAt
+		}
+		switch strings.ToLower(strings.TrimSpace(row.Status)) {
+		case "succeeded", "completed", "success":
+			stats.SucceededRuns++
+		case "failed":
+			stats.FailedRuns++
+		case "cancelled", "canceled":
+			stats.CancelledRuns++
+		default:
+			stats.ActiveRuns++
+		}
+		if row.CompletedAt != nil && row.CompletedAt.After(row.CreatedAt) {
+			durationTotals[row.WorkflowReleaseID] += row.CompletedAt.Sub(row.CreatedAt).Milliseconds()
+			durationCounts[row.WorkflowReleaseID]++
+		}
+		var input map[string]any
+		if json.Unmarshal([]byte(defaultJSON(row.InputJSON, "{}")), &input) == nil {
+			if selection, ok := input["workflowSelection"].(map[string]any); ok {
+				if fallback, ok := selection["fallback"].(bool); ok && fallback {
+					stats.FallbackRuns++
+				}
+			}
+		}
+	}
+	out := make([]domain.WorkflowReleaseStats, 0, len(byRelease))
+	for releaseID, stats := range byRelease {
+		terminal := stats.SucceededRuns + stats.FailedRuns
+		if terminal > 0 {
+			stats.SuccessRate = float64(stats.SucceededRuns) / float64(terminal)
+		}
+		if stats.TotalRuns > 0 {
+			stats.AverageTokens = float64(stats.TotalTokens) / float64(stats.TotalRuns)
+		}
+		if durationCounts[releaseID] > 0 {
+			stats.AverageDurationMs = durationTotals[releaseID] / durationCounts[releaseID]
+		}
+		out = append(out, *stats)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastRunAt.Equal(out[j].LastRunAt) {
+			return out[i].WorkflowReleaseID < out[j].WorkflowReleaseID
+		}
+		return out[i].LastRunAt.After(out[j].LastRunAt)
+	})
 	return out, nil
 }
 

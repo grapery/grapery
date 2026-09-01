@@ -38,7 +38,7 @@ func TestBuildImageGenerationPromptIncludesComicStyle(t *testing.T) {
 	if !strings.Contains(out, "Comic Style Continuation") {
 		t.Fatalf("prompt should mention comic style section")
 	}
-	for _, want := range []string{"# PromptDSL", "prompt_dsl_v1", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Output Contract"} {
+	for _, want := range []string{"visual_scene_v2", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Output Contract"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("prompt should contain structured section %q, got: %s", want, out)
 		}
@@ -58,7 +58,7 @@ func TestBuildComicPagePromptUsesStructuredSections(t *testing.T) {
 		PageAspectRatio: "3:4",
 		DialogueMode:    "auto",
 	}, nil, 0)
-	for _, want := range []string{"# PromptDSL", "prompt_dsl_v1", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Detailed Instructions"} {
+	for _, want := range []string{"visual_scene_v2", "# Role", "## Task", "## Inputs", "## Global Visual Config", "## Comic Page Rules"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("comic page prompt should contain structured section %q, got: %s", want, out)
 		}
@@ -88,14 +88,13 @@ func TestBuildComicPagePromptPrefersPreplannedComicMetadata(t *testing.T) {
 		DialogueMode:    "auto",
 	}, planned, 0)
 	for _, want := range []string{
-		"Pre-planned comic metadata from text stage (highest priority)",
-		"layoutIntent: diagonal_motion",
-		"compositionPlan: 画面左下主角",
-		"shotType: low_angle",
-		"visualHierarchy: 主角动作第一",
-		"type=dialogue",
-		"text=你别过来",
-		"preplannedLayoutIntent",
+		`"layoutIntent": "diagonal_motion"`,
+		`"compositionPlan": "画面左下主角`,
+		`"shotType": "low_angle"`,
+		`"visualHierarchy": "主角动作第一`,
+		`"type": "dialogue"`,
+		`"text": "你别过来"`,
+		"comicTexts from sceneSpec is authoritative",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("comic page prompt should include %q, got: %s", want, out)

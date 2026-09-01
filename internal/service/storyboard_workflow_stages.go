@@ -36,6 +36,7 @@ type StoryboardWorkflowStageOptions struct {
 	UserDirective       string
 	SceneCount          int
 	ComicStyle          string
+	Language            string
 }
 
 // ExecuteStoryboardWorkflowStage executes exactly one durable text stage. A
@@ -132,6 +133,7 @@ func (s *Service) ensureStoryboardWorkflowRun(ctx context.Context, storyboard *d
 			"rawInput": storyboard.RawInput, "sceneCount": sceneCount, "continuation": continuation,
 			"comicStyle": storyboard.ContinuationComicStyle, "clientRequestId": strings.TrimSpace(opts.ClientRequestID),
 			"regenerateStructure": opts.RegenerateStructure, "userDirective": strings.TrimSpace(opts.UserDirective),
+			"language": strings.TrimSpace(opts.Language),
 		}, "{}"),
 		ContextSnapshotJSON: mustJSON(snapshot, "{}"), AlignmentSnapshotJSON: alignmentJSON, MetricsJSON: "{}",
 		CreatedAt: now, UpdatedAt: now,
@@ -219,6 +221,15 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 	if err := json.Unmarshal([]byte(run.ScenePlanJSON), &scenePlan); err != nil || len(scenePlan.Scenes) == 0 {
 		return nil, fmt.Errorf("scene_plan stage is incomplete")
 	}
+	assets, _ := s.repo.ListStoryboardGenerationAssets(ctx, run.ID)
+	issues := s.auditStoryboardGenerationConsistency(plan, &scenePlan, assets, sceneCount, s.isStoryboardContinuation(storyboard))
+	run.ConsistencyIssuesJSON = mustJSON(issues, "[]")
+	if detail := firstHighStoryboardConsistencyIssue(issues); detail != "" {
+		err := fmt.Errorf("story framework consistency check failed: %s", detail)
+		s.failStoryboardGenerationRun(ctx, run, "story_framework_conflict", err)
+		return nil, err
+	}
+
 	existing, err := s.repo.StoryboardScenes(ctx, storyboard.ID)
 	if err != nil {
 		return nil, fmt.Errorf("load storyboard scenes: %w", err)
@@ -252,9 +263,6 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 			return nil, err
 		}
 	}
-	assets, _ := s.repo.ListStoryboardGenerationAssets(ctx, run.ID)
-	issues := s.auditStoryboardGenerationConsistency(plan, &scenePlan, assets, sceneCount)
-	run.ConsistencyIssuesJSON = mustJSON(issues, "[]")
 	run.Progress, run.CurrentStep, run.Status = 100, domain.StoryboardGenerationStepConsistency, domain.GenerationStatusCompleted
 	done := time.Now().Unix()
 	run.CompletedAt, run.UpdatedAt, run.ErrorCode, run.ErrorMessage = &done, done, "", ""
@@ -271,6 +279,15 @@ type storyboardWorkflowRunRequest struct {
 	ClientRequestID     string `json:"clientRequestId"`
 	RegenerateStructure bool   `json:"regenerateStructure"`
 	UserDirective       string `json:"userDirective"`
+	Language            string `json:"language"`
+}
+
+func storyboardWorkflowOutputLanguage(run *domain.StoryboardGenerationRun) string {
+	language := strings.TrimSpace(storyboardWorkflowRunRequestFromRun(run).Language)
+	if language == "" {
+		return "zh-Hans"
+	}
+	return language
 }
 
 func storyboardWorkflowRunRequestFromRun(run *domain.StoryboardGenerationRun) storyboardWorkflowRunRequest {

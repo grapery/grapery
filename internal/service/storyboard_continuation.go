@@ -58,13 +58,35 @@ func (s *Service) invalidateParentStoryboardCaches(ctx context.Context, parentID
 		return
 	}
 	_ = c.Delete(ctx, cache.StoryboardKey(parentID))
-	_ = c.Delete(ctx, cache.StoryboardKey(parentID)+":children")
+	for _, scope := range []string{"published", "collaborator"} {
+		_ = c.Delete(ctx, cache.StoryboardKey(parentID)+":children:"+scope)
+	}
+	_ = c.Delete(ctx, cache.StoryboardKey(parentID)+":children") // legacy key
 	if storyID == "" {
 		return
 	}
 	for limit := 20; limit <= 100; limit += 20 {
 		for offset := 0; offset < 200; offset += limit {
-			_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+parentID, limit, offset))
+			for _, scope := range []string{"published", "collaborator"} {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+parentID+"_"+scope, limit, offset))
+			}
+			_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_parent_"+parentID, limit, offset)) // legacy key
+		}
+	}
+}
+
+// invalidateRootStoryboardCaches busts both public and collaborator root lists.
+func (s *Service) invalidateRootStoryboardCaches(ctx context.Context, storyID string) {
+	c := s.getCache()
+	if c == nil || strings.TrimSpace(storyID) == "" {
+		return
+	}
+	for limit := 20; limit <= 100; limit += 20 {
+		for offset := 0; offset < 200; offset += limit {
+			for _, scope := range []string{"published", "collaborator"} {
+				_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_root_"+scope, limit, offset))
+			}
+			_ = c.Delete(ctx, cache.StoryboardsListKey(storyID+"_root", limit, offset)) // legacy key
 		}
 	}
 }

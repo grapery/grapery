@@ -192,10 +192,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 	}
 
 	imageSlots, imageProgress := fragmentGenerationImageSnapshot(task)
-	slotMode := "delta"
-	if strings.TrimSpace(task.Request.TargetDraftFragmentID) != "" && task.Result != nil && len(task.Result.ImageUrls) > task.Request.ImageCount {
-		slotMode = "full"
-	}
+	slotMode := fragmentGenerationSlotMode(task)
 	response := gin.H{
 		"taskId":        task.ID,
 		"status":        task.Status,
@@ -223,6 +220,19 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Append generation persists a complete slot snapshot as soon as planning has
+// produced placeholders for the existing and new pages. ImageUrls can still be
+// empty at that point, so it cannot be used to infer whether slots are full.
+func fragmentGenerationSlotMode(task *domain.FragmentGenerationTask) string {
+	if task == nil || strings.TrimSpace(task.Request.TargetDraftFragmentID) == "" || task.Request.ReplaceImageIndex > 0 {
+		return "delta"
+	}
+	if task.Result != nil && (len(task.Result.ImageSlots) > 0 || task.Result.ExpectedImageCount > task.Request.ImageCount || len(task.Result.ImageUrls) > task.Request.ImageCount) {
+		return "full"
+	}
+	return "delta"
 }
 
 // ListGenerationTasks handles GET /fragments/generate
@@ -280,9 +290,15 @@ func (h *FragmentGenerationHandler) ListGenerationTasks(c *gin.Context) {
 }
 
 func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H {
+	imageURLs := task.Result.ImageUrls
+	if imageURLs == nil {
+		// `result` is created before the first image is available. Keep the HTTP
+		// response contract stable for clients polling this legitimate middle state.
+		imageURLs = []string{}
+	}
 	res := gin.H{
 		"content":            task.Result.Content,
-		"imageUrls":          task.Result.ImageUrls,
+		"imageUrls":          imageURLs,
 		"tokensUsed":         task.Result.TokensUsed,
 		"draftFragmentId":    task.Result.DraftFragmentID,
 		"expectedImageCount": fragmentGenerationExpectedImageCount(task),
@@ -306,13 +322,13 @@ func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H
 
 func fragmentGenerationStage(task *domain.FragmentGenerationTask) string {
 	switch strings.TrimSpace(task.CurrentStep) {
-	case "extracting_elements", "expanding_scenes":
+	case "extracting_elements", "expanding_scenes", "planning_comic_pages":
 		return "story"
 	case "generating_reference_assets":
 		return "style"
 	case "generating_images":
 		return "images"
-	case "checking_consistency":
+	case "checking_consistency", "repairing_consistency":
 		return "review"
 	case "completed":
 		return "completed"
@@ -552,12 +568,16 @@ func fragmentGenerationStepMessageKey(step string) string {
 		return "fragment_generation_analyzing_story"
 	case "expanding_scenes":
 		return "fragment_generation_writing_story"
+	case "planning_comic_pages":
+		return "fragment_generation_planning_pages"
 	case "generating_reference_assets":
 		return "fragment_generation_designing_style"
 	case "generating_images":
 		return "fragment_generation_generating_images"
 	case "checking_consistency":
 		return "fragment_generation_checking_consistency"
+	case "repairing_consistency":
+		return "fragment_generation_repairing_consistency"
 	case "completed":
 		return "fragment_generation_completed"
 	default:
