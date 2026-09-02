@@ -108,6 +108,12 @@ func (r *GenerationRuntimeRepository) findGenerationExecutionByIdempotency(ctx c
 	return generationExecutionFromDB(&row)
 }
 
+func (r *GenerationRuntimeRepository) FindGenerationExecutionByRequest(ctx context.Context, userID, kind, clientRequestID string) (*domain.GenerationExecution, error) {
+	return r.findGenerationExecutionByIdempotency(ctx, &domain.GenerationExecution{
+		UserID: strings.TrimSpace(userID), Kind: strings.TrimSpace(kind), ClientRequestID: strings.TrimSpace(clientRequestID),
+	})
+}
+
 func (r *GenerationRuntimeRepository) GetGenerationExecution(ctx context.Context, id string) (*domain.GenerationExecution, error) {
 	var row GenerationExecutionDB
 	if err := r.db.WithContext(ctx).Where("id = ?", strings.TrimSpace(id)).Take(&row).Error; err != nil {

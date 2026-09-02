@@ -1696,6 +1696,9 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 		}
 	}
 	prompt := s.buildExtractionAndStoryPrompt(req, hasImages, continuation)
+	if strings.TrimSpace(req.WorkflowUserPrompt) != "" {
+		prompt = strings.TrimSpace(req.WorkflowUserPrompt)
+	}
 	if len(visualEvidence) > 0 {
 		prompt = prompt + "\n\n" + formatFragmentVisualEvidenceForPrompt(visualEvidence)
 	}
@@ -1703,7 +1706,13 @@ func (s *FragmentGenerationService) extractElementsAndGenerateContent(ctx contex
 		prompt = prompt + "\n\n" + slotText
 	}
 
-	payload := map[string]interface{}{"prompt": prompt}
+	payload := map[string]interface{}{
+		"prompt":                  prompt,
+		"systemPrompt":            strings.TrimSpace(req.WorkflowSystemPrompt),
+		"modelConfig":             req.WorkflowModelConfig,
+		"outputSchema":            req.WorkflowOutputSchema,
+		"promptTemplateVersionId": strings.TrimSpace(req.WorkflowPromptVersionID),
+	}
 	if len(visualEvidence) == 0 && len(imageURLs) > 0 {
 		payload["imageUrls"] = imageURLs
 	}

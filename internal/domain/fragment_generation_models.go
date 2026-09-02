@@ -63,14 +63,21 @@ type FragmentGenerationRequest struct {
 	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
 	Visibility string   `json:"visibility"` // 可见性：public, followers, private
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
-	AspectRatio            string                  `json:"aspectRatio,omitempty"`
-	ConsistencyLevel       string                  `json:"consistencyLevel,omitempty"`       // off | standard | strong
-	EnableReferenceAssets  *bool                   `json:"enableReferenceAssets,omitempty"`  // nil 时由 consistencyLevel 决定
-	IncludeGenerationTrace bool                    `json:"includeGenerationTrace,omitempty"` // 返回完整生成 trace
-	ReferenceSlots         []FragmentReferenceSlot `json:"referenceSlots,omitempty"`         // 语义参考槽位（可选）
-	TargetDraftFragmentID  string                  `json:"targetDraftFragmentId,omitempty"`  // 修改/续写时写回的现有草稿碎片
-	ReplaceImageIndex      int                     `json:"replaceImageIndex,omitempty"`      // 单张重绘时替换的 1-based 图片位置
-	ClientMessageID        string                  `json:"clientMessageId,omitempty"`        // 客户端消息幂等键，避免重复提交创建多个任务
+	AspectRatio             string                  `json:"aspectRatio,omitempty"`
+	ConsistencyLevel        string                  `json:"consistencyLevel,omitempty"`       // off | standard | strong
+	EnableReferenceAssets   *bool                   `json:"enableReferenceAssets,omitempty"`  // nil 时由 consistencyLevel 决定
+	IncludeGenerationTrace  bool                    `json:"includeGenerationTrace,omitempty"` // 返回完整生成 trace
+	ReferenceSlots          []FragmentReferenceSlot `json:"referenceSlots,omitempty"`         // 语义参考槽位（可选）
+	TargetDraftFragmentID   string                  `json:"targetDraftFragmentId,omitempty"`  // 修改/续写时写回的现有草稿碎片
+	ReplaceImageIndex       int                     `json:"replaceImageIndex,omitempty"`      // 单张重绘时替换的 1-based 图片位置
+	ClientMessageID         string                  `json:"clientMessageId,omitempty"`        // 客户端消息幂等键，避免重复提交创建多个任务
+	WorkflowReleaseID       string                  `json:"workflowReleaseId,omitempty"`
+	WorkflowRunID           string                  `json:"workflowRunId,omitempty"`
+	WorkflowSystemPrompt    string                  `json:"workflowSystemPrompt,omitempty"`
+	WorkflowUserPrompt      string                  `json:"workflowUserPrompt,omitempty"`
+	WorkflowModelConfig     map[string]any          `json:"workflowModelConfig,omitempty"`
+	WorkflowOutputSchema    map[string]any          `json:"workflowOutputSchema,omitempty"`
+	WorkflowPromptVersionID string                  `json:"workflowPromptVersionId,omitempty"`
 }
 
 // FragmentReferenceSlot 描述用户可为某个故事实体提供的语义参考图。

@@ -853,8 +853,49 @@ func ptrInt32(v int) *int32 {
 
 // fragmentTextPayload 碎片文案生成输入（支持纯字符串或 JSON：prompt + 可选参考图 URL）。
 type fragmentTextPayload struct {
-	Prompt    string   `json:"prompt"`
-	ImageURLs []string `json:"imageUrls,omitempty"`
+	Prompt                  string         `json:"prompt"`
+	ImageURLs               []string       `json:"imageUrls,omitempty"`
+	SystemPrompt            string         `json:"systemPrompt,omitempty"`
+	ModelConfig             map[string]any `json:"modelConfig,omitempty"`
+	OutputSchema            map[string]any `json:"outputSchema,omitempty"`
+	PromptTemplateVersionID string         `json:"promptTemplateVersionId,omitempty"`
+}
+
+func parseFragmentTextPayload(aiTask *domain.AITask) fragmentTextPayload {
+	var payload fragmentTextPayload
+	if aiTask != nil {
+		_ = json.Unmarshal([]byte(aiTask.Input), &payload)
+	}
+	return payload
+}
+
+func fragmentModelString(config map[string]any, key string) string {
+	value, _ := config[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func fragmentModelFloat32(config map[string]any, key string, fallback float32) float32 {
+	switch value := config[key].(type) {
+	case float64:
+		return float32(value)
+	case float32:
+		return value
+	case int:
+		return float32(value)
+	default:
+		return fallback
+	}
+}
+
+func fragmentModelInt(config map[string]any, key string, fallback int) int {
+	switch value := config[key].(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	default:
+		return fallback
+	}
 }
 
 func (s *AIService) parseFragmentTextInput(aiTask *domain.AITask) (prompt string, imageURLs []string, err error) {
@@ -982,12 +1023,13 @@ func (s *AIService) generateFragmentStoryMultimodal(ctx context.Context, prompt 
 }
 
 // generateFragmentExtractionMultimodalRaw 多模态提取：返回完整 JSON 文本（含 visualBible），不裁剪为 content-only。
-func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string, relatedEntityType, relatedEntityID string) (string, int, error) {
+func (s *AIService) generateFragmentExtractionMultimodalRaw(ctx context.Context, prompt string, imageURLs []string, relatedEntityType, relatedEntityID, providerHint string, maxTokens int32, temperature float32) (string, int, error) {
 	resp, err := s.GenerateFragmentVisionJSON(ctx, &FragmentVisionJSONRequest{
 		Prompt:            prompt,
 		ImageURLs:         imageURLs,
-		MaxTokens:         4096,
-		Temperature:       0.55,
+		ProviderHint:      providerHint,
+		MaxTokens:         maxTokens,
+		Temperature:       temperature,
 		RelatedEntityID:   relatedEntityID,
 		RelatedEntityType: relatedEntityType,
 		Step:              "fragment_extraction",
@@ -1203,7 +1245,7 @@ func (s *AIService) generateFragmentVisionJSONGemini(ctx context.Context, prompt
 	return text, tokens, model, nil
 }
 
-func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, prompt string) (string, int, error) {
+func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, prompt, systemPrompt, model string, maxTokens int, temperature float32) (string, int, error) {
 	if s.genAPI == nil {
 		return "", 0, fmt.Errorf("genAPI not available")
 	}
@@ -1212,9 +1254,11 @@ func (s *AIService) generateFragmentExtractionTextHuoshan(ctx context.Context, p
 		return "", 0, fmt.Errorf("huoshan client not available")
 	}
 	resp, err := hc.GenerateText(ctx, &huoshanclient.TextGenerationRequest{
+		Model:        model,
 		Prompt:       prompt,
-		MaxTokens:    4096,
-		Temperature:  0.55,
+		SystemPrompt: systemPrompt,
+		MaxTokens:    maxTokens,
+		Temperature:  temperature,
 		JSONResponse: true,
 	})
 	if err != nil {
@@ -1244,25 +1288,46 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 	if err != nil {
 		return "", 0, err
 	}
-	if len(imageURLs) > 0 {
-		return s.generateFragmentExtractionMultimodalRaw(ctx, prompt, imageURLs, aiTask.RelatedEntityType, aiTask.RelatedEntityID)
+	options := parseFragmentTextPayload(aiTask)
+	systemPrompt := strings.TrimSpace(options.SystemPrompt)
+	if len(options.OutputSchema) > 0 {
+		if schemaJSON, marshalErr := json.Marshal(options.OutputSchema); marshalErr == nil {
+			systemPrompt = strings.TrimSpace(systemPrompt + "\nReturn JSON matching this schema: " + string(schemaJSON))
+		}
 	}
-	if s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
-		if t, tok, err := s.generateFragmentExtractionTextHuoshan(ctx, prompt); err == nil && strings.TrimSpace(t) != "" {
-			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "huoshan", "", 0.55, 4096, prompt, nil, strings.TrimSpace(t), tok, nil)
+	model := fragmentModelString(options.ModelConfig, "model")
+	provider := strings.ToLower(fragmentModelString(options.ModelConfig, "provider"))
+	temperature := fragmentModelFloat32(options.ModelConfig, "temperature", 0.55)
+	maxTokens := fragmentModelInt(options.ModelConfig, "maxTokens", 4096)
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	if len(imageURLs) > 0 {
+		multimodalPrompt := prompt
+		if systemPrompt != "" {
+			multimodalPrompt = systemPrompt + "\n\n" + prompt
+		}
+		return s.generateFragmentExtractionMultimodalRaw(ctx, multimodalPrompt, imageURLs, aiTask.RelatedEntityType, aiTask.RelatedEntityID, provider, int32(maxTokens), temperature)
+	}
+	if provider != "gemini" && s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
+		if t, tok, err := s.generateFragmentExtractionTextHuoshan(ctx, prompt, systemPrompt, model, maxTokens, temperature); err == nil && strings.TrimSpace(t) != "" {
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "huoshan", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(t), tok, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID})
 			return t, tok, nil
 		} else if err != nil {
 			s.logger.Warn("fragment extraction JSON: huoshan failed", zap.Error(err))
 		}
 	}
 	if s.geminiClient != nil {
-		temp := float32(0.55)
-		maxTok := int32(4096)
+		temp := temperature
+		maxTok := int32(maxTokens)
 		cfg := &genai.GenerateContentConfig{
 			Temperature:     &temp,
 			MaxOutputTokens: maxTok,
 		}
-		text, gemResp, err := s.geminiClient.GenerateText(ctx, "", prompt, cfg)
+		if systemPrompt != "" {
+			cfg.SystemInstruction = genai.NewContentFromText(systemPrompt, genai.RoleUser)
+		}
+		text, gemResp, err := s.geminiClient.GenerateText(ctx, model, prompt, cfg)
 		if err != nil {
 			return "", 0, fmt.Errorf("gemini extraction JSON: %w", err)
 		}
@@ -1270,7 +1335,7 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 		if gemResp != nil && gemResp.UsageMetadata != nil {
 			tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
 		}
-		s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "gemini", "", 0.55, 4096, prompt, nil, strings.TrimSpace(text), tokensUsed, nil)
+		s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "gemini", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(text), tokensUsed, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID})
 		return strings.TrimSpace(text), tokensUsed, nil
 	}
 	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")

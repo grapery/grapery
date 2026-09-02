@@ -436,7 +436,7 @@ func main() {
 	workflowPublicGroup := apiGroup.Group("/v1")
 	workflowPublicGroup.Use(authPkg.AuthMiddleware())
 	workflowRegistryHandler.RegisterPublicRoutes(workflowPublicGroup)
-	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, logger)
+	fragmentGenHandler := transport.NewFragmentGenerationHandler(fragmentGenService, fragmentHandler, generationRuntimeService, logger)
 	// AI rate limiter for fragment generation endpoints
 	fragGenGroup := apiGroup.Group("/v1/fragments")
 	fragGenGroup.Use(authPkg.AuthMiddleware())

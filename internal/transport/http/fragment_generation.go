@@ -21,13 +21,15 @@ func parseIntParam(s string) (int, error) {
 type FragmentGenerationHandler struct {
 	fragmentGenService *service.FragmentGenerationService
 	fragmentHandler    *handler.FragmentHandler
+	generationRuntime  *service.GenerationRuntimeService
 	logger             *zap.Logger
 }
 
-func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGenerationService, fragmentHandler *handler.FragmentHandler, logger *zap.Logger) *FragmentGenerationHandler {
+func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGenerationService, fragmentHandler *handler.FragmentHandler, generationRuntime *service.GenerationRuntimeService, logger *zap.Logger) *FragmentGenerationHandler {
 	return &FragmentGenerationHandler{
 		fragmentGenService: fragmentGenService,
 		fragmentHandler:    fragmentHandler,
+		generationRuntime:  generationRuntime,
 		logger:             logger,
 	}
 }
@@ -64,14 +66,21 @@ type GenerateFragmentRequest struct {
 	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
 	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	// AspectRatio 配图长宽比；空表示由多模态（有参考图时）推断，否则默认 16:9
-	AspectRatio            string                         `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
-	ConsistencyLevel       string                         `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
-	EnableReferenceAssets  *bool                          `json:"enableReferenceAssets"`
-	IncludeGenerationTrace bool                           `json:"includeGenerationTrace"`
-	ReferenceSlots         []domain.FragmentReferenceSlot `json:"referenceSlots" binding:"max=10"`
-	TargetDraftFragmentID  string                         `json:"targetDraftFragmentId"`
-	ReplaceImageIndex      int                            `json:"replaceImageIndex" binding:"min=0,max=99"`
-	ClientMessageID        string                         `json:"clientMessageId" binding:"omitempty,max=128"`
+	AspectRatio             string                         `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	ConsistencyLevel        string                         `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
+	EnableReferenceAssets   *bool                          `json:"enableReferenceAssets"`
+	IncludeGenerationTrace  bool                           `json:"includeGenerationTrace"`
+	ReferenceSlots          []domain.FragmentReferenceSlot `json:"referenceSlots" binding:"max=10"`
+	TargetDraftFragmentID   string                         `json:"targetDraftFragmentId"`
+	ReplaceImageIndex       int                            `json:"replaceImageIndex" binding:"min=0,max=99"`
+	ClientMessageID         string                         `json:"clientMessageId" binding:"omitempty,max=128"`
+	WorkflowReleaseID       string                         `json:"workflowReleaseId,omitempty"`
+	WorkflowRunID           string                         `json:"workflowRunId,omitempty"`
+	WorkflowSystemPrompt    string                         `json:"workflowSystemPrompt,omitempty"`
+	WorkflowUserPrompt      string                         `json:"workflowUserPrompt,omitempty"`
+	WorkflowModelConfig     map[string]any                 `json:"workflowModelConfig,omitempty"`
+	WorkflowOutputSchema    map[string]any                 `json:"workflowOutputSchema,omitempty"`
+	WorkflowPromptVersionID string                         `json:"workflowPromptVersionId,omitempty"`
 }
 
 // AnalyzeFragment handles POST /fragments/analyze
@@ -108,6 +117,19 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if strings.TrimSpace(req.WorkflowReleaseID) == "" || strings.TrimSpace(req.WorkflowRunID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "fragment generation must be started by a configured workflow"})
+		return
+	}
+	if h.generationRuntime == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "generation runtime unavailable"})
+		return
+	}
+	workflowRun, runErr := h.generationRuntime.GetExecution(c.Request.Context(), req.WorkflowRunID)
+	if runErr != nil || workflowRun.UserID != userID || workflowRun.WorkflowReleaseID != req.WorkflowReleaseID || workflowRun.Kind != "fragment" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "fragment generation workflow execution is invalid"})
+		return
+	}
 
 	style := strings.TrimSpace(req.Style)
 	if style == "" {
@@ -116,22 +138,29 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 
 	// 转换为领域模型
 	domainReq := domain.FragmentGenerationRequest{
-		UserInput:              req.UserInput,
-		ImageUrls:              req.ImageUrls,
-		ImageCount:             req.ImageCount,
-		Style:                  style,
-		Mood:                   req.Mood,
-		Length:                 req.Length,
-		Language:               req.Language,
-		Visibility:             domain.NormalizeFragmentVisibility(req.Visibility),
-		AspectRatio:            strings.TrimSpace(req.AspectRatio),
-		ConsistencyLevel:       strings.TrimSpace(req.ConsistencyLevel),
-		EnableReferenceAssets:  req.EnableReferenceAssets,
-		IncludeGenerationTrace: req.IncludeGenerationTrace,
-		ReferenceSlots:         normalizeFragmentReferenceSlots(req.ReferenceSlots),
-		TargetDraftFragmentID:  strings.TrimSpace(req.TargetDraftFragmentID),
-		ReplaceImageIndex:      req.ReplaceImageIndex,
-		ClientMessageID:        strings.TrimSpace(req.ClientMessageID),
+		UserInput:               req.UserInput,
+		ImageUrls:               req.ImageUrls,
+		ImageCount:              req.ImageCount,
+		Style:                   style,
+		Mood:                    req.Mood,
+		Length:                  req.Length,
+		Language:                req.Language,
+		Visibility:              domain.NormalizeFragmentVisibility(req.Visibility),
+		AspectRatio:             strings.TrimSpace(req.AspectRatio),
+		ConsistencyLevel:        strings.TrimSpace(req.ConsistencyLevel),
+		EnableReferenceAssets:   req.EnableReferenceAssets,
+		IncludeGenerationTrace:  req.IncludeGenerationTrace,
+		ReferenceSlots:          normalizeFragmentReferenceSlots(req.ReferenceSlots),
+		TargetDraftFragmentID:   strings.TrimSpace(req.TargetDraftFragmentID),
+		ReplaceImageIndex:       req.ReplaceImageIndex,
+		ClientMessageID:         strings.TrimSpace(req.ClientMessageID),
+		WorkflowReleaseID:       strings.TrimSpace(req.WorkflowReleaseID),
+		WorkflowRunID:           strings.TrimSpace(req.WorkflowRunID),
+		WorkflowSystemPrompt:    strings.TrimSpace(req.WorkflowSystemPrompt),
+		WorkflowUserPrompt:      strings.TrimSpace(req.WorkflowUserPrompt),
+		WorkflowModelConfig:     req.WorkflowModelConfig,
+		WorkflowOutputSchema:    req.WorkflowOutputSchema,
+		WorkflowPromptVersionID: strings.TrimSpace(req.WorkflowPromptVersionID),
 	}
 
 	// 如果用户没有指定图片数量，默认生成1张；显式数量由后端作为 slot 任务目标，不由 agent 覆盖。

@@ -15,6 +15,9 @@ const (
 	storyboardBiblePromptSlot      = "bible_plan"
 	storyboardScenePromptSlot      = "scene_plan"
 	storyboardJSONRepairPromptSlot = "json_repair"
+	storyboardBranchPromptNodeID   = "generate_storyboard_branch"
+	storyboardBranchContentSlot    = "content"
+	storyboardBranchSceneSlot      = "scene_plan"
 	maxRenderedStoryboardPromptLen = 256 * 1024
 )
 
@@ -27,6 +30,29 @@ type storyboardPromptResolution struct {
 	TemplateVersion string
 	Applied         bool
 	FallbackReason  string
+}
+
+func resolveStoryboardBranchPrompt(storyboard *domain.Storyboard, slot, legacySystem, legacyUser string, data map[string]any, defaultTemperature float32, defaultMaxTokens int32) storyboardPromptResolution {
+	fallback := storyboardPromptResolution{
+		SystemPrompt: legacySystem, UserPrompt: legacyUser, Model: "gemini-2.5-flash",
+		Temperature: defaultTemperature, MaxTokens: defaultMaxTokens, TemplateVersion: storyboardPromptTemplateVersion,
+	}
+	prompt := workflowPromptSnapshot(storyboard, storyboardBranchPromptNodeID, slot, slot == storyboardBranchContentSlot)
+	if prompt == nil {
+		fallback.FallbackReason = "branch workflow prompt snapshot not found"
+		return fallback
+	}
+	if prompt.Type != "chat" && prompt.Type != "text" {
+		fallback.FallbackReason = "branch workflow prompt type is not text or chat"
+		return fallback
+	}
+	if data == nil {
+		data = make(map[string]any)
+	}
+	data["legacySystemPrompt"] = legacySystem
+	data["legacyUserPrompt"] = legacyUser
+	data["storyboardJSON"] = mustJSON(storyboard, "{}")
+	return resolveStoryboardPromptTemplate(prompt, fallback, data, "branch_"+slot, "gemini-2.5-flash", defaultTemperature, defaultMaxTokens)
 }
 
 func shouldWarnStoryboardPromptFallback(reason string) bool {
@@ -193,14 +219,24 @@ func resolveStoryboardPromptTemplate(prompt *domain.PromptTemplateVersion, fallb
 }
 
 func storyboardPromptSnapshotForSlot(storyboard *domain.Storyboard, slot string, allowLegacyDefault bool) *domain.PromptTemplateVersion {
+	if prompt := workflowPromptSnapshot(storyboard, storyboardWorkflowPromptNodeID, slot, allowLegacyDefault); prompt != nil {
+		return prompt
+	}
+	// The compatibility /fork endpoint executes the redesign stages underneath
+	// a branch release; allow that immutable branch snapshot to drive the same
+	// structured generation rather than falling back to hard-coded prompts.
+	return workflowPromptSnapshot(storyboard, storyboardBranchPromptNodeID, slot, allowLegacyDefault)
+}
+
+func workflowPromptSnapshot(storyboard *domain.Storyboard, nodeID, slot string, allowDefault bool) *domain.PromptTemplateVersion {
 	if storyboard == nil || len(storyboard.PromptSnapshots) == 0 {
 		return nil
 	}
-	if prompt, ok := storyboard.PromptSnapshots[storyboardWorkflowPromptNodeID+":"+slot]; ok {
+	if prompt, ok := storyboard.PromptSnapshots[nodeID+":"+slot]; ok {
 		return &prompt
 	}
-	if allowLegacyDefault {
-		if prompt, ok := storyboard.PromptSnapshots[storyboardWorkflowPromptNodeID]; ok {
+	if allowDefault {
+		if prompt, ok := storyboard.PromptSnapshots[nodeID]; ok {
 			return &prompt
 		}
 	}

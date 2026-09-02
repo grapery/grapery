@@ -183,6 +183,20 @@ func (h *AgentPolicyHandler) listGenerationExecutions(c *gin.Context) {
 		InternalError(c, "generation runtime unavailable")
 		return
 	}
+	userID, clientRequestID := strings.TrimSpace(c.Query("userId")), strings.TrimSpace(c.Query("clientRequestId"))
+	if userID != "" || clientRequestID != "" {
+		if userID == "" || clientRequestID == "" || strings.TrimSpace(c.Query("kind")) == "" {
+			InvalidParams(c, "userId, kind and clientRequestId are required together")
+			return
+		}
+		run, err := h.runtime.FindExecutionByRequest(c.Request.Context(), userID, c.Query("kind"), clientRequestID)
+		if err != nil {
+			HandleError(c, err)
+			return
+		}
+		Success(c, gin.H{"runs": []*domain.GenerationExecution{run}})
+		return
+	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	runs, err := h.runtime.ListExecutions(c.Request.Context(), c.Query("kind"), limit)
 	if err != nil {

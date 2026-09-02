@@ -24,8 +24,12 @@ type ContinueRequest struct {
 	SceneCount         int      `json:"sceneCount"`
 	Characters         []string `json:"characters,omitempty"` // Optional: specific character IDs to include
 	// GenerateVideo: 为 true 时，每格场景图生成完成后自动基于该图发起视频生成（默认仅图片）
-	GenerateVideo bool   `json:"generateVideo"`
-	ComicStyle    string `json:"comicStyle,omitempty"` // 漫画风格 slug，持久化到故事板
+	GenerateVideo     bool                                    `json:"generateVideo"`
+	ComicStyle        string                                  `json:"comicStyle,omitempty"` // 漫画风格 slug，持久化到故事板
+	WorkflowReleaseID string                                  `json:"workflowReleaseId,omitempty"`
+	WorkflowChecksum  string                                  `json:"workflowChecksum,omitempty"`
+	PromptSnapshots   map[string]domain.PromptTemplateVersion `json:"-"`
+	ParentStoryboard  *domain.Storyboard                      `json:"-"`
 }
 
 // ContinueResult represents the result of continuing a storyboard
@@ -67,12 +71,15 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		zap.String("comicStyle", strings.TrimSpace(req.ComicStyle)))
 
 	// Step 1: Validate and fetch parent storyboard
-	parentStoryboard, err := s.repo.StoryboardByID(ctx, req.ParentStoryboardID)
-	if err != nil {
-		s.logger.Error("parent storyboard not found",
-			zap.String("parentStoryboardId", req.ParentStoryboardID),
-			zap.Error(err))
-		return nil, fmt.Errorf("parent storyboard not found: %w", err)
+	parentStoryboard := req.ParentStoryboard
+	if parentStoryboard == nil {
+		parentStoryboard, err = s.repo.StoryboardByID(ctx, req.ParentStoryboardID)
+		if err != nil {
+			s.logger.Error("parent storyboard not found",
+				zap.String("parentStoryboardId", req.ParentStoryboardID),
+				zap.Error(err))
+			return nil, fmt.Errorf("parent storyboard not found: %w", err)
+		}
 	}
 
 	// Continue and Fork share one server-authoritative permission contract.
@@ -143,6 +150,9 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		ParentID:                 req.ParentStoryboardID,
 		UserID:                   userID,
 		Title:                    generateContinuationTitle(parentStoryboard),
+		WorkflowReleaseID:        req.WorkflowReleaseID,
+		WorkflowChecksum:         req.WorkflowChecksum,
+		PromptSnapshots:          req.PromptSnapshots,
 		Content:                  "", // Will be filled by AI
 		RawInput:                 req.UserPrompt,
 		IsStandalone:             false,
@@ -282,7 +292,7 @@ func (s *Service) generateContinuationStoryboard(
 	// 基于生成的叙述文本，将其细分为多个场景
 	scenes, tokensScenes, err := s.generateScenesFromContent(
 		ctx,
-		newStoryboard.ID,
+		newStoryboard,
 		content,
 		newStoryboard.SceneCount,
 		newStoryboard.ContinuationComicStyle,
@@ -487,7 +497,8 @@ func (s *Service) generateStoryboardContent(
 		}
 	}
 
-	// Build the prompt
+	// Build the prompt while preserving the immutable workflow version's
+	// system/user roles and model configuration.
 	comicStyleBlock := ""
 	if cs := strings.TrimSpace(newStoryboard.ContinuationComicStyle); cs != "" {
 		comicStyleBlock = fmt.Sprintf(`
@@ -497,9 +508,8 @@ func (s *Service) generateStoryboardContent(
 
 `, cs)
 	}
-	prompt := fmt.Sprintf(`你是一位专业的小说作家。请根据以下上下文和用户输入，续写一个引人入胜的故事章节。
-
-%s
+	legacySystem := `你是一位专业的小说作家。请根据提供的上下文和用户输入，续写一个引人入胜的故事章节。`
+	legacyUser := fmt.Sprintf(`%s
 %s
 ## 用户输入
 %s
@@ -512,23 +522,37 @@ func (s *Service) generateStoryboardContent(
 5. 只输出故事内容，不要输出其他解释或说明
 
 请开始创作:`, contextBuilder.String(), comicStyleBlock, userPrompt)
+	prompt := resolveStoryboardBranchPrompt(newStoryboard, storyboardBranchContentSlot, legacySystem, legacyUser, map[string]any{
+		"userInput": userPrompt, "rawInput": userPrompt, "seedPrompt": userPrompt,
+		"contextJSON": mustJSON(map[string]any{"ancestorScenes": ancestorScenes, "fateSnapshot": fateSnapshot}, "{}"),
+	}, 0.7, 8192)
+	if newStoryboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
+		s.logger.Warn("storyboard branch content workflow prompt fallback",
+			zap.String("storyboardId", newStoryboard.ID), zap.String("workflowReleaseId", newStoryboard.WorkflowReleaseID),
+			zap.String("reason", prompt.FallbackReason))
+	}
 
 	s.logger.Debug("calling storyboard continuation content LLM (huoshan then gemini)",
 		zap.String("storyboardId", newStoryboard.ID),
-		zap.Int("promptLength", len(prompt)))
+		zap.Int("promptLength", len(prompt.SystemPrompt)+len(prompt.UserPrompt)))
 
-	content, _, _, totalTokens, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "narrator_content", 8192, 0.7, false, 0.7, 8192)
+	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
+		UserID: newStoryboard.UserID, OriginalPrompt: prompt.UserPrompt, SystemPrompt: prompt.SystemPrompt,
+		Model: prompt.Model, Temperature: prompt.Temperature, MaxTokens: prompt.MaxTokens,
+		RelatedEntityID: newStoryboard.ID, RelatedEntityType: "storyboard", Step: "narrator_content",
+		PromptKind: "storyboard_branch_content", PromptTemplateVersion: prompt.TemplateVersion,
+		Metadata: map[string]interface{}{"workflowReleaseId": newStoryboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied},
+	})
 	if err != nil {
 		s.logger.Error("AI content generation failed",
 			zap.String("storyboardId", newStoryboard.ID),
-			zap.String("lastProvider", prov),
 			zap.Error(err))
 		return "", 0, fmt.Errorf("AI content generation failed: %w", err)
 	}
+	content, totalTokens := res.Text, res.TokensUsed
 
 	s.logger.Info("storyboard content generated successfully",
 		zap.String("storyboardId", newStoryboard.ID),
-		zap.String("provider", prov),
 		zap.Int("contentLength", len(content)),
 		zap.Int("totalTokens", totalTokens))
 
@@ -538,11 +562,12 @@ func (s *Service) generateStoryboardContent(
 // generateScenesFromContent 基于叙述内容生成场景
 func (s *Service) generateScenesFromContent(
 	ctx context.Context,
-	storyboardID string,
+	storyboard *domain.Storyboard,
 	content string,
 	sceneCount int,
 	comicStyle string,
 ) ([]domain.StoryboardScene, int, error) {
+	storyboardID := storyboard.ID
 	s.logger.Info("generating scenes from content",
 		zap.String("storyboardId", storyboardID),
 		zap.Int("sceneCount", sceneCount))
@@ -571,10 +596,9 @@ func (s *Service) generateScenesFromContent(
 
 `, cs)
 	}
-	// Build the prompt for structured scene generation
-	prompt := fmt.Sprintf(`你是一位专业的编剧。请将以下故事内容细分为 %d 个场景，并为每个场景生成详细信息。
-
-## 故事内容
+	// Build the prompt for structured scene generation.
+	legacySystem := `你是一位专业的编剧。请把故事内容拆分为结构化场景，并且只输出合法 JSON。`
+	legacyUser := fmt.Sprintf(`## 故事内容
 %s
 %s
 ## 要求
@@ -598,21 +622,30 @@ func (s *Service) generateScenesFromContent(
   ]
 }
 
-请生成场景信息:`, sceneCount, contentForPrompt, comicHint, sceneCount)
+请生成场景信息:`, contentForPrompt, comicHint, sceneCount)
+	prompt := resolveStoryboardBranchPrompt(storyboard, storyboardBranchSceneSlot, legacySystem, legacyUser, map[string]any{
+		"content": contentForPrompt, "sceneCount": sceneCount, "comicStyle": comicStyle,
+	}, 0.35, 8192)
 
 	s.logger.Debug("calling narrator scene plan LLM (huoshan then gemini)",
 		zap.String("storyboardId", storyboardID),
 		zap.Int("sceneCount", sceneCount),
-		zap.Int("promptLength", len(prompt)))
+		zap.Int("promptLength", len(prompt.SystemPrompt)+len(prompt.UserPrompt)))
 
-	generatedText, _, _, totalTokens, prov, err := s.storyboardLLMTextHuoshanThenGemini(ctx, prompt, "narrator_scenes", 8192, 0.35, true, 0.35, 8192)
+	res, err := s.aiGenService.GenerateText(ctx, &GenerateTextRequest{
+		UserID: storyboard.UserID, OriginalPrompt: prompt.UserPrompt, SystemPrompt: prompt.SystemPrompt,
+		Model: prompt.Model, Temperature: prompt.Temperature, MaxTokens: prompt.MaxTokens,
+		RelatedEntityID: storyboard.ID, RelatedEntityType: "storyboard", Step: "narrator_scenes",
+		PromptKind: "storyboard_branch_scene_plan", PromptTemplateVersion: prompt.TemplateVersion,
+		Metadata: map[string]interface{}{"workflowReleaseId": storyboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied, "jsonResponse": true},
+	})
 	if err != nil {
 		s.logger.Warn("AI scene generation failed, using placeholder scenes",
 			zap.String("storyboardId", storyboardID),
-			zap.String("lastProvider", prov),
 			zap.Error(err))
 		return s.generatePlaceholderScenes(storyboardID, sceneCount), 0, nil
 	}
+	generatedText, totalTokens := res.Text, res.TokensUsed
 
 	// Parse the generated scenes from JSON
 	scenes, err := s.parseGeneratedScenes(storyboardID, generatedText, sceneCount)
@@ -625,7 +658,6 @@ func (s *Service) generateScenesFromContent(
 
 	s.logger.Info("scenes generated successfully",
 		zap.String("storyboardId", storyboardID),
-		zap.String("provider", prov),
 		zap.Int("sceneCount", len(scenes)),
 		zap.Int("totalTokens", totalTokens))
 

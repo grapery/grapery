@@ -92,3 +92,22 @@ func TestResolveStoryboardJSONRepairPromptUsesRepairSlot(t *testing.T) {
 		t.Fatalf("repair variables were not rendered: %s", resolved.UserPrompt)
 	}
 }
+
+func TestResolveStoryboardBranchPromptPreservesRolesAndModelConfig(t *testing.T) {
+	storyboard := &domain.Storyboard{PromptSnapshots: map[string]domain.PromptTemplateVersion{
+		storyboardBranchPromptNodeID: {
+			ID: "ptv_branch", Key: "storyboard.branch", Type: "chat", Checksum: "branch",
+			SystemTemplate: "branch system {{.sceneCount}}", UserTemplate: "seed={{.seedPrompt}}",
+			ModelConfig: map[string]any{"model": "gemini-2.5-pro", "temperature": 0.4, "maxTokens": 4096},
+		},
+	}}
+	resolved := resolveStoryboardBranchPrompt(storyboard, storyboardBranchContentSlot, "legacy system", "legacy user", map[string]any{
+		"sceneCount": 3, "seedPrompt": "turn left",
+	}, 0.7, 8192)
+	if !resolved.Applied || resolved.SystemPrompt != "branch system 3" || resolved.UserPrompt != "seed=turn left" {
+		t.Fatalf("branch prompt roles were not preserved: %+v", resolved)
+	}
+	if resolved.Model != "gemini-2.5-pro" || resolved.Temperature != 0.4 || resolved.MaxTokens != 4096 {
+		t.Fatalf("branch model config was not applied: %+v", resolved)
+	}
+}

@@ -65,6 +65,7 @@ type GenerationCheckpoint struct {
 type GenerationRuntimeRepository interface {
 	SaveGenerationExecution(ctx context.Context, run *GenerationExecution, eventType string) (*GenerationEvent, error)
 	GetGenerationExecution(ctx context.Context, id string) (*GenerationExecution, error)
+	FindGenerationExecutionByRequest(ctx context.Context, userID, kind, clientRequestID string) (*GenerationExecution, error)
 	FindLatestGenerationExecution(ctx context.Context, userID, kind, contentID string) (*GenerationExecution, error)
 	ListGenerationExecutions(ctx context.Context, kind string, limit int) ([]*GenerationExecution, error)
 	ListGenerationEvents(ctx context.Context, runID string, afterSequence int64, limit int) ([]*GenerationEvent, error)
