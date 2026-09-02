@@ -11,6 +11,7 @@ import (
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type WorkflowRegistryRepository struct{ db *gorm.DB }
@@ -87,6 +88,20 @@ func (r *WorkflowRegistryRepository) SaveWorkflowBinding(ctx context.Context, bi
 	return r.db.WithContext(ctx).Save(&row).Error
 }
 
+func (r *WorkflowRegistryRepository) DisableWorkflowBindingsByRelease(ctx context.Context, releaseID string) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&WorkflowBindingDB{}).
+		Where("release_id = ? AND enabled = ?", strings.TrimSpace(releaseID), true).
+		Updates(map[string]any{"enabled": false, "updated_at": time.Now().UTC()})
+	return result.RowsAffected, result.Error
+}
+
+func (r *WorkflowRegistryRepository) RebindWorkflowBindings(ctx context.Context, surface, action, workflowKey, releaseID string) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&WorkflowBindingDB{}).
+		Where("surface = ? AND action = ? AND workflow_key = ? AND enabled = ?", strings.TrimSpace(surface), strings.TrimSpace(action), strings.TrimSpace(workflowKey), true).
+		Updates(map[string]any{"release_id": strings.TrimSpace(releaseID), "updated_at": time.Now().UTC()})
+	return result.RowsAffected, result.Error
+}
+
 func (r *WorkflowRegistryRepository) ListWorkflowCatalog(ctx context.Context, surface, action, tenantID string) ([]*domain.WorkflowCatalogEntry, error) {
 	q := r.db.WithContext(ctx).Where("enabled = ?", true)
 	if surface = strings.TrimSpace(surface); surface != "" {
@@ -97,6 +112,7 @@ func (r *WorkflowRegistryRepository) ListWorkflowCatalog(ctx context.Context, su
 	}
 	if tenantID = strings.TrimSpace(tenantID); tenantID != "" {
 		q = q.Where("tenant_id IN ?", []string{"", tenantID})
+		q = q.Order(clause.Expr{SQL: "CASE WHEN tenant_id = ? THEN 0 ELSE 1 END", Vars: []any{tenantID}})
 	} else {
 		q = q.Where("tenant_id = ''")
 	}

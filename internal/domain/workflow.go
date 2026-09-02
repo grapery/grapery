@@ -134,6 +134,8 @@ type WorkflowRegistryRepository interface {
 	SaveWorkflowRelease(ctx context.Context, release *WorkflowRelease) error
 	GetWorkflowRelease(ctx context.Context, id string) (*WorkflowRelease, error)
 	SaveWorkflowBinding(ctx context.Context, binding *WorkflowBinding) error
+	DisableWorkflowBindingsByRelease(ctx context.Context, releaseID string) (int64, error)
+	RebindWorkflowBindings(ctx context.Context, surface, action, workflowKey, releaseID string) (int64, error)
 	ListWorkflowCatalog(ctx context.Context, surface, action, tenantID string) ([]*WorkflowCatalogEntry, error)
 	ListWorkflowReleaseStats(ctx context.Context, since time.Time) ([]WorkflowReleaseStats, error)
 }

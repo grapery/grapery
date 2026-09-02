@@ -220,6 +220,32 @@ func (s *WorkflowRegistryService) SaveBinding(ctx context.Context, binding *doma
 	return binding, nil
 }
 
+func (s *WorkflowRegistryService) PauseReleaseBindings(ctx context.Context, releaseID string) (int64, error) {
+	releaseID = strings.TrimSpace(releaseID)
+	if releaseID == "" {
+		return 0, errors.New("workflow release id is required")
+	}
+	if _, err := s.GetRelease(ctx, releaseID); err != nil {
+		return 0, fmt.Errorf("resolve workflow release: %w", err)
+	}
+	return s.repo.DisableWorkflowBindingsByRelease(ctx, releaseID)
+}
+
+func (s *WorkflowRegistryService) RebindWorkflowBindings(ctx context.Context, surface, action, workflowKey, releaseID string) (int64, error) {
+	surface, action, workflowKey, releaseID = strings.TrimSpace(surface), strings.TrimSpace(action), strings.TrimSpace(workflowKey), strings.TrimSpace(releaseID)
+	if surface == "" || action == "" || workflowKey == "" || releaseID == "" {
+		return 0, errors.New("surface, action, workflow key and release id are required")
+	}
+	release, err := s.GetRelease(ctx, releaseID)
+	if err != nil {
+		return 0, fmt.Errorf("resolve workflow release: %w", err)
+	}
+	if release.Key != workflowKey {
+		return 0, errors.New("workflow binding key does not match release")
+	}
+	return s.repo.RebindWorkflowBindings(ctx, surface, action, workflowKey, releaseID)
+}
+
 func (s *WorkflowRegistryService) Catalog(ctx context.Context, surface, action, tenantID string) ([]*domain.WorkflowCatalogEntry, error) {
 	return s.repo.ListWorkflowCatalog(ctx, surface, action, tenantID)
 }

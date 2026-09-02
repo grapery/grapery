@@ -63,6 +63,28 @@ func (r *workflowRegistryMemoryRepo) SaveWorkflowBinding(_ context.Context, bind
 	return nil
 }
 
+func (r *workflowRegistryMemoryRepo) DisableWorkflowBindingsByRelease(_ context.Context, releaseID string) (int64, error) {
+	var count int64
+	for _, binding := range r.bindings {
+		if binding.ReleaseID == releaseID && binding.Enabled {
+			binding.Enabled = false
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *workflowRegistryMemoryRepo) RebindWorkflowBindings(_ context.Context, surface, action, workflowKey, releaseID string) (int64, error) {
+	var count int64
+	for _, binding := range r.bindings {
+		if binding.Enabled && binding.Surface == surface && binding.Action == action && binding.WorkflowKey == workflowKey {
+			binding.ReleaseID = releaseID
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *workflowRegistryMemoryRepo) ListWorkflowCatalog(_ context.Context, surface, action, tenantID string) ([]*domain.WorkflowCatalogEntry, error) {
 	var out []*domain.WorkflowCatalogEntry
 	for _, binding := range r.bindings {
@@ -134,6 +156,25 @@ func TestWorkflowRegistryPublishResolveAndPinVersions(t *testing.T) {
 	}
 	if _, _, err := svc.ResolvePinnedPromptSnapshots(ctx, "voyager.create", "storyboard", "", "wfr_stale"); err == nil {
 		t.Fatal("expected stale client release to be rejected")
+	}
+}
+
+func TestWorkflowRegistryPauseAndRebindAffectAllMatchingBindings(t *testing.T) {
+	ctx := context.Background()
+	repo := newWorkflowRegistryMemoryRepo()
+	svc := NewWorkflowRegistryService(repo, nil, nil)
+	repo.releases["release-1"] = &domain.WorkflowRelease{ID: "release-1", Key: "storyboard", Version: 1}
+	repo.releases["release-2"] = &domain.WorkflowRelease{ID: "release-2", Key: "storyboard", Version: 2}
+	repo.bindings["global"] = &domain.WorkflowBinding{ID: "global", Surface: "voyager.storyboard", Action: "generate", WorkflowKey: "storyboard", ReleaseID: "release-1", Enabled: true}
+	repo.bindings["tenant"] = &domain.WorkflowBinding{ID: "tenant", Surface: "voyager.storyboard", Action: "generate", TenantID: "tenant-1", WorkflowKey: "storyboard", ReleaseID: "release-1", Enabled: true}
+
+	updated, err := svc.RebindWorkflowBindings(ctx, "voyager.storyboard", "generate", "storyboard", "release-2")
+	if err != nil || updated != 2 {
+		t.Fatalf("rebind failed: count=%d err=%v", updated, err)
+	}
+	disabled, err := svc.PauseReleaseBindings(ctx, "release-2")
+	if err != nil || disabled != 2 || repo.bindings["global"].Enabled || repo.bindings["tenant"].Enabled {
+		t.Fatalf("pause failed: count=%d err=%v bindings=%+v", disabled, err, repo.bindings)
 	}
 }
 

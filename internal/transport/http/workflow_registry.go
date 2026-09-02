@@ -28,11 +28,40 @@ func (h *WorkflowRegistryHandler) RegisterInternalRoutes(r *gin.Engine) {
 		g.GET("/prompt-versions/:id", h.getPromptVersion)
 		g.PUT("/workflow-releases/:id", h.publishRelease)
 		g.GET("/workflow-releases/:id", h.getRelease)
+		g.POST("/workflow-releases/:id/pause-bindings", h.pauseReleaseBindings)
+		g.POST("/workflow-releases/:id/rebind", h.rebindRelease)
 		g.PUT("/workflow-bindings/:id", h.saveBinding)
 		g.GET("/workflow-catalog", h.catalog)
 		g.POST("/workflow-resolve", h.resolve)
 		g.GET("/workflow-stats", h.stats)
 	}
+}
+
+func (h *WorkflowRegistryHandler) rebindRelease(c *gin.Context) {
+	var body struct {
+		Surface     string `json:"surface" binding:"required"`
+		Action      string `json:"action" binding:"required"`
+		WorkflowKey string `json:"workflowKey" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		InvalidParams(c, err.Error())
+		return
+	}
+	count, err := h.registry.RebindWorkflowBindings(c.Request.Context(), body.Surface, body.Action, body.WorkflowKey, c.Param("id"))
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	Success(c, gin.H{"releaseId": c.Param("id"), "updatedBindings": count})
+}
+
+func (h *WorkflowRegistryHandler) pauseReleaseBindings(c *gin.Context) {
+	count, err := h.registry.PauseReleaseBindings(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	Success(c, gin.H{"releaseId": c.Param("id"), "disabledBindings": count})
 }
 
 func (h *WorkflowRegistryHandler) stats(c *gin.Context) {
