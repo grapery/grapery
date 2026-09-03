@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
@@ -24,6 +25,19 @@ func TestMergeStoryboardRunMetricsPreservesPreviousStage(t *testing.T) {
 	got := mergeStoryboardRunMetrics(`{"biblePlanTokens":12}`, map[string]any{"scenePlanTokens": 34})
 	if got != `{"biblePlanTokens":12,"scenePlanTokens":34}` && got != `{"scenePlanTokens":34,"biblePlanTokens":12}` {
 		t.Fatalf("unexpected metrics: %s", got)
+	}
+}
+
+func TestStoryboardMetricIntReadsJSONNumber(t *testing.T) {
+	if got := storyboardMetricInt(`{"scenePlanRepairAttempts":1}`, "scenePlanRepairAttempts"); got != 1 {
+		t.Fatalf("unexpected metric: %d", got)
+	}
+}
+
+func TestStoryboardScenePlanCorrectionContextIncludesIssuesAndCandidate(t *testing.T) {
+	got := storyboardScenePlanCorrectionContext(`{"scenes":[]}`, []domain.FragmentConsistencyIssue{{Severity: "high", Detail: "scene count mismatch"}})
+	if !strings.Contains(got, "scene count mismatch") || !strings.Contains(got, `{"scenes":[]}`) {
+		t.Fatalf("correction context lost evidence: %s", got)
 	}
 }
 

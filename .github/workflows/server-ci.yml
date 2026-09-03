@@ -230,6 +230,7 @@ jobs:
           
           # ========== Aliyun SMS — Repository Variables ==========
           # Sign/template fall back to code defaults; credentials: OSS keys below, or ECS RAM via USE_DEFAULT_CREDENTIAL
+          ALIYUN_SMS_ENABLED=${{ vars.ALIYUN_SMS_ENABLED || 'false' }}
           ALIYUN_SMS_SIGN_NAME=${{ vars.ALIYUN_SMS_SIGN_NAME }}
           ALIYUN_SMS_TEMPLATE_CODE=${{ vars.ALIYUN_SMS_TEMPLATE_CODE }}
           ALIYUN_SMS_REGION=${{ vars.ALIYUN_SMS_REGION || 'cn-hangzhou' }}
@@ -455,6 +456,7 @@ jobs:
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           
           # ========== Aliyun SMS — Repository Variables ==========
+          ALIYUN_SMS_ENABLED=${{ vars.ALIYUN_SMS_ENABLED || 'false' }}
           ALIYUN_SMS_SIGN_NAME=${{ vars.ALIYUN_SMS_SIGN_NAME }}
           ALIYUN_SMS_TEMPLATE_CODE=${{ vars.ALIYUN_SMS_TEMPLATE_CODE }}
           ALIYUN_SMS_REGION=${{ vars.ALIYUN_SMS_REGION || 'cn-hangzhou' }}
@@ -585,4 +587,3 @@ jobs:
             
             # 清理未使用的镜像
             docker system prune -f
-

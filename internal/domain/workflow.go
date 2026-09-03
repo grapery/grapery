@@ -172,12 +172,14 @@ func validateWorkflowGraph(nodes []WorkflowNode) error {
 	}
 	byID := make(map[string]WorkflowNode, len(nodes))
 	allowedActivities := map[string]bool{
+		"ai.runtime.plan":                true,
 		"legacy.fragment.generate":       true,
 		"legacy.storyboard.branch":       true,
 		"legacy.storyboard.generate":     true,
 		"storyboard.ensure_draft":        true,
 		"storyboard.generate_bible_plan": true,
 		"storyboard.generate_scene_plan": true,
+		"storyboard.review_content":      true,
 		"storyboard.persist_content":     true,
 		"storyboard.await_content":       true,
 		"storyboard.ensure_images":       true,

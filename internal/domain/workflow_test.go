@@ -18,7 +18,8 @@ func TestValidateWorkflowRelease(t *testing.T) {
 	}
 	split := base()
 	split.Definition.Nodes = []WorkflowNode{
-		{ID: "generate_storyboard", Type: "activity", Activity: "storyboard.ensure_draft"},
+		{ID: "plan_generation", Type: "activity", Activity: "ai.runtime.plan"},
+		{ID: "generate_storyboard", Type: "activity", Activity: "storyboard.ensure_draft", DependsOn: []string{"plan_generation"}},
 		{ID: "await_content", Type: "activity", Activity: "storyboard.await_content", DependsOn: []string{"generate_storyboard"}},
 		{ID: "ensure_images", Type: "activity", Activity: "storyboard.ensure_images", DependsOn: []string{"await_content"}},
 	}

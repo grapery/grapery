@@ -91,6 +91,8 @@ func TestAliyunSMSDefaults(t *testing.T) {
 
 func TestSendAliyunOTPCode_notConfigured(t *testing.T) {
 	envKeys := []string{
+		"ALIYUN_SMS_ACCESS_ID",
+		"ALIYUN_SMS_ACCESS_SECRET",
 		"ALIYUN_SMS_ACCESS_KEY_ID",
 		"ALIYUN_SMS_ACCESS_KEY_SECRET",
 		"ALIYUN_OSS_ACCESS_KEY_ID",
@@ -104,11 +106,22 @@ func TestSendAliyunOTPCode_notConfigured(t *testing.T) {
 	for _, k := range envKeys {
 		t.Setenv(k, "")
 	}
+	t.Setenv("ALIYUN_SMS_ENABLED", "true")
 	err := SendAliyunOTPCode("13800138000", "123456")
 	if err == nil {
 		t.Fatal("want error when SMS credentials not set")
 	}
 	if !strings.Contains(err.Error(), "aliyun SMS not configured") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSendAliyunOTPCode_disabledByDefault(t *testing.T) {
+	t.Setenv("ALIYUN_SMS_ENABLED", "")
+	t.Setenv("ALIYUN_SMS_ACCESS_KEY_ID", "would-send-id")
+	t.Setenv("ALIYUN_SMS_ACCESS_KEY_SECRET", "would-send-secret")
+	err := SendAliyunOTPCode("13800138000", "123456")
+	if err == nil || !strings.Contains(err.Error(), "delivery disabled") {
 		t.Fatalf("got %v", err)
 	}
 }

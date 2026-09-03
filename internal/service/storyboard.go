@@ -861,7 +861,7 @@ func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, u
 		sb.RawInput = strings.TrimSpace(sb.Content)
 	}
 	if !s.canGenerateStoryboardText() {
-		return fmt.Errorf("storyboard AI generation is not configured")
+		return s.AIMissingConfigError("storyboard AI generation")
 	}
 	// 改稿要整体替换分镜：CreateStoryboardScenes 是纯插入，不先清理会留下两套分镜。
 	if len(scenes) > 0 {

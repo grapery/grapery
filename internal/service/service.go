@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"context"
 	"fmt"
 	"sync"
@@ -25,6 +26,9 @@ type Service struct {
 	genAPI           *genapi.GenAPI
 	geminiClient     *gemini.Client
 	aiGenService     *AIGenerationService   // AI生成服务（统一管理AI能力使用）
+	// missingAIProviders 记录启动时未配置的 AI 供应商，用于把环境问题
+	// 透出为可操作的运行错误（而不是笼统的 not configured）。
+	missingAIProviders []string
 	imageProvider    string                 // Provider for image generation (gemini, huoshan)
 	videoProvider    string                 // Provider for video generation (gemini, huoshan, hailuo)
 	metrics          *telemetry.Metrics     // Prometheus metrics (optional)
@@ -210,6 +214,19 @@ func (s *Service) SetAccountDeletionDeps(cfg config.AccountDeletionConfig, frag 
 // SetCache 设置缓存实例
 func (s *Service) SetCache(cache interface{}) {
 	s.cache = cache
+}
+
+// SetMissingAIProviders 记录启动时缺失的 AI 供应商配置。
+func (s *Service) SetMissingAIProviders(missing []string) {
+	s.missingAIProviders = missing
+}
+
+// AIMissingConfigError 把「AI 未配置」翻译成带环境指引的错误。
+func (s *Service) AIMissingConfigError(feature string) error {
+	if len(s.missingAIProviders) == 0 {
+		return fmt.Errorf("%s is not configured", feature)
+	}
+	return fmt.Errorf("%s is not configured: missing provider env %s on the grapery service", feature, strings.Join(s.missingAIProviders, ", "))
 }
 
 // SetAIClients 设置 AI 客户端

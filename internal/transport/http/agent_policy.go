@@ -1,14 +1,24 @@
 package http
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/grapestree/fgrapery/grapery/internal/auth"
+
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"github.com/grapestree/fgrapery/grapery/internal/service"
 	"gorm.io/gorm"
@@ -20,8 +30,11 @@ type AgentPolicyHandler struct {
 	signer   *service.AgentAccessTokenSigner
 	audit    *service.GenerationAuditService
 	panelGen *service.FragmentPanelGenerationService
-	runtime  *service.GenerationRuntimeService
-	apiKey   string
+	runtime      *service.GenerationRuntimeService
+	apiKey       string
+	agentBaseURL string
+	agentHTTP    *http.Client
+	mainDB       *gorm.DB
 }
 
 func NewAgentPolicyHandler(
@@ -31,15 +44,67 @@ func NewAgentPolicyHandler(
 	panelGen *service.FragmentPanelGenerationService,
 	runtime *service.GenerationRuntimeService,
 	apiKey string,
+	agentBaseURL string,
+	mainDB *gorm.DB,
 ) *AgentPolicyHandler {
 	return &AgentPolicyHandler{
-		policy:   policy,
-		signer:   signer,
-		audit:    audit,
-		panelGen: panelGen,
-		runtime:  runtime,
-		apiKey:   strings.TrimSpace(apiKey),
+		policy:       policy,
+		signer:       signer,
+		audit:        audit,
+		panelGen:     panelGen,
+		runtime:      runtime,
+		apiKey:       strings.TrimSpace(apiKey),
+		agentBaseURL: strings.TrimRight(strings.TrimSpace(agentBaseURL), "/"),
+		agentHTTP:    &http.Client{Timeout: 60 * time.Second},
+		mainDB:       mainDB,
 	}
+}
+
+// resolveTestRunUser 定位试运行应代入的资源所有者：branch/storyboard 流程
+// 引用了父故事板或故事，agent 回源读取时需要所有者身份才能通过用户鉴权。
+func (h *AgentPolicyHandler) resolveTestRunUser(input map[string]any) string {
+	if h.mainDB == nil || input == nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	lookup := func(table, column, id string) string {
+		if strings.TrimSpace(id) == "" {
+			return ""
+		}
+		var userID string
+		// stories 归属列是 author_id；storyboards/fragments 是 creator_id。
+		ownerCol := "creator_id"
+		if table == "stories" {
+			ownerCol = "author_id"
+		}
+		if err := h.mainDB.WithContext(ctx).Table(table).Select(ownerCol).
+			Where(column+" = ? AND deleted_at IS NULL", strings.TrimSpace(id)).
+			Scan(&userID).Error; err != nil || strings.TrimSpace(userID) == "" {
+			return ""
+		}
+		return userID
+	}
+	if id, ok := input["parentStoryboardId"].(string); ok {
+		if userID := lookup("storyboards", "id", id); userID != "" {
+			return userID
+		}
+	}
+	if id, ok := input["draftStoryboardId"].(string); ok {
+		if userID := lookup("storyboards", "id", id); userID != "" {
+			return userID
+		}
+	}
+	if id, ok := input["storyId"].(string); ok {
+		if userID := lookup("stories", "id", id); userID != "" {
+			return userID
+		}
+	}
+	// 无资源引用时退回最早创建的账号，保证试运行有合法的用户上下文。
+	var fallback string
+	_ = h.mainDB.WithContext(ctx).Table("users").Select("id").
+		Where("deleted_at IS NULL").Order("created_at ASC").Limit(1).Scan(&fallback).Error
+	return fallback
 }
 
 func (h *AgentPolicyHandler) RegisterRoutes(r *gin.Engine) {
@@ -70,6 +135,9 @@ func (h *AgentPolicyHandler) RegisterRoutes(r *gin.Engine) {
 			pg.POST("/generate", h.agentStartPanelGeneration)
 			pg.GET("/generate/:taskId", h.agentGetPanelGeneration)
 		}
+
+		g.POST("/workflow-test-runs", h.startWorkflowTestRun)
+		g.GET("/workflow-test-runs/:runId", h.getWorkflowTestRun)
 	}
 }
 
@@ -529,4 +597,144 @@ func (h *AgentPolicyHandler) agentGetPanelGeneration(c *gin.Context) {
 		resp["metrics"] = gin.H{"totalTokens": task.Metrics.TotalTokens}
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "success", "data": resp})
+}
+
+// startWorkflowTestRun 以内部身份向 grapery-agent 发起一次工作流试运行，
+// 供 forge 运营端在发布后做运行验证。令牌按 surface 末段签发，
+// 与 agent 侧 creationTargetScopeMatches 的作用域校验保持一致。
+func (h *AgentPolicyHandler) startWorkflowTestRun(c *gin.Context) {
+	if h.signer == nil || !h.signer.IsConfigured() {
+		InternalError(c, "agent access token signing is not configured")
+		return
+	}
+	if h.agentBaseURL == "" {
+		InternalError(c, "agent runtime base url is not configured (GRAPERY_AGENT_BASE_URL)")
+		return
+	}
+	var req struct {
+		Surface   string         `json:"surface" binding:"required"`
+		Action    string         `json:"action" binding:"required"`
+		ReleaseID string         `json:"releaseId" binding:"required"`
+		Input     map[string]any `json:"input"`
+		TestRun   bool           `json:"testRun"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Error(c, CodeInvalidParams, err.Error())
+		return
+	}
+	surface := strings.TrimSpace(req.Surface)
+	target := surface
+	if idx := strings.LastIndex(target, "."); idx >= 0 {
+		target = target[idx+1:]
+	}
+	// 试运行必须以「资源所有者」身份执行：grapery 在创建故事板/碎片时会校验
+	// 运行记录的 UserID 与调用者一致。先解析所有者，再以同一身份签发
+	// agent 令牌与用户 JWT（尽力而为走策略预留配额）。
+	quotaMode := "budget"
+	scope := ""
+	reservationID := ""
+	owner := h.resolveTestRunUser(req.Input)
+	if owner == "" {
+		owner = "forge_workflow_tester"
+	}
+	if h.policy != nil {
+		if policyResult, policyErr := h.policy.PrepareIssuance(c.Request.Context(), service.AgentAccessIssuanceInput{
+			UserID:    owner,
+			Agent:     target,
+			Operation: "generate",
+		}); policyErr == nil && policyResult != nil {
+			scope = policyResult.Scope
+			reservationID = policyResult.QuotaReservationID
+		}
+	}
+	issued, err := h.signer.Issue(service.AgentAccessTokenRequest{
+		UserID:             owner,
+		Agent:              target,
+		Operation:          "generate",
+		QuotaMode:          quotaMode,
+		QuotaReservationID: reservationID,
+		Scope:              scope,
+	})
+	if err != nil {
+		InternalError(c, fmt.Sprintf("issue test run token: %v", err))
+		return
+	}
+	if h.policy != nil {
+		if storeErr := h.policy.StoreJTI(c.Request.Context(), issued.JTI, h.signer.TTL()+30*time.Second); storeErr != nil {
+			slog.Warn("failed to record workflow test run token jti", slog.Any("error", storeErr))
+		}
+	}
+	userToken := ""
+	if issuedUserID, genErr := auth.GenerateToken(owner, "forge_test_runner", ""); genErr == nil {
+		userToken = issuedUserID
+	}
+	payload := map[string]any{
+		"surface":         surface,
+		"action":          strings.TrimSpace(req.Action),
+		"releaseId":       strings.TrimSpace(req.ReleaseID),
+		"clientRequestId": "wtest_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		"input":           req.Input,
+		"testRun":         req.TestRun,
+	}
+	h.relayAgentJSON(c, http.MethodPost, "/api/v1/generation/workflows", issued.AgentAccessToken, userToken, payload)
+}
+
+// getWorkflowTestRun 透传 agent 的运行状态，供 forge 轮询展示节点级进度。
+func (h *AgentPolicyHandler) getWorkflowTestRun(c *gin.Context) {
+	if h.agentBaseURL == "" {
+		InternalError(c, "agent runtime base url is not configured (GRAPERY_AGENT_BASE_URL)")
+		return
+	}
+	runID := strings.TrimSpace(c.Param("runId"))
+	if runID == "" {
+		Error(c, CodeInvalidParams, "runId is required")
+		return
+	}
+	token := ""
+	if h.signer != nil && h.signer.IsConfigured() {
+		if issued, err := h.signer.Issue(service.AgentAccessTokenRequest{UserID: "forge_workflow_tester", Agent: "workflow", Operation: "generate"}); err == nil {
+			token = issued.AgentAccessToken
+		}
+	}
+	h.relayAgentJSON(c, http.MethodGet, "/api/v1/generation/runs/"+url.PathEscape(runID), token, "", nil)
+}
+
+// relayAgentJSON 调用 grapery-agent 并按原样透传状态码与响应体。
+func (h *AgentPolicyHandler) relayAgentJSON(c *gin.Context, method, path, token, userToken string, payload map[string]any) {
+	var bodyReader io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			InternalError(c, err.Error())
+			return
+		}
+		bodyReader = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(c.Request.Context(), method, h.agentBaseURL+path, bodyReader)
+	if err != nil {
+		InternalError(c, err.Error())
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("X-Agent-Access-Token", token)
+	}
+	if userToken != "" {
+		req.Header.Set("Authorization", "Bearer "+userToken)
+	}
+	if h.apiKey != "" {
+		req.Header.Set("X-Internal-Api-Key", h.apiKey)
+	}
+	resp, err := h.agentHTTP.Do(req)
+	if err != nil {
+		InternalError(c, fmt.Sprintf("call agent runtime: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		InternalError(c, err.Error())
+		return
+	}
+	c.Data(resp.StatusCode, "application/json; charset=utf-8", raw)
 }

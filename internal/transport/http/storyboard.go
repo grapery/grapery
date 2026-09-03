@@ -91,7 +91,9 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 		return
 	}
 	workflowRun, runErr := h.generationRuntime.GetExecution(c.Request.Context(), req.WorkflowRunID)
-	if runErr != nil || workflowRun.UserID != userID.(string) || workflowRun.WorkflowReleaseID != req.WorkflowReleaseID || workflowRun.Kind != "storyboard" {
+	// 持久化故事板工作流的运行 Kind 是 workflow；遗留直连流程才是 storyboard。
+	kindOK := workflowRun != nil && (workflowRun.Kind == "storyboard" || workflowRun.Kind == "workflow")
+	if runErr != nil || workflowRun == nil || workflowRun.UserID != userID.(string) || workflowRun.WorkflowReleaseID != req.WorkflowReleaseID || !kindOK {
 		Forbidden(c, "storyboard generation workflow execution is invalid")
 		return
 	}

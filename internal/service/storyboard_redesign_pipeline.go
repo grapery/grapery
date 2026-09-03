@@ -307,8 +307,15 @@ func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.S
 }
 
 func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int) (*domain.StoryboardScenePlan, string, int, error) {
+	return s.generateStoryboardScenePlanWithCorrection(ctx, run, story, storyboard, snapshot, plan, alignmentPrompt, sceneCount, "")
+}
+
+func (s *Service) generateStoryboardScenePlanWithCorrection(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int, correctionContext string) (*domain.StoryboardScenePlan, string, int, error) {
 	prompt := resolveStoryboardScenePrompt(story, storyboard, snapshot, plan, alignmentPrompt, sceneCount)
 	prompt.SystemPrompt += "\nWrite content, scene titles, descriptions, dialogue and narration in " + storyboardWorkflowOutputLanguage(run) + ". Keep imagePrompt and machine-readable enum values in English."
+	if correctionContext = strings.TrimSpace(correctionContext); correctionContext != "" {
+		prompt.UserPrompt += "\n\nLOCAL REPAIR REQUEST\n" + correctionContext
+	}
 	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
 		s.logger.Warn("storyboard scene plan workflow prompt fallback",
 			zap.String("storyboardId", storyboard.ID),

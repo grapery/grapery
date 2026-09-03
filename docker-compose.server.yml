@@ -15,7 +15,7 @@ services:
     # AGENT_TOKEN_REPLAY_CACHE_ENABLED、AGENT_PUBLIC_PARALLEL_ENABLED、AGENT_EXEC_FRAGMENT_PANEL_ENABLED、
     # GRAPERY_INTERNAL_API_KEY
     # Apple IAP（StoreKit 2）在 VIPPay 服务配置，见 docker-compose.vippay.yml / env.vippay.example
-    # Aliyun SMS：验证码需在部署目录 .env 中配置 ALIYUN_SMS_SIGN_NAME、ALIYUN_SMS_TEMPLATE_CODE、
+    # Aliyun SMS：默认关闭；启用真实发送需在部署目录 .env 设置 ALIYUN_SMS_ENABLED=true，并配置 ALIYUN_SMS_SIGN_NAME、ALIYUN_SMS_TEMPLATE_CODE、
     # ALIYUN_SMS_REGION（默认 cn-hangzhou）、ALIYUN_SMS_ENDPOINT、ALIYUN_SMS_USE_DEFAULT_CREDENTIAL，
     # 非默认凭据时需 ALIYUN_SMS_ACCESS_KEY_ID / ALIYUN_SMS_ACCESS_KEY_SECRET（与 server-ci deploy 下发的 .env 一致）
     volumes:

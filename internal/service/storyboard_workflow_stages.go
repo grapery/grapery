@@ -16,6 +16,7 @@ import (
 const (
 	StoryboardWorkflowStageBiblePlan      = "bible_plan"
 	StoryboardWorkflowStageScenePlan      = "scene_plan"
+	StoryboardWorkflowStageReviewContent  = "review_content"
 	StoryboardWorkflowStagePersistContent = "persist_content"
 )
 
@@ -27,6 +28,8 @@ type StoryboardWorkflowStageResult struct {
 	Stage           string `json:"stage"`
 	Progress        int    `json:"progress"`
 	AlreadyComplete bool   `json:"alreadyComplete"`
+	IssueCount      int    `json:"issueCount,omitempty"`
+	RepairApplied   bool   `json:"repairApplied,omitempty"`
 }
 
 type StoryboardWorkflowStageOptions struct {
@@ -45,7 +48,7 @@ type StoryboardWorkflowStageOptions struct {
 func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, storyboardID, stage string, opts StoryboardWorkflowStageOptions) (*StoryboardWorkflowStageResult, error) {
 	stage = strings.TrimSpace(stage)
 	switch stage {
-	case StoryboardWorkflowStageBiblePlan, StoryboardWorkflowStageScenePlan, StoryboardWorkflowStagePersistContent:
+	case StoryboardWorkflowStageBiblePlan, StoryboardWorkflowStageScenePlan, StoryboardWorkflowStageReviewContent, StoryboardWorkflowStagePersistContent:
 	default:
 		return nil, fmt.Errorf("unsupported storyboard workflow stage %q", stage)
 	}
@@ -79,8 +82,8 @@ func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, st
 		}
 		storyboard.TurnDirective = opts.UserDirective
 	}
-	if !s.canGenerateStoryboardText() && stage != StoryboardWorkflowStagePersistContent {
-		return nil, fmt.Errorf("storyboard AI generation is not configured")
+	if !s.canGenerateStoryboardText() && (stage == StoryboardWorkflowStageBiblePlan || stage == StoryboardWorkflowStageScenePlan) {
+		return nil, s.AIMissingConfigError("storyboard AI generation")
 	}
 	story, err := s.repo.StoryByID(ctx, storyboard.StoryID)
 	if err != nil {
@@ -96,8 +99,91 @@ func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, st
 		return s.ensureStoryboardBibleStage(ctx, storyboard, story, run, snapshot, alignmentPrompt, sceneCount)
 	case StoryboardWorkflowStageScenePlan:
 		return s.ensureStoryboardScenePlanStage(ctx, storyboard, story, run, snapshot, alignmentPrompt, sceneCount)
+	case StoryboardWorkflowStageReviewContent:
+		return s.ensureStoryboardReviewContentStage(ctx, storyboard, story, run, snapshot, alignmentPrompt, sceneCount)
 	default:
 		return s.ensureStoryboardPersistContentStage(ctx, storyboard, run, sceneCount)
+	}
+}
+
+func (s *Service) ensureStoryboardReviewContentStage(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story, run *domain.StoryboardGenerationRun, snapshot storyboardGenerationContextSnapshot, alignmentPrompt string, sceneCount int) (*StoryboardWorkflowStageResult, error) {
+	plan, err := storyboardBiblePlanFromRun(run)
+	if err != nil {
+		return nil, fmt.Errorf("bible_plan stage is incomplete: %w", err)
+	}
+	var scenePlan domain.StoryboardScenePlan
+	if err := json.Unmarshal([]byte(run.ScenePlanJSON), &scenePlan); err != nil || len(scenePlan.Scenes) == 0 {
+		return nil, fmt.Errorf("scene_plan stage is incomplete")
+	}
+	assets, _ := s.repo.ListStoryboardGenerationAssets(ctx, run.ID)
+	issues := s.auditStoryboardGenerationConsistency(plan, &scenePlan, assets, sceneCount, s.isStoryboardContinuation(storyboard))
+	if strings.TrimSpace(run.ConsistencyIssuesJSON) != "" && firstHighStoryboardConsistencyIssue(issues) == "" {
+		result := storyboardStageResult(storyboard.ID, run, StoryboardWorkflowStageReviewContent, true)
+		result.IssueCount = len(issues)
+		result.RepairApplied = storyboardMetricInt(run.MetricsJSON, "scenePlanRepairAttempts") > 0
+		return result, nil
+	}
+
+	run.ConsistencyIssuesJSON = mustJSON(issues, "[]")
+	if detail := firstHighStoryboardConsistencyIssue(issues); detail != "" {
+		if storyboardMetricInt(run.MetricsJSON, "scenePlanRepairAttempts") >= 1 {
+			return nil, fmt.Errorf("story framework consistency check failed after local repair: %s", detail)
+		}
+		correction := storyboardScenePlanCorrectionContext(run.ScenePlanJSON, issues)
+		repaired, text, tokens, repairErr := s.generateStoryboardScenePlanWithCorrection(ctx, run, story, storyboard, snapshot, plan, alignmentPrompt, sceneCount, correction)
+		run.MetricsJSON = mergeStoryboardRunMetrics(run.MetricsJSON, map[string]any{
+			"scenePlanRepairAttempts": 1, "scenePlanRepairTokens": tokens, "scenePlanRepairChars": len(text),
+		})
+		if repairErr != nil {
+			_ = s.repo.UpdateStoryboardGenerationRun(ctx, run)
+			s.failStoryboardGenerationRun(ctx, run, "scene_plan_local_repair_failed", repairErr)
+			return nil, repairErr
+		}
+		run.ScenePlanJSON = mustJSON(repaired, "{}")
+		issues = s.auditStoryboardGenerationConsistency(plan, repaired, assets, sceneCount, s.isStoryboardContinuation(storyboard))
+		run.ConsistencyIssuesJSON = mustJSON(issues, "[]")
+		if detail = firstHighStoryboardConsistencyIssue(issues); detail != "" {
+			_ = s.repo.UpdateStoryboardGenerationRun(ctx, run)
+			err := fmt.Errorf("story framework consistency check failed after local repair: %s", detail)
+			s.failStoryboardGenerationRun(ctx, run, "story_framework_conflict", err)
+			return nil, err
+		}
+	}
+
+	run.Status, run.Progress, run.CurrentStep = domain.GenerationStatusProcessing, 75, domain.StoryboardGenerationStepConsistency
+	run.ErrorCode, run.ErrorMessage, run.UpdatedAt = "", "", time.Now().Unix()
+	if err := s.repo.UpdateStoryboardGenerationRun(ctx, run); err != nil {
+		return nil, fmt.Errorf("persist storyboard content review: %w", err)
+	}
+	s.recordPromptAudit(ctx, promptAuditInput{
+		RunID: run.ID, RelatedEntityType: "storyboard", RelatedEntityID: storyboard.ID,
+		Step: domain.StoryboardGenerationStepConsistency, PromptKind: domain.PromptKindConsistencyAudit,
+		PromptTemplateVersion: storyboardPromptTemplateVersion, AlignmentPrompt: alignmentPrompt,
+		UserPrompt: "Deterministic consistency review over bible, beats, scene plan, reference assets, and branch continuity; high-severity findings permit one local scene-plan repair.",
+		Provider:   "internal", Model: "deterministic-audit", Output: run.ConsistencyIssuesJSON,
+	})
+	result := storyboardStageResult(storyboard.ID, run, StoryboardWorkflowStageReviewContent, false)
+	result.IssueCount = len(issues)
+	result.RepairApplied = storyboardMetricInt(run.MetricsJSON, "scenePlanRepairAttempts") > 0
+	return result, nil
+}
+
+func storyboardScenePlanCorrectionContext(previous string, issues []domain.FragmentConsistencyIssue) string {
+	return "The previous candidate failed the deterministic consistency review. Return a complete replacement scene plan, changing only what is needed to resolve every listed issue. Preserve valid creative choices.\nIssues:\n" + mustJSON(issues, "[]") + "\nPrevious candidate:\n" + previous
+}
+
+func storyboardMetricInt(raw, key string) int {
+	metrics := map[string]any{}
+	if json.Unmarshal([]byte(raw), &metrics) != nil {
+		return 0
+	}
+	switch value := metrics[key].(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	default:
+		return 0
 	}
 }
 

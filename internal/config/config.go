@@ -162,7 +162,9 @@ type AgentTokenConfig struct {
 	ReplayCacheEnabled bool `yaml:"replay_cache_enabled"`
 	// PublicParallelEnabled 是否开启「agent 平行对外」模式（env: AGENT_PUBLIC_PARALLEL_ENABLED）。
 	PublicParallelEnabled bool `yaml:"public_parallel_enabled"`
+	AgentBaseURL string `yaml:"agent_base_url"`
 	// ExecFragmentPanelEnabled fragment-panel 试点执行迁移开关（env: AGENT_EXEC_FRAGMENT_PANEL_ENABLED）。
+	// AgentBaseURL grapery-agent 服务地址（env: GRAPERY_AGENT_BASE_URL），供 forge 试运行中继调用。
 	ExecFragmentPanelEnabled bool `yaml:"exec_fragment_panel_enabled"`
 	// InternalAPIKey 供 grapery-agent 调用 policy API（env: GRAPERY_INTERNAL_API_KEY）。
 	InternalAPIKey string `yaml:"internal_api_key"`
@@ -324,6 +326,7 @@ func Load(app string) Config {
 			PublicParallelEnabled:    getEnvBool("AGENT_PUBLIC_PARALLEL_ENABLED", false),
 			ExecFragmentPanelEnabled: getEnvBool("AGENT_EXEC_FRAGMENT_PANEL_ENABLED", true),
 			InternalAPIKey:           getEnv("GRAPERY_INTERNAL_API_KEY", ""),
+			AgentBaseURL:             strings.TrimRight(getEnv("GRAPERY_AGENT_BASE_URL", ""), "/"),
 		},
 		Aliyun: AliyunConfig{
 			APIKey:    getEnv("ALIYUN_API_KEY", ""),

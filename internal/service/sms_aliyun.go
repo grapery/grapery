@@ -6,6 +6,7 @@ package service
 // credential is either explicit access keys or the default credential chain (RAM / env file / etc.).
 //
 // Required env:
+//   - ALIYUN_SMS_ENABLED=1 / true（总开关；默认关闭，避免开发与测试误发真实短信）
 //   - ALIYUN_SMS_SIGN_NAME（短信签名，如 「上海秩量科技」）
 //   - ALIYUN_SMS_TEMPLATE_CODE（模板 CODE；模板变量需包含 JSON 字段 code，与本服务 marshal 一致）
 //
@@ -88,6 +89,10 @@ func SendAliyunOTPCode(domesticPhone, code string) error {
 	domesticPhone = strings.TrimSpace(domesticPhone)
 	if domesticPhone == "" {
 		return fmt.Errorf("empty phone")
+	}
+	if !smsEnvTruthy("ALIYUN_SMS_ENABLED") {
+		logrus.WithField("phone_masked", utils.MaskChinaPhone(domesticPhone)).Info("aliyun sms: delivery disabled")
+		return fmt.Errorf("aliyun sms: delivery disabled (set ALIYUN_SMS_ENABLED=true to enable)")
 	}
 
 	signName := aliyunSMSSignName()

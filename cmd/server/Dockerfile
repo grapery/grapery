@@ -69,6 +69,7 @@ ENV ALIYUN_ROLE_ARN=
 
 # ========== Aliyun SMS (phone verification) ==========
 # ECS/阿里云默认凭据可将 ALIYUN_SMS_ACCESS_KEY_* 留空并设 USE_DEFAULT_CREDENTIAL=1
+ENV ALIYUN_SMS_ENABLED=false
 ENV ALIYUN_SMS_REGION=cn-hangzhou
 ENV ALIYUN_SMS_ENDPOINT=
 ENV ALIYUN_SMS_SIGN_NAME=
@@ -87,4 +88,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/app/grapery-server", "-version"]
 
 CMD ["/app/grapery-server"]
-

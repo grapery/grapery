@@ -139,6 +139,8 @@ func (r *WorkflowRegistryRepository) ListWorkflowReleaseStats(ctx context.Contex
 	var rows []GenerationExecutionDB
 	query := r.db.WithContext(ctx).
 		Where("workflow_release_id <> ''").
+		// 固定版本试运行（input.workflowTestRun）不计入版本运行统计。
+		Where(`input_json IS NULL OR input_json NOT LIKE '%"workflowTestRun":true%'`).
 		Order("created_at ASC")
 	if !since.IsZero() {
 		query = query.Where("created_at >= ?", since)
@@ -151,6 +153,9 @@ func (r *WorkflowRegistryRepository) ListWorkflowReleaseStats(ctx context.Contex
 	durationCounts := make(map[string]int64)
 	for i := range rows {
 		row := &rows[i]
+		if strings.Contains(row.InputJSON, `"workflowTestRun":true`) {
+			continue
+		}
 		stats := byRelease[row.WorkflowReleaseID]
 		if stats == nil {
 			stats = &domain.WorkflowReleaseStats{

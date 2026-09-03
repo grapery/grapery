@@ -426,7 +426,7 @@ func main() {
 	}
 	router := transport.SetupRouter(deps)
 
-	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, generationRuntimeService, cfg.AgentToken.InternalAPIKey)
+	agentPolicyHandler := transport.NewAgentPolicyHandler(agentPolicy, agentTokenSigner, genAuditService, panelGenService, generationRuntimeService, cfg.AgentToken.InternalAPIKey, cfg.AgentToken.AgentBaseURL, db)
 	agentPolicyHandler.RegisterRoutes(router)
 	workflowRegistryHandler := transport.NewWorkflowRegistryHandler(workflowRegistryService, cfg.AgentToken.InternalAPIKey)
 	workflowRegistryHandler.RegisterInternalRoutes(router)
@@ -769,6 +769,8 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 			zap.String("action", "Set at least one of: GEMINI_API_KEY, HUOSHAN_API_KEY"),
 		)
 	}
+	// 无论是否成功初始化，都记录缺失清单，供运行错误给出可操作指引。
+	svc.SetMissingAIProviders(missingProviders)
 
 	logger.Info("==============================================")
 }
