@@ -264,20 +264,28 @@ func (h *Handler) GetUserStoryboards(c *gin.Context) {
 		return
 	}
 	viewerID := GetUserID(c)
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil {
+		limit = 20
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil {
+		offset = 0
+	}
 
-	storyboards, err := h.svc.GetUserStoryboards(c.Request.Context(), userID, viewerID, limit, offset)
+	page, err := h.svc.GetUserStoryboardPage(c.Request.Context(), userID, viewerID, limit, offset)
 	if err != nil {
 		HandleError(c, err)
 		return
 	}
 
+	storyboards := page.Storyboards
 	h.attachStoryboardIsLikedMany(c, storyboards)
 	domain.RedactStoryboardViewsUnlessCreatorMany(storyboards, viewerID)
 	Success(c, gin.H{
 		"storyboards": storyboards,
 		"count":       len(storyboards),
+		"hasMore":     page.HasMore,
 	})
 }
 

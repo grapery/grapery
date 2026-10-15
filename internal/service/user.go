@@ -733,8 +733,24 @@ func (s *Service) GetLikedStoryboards(ctx context.Context, userID, viewerID stri
 // REMOVED: GetDraftStoryboards - not in StoryCreationAppUI design
 // REMOVED: GetUserDrafts - not in StoryCreationAppUI design
 
-// GetUserStoryboards 获取用户的故事板列表（已发布的）
+// UserStoryboardPage separates visible results from pagination of the unfiltered repository window.
+// HasMore may remain true when every item in this window is hidden from the viewer.
+type UserStoryboardPage struct {
+	Storyboards []*domain.Storyboard
+	HasMore     bool
+}
+
+// GetUserStoryboards preserves the list-only API for existing service callers.
 func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID string, limit, offset int) ([]*domain.Storyboard, error) {
+	page, err := s.GetUserStoryboardPage(ctx, userID, viewerID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return page.Storyboards, nil
+}
+
+// GetUserStoryboardPage retains the existing visibility policy while reporting raw-window pagination.
+func (s *Service) GetUserStoryboardPage(ctx context.Context, userID, viewerID string, limit, offset int) (*UserStoryboardPage, error) {
 	s.logger.Debug("getting user storyboards",
 		zap.String("userID", userID),
 		zap.Int("limit", limit),
@@ -747,6 +763,10 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID strin
 		limit = 100
 	}
 
+	if offset < 0 {
+		offset = 0
+	}
+
 	// 尝试从缓存获取
 	c := s.getCache()
 	if c != nil {
@@ -756,7 +776,7 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID strin
 			s.logger.Debug("user storyboards cache hit",
 				zap.String("userID", userID),
 				zap.Int("count", len(cachedStoryboards)))
-			return s.filterStoryboardsForViewer(ctx, cachedStoryboards, userID, viewerID)
+			return s.userStoryboardPage(ctx, cachedStoryboards, userID, viewerID, limit)
 		} else {
 			s.logger.Debug("user storyboards cache miss",
 				zap.String("userID", userID),
@@ -787,7 +807,15 @@ func (s *Service) GetUserStoryboards(ctx context.Context, userID, viewerID strin
 		}
 	}
 
-	return s.filterStoryboardsForViewer(ctx, storyboards, userID, viewerID)
+	return s.userStoryboardPage(ctx, storyboards, userID, viewerID, limit)
+}
+
+func (s *Service) userStoryboardPage(ctx context.Context, window []*domain.Storyboard, ownerID, viewerID string, limit int) (*UserStoryboardPage, error) {
+	visible, err := s.filterStoryboardsForViewer(ctx, window, ownerID, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	return &UserStoryboardPage{Storyboards: visible, HasMore: len(window) >= limit}, nil
 }
 
 // ListDashboardStoryboards returns storyboards created by the authenticated user (all workflow states),
