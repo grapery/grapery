@@ -26,10 +26,10 @@ import (
 
 // AgentPolicyHandler 暴露给 grapery-agent 的 policy/query 原语（服务间 API Key 认证）。
 type AgentPolicyHandler struct {
-	policy   *service.AgentAccessPolicyService
-	signer   *service.AgentAccessTokenSigner
-	audit    *service.GenerationAuditService
-	panelGen *service.FragmentPanelGenerationService
+	policy       *service.AgentAccessPolicyService
+	signer       *service.AgentAccessTokenSigner
+	audit        *service.GenerationAuditService
+	panelGen     *service.FragmentPanelGenerationService
 	runtime      *service.GenerationRuntimeService
 	apiKey       string
 	agentBaseURL string
@@ -350,6 +350,7 @@ func (h *AgentPolicyHandler) getGenerationCheckpoint(c *gin.Context) {
 func (h *AgentPolicyHandler) internalAPIKeyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if h.apiKey == "" {
+			c.Abort()
 			InternalError(c, "internal agent policy API is not configured")
 			return
 		}
@@ -361,6 +362,7 @@ func (h *AgentPolicyHandler) internalAPIKeyMiddleware() gin.HandlerFunc {
 			}
 		}
 		if key == "" || key != h.apiKey {
+			c.Abort()
 			Unauthorized(c, "invalid internal api key")
 			return
 		}

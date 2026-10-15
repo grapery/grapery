@@ -191,6 +191,7 @@ func (h *WorkflowRegistryHandler) resolve(c *gin.Context) {
 func (h *WorkflowRegistryHandler) internalAPIKeyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if h.apiKey == "" {
+			c.Abort()
 			InternalError(c, "workflow registry internal API is not configured")
 			return
 		}
@@ -199,6 +200,7 @@ func (h *WorkflowRegistryHandler) internalAPIKeyMiddleware() gin.HandlerFunc {
 			key = strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "))
 		}
 		if key != h.apiKey {
+			c.Abort()
 			Unauthorized(c, "invalid internal api key")
 			return
 		}
