@@ -757,6 +757,7 @@ func initAIClients(cfg config.Config, svc *service.Service, repo domain.Reposito
 	if hasProvider {
 		svc.SetAIClients(genAPI, geminiClient)
 		svc.SetAIConfig(cfg.AI) // Set image/video provider configuration
+		go svc.StartCharacterGenerationRecovery(context.Background())
 		logger.Info("✅ AI generation service initialized",
 			zap.Strings("providers", configuredProviders),
 			zap.String("defaultProvider", cfg.AI.DefaultProvider),

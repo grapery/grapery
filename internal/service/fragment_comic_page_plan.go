@@ -8,14 +8,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
-	"go.uber.org/zap"
 )
 
 const (
 	fragmentComicPageMinPanels     = 2
 	fragmentComicPageDefaultPanels = 4
 	fragmentComicPageMaxPanels     = 10
-	fragmentComicPagePlanMaxTokens = 4096
+	fragmentComicPagePlanMaxTokens = 8192
 )
 
 type fragmentComicPagePlanningCallback func(pageIndex int, pages []domain.FragmentScenePlan)
@@ -25,115 +24,35 @@ type fragmentComicPagePlanningCallback func(pageIndex int, pages []domain.Fragme
 // has a compact response limit, so one giant response for all pages could
 // truncate later pages and silently lose panels.
 func (s *FragmentGenerationService) planFragmentComicPages(
-	ctx context.Context,
-	userID, taskID string,
-	req domain.FragmentGenerationRequest,
-	storyContent string,
-	bible *domain.FragmentVisualBible,
-	pages []domain.FragmentScenePlan,
+	ctx context.Context, userID, taskID string,
+	req domain.FragmentGenerationRequest, storyContent string,
+	bible *domain.FragmentVisualBible, pages []domain.FragmentScenePlan,
 	callbacks ...fragmentComicPagePlanningCallback,
-) ([]domain.FragmentScenePlan, int) {
+) ([]domain.FragmentScenePlan, int, error) {
 	out := append([]domain.FragmentScenePlan(nil), pages...)
 	totalTokens := 0
 	for i := range out {
-		if ctx.Err() != nil {
-			break
+		if err := ctx.Err(); err != nil {
+			return out, totalTokens, err
 		}
-		fallbackPanelCount := fragmentComicPageFallbackPanelCount(out[i])
 		prompt := buildFragmentComicPagePlanPrompt(req, storyContent, bible, out, i)
-		payload, _ := json.Marshal(map[string]interface{}{
-			"prompt": prompt,
-			"step":   "fragment_comic_page_plan",
-			"page":   i,
-		})
-		aiReq := domain.AITask{
-			ID:                uuid.New().String(),
-			UserID:            userID,
-			Type:              domain.AITaskGenerateFragmentContent,
-			Status:            domain.AITaskStatusProcessing,
-			Input:             string(payload),
-			RelatedEntityID:   taskID,
-			RelatedEntityType: "fragment_generation",
+		generate := func(prompt, step string) (string, int, error) {
+			if s == nil || s.aiService == nil {
+				return "", 0, fmt.Errorf("fragment comic page planner unavailable")
+			}
+			payload, _ := json.Marshal(map[string]interface{}{"prompt": prompt, "step": step, "page": i})
+			aiReq := domain.AITask{ID: uuid.NewString(), UserID: userID, Type: domain.AITaskGenerateFragmentContent,
+				Status: domain.AITaskStatusProcessing, Input: string(payload), RelatedEntityID: taskID, RelatedEntityType: "fragment_generation"}
+			return s.aiService.GenerateFragmentStructuredTextJSON(ctx, &aiReq, fragmentComicPagePlanMaxTokens, 0.35, step)
 		}
-
-		var raw string
-		var tokens int
-		var err error
-		if s == nil || s.aiService == nil {
-			err = fmt.Errorf("fragment comic page planner unavailable")
-		} else {
-			raw, tokens, err = s.aiService.GenerateFragmentStructuredTextJSON(
-				ctx,
-				&aiReq,
-				fragmentComicPagePlanMaxTokens,
-				0.35,
-				"fragment_comic_page_plan",
-			)
-		}
+		plan, tokens, err := requestFragmentComicPagePlan(ctx, prompt, bible, generate)
 		totalTokens += tokens
-		var plan *domain.FragmentComicPagePlan
-		planningStatus := "planned"
-		planningError := ""
-		if err == nil {
-			plan, err = parseFragmentComicPagePlan(raw)
-			if err == nil {
-				err = validateFragmentComicPagePlanCount(plan)
-			}
-			if err == nil {
-				reviewIssues := reviewFragmentComicPagePlan(plan)
-				if len(reviewIssues) > 0 {
-					initialPlan := plan
-					revisionPrompt := buildFragmentComicPageRevisionPrompt(prompt, raw, reviewIssues)
-					revisionPayload, _ := json.Marshal(map[string]interface{}{
-						"prompt": revisionPrompt,
-						"step":   "fragment_comic_page_revision",
-						"page":   i,
-					})
-					revisionTask := aiReq
-					revisionTask.ID = uuid.New().String()
-					revisionTask.Input = string(revisionPayload)
-					revisionRaw, revisionTokens, revisionErr := s.aiService.GenerateFragmentStructuredTextJSON(
-						ctx, &revisionTask, fragmentComicPagePlanMaxTokens, 0.25, "fragment_comic_page_revision",
-					)
-					totalTokens += revisionTokens
-					if revisionErr == nil {
-						var revised *domain.FragmentComicPagePlan
-						revised, revisionErr = parseFragmentComicPagePlan(revisionRaw)
-						if revisionErr == nil {
-							revisionErr = validateFragmentComicPagePlanCount(revised)
-						}
-						if revisionErr == nil && len(reviewFragmentComicPagePlan(revised)) == 0 {
-							plan = revised
-							planningStatus = "revised"
-						} else {
-							plan = initialPlan
-						}
-					}
-					if planningStatus != "revised" {
-						planningStatus = "planned_with_review_notes"
-						planningError = truncateRunes(strings.Join(reviewIssues, "; "), 180)
-					}
-				}
-			}
+		if err != nil {
+			return out, totalTokens, fmt.Errorf("comic page %d planning failed: %w", i+1, err)
 		}
-		if err != nil || plan == nil {
-			if s != nil && s.logger != nil {
-				s.logger.Warn("fragment comic page planning fell back to deterministic plan",
-					zap.String("task_id", taskID), zap.Int("page_index", i), zap.Error(err))
-			}
-			fallback := buildFallbackFragmentComicPagePlan(out[i], fallbackPanelCount, req.Language)
-			plan = &fallback
-			planningStatus = "fallback"
-			if err != nil {
-				planningError = truncateRunes(err.Error(), 180)
-			}
-		}
-		panelCount := len(plan.Panels)
-		normalized := normalizeFragmentComicPagePlan(*plan, out[i], panelCount, bible, req.Language)
-		layout := fragmentComicLayoutForPanelCount(panelCount, req.AspectRatio)
+		normalized := normalizeFragmentComicPagePlan(*plan, out[i], len(plan.Panels), bible, req.Language)
+		layout := fragmentComicLayoutForPanelCount(len(plan.Panels), req.AspectRatio)
 		normalized.Layout = &layout
-		normalized.PlanningStatus = planningStatus
-		normalized.PlanningError = planningError
 		out[i].ComicPage = &normalized
 		out[i].ReferenceKeys = mergeFragmentPageReferenceKeys(out[i].ReferenceKeys, normalized.Panels)
 		out[i].EntityBindings = mergeFragmentPageEntityBindings(out[i].EntityBindings, normalized.Panels)
@@ -143,7 +62,82 @@ func (s *FragmentGenerationService) planFragmentComicPages(
 			}
 		}
 	}
-	return out, totalTokens
+	return out, totalTokens, nil
+}
+
+// Both schema failure and narrative review get one bounded repair. An invalid
+// replacement is never silently filled with invented beats before paid render.
+func requestFragmentComicPagePlan(ctx context.Context, prompt string, bible *domain.FragmentVisualBible,
+	generate func(string, string) (string, int, error),
+) (*domain.FragmentComicPagePlan, int, error) {
+	total := 0
+	currentPrompt := prompt
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, total, err
+		}
+		step := "fragment_comic_page_plan"
+		if attempt > 0 {
+			step = "fragment_comic_page_revision"
+		}
+		raw, tokens, err := generate(currentPrompt, step)
+		total += tokens
+		var plan *domain.FragmentComicPagePlan
+		if err == nil {
+			plan, err = parseFragmentComicPagePlan(raw)
+		}
+		if err == nil {
+			err = validateProductionFragmentComicPagePlan(plan, bible)
+		}
+		if err == nil {
+			plan.PlanningStatus = "planned"
+			if attempt > 0 {
+				plan.PlanningStatus = "revised"
+			}
+			return plan, total, nil
+		}
+		if attempt == 1 {
+			return nil, total, err
+		}
+		currentPrompt = buildFragmentComicPageRevisionPrompt(prompt, raw, []string{err.Error()})
+	}
+	return nil, total, fmt.Errorf("page plan unavailable")
+}
+
+func validateProductionFragmentComicPagePlan(plan *domain.FragmentComicPagePlan, bible *domain.FragmentVisualBible) error {
+	if err := validateFragmentComicPagePlanCount(plan); err != nil {
+		return err
+	}
+	valid, _, kinds := fragmentVisualBibleKeySets(bible)
+	for i, panel := range plan.Panels {
+		if panel.Index != i || strings.TrimSpace(panel.SceneDesc) == "" || strings.TrimSpace(panel.ImagePrompt) == "" {
+			return fmt.Errorf("panel %d requires a contiguous index, visible beat and artwork prompt", i)
+		}
+		for _, key := range panel.ReferenceKeys {
+			if _, ok := valid[key]; !ok {
+				return fmt.Errorf("panel %d references unknown entity %s", i, key)
+			}
+		}
+		for _, binding := range panel.EntityBindings {
+			if _, ok := valid[binding.Key]; !ok {
+				return fmt.Errorf("panel %d binds unknown entity %s", i, binding.Key)
+			}
+			if binding.Kind != "" && binding.Kind != kinds[binding.Key] {
+				return fmt.Errorf("panel %d swaps entity kind for %s", i, binding.Key)
+			}
+		}
+		for _, text := range panel.ComicTexts {
+			if text.Speaker != "" {
+				if _, ok := valid[text.Speaker]; !ok {
+					return fmt.Errorf("panel %d text has unknown speaker %s", i, text.Speaker)
+				}
+			}
+		}
+	}
+	if issues := reviewFragmentComicPagePlan(plan); len(issues) > 0 {
+		return fmt.Errorf("narrative review: %s", strings.Join(issues, "; "))
+	}
+	return nil
 }
 
 // fragmentComicPageFallbackPanelCount is used only when semantic page planning
@@ -198,15 +192,18 @@ func buildFragmentComicPagePlanPrompt(
 		Task: "先识别当前页不可合并的有效剧情节拍，再自行决定所需内部漫画格数；外层仍只生成一张完整漫画页图片。",
 		Inputs: map[string]any{
 			"pageIndex": pageIndex, "pageCount": len(pages),
-			"minimumPanelCount": fragmentComicPageMinPanels, "maximumPanelCount": fragmentComicPageMaxPanels,
+			"userRequest": req.UserInput, "replaceImageIndex": req.ReplaceImageIndex,
+			"creativePreferences": formatCreativeControls(req.CreativeControls),
+			"minimumPanelCount":   fragmentComicPageMinPanels, "maximumPanelCount": fragmentComicPageMaxPanels,
 			"pageAspectRatio": req.AspectRatio, "style": req.Style, "mood": req.Mood,
 			"storyContext": truncateRunes(storyContent, 600), "pageBeat": page.SceneDesc,
 			"pageVisualDirection": page.ImagePrompt, "previousPageBeat": previous, "nextPageBeat": next,
 			"allowedReferenceKeys": formatVisualBibleKeyListForPrompt(bible),
 			"contentLanguage":      language, "letteringLanguage": language,
 		},
-		GlobalConfig: structuredStoryPanelGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance() + "\n" + creativeAuthorityPolicy,
 		Sections: []PromptDSLSection{{Title: "Complete Comic Page Rules", Kind: "text", Body: fmt.Sprintf(`
+- 如果 replaceImageIndex>0，遵守 userRequest 中服务端权威编辑上下文，仅修改选中原页，保留其对白和事件，不添加新剧情。
 - 这是第 %d/%d 张最终图片；它本身必须是一张完整漫画页，不是单幅插图，也不是把多张外部图片合成到一起。
 - 先从 pageBeat 中识别独立的动作、发现、反应、对白、转折和结果，再在 %d～%d 格之间选择能够完整且紧凑表达本页的最少格数。
 - 不得先选择高格数再用重复姿态、重复环境、无结果的过渡动作填满；相邻格若没有新增信息、动作结果、情绪变化、对白或关键视角，必须合并。

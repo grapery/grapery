@@ -15,6 +15,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/repository/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type FragmentRepository struct {
@@ -55,6 +56,11 @@ func (r *FragmentRepository) Create(ctx context.Context, fragment *domain.Fragme
 func (r *FragmentRepository) CreateWithTx(ctx context.Context, tx *gorm.DB, fragment *domain.Fragment) error {
 	if tx == nil {
 		return fmt.Errorf("nil transaction")
+	}
+	if !fragment.IsDraft {
+		if err := domain.ValidateFragmentPublicationQuality(fragment.GenerationMetadata); err != nil {
+			return err
+		}
 	}
 	dbFragment := mysql.DomainToFragmentDB(fragment)
 	if dbFragment == nil {
@@ -640,11 +646,26 @@ func (r *FragmentRepository) DecrementUserFragmentsCount(ctx context.Context, us
 
 // Update updates a fragment
 func (r *FragmentRepository) Update(ctx context.Context, fragment *domain.Fragment) error {
-	dbFragment := mysql.DomainToFragmentDB(fragment)
-	if dbFragment == nil {
-		return domain.ErrInvalidInput
-	}
-	return r.db.WithContext(ctx).Save(dbFragment).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stored mysql.FragmentDB
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fragment.ID).First(&stored).Error; err != nil {
+			return err
+		}
+		if fragment.ExpectedGenerationTaskID != "" && fragment.ExpectedGenerationTaskID != stored.GenerationTaskID {
+			return domain.ErrAlreadyExists
+		}
+
+		if !fragment.IsDraft {
+			if err := mysql.ValidateFragmentPublicationAuthority(ctx, tx, &stored, fragment); err != nil {
+				return err
+			}
+		}
+		dbFragment := mysql.DomainToFragmentDB(fragment)
+		if dbFragment == nil {
+			return domain.ErrInvalidInput
+		}
+		return tx.Save(dbFragment).Error
+	})
 }
 
 // Delete deletes a fragment and decrements user's fragments count
@@ -734,7 +755,6 @@ func (r *FragmentRepository) IsLiked(ctx context.Context, fragmentID, userID str
 	return count > 0, err
 }
 
-
 // ToggleLike atomically toggles like status for a fragment using delete-first strategy.
 // Returns (true, nil) if liked, (false, nil) if unliked.
 func (r *FragmentRepository) ToggleLike(ctx context.Context, fragmentID, userID string) (bool, error) {
@@ -782,6 +802,7 @@ func isDuplicateKeyError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "Error 1062") || strings.Contains(msg, "Duplicate entry")
 }
+
 // GetEngagementStats retrieves likes/comments counts and current user's like status.
 // Comments are aggregated from both legacy comments table and fragment_comments table.
 func (r *FragmentRepository) GetEngagementStats(ctx context.Context, fragmentID, userID string) (FragmentEngagement, error) {

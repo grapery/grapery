@@ -151,15 +151,16 @@ type CreateFragmentRequest struct {
 
 // UpdateFragmentRequest represents the request to update a fragment
 type UpdateFragmentRequest struct {
-	Content       *string   `json:"content" binding:"omitempty,max=500"`
-	ImageUrls     *[]string `json:"imageUrls" binding:"omitempty,max=10"`
-	Style         *string   `json:"style" binding:"omitempty"`
-	FragmentCount *int      `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
-	Topic         *string   `json:"topic" binding:"omitempty,max=200"`
-	Caption       *string   `json:"caption" binding:"omitempty,max=500"`
-	Visibility    *string   `json:"visibility" binding:"omitempty,oneof=public followers followers_only private"`
-	IsDraft       *bool     `json:"isDraft,omitempty"`
-	AspectRatio   *string   `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
+	ExpectedGenerationTaskID *string   `json:"expectedGenerationTaskId,omitempty"`
+	Content                  *string   `json:"content" binding:"omitempty,max=500"`
+	ImageUrls                *[]string `json:"imageUrls" binding:"omitempty,max=10"`
+	Style                    *string   `json:"style" binding:"omitempty"`
+	FragmentCount            *int      `json:"fragmentCount" binding:"omitempty,min=1,max=16"`
+	Topic                    *string   `json:"topic" binding:"omitempty,max=200"`
+	Caption                  *string   `json:"caption" binding:"omitempty,max=500"`
+	Visibility               *string   `json:"visibility" binding:"omitempty,oneof=public followers followers_only private"`
+	IsDraft                  *bool     `json:"isDraft,omitempty"`
+	AspectRatio              *string   `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 }
 
 // CreateFragment handles POST /fragments
@@ -577,6 +578,9 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 		return
 	}
 
+	if req.ExpectedGenerationTaskID != nil {
+		fragment.ExpectedGenerationTaskID = strings.TrimSpace(*req.ExpectedGenerationTaskID)
+	}
 	if req.Content != nil {
 		fragment.Content = *req.Content
 	}
@@ -614,6 +618,12 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 		fragment.Visibility = domain.NormalizeFragmentVisibility(*req.Visibility)
 	}
 
+	if req.IsDraft != nil && !*req.IsDraft {
+		if err := domain.ValidateFragmentPublicationQuality(fragment.GenerationMetadata); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "作品尚未通过生成验收，请先修复或重新检查", "code": "fragment_quality_pending"})
+			return
+		}
+	}
 	wasDraft := fragment.IsDraft
 	if req.IsDraft != nil {
 		fragment.IsDraft = *req.IsDraft
@@ -625,6 +635,10 @@ func (h *FragmentHandler) UpdateFragment(c *gin.Context) {
 	}
 
 	if err := h.fragmentRepo.Update(c.Request.Context(), fragment); err != nil {
+		if !fragment.IsDraft {
+			c.JSON(http.StatusConflict, gin.H{"error": "作品状态或验收结果已变化，请重新打开草稿后再发布", "code": "fragment_publication_conflict"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update fragment"})
 		return
 	}

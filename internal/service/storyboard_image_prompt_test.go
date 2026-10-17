@@ -249,18 +249,18 @@ func TestEstimateComicPagePanelCountRangeAndCompactness(t *testing.T) {
 	}
 }
 
-func TestResolveComicPagePipelineIgnoresClientPanelCount(t *testing.T) {
+func TestResolveComicPagePipelineHonorsExplicitPagePlan(t *testing.T) {
 	got := resolveComicPagePipeline(ComicPagePipelineOptions{
 		LayoutPreset:    "strip5_top2_middle_wide_bottom2",
 		PanelCount:      5,
 		PageAspectRatio: "9:16",
 		DialogueMode:    "auto",
 	}, nil, "安静的雨夜。", true, 4)
-	if got.PanelCount != 1 {
-		t.Fatalf("server should auto-select compact transition count, got %d", got.PanelCount)
+	if got.PanelCount != 5 {
+		t.Fatalf("explicit panel count must override transition heuristics, got %d", got.PanelCount)
 	}
-	if got.LayoutPreset != "single_panel_full_page" {
-		t.Fatalf("layout should follow auto count, got %q", got.LayoutPreset)
+	if got.LayoutPreset != "strip5_top2_middle_wide_bottom2" {
+		t.Fatalf("explicit layout must be preserved, got %q", got.LayoutPreset)
 	}
 }
 

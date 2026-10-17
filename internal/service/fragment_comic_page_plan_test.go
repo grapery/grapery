@@ -201,27 +201,11 @@ func TestReviewFragmentComicPagePlanRejectsRepeatedBeatsAndFlatPerformance(t *te
 	}
 }
 
-func TestFragmentComicPagePlannerPersistsEachFallbackPageIncrementally(t *testing.T) {
-	pages := []domain.FragmentScenePlan{
-		{Index: 0, SceneDesc: "第一页", ImagePrompt: "page one"},
-		{Index: 1, SceneDesc: "第二页", ImagePrompt: "page two"},
-	}
-	var callbacks []int
-	got, _ := (*FragmentGenerationService)(nil).planFragmentComicPages(
-		context.Background(), "user", "task", domain.FragmentGenerationRequest{Language: "zh-Hans"}, "story", nil, pages,
-		func(pageIndex int, snapshot []domain.FragmentScenePlan) {
-			callbacks = append(callbacks, pageIndex)
-			if snapshot[pageIndex].ComicPage == nil {
-				t.Fatalf("callback %d must include its planned page", pageIndex)
-			}
-		},
-	)
-	if len(callbacks) != 2 || callbacks[0] != 0 || callbacks[1] != 1 {
-		t.Fatalf("expected one progress callback per page, got %#v", callbacks)
-	}
-	for i, page := range got {
-		if page.ComicPage == nil || page.ComicPage.PlanningStatus != "fallback" {
-			t.Fatalf("page %d should keep an explicit fallback status, got %#v", i, page.ComicPage)
-		}
+func TestFragmentComicPagePlannerUnavailableDoesNotInventRenderPlan(t *testing.T) {
+	pages := []domain.FragmentScenePlan{{Index: 0, SceneDesc: "第一页", ImagePrompt: "page one"}}
+	callbacks := 0
+	got, tokens, err := (*FragmentGenerationService)(nil).planFragmentComicPages(context.Background(), "user", "task", domain.FragmentGenerationRequest{}, "story", nil, pages, func(int, []domain.FragmentScenePlan) { callbacks++ })
+	if err == nil || callbacks != 0 || tokens != 0 || got[0].ComicPage != nil {
+		t.Fatalf("unavailable planner must stop before paid rendering: %#v, %v", got, err)
 	}
 }

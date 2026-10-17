@@ -80,6 +80,7 @@ type StoryboardCharacter struct {
 
 // Storyboard represents a storyboard node with tree structure (支持 Fork 和续写)
 type Storyboard struct {
+	CreativeControls *CreativeControls `json:"creativeControls,omitempty" gorm:"-"`
 	// Base model fields
 	common.BaseModel
 
@@ -117,7 +118,12 @@ type Storyboard struct {
 
 	// TurnDirective 对话式创作中「本轮修改要求」。瞬时字段，不入库，只作用于当次生成的提示词：
 	// RawInput 保留首轮完整描述，本字段承载"改成雨夜"这类增量指令。
-	TurnDirective string `json:"-"`
+	TurnDirective           string                      `json:"-"`
+	CreationRequestHash     string                      `json:"-"`
+	ContentRevision         string                      `json:"contentRevision,omitempty"`
+	RevisionBaseline        *StoryboardRevisionBaseline `json:"-"`
+	TargetSceneIDs          []string                    `json:"-"`
+	ExpectedContentRevision string                      `json:"-"`
 
 	// Engagement stats fields
 	common.EngagementStats

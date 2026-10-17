@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -89,6 +90,7 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 
 	dbStoryboard := Storyboard{
 		ID:                       id,
+		CreationRequestHash:      storyboard.CreationRequestHash,
 		StoryID:                  storyboard.StoryID,
 		ParentID:                 parentID,
 		UserID:                   storyboard.UserID,
@@ -118,6 +120,10 @@ func (r *Repository) CreateStoryboard(ctx context.Context, storyboard *domain.St
 	}
 
 	if err := r.db.WithContext(ctx).Create(&dbStoryboard).Error; err != nil {
+		var duplicate *mysqlDriver.MySQLError
+		if errors.Is(err, gorm.ErrDuplicatedKey) || (errors.As(err, &duplicate) && duplicate.Number == 1062) {
+			return fmt.Errorf("%w: storyboard identity already committed", domain.ErrAlreadyExists)
+		}
 		return fmt.Errorf("failed to create storyboard: %w", err)
 	}
 
@@ -826,6 +832,7 @@ func (r *Repository) storyboardsToDomain(ctx context.Context, storyboards []Stor
 				UpdatedAt: sb.UpdatedAt.Unix(),
 			},
 			StoryID:                  sb.StoryID,
+			CreationRequestHash:      sb.CreationRequestHash,
 			ParentID:                 parentID,
 			UserID:                   sb.UserID,
 			CreatorName:              sb.Creator.DisplayName,

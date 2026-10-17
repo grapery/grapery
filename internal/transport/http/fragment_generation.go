@@ -35,6 +35,10 @@ func NewFragmentGenerationHandler(fragmentGenService *service.FragmentGeneration
 }
 
 func fragmentGenerationHTTPError(err error) (int, string, string) {
+	var billingErr *domain.GenerationBillingError
+	if errors.As(err, &billingErr) {
+		return http.StatusConflict, "billing_unsettled", "作品已保存，费用核对暂未完成，请稍后重试"
+	}
 	var genErr *domain.FragmentGenerationError
 	if errors.As(err, &genErr) {
 		switch genErr.Code {
@@ -57,14 +61,15 @@ func fragmentGenerationHTTPError(err error) (int, string, string) {
 
 // GenerateFragmentRequest 生成碎片故事的请求
 type GenerateFragmentRequest struct {
-	UserInput  string   `json:"userInput" binding:"required,min=1,max=2000"`
-	ImageUrls  []string `json:"imageUrls" binding:"max=10"`
-	ImageCount int      `json:"imageCount" binding:"min=0,max=8"`
-	Style      string   `json:"style" binding:"omitempty,max=64"`
-	Mood       string   `json:"mood" binding:"omitempty,oneof=happy sad mysterious romantic"`
-	Length     string   `json:"length" binding:"omitempty,oneof=short medium long"`
-	Language   string   `json:"language" binding:"required,oneof=zh-Hans en ja"`
-	Visibility string   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
+	CreativeControls *domain.CreativeControls `json:"creativeControls,omitempty"`
+	UserInput        string                   `json:"userInput" binding:"required,min=1,max=2000"`
+	ImageUrls        []string                 `json:"imageUrls" binding:"max=10"`
+	ImageCount       int                      `json:"imageCount" binding:"min=0,max=8"`
+	Style            string                   `json:"style" binding:"omitempty,max=64"`
+	Mood             string                   `json:"mood" binding:"omitempty,oneof=happy sad mysterious romantic"`
+	Length           string                   `json:"length" binding:"omitempty,oneof=short medium long"`
+	Language         string                   `json:"language" binding:"required,oneof=zh-Hans en ja"`
+	Visibility       string                   `json:"visibility" binding:"required,oneof=public followers followers_only private"`
 	// AspectRatio 配图长宽比；空表示由多模态（有参考图时）推断，否则默认 16:9
 	AspectRatio             string                         `json:"aspectRatio" binding:"omitempty,oneof=1:1 16:9 9:16 3:4 4:3"`
 	ConsistencyLevel        string                         `json:"consistencyLevel" binding:"omitempty,oneof=off standard strong"`
@@ -113,7 +118,7 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 	}
 
 	var req GenerateFragmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -138,6 +143,7 @@ func (h *FragmentGenerationHandler) GenerateFragment(c *gin.Context) {
 
 	// 转换为领域模型
 	domainReq := domain.FragmentGenerationRequest{
+		CreativeControls:        req.CreativeControls,
 		UserInput:               req.UserInput,
 		ImageUrls:               req.ImageUrls,
 		ImageCount:              req.ImageCount,
@@ -233,7 +239,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 		"imageSlots":    imageSlots,
 		"slotMode":      slotMode,
 		"imageProgress": imageProgress,
-		"cost":          fragmentGenerationCostSnapshot(task, strings.TrimSpace(task.Request.TargetDraftFragmentID) != ""),
+		"cost":          h.fragmentGenService.GenerationCostSnapshot(c.Request.Context(), task),
 	}
 
 	if task.Result != nil {
@@ -326,19 +332,23 @@ func fragmentGenerationResultResponse(task *domain.FragmentGenerationTask) gin.H
 		imageURLs = []string{}
 	}
 	res := gin.H{
-		"content":            task.Result.Content,
-		"imageUrls":          imageURLs,
-		"tokensUsed":         task.Result.TokensUsed,
-		"draftFragmentId":    task.Result.DraftFragmentID,
-		"expectedImageCount": fragmentGenerationExpectedImageCount(task),
-		"imageSlots":         task.Result.ImageSlots,
-		"imageProgress":      fragmentGenerationProgressFromResult(task),
-		"visualBible":        task.Result.VisualBible,
-		"scenePlan":          task.Result.ScenePlan,
-		"referenceAssets":    task.Result.ReferenceAssets,
-		"consistencyPolicy":  task.Result.ConsistencyPolicy,
-		"consistencyIssues":  task.Result.ConsistencyIssues,
-		"storyElements":      task.Result.StoryElements,
+		"content":             task.Result.Content,
+		"imageUrls":           imageURLs,
+		"tokensUsed":          task.Result.TokensUsed,
+		"draftFragmentId":     task.Result.DraftFragmentID,
+		"expectedImageCount":  fragmentGenerationExpectedImageCount(task),
+		"imageSlots":          task.Result.ImageSlots,
+		"imageProgress":       fragmentGenerationProgressFromResult(task),
+		"visualBible":         task.Result.VisualBible,
+		"scenePlan":           task.Result.ScenePlan,
+		"referenceAssets":     task.Result.ReferenceAssets,
+		"consistencyPolicy":   task.Result.ConsistencyPolicy,
+		"consistencyIssues":   task.Result.ConsistencyIssues,
+		"storyElements":       task.Result.StoryElements,
+		"quality":             task.Result.Quality,
+		"comicDocument":       task.Result.ComicDocument,
+		"publicationManifest": task.Result.PublicationManifest,
+		"publicationAssets":   task.Result.PublicationAssets,
 	}
 	if task.Result.AspectRatio != "" {
 		res["aspectRatio"] = task.Result.AspectRatio
@@ -538,23 +548,6 @@ func fragmentGenerationChatMessages(task *domain.FragmentGenerationTask) []gin.H
 	return out
 }
 
-func fragmentGenerationCostSnapshot(task *domain.FragmentGenerationTask, revision bool) gin.H {
-	count := task.Request.ImageCount
-	if count < 1 {
-		count = 1
-	}
-	points := count * 8
-	label := "本次创作消耗 "
-	if revision {
-		label = "本次修改消耗 "
-	}
-	return gin.H{
-		"amount": points,
-		"unit":   "点数",
-		"text":   label + strconv.Itoa(points) + " 点数",
-	}
-}
-
 func normalizeFragmentReferenceSlots(slots []domain.FragmentReferenceSlot) []domain.FragmentReferenceSlot {
 	if len(slots) == 0 {
 		return nil
@@ -658,6 +651,9 @@ func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, auth
 	{
 		fragmentGenGroup.POST("", h.GenerateFragment)
 		fragmentGenGroup.GET("/:taskId", h.GetGenerationStatus)
+		fragmentGenGroup.POST("/:taskId/recheck", h.RecheckQuality)
+		fragmentGenGroup.POST("/:taskId/prepare-publication", h.PreparePublication)
+		fragmentGenGroup.POST("/:taskId/settle", h.SettleGeneration)
 		fragmentGenGroup.GET("", h.ListGenerationTasks)
 		fragmentGenGroup.DELETE("/:taskId", h.CancelGeneration)
 	}

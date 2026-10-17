@@ -49,6 +49,7 @@ func buildFragmentComicDocument(
 ) *domain.FragmentComicDocument {
 	doc := &domain.FragmentComicDocument{
 		SchemaVersion: fragmentComicDocumentSchemaVersion,
+		Quality:       &domain.FragmentGenerationQuality{Status: domain.FragmentQualityUnreviewed, Reason: "awaiting_visual_audit"},
 		Revision:      1,
 		FragmentID:    strings.TrimSpace(fragmentID),
 		CreativeContext: domain.FragmentCreativeContext{
@@ -104,6 +105,7 @@ func buildFragmentComicDocument(
 			}
 		}
 		doc.Pages = append(doc.Pages, domain.FragmentComicPageDocument{
+			Quality:            doc.Quality,
 			PageIndex:          i,
 			PageIntent:         strings.TrimSpace(scenes[i].SceneDesc),
 			Plan:               plan,
@@ -208,6 +210,7 @@ func mergeFragmentComicDocuments(previous, current *domain.FragmentComicDocument
 	}
 	merged.Pages = pages
 	merged.ReferenceAssets = mergeFragmentReferenceAssets(previous.ReferenceAssets, current.ReferenceAssets)
+	reconcileFragmentDocumentQuality(&merged)
 	return &merged
 }
 
@@ -219,8 +222,10 @@ func applyFragmentComicDocumentEdit(previous, current *domain.FragmentComicDocum
 	merged.Revision = previous.Revision + 1
 	merged.CreativeContext.Inputs = mergeFragmentInputAssets(previous.CreativeContext.Inputs, current.CreativeContext.Inputs)
 	merged.CreativeContext.Facts = mergeFragmentCreativeFacts(previous.CreativeContext.Facts, current.CreativeContext.Facts)
-	merged.VisualBible = current.VisualBible
-	merged.StoryState = current.StoryState
+	// A page edit cannot replace global identity or downstream story state.
+	merged.VisualBible = previous.VisualBible
+	merged.StoryState = previous.StoryState
+	merged.Quality = current.Quality
 	merged.ReferenceAssets = mergeFragmentReferenceAssets(previous.ReferenceAssets, current.ReferenceAssets)
 	merged.Pages = append([]domain.FragmentComicPageDocument(nil), previous.Pages...)
 	index := replaceImageIndex - 1
@@ -239,11 +244,13 @@ func applyFragmentComicDocumentEdit(previous, current *domain.FragmentComicDocum
 	for i := range merged.Pages {
 		if merged.Pages[i].PageIndex == index {
 			merged.Pages[i] = page
+			reconcileFragmentDocumentQuality(&merged)
 			return &merged
 		}
 	}
 	merged.Pages = append(merged.Pages, page)
 	sort.Slice(merged.Pages, func(i, j int) bool { return merged.Pages[i].PageIndex < merged.Pages[j].PageIndex })
+	reconcileFragmentDocumentQuality(&merged)
 	return &merged
 }
 
@@ -257,7 +264,29 @@ func fragmentComicDocumentFromExistingDraft(
 		return nil
 	}
 	if trace.ComicDocument != nil {
-		return reconcileFragmentComicDocumentImages(trace.ComicDocument, imageURLs)
+		selected, err := projectDraftPublicationPages(trace.ComicDocument, trace.PublicationAssets, imageURLs)
+		if err != nil {
+			return nil
+		}
+		out := *trace.ComicDocument
+		out.Pages = append([]domain.FragmentComicPageDocument(nil), selected...)
+		accepted := map[string]bool{}
+		for _, asset := range trace.PublicationAssets {
+			accepted[asset.ImageURL] = true
+		}
+		for index := range out.Pages {
+			out.Pages[index].PageIndex = index
+			if imageURLs[index] != out.Pages[index].BackgroundImageURL {
+				// Attach the current trusted alias to this in-memory projection.
+				// The persisted canonical page and its older aliases remain intact.
+				out.Pages[index].FlattenedImageURL = imageURLs[index]
+				if accepted[imageURLs[index]] {
+					out.Pages[index].Quality = &domain.FragmentGenerationQuality{Status: domain.FragmentQualityPassed}
+				}
+			}
+		}
+		reconcileFragmentDocumentQuality(&out)
+		return &out
 	}
 	scenes := append([]domain.FragmentScenePlan(nil), trace.Scenes...)
 	for index := range scenes {
@@ -277,10 +306,13 @@ func fragmentComicDocumentFromExistingDraft(
 			scenes[index].ComicPage = &plan
 		}
 	}
-	return buildFragmentComicDocument(
+	doc := buildFragmentComicDocument(
 		request, fragmentID, content, aspectRatio,
 		trace.VisualBible, trace.VisualEvidence, scenes, trace.ReferenceAssets,
 	)
+	// Migration is not a new generation or a retroactive quality verdict.
+	setFragmentDocumentQuality(doc, trace.Quality)
+	return doc
 }
 
 // Image edits can reorder/delete pages while the historical generation trace

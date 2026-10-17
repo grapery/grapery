@@ -38,44 +38,109 @@ func storyboardCreateIdempotencyCacheKey(userID, key string) string {
 	return fmt.Sprintf("storyboard:create:idempotency:%s:%s", userID, key)
 }
 
+// storyboardCreateIdentity is stable across processes and Redis outages. The
+// database primary key is the final uniqueness arbiter for concurrent retries.
+func storyboardCreateIdentity(userID, requestID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte("grapery/storyboard/create/v1\x00"+userID+"\x00"+strings.TrimSpace(requestID))).String()
+}
+
+func storyboardCreationRequestHash(board *domain.Storyboard) string {
+	parent := strings.TrimSpace(board.ParentID)
+	if parent == "" || parent == "root" {
+		parent = domain.StoryboardRootMarker
+	}
+	count := board.SceneCount
+	if count <= 0 {
+		count = DefaultStoryboardSceneCount
+	}
+	characters := make([]map[string]any, 0, len(board.CharacterRefs))
+	for _, ref := range board.CharacterRefs {
+		characters = append(characters, map[string]any{"id": ref.CharacterID, "role": ref.Role, "order": ref.Order, "notes": ref.Notes})
+	}
+	locations := make([]map[string]any, 0, len(board.SceneRefs))
+	for _, ref := range board.SceneRefs {
+		locations = append(locations, map[string]any{"id": ref.StorySceneID, "sequence": ref.Sequence, "primary": ref.IsPrimaryScene})
+	}
+	payload := map[string]any{"userId": board.UserID, "storyId": board.StoryID, "parentId": parent, "rawInput": strings.TrimSpace(board.RawInput), "title": strings.TrimSpace(board.Title), "content": board.Content, "sceneCount": count, "comicStyle": strings.TrimSpace(board.ContinuationComicStyle), "comicPipeline": board.UseComicPagePipeline, "video": board.GenerateVideoAfterImages, "characters": characters, "locations": locations, "workflowReleaseId": board.WorkflowReleaseID, "workflowChecksum": board.WorkflowChecksum}
+	if !sameCreativeControls(board.CreativeControls, nil) {
+		payload["creativeControls"] = board.CreativeControls.Normalized()
+	}
+	return stableSHA256(mustJSON(payload, "{}"))
+}
+
+func sameStoryboardCreationTarget(a, b *domain.Storyboard) bool {
+	return a != nil && b != nil && a.UserID == b.UserID && a.CreationRequestHash != "" && a.CreationRequestHash == b.CreationRequestHash
+}
+
 func (s *Service) CreateStoryboardWithIdempotency(ctx context.Context, storyboard *domain.Storyboard, idempotencyKey string) error {
-	if strings.TrimSpace(idempotencyKey) == "" {
+	if storyboard == nil {
+		return domain.ErrInvalidInput
+	}
+	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, storyboard.WorkflowReleaseID, storyboard.CreativeControls)
+	if controlErr != nil {
+		return fmt.Errorf("%w: %s", domain.ErrInvalidInput, controlErr)
+	}
+	storyboard.CreativeControls = controls
+	key := strings.TrimSpace(idempotencyKey)
+	if key == "" {
 		return s.CreateStoryboard(ctx, storyboard)
 	}
-
+	if len(key) > 200 || storyboard == nil || strings.TrimSpace(storyboard.UserID) == "" {
+		return fmt.Errorf("%w: invalid storyboard idempotency identity", domain.ErrInvalidInput)
+	}
+	storyboard.CreationRequestHash = storyboardCreationRequestHash(storyboard)
+	reuse := func(existing *domain.Storyboard) error {
+		if !sameStoryboardCreationTarget(existing, storyboard) {
+			return fmt.Errorf("%w: idempotency key is bound to another creation request", domain.ErrAlreadyExists)
+		}
+		*storyboard = *existing
+		return nil
+	}
 	c := s.getCache()
-	if c == nil {
-		return s.CreateStoryboard(ctx, storyboard)
-	}
-
-	cacheKey := storyboardCreateIdempotencyCacheKey(storyboard.UserID, strings.TrimSpace(idempotencyKey))
-	var existingStoryboardID string
-	if err := c.Get(ctx, cacheKey, &existingStoryboardID); err == nil && existingStoryboardID != "" {
-		existing, getErr := s.repo.StoryboardByID(ctx, existingStoryboardID)
-		if getErr == nil {
-			*storyboard = *existing
-			s.logger.Info("idempotent create hit, returning existing storyboard",
-				zap.String("storyboardId", existingStoryboardID),
-				zap.String("userId", storyboard.UserID))
-			return nil
+	cacheKey := storyboardCreateIdempotencyCacheKey(storyboard.UserID, key)
+	// Honor existing mappings created by older releases, which used random IDs.
+	if c != nil {
+		var priorID string
+		if err := c.Get(ctx, cacheKey, &priorID); err == nil && priorID != "" {
+			if existing, err := s.repo.StoryboardByID(ctx, priorID); err == nil {
+				return reuse(existing)
+			}
 		}
 	}
-
-	if err := s.CreateStoryboard(ctx, storyboard); err != nil {
+	storyboard.ID = storyboardCreateIdentity(storyboard.UserID, key)
+	if existing, err := s.repo.StoryboardByID(ctx, storyboard.ID); err == nil {
+		return reuse(existing)
+	} else if !errors.Is(err, domain.ErrNotFound) {
 		return err
 	}
-
-	if err := c.Set(ctx, cacheKey, storyboard.ID, 24*time.Hour); err != nil {
-		s.logger.Warn("failed to cache storyboard create idempotency key",
-			zap.String("storyboardId", storyboard.ID),
-			zap.Error(err))
+	if err := s.CreateStoryboard(ctx, storyboard); err != nil {
+		// A peer may have committed the same deterministic primary key while this
+		// request was validating. Reuse its result without repeating side effects.
+		if errors.Is(err, domain.ErrAlreadyExists) {
+			if existing, lookupErr := s.repo.StoryboardByID(ctx, storyboard.ID); lookupErr == nil {
+				return reuse(existing)
+			}
+		}
+		return err
 	}
-
+	if c != nil {
+		if err := c.Set(ctx, cacheKey, storyboard.ID, 24*time.Hour); err != nil {
+			s.logger.Warn("failed to cache storyboard idempotency mapping", zap.Error(err))
+		}
+	}
 	return nil
 }
 
 // CreateStoryboard 创建新的 storyboard
 func (s *Service) CreateStoryboard(ctx context.Context, storyboard *domain.Storyboard) error {
+	if storyboard == nil {
+		return domain.ErrInvalidInput
+	}
+	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, storyboard.WorkflowReleaseID, storyboard.CreativeControls)
+	if controlErr != nil {
+		return fmt.Errorf("%w: %s", domain.ErrInvalidInput, controlErr)
+	}
+	storyboard.CreativeControls = controls
 	storyboard.Title = strings.TrimSpace(storyboard.Title)
 	if storyboard.Title == "" {
 		storyboard.Title = generateStoryboardFallbackTitle(storyboard.RawInput)
@@ -369,29 +434,10 @@ func (s *Service) processStoryboardInitialGeneration(ctx context.Context, storyb
 		return
 	}
 
-	if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
-		contentGen.Status = domain.GenerationStatusFailed
-		contentGen.ErrorMessage = err.Error()
+	if err := s.commitGeneratedStoryboard(ctx, storyboard); err != nil {
+		contentGen.Status, contentGen.ErrorMessage = domain.GenerationStatusFailed, err.Error()
 		_ = s.repo.UpdateContentGeneration(ctx, contentGen)
-		s.logger.Warn("failed to update storyboard after initial generation",
-			zap.String("storyboardId", storyboardID),
-			zap.Error(err))
-		if nerr := s.NotifyStoryboardGenerationFailed(ctx, storyboard.UserID, storyboard.StoryID, storyboardID, err.Error()); nerr != nil {
-			s.logger.Warn("storyboard save failure notify failed", zap.Error(nerr), zap.String("storyboardId", storyboardID))
-		}
-		return
-	}
-
-	if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
-		contentGen.Status = domain.GenerationStatusFailed
-		contentGen.ErrorMessage = err.Error()
-		_ = s.repo.UpdateContentGeneration(ctx, contentGen)
-		s.logger.Warn("failed to persist scenes after initial generation",
-			zap.String("storyboardId", storyboardID),
-			zap.Error(err))
-		if nerr := s.NotifyStoryboardGenerationFailed(ctx, storyboard.UserID, storyboard.StoryID, storyboardID, err.Error()); nerr != nil {
-			s.logger.Warn("storyboard scenes persist failure notify failed", zap.Error(nerr), zap.String("storyboardId", storyboardID))
-		}
+		s.logger.Warn("atomic storyboard content commit failed", zap.String("storyboardId", storyboardID), zap.Error(err))
 		return
 	}
 
@@ -451,6 +497,7 @@ func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storybo
 					cachedStoryboard.StoryboardScenes[i] = *scene
 				}
 			}
+			cachedStoryboard.ContentRevision = domain.StoryboardContentRevision(&cachedStoryboard, cachedStoryboard.StoryboardScenes)
 			// Populate missing scene images/videos
 			s.populateMissingSceneImages(ctx, &cachedStoryboard)
 			s.populateMissingSceneVideos(ctx, &cachedStoryboard)
@@ -495,6 +542,7 @@ func (s *Service) GetStoryboard(ctx context.Context, id string) (*domain.Storybo
 			zap.Int("sceneCount", len(storyboardScenes)))
 	}
 
+	storyboard.ContentRevision = domain.StoryboardContentRevision(storyboard, storyboard.StoryboardScenes)
 	// Populate missing scene images from image generation records
 	s.populateMissingSceneImages(ctx, storyboard)
 
@@ -863,22 +911,23 @@ func (s *Service) resumeStoryboardStructureGenerationWork(ctx context.Context, u
 	if !s.canGenerateStoryboardText() {
 		return s.AIMissingConfigError("storyboard AI generation")
 	}
-	// 改稿要整体替换分镜：CreateStoryboardScenes 是纯插入，不先清理会留下两套分镜。
-	if len(scenes) > 0 {
-		if err := s.repo.DeleteStoryboardScenes(ctx, storyboardID); err != nil {
-			return fmt.Errorf("clear existing scenes before revision: %w", err)
-		}
+	baseline, err := s.captureStoryboardRevision(ctx, sb, opts.TargetSceneIDs, opts.BaseRevision)
+	if err != nil {
+		return err
+	}
+	sb.RevisionBaseline = baseline
+	if len(opts.TargetSceneIDs) > 0 && opts.SceneCount > 0 && opts.SceneCount != len(baseline.Scenes) {
+		return fmt.Errorf("%w: local edit cannot change scene count", domain.ErrInvalidInput)
+	}
+	if err := s.applyStoryboardTurnOptions(ctx, sb, opts); err != nil {
+		return err
 	}
 
 	if err := s.GenerateStoryboardWithAI(ctx, sb); err != nil {
 		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
 		return err
 	}
-	if err := s.repo.UpdateStoryboard(ctx, sb); err != nil {
-		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
-		return fmt.Errorf("failed to update storyboard after structure regeneration: %w", err)
-	}
-	if err := s.persistStoryboardScenes(ctx, sb); err != nil {
+	if err := s.commitGeneratedStoryboard(ctx, sb); err != nil {
 		s.failLatestContentGeneration(ctx, storyboardID, err.Error())
 		return err
 	}
@@ -923,9 +972,6 @@ func (s *Service) applyStoryboardTurnOptions(ctx context.Context, sb *domain.Sto
 	if sceneCount == 0 && comicStyle == "" {
 		return nil
 	}
-	if err := s.repo.UpdateStoryboardTurnOptions(ctx, sb.ID, sceneCount, comicStyle); err != nil {
-		return err
-	}
 	if sceneCount > 0 {
 		sb.SceneCount = sceneCount
 	}
@@ -939,9 +985,11 @@ func (s *Service) applyStoryboardTurnOptions(ctx context.Context, sb *domain.Sto
 // 三个字段都为零值时，本接口行为与旧的无参调用完全一致。
 type StoryboardStructureGenerationOptions struct {
 	// UserDirective 本轮修改要求。非空表示这是一次改稿：即使已有分镜也会重跑，并整体替换分镜。
-	UserDirective string
-	SceneCount    int
-	ComicStyle    string
+	UserDirective  string
+	SceneCount     int
+	ComicStyle     string
+	TargetSceneIDs []string
+	BaseRevision   string
 }
 
 // StartStoryboardStructureGeneration starts structure regeneration when DB has zero scenes,
@@ -958,8 +1006,16 @@ func (s *Service) StartStoryboardStructureGeneration(ctx context.Context, userID
 
 	opts.UserDirective = strings.TrimSpace(opts.UserDirective)
 	revise := opts.UserDirective != ""
+	if len(opts.TargetSceneIDs) > 0 && !revise {
+		return nil, fmt.Errorf("%w: local edit requires a directive", domain.ErrInvalidInput)
+	}
+	if revise {
+		if _, err := s.captureStoryboardRevision(ctx, sb, opts.TargetSceneIDs, opts.BaseRevision); err != nil {
+			return nil, err
+		}
+	}
 	// 已发布内容不接受重写，避免读者看到的分镜被静默替换。
-	if revise && sb.WorkflowStatus == domain.WorkflowStatusPublished {
+	if sb.WorkflowStatus == domain.WorkflowStatusPublished {
 		return nil, fmt.Errorf("published storyboard cannot be revised")
 	}
 

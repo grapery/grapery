@@ -103,3 +103,10 @@ func TestFragmentGenerationResultResponseUsesEmptyImageArrayWhileProcessing(t *t
 		t.Fatalf("imageUrls = %#v, want a non-nil empty array", imageURLs)
 	}
 }
+
+func TestFragmentBillingRecoveryHasStableHTTPCode(t *testing.T) {
+	status, code, message := fragmentGenerationHTTPError(&domain.GenerationBillingError{Err: errors.New("ledger unavailable")})
+	if status != http.StatusConflict || code != "billing_unsettled" || message == "failed to create generation task" {
+		t.Fatalf("wrong recovery contract: %d %s %s", status, code, message)
+	}
+}

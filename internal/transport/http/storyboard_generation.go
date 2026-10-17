@@ -17,6 +17,9 @@ import (
 // GenerateContent starts content generation for a storyboard (Step 1)
 // POST /api/storyboards/:id/generate/content
 func (h *Handler) GenerateContent(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -50,7 +53,7 @@ func (h *Handler) GenerateContent(c *gin.Context) {
 
 	gen, err := h.svc.StartContentGeneration(c.Request.Context(), genReq)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -75,9 +78,11 @@ func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
 	// Body is optional: legacy callers resume a stalled draft with no payload, while the
 	// conversational flow sends this turn's revision instruction.
 	var req struct {
-		UserDirective string `json:"userDirective"`
-		SceneCount    int    `json:"sceneCount"`
-		ComicStyle    string `json:"comicStyle"`
+		UserDirective  string   `json:"userDirective"`
+		SceneCount     int      `json:"sceneCount"`
+		ComicStyle     string   `json:"comicStyle"`
+		TargetSceneIDs []string `json:"targetSceneIds"`
+		BaseRevision   string   `json:"baseRevision"`
 	}
 	if c.Request.Body != nil {
 		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -90,7 +95,7 @@ func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
 		service.StoryboardStructureGenerationOptions{
 			UserDirective: req.UserDirective,
 			SceneCount:    req.SceneCount,
-			ComicStyle:    req.ComicStyle,
+			ComicStyle:    req.ComicStyle, TargetSceneIDs: req.TargetSceneIDs, BaseRevision: req.BaseRevision,
 		})
 	if err != nil {
 		HandleError(c, err)
@@ -115,23 +120,26 @@ func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
 		return
 	}
 	var req struct {
-		GenerationRunID     string `json:"generationRunId"`
-		ClientRequestID     string `json:"clientRequestId"`
-		RegenerateStructure bool   `json:"regenerateStructure"`
-		UserDirective       string `json:"userDirective"`
-		SceneCount          int    `json:"sceneCount"`
-		ComicStyle          string `json:"comicStyle"`
-		Language            string `json:"language"`
+		CreativeControls    *domain.CreativeControls `json:"creativeControls,omitempty"`
+		GenerationRunID     string                   `json:"generationRunId"`
+		ClientRequestID     string                   `json:"clientRequestId"`
+		RegenerateStructure bool                     `json:"regenerateStructure"`
+		UserDirective       string                   `json:"userDirective"`
+		SceneCount          int                      `json:"sceneCount"`
+		ComicStyle          string                   `json:"comicStyle"`
+		Language            string                   `json:"language"`
+		TargetSceneIDs      []string                 `json:"targetSceneIds"`
+		BaseRevision        string                   `json:"baseRevision"`
 	}
 	if c.Request.Body != nil {
-		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		if err := bindCreativeRequest(c, &req); err != nil && !errors.Is(err, io.EOF) {
 			InvalidParams(c, err.Error())
 			return
 		}
 	}
 	result, err := h.svc.ExecuteStoryboardWorkflowStage(c.Request.Context(), userID, storyboardID, stage, service.StoryboardWorkflowStageOptions{
-		GenerationRunID: req.GenerationRunID, ClientRequestID: req.ClientRequestID, RegenerateStructure: req.RegenerateStructure,
-		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle, Language: req.Language,
+		CreativeControls: req.CreativeControls, GenerationRunID: req.GenerationRunID, ClientRequestID: req.ClientRequestID, RegenerateStructure: req.RegenerateStructure,
+		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle, Language: req.Language, TargetSceneIDs: req.TargetSceneIDs, BaseRevision: req.BaseRevision,
 	})
 	if err != nil {
 		HandleError(c, err)
@@ -143,6 +151,9 @@ func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 // POST /api/storyboards/:id/generate/scene-details
 func (h *Handler) GenerateSceneDetails(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -171,7 +182,7 @@ func (h *Handler) GenerateSceneDetails(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneDetails(c.Request.Context(), genReq)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -195,6 +206,9 @@ func (h *Handler) GenerateSceneDetails(c *gin.Context) {
 //   - 如果场景是过渡场景（无角色），则只使用故事风格配置
 //   - 故事风格配置会自动从故事中获取，除非明确指定 storyStyleId
 func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -233,7 +247,7 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneImage(c.Request.Context(), genReq)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -245,6 +259,9 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 //
 // Separate pipeline from GenerateStoryboardImage: different prompt + default aspect ratio (9:16).
 func (h *Handler) GenerateStoryboardComicPage(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -287,7 +304,7 @@ func (h *Handler) GenerateStoryboardComicPage(c *gin.Context) {
 
 	gen, err := h.svc.GenerateStoryboardComicPage(c.Request.Context(), genReq)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -297,6 +314,9 @@ func (h *Handler) GenerateStoryboardComicPage(c *gin.Context) {
 // GenerateAllStoryboardComicPages batch comic-page generation for all scenes.
 // POST /api/storyboards/:id/generate/comic-pages
 func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -327,11 +347,10 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 		PageAspectRatio: req.PageAspectRatio,
 		DialogueMode:    req.DialogueMode,
 	}
-	service.NormalizeComicPagePipeline(&pipeline)
 
 	storyboard, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 	if len(storyboard.StoryboardScenes) == 0 {
@@ -448,6 +467,9 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 //
 // Response: Array of image generation records
 func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -479,7 +501,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 		h.logger.Error("failed to get storyboard for batch image generation",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -587,6 +609,9 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 // GenerateStoryboardVideo generates a video for a scene (Step 4)
 // POST /api/storyboards/:id/generate/video
 func (h *Handler) GenerateStoryboardVideo(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -617,7 +642,7 @@ func (h *Handler) GenerateStoryboardVideo(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneVideo(c.Request.Context(), genReq)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -627,6 +652,9 @@ func (h *Handler) GenerateStoryboardVideo(c *gin.Context) {
 // GetGenerationProgress returns all generation records for a storyboard
 // GET /api/storyboards/:id/generation-progress
 func (h *Handler) GetGenerationProgress(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationReadRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -635,7 +663,7 @@ func (h *Handler) GetGenerationProgress(c *gin.Context) {
 
 	progress, err := h.svc.GetGenerationProgress(c.Request.Context(), storyboardID)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -645,6 +673,9 @@ func (h *Handler) GetGenerationProgress(c *gin.Context) {
 // RetryFailedStoryboardImages retries failed image generations for a storyboard.
 // POST /api/storyboards/:id/retry-failed-images
 func (h *Handler) RetryFailedStoryboardImages(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -666,7 +697,7 @@ func (h *Handler) RetryFailedStoryboardImages(c *gin.Context) {
 
 	retried, remainingFailed, err := h.svc.RetryFailedStoryboardImages(c.Request.Context(), storyboardID, &opts)
 	if err != nil {
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -699,7 +730,7 @@ func (h *Handler) CancelStoryboardGeneration(c *gin.Context) {
 			Error(c, CodeForbidden, err.Error())
 			return
 		}
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -712,6 +743,9 @@ func (h *Handler) CancelStoryboardGeneration(c *gin.Context) {
 // PublishStoryboard publishes a storyboard (Step 5)
 // POST /api/storyboards/:id/publish
 func (h *Handler) PublishStoryboard(c *gin.Context) {
+	if !h.authorizeStoryboardGenerationReadRequest(c) {
+		return
+	}
 	storyboardID := c.Param("id")
 	if storyboardID == "" {
 		Error(c, CodeInvalidParams, "storyboard id required")
@@ -727,7 +761,7 @@ func (h *Handler) PublishStoryboard(c *gin.Context) {
 		h.logger.Error("PublishStoryboard: failed to get storyboard",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -741,7 +775,7 @@ func (h *Handler) PublishStoryboard(c *gin.Context) {
 		h.logger.Error("PublishStoryboard failed",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		Error(c, CodeInternalError, err.Error())
+		HandleError(c, err)
 		return
 	}
 
@@ -1048,4 +1082,48 @@ func (h *Handler) SyncStoryboardConversationMessages(c *gin.Context) {
 		return
 	}
 	Success(c, gin.H{"ok": true, "synced": len(toSave)})
+}
+
+// authorizeStoryboardGenerationRequest derives actor identity from authentication,
+// then puts it in the service context. Batch endpoints authorize before enumerating jobs.
+func (h *Handler) authorizeStoryboardGenerationRequest(c *gin.Context) bool {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return false
+	}
+	ctx := service.WithStoryboardGenerationCaller(c.Request.Context(), userID)
+	c.Request = c.Request.WithContext(ctx)
+	if _, err := h.svc.AuthorizeStoryboardGeneration(ctx, c.Param("id")); err != nil {
+		HandleError(c, err)
+		return false
+	}
+	return true
+}
+
+// GetStoryboardRevisionHistory returns owner-only accepted draft snapshots.
+func (h *Handler) GetStoryboardRevisionHistory(c *gin.Context) {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+	versions, err := h.svc.ListStoryboardRevisionHistory(c.Request.Context(), userID, c.Param("id"))
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+	Success(c, gin.H{"revisions": versions})
+}
+
+func (h *Handler) authorizeStoryboardGenerationReadRequest(c *gin.Context) bool {
+	userID, ok := RequireUserID(c)
+	if !ok {
+		return false
+	}
+	ctx := service.WithStoryboardGenerationCaller(c.Request.Context(), userID)
+	c.Request = c.Request.WithContext(ctx)
+	if _, err := h.svc.AuthorizeStoryboardGenerationRead(ctx, c.Param("id")); err != nil {
+		HandleError(c, err)
+		return false
+	}
+	return true
 }

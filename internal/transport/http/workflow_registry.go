@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -210,7 +211,9 @@ func (h *WorkflowRegistryHandler) internalAPIKeyMiddleware() gin.HandlerFunc {
 
 func (h *WorkflowRegistryHandler) handleError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
+	case errors.Is(err, domain.ErrNoActiveWorkflow):
+		c.JSON(http.StatusNotFound, gin.H{"code": CodeNotFound, "message": "no_active_workflow", "errorCode": "no_active_workflow"})
+	case errors.Is(err, gorm.ErrRecordNotFound), errors.Is(err, domain.ErrNotFound):
 		NotFound(c, "workflow resource not found")
 	case errors.Is(err, domain.ErrWorkflowReleaseImmutable), errors.Is(err, domain.ErrPromptVersionImmutable):
 		Error(c, CodeConflict, err.Error())

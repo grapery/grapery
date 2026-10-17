@@ -51,7 +51,7 @@ func (h *Handler) StartCharacterGenerationTask(c *gin.Context) {
 		return
 	}
 	var req service.CharacterGenerationTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -413,7 +413,7 @@ func (h *Handler) GenerateCharacterAttributes(c *gin.Context) {
 	}
 
 	var req service.GenerateCharacterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -438,10 +438,14 @@ func (h *Handler) GenerateCharacter(c *gin.Context) {
 
 	// iOS app sends: { name: String, baseDescription: String? }
 	var req struct {
-		Name            string `json:"name"`
-		BaseDescription string `json:"baseDescription"`
+		CreativeControls  *domain.CreativeControls              `json:"creativeControls,omitempty"`
+		WorkflowReleaseID string                                `json:"workflowReleaseId,omitempty"`
+		StoryID           string                                `json:"storyId,omitempty"`
+		KnownAttributes   *service.GeneratedCharacterAttributes `json:"knownAttributes,omitempty"`
+		Name              string                                `json:"name"`
+		BaseDescription   string                                `json:"baseDescription"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -457,6 +461,7 @@ func (h *Handler) GenerateCharacter(c *gin.Context) {
 	}
 
 	serviceReq := service.GenerateCharacterRequest{
+		CreativeControls: req.CreativeControls, WorkflowReleaseID: req.WorkflowReleaseID, StoryID: req.StoryID, KnownAttributes: req.KnownAttributes,
 		Name:   req.Name,
 		Prompt: prompt,
 	}

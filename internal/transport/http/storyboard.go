@@ -29,13 +29,14 @@ type sceneRefPayload struct {
 }
 
 type continueStoryboardPayload struct {
-	RawInput          string   `json:"rawInput" binding:"required"`
-	SceneCount        int      `json:"sceneCount"`
-	Characters        []string `json:"characters,omitempty"` // Optional: specific character IDs to include
-	GenerateVideo     bool     `json:"generateVideo"`        // 默认 false：仅生图；true 时生图后再基于图生视频
-	ComicStyle        string   `json:"comicStyle,omitempty"` // 漫画风格 slug，写入故事板
-	WorkflowReleaseID string   `json:"workflowReleaseId,omitempty"`
-	WorkflowRunID     string   `json:"workflowRunId,omitempty"`
+	CreativeControls  *domain.CreativeControls `json:"creativeControls,omitempty"`
+	RawInput          string                   `json:"rawInput" binding:"required"`
+	SceneCount        int                      `json:"sceneCount"`
+	Characters        []string                 `json:"characters,omitempty"` // Optional: specific character IDs to include
+	GenerateVideo     bool                     `json:"generateVideo"`        // 默认 false：仅生图；true 时生图后再基于图生视频
+	ComicStyle        string                   `json:"comicStyle,omitempty"` // 漫画风格 slug，写入故事板
+	WorkflowReleaseID string                   `json:"workflowReleaseId,omitempty"`
+	WorkflowRunID     string                   `json:"workflowRunId,omitempty"`
 }
 
 // truncateForLog truncates for logging; maxLen is bytes, adjusted to a UTF-8 boundary.
@@ -59,26 +60,27 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 	uid := userID.(string)
 
 	var req struct {
-		StoryID              string                `json:"storyId" binding:"required"`
-		ParentID             *string               `json:"parentId"`
-		Title                string                `json:"title"`
-		RawInput             string                `json:"rawInput" binding:"required"`
-		Content              string                `json:"content"`
-		IsStandalone         bool                  `json:"isStandalone"` // Independent plot, AI won't reference parent context
-		SceneCount           int                   `json:"sceneCount"`   // Requested number of scenes to generate (2-8, default 3)
-		SceneRefs            []sceneRefPayload     `json:"sceneRefs"`    // References to story-level scenes (static locations)
-		CharacterRefs        []characterRefPayload `json:"characterRefs"`
-		Tags                 []string              `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
-		UseComicPagePipeline bool                  `json:"useComicPagePipeline"`
-		ComicStyle           string                `json:"comicStyle"` // 漫画风格 slug，写入故事板并进入生成提示词
-		WorkflowReleaseID    string                `json:"workflowReleaseId"`
-		WorkflowRunID        string                `json:"workflowRunId"`
-		ChapterContent       string                `json:"chapterContent"`
-		StoryContent         string                `json:"storyContent"`
-		ParentEnding         string                `json:"parentEnding"`
+		StoryID              string                   `json:"storyId" binding:"required"`
+		ParentID             *string                  `json:"parentId"`
+		Title                string                   `json:"title"`
+		RawInput             string                   `json:"rawInput" binding:"required"`
+		Content              string                   `json:"content"`
+		IsStandalone         bool                     `json:"isStandalone"` // Independent plot, AI won't reference parent context
+		SceneCount           int                      `json:"sceneCount"`   // Requested number of scenes to generate (2-8, default 3)
+		SceneRefs            []sceneRefPayload        `json:"sceneRefs"`    // References to story-level scenes (static locations)
+		CharacterRefs        []characterRefPayload    `json:"characterRefs"`
+		Tags                 []string                 `json:"tags" binding:"omitempty,max=3,dive,min=1,max=50"` // 最多3个标签，每个标签1-50字符
+		UseComicPagePipeline bool                     `json:"useComicPagePipeline"`
+		ComicStyle           string                   `json:"comicStyle"` // 漫画风格 slug，写入故事板并进入生成提示词
+		CreativeControls     *domain.CreativeControls `json:"creativeControls,omitempty"`
+		WorkflowReleaseID    string                   `json:"workflowReleaseId"`
+		WorkflowRunID        string                   `json:"workflowRunId"`
+		ChapterContent       string                   `json:"chapterContent"`
+		StoryContent         string                   `json:"storyContent"`
+		ParentEnding         string                   `json:"parentEnding"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -144,6 +146,7 @@ func (h *Handler) CreateStoryboard(c *gin.Context) {
 	}
 
 	storyboard := &domain.Storyboard{
+		CreativeControls:       req.CreativeControls,
 		StoryID:                req.StoryID,
 		ParentID:               parentID,
 		UserID:                 userID.(string),
@@ -718,17 +721,18 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 	parentID := c.Param("id")
 
 	var req struct {
-		Title             string                `json:"title" binding:"required"`
-		RawInput          string                `json:"rawInput" binding:"required"`
-		Content           string                `json:"content"`
-		SceneCount        int                   `json:"sceneCount"` // Requested number of scenes to generate (2-8, default 3)
-		SceneRefs         []sceneRefPayload     `json:"sceneRefs"`  // References to story-level scenes
-		CharacterRefs     []characterRefPayload `json:"characterRefs"`
-		WorkflowReleaseID string                `json:"workflowReleaseId,omitempty"`
-		WorkflowRunID     string                `json:"workflowRunId,omitempty"`
+		Title             string                   `json:"title" binding:"required"`
+		RawInput          string                   `json:"rawInput" binding:"required"`
+		Content           string                   `json:"content"`
+		SceneCount        int                      `json:"sceneCount"` // Requested number of scenes to generate (2-8, default 3)
+		SceneRefs         []sceneRefPayload        `json:"sceneRefs"`  // References to story-level scenes
+		CharacterRefs     []characterRefPayload    `json:"characterRefs"`
+		CreativeControls  *domain.CreativeControls `json:"creativeControls,omitempty"`
+		WorkflowReleaseID string                   `json:"workflowReleaseId,omitempty"`
+		WorkflowRunID     string                   `json:"workflowRunId,omitempty"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -753,11 +757,12 @@ func (h *Handler) ForkStoryboard(c *gin.Context) {
 	}
 
 	newStoryboard := &domain.Storyboard{
-		Title:        req.Title,
-		RawInput:     req.RawInput,
-		Content:      req.Content,
-		IsStandalone: false,
-		SceneCount:   sceneCount,
+		CreativeControls: req.CreativeControls,
+		Title:            req.Title,
+		RawInput:         req.RawInput,
+		Content:          req.Content,
+		IsStandalone:     false,
+		SceneCount:       sceneCount,
 		// StoryboardScenes are generated by AI, not passed in fork request
 	}
 	parent, err := h.svc.GetStoryboard(c.Request.Context(), parentID)
@@ -854,7 +859,7 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 
 	var req continueStoryboardPayload
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCreativeRequest(c, &req); err != nil {
 		InvalidParams(c, err.Error())
 		return
 	}
@@ -914,6 +919,7 @@ func (h *Handler) ContinueStoryboard(c *gin.Context) {
 
 	// Use the narrator pipeline for parallel universe continuation
 	result, err := h.svc.ContinueStoryboard(c.Request.Context(), userID.(string), &service.ContinueRequest{
+		CreativeControls:   req.CreativeControls,
 		ParentStoryboardID: parentID,
 		UserPrompt:         req.RawInput,
 		SceneCount:         sceneCount,

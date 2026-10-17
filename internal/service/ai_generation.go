@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -546,6 +547,7 @@ func (s *AIGenerationService) recordTextPromptAudit(ctx context.Context, req *Ge
 
 // GenerateImageRequest 图片生成请求
 type GenerateImageRequest struct {
+	OperationID       string // server-owned operation identity; never copied from arbitrary image request JSON
 	UserID            string
 	Prompt            string
 	NegativePrompt    string // 反向约束；仅部分 provider 支持，不支持时静默忽略
@@ -581,13 +583,34 @@ func isImagenImageModel(model string) bool {
 
 // GenerateImage 使用GenAPI生成图片，并记录AI使用数据
 func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateImageRequest) (*GenerateImageResult, error) {
-	// Check if genAPI client is configured
-	if s.genAPI == nil {
-		return nil, fmt.Errorf("GenAPI client not configured")
+	if req == nil {
+		return nil, fmt.Errorf("image request is required")
 	}
 
 	if strings.EqualFold(strings.TrimSpace(req.Provider), "huoshan") {
 		PrepareHuoshanGenerateImageRequest(req)
+	}
+
+	operationRecordID := ""
+	var retryRecord *domain.AIGenerationRecord
+	if req.OperationID != "" {
+		operationRecordID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(req.UserID+":image:"+req.OperationID)).String()
+		if previous, err := s.repo.GetAIGenerationRecord(ctx, operationRecordID); err == nil {
+			if previous.Status == domain.AITaskStatusFailed && !hasStoredImageOutput(previous) {
+				if !matchesImageOperation(req, previous) {
+					return nil, &domain.GenerationBillingError{Err: fmt.Errorf("image operation intent conflict")}
+				}
+				retryRecord = previous
+			} else {
+				return s.resumeImageSettlement(ctx, req, previous)
+			}
+		} else if !errors.Is(err, domain.ErrNotFound) {
+			return nil, err
+		}
+	}
+
+	if s.genAPI == nil {
+		return nil, fmt.Errorf("GenAPI client not configured")
 	}
 
 	startTime := time.Now()
@@ -612,7 +635,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	var lockAcquired bool
 
 	// 1. 获取分布式锁（防止同一用户的并发请求）
-	if s.enableQuotaReservation && s.redisDistributedLock != nil {
+	if !domain.IsSponsoredGeneration(ctx) && req.OperationID == "" && !strings.HasPrefix(req.RelatedEntityType, "fragment_") && s.enableQuotaReservation && s.redisDistributedLock != nil {
 		var err error
 		lockAcquired, err = s.redisDistributedLock.AcquireLock(ctx, lockKey, requestID, 60*time.Second)
 		if err != nil {
@@ -634,7 +657,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	// 2. 预留配额
-	if s.enableQuotaReservation && s.quotaReservation != nil {
+	if !domain.IsSponsoredGeneration(ctx) && req.OperationID == "" && !strings.HasPrefix(req.RelatedEntityType, "fragment_") && s.enableQuotaReservation && s.quotaReservation != nil {
 		metadata := map[string]interface{}{
 			"provider":    req.Provider,
 			"model":       req.Model,
@@ -670,7 +693,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}()
 	// ============== 配额预留和分布式锁结束 ==============
 
-	if !s.enableQuotaReservation {
+	if !domain.IsSponsoredGeneration(ctx) && (!s.enableQuotaReservation || req.OperationID != "" || strings.HasPrefix(req.RelatedEntityType, "fragment_")) {
 		balance, err := s.repo.GetTokenBalance(ctx, req.UserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get token balance: %w", err)
@@ -682,6 +705,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 
 	// 1. 创建AI生成记录
 	record := &domain.AIGenerationRecord{
+		ID:                operationRecordID,
 		UserID:            req.UserID,
 		Type:              "image",
 		Provider:          req.Provider,
@@ -695,6 +719,10 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		OutputResult:      "{}", // Initialize with valid empty JSON for MySQL
 	}
 
+	record.Metadata = cloneImageGenerationMetadata(req.Metadata)
+	record.Metadata["operationFingerprint"] = imageOperationFingerprint(req)
+	record.Metadata["sponsored"] = domain.IsSponsoredGeneration(ctx)
+	record.Metadata["billingStatus"] = "pending"
 	// 保存输入参数
 	inputParams := map[string]interface{}{
 		"prompt":          req.Prompt,
@@ -714,8 +742,22 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 		record.InputParams = string(inputJSON)
 	}
 
-	if err := s.repo.CreateAIGenerationRecord(ctx, record); err != nil {
-		s.logger.Error("failed to create AI generation record", zap.Error(err))
+	if retryRecord != nil {
+		claims, ok := s.repo.(domain.GenerationImageExecutionRepository)
+		if !ok {
+			return nil, &domain.GenerationBillingError{Err: fmt.Errorf("image retry claim unavailable")}
+		}
+		claimed, err := claims.ClaimFailedGenerationImage(ctx, record.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !claimed {
+			return nil, &domain.GenerationBillingError{Err: fmt.Errorf("image retry already claimed")}
+		}
+		if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
+			return nil, err
+		}
+	} else if err := s.repo.CreateAIGenerationRecord(ctx, record); err != nil {
 		return nil, fmt.Errorf("failed to create AI record: %w", err)
 	}
 
@@ -900,7 +942,7 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
-		s.logger.Warn("failed to update AI generation record", zap.Error(err))
+		return nil, &domain.GenerationBillingError{Err: fmt.Errorf("persist generated output: %w", err)}
 	}
 
 	// ============== 确认配额预留 ==============
@@ -914,14 +956,14 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 	}
 
 	// 如果启用了配额预留，确认实际使用量
-	if s.enableQuotaReservation && reservation != nil && reservation.Status == string(common.StatusPending) {
+	if !domain.IsSponsoredGeneration(ctx) && req.OperationID == "" && !strings.HasPrefix(req.RelatedEntityType, "fragment_") && s.enableQuotaReservation && reservation != nil && reservation.Status == string(common.StatusPending) {
 		if err := s.quotaReservation.ConfirmQuota(ctx, reservation.ReservationID, actualTokens); err != nil {
 			s.logger.Error("failed to confirm quota reservation for image generation",
 				zap.String("reservationID", reservation.ReservationID),
 				zap.String("recordId", record.ID),
 				zap.Int("actualTokens", actualTokens),
 				zap.Error(err))
-			// 确认失败不影响返回结果，但需要记录警告
+			return nil, &domain.GenerationBillingError{Err: err}
 		} else {
 			s.logger.Info("quota reservation confirmed for image generation",
 				zap.String("reservationID", reservation.ReservationID),
@@ -932,17 +974,21 @@ func (s *AIGenerationService) GenerateImage(ctx context.Context, req *GenerateIm
 			// 预留已确认，清除引用以避免 defer 中释放
 			reservation = nil
 		}
-	} else {
-		// 如果没有启用配额预留，直接扣减（向后兼容）
-		_, err := s.repo.UpdateTokenBalance(ctx, req.UserID, -actualTokens, "ai_image_generation", fmt.Sprintf("AI image generation consumed %d tokens (%d images)", actualTokens, record.ImageCount))
-		if err != nil {
-			s.logger.Error("failed to deduct token balance for image generation",
-				zap.String("userID", req.UserID),
-				zap.String("recordId", record.ID),
-				zap.Int("imageCount", record.ImageCount),
-				zap.Int("tokensUsed", actualTokens),
-				zap.Error(err))
+	} else if !domain.IsSponsoredGeneration(ctx) {
+		if _, err := applyGenerationCharge(ctx, s.repo, req.UserID, record.ID, req.RelatedEntityID, "ai_image_generation", actualTokens); err != nil {
+			s.logger.Error("image result persisted but settlement failed", zap.String("recordId", record.ID), zap.Error(err))
+			return nil, &domain.GenerationBillingError{Err: err}
 		}
+	}
+
+	record.Metadata["billingStatus"] = "settled"
+	record.Metadata["billedTokens"] = actualTokens
+	if domain.IsSponsoredGeneration(ctx) {
+		record.Metadata["billedTokens"] = 0
+		record.Metadata["billingStatus"] = "sponsored"
+	}
+	if err := s.repo.UpdateAIGenerationRecord(ctx, record); err != nil {
+		s.logger.Warn("image billing metadata update failed", zap.String("recordId", record.ID), zap.Error(err))
 	}
 	// ============== 配额预留确认结束 ==============
 

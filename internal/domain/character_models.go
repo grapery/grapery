@@ -107,6 +107,7 @@ const (
 	CharacterGenerationStatusPending    = "pending"
 	CharacterGenerationStatusProcessing = "processing"
 	CharacterGenerationStatusCompleted  = "completed"
+	CharacterGenerationStatusPartial    = "partial"
 	CharacterGenerationStatusFailed     = "failed"
 )
 
@@ -126,23 +127,34 @@ const (
 )
 
 // CharacterGenerationTask is the durable draft/progress record for async story-character creation.
+type CharacterGenerationStage struct {
+	Status   string `json:"status"`
+	Error    string `json:"error,omitempty"`
+	Attempts int    `json:"attempts"`
+}
+
 type CharacterGenerationTask struct {
-	ID                         string `json:"id"`
-	UserID                     string `json:"userId"`
-	StoryID                    string `json:"storyId"`
-	CharacterID                string `json:"characterId,omitempty"`
-	SourceType                 string `json:"sourceType"`
-	SourceFragmentID           string `json:"sourceFragmentId,omitempty"`
-	SourceFragmentCharacterKey string `json:"sourceFragmentCharacterKey,omitempty"`
-	Status                     string `json:"status"`
-	Progress                   int    `json:"progress"`
-	CurrentStep                string `json:"currentStep,omitempty"`
-	RequestJSON                string `json:"requestJson,omitempty"`
-	ResultJSON                 string `json:"resultJson,omitempty"`
-	ErrorMessage               string `json:"errorMessage,omitempty"`
-	CreatedAt                  int64  `json:"createdAt"`
-	UpdatedAt                  int64  `json:"updatedAt"`
-	CompletedAt                *int64 `json:"completedAt,omitempty"`
+	Stages                     map[string]CharacterGenerationStage `json:"stages,omitempty"`
+	AttributesJSON             string                              `json:"-"`
+	LeaseOwner                 string                              `json:"-"`
+	LeaseFence                 int64                               `json:"-"`
+	LeaseExpiresAt             *int64                              `json:"-"`
+	ID                         string                              `json:"id"`
+	UserID                     string                              `json:"userId"`
+	StoryID                    string                              `json:"storyId"`
+	CharacterID                string                              `json:"characterId,omitempty"`
+	SourceType                 string                              `json:"sourceType"`
+	SourceFragmentID           string                              `json:"sourceFragmentId,omitempty"`
+	SourceFragmentCharacterKey string                              `json:"sourceFragmentCharacterKey,omitempty"`
+	Status                     string                              `json:"status"`
+	Progress                   int                                 `json:"progress"`
+	CurrentStep                string                              `json:"currentStep,omitempty"`
+	RequestJSON                string                              `json:"requestJson,omitempty"`
+	ResultJSON                 string                              `json:"resultJson,omitempty"`
+	ErrorMessage               string                              `json:"errorMessage,omitempty"`
+	CreatedAt                  int64                               `json:"createdAt"`
+	UpdatedAt                  int64                               `json:"updatedAt"`
+	CompletedAt                *int64                              `json:"completedAt,omitempty"`
 	// DraftDismissedAt is set when the user confirms removal from the drafts list (server persists; list API omits these rows).
 	DraftDismissedAt *int64 `json:"draftDismissedAt,omitempty"`
 

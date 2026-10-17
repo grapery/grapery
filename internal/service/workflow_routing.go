@@ -231,7 +231,7 @@ func roundWorkflowScore(value float64) float64 { return math.Round(value*1000) /
 // when no conditional binding matches.
 func ResolveWorkflowEntries(entries []*domain.WorkflowCatalogEntry, profile domain.WorkflowContentProfile) (*domain.WorkflowResolution, error) {
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("no active workflow binding")
+		return nil, domain.ErrNoActiveWorkflow
 	}
 	candidates := make([]string, 0, len(entries))
 	var fallback *domain.WorkflowCatalogEntry

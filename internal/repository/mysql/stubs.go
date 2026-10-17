@@ -1193,6 +1193,10 @@ func (r *Repository) GetTokenBalance(ctx context.Context, userID string) (int, e
 }
 
 func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amount int, source, description string) (*domain.TokenTransaction, error) {
+	return r.updateTokenBalance(ctx, userID, amount, source, description, "", "")
+}
+
+func (r *Repository) updateTokenBalance(ctx context.Context, userID string, amount int, source, description, transactionID, relatedID string) (*domain.TokenTransaction, error) {
 	var resultTx *domain.TokenTransaction
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var membership Membership
@@ -1223,6 +1227,21 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			return err
 		}
 
+		if transactionID != "" {
+			var existing TokenTransaction
+			err := tx.Where("id = ?", transactionID).First(&existing).Error
+			if err == nil {
+				if existing.UserID != userID || existing.Amount != amount || existing.Source != source || existing.RelatedID != relatedID {
+					return fmt.Errorf("generation charge idempotency conflict")
+				}
+				resultTx = ModelToTokenTransaction(&existing)
+				return nil
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+
 		currentBalance := membership.TokenQuota - membership.TokenUsed
 		newBalance := currentBalance + amount
 
@@ -1250,10 +1269,21 @@ func (r *Repository) UpdateTokenBalance(ctx context.Context, userID string, amou
 			return err
 		}
 
+		if transactionID == "" {
+			transactionID = uuid.New().String()
+		}
+		transactionType := source
+		if relatedID != "" {
+			transactionType = "consume"
+			if amount > 0 {
+				transactionType = "refund"
+			}
+		}
 		transaction := &TokenTransaction{
-			ID:          uuid.New().String(),
+			ID:          transactionID,
+			RelatedID:   relatedID,
 			UserID:      userID,
-			Type:        source,
+			Type:        transactionType,
 			Amount:      amount,
 			Balance:     newBalance,
 			Source:      source,

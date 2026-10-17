@@ -99,6 +99,15 @@ func (s *WorkflowRegistryService) GetPromptVersion(ctx context.Context, id strin
 }
 
 func (s *WorkflowRegistryService) PublishRelease(ctx context.Context, release *domain.WorkflowRelease) (*domain.WorkflowRelease, error) {
+	if release != nil && (strings.HasPrefix(strings.TrimSpace(release.ID), "engineering.") || strings.HasPrefix(strings.TrimSpace(release.Key), "engineering.")) {
+		return nil, fmt.Errorf("engineering workflow namespace is reserved")
+	}
+	if release != nil {
+		if err := normalizeWorkflowCreativeControls(release.Manifest); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := domain.ValidateWorkflowRelease(release); err != nil {
 		return nil, err
 	}
@@ -117,8 +126,11 @@ func (s *WorkflowRegistryService) PublishRelease(ctx context.Context, release *d
 		if slot != "" && !validWorkflowPromptSlot(slot) {
 			return nil, fmt.Errorf("prompt bundle key %s has an invalid slot", bindingKey)
 		}
-		if _, err := s.repo.GetPromptVersion(ctx, promptID); err != nil {
-			return nil, fmt.Errorf("prompt bundle node %s references unavailable prompt %s: %w", nodeID, promptID, err)
+		surface, _ := release.Manifest["surface"].(string)
+		if !engineeringManagedCreationSurface(surface) {
+			if _, err := s.repo.GetPromptVersion(ctx, promptID); err != nil {
+				return nil, fmt.Errorf("prompt bundle node %s references unavailable prompt %s: %w", nodeID, promptID, err)
+			}
 		}
 	}
 	providedChecksum := release.Checksum
@@ -178,6 +190,10 @@ func validWorkflowPromptSlot(slot string) bool {
 }
 
 func (s *WorkflowRegistryService) GetRelease(ctx context.Context, id string) (*domain.WorkflowRelease, error) {
+	id = strings.TrimSpace(id)
+	if strings.HasPrefix(id, "engineering.") {
+		return engineeringRelease(id)
+	}
 	var cached domain.WorkflowRelease
 	if s.readCache(ctx, "workflow:release:"+strings.TrimSpace(id), &cached) {
 		return &cached, nil
@@ -190,6 +206,9 @@ func (s *WorkflowRegistryService) GetRelease(ctx context.Context, id string) (*d
 }
 
 func (s *WorkflowRegistryService) SaveBinding(ctx context.Context, binding *domain.WorkflowBinding) (*domain.WorkflowBinding, error) {
+	if binding != nil && strings.HasPrefix(strings.TrimSpace(binding.ReleaseID), "engineering.") {
+		return nil, fmt.Errorf("engineering defaults are selected automatically; publish a separate editorial release for custom controls")
+	}
 	if binding == nil || strings.TrimSpace(binding.Surface) == "" || strings.TrimSpace(binding.Action) == "" || strings.TrimSpace(binding.ReleaseID) == "" {
 		return nil, errors.New("workflow binding surface, action and release id are required")
 	}
@@ -247,7 +266,26 @@ func (s *WorkflowRegistryService) RebindWorkflowBindings(ctx context.Context, su
 }
 
 func (s *WorkflowRegistryService) Catalog(ctx context.Context, surface, action, tenantID string) ([]*domain.WorkflowCatalogEntry, error) {
-	return s.repo.ListWorkflowCatalog(ctx, surface, action, tenantID)
+	entries, err := s.repo.ListWorkflowCatalog(ctx, surface, action, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return engineeringCatalog(surface, action, tenantID)
+	}
+	// Broken configured releases must surface as errors, never silently choose another graph.
+	for _, entry := range entries {
+		if entry == nil {
+			return nil, fmt.Errorf("invalid workflow catalog entry")
+		}
+		if err := domain.ValidateWorkflowRelease(&entry.Release); err != nil {
+			return nil, err
+		}
+		if err := validateWorkflowCreativeControls(entry.Release.Manifest); err != nil {
+			return nil, err
+		}
+	}
+	return entries, nil
 }
 
 func (s *WorkflowRegistryService) ReleaseStats(ctx context.Context, days int) ([]domain.WorkflowReleaseStats, error) {
@@ -277,7 +315,12 @@ func (s *WorkflowRegistryService) ResolveForInput(ctx context.Context, surface, 
 		return nil, err
 	}
 	profile := BuildWorkflowContentProfile(surface, action, input)
-	return ResolveWorkflowEntries(entries, profile)
+	resolution, err := ResolveWorkflowEntries(entries, profile)
+	if err == nil && resolution != nil && strings.HasPrefix(resolution.Entry.Release.ID, "engineering.") {
+		resolution.RouteReason = "engineering default: no operator binding"
+		resolution.Fallback = true
+	}
+	return resolution, err
 }
 
 // ResolvePinnedPromptSnapshots verifies that a client-discovered release is
@@ -297,6 +340,11 @@ func (s *WorkflowRegistryService) ResolvePinnedPromptSnapshotsForInput(ctx conte
 		return nil, nil, errors.New("workflow release changed; refresh and retry")
 	}
 	snapshots := make(map[string]domain.PromptTemplateVersion, len(entry.Release.PromptBundle))
+	if engineeringManagedCreationSurface(surface) {
+		// IDs remain in the immutable release for audit. Legacy free-text bodies
+		// no longer execute, and their availability must not gate creation.
+		return entry, snapshots, nil
+	}
 	for nodeID, promptID := range entry.Release.PromptBundle {
 		prompt, err := s.GetPromptVersion(ctx, promptID)
 		if err != nil {

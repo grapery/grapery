@@ -85,14 +85,15 @@ type StoryboardComicText struct {
 
 // ImagePromptDetails 结构化的图片生成提示词详情
 type ImagePromptDetails struct {
-	ArtStyle        string                `json:"artStyle"`                  // 艺术风格和媒介，如 "digital painting", "watercolor", "photorealistic"
-	Lighting        string                `json:"lighting"`                  // 光照和氛围，如 "soft morning light", "dramatic shadows"
-	ColorPalette    string                `json:"colorPalette"`              // 色彩 palette，如 "warm tones", "cool blues and grays"
-	Composition     string                `json:"composition"`               // 构图细节，如 "wide angle", "close-up", "rule of thirds"
-	KeyElements     []string              `json:"keyElements"`               // 关键视觉元素列表
-	Mood            string                `json:"mood"`                      // 情绪氛围，如 "peaceful", "tense", "mysterious"
-	AdditionalNotes string                `json:"additionalNotes,omitempty"` // 其他补充说明（微表情、大气特效等）
-	ComicTexts      []StoryboardComicText `json:"comicTexts,omitempty"`      // 唯一允许绘入的漫画文字；模型无法准确绘字时应连同空气泡一并省略
+	ArtStyle        string                   `json:"artStyle"`                  // 艺术风格和媒介，如 "digital painting", "watercolor", "photorealistic"
+	Lighting        string                   `json:"lighting"`                  // 光照和氛围，如 "soft morning light", "dramatic shadows"
+	ColorPalette    string                   `json:"colorPalette"`              // 色彩 palette，如 "warm tones", "cool blues and grays"
+	Composition     string                   `json:"composition"`               // 构图细节，如 "wide angle", "close-up", "rule of thirds"
+	KeyElements     []string                 `json:"keyElements"`               // 关键视觉元素列表
+	Mood            string                   `json:"mood"`                      // 情绪氛围，如 "peaceful", "tense", "mysterious"
+	AdditionalNotes string                   `json:"additionalNotes,omitempty"` // 其他补充说明（微表情、大气特效等）
+	ComicTexts      []StoryboardComicText    `json:"comicTexts,omitempty"`
+	ComicPagePlan   *StoryboardComicPagePlan `json:"comicPagePlan,omitempty"` // 唯一允许绘入的漫画文字；模型无法准确绘字时应连同空气泡一并省略
 }
 
 const (

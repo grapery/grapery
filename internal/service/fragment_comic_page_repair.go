@@ -109,6 +109,8 @@ func (s *FragmentGenerationService) repairHighSeverityFragmentComicPages(
 	partial *domain.FragmentGenerationResult,
 	tokenBase int,
 ) ([]domain.FragmentScenePlan, []string, int, int) {
+	// Correcting a failed quality check is paid by the platform.
+	ctx = domain.WithSponsoredGeneration(ctx)
 	indexes := fragmentHighSeverityComicPageIndexes(issues, imageURLs, len(scenes))
 	if len(indexes) == 0 {
 		return scenes, imageURLs, 0, 0

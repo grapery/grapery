@@ -33,6 +33,7 @@ type StoryboardWorkflowStageResult struct {
 }
 
 type StoryboardWorkflowStageOptions struct {
+	CreativeControls    *domain.CreativeControls
 	GenerationRunID     string
 	ClientRequestID     string
 	RegenerateStructure bool
@@ -40,12 +41,17 @@ type StoryboardWorkflowStageOptions struct {
 	SceneCount          int
 	ComicStyle          string
 	Language            string
+	TargetSceneIDs      []string
+	BaseRevision        string
 }
 
 // ExecuteStoryboardWorkflowStage executes exactly one durable text stage. A
 // completed stage is returned from its persisted run, so agent retries do not
 // call the model or insert scenes twice.
 func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, storyboardID, stage string, opts StoryboardWorkflowStageOptions) (*StoryboardWorkflowStageResult, error) {
+	if err := opts.CreativeControls.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %s", domain.ErrInvalidInput, err)
+	}
 	stage = strings.TrimSpace(stage)
 	switch stage {
 	case StoryboardWorkflowStageBiblePlan, StoryboardWorkflowStageScenePlan, StoryboardWorkflowStageReviewContent, StoryboardWorkflowStagePersistContent:
@@ -63,7 +69,13 @@ func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, st
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
 	if storyboard.UserID != userID {
-		return nil, fmt.Errorf("permission denied: not the creator")
+		return nil, fmt.Errorf("%w: not the creator", domain.ErrForbidden)
+	}
+	if storyboard.WorkflowStatus == domain.WorkflowStatusPublished {
+		return nil, fmt.Errorf("%w: published storyboard cannot be generated", domain.ErrForbidden)
+	}
+	if len(opts.TargetSceneIDs) > 0 && !opts.RegenerateStructure {
+		return nil, fmt.Errorf("%w: local edit requires a revision", domain.ErrInvalidInput)
 	}
 	if opts.RegenerateStructure {
 		if stage != StoryboardWorkflowStageBiblePlan {
@@ -93,6 +105,24 @@ func (s *Service) ExecuteStoryboardWorkflowStage(ctx context.Context, userID, st
 	run, snapshot, alignmentPrompt, sceneCount, err := s.ensureStoryboardWorkflowRun(ctx, storyboard, story, opts)
 	if err != nil {
 		return nil, err
+	}
+	storyboard.RevisionBaseline = snapshot.Baseline
+	storyboard.RawInput = snapshot.RawInput
+	// Stage restarts use the frozen story contract instead of mutable live text.
+	frozenStory := *story
+	frozenStory.Title, frozenStory.Genre = snapshot.StoryTitle, snapshot.StoryGenre
+	if snapshot.StoryDescription != "" {
+		frozenStory.Description = snapshot.StoryDescription
+	}
+	if snapshot.StoryStyle != nil {
+		frozenStory.Style = snapshot.StoryStyle
+	}
+	story = &frozenStory
+	request := storyboardWorkflowRunRequestFromRun(run)
+	storyboard.TurnDirective = request.UserDirective
+	storyboard.CreativeControls = snapshot.CreativeControls
+	if request.ComicStyle != "" {
+		storyboard.ContinuationComicStyle = request.ComicStyle
 	}
 	switch stage {
 	case StoryboardWorkflowStageBiblePlan:
@@ -200,14 +230,34 @@ func (s *Service) ensureStoryboardWorkflowRun(ctx context.Context, storyboard *d
 		if existing.StoryboardID != storyboard.ID || existing.UserID != storyboard.UserID {
 			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("generation run does not belong to storyboard")
 		}
+		if opts.CreativeControls != nil && !sameCreativeControls(opts.CreativeControls, storyboardWorkflowRunRequestFromRun(existing).CreativeControls) {
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("creativeControls cannot change within a generation run")
+		}
 		return restoreStoryboardWorkflowRun(existing, sceneCount)
 	}
 	if existing, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboard.ID); err == nil && existing != nil && storyboardWorkflowRunMatchesRequest(existing, opts) {
+		if opts.CreativeControls != nil && !sameCreativeControls(opts.CreativeControls, storyboardWorkflowRunRequestFromRun(existing).CreativeControls) {
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("creativeControls cannot change within a generation run")
+		}
 		return restoreStoryboardWorkflowRun(existing, sceneCount)
 	} else if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("load latest storyboard generation run: %w", err)
 	}
 
+	controls, err := resolvePinnedCreativeControls(ctx, s.repo, storyboard.WorkflowReleaseID, opts.CreativeControls)
+	if err != nil {
+		return nil, storyboardGenerationContextSnapshot{}, "", 0, err
+	}
+	storyboard.CreativeControls = controls
+	opts.CreativeControls = controls
+	baseline, err := s.captureStoryboardRevision(ctx, storyboard, opts.TargetSceneIDs, opts.BaseRevision)
+	if err != nil {
+		return nil, storyboardGenerationContextSnapshot{}, "", 0, err
+	}
+	if len(opts.TargetSceneIDs) > 0 && sceneCount != len(baseline.Scenes) {
+		return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("%w: local edit must preserve scene count", domain.ErrInvalidInput)
+	}
+	storyboard.RevisionBaseline = baseline
 	continuation := s.isStoryboardContinuation(storyboard)
 	alignmentJSON, alignmentPrompt := s.storyboardAlignmentSnapshot(ctx, story, storyboard)
 	snapshot := s.buildStoryboardGenerationContextSnapshot(ctx, storyboard, story, continuation)
@@ -219,7 +269,8 @@ func (s *Service) ensureStoryboardWorkflowRun(ctx context.Context, storyboard *d
 			"rawInput": storyboard.RawInput, "sceneCount": sceneCount, "continuation": continuation,
 			"comicStyle": storyboard.ContinuationComicStyle, "clientRequestId": strings.TrimSpace(opts.ClientRequestID),
 			"regenerateStructure": opts.RegenerateStructure, "userDirective": strings.TrimSpace(opts.UserDirective),
-			"language": strings.TrimSpace(opts.Language),
+			"creativeControls": opts.CreativeControls,
+			"language":         strings.TrimSpace(opts.Language), "targetSceneIds": baseline.TargetSceneIDs, "baseRevision": baseline.Revision,
 		}, "{}"),
 		ContextSnapshotJSON: mustJSON(snapshot, "{}"), AlignmentSnapshotJSON: alignmentJSON, MetricsJSON: "{}",
 		CreatedAt: now, UpdatedAt: now,
@@ -245,6 +296,9 @@ func restoreStoryboardWorkflowRun(existing *domain.StoryboardGenerationRun, scen
 		return nil, snapshot, "", 0, fmt.Errorf("decode storyboard generation context: %w", err)
 	}
 	alignmentPrompt := "Human-value and user-alignment snapshot:\n" + existing.AlignmentSnapshotJSON + "\nRespect the user's selected values and safety preferences without adding moralizing exposition."
+	if request := storyboardWorkflowRunRequestFromRun(existing); request.SceneCount > 0 {
+		sceneCount = request.SceneCount
+	}
 	return existing, snapshot, alignmentPrompt, sceneCount, nil
 }
 
@@ -320,19 +374,10 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 	if err != nil {
 		return nil, fmt.Errorf("load storyboard scenes: %w", err)
 	}
-	already := len(existing) > 0
-	revision := storyboardWorkflowRunIsRevision(run)
+	already := false
 	for _, scene := range existing {
-		if scene == nil || scene.GenerationRunID != run.ID {
-			if !revision {
-				return nil, fmt.Errorf("storyboard already contains scenes from another generation run")
-			}
-			if err := s.repo.DeleteStoryboardScenes(ctx, storyboard.ID); err != nil {
-				return nil, fmt.Errorf("replace storyboard scenes for revision: %w", err)
-			}
-			existing = nil
-			already = false
-			break
+		if scene != nil && scene.GenerationRunID == run.ID {
+			already = true
 		}
 	}
 	if !already {
@@ -341,14 +386,13 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 			storyboard.Content = truncateStoryboardContentToMaxRunes(storyboard.Content, storyboardContentMaxRunes)
 		}
 		storyboard.IsAIGenerated = true
+		storyboard.SceneCount = sceneCount
 		storyboard.StoryboardScenes = s.storyboardScenesFromScenePlan(run.ID, &scenePlan)
-		if err := s.repo.UpdateStoryboard(ctx, storyboard); err != nil {
-			return nil, fmt.Errorf("persist generated storyboard content: %w", err)
-		}
-		if err := s.persistStoryboardScenes(ctx, storyboard); err != nil {
+		if err := s.commitGeneratedStoryboard(ctx, storyboard); err != nil {
 			return nil, err
 		}
 	}
+
 	run.Progress, run.CurrentStep, run.Status = 100, domain.StoryboardGenerationStepConsistency, domain.GenerationStatusCompleted
 	done := time.Now().Unix()
 	run.CompletedAt, run.UpdatedAt, run.ErrorCode, run.ErrorMessage = &done, done, "", ""
@@ -362,10 +406,13 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 }
 
 type storyboardWorkflowRunRequest struct {
-	ClientRequestID     string `json:"clientRequestId"`
-	RegenerateStructure bool   `json:"regenerateStructure"`
-	UserDirective       string `json:"userDirective"`
-	Language            string `json:"language"`
+	CreativeControls    *domain.CreativeControls `json:"creativeControls,omitempty"`
+	ClientRequestID     string                   `json:"clientRequestId"`
+	RegenerateStructure bool                     `json:"regenerateStructure"`
+	UserDirective       string                   `json:"userDirective"`
+	Language            string                   `json:"language"`
+	SceneCount          int                      `json:"sceneCount"`
+	ComicStyle          string                   `json:"comicStyle"`
 }
 
 func storyboardWorkflowOutputLanguage(run *domain.StoryboardGenerationRun) string {

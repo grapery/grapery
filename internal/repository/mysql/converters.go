@@ -327,6 +327,7 @@ func StoryboardToModel(d *domain.Storyboard) *Storyboard {
 	}
 	return &Storyboard{
 		ID:                  d.ID,
+		CreationRequestHash: d.CreationRequestHash,
 		StoryID:             d.StoryID,
 		ParentID:            stringToStringPtr(d.ParentID),
 		UserID:              d.UserID,
@@ -365,6 +366,7 @@ func ModelToStoryboard(m *Storyboard) *domain.Storyboard {
 			UpdatedAt: timeToUnix(m.UpdatedAt),
 		},
 		StoryID:             m.StoryID,
+		CreationRequestHash: m.CreationRequestHash,
 		ParentID:            stringPtrToString(m.ParentID),
 		UserID:              m.UserID,
 		CreatorName:         m.Creator.DisplayName,
@@ -620,7 +622,14 @@ func CharacterGenerationTaskToModel(d *domain.CharacterGenerationTask) *Characte
 		t := unixToTime(*d.DraftDismissedAt)
 		draftDismissedAt = &t
 	}
+	stages, _ := json.Marshal(d.Stages)
+	var leaseExpiresAt *time.Time
+	if d.LeaseExpiresAt != nil {
+		t := unixToTime(*d.LeaseExpiresAt)
+		leaseExpiresAt = &t
+	}
 	return &CharacterGenerationTask{
+		StagesJSON: string(stages), AttributesJSON: d.AttributesJSON, LeaseOwner: d.LeaseOwner, LeaseFence: d.LeaseFence, LeaseExpiresAt: leaseExpiresAt,
 		ID:                         d.ID,
 		UserID:                     d.UserID,
 		StoryID:                    d.StoryID,
@@ -655,7 +664,15 @@ func ModelToCharacterGenerationTask(m *CharacterGenerationTask) *domain.Characte
 		v := timeToUnix(*m.DraftDismissedAt)
 		draftDismissedAt = &v
 	}
+	var stages map[string]domain.CharacterGenerationStage
+	_ = json.Unmarshal([]byte(m.StagesJSON), &stages)
+	var leaseExpiresAt *int64
+	if m.LeaseExpiresAt != nil {
+		t := timeToUnix(*m.LeaseExpiresAt)
+		leaseExpiresAt = &t
+	}
 	task := &domain.CharacterGenerationTask{
+		Stages: stages, AttributesJSON: m.AttributesJSON, LeaseOwner: m.LeaseOwner, LeaseFence: m.LeaseFence, LeaseExpiresAt: leaseExpiresAt,
 		ID:                         m.ID,
 		UserID:                     m.UserID,
 		StoryID:                    m.StoryID,

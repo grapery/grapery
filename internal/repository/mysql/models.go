@@ -147,6 +147,7 @@ type Panel struct {
 // Storyboard database model (树状结构)
 type Storyboard struct {
 	ID                       string      `gorm:"primaryKey;size:36"`
+	CreationRequestHash      string      `gorm:"column:creation_request_hash;size:64;not null;default:''"`
 	StoryID                  string      `gorm:"size:36;not null;index:idx_storyboard_story;index:idx_storyboard_story_parent"`
 	Story                    Story       `gorm:"foreignKey:StoryID"`
 	ParentID                 *string     `gorm:"size:36;index;index:idx_storyboard_story_parent"` // NULL or "__root__" for root storyboard
@@ -336,11 +337,16 @@ type Character struct {
 
 // CharacterGenerationTask database model for async story-character creation drafts.
 type CharacterGenerationTask struct {
-	ID      string `gorm:"primaryKey;size:36"`
-	UserID  string `gorm:"size:36;not null;index:idx_char_gen_user"`
-	User    User   `gorm:"foreignKey:UserID"`
-	StoryID string `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
-	Story   Story  `gorm:"foreignKey:StoryID"`
+	StagesJSON     string     `gorm:"type:longtext"`
+	AttributesJSON string     `gorm:"type:longtext"`
+	LeaseOwner     string     `gorm:"size:64"`
+	LeaseFence     int64      `gorm:"not null;default:0"`
+	LeaseExpiresAt *time.Time `gorm:"index"`
+	ID             string     `gorm:"primaryKey;size:36"`
+	UserID         string     `gorm:"size:36;not null;index:idx_char_gen_user"`
+	User           User       `gorm:"foreignKey:UserID"`
+	StoryID        string     `gorm:"size:36;not null;index:idx_char_gen_story;index:idx_char_gen_fragment_key,unique"`
+	Story          Story      `gorm:"foreignKey:StoryID"`
 	// Nullable until runCharacterGenerationTask creates the character; empty string would violate FK on characters.id.
 	CharacterID                *string        `gorm:"size:36;index"`
 	Character                  *Character     `gorm:"foreignKey:CharacterID"`
@@ -1271,7 +1277,7 @@ type FragmentDB struct {
 	IsDraft            bool    `gorm:"column:is_draft;type:tinyint(1);default:0;index"`           // 草稿（AI 生成落库等）
 	GenerationTaskID   string  `gorm:"column:generation_task_id;size:36;index"`                   // AI 碎片生成任务 ID
 	GenerationMetadata string  `gorm:"column:generation_metadata;type:longtext"`                  // 生成 trace/策略等 JSON
-	ImageAspectRatio   string  `gorm:"column:image_aspect_ratio;size:16;index"`                  // 配图比例 1:1 / 16:9 等
+	ImageAspectRatio   string  `gorm:"column:image_aspect_ratio;size:16;index"`                   // 配图比例 1:1 / 16:9 等
 	Likes              int     `gorm:"type:int;default:0"`                                        // 点赞数
 	Comments           int     `gorm:"type:int;default:0"`                                        // 评论数
 	Shares             int     `gorm:"type:int;default:0"`                                        // 分享数

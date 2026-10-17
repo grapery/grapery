@@ -52,13 +52,16 @@ func buildFragmentSceneExpansionPrompt(
 			"contractVersion": visualSceneContractVersion,
 			"sceneCount":      sceneCount, "aspectRatio": aspectRatio, "style": req.Style, "mood": req.Mood,
 			"storyContent": content, "storyElements": elements, "visualBible": visualBible,
+			"userRequest": req.UserInput, "replaceImageIndex": req.ReplaceImageIndex,
+			"creativePreferences":  formatCreativeControls(req.CreativeControls),
 			"allowedReferenceKeys": keyHint, "continuation": continuationRule,
 			"contentLanguage": language, "letteringLanguage": language,
 		},
-		GlobalConfig: structuredStoryPanelGuidance(),
+		GlobalConfig: structuredStoryPanelGuidance() + "\n" + creativeAuthorityPolicy,
 		Sections: []PromptDSLSection{
 			{Title: "Comic Page Beat Planning Rules", Kind: "text", Body: fmt.Sprintf(`
 	- scenes 数组长度必须等于 sceneCount，index 从 0 连续递增；每项是一张最终漫画页图片的 page beat。
+	- replaceImageIndex > 0 时只编辑原目标页：遵守 userRequest 中服务端权威编辑上下文，保留目标页事件及相邻页因果，不套用新故事的开端/结局结构。
 	- sceneDesc 用一至两句%s描述这一整页要完成的目标、阻碍、关键动作与页末结果/钩子。
 	- imagePrompt 只用英文，描述本页统一媒介画风、主要人物与地点、核心动作、整体光线色彩及连续性；页内逐格镜头由下一阶段规划，不要把本页误写成一张单幅插图。
 	- 页面形成完整叙事序列：首张漫画页建立人物、目标与空间；中间页升级行动、反应、转折或代价；末页呈现结果并回应开场。相邻页不得重复同一事件。

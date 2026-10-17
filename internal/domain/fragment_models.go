@@ -38,6 +38,7 @@ const (
 
 // Fragment represents a fragment story - short, complete stories shared by users
 type Fragment struct {
+	ExpectedGenerationTaskID string `json:"-" gorm:"-"`
 	// Base model fields (ID, CreatedAt, UpdatedAt as int64)
 	common.BaseModel
 

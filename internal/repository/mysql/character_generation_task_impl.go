@@ -41,23 +41,31 @@ func (r *Repository) UpdateCharacterGenerationTask(ctx context.Context, task *do
 		characterID = nil
 	}
 	updates := map[string]interface{}{
-		"character_id":  characterID,
-		"status":        model.Status,
-		"progress":      model.Progress,
-		"current_step":  model.CurrentStep,
-		"request_json":  model.RequestJSON,
-		"result_json":   model.ResultJSON,
-		"error_message": model.ErrorMessage,
-		"updated_at":    time.Now(),
-		"completed_at":  model.CompletedAt,
+		"character_id":    characterID,
+		"stages_json":     characterTaskStageJSON(task.Stages),
+		"attributes_json": task.AttributesJSON,
+		"status":          model.Status,
+		"progress":        model.Progress,
+		"current_step":    model.CurrentStep,
+		"request_json":    model.RequestJSON,
+		"result_json":     model.ResultJSON,
+		"error_message":   model.ErrorMessage,
+		"updated_at":      time.Now(),
+		"completed_at":    model.CompletedAt,
 	}
 	if model.DraftDismissedAt != nil {
 		updates["draft_dismissed_at"] = model.DraftDismissedAt
 	}
-	if err := r.db.WithContext(ctx).Model(&CharacterGenerationTask{}).
-		Where("id = ?", model.ID).
-		Updates(updates).Error; err != nil {
-		return err
+	query := r.db.WithContext(ctx).Model(&CharacterGenerationTask{}).Where("id = ?", model.ID)
+	if task.LeaseOwner != "" {
+		query = query.Where("lease_owner = ? AND lease_fence = ? AND lease_expires_at > ?", task.LeaseOwner, task.LeaseFence, time.Now())
+	}
+	result := query.Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if task.LeaseOwner != "" && result.RowsAffected != 1 {
+		return domain.ErrCharacterTaskLeaseLost
 	}
 	return nil
 }

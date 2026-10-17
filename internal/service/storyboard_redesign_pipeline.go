@@ -15,28 +15,38 @@ import (
 )
 
 type storyboardGenerationContextSnapshot struct {
-	StoryID      string                         `json:"storyId"`
-	StoryTitle   string                         `json:"storyTitle"`
-	StoryGenre   string                         `json:"storyGenre,omitempty"`
-	StoryStyle   any                            `json:"storyStyle,omitempty"`
-	RawInput     string                         `json:"rawInput"`
-	Continuation bool                           `json:"continuation"`
-	IsStandalone bool                           `json:"isStandalone"`
-	ContextText  string                         `json:"contextText"`
-	Characters   []storyboardContextCharacter   `json:"characters,omitempty"`
-	Scenes       []storyboardContextScene       `json:"scenes,omitempty"`
-	ParentTail   []storyboardContextParentScene `json:"parentTailScenes,omitempty"`
+	CreativeControls *domain.CreativeControls           `json:"creativeControls,omitempty"`
+	StoryID          string                             `json:"storyId"`
+	StoryTitle       string                             `json:"storyTitle"`
+	StoryDescription string                             `json:"storyDescription,omitempty"`
+	StoryGenre       string                             `json:"storyGenre,omitempty"`
+	StoryStyle       *domain.StyleConfig                `json:"storyStyle,omitempty"`
+	RawInput         string                             `json:"rawInput"`
+	Continuation     bool                               `json:"continuation"`
+	IsStandalone     bool                               `json:"isStandalone"`
+	ContextText      string                             `json:"contextText"`
+	Characters       []storyboardContextCharacter       `json:"characters,omitempty"`
+	Scenes           []storyboardContextScene           `json:"scenes,omitempty"`
+	ParentTail       []storyboardContextParentScene     `json:"parentTailScenes,omitempty"`
+	Baseline         *domain.StoryboardRevisionBaseline `json:"acceptedBaseline,omitempty"`
 }
 
 type storyboardContextCharacter struct {
-	ID          string                      `json:"id"`
-	Key         string                      `json:"key"`
-	Name        string                      `json:"name"`
-	Role        string                      `json:"role,omitempty"`
-	Description string                      `json:"description,omitempty"`
-	Personality string                      `json:"personality,omitempty"`
-	Appearance  string                      `json:"appearance,omitempty"`
-	Views       *domain.CharacterThreeViews `json:"turnaroundImages,omitempty"`
+	ID              string                      `json:"id"`
+	Key             string                      `json:"key"`
+	Name            string                      `json:"name"`
+	Role            string                      `json:"role,omitempty"`
+	Description     string                      `json:"description,omitempty"`
+	Personality     string                      `json:"personality,omitempty"`
+	Background      string                      `json:"background,omitempty"`
+	ShortTermGoal   string                      `json:"shortTermGoal,omitempty"`
+	LongTermGoal    string                      `json:"longTermGoal,omitempty"`
+	HandlingStyle   string                      `json:"handlingStyle,omitempty"`
+	CognitionRange  string                      `json:"cognitionRange,omitempty"`
+	AbilityFeatures string                      `json:"abilityFeatures,omitempty"`
+	DressPreference string                      `json:"dressPreference,omitempty"`
+	Appearance      string                      `json:"appearance,omitempty"`
+	Views           *domain.CharacterThreeViews `json:"turnaroundImages,omitempty"`
 }
 
 type storyboardContextScene struct {
@@ -56,8 +66,20 @@ type storyboardContextParentScene struct {
 }
 
 func (s *Service) generateStoryboardWithRedesignPipeline(ctx context.Context, storyboard *domain.Storyboard, story *domain.Story) error {
+	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, storyboard.WorkflowReleaseID, storyboard.CreativeControls)
+	if controlErr != nil {
+		return controlErr
+	}
+	storyboard.CreativeControls = controls
 	if s.aiGenService == nil {
 		return fmt.Errorf("AI generation service not configured")
+	}
+	if storyboard.RevisionBaseline == nil {
+		baseline, err := s.captureStoryboardRevision(ctx, storyboard, storyboard.TargetSceneIDs, storyboard.ExpectedContentRevision)
+		if err != nil {
+			return err
+		}
+		storyboard.RevisionBaseline = baseline
 	}
 	sceneCount := storyboard.SceneCount
 	if sceneCount < MinStoryboardSceneCount || sceneCount > MaxStoryboardSceneCount {
@@ -218,6 +240,7 @@ func (s *Service) repairStoryboardJSONResponse(
 			"storyId":                      storyboard.StoryID,
 			"workflowReleaseId":            storyboard.WorkflowReleaseID,
 			"workflowPromptApplied":        prompt.Applied,
+			"deprecatedTemplateIgnored":    prompt.DeprecatedTemplateIgnored,
 			"workflowPromptFallbackReason": prompt.FallbackReason,
 		},
 	})
@@ -229,6 +252,8 @@ func (s *Service) repairStoryboardJSONResponse(
 
 func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, alignmentPrompt string, sceneCount int) (*domain.StoryboardBiblePlan, string, int, error) {
 	prompt := resolveStoryboardBiblePrompt(story, storyboard, snapshot, alignmentPrompt, sceneCount)
+	prompt.UserPrompt += storyboardAcceptedBaselinePrompt(snapshot.Baseline)
+	prompt.UserPrompt += storyboardOutputUnitPrompt(storyboard)
 	prompt.SystemPrompt += "\nWrite all user-facing narrative fields in " + storyboardWorkflowOutputLanguage(run) + ". Keep machine keys and executable image prompts in English."
 	if storyboard.WorkflowReleaseID != "" && shouldWarnStoryboardPromptFallback(prompt.FallbackReason) {
 		s.logger.Warn("storyboard workflow prompt fallback",
@@ -256,6 +281,7 @@ func (s *Service) generateStoryboardBiblePlan(ctx context.Context, run *domain.S
 			"storyId":                      storyboard.StoryID,
 			"workflowReleaseId":            storyboard.WorkflowReleaseID,
 			"workflowPromptApplied":        prompt.Applied,
+			"deprecatedTemplateIgnored":    prompt.DeprecatedTemplateIgnored,
 			"workflowPromptFallbackReason": prompt.FallbackReason,
 		},
 	})
@@ -312,6 +338,8 @@ func (s *Service) generateStoryboardScenePlan(ctx context.Context, run *domain.S
 
 func (s *Service) generateStoryboardScenePlanWithCorrection(ctx context.Context, run *domain.StoryboardGenerationRun, story *domain.Story, storyboard *domain.Storyboard, snapshot storyboardGenerationContextSnapshot, plan *domain.StoryboardBiblePlan, alignmentPrompt string, sceneCount int, correctionContext string) (*domain.StoryboardScenePlan, string, int, error) {
 	prompt := resolveStoryboardScenePrompt(story, storyboard, snapshot, plan, alignmentPrompt, sceneCount)
+	prompt.UserPrompt += storyboardAcceptedBaselinePrompt(snapshot.Baseline)
+	prompt.UserPrompt += storyboardOutputUnitPrompt(storyboard)
 	prompt.SystemPrompt += "\nWrite content, scene titles, descriptions, dialogue and narration in " + storyboardWorkflowOutputLanguage(run) + ". Keep imagePrompt and machine-readable enum values in English."
 	if correctionContext = strings.TrimSpace(correctionContext); correctionContext != "" {
 		prompt.UserPrompt += "\n\nLOCAL REPAIR REQUEST\n" + correctionContext
@@ -408,8 +436,10 @@ func (s *Service) buildStoryboardGenerationContextSnapshot(ctx context.Context, 
 			Role:        firstNonEmpty(ref.Role, ch.Role),
 			Description: ch.Description,
 			Personality: ch.Personality,
-			Appearance:  firstNonEmpty(ch.Appearance, ch.Description),
-			Views:       ch.Views,
+			Background:  ch.Background, ShortTermGoal: ch.ShortTermGoal, LongTermGoal: ch.LongTermGoal,
+			HandlingStyle: ch.HandlingStyle, CognitionRange: ch.CognitionRange, AbilityFeatures: ch.AbilityFeatures, DressPreference: ch.DressPreference,
+			Appearance: firstNonEmpty(ch.Appearance, ch.Description),
+			Views:      ch.Views,
 		})
 	}
 	scenes := make([]storyboardContextScene, 0, len(storyboard.SceneRefs))
@@ -429,17 +459,20 @@ func (s *Service) buildStoryboardGenerationContextSnapshot(ctx context.Context, 
 	}
 	parentTail := s.storyboardParentTailScenes(ctx, storyboard)
 	return storyboardGenerationContextSnapshot{
-		StoryID:      story.ID,
-		StoryTitle:   story.Title,
-		StoryGenre:   story.Genre,
-		StoryStyle:   story.Style,
-		RawInput:     storyboard.RawInput,
-		Continuation: continuation,
-		IsStandalone: storyboard.IsStandalone,
-		ContextText:  s.buildStoryboardContext(ctx, storyboard, story),
-		Characters:   characters,
-		Scenes:       scenes,
-		ParentTail:   parentTail,
+		CreativeControls: storyboard.CreativeControls,
+		StoryID:          story.ID,
+		StoryTitle:       story.Title,
+		StoryDescription: story.Description,
+		StoryGenre:       story.Genre,
+		StoryStyle:       story.Style,
+		RawInput:         storyboard.RawInput,
+		Continuation:     continuation,
+		IsStandalone:     storyboard.IsStandalone,
+		ContextText:      s.buildStoryboardContext(ctx, storyboard, story),
+		Characters:       characters,
+		Scenes:           scenes,
+		ParentTail:       parentTail,
+		Baseline:         storyboard.RevisionBaseline,
 	}
 }
 
@@ -595,4 +628,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func storyboardOutputUnitPrompt(board *domain.Storyboard) string {
+	if board.UseComicPagePipeline {
+		return "\nOUTPUT UNIT CONTRACT: requested sceneCount counts COMIC PAGES, not individual panels. Each scenes[] item is one complete page image. compositionPlan must specify readable within-page panels and their narrative progression; panels must not replay the same beat in different poses. Page panel count is separate from sceneCount. Keep one causal action per panel and continue into the next page. User-selected panelCount/layoutPreset, when supplied to the image stage, are authoritative."
+	}
+	return "\nOUTPUT UNIT CONTRACT: requested sceneCount counts storyboard shots; each scenes[] item drives one single-panel image. Do not reinterpret sceneCount as panels hidden inside one image."
 }

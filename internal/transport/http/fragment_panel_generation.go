@@ -326,16 +326,9 @@ func fragmentPanelChatMessages(task *domain.FragmentPanelGenerationTask) []gin.H
 }
 
 func fragmentPanelGenerationCostSnapshot(task *domain.FragmentPanelGenerationTask) gin.H {
-	count := task.Request.PanelCount
-	if count < 1 {
-		count = 1
-	}
-	points := count * 8
-	return gin.H{
-		"amount": points,
-		"unit":   "点数",
-		"text":   "本次创作消耗 " + strconv.Itoa(points) + " 点数",
-	}
+	// Legacy panel tasks do not carry a verified billing-version marker.
+	// A page count cannot stand in for a reconciled debit.
+	return gin.H{"unit": "点数", "state": "unavailable", "text": "费用以账单记录为准"}
 }
 
 // ResumePanelGeneration POST /fragment-panels/generate/:taskId/resume

@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	ErrNoActiveWorkflow         = errors.New("no_active_workflow")
 	ErrWorkflowReleaseImmutable = errors.New("workflow release is immutable")
 	ErrPromptVersionImmutable   = errors.New("prompt version is immutable")
 )
@@ -174,6 +175,7 @@ func validateWorkflowGraph(nodes []WorkflowNode) error {
 	allowedActivities := map[string]bool{
 		"ai.runtime.plan":                true,
 		"legacy.fragment.generate":       true,
+		"legacy.character.generate":      true,
 		"legacy.storyboard.branch":       true,
 		"legacy.storyboard.generate":     true,
 		"storyboard.ensure_draft":        true,

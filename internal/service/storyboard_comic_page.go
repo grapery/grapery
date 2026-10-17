@@ -45,7 +45,7 @@ type ComicPageGenerationRequest struct {
 }
 
 // NormalizeComicPagePipeline applies fallback defaults for legacy/internal callers.
-// GenerateStoryboardComicPage overrides panel count and layout with story-driven values.
+// Explicit page options take precedence; absent options use story-driven values.
 func NormalizeComicPagePipeline(o *ComicPagePipelineOptions) {
 	if o == nil {
 		return
@@ -72,8 +72,17 @@ func NormalizeComicPagePipeline(o *ComicPagePipelineOptions) {
 
 func resolveComicPagePipeline(base ComicPagePipelineOptions, plannedScene *domain.StoryboardScene, sceneDescription string, isTransitionScene bool, totalScenes int) ComicPagePipelineOptions {
 	panelCount := estimateComicPagePanelCount(plannedScene, sceneDescription, isTransitionScene, totalScenes)
+	if base.PanelCount > 0 {
+		panelCount = clampComicPagePanelCount(base.PanelCount)
+	} else if known := comicPageLayoutPanelCount(base.LayoutPreset); known > 0 {
+		panelCount = known
+	}
+	layout := strings.TrimSpace(base.LayoutPreset)
+	if layout == "" {
+		layout = comicPageLayoutPresetForPanelCount(panelCount)
+	}
 	return ComicPagePipelineOptions{
-		LayoutPreset:    comicPageLayoutPresetForPanelCount(panelCount),
+		LayoutPreset:    layout,
 		PanelCount:      panelCount,
 		PageAspectRatio: firstNonBlank(base.PageAspectRatio, "9:16"),
 		DialogueMode:    firstNonBlank(base.DialogueMode, "auto"),
@@ -211,8 +220,14 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 	if req == nil {
 		return nil, fmt.Errorf("nil comic page request")
 	}
+	if req.Pipeline.PanelCount < 0 || req.Pipeline.PanelCount > comicPageMaxPanelCount {
+		return nil, fmt.Errorf("%w: panelCount must be between 1 and 7", domain.ErrInvalidInput)
+	}
+	if count := comicPageLayoutPanelCount(req.Pipeline.LayoutPreset); count > 0 && req.Pipeline.PanelCount > 0 && count != req.Pipeline.PanelCount {
+		return nil, fmt.Errorf("%w: layoutPreset conflicts with panelCount", domain.ErrInvalidInput)
+	}
 
-	storyboard, err := s.repo.StoryboardByID(ctx, req.StoryboardID)
+	storyboard, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID)
 	if err != nil {
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
@@ -280,6 +295,7 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		IsTransitionScene:        isTransitionScene,
 		ComicStyle:               strings.TrimSpace(req.ComicStyle),
 		PipelineKind:             domain.StoryboardImagePipelineComicPage,
+		PromptDetails:            &domain.ImagePromptDetails{ComicPagePlan: comicPagePlanSnapshot(req.Pipeline)},
 		SkipPeerFailureGate:      req.SkipPeerFailureGate,
 		Status:                   domain.GenerationStatusPending,
 		CreatedAt:                time.Now().Unix(),
@@ -376,6 +392,10 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		}
 	}
 
+	if gen.PromptDetails == nil {
+		gen.PromptDetails = &domain.ImagePromptDetails{}
+	}
+	gen.PromptDetails.ComicPagePlan = comicPagePlanSnapshot(opts)
 	if gen.GeneratedPrompt != "" {
 		gen.GeneratedPrompt = finalizeStoryboardImagePromptForAPI(gen)
 		gen.GeneratedPrompt = prependComicPageImagePromptGuard(gen.GeneratedPrompt, opts)
@@ -583,4 +603,35 @@ func (s *Service) uploadStoryboardSceneImageOSS(gen *domain.StoryboardImageGener
 		return ossURL
 	}
 	return originalImageURL
+}
+
+func comicPagePlanSnapshot(options ComicPagePipelineOptions) *domain.StoryboardComicPagePlan {
+	return &domain.StoryboardComicPagePlan{PanelCount: options.PanelCount, LayoutPreset: options.LayoutPreset, PageAspectRatio: options.PageAspectRatio, DialogueMode: options.DialogueMode}
+}
+func comicPageRetryOptions(gen *domain.StoryboardImageGeneration) ComicPagePipelineOptions {
+	if gen != nil && gen.PromptDetails != nil && gen.PromptDetails.ComicPagePlan != nil {
+		p := gen.PromptDetails.ComicPagePlan
+		return ComicPagePipelineOptions{PanelCount: p.PanelCount, LayoutPreset: p.LayoutPreset, PageAspectRatio: p.PageAspectRatio, DialogueMode: p.DialogueMode}
+	}
+	return ComicPagePipelineOptions{}
+}
+
+func comicPageLayoutPanelCount(layout string) int {
+	switch strings.TrimSpace(layout) {
+	case "single_panel_full_page":
+		return 1
+	case "two_panel_vertical_stack":
+		return 2
+	case "three_panel_setup_reaction_release":
+		return 3
+	case "four_panel_2x2_grid", "grid_2x2":
+		return 4
+	case "strip5_top2_middle_wide_bottom2":
+		return 5
+	case "six_panel_2x3_grid":
+		return 6
+	case "seven_panel_story_page_top2_middle3_bottom2":
+		return 7
+	}
+	return 0
 }

@@ -184,6 +184,7 @@ func SetupRouter(deps *HandlerDependencies) *gin.Engine {
 			authenticated.GET("/stories/:id/stats", h.GetStoryStats)
 			authenticated.GET("/storyboards", h.ListStoryboards)
 			// REMOVED: Dashboard storyboard feeds - not in StoryCreationAppUI design
+			authenticated.GET("/storyboards/:id/revisions", h.GetStoryboardRevisionHistory)
 			authenticated.GET("/storyboards/:id/children", h.GetStoryboardChildren)
 			authenticated.GET("/storyboards/:id/tree", h.GetStoryboardTree)
 

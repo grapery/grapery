@@ -54,14 +54,17 @@ func FragmentImagePixelSizeForAspectRatio(ar string) string {
 // FragmentGenerationRequest 碎片故事生成请求
 // 若将来增加统一 provider 字段，应仅作用于图片/视频；文案与规划仍由服务端按用户区域在 huoshan/gemini 间路由。
 type FragmentGenerationRequest struct {
-	UserInput  string   `json:"userInput"`  // 用户输入的描述
-	ImageUrls  []string `json:"imageUrls"`  // 用户提供的参考图片（可选）
-	ImageCount int      `json:"imageCount"` // 本次需要生成的图片数量 (1-8)；草稿可通过续写不断追加
-	Style      string   `json:"style"`      // 风格：fantasy, realistic, anime, etc.
-	Mood       string   `json:"mood"`       // 情绪：happy, sad, mysterious, etc.
-	Length     string   `json:"length"`     // 内容长度：short, medium, long
-	Language   string   `json:"language"`   // 语言：zh-Hans, en, ja
-	Visibility string   `json:"visibility"` // 可见性：public, followers, private
+	CreativeControls *CreativeControls `json:"creativeControls,omitempty"`
+	// BillingVersion is assigned by the service, never trusted from clients.
+	BillingVersion int      `json:"billingVersion,omitempty"`
+	UserInput      string   `json:"userInput"`  // 用户输入的描述
+	ImageUrls      []string `json:"imageUrls"`  // 用户提供的参考图片（可选）
+	ImageCount     int      `json:"imageCount"` // 本次需要生成的图片数量 (1-8)；草稿可通过续写不断追加
+	Style          string   `json:"style"`      // 风格：fantasy, realistic, anime, etc.
+	Mood           string   `json:"mood"`       // 情绪：happy, sad, mysterious, etc.
+	Length         string   `json:"length"`     // 内容长度：short, medium, long
+	Language       string   `json:"language"`   // 语言：zh-Hans, en, ja
+	Visibility     string   `json:"visibility"` // 可见性：public, followers, private
 	// AspectRatio 配图长宽比：1:1、16:9、9:16、3:4、4:3；空表示由多模态解析（有参考图时）或默认 16:9。
 	AspectRatio             string                  `json:"aspectRatio,omitempty"`
 	ConsistencyLevel        string                  `json:"consistencyLevel,omitempty"`       // off | standard | strong
@@ -367,20 +370,22 @@ type FragmentStoryState struct {
 }
 
 type FragmentComicPageDocument struct {
-	PageIndex          int                   `json:"pageIndex"`
-	PageIntent         string                `json:"pageIntent"`
-	Plan               FragmentComicPagePlan `json:"plan"`
-	TextLayers         []FragmentComicText   `json:"textLayers,omitempty"`
-	PanelImageURLs     []string              `json:"panelImageUrls,omitempty"`
-	BackgroundImageURL string                `json:"backgroundImageUrl,omitempty"`
-	FlattenedImageURL  string                `json:"flattenedImageUrl,omitempty"`
-	Status             string                `json:"status"`
+	Quality            *FragmentGenerationQuality `json:"quality,omitempty"`
+	PageIndex          int                        `json:"pageIndex"`
+	PageIntent         string                     `json:"pageIntent"`
+	Plan               FragmentComicPagePlan      `json:"plan"`
+	TextLayers         []FragmentComicText        `json:"textLayers,omitempty"`
+	PanelImageURLs     []string                   `json:"panelImageUrls,omitempty"`
+	BackgroundImageURL string                     `json:"backgroundImageUrl,omitempty"`
+	FlattenedImageURL  string                     `json:"flattenedImageUrl,omitempty"`
+	Status             string                     `json:"status"`
 }
 
 // FragmentComicDocument is the versioned source of truth for generation,
 // continuation and editing. It is persisted inside the generation result so
 // older fragments remain readable without a schema migration.
 type FragmentComicDocument struct {
+	Quality         *FragmentGenerationQuality  `json:"quality,omitempty"`
 	SchemaVersion   int                         `json:"schemaVersion"`
 	Revision        int                         `json:"revision"`
 	FragmentID      string                      `json:"fragmentId,omitempty"`
@@ -430,7 +435,7 @@ type FragmentGenerationStepMetric struct {
 	Note       string `json:"note,omitempty"`
 }
 
-// FragmentConsistencyIssue 一致性检查问题（仅记录，不阻断任务）。
+// FragmentConsistencyIssue 一致性检查问题；high severity blocks publication of newly generated documents.
 type FragmentConsistencyIssue struct {
 	SceneIndex int     `json:"sceneIndex,omitempty"`
 	Severity   string  `json:"severity,omitempty"` // low | medium | high
@@ -444,6 +449,11 @@ type FragmentConsistencyIssue struct {
 
 // FragmentGenerationTrace 保存完整生成计划、策略、成本和审计信息。
 type FragmentGenerationTrace struct {
+	PublicationManifest *FragmentPublicationManifest   `json:"publicationManifest,omitempty"`
+	PublicationAssets   []FragmentPublicationAsset     `json:"publicationAssets,omitempty"`
+	BillingStatus       string                         `json:"billingStatus,omitempty"`     // pending | settled; nil/empty identifies legacy data.
+	TextBillingTokens   int                            `json:"textBillingTokens,omitempty"` // exact non-image debit for this task
+	Quality             *FragmentGenerationQuality     `json:"quality,omitempty"`
 	ComicDocument       *FragmentComicDocument         `json:"comicDocument,omitempty"`
 	VisualBible         *FragmentVisualBible           `json:"visualBible,omitempty"`
 	VisualEvidence      []FragmentVisualEvidence       `json:"visualEvidence,omitempty"`
@@ -461,24 +471,27 @@ type FragmentGenerationTrace struct {
 
 // FragmentGenerationResult 碎片故事生成结果
 type FragmentGenerationResult struct {
-	Content            string                           `json:"content"`                      // 生成的文字内容
-	ImageUrls          []string                         `json:"imageUrls"`                    // 生成的图片URL列表
-	AspectRatio        string                           `json:"aspectRatio,omitempty"`        // 实际使用的配图长宽比
-	TokensUsed         int                              `json:"tokensUsed"`                   // 使用的token数量
-	DraftFragmentID    string                           `json:"draftFragmentId,omitempty"`    // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
-	ExpectedImageCount int                              `json:"expectedImageCount,omitempty"` // 用户/客户端请求的权威目标张数
-	ImageSlots         []FragmentGenerationImageSlot    `json:"imageSlots,omitempty"`         // 逐张图片任务槽位，作为生成状态事实源
-	ImageProgress      *FragmentGenerationImageProgress `json:"imageProgress,omitempty"`      // 基于 slot 的进度
-	VisualBible        *FragmentVisualBible             `json:"visualBible,omitempty"`        // 结构化视觉设定（方案 B）
-	VisualEvidence     []FragmentVisualEvidence         `json:"visualEvidence,omitempty"`     // 多模态参考图事实
-	AnchorImages       []FragmentAnchorImage            `json:"anchorImages,omitempty"`       // 锚点参考图
-	ReferenceAssets    []FragmentReferenceAsset         `json:"referenceAssets,omitempty"`    // 按需参考资产
-	ScenePlan          []FragmentScenePlan              `json:"scenePlan,omitempty"`          // 可追踪场景计划
-	ConsistencyPolicy  *FragmentConsistencyPolicy       `json:"consistencyPolicy,omitempty"`  // 一致性策略
-	GenerationTrace    *FragmentGenerationTrace         `json:"generationTrace,omitempty"`    // 完整生成 trace
-	ConsistencyIssues  []FragmentConsistencyIssue       `json:"consistencyIssues,omitempty"`  // 一致性检查（best-effort）
-	StoryElements      []FragmentReferenceSlot          `json:"storyElements,omitempty"`      // 分析/生成时使用的语义元素槽位
-	ComicDocument      *FragmentComicDocument           `json:"comicDocument,omitempty"`
+	PublicationManifest *FragmentPublicationManifest     `json:"publicationManifest,omitempty"`
+	PublicationAssets   []FragmentPublicationAsset       `json:"publicationAssets,omitempty"`
+	Quality             *FragmentGenerationQuality       `json:"quality,omitempty"`
+	Content             string                           `json:"content"`                      // 生成的文字内容
+	ImageUrls           []string                         `json:"imageUrls"`                    // 生成的图片URL列表
+	AspectRatio         string                           `json:"aspectRatio,omitempty"`        // 实际使用的配图长宽比
+	TokensUsed          int                              `json:"tokensUsed"`                   // 使用的token数量
+	DraftFragmentID     string                           `json:"draftFragmentId,omitempty"`    // 服务端为该次生成落库的草稿碎片 ID（客户端发布时 PUT 同一条，避免重复创建）
+	ExpectedImageCount  int                              `json:"expectedImageCount,omitempty"` // 用户/客户端请求的权威目标张数
+	ImageSlots          []FragmentGenerationImageSlot    `json:"imageSlots,omitempty"`         // 逐张图片任务槽位，作为生成状态事实源
+	ImageProgress       *FragmentGenerationImageProgress `json:"imageProgress,omitempty"`      // 基于 slot 的进度
+	VisualBible         *FragmentVisualBible             `json:"visualBible,omitempty"`        // 结构化视觉设定（方案 B）
+	VisualEvidence      []FragmentVisualEvidence         `json:"visualEvidence,omitempty"`     // 多模态参考图事实
+	AnchorImages        []FragmentAnchorImage            `json:"anchorImages,omitempty"`       // 锚点参考图
+	ReferenceAssets     []FragmentReferenceAsset         `json:"referenceAssets,omitempty"`    // 按需参考资产
+	ScenePlan           []FragmentScenePlan              `json:"scenePlan,omitempty"`          // 可追踪场景计划
+	ConsistencyPolicy   *FragmentConsistencyPolicy       `json:"consistencyPolicy,omitempty"`  // 一致性策略
+	GenerationTrace     *FragmentGenerationTrace         `json:"generationTrace,omitempty"`    // 完整生成 trace
+	ConsistencyIssues   []FragmentConsistencyIssue       `json:"consistencyIssues,omitempty"`  // 一致性检查（best-effort）
+	StoryElements       []FragmentReferenceSlot          `json:"storyElements,omitempty"`      // 分析/生成时使用的语义元素槽位
+	ComicDocument       *FragmentComicDocument           `json:"comicDocument,omitempty"`
 }
 
 // FragmentGenerationImageSlot 是故事碎片生成的单张图片槽位。

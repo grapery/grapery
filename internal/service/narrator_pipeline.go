@@ -19,10 +19,11 @@ import (
 
 // ContinueRequest represents a request to continue a storyboard (parallel universe creation)
 type ContinueRequest struct {
-	ParentStoryboardID string   `json:"parentStoryboardId"`
-	UserPrompt         string   `json:"userPrompt"`
-	SceneCount         int      `json:"sceneCount"`
-	Characters         []string `json:"characters,omitempty"` // Optional: specific character IDs to include
+	CreativeControls   *domain.CreativeControls `json:"creativeControls,omitempty"`
+	ParentStoryboardID string                   `json:"parentStoryboardId"`
+	UserPrompt         string                   `json:"userPrompt"`
+	SceneCount         int                      `json:"sceneCount"`
+	Characters         []string                 `json:"characters,omitempty"` // Optional: specific character IDs to include
 	// GenerateVideo: 为 true 时，每格场景图生成完成后自动基于该图发起视频生成（默认仅图片）
 	GenerateVideo     bool                                    `json:"generateVideo"`
 	ComicStyle        string                                  `json:"comicStyle,omitempty"` // 漫画风格 slug，持久化到故事板
@@ -56,6 +57,14 @@ type CharacterFateState struct {
 // ContinueStoryboard continues a storyboard by creating a parallel universe
 // This is the main entry point for the "AI 辅助平行宇宙续写" feature
 func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *ContinueRequest) (*ContinueResult, error) {
+	if req == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, req.WorkflowReleaseID, req.CreativeControls)
+	if controlErr != nil {
+		return nil, controlErr
+	}
+	req.CreativeControls = controls
 	sceneCount, err := NormalizeStoryboardSceneCount(req.SceneCount)
 	if err != nil {
 		return nil, err
@@ -150,6 +159,7 @@ func (s *Service) ContinueStoryboard(ctx context.Context, userID string, req *Co
 		ParentID:                 req.ParentStoryboardID,
 		UserID:                   userID,
 		Title:                    generateContinuationTitle(parentStoryboard),
+		CreativeControls:         req.CreativeControls,
 		WorkflowReleaseID:        req.WorkflowReleaseID,
 		WorkflowChecksum:         req.WorkflowChecksum,
 		PromptSnapshots:          req.PromptSnapshots,
@@ -316,6 +326,11 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 	if len(scenes) == 0 {
 		return
 	}
+	board, err := s.repo.StoryboardByID(context.Background(), storyboardID)
+	if err != nil || board == nil {
+		return
+	}
+	jobContext := WithStoryboardGenerationCaller(context.Background(), board.UserID)
 	comicStyle = strings.TrimSpace(comicStyle)
 	s.logger.Info("starting async image generation for continuation scenes",
 		zap.String("storyboardId", storyboardID),
@@ -323,6 +338,9 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 		zap.String("comicStyle", comicStyle))
 
 	for _, scene := range scenes {
+		if strings.TrimSpace(scene.Image) != "" {
+			continue
+		}
 		scene := scene
 		description := scene.Description
 		if strings.TrimSpace(scene.ImagePrompt) != "" {
@@ -346,7 +364,7 @@ func (s *Service) startContinuationSceneImageGenerations(storyboardID, comicStyl
 						zap.Any("panic", r))
 				}
 			}()
-			gen, err := s.GenerateSceneImage(context.Background(), imageReq)
+			gen, err := s.GenerateSceneImage(jobContext, imageReq)
 			if err != nil {
 				s.logger.Warn("failed to start image generation for continuation scene",
 					zap.String("storyboardId", storyboardID),
@@ -541,7 +559,7 @@ func (s *Service) generateStoryboardContent(
 		Model: prompt.Model, Temperature: prompt.Temperature, MaxTokens: prompt.MaxTokens,
 		RelatedEntityID: newStoryboard.ID, RelatedEntityType: "storyboard", Step: "narrator_content",
 		PromptKind: "storyboard_branch_content", PromptTemplateVersion: prompt.TemplateVersion,
-		Metadata: map[string]interface{}{"workflowReleaseId": newStoryboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied},
+		Metadata: map[string]interface{}{"workflowReleaseId": newStoryboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied, "deprecatedTemplateIgnored": prompt.DeprecatedTemplateIgnored},
 	})
 	if err != nil {
 		s.logger.Error("AI content generation failed",
@@ -637,7 +655,7 @@ func (s *Service) generateScenesFromContent(
 		Model: prompt.Model, Temperature: prompt.Temperature, MaxTokens: prompt.MaxTokens,
 		RelatedEntityID: storyboard.ID, RelatedEntityType: "storyboard", Step: "narrator_scenes",
 		PromptKind: "storyboard_branch_scene_plan", PromptTemplateVersion: prompt.TemplateVersion,
-		Metadata: map[string]interface{}{"workflowReleaseId": storyboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied, "jsonResponse": true},
+		Metadata: map[string]interface{}{"workflowReleaseId": storyboard.WorkflowReleaseID, "workflowPromptApplied": prompt.Applied, "deprecatedTemplateIgnored": prompt.DeprecatedTemplateIgnored, "jsonResponse": true},
 	})
 	if err != nil {
 		s.logger.Warn("AI scene generation failed, using placeholder scenes",

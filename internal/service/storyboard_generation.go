@@ -133,6 +133,12 @@ func formatGenerationError(code GenerationErrorCode, message string) string {
 
 // StartContentGeneration starts the AI content generation process (Step 1)
 func (s *Service) StartContentGeneration(ctx context.Context, req *ContentGenerationRequest) (*domain.StoryboardContentGeneration, error) {
+	if req == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if _, err := s.AuthorizeStoryboardGeneration(ctx, req.StoryboardID); err != nil {
+		return nil, err
+	}
 	s.logger.Info("starting content generation",
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("rawInput", truncateForLog(req.RawInput, 200)),
@@ -435,6 +441,12 @@ func (s *Service) processContentGeneration(ctx context.Context, gen *domain.Stor
 
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
 func (s *Service) GenerateSceneDetails(ctx context.Context, req *SceneDetailRequest) (*domain.StoryboardSceneGeneration, error) {
+	if req == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if _, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID); err != nil {
+		return nil, err
+	}
 	s.logger.Info("starting scene detail generation",
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("sceneId", req.SceneID),
@@ -634,6 +646,12 @@ Return a cohesive, extremely vivid and descriptive narrative paragraph. Do not u
 
 // GenerateSceneImage generates an image for a scene (Step 3)
 func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRequest) (*domain.StoryboardImageGeneration, error) {
+	if req == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if _, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID); err != nil {
+		return nil, err
+	}
 	s.logger.Info("starting scene image generation",
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("sceneId", req.SceneID),
@@ -1465,7 +1483,7 @@ func (s *Service) maybeStartBatchVideoAfterAllImages(ctx context.Context, storyb
 						zap.String("sceneId", scene.ID))
 				}
 			}()
-			_, vErr := s.GenerateSceneVideo(context.Background(), &VideoGenerationRequest{
+			_, vErr := s.GenerateSceneVideo(WithStoryboardGenerationCaller(context.Background(), sb.UserID), &VideoGenerationRequest{
 				StoryboardID:      sbID,
 				SceneID:           scene.ID,
 				SceneTitle:        scene.Title,
@@ -1590,6 +1608,12 @@ func (s *Service) maybeFinalizeBatchVideoWorkflow(ctx context.Context, storyboar
 
 // GenerateSceneVideo generates a video for a scene (Step 4)
 func (s *Service) GenerateSceneVideo(ctx context.Context, req *VideoGenerationRequest) (*domain.StoryboardVideoGeneration, error) {
+	if req == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if _, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID); err != nil {
+		return nil, err
+	}
 	s.logger.Info("starting scene video generation",
 		zap.String("storyboardId", req.StoryboardID),
 		zap.String("sceneId", req.SceneID),
@@ -2381,6 +2405,9 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 // It starts new generation jobs only for scenes whose latest image generation row (by time) is failed,
 // so old failed rows after a successful retry do not trigger duplicate work.
 func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string, opts *RetryFailedStoryboardImageOptions) (retried int, remainingFailed int, err error) {
+	if _, err := s.AuthorizeStoryboardGeneration(ctx, storyboardID); err != nil {
+		return 0, 0, err
+	}
 	forceComic := opts != nil && opts.ForceComicPagePipeline
 	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
 	if err != nil {
@@ -2422,7 +2449,7 @@ func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID 
 				StoryStyle:               gen.StoryStyle,
 				ComicStyle:               comicStyle,
 				SkipPeerFailureGate:      true,
-				Pipeline:                 ComicPagePipelineOptions{},
+				Pipeline:                 comicPageRetryOptions(gen),
 			})
 		} else {
 			_, retryErr = s.GenerateSceneImage(ctx, &ImageGenerationRequest{
@@ -2539,6 +2566,9 @@ func (s *Service) CancelStoryboardGeneration(ctx context.Context, storyboardID, 
 
 // PublishStoryboard publishes a storyboard (Step 5)
 func (s *Service) PublishStoryboard(ctx context.Context, storyboardID string) error {
+	if _, err := s.AuthorizeStoryboardGenerationRead(ctx, storyboardID); err != nil {
+		return err
+	}
 	s.logger.Info("publishing storyboard",
 		zap.String("storyboardId", storyboardID))
 
@@ -3305,7 +3335,7 @@ func (s *Service) usageRecordMetadataForStoryboard(ctx context.Context, storyboa
 		}
 	}
 	return map[string]interface{}{
-		"user_id":             story.UserID,
+		"user_id":             storyboard.UserID,
 		"related_entity_id":   storyboardID,
 		"related_entity_type": "storyboard",
 	}

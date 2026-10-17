@@ -10,6 +10,7 @@ import (
 	"github.com/grapestree/fgrapery/grapery/internal/common"
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ========== Fragment Repository 实现 ==========
@@ -152,6 +153,11 @@ LIMIT ?
 
 // CreateFragment creates a new fragment
 func (r *Repository) CreateFragment(ctx context.Context, fragment *domain.Fragment) error {
+	if !fragment.IsDraft {
+		if err := domain.ValidateFragmentPublicationQuality(fragment.GenerationMetadata); err != nil {
+			return err
+		}
+	}
 	dbFragment := r.fragmentToModel(fragment)
 	if err := r.db.WithContext(ctx).Create(dbFragment).Error; err != nil {
 		return err
@@ -161,8 +167,22 @@ func (r *Repository) CreateFragment(ctx context.Context, fragment *domain.Fragme
 
 // UpdateFragment updates a fragment
 func (r *Repository) UpdateFragment(ctx context.Context, fragment *domain.Fragment) error {
-	dbFragment := r.fragmentToModel(fragment)
-	return r.db.WithContext(ctx).Save(dbFragment).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stored FragmentDB
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", fragment.ID).First(&stored).Error; err != nil {
+			return err
+		}
+		if fragment.ExpectedGenerationTaskID != "" && fragment.ExpectedGenerationTaskID != stored.GenerationTaskID {
+			return domain.ErrAlreadyExists
+		}
+
+		if !fragment.IsDraft {
+			if err := ValidateFragmentPublicationAuthority(ctx, tx, &stored, fragment); err != nil {
+				return err
+			}
+		}
+		return tx.Save(r.fragmentToModel(fragment)).Error
+	})
 }
 
 // DeleteFragment deletes a fragment and its related data.

@@ -853,12 +853,13 @@ func ptrInt32(v int) *int32 {
 
 // fragmentTextPayload 碎片文案生成输入（支持纯字符串或 JSON：prompt + 可选参考图 URL）。
 type fragmentTextPayload struct {
-	Prompt                  string         `json:"prompt"`
-	ImageURLs               []string       `json:"imageUrls,omitempty"`
-	SystemPrompt            string         `json:"systemPrompt,omitempty"`
-	ModelConfig             map[string]any `json:"modelConfig,omitempty"`
-	OutputSchema            map[string]any `json:"outputSchema,omitempty"`
-	PromptTemplateVersionID string         `json:"promptTemplateVersionId,omitempty"`
+	DeprecatedTemplateIgnored bool           `json:"deprecatedTemplateIgnored,omitempty"`
+	Prompt                    string         `json:"prompt"`
+	ImageURLs                 []string       `json:"imageUrls,omitempty"`
+	SystemPrompt              string         `json:"systemPrompt,omitempty"`
+	ModelConfig               map[string]any `json:"modelConfig,omitempty"`
+	OutputSchema              map[string]any `json:"outputSchema,omitempty"`
+	PromptTemplateVersionID   string         `json:"promptTemplateVersionId,omitempty"`
 }
 
 func parseFragmentTextPayload(aiTask *domain.AITask) fragmentTextPayload {
@@ -1289,19 +1290,12 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 		return "", 0, err
 	}
 	options := parseFragmentTextPayload(aiTask)
-	systemPrompt := strings.TrimSpace(options.SystemPrompt)
-	if len(options.OutputSchema) > 0 {
-		if schemaJSON, marshalErr := json.Marshal(options.OutputSchema); marshalErr == nil {
-			systemPrompt = strings.TrimSpace(systemPrompt + "\nReturn JSON matching this schema: " + string(schemaJSON))
-		}
-	}
-	model := fragmentModelString(options.ModelConfig, "model")
-	provider := strings.ToLower(fragmentModelString(options.ModelConfig, "provider"))
-	temperature := fragmentModelFloat32(options.ModelConfig, "temperature", 0.55)
-	maxTokens := fragmentModelInt(options.ModelConfig, "maxTokens", 4096)
-	if maxTokens <= 0 {
-		maxTokens = 4096
-	}
+	// Provider limits and output format belong to engineering, not a legacy
+	// workflow/client payload. Only the immutable version ID is kept for audit.
+	systemPrompt := fragmentExtractionSystemContract + "\n\n" + creativeAuthorityPolicy
+	model, provider := "", ""
+	temperature := float32(0.55)
+	maxTokens := 4096
 	if len(imageURLs) > 0 {
 		multimodalPrompt := prompt
 		if systemPrompt != "" {
@@ -1311,7 +1305,7 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 	}
 	if provider != "gemini" && s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil {
 		if t, tok, err := s.generateFragmentExtractionTextHuoshan(ctx, prompt, systemPrompt, model, maxTokens, temperature); err == nil && strings.TrimSpace(t) != "" {
-			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "huoshan", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(t), tok, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID})
+			s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "huoshan", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(t), tok, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID, "deprecatedTemplateIgnored": options.DeprecatedTemplateIgnored})
 			return t, tok, nil
 		} else if err != nil {
 			s.logger.Warn("fragment extraction JSON: huoshan failed", zap.Error(err))
@@ -1335,7 +1329,7 @@ func (s *AIService) GenerateFragmentExtractionJSON(ctx context.Context, aiTask *
 		if gemResp != nil && gemResp.UsageMetadata != nil {
 			tokensUsed = int(gemResp.UsageMetadata.TotalTokenCount)
 		}
-		s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "gemini", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(text), tokensUsed, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID})
+		s.recordFragmentPromptAudit(ctx, aiTask.RelatedEntityType, aiTask.RelatedEntityID, "fragment_extraction", "text_json", "gemini", model, float64(temperature), maxTokens, prompt, nil, strings.TrimSpace(text), tokensUsed, map[string]any{"promptTemplateVersionId": options.PromptTemplateVersionID, "deprecatedTemplateIgnored": options.DeprecatedTemplateIgnored})
 		return strings.TrimSpace(text), tokensUsed, nil
 	}
 	return "", 0, fmt.Errorf("no text generation provider available (configure HUOSHAN_API_KEY or GEMINI_API_KEY)")
@@ -1795,6 +1789,7 @@ func (s *AIService) GenerateImageForFragment(ctx context.Context, aiTask *domain
 	}
 
 	imgReq := &GenerateImageRequest{
+		OperationID:       aiTask.ID,
 		UserID:            strings.TrimSpace(aiTask.UserID),
 		Prompt:            prompt,
 		NegativePrompt:    fragmentImageNegativePrompt(),
