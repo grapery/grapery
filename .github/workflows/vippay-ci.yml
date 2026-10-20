@@ -155,6 +155,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        env:
+          APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY }}
         run: |
           echo "📦 Generating development .env file..."
           cat > .env << EOF
@@ -182,7 +184,6 @@ jobs:
           APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
           APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
           APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
           
           # ========== Google IAP Configuration ==========
           GOOGLE_PACKAGE_NAME=${{ vars.GOOGLE_PACKAGE_NAME }}
@@ -207,6 +208,7 @@ jobs:
           ALIYUN_ACCESS_KEY_ID=${{ vars.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET=${{ vars.ALIYUN_ACCESS_KEY_SECRET }}
           EOF
+          bash scripts/vippay_ci_apple_iap_setup.sh
           echo "✅ Development .env file generated"
           cat .env
 
@@ -315,6 +317,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate .env file
+        env:
+          APPLE_PRIVATE_KEY: ${{ vars.APPLE_PRIVATE_KEY }}
         run: |
           echo "📦 Generating production .env file..."
           cat > .env << EOF
@@ -342,7 +346,6 @@ jobs:
           APPLE_BUNDLE_ID=${{ vars.APPLE_BUNDLE_ID }}
           APPLE_ISSUER_ID=${{ vars.APPLE_ISSUER_ID }}
           APPLE_KEY_ID=${{ vars.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY=${{ vars.APPLE_PRIVATE_KEY }}
           
           # ========== Google IAP Configuration ==========
           GOOGLE_PACKAGE_NAME=${{ vars.GOOGLE_PACKAGE_NAME }}
@@ -363,6 +366,7 @@ jobs:
           ALIYUN_OSS_ACCESS_KEY_SECRET=${{ vars.ALIYUN_OSS_ACCESS_KEY_SECRET }}
           ALIYUN_OSS_ROLE_ARN=${{ vars.ALIYUN_OSS_ROLE_ARN }}
           EOF
+          bash scripts/vippay_ci_apple_iap_setup.sh
           echo "✅ Production .env file generated"
           cat .env
 
