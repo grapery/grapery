@@ -629,6 +629,7 @@ func CharacterGenerationTaskToModel(d *domain.CharacterGenerationTask) *Characte
 		leaseExpiresAt = &t
 	}
 	return &CharacterGenerationTask{
+		RequestKey: optionalStringPtr(d.RequestKey), IntentHash: d.IntentHash,
 		StagesJSON: string(stages), AttributesJSON: d.AttributesJSON, LeaseOwner: d.LeaseOwner, LeaseFence: d.LeaseFence, LeaseExpiresAt: leaseExpiresAt,
 		ID:                         d.ID,
 		UserID:                     d.UserID,
@@ -672,6 +673,7 @@ func ModelToCharacterGenerationTask(m *CharacterGenerationTask) *domain.Characte
 		leaseExpiresAt = &t
 	}
 	task := &domain.CharacterGenerationTask{
+		RequestKey: optionalStringValue(m.RequestKey), IntentHash: m.IntentHash,
 		Stages: stages, AttributesJSON: m.AttributesJSON, LeaseOwner: m.LeaseOwner, LeaseFence: m.LeaseFence, LeaseExpiresAt: leaseExpiresAt,
 		ID:                         m.ID,
 		UserID:                     m.UserID,

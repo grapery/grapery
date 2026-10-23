@@ -22,7 +22,7 @@ func characterExecutionTestRepo(t *testing.T) *Repository {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlDB.Close() })
-	err = db.Exec(`CREATE TABLE character_generation_tasks (id TEXT PRIMARY KEY,user_id TEXT,story_id TEXT,character_id TEXT,source_type TEXT,source_fragment_id TEXT,source_fragment_character_key TEXT,status TEXT,progress INTEGER,current_step TEXT,request_json TEXT,result_json TEXT,error_message TEXT,stages_json TEXT,attributes_json TEXT,lease_owner TEXT,lease_fence INTEGER NOT NULL DEFAULT 0,lease_expires_at DATETIME,created_at DATETIME,updated_at DATETIME,completed_at DATETIME,draft_dismissed_at DATETIME,deleted_at DATETIME)`).Error
+	err = db.Exec(`CREATE TABLE character_generation_tasks (id TEXT PRIMARY KEY,request_key TEXT UNIQUE,intent_hash TEXT,user_id TEXT,story_id TEXT,character_id TEXT,source_type TEXT,source_fragment_id TEXT,source_fragment_character_key TEXT,status TEXT,progress INTEGER,current_step TEXT,request_json TEXT,result_json TEXT,error_message TEXT,stages_json TEXT,attributes_json TEXT,lease_owner TEXT,lease_fence INTEGER NOT NULL DEFAULT 0,lease_expires_at DATETIME,created_at DATETIME,updated_at DATETIME,completed_at DATETIME,draft_dismissed_at DATETIME,deleted_at DATETIME)`).Error
 	if err != nil {
 		t.Fatal(err)
 	}

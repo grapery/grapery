@@ -549,19 +549,25 @@ type FragmentImageGenerationResult struct {
 
 // FragmentGenerationTask 碎片故事生成任务
 type FragmentGenerationTask struct {
-	ID           string                    `json:"id"`
-	UserID       string                    `json:"userId"`
-	Status       string                    `json:"status"` // pending, processing, completed, failed
-	Request      FragmentGenerationRequest `json:"request"`
-	Result       *FragmentGenerationResult `json:"result,omitempty"`
-	Progress     int                       `json:"progress"`    // 0-100
-	CurrentStep  string                    `json:"currentStep"` // 当前步骤
-	ErrorMessage string                    `json:"errorMessage,omitempty"`
-	TokensUsed   int                       `json:"tokensUsed"`
-	CreatedAt    int64                     `json:"createdAt"`
-	StartedAt    *int64                    `json:"startedAt,omitempty"`
-	CompletedAt  *int64                    `json:"completedAt,omitempty"`
-	UpdatedAt    int64                     `json:"updatedAt"`
+	ID               string                    `json:"id"`
+	UserID           string                    `json:"userId"`
+	Status           string                    `json:"status"` // pending, processing, completed, failed
+	Request          FragmentGenerationRequest `json:"request"`
+	Result           *FragmentGenerationResult `json:"result,omitempty"`
+	Progress         int                       `json:"progress"`    // 0-100
+	CurrentStep      string                    `json:"currentStep"` // 当前步骤
+	ErrorMessage     string                    `json:"errorMessage,omitempty"`
+	TokensUsed       int                       `json:"tokensUsed"`
+	CreatedAt        int64                     `json:"createdAt"`
+	StartedAt        *int64                    `json:"startedAt,omitempty"`
+	CompletedAt      *int64                    `json:"completedAt,omitempty"`
+	UpdatedAt        int64                     `json:"updatedAt"`
+	LeaseOwner       string                    `json:"-"`
+	LeaseFence       int64                     `json:"-"`
+	LeaseExpiresAt   *int64                    `json:"-"` // Unix milliseconds, server-owned execution lease.
+	CheckpointJSON   string                    `json:"-"` // Server-owned stage recovery checkpoints.
+	ExecutionVersion int                       `json:"-"` // 0 identifies pre-lease historical rows.
+	ReadyAt          *int64                    `json:"-"` // Unix milliseconds; setup completed before dispatch.
 
 	// Relations
 	User *User `json:"user,omitempty"`

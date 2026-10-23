@@ -1,6 +1,9 @@
 package http
 
 import (
+	"errors"
+	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +60,14 @@ func (h *Handler) StartCharacterGenerationTask(c *gin.Context) {
 	}
 	task, err := h.svc.StartCharacterGenerationTask(c.Request.Context(), userID, req)
 	if err != nil {
+		if errors.Is(err, domain.ErrCharacterTaskRequestConflict) {
+			c.JSON(http.StatusConflict, gin.H{"code": CodeConflict, "message": err.Error(), "errorCode": "character_request_conflict"})
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			Forbidden(c, err.Error())
+			return
+		}
 		if err.Error() == "story not found" {
 			NotFound(c, "story not found")
 			return
@@ -117,6 +128,11 @@ func (h *Handler) RetryCharacterGenerationTask(c *gin.Context) {
 	}
 	task, err := h.svc.RetryCharacterGenerationTask(c.Request.Context(), userID, c.Param("taskId"))
 	if err != nil {
+		if errors.Is(err, domain.ErrCharacterStageOutcomeUnknown) {
+			c.JSON(409, gin.H{"code": CodeError, "message": err.Error(), "errorCode": "character_attributes_outcome_unknown"})
+			return
+		}
+
 		Error(c, CodeError, err.Error())
 		return
 	}
@@ -650,14 +666,19 @@ func (h *Handler) GenerateCharacterPortrait(c *gin.Context) {
 
 	var req service.GenerateCharacterPortraitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// 允许空请求体，使用默认参数
-		req = service.GenerateCharacterPortraitRequest{
-			AspectRatio: "2:3",
+		if !errors.Is(err, io.EOF) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": CodeInvalidParams, "message": "invalid portrait request", "data": nil})
+			return
 		}
 	}
 
 	result, err := h.svc.GenerateCharacterPortrait(c.Request.Context(), userID, characterID, req)
 	if err != nil {
+		if errors.Is(err, domain.ErrCharacterTaskRequestConflict) || errors.Is(err, domain.ErrCharacterEditConflict) {
+			c.JSON(409, gin.H{"code": CodeError, "message": err.Error(), "errorCode": "character_generation_conflict"})
+			return
+		}
+
 		if err.Error() == "character not found" {
 			NotFound(c, "character not found")
 			return
@@ -689,12 +710,18 @@ func (h *Handler) GenerateCharacterThreeViews(c *gin.Context) {
 	}
 
 	var req service.GenerateCharacterThreeViewsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		req = service.GenerateCharacterThreeViewsRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": CodeInvalidParams, "message": "invalid three-view request", "data": nil})
+		return
 	}
 
 	result, err := h.svc.GenerateCharacterThreeViews(c.Request.Context(), userID, characterID, req)
 	if err != nil {
+		if errors.Is(err, domain.ErrCharacterTaskRequestConflict) || errors.Is(err, domain.ErrCharacterEditConflict) {
+			c.JSON(409, gin.H{"code": CodeError, "message": err.Error(), "errorCode": "character_generation_conflict"})
+			return
+		}
+
 		if err.Error() == "character not found" {
 			NotFound(c, "character not found")
 			return
@@ -725,8 +752,13 @@ func (h *Handler) CropAvatarFromPortrait(c *gin.Context) {
 		return
 	}
 
-	avatarURL, err := h.svc.CropAvatarFromPortrait(c.Request.Context(), characterID)
+	avatarURL, err := h.svc.CropAvatarFromPortrait(c.Request.Context(), userID, characterID)
 	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			Forbidden(c, "you can only update your own character")
+			return
+		}
+
 		if err.Error() == "character not found" {
 			NotFound(c, "character not found")
 			return

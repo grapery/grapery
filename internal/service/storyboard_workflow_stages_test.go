@@ -42,15 +42,24 @@ func TestStoryboardScenePlanCorrectionContextIncludesIssuesAndCandidate(t *testi
 }
 
 func TestStoryboardWorkflowRevisionRunMatchesStableRequestIdentity(t *testing.T) {
-	run := &domain.StoryboardGenerationRun{RequestJSON: `{"clientRequestId":"turn_2","regenerateStructure":true,"userDirective":"改成雨夜"}`}
-	if !storyboardWorkflowRunMatchesRequest(run, StoryboardWorkflowStageOptions{ClientRequestID: "turn_2", RegenerateStructure: true, UserDirective: "different retry text"}) {
-		t.Fatal("same client request must reuse the durable revision run")
+	board := &domain.Storyboard{RawInput: "original plot"}
+	opts := StoryboardWorkflowStageOptions{ClientRequestID: "turn_2", RegenerateStructure: true, UserDirective: "改成雨夜"}
+	run := storyboardIntentTestRun(board, opts)
+	if !storyboardWorkflowRunMatchesRequest(run, opts) {
+		t.Fatal("identical retry must reuse frozen intent")
 	}
-	if storyboardWorkflowRunMatchesRequest(run, StoryboardWorkflowStageOptions{ClientRequestID: "turn_3", RegenerateStructure: true, UserDirective: "改成雨夜"}) {
-		t.Fatal("a new client request must create a new revision run")
+	changed := opts
+	changed.UserDirective = "different retry text"
+	if storyboardWorkflowRunMatchesRequest(run, changed) {
+		t.Fatal("same key must not permit another directive")
+	}
+	changed = opts
+	changed.ClientRequestID = "turn_3"
+	if storyboardWorkflowRunMatchesRequest(run, changed) {
+		t.Fatal("another key is another turn")
 	}
 	if !storyboardWorkflowRunIsRevision(run) {
-		t.Fatal("revision marker was not restored from request checkpoint")
+		t.Fatal("revision marker lost")
 	}
 }
 

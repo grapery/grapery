@@ -3,10 +3,12 @@ package mysql
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/grapestree/fgrapery/grapery/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ========== Content Generation (Step 1) ==========
@@ -128,8 +130,29 @@ func (r *Repository) ListImageGenerations(ctx context.Context, storyboardID stri
 }
 
 func (r *Repository) UpdateImageGeneration(ctx context.Context, gen *domain.StoryboardImageGeneration) error {
-	model := StoryboardImageGenerationToModel(gen)
-	return r.db.WithContext(ctx).Save(model).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row StoryboardImageGeneration
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&row, "id = ?", gen.ID).Error; err != nil {
+			return err
+		}
+		if gen.Status == domain.GenerationStatusProcessing && row.Status != domain.GenerationStatusPending && row.Status != domain.GenerationStatusProcessing {
+			return fmt.Errorf("%w: image attempt already terminal", domain.ErrAlreadyExists)
+		}
+		// Freeze server execution metadata across prompt compiler replacements,
+		// client prompt edits, cancellation and progress updates.
+		trusted := ModelToStoryboardImageGeneration(&row)
+		if gen.PromptDetails == nil {
+			gen.PromptDetails = &domain.ImagePromptDetails{}
+		}
+		gen.PromptDetails.Execution = nil
+		if trusted.PromptDetails != nil {
+			gen.PromptDetails.Execution = trusted.PromptDetails.Execution
+		}
+		if gen.GeneratedImageURL == "" {
+			gen.GeneratedImageURL = row.GeneratedImageURL
+		}
+		return tx.Save(StoryboardImageGenerationToModel(gen)).Error
+	})
 }
 
 // ========== Video Generation (Step 4) ==========
@@ -235,7 +258,9 @@ func (r *Repository) UpdateStoryboardWorkflow(ctx context.Context, storyboardID 
 		"workflow_status": status,
 		"current_step":    step,
 	}
-	return r.db.WithContext(ctx).Model(&Storyboard{}).
-		Where("id = ?", storyboardID).
-		Updates(updates).Error
+	query := r.db.WithContext(ctx).Model(&Storyboard{}).Where("id = ?", storyboardID)
+	if status != domain.WorkflowStatusPublished {
+		query = query.Where("workflow_status <> ?", domain.WorkflowStatusPublished)
+	}
+	return query.Updates(updates).Error
 }

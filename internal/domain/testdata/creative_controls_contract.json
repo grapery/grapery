@@ -238,5 +238,99 @@
       ]
     },
     "valid": false
+  },
+  {
+    "name": "alias_version_zero",
+    "value": {
+      "Version": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_version_one",
+    "value": {
+      "VERSION": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_empty_enum",
+    "value": {
+      "PACING": ""
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_valid_enum",
+    "value": {
+      "Tone": "warm"
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_duplicate_enum",
+    "value": {
+      "pacing": "slow",
+      "PACING": "fast"
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_dialogue_density",
+    "value": {
+      "dialoguedensity": "rich"
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_visual_emphasis",
+    "value": {
+      "VISUALEMPHASIS": "action"
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_examples",
+    "value": {
+      "Examples": []
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_example_input",
+    "value": {
+      "examples": [
+        {
+          "Input": "a",
+          "output": "b"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_example_output",
+    "value": {
+      "examples": [
+        {
+          "input": "a",
+          "OUTPUT": "b"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "alias_example_duplicate_input",
+    "value": {
+      "examples": [
+        {
+          "input": "a",
+          "Input": "c",
+          "output": "b"
+        }
+      ]
+    },
+    "valid": false
   }
 ]

@@ -38,35 +38,47 @@ func taskToDB(task *domain.FragmentGenerationTask) (*mysql.FragmentGenerationTas
 	}
 
 	return &mysql.FragmentGenerationTaskDB{
-		ID:           task.ID,
-		UserID:       task.UserID,
-		Status:       task.Status,
-		RequestJSON:  string(requestJSON),
-		ResultJSON:   resultJSON,
-		Progress:     task.Progress,
-		CurrentStep:  task.CurrentStep,
-		ErrorMessage: task.ErrorMessage,
-		TokensUsed:   task.TokensUsed,
-		CreatedAt:    task.CreatedAt,
-		StartedAt:    task.StartedAt,
-		CompletedAt:  task.CompletedAt,
-		UpdatedAt:    task.UpdatedAt,
+		ID:               task.ID,
+		UserID:           task.UserID,
+		Status:           task.Status,
+		RequestJSON:      string(requestJSON),
+		ResultJSON:       resultJSON,
+		Progress:         task.Progress,
+		CurrentStep:      task.CurrentStep,
+		ErrorMessage:     task.ErrorMessage,
+		TokensUsed:       task.TokensUsed,
+		CreatedAt:        task.CreatedAt,
+		StartedAt:        task.StartedAt,
+		CompletedAt:      task.CompletedAt,
+		UpdatedAt:        task.UpdatedAt,
+		LeaseOwner:       task.LeaseOwner,
+		LeaseFence:       task.LeaseFence,
+		LeaseExpiresAt:   task.LeaseExpiresAt,
+		CheckpointJSON:   task.CheckpointJSON,
+		ExecutionVersion: task.ExecutionVersion,
+		ReadyAt:          task.ReadyAt,
 	}, nil
 }
 
 func taskFromDB(row *mysql.FragmentGenerationTaskDB) (*domain.FragmentGenerationTask, error) {
 	task := &domain.FragmentGenerationTask{
-		ID:           row.ID,
-		UserID:       row.UserID,
-		Status:       row.Status,
-		Progress:     row.Progress,
-		CurrentStep:  row.CurrentStep,
-		ErrorMessage: row.ErrorMessage,
-		TokensUsed:   row.TokensUsed,
-		CreatedAt:    row.CreatedAt,
-		StartedAt:    row.StartedAt,
-		CompletedAt:  row.CompletedAt,
-		UpdatedAt:    row.UpdatedAt,
+		ID:               row.ID,
+		UserID:           row.UserID,
+		Status:           row.Status,
+		Progress:         row.Progress,
+		CurrentStep:      row.CurrentStep,
+		ErrorMessage:     row.ErrorMessage,
+		TokensUsed:       row.TokensUsed,
+		CreatedAt:        row.CreatedAt,
+		StartedAt:        row.StartedAt,
+		CompletedAt:      row.CompletedAt,
+		UpdatedAt:        row.UpdatedAt,
+		LeaseOwner:       row.LeaseOwner,
+		LeaseFence:       row.LeaseFence,
+		LeaseExpiresAt:   row.LeaseExpiresAt,
+		CheckpointJSON:   row.CheckpointJSON,
+		ExecutionVersion: row.ExecutionVersion,
+		ReadyAt:          row.ReadyAt,
 	}
 
 	if row.RequestJSON != "" {
@@ -98,6 +110,10 @@ func fragmentGenerationTasksFromRows(rows []*mysql.FragmentGenerationTaskDB) ([]
 
 // Create 创建碎片生成任务
 func (r *FragmentGenerationRepository) Create(ctx context.Context, task *domain.FragmentGenerationTask) error {
+	// Legacy rows retain version 0 after migration. New tasks are never visible
+	// to workers until MarkReady confirms the placeholder draft is attached.
+	task.ExecutionVersion = 1
+	task.ReadyAt = nil
 	dbTask, err := taskToDB(task)
 	if err != nil {
 		return err
@@ -148,24 +164,33 @@ func (r *FragmentGenerationRepository) FindByClientMessageID(ctx context.Context
 	if userID == "" || clientMessageID == "" {
 		return nil, nil
 	}
-	var rows []*mysql.FragmentGenerationTaskDB
-	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Order("created_at DESC").
-		Limit(100).
-		Find(&rows).Error; err != nil {
+	if task, err := r.GetByID(ctx, FragmentGenerationRequestTaskID(userID, clientMessageID)); err == nil {
+		return task, nil
+	} else if err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
-	for _, row := range rows {
-		task, err := taskFromDB(row)
-		if err != nil {
+	// Historical random-ID tasks still have their retry key inside request_json.
+	// Keyset pagination keeps compatibility without silently forgetting old keys.
+	lastID := ""
+	for {
+		var rows []*mysql.FragmentGenerationTaskDB
+		if err := r.db.WithContext(ctx).Where("user_id = ? AND id > ?", userID, lastID).Order("id ASC").Limit(100).Find(&rows).Error; err != nil {
 			return nil, err
 		}
-		if task.Request.ClientMessageID == clientMessageID {
-			return task, nil
+		for _, row := range rows {
+			task, err := taskFromDB(row)
+			if err != nil {
+				return nil, err
+			}
+			if task.Request.ClientMessageID == clientMessageID {
+				return task, nil
+			}
+			lastID = row.ID
+		}
+		if len(rows) < 100 {
+			return nil, nil
 		}
 	}
-	return nil, nil
 }
 
 func (r *FragmentGenerationRepository) FindActiveByDraftID(ctx context.Context, userID, draftID string) (*domain.FragmentGenerationTask, error) {
@@ -201,7 +226,11 @@ func (r *FragmentGenerationRepository) Update(ctx context.Context, task *domain.
 	if err != nil {
 		return err
 	}
-	return r.db.WithContext(ctx).Save(dbTask).Error
+	return r.withTaskLease(ctx, task.ID, func(scoped *FragmentGenerationRepository) error {
+		// Execution identity is owned by Claim/Renew, never by a stale task copy.
+		return scoped.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).Where("id = ?", task.ID).
+			Select("user_id", "status", "request_json", "result_json", "progress", "current_step", "error_message", "tokens_used", "started_at", "completed_at", "updated_at").Updates(dbTask).Error
+	})
 }
 
 // UpdateStatus 更新任务状态
@@ -232,7 +261,19 @@ func (r *FragmentGenerationRepository) UpdateStatus(ctx context.Context, id stri
 			string(common.TaskStatusCancelled),
 		})
 	}
-	return query.Updates(updates).Error
+	if status == string(common.TaskStatusCancelled) {
+		// Owner cancellation is an explicit external operation; invalidate every
+		// worker even when its model call cannot be cancelled remotely.
+		updates["lease_fence"] = gorm.Expr("COALESCE(lease_fence, 0) + 1")
+		updates["lease_owner"], updates["lease_expires_at"] = "", nil
+		if _, worker := domain.FragmentTaskLeaseFromContext(ctx); worker {
+			query = fragmentTaskFencedQuery(ctx, query, id)
+			return fragmentTaskWriteResult(ctx, id, query.Updates(updates))
+		}
+		return query.Updates(updates).Error
+	}
+	query = fragmentTaskFencedQuery(ctx, query, id)
+	return fragmentTaskWriteResult(ctx, id, query.Updates(updates))
 }
 
 // UpdateResult 更新任务结果
@@ -242,17 +283,17 @@ func (r *FragmentGenerationRepository) UpdateResult(ctx context.Context, id stri
 		return fmt.Errorf("failed to marshal result: %w", err)
 	}
 
-	return r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
 		Where("id = ? AND status NOT IN ?", id, []string{
 			string(common.TaskStatusCompleted),
 			string(common.TaskStatusFailed),
 			string(common.TaskStatusCancelled),
-		}).
-		Updates(map[string]interface{}{
-			"result_json": string(resultJSON),
-			"tokens_used": result.TokensUsed,
-			"updated_at":  time.Now().Unix(),
-		}).Error
+		})
+	return fragmentTaskWriteResult(ctx, id, fragmentTaskFencedQuery(ctx, query, id).Updates(map[string]interface{}{
+		"result_json": string(resultJSON),
+		"tokens_used": result.TokensUsed,
+		"updated_at":  time.Now().Unix(),
+	}))
 }
 
 // UpsertImageSlots stores the durable per-image state for a fragment generation task.
@@ -260,6 +301,17 @@ func (r *FragmentGenerationRepository) UpsertImageSlots(ctx context.Context, tas
 	if len(slots) == 0 {
 		return nil
 	}
+	for _, slot := range slots {
+		if slot.TaskID != "" && slot.TaskID != taskID {
+			return domain.ErrFragmentTaskLeaseLost
+		}
+	}
+	return r.withTaskLease(ctx, taskID, func(scoped *FragmentGenerationRepository) error {
+		return scoped.upsertImageSlots(ctx, taskID, fragmentID, slots)
+	})
+}
+
+func (r *FragmentGenerationRepository) upsertImageSlots(ctx context.Context, taskID, fragmentID string, slots []domain.FragmentGenerationImageSlot) error {
 	existingByIndex, err := r.fragmentGenerationImageSlotsByIndex(ctx, taskID)
 	if err != nil {
 		return err
@@ -380,23 +432,24 @@ func stableFragmentGenerationImageSlotID(taskID string, index int) string {
 // UpdateError 更新错误信息
 func (r *FragmentGenerationRepository) UpdateError(ctx context.Context, id string, status string, errorMsg string) error {
 	now := time.Now().Unix()
-	return r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
+	query := r.db.WithContext(ctx).Model(&mysql.FragmentGenerationTaskDB{}).
 		Where("id = ? AND status NOT IN ?", id, []string{
 			string(common.TaskStatusCompleted),
 			string(common.TaskStatusFailed),
 			string(common.TaskStatusCancelled),
-		}).
-		Updates(map[string]interface{}{
-			"status":        status,
-			"error_message": errorMsg,
-			"completed_at":  &now,
-			"updated_at":    time.Now().Unix(),
-		}).Error
+		})
+	return fragmentTaskWriteResult(ctx, id, fragmentTaskFencedQuery(ctx, query, id).Updates(map[string]interface{}{
+		"status":        status,
+		"error_message": errorMsg,
+		"completed_at":  &now,
+		"updated_at":    time.Now().Unix(),
+	}))
 }
 
 // Delete 删除任务
 func (r *FragmentGenerationRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&mysql.FragmentGenerationTaskDB{}).Error
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	return fragmentTaskWriteResult(ctx, id, fragmentTaskFencedQuery(ctx, query, id).Delete(&mysql.FragmentGenerationTaskDB{}))
 }
 
 // GetPendingTasks 获取待处理的任务

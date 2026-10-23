@@ -240,6 +240,7 @@ func (h *FragmentGenerationHandler) GetGenerationStatus(c *gin.Context) {
 		"slotMode":      slotMode,
 		"imageProgress": imageProgress,
 		"cost":          h.fragmentGenService.GenerationCostSnapshot(c.Request.Context(), task),
+		"recovery":      h.fragmentGenService.RecoverySnapshot(c.Request.Context(), task),
 	}
 
 	if task.Result != nil {
@@ -652,6 +653,7 @@ func (h *FragmentGenerationHandler) RegisterRoutes(router *gin.RouterGroup, auth
 		fragmentGenGroup.POST("", h.GenerateFragment)
 		fragmentGenGroup.GET("/:taskId", h.GetGenerationStatus)
 		fragmentGenGroup.POST("/:taskId/recheck", h.RecheckQuality)
+		fragmentGenGroup.POST("/:taskId/retry", h.RetryGeneration)
 		fragmentGenGroup.POST("/:taskId/prepare-publication", h.PreparePublication)
 		fragmentGenGroup.POST("/:taskId/settle", h.SettleGeneration)
 		fragmentGenGroup.GET("", h.ListGenerationTasks)

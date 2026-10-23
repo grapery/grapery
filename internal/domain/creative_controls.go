@@ -25,12 +25,72 @@ type CreativeControlExample struct {
 	Output string `json:"output"`
 }
 
-func (c *CreativeControls) UnmarshalJSON(raw []byte) error {
-	if value := bytes.TrimSpace(raw); len(value) == 0 || value[0] != '{' {
-		return fmt.Errorf("creativeControls must be an object")
+// Struct decoding case-folds JSON names and silently accepts duplicate keys.
+// Inspect the token stream first so only the documented wire spelling is valid.
+func creativeObjectFields(raw []byte, allowed map[string]bool, label string, allowOther bool) (map[string]json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return nil, fmt.Errorf("%s must be an object", label)
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	fields := make(map[string]json.RawMessage)
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := token.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s has an invalid field name", label)
+		}
+		if !allowed[key] {
+			if !allowOther || strings.EqualFold(key, "creativeControls") {
+				return nil, fmt.Errorf("%s has an unknown or noncanonical field %q", label, key)
+			}
+		} else if _, duplicate := fields[key]; duplicate {
+			return nil, fmt.Errorf("%s has duplicate field %q", label, key)
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		fields[key] = value
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("%s must contain one object", label)
+	}
+	return fields, nil
+}
+
+func (example *CreativeControlExample) UnmarshalJSON(raw []byte) error {
+	fields, err := creativeObjectFields(raw, map[string]bool{"input": true, "output": true}, "creativeControls example", false)
+	if err != nil {
+		return err
+	}
+	if len(fields) != 2 {
+		return fmt.Errorf("creativeControls example requires input and output")
+	}
+	type plain CreativeControlExample
+	var value plain
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if err := (&CreativeControls{Examples: []CreativeControlExample{CreativeControlExample(value)}}).Validate(); err != nil {
+		return err
+	}
+	*example = CreativeControlExample(value)
+	return nil
+}
+
+func (c *CreativeControls) UnmarshalJSON(raw []byte) error {
+	fields, err := creativeObjectFields(raw, map[string]bool{
+		"version": true, "pacing": true, "dialogueDensity": true,
+		"visualEmphasis": true, "tone": true, "examples": true,
+	}, "creativeControls", false)
+	if err != nil {
 		return err
 	}
 	for key, value := range fields {
@@ -151,8 +211,8 @@ func ParseCreativeControls(value any) (*CreativeControls, error) {
 // ValidateCreativeControlsEnvelope distinguishes an omitted optional object from
 // explicit null, which ordinary *CreativeControls JSON fields otherwise erase.
 func ValidateCreativeControlsEnvelope(raw []byte) error {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	fields, err := creativeObjectFields(raw, map[string]bool{"creativeControls": true}, "creation request", true)
+	if err != nil {
 		return err
 	}
 	value, present := fields["creativeControls"]

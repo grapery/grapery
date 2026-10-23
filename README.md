@@ -3,6 +3,7 @@
 grapery 是一个使用 Go + Gin + MySQL + Redis 构建的故事创作平台后端服务，为 `creation/` 前端提供完整的 RESTful API。
 
 创作业务规则、恢复接口与验收边界见 [创作链路契约](docs/CREATION_PIPELINE.md)。
+默认创作能力与运营的有限配置范围见 [工程默认创作与局部运营配置](docs/CREATIVE_CONTROLS.md)。
 
 ## 技术栈
 

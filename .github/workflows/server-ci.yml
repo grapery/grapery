@@ -491,8 +491,8 @@ jobs:
       - name: Upload .env to ECS
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: 116.62.27.179
-          username: root
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.PROD_SSH_USER || 'root' }}
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: ".env"
@@ -501,8 +501,8 @@ jobs:
       - name: Upload docker-compose.server.yml to ECS
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: 116.62.27.179
-          username: root
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.PROD_SSH_USER || 'root' }}
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: "docker-compose.server.yml"
@@ -518,8 +518,8 @@ jobs:
         if: steps.envgen_prod.outputs.apns_file_ready == 'true'
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: 116.62.27.179
-          username: root
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.PROD_SSH_USER || 'root' }}
           key: ${{ vars.SSH_KEY }}
           port: 22
           source: "apns.p8"
@@ -528,8 +528,8 @@ jobs:
       - name: Remote Deploy to Production Server
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: 116.62.27.179
-          username: root
+          host: ${{ vars.PROD_DEPLOY_HOST }}
+          username: ${{ vars.PROD_SSH_USER || 'root' }}
           key: ${{ vars.SSH_KEY }}
           port: 22
           script: |

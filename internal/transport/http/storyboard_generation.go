@@ -53,7 +53,7 @@ func (h *Handler) GenerateContent(c *gin.Context) {
 
 	gen, err := h.svc.StartContentGeneration(c.Request.Context(), genReq)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *Handler) GenerateStoryboardStructure(c *gin.Context) {
 			ComicStyle:    req.ComicStyle, TargetSceneIDs: req.TargetSceneIDs, BaseRevision: req.BaseRevision,
 		})
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	Success(c, resp)
@@ -137,15 +137,40 @@ func (h *Handler) ExecuteStoryboardWorkflowStage(c *gin.Context) {
 			return
 		}
 	}
+	provided := map[string]bool{}
+	if body, ok := c.Get(gin.BodyBytesKey); ok {
+		if raw, ok := body.([]byte); ok {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(raw, &fields) == nil {
+				for key := range fields {
+					// Track presence with the same case folding used by Go JSON binding.
+					for _, canonical := range []string{"clientRequestId", "regenerateStructure", "userDirective", "sceneCount", "comicStyle", "language", "targetSceneIds", "baseRevision"} {
+						if strings.EqualFold(key, canonical) {
+							provided[canonical] = true
+						}
+					}
+				}
+			}
+		}
+	}
 	result, err := h.svc.ExecuteStoryboardWorkflowStage(c.Request.Context(), userID, storyboardID, stage, service.StoryboardWorkflowStageOptions{
+		ProvidedFields:   provided,
 		CreativeControls: req.CreativeControls, GenerationRunID: req.GenerationRunID, ClientRequestID: req.ClientRequestID, RegenerateStructure: req.RegenerateStructure,
 		UserDirective: req.UserDirective, SceneCount: req.SceneCount, ComicStyle: req.ComicStyle, Language: req.Language, TargetSceneIDs: req.TargetSceneIDs, BaseRevision: req.BaseRevision,
 	})
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	Success(c, result)
+}
+
+func handleStoryboardWorkflowStageError(c *gin.Context, err error) {
+	if errors.Is(err, service.ErrStoryboardRequestIntentConflict) || errors.Is(err, service.ErrStoryboardImageAttemptConflict) {
+		Error(c, CodeConflict, err.Error())
+		return
+	}
+	HandleError(c, err)
 }
 
 // GenerateSceneDetails generates detailed scene descriptions (Step 2)
@@ -182,7 +207,7 @@ func (h *Handler) GenerateSceneDetails(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneDetails(c.Request.Context(), genReq)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -247,7 +272,7 @@ func (h *Handler) GenerateStoryboardImage(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneImage(c.Request.Context(), genReq)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -304,7 +329,7 @@ func (h *Handler) GenerateStoryboardComicPage(c *gin.Context) {
 
 	gen, err := h.svc.GenerateStoryboardComicPage(c.Request.Context(), genReq)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -350,7 +375,7 @@ func (h *Handler) GenerateAllStoryboardComicPages(c *gin.Context) {
 
 	storyboard, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	if len(storyboard.StoryboardScenes) == 0 {
@@ -501,7 +526,7 @@ func (h *Handler) GenerateAllStoryboardImages(c *gin.Context) {
 		h.logger.Error("failed to get storyboard for batch image generation",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -642,7 +667,7 @@ func (h *Handler) GenerateStoryboardVideo(c *gin.Context) {
 
 	gen, err := h.svc.GenerateSceneVideo(c.Request.Context(), genReq)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -663,7 +688,7 @@ func (h *Handler) GetGenerationProgress(c *gin.Context) {
 
 	progress, err := h.svc.GetGenerationProgress(c.Request.Context(), storyboardID)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -697,7 +722,7 @@ func (h *Handler) RetryFailedStoryboardImages(c *gin.Context) {
 
 	retried, remainingFailed, err := h.svc.RetryFailedStoryboardImages(c.Request.Context(), storyboardID, &opts)
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -730,7 +755,7 @@ func (h *Handler) CancelStoryboardGeneration(c *gin.Context) {
 			Error(c, CodeForbidden, err.Error())
 			return
 		}
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -761,7 +786,7 @@ func (h *Handler) PublishStoryboard(c *gin.Context) {
 		h.logger.Error("PublishStoryboard: failed to get storyboard",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -775,7 +800,7 @@ func (h *Handler) PublishStoryboard(c *gin.Context) {
 		h.logger.Error("PublishStoryboard failed",
 			zap.String("storyboardId", storyboardID),
 			zap.Error(err))
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 
@@ -989,7 +1014,7 @@ func (h *Handler) GetStoryboardConversation(c *gin.Context) {
 	}
 	sb, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
 	if err != nil || sb == nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	if sb.UserID != userID {
@@ -1053,7 +1078,7 @@ func (h *Handler) SyncStoryboardConversationMessages(c *gin.Context) {
 	}
 	sb, err := h.svc.GetStoryboard(c.Request.Context(), storyboardID)
 	if err != nil || sb == nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	if sb.UserID != userID {
@@ -1094,7 +1119,7 @@ func (h *Handler) authorizeStoryboardGenerationRequest(c *gin.Context) bool {
 	ctx := service.WithStoryboardGenerationCaller(c.Request.Context(), userID)
 	c.Request = c.Request.WithContext(ctx)
 	if _, err := h.svc.AuthorizeStoryboardGeneration(ctx, c.Param("id")); err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return false
 	}
 	return true
@@ -1108,7 +1133,7 @@ func (h *Handler) GetStoryboardRevisionHistory(c *gin.Context) {
 	}
 	versions, err := h.svc.ListStoryboardRevisionHistory(c.Request.Context(), userID, c.Param("id"))
 	if err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return
 	}
 	Success(c, gin.H{"revisions": versions})
@@ -1122,7 +1147,7 @@ func (h *Handler) authorizeStoryboardGenerationReadRequest(c *gin.Context) bool 
 	ctx := service.WithStoryboardGenerationCaller(c.Request.Context(), userID)
 	c.Request = c.Request.WithContext(ctx)
 	if _, err := h.svc.AuthorizeStoryboardGenerationRead(ctx, c.Param("id")); err != nil {
-		HandleError(c, err)
+		handleStoryboardWorkflowStageError(c, err)
 		return false
 	}
 	return true

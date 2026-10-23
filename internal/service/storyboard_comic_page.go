@@ -41,7 +41,8 @@ type ComicPageGenerationRequest struct {
 	ComicStyle               string
 	Pipeline                 ComicPagePipelineOptions
 	// SkipPeerFailureGate 用户重试时跳过同批兄弟分镜失败闸门
-	SkipPeerFailureGate bool
+	SkipPeerFailureGate     bool
+	ExpectedPreviousImageID *string
 }
 
 // NormalizeComicPagePipeline applies fallback defaults for legacy/internal callers.
@@ -227,7 +228,7 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		return nil, fmt.Errorf("%w: layoutPreset conflicts with panelCount", domain.ErrInvalidInput)
 	}
 
-	storyboard, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID)
+	storyboard, authorizedScene, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID)
 	if err != nil {
 		return nil, fmt.Errorf("storyboard not found: %w", err)
 	}
@@ -304,7 +305,7 @@ func (s *Service) GenerateStoryboardComicPage(ctx context.Context, req *ComicPag
 		ContentLanguage:          s.storyboardSceneContentLanguage(ctx, plannedScene, req.SceneTitle+"\n"+mergedSceneDescription),
 	}
 
-	if err := s.repo.CreateImageGeneration(ctx, gen); err != nil {
+	if err := s.createStoryboardImageAttempt(ctx, gen, storyboard.UserID, domain.StoryboardContentRevision(storyboard, []domain.StoryboardScene{*authorizedScene}), req.ExpectedPreviousImageID); err != nil {
 		return nil, fmt.Errorf("failed to create image generation record: %w", err)
 	}
 
@@ -339,6 +340,7 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		s.logger.Warn("failed to update comic page generation status to processing",
 			zap.String("generationId", gen.ID),
 			zap.Error(err))
+		return
 	}
 
 	huoshanOK := s.genAPI != nil && s.genAPI.HuoshanInternalClient() != nil
@@ -439,38 +441,15 @@ func (s *Service) processComicPageGeneration(ctx context.Context, gen *domain.St
 		}
 	}
 
-	if latest, err := s.repo.GetImageGeneration(ctx, gen.ID); err == nil && latest != nil && latest.Status == domain.GenerationStatusFailed {
+	accepted, finishErr := s.completeStoryboardImageAttempt(ctx, gen)
+	if finishErr != nil {
+		s.logger.Error("failed to finalize comic page candidate", zap.String("generationId", gen.ID), zap.Error(finishErr))
 		return
 	}
-
-	if gen.GeneratedImageURL == "" {
-		gen.Status = domain.GenerationStatusFailed
-		if gen.ErrorMessage == "" {
-			gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "comic page generation failed: empty generated image url")
-		}
-	} else {
-		gen.Status = domain.GenerationStatusCompleted
-		gen.ErrorMessage = ""
-	}
-	now := time.Now().Unix()
-	gen.CompletedAt = &now
-	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
-		s.logger.Error("failed to update comic page generation final status",
-			zap.String("generationId", gen.ID),
-			zap.Error(err))
-	}
-
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
-
-	if gen.GeneratedImageURL != "" && gen.SceneID != "" {
-		if err := s.repo.UpdateStoryboardSceneImage(ctx, gen.SceneID, gen.GeneratedImageURL); err != nil {
-			s.logger.Warn("failed to sync comic page image to storyboard scene",
-				zap.String("sceneId", gen.SceneID),
-				zap.Error(err))
-		}
+	if accepted {
+		s.afterSceneImageWritten(ctx, gen)
 	}
-
-	s.afterSceneImageWritten(ctx, gen)
 
 	if s.metrics != nil {
 		duration := time.Since(startTime)
@@ -590,7 +569,7 @@ func (s *Service) uploadStoryboardSceneImageOSS(gen *domain.StoryboardImageGener
 	originalImageURL := originalURL
 	ossClient := aliyun.GetGlobalClient()
 	if ossClient != nil {
-		objectKey := fmt.Sprintf("storyboard/%s/scenes/%s.jpg", gen.StoryboardID, gen.SceneID)
+		objectKey := storyboardSceneImageObjectKey(gen, "jpg")
 		ossURL, err := ossClient.UploadFileFromURL(objectKey, originalImageURL)
 		if err != nil {
 			s.logger.Warn("failed to upload comic page image to OSS, using original URL",

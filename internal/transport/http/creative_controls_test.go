@@ -30,6 +30,15 @@ func TestCreativeRequestBindingRejectsExplicitNullButAllowsOmission(t *testing.T
 		{`{}`, true}, {`{"creativeControls":{}}`, true}, {`{"creativeControls":null}`, false},
 		{`{"creativeControls":{"version":0}}`, false}, {`{"creativeControls":{"tone":""}}`, false},
 		{`{"creativeControls":{"pacing":null}}`, false}, {`{"creativeControls":{"examples":[{"input":"x","output":null}]}}`, false},
+		{`{"CREATIVECONTROLS":null}`, false}, {`{"CreativeControls":{}}`, false},
+		{`{"creativeControls":{},"CREATIVECONTROLS":null}`, false},
+		{`{"CREATIVECONTROLS":null,"creativeControls":{}}`, false},
+		{`{"creativeControls":{},"creativeControls":{}}`, false},
+		{`{"creativeControls":{"Version":1}}`, false}, {`{"creativeControls":{"PACING":"slow"}}`, false},
+		{`{"creativeControls":{"pacing":"fast","pacing":"slow"}}`, false},
+		{`{"creativeControls":{"examples":[{"Input":"x","output":"y"}]}}`, false},
+		{`{"creativeControls":{"examples":[{"input":"x","OUTPUT":"y"}]}}`, false},
+		{`{"title":"story","creativeControls":{"version":1,"tone":"warm"}}`, true},
 	} {
 		context, _ := gin.CreateTestContext(httptest.NewRecorder())
 		context.Request = httptest.NewRequest("POST", "/", strings.NewReader(tc.body))

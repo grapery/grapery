@@ -337,6 +337,8 @@ type Character struct {
 
 // CharacterGenerationTask database model for async story-character creation drafts.
 type CharacterGenerationTask struct {
+	RequestKey     *string    `gorm:"size:64;uniqueIndex:idx_character_task_request_key"`
+	IntentHash     string     `gorm:"size:64"`
 	StagesJSON     string     `gorm:"type:longtext"`
 	AttributesJSON string     `gorm:"type:longtext"`
 	LeaseOwner     string     `gorm:"size:64"`
@@ -1297,19 +1299,25 @@ func (FragmentDB) TableName() string {
 
 // FragmentGenerationTaskDB fragment generation task database model
 type FragmentGenerationTaskDB struct {
-	ID           string `gorm:"primaryKey;size:36"`
-	UserID       string `gorm:"size:36;not null;index:idx_fragment_gen_user"`
-	Status       string `gorm:"size:20;not null;default:'pending';index:idx_fragment_gen_status"`
-	RequestJSON  string `gorm:"type:text;not null"` // JSON encoded FragmentGenerationRequest
-	ResultJSON   string `gorm:"type:longtext"`      // JSON encoded FragmentGenerationResult
-	Progress     int    `gorm:"type:int;default:0"`
-	CurrentStep  string `gorm:"size:50"`
-	ErrorMessage string `gorm:"type:text"`
-	TokensUsed   int    `gorm:"type:int;default:0"`
-	CreatedAt    int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_gen_created"`
-	StartedAt    *int64 `gorm:"type:bigint"`
-	CompletedAt  *int64 `gorm:"type:bigint"`
-	UpdatedAt    int64  `gorm:"type:bigint;autoUpdateTime"`
+	ID               string `gorm:"primaryKey;size:36"`
+	UserID           string `gorm:"size:36;not null;index:idx_fragment_gen_user"`
+	Status           string `gorm:"size:20;not null;default:'pending';index:idx_fragment_gen_status"`
+	RequestJSON      string `gorm:"type:text;not null"` // JSON encoded FragmentGenerationRequest
+	ResultJSON       string `gorm:"type:longtext"`      // JSON encoded FragmentGenerationResult
+	Progress         int    `gorm:"type:int;default:0"`
+	CurrentStep      string `gorm:"size:50"`
+	ErrorMessage     string `gorm:"type:text"`
+	TokensUsed       int    `gorm:"type:int;default:0"`
+	CreatedAt        int64  `gorm:"type:bigint;autoCreateTime;index:idx_fragment_gen_created"`
+	StartedAt        *int64 `gorm:"type:bigint"`
+	CompletedAt      *int64 `gorm:"type:bigint"`
+	UpdatedAt        int64  `gorm:"type:bigint;autoUpdateTime"`
+	LeaseOwner       string `gorm:"size:64;not null;default:''"`
+	LeaseFence       int64  `gorm:"type:bigint;not null;default:0"`
+	LeaseExpiresAt   *int64 `gorm:"type:bigint;index:idx_fragment_gen_lease_expiry"`
+	CheckpointJSON   string `gorm:"type:longtext"`
+	ExecutionVersion int    `gorm:"not null;default:0"`
+	ReadyAt          *int64 `gorm:"type:bigint"`
 
 	User User `gorm:"foreignKey:UserID"`
 }

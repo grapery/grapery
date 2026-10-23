@@ -503,6 +503,7 @@ func main() {
 	// Setup graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	fragmentGenService.StartRecovery(shutdownCtx)
 
 	// Initialize server
 	srv := server.New(cfg, router)

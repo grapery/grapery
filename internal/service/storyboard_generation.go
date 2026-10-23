@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -53,7 +54,8 @@ type ImageGenerationRequest struct {
 	// ComicStyle 漫画/视觉风格 slug（如续写 continuation_comic_style）
 	ComicStyle string `json:"comicStyle,omitempty"`
 	// SkipPeerFailureGate 为 true 时跳过「同批其他分镜已失败则放弃」（用于用户主动重试）。
-	SkipPeerFailureGate bool `json:"-"`
+	SkipPeerFailureGate     bool    `json:"-"`
+	ExpectedPreviousImageID *string `json:"-"`
 }
 
 // RetryFailedStoryboardImageOptions optional flags for POST retry-failed-images.
@@ -649,8 +651,9 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 	if req == nil {
 		return nil, domain.ErrInvalidInput
 	}
-	if _, _, err := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID); err != nil {
-		return nil, err
+	authorizedBoard, authorizedScene, authErr := s.authorizeStoryboardSceneGeneration(ctx, req.StoryboardID, req.SceneID)
+	if authErr != nil {
+		return nil, authErr
 	}
 	s.logger.Info("starting scene image generation",
 		zap.String("storyboardId", req.StoryboardID),
@@ -764,7 +767,7 @@ func (s *Service) GenerateSceneImage(ctx context.Context, req *ImageGenerationRe
 		zap.Bool("isTransitionScene", isTransitionScene),
 		zap.Int("totalReferenceImages", len(allReferenceImages)))
 
-	if err := s.repo.CreateImageGeneration(ctx, gen); err != nil {
+	if err := s.createStoryboardImageAttempt(ctx, gen, authorizedBoard.UserID, domain.StoryboardContentRevision(authorizedBoard, []domain.StoryboardScene{*authorizedScene}), req.ExpectedPreviousImageID); err != nil {
 		s.logger.Error("failed to create image generation record",
 			zap.String("generationId", gen.ID),
 			zap.String("storyboardId", req.StoryboardID),
@@ -850,7 +853,7 @@ func latestStoryboardImageGenerationByScene(list []*domain.StoryboardImageGenera
 			continue
 		}
 		cur, ok := out[g.SceneID]
-		if !ok || g.CreatedAt > cur.CreatedAt || (g.CreatedAt == cur.CreatedAt && g.ID > cur.ID) {
+		if !ok || domain.StoryboardImageAttemptAfter(g, cur) {
 			out[g.SceneID] = g
 		}
 	}
@@ -983,6 +986,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		s.logger.Warn("failed to update image generation status to processing",
 			zap.String("generationId", gen.ID),
 			zap.Error(err))
+		return
 	} else {
 		s.logger.Debug("image generation status updated to processing",
 			zap.String("generationId", gen.ID))
@@ -1185,6 +1189,10 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 
 		resp, err := s.genAPI.GenerateImage(ctx, imageProvider, genReq)
 		if err != nil {
+			// Once a paid provider call has been dispatched, a transport error does
+			// not prove that the provider did no work. Keep this attempt fenced for
+			// reconciliation instead of authorizing an automatic second charge.
+			gen.ErrorMessage = markStoryboardImageOutcomeUnknown(err)
 			s.logger.Warn("AI image generation failed, keeping prompt only",
 				zap.String("generationId", gen.ID),
 				zap.String("sceneId", gen.SceneID),
@@ -1207,7 +1215,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 			ossClient := aliyun.GetGlobalClient()
 			if ossClient != nil {
 				// 生成OSS object key
-				objectKey := fmt.Sprintf("storyboard/%s/scenes/%s.jpg", gen.StoryboardID, gen.SceneID)
+				objectKey := storyboardSceneImageObjectKey(gen, "jpg")
 
 				// 上传到OSS
 				ossURL, err := ossClient.UploadFileFromURL(objectKey, originalImageURL)
@@ -1259,7 +1267,7 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 				// Upload image bytes to OSS
 				ossClient := aliyun.GetGlobalClient()
 				if ossClient != nil {
-					objectKey := fmt.Sprintf("storyboard/%s/scenes/%s.png", gen.StoryboardID, gen.SceneID)
+					objectKey := storyboardSceneImageObjectKey(gen, "png")
 					imageURL, uploadErr := ossClient.UploadBytes(objectKey, imageBytes[0])
 					if uploadErr != nil {
 						s.logger.Warn("failed to upload generated image to OSS",
@@ -1289,65 +1297,15 @@ func (s *Service) processImageGeneration(ctx context.Context, gen *domain.Storyb
 		}
 	}
 
-	// 并行任务中：若兄弟任务已先将本行标为失败（级联取消），则不再写入成功。
-	if latest, err := s.repo.GetImageGeneration(ctx, gen.ID); err == nil && latest != nil && latest.Status == domain.GenerationStatusFailed {
-		s.logger.Info("image generation record already failed in DB (cascade), skipping final write",
-			zap.String("generationId", gen.ID),
-			zap.String("storyboardId", gen.StoryboardID))
+	accepted, finishErr := s.completeStoryboardImageAttempt(ctx, gen)
+	if finishErr != nil {
+		s.logger.Error("failed to finalize storyboard image candidate", zap.String("generationId", gen.ID), zap.Error(finishErr))
 		return
 	}
-
-	if gen.GeneratedImageURL == "" {
-		gen.Status = domain.GenerationStatusFailed
-		if gen.ErrorMessage == "" {
-			gen.ErrorMessage = formatGenerationError(GenerationErrorProvider, "image generation failed: empty generated image url")
-		}
-	} else {
-		gen.Status = domain.GenerationStatusCompleted
-		gen.ErrorMessage = ""
-	}
-	now := time.Now().Unix()
-	gen.CompletedAt = &now
-	if err := s.repo.UpdateImageGeneration(ctx, gen); err != nil {
-		s.logger.Error("failed to update image generation final status",
-			zap.String("generationId", gen.ID),
-			zap.Error(err))
-	} else {
-		s.logger.Debug("image generation final status updated",
-			zap.String("generationId", gen.ID),
-			zap.String("status", gen.Status))
-	}
-
-	s.logger.Debug("updating storyboard token consumption",
-		zap.String("storyboardId", gen.StoryboardID))
 	s.updateStoryboardTokens(ctx, gen.StoryboardID)
-
-	// Sync generated image URL to storyboard scene
-	if gen.GeneratedImageURL != "" && gen.SceneID != "" {
-		s.logger.Debug("syncing image URL to storyboard scene",
-			zap.String("generationId", gen.ID),
-			zap.String("sceneId", gen.SceneID),
-			zap.String("imageURL", gen.GeneratedImageURL))
-		if err := s.repo.UpdateStoryboardSceneImage(ctx, gen.SceneID, gen.GeneratedImageURL); err != nil {
-			s.logger.Warn("failed to sync image to storyboard scene",
-				zap.String("generationId", gen.ID),
-				zap.String("sceneId", gen.SceneID),
-				zap.String("imageURL", gen.GeneratedImageURL),
-				zap.Error(err))
-		} else {
-			s.logger.Info("image URL synced to storyboard scene",
-				zap.String("generationId", gen.ID),
-				zap.String("sceneId", gen.SceneID),
-				zap.String("imageURL", gen.GeneratedImageURL))
-		}
-	} else {
-		s.logger.Debug("skipping image URL sync - missing image URL or scene ID",
-			zap.String("generationId", gen.ID),
-			zap.String("sceneId", gen.SceneID),
-			zap.String("imageURL", gen.GeneratedImageURL))
+	if accepted {
+		s.afterSceneImageWritten(ctx, gen)
 	}
-
-	s.afterSceneImageWritten(ctx, gen)
 
 	// Record metrics: completed
 	if s.metrics != nil {
@@ -2405,91 +2363,110 @@ func (s *Service) GetGenerationProgress(ctx context.Context, storyboardID string
 // It starts new generation jobs only for scenes whose latest image generation row (by time) is failed,
 // so old failed rows after a successful retry do not trigger duplicate work.
 func (s *Service) RetryFailedStoryboardImages(ctx context.Context, storyboardID string, opts *RetryFailedStoryboardImageOptions) (retried int, remainingFailed int, err error) {
-	if _, err := s.AuthorizeStoryboardGeneration(ctx, storyboardID); err != nil {
+	board, err := s.AuthorizeStoryboardGeneration(ctx, storyboardID)
+	if err != nil {
 		return 0, 0, err
 	}
-	forceComic := opts != nil && opts.ForceComicPagePipeline
+	scenes, err := s.repo.StoryboardScenes(ctx, storyboardID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(scenes) == 0 {
+		return 0, 0, fmt.Errorf("%w: no accepted scenes; resume the original content workflow", domain.ErrInvalidInput)
+	}
 	imageGens, err := s.repo.ListImageGenerations(ctx, storyboardID)
 	if err != nil {
 		return 0, 0, err
 	}
-
 	latestByScene := latestStoryboardImageGenerationByScene(imageGens)
-	var toRetry []*domain.StoryboardImageGeneration
-	for _, gen := range latestByScene {
-		if gen == nil {
+	forceComic := opts != nil && opts.ForceComicPagePipeline
+	// Fail closed before enqueueing any paid work when a current result is
+	// unresolved. pending/processing are polled, never replayed.
+	for _, scene := range scenes {
+		if scene == nil || strings.TrimSpace(scene.Image) != "" {
 			continue
 		}
-		needsRetry := gen.Status == domain.GenerationStatusFailed ||
-			(gen.Status == domain.GenerationStatusCompleted && strings.TrimSpace(gen.GeneratedImageURL) == "")
-		if !needsRetry {
+		gen := latestByScene[scene.ID]
+		if gen == nil || strings.TrimSpace(gen.GeneratedImageURL) != "" {
 			continue
 		}
-		toRetry = append(toRetry, gen)
+		if storyboardImageOutcomeRequiresReconciliation(gen) {
+			return 0, 0, storyboardImageAttemptError(fmt.Errorf("%w: scene %s provider outcome requires reconciliation", domain.ErrAlreadyExists, scene.ID))
+		}
+		switch gen.Status {
+		case domain.GenerationStatusPending, domain.GenerationStatusProcessing, domain.GenerationStatusFailed, domain.GenerationStatusCompleted:
+		default:
+			return 0, 0, storyboardImageAttemptError(fmt.Errorf("%w: scene %s has unresolved image status %q", domain.ErrAlreadyExists, scene.ID, gen.Status))
+		}
 	}
-
-	for _, gen := range toRetry {
-		comicStyle := strings.TrimSpace(gen.ComicStyle)
-		if comicStyle == "" {
-			if sb, sbErr := s.repo.StoryboardByID(ctx, storyboardID); sbErr == nil && sb != nil {
-				comicStyle = strings.TrimSpace(sb.ContinuationComicStyle)
+	var failures []error
+	for _, scene := range scenes {
+		if scene == nil || strings.TrimSpace(scene.Image) != "" {
+			continue
+		}
+		gen := latestByScene[scene.ID]
+		if gen != nil && strings.TrimSpace(gen.GeneratedImageURL) != "" {
+			accepted, recoverErr := s.finalizeStoryboardImageAttempt(ctx, gen)
+			if recoverErr != nil {
+				failures = append(failures, fmt.Errorf("recover scene %s: %w", scene.ID, recoverErr))
+			} else if accepted {
+				retried++
+				s.afterSceneImageWritten(ctx, gen)
+			}
+			continue
+		}
+		if gen != nil && (gen.Status == domain.GenerationStatusPending || gen.Status == domain.GenerationStatusProcessing) {
+			continue
+		}
+		previousID := ""
+		comicStyle := strings.TrimSpace(board.ContinuationComicStyle)
+		useComic := forceComic
+		var pipeline ComicPagePipelineOptions
+		var refs, characterRefs []string
+		if gen != nil {
+			previousID = gen.ID
+			useComic = useComic || gen.PipelineKind == domain.StoryboardImagePipelineComicPage
+			pipeline = comicPageRetryOptions(gen)
+			refs, characterRefs = gen.ReferenceImages, gen.CharacterReferenceImages
+			if strings.TrimSpace(gen.ComicStyle) != "" {
+				comicStyle = gen.ComicStyle
 			}
 		}
-		useComic := forceComic || strings.TrimSpace(gen.PipelineKind) == domain.StoryboardImagePipelineComicPage
 		var retryErr error
 		if useComic {
 			_, retryErr = s.GenerateStoryboardComicPage(ctx, &ComicPageGenerationRequest{
-				StoryboardID:             storyboardID,
-				SceneID:                  gen.SceneID,
-				SceneTitle:               gen.SceneTitle,
-				SceneDescription:         gen.SceneDescription,
-				ReferenceImages:          gen.ReferenceImages,
-				SceneCharacters:          gen.SceneCharacters,
-				CharacterReferenceImages: gen.CharacterReferenceImages,
-				StoryStyle:               gen.StoryStyle,
-				ComicStyle:               comicStyle,
-				SkipPeerFailureGate:      true,
-				Pipeline:                 comicPageRetryOptions(gen),
+				StoryboardID: storyboardID, SceneID: scene.ID, SceneTitle: scene.Title, SceneDescription: scene.Description,
+				ReferenceImages: refs, SceneCharacters: scene.Characters, CharacterReferenceImages: characterRefs,
+				ComicStyle: comicStyle, SkipPeerFailureGate: true, Pipeline: pipeline, ExpectedPreviousImageID: &previousID,
 			})
 		} else {
 			_, retryErr = s.GenerateSceneImage(ctx, &ImageGenerationRequest{
-				StoryboardID:             storyboardID,
-				SceneID:                  gen.SceneID,
-				SceneTitle:               gen.SceneTitle,
-				SceneDescription:         gen.SceneDescription,
-				ReferenceImages:          gen.ReferenceImages,
-				SceneCharacters:          gen.SceneCharacters,
-				CharacterReferenceImages: gen.CharacterReferenceImages,
-				StoryStyle:               gen.StoryStyle,
-				ComicStyle:               comicStyle,
-				SkipPeerFailureGate:      true,
+				StoryboardID: storyboardID, SceneID: scene.ID, SceneTitle: scene.Title, SceneDescription: scene.Description,
+				ReferenceImages: refs, SceneCharacters: scene.Characters, CharacterReferenceImages: characterRefs,
+				ComicStyle: comicStyle, SkipPeerFailureGate: true, ExpectedPreviousImageID: &previousID,
 			})
 		}
 		if retryErr != nil {
-			s.logger.Warn("failed to retry image generation",
-				zap.String("storyboardId", storyboardID),
-				zap.String("sceneId", gen.SceneID),
-				zap.Bool("comicPage", useComic),
-				zap.Error(retryErr))
+			failures = append(failures, fmt.Errorf("retry scene %s: %w", scene.ID, retryErr))
 			continue
 		}
 		retried++
 	}
-
-	// Count remaining failed based on latest record per scene only,
-	// so newly-created pending retry records don't get masked by the old failed rows.
 	allImageGens, listErr := s.repo.ListImageGenerations(ctx, storyboardID)
 	if listErr != nil {
-		return retried, 0, nil
-	}
-	postRetryLatest := latestStoryboardImageGenerationByScene(allImageGens)
-	for _, gen := range postRetryLatest {
-		if gen != nil && gen.Status == domain.GenerationStatusFailed {
-			remainingFailed++
+		failures = append(failures, fmt.Errorf("refresh image attempts: %w", listErr))
+	} else {
+		postRetryLatest := latestStoryboardImageGenerationByScene(allImageGens)
+		for _, scene := range scenes {
+			if scene == nil || strings.TrimSpace(scene.Image) != "" {
+				continue
+			}
+			if gen := postRetryLatest[scene.ID]; gen != nil && gen.Status == domain.GenerationStatusFailed {
+				remainingFailed++
+			}
 		}
 	}
-
-	return retried, remainingFailed, nil
+	return retried, remainingFailed, errors.Join(failures...)
 }
 
 // CancelStoryboardGeneration cancels all in-flight generation tasks for a storyboard.

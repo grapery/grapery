@@ -128,12 +128,15 @@ const (
 
 // CharacterGenerationTask is the durable draft/progress record for async story-character creation.
 type CharacterGenerationStage struct {
-	Status   string `json:"status"`
-	Error    string `json:"error,omitempty"`
-	Attempts int    `json:"attempts"`
+	OutcomeUnknown bool   `json:"outcomeUnknown,omitempty"`
+	Status         string `json:"status"`
+	Error          string `json:"error,omitempty"`
+	Attempts       int    `json:"attempts"`
 }
 
 type CharacterGenerationTask struct {
+	RequestKey                 string                              `json:"-"`
+	IntentHash                 string                              `json:"-"`
 	Stages                     map[string]CharacterGenerationStage `json:"stages,omitempty"`
 	AttributesJSON             string                              `json:"-"`
 	LeaseOwner                 string                              `json:"-"`

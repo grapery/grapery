@@ -85,15 +85,41 @@ type StoryboardComicText struct {
 
 // ImagePromptDetails 结构化的图片生成提示词详情
 type ImagePromptDetails struct {
-	ArtStyle        string                   `json:"artStyle"`                  // 艺术风格和媒介，如 "digital painting", "watercolor", "photorealistic"
-	Lighting        string                   `json:"lighting"`                  // 光照和氛围，如 "soft morning light", "dramatic shadows"
-	ColorPalette    string                   `json:"colorPalette"`              // 色彩 palette，如 "warm tones", "cool blues and grays"
-	Composition     string                   `json:"composition"`               // 构图细节，如 "wide angle", "close-up", "rule of thirds"
-	KeyElements     []string                 `json:"keyElements"`               // 关键视觉元素列表
-	Mood            string                   `json:"mood"`                      // 情绪氛围，如 "peaceful", "tense", "mysterious"
-	AdditionalNotes string                   `json:"additionalNotes,omitempty"` // 其他补充说明（微表情、大气特效等）
-	ComicTexts      []StoryboardComicText    `json:"comicTexts,omitempty"`
-	ComicPagePlan   *StoryboardComicPagePlan `json:"comicPagePlan,omitempty"` // 唯一允许绘入的漫画文字；模型无法准确绘字时应连同空气泡一并省略
+	// Execution is server-owned fencing metadata, persisted in the existing JSON
+	// column. Prompt compilation and client edits must never replace it.
+	Execution       *StoryboardImageExecution `json:"execution,omitempty"`
+	ArtStyle        string                    `json:"artStyle"`                  // 艺术风格和媒介，如 "digital painting", "watercolor", "photorealistic"
+	Lighting        string                    `json:"lighting"`                  // 光照和氛围，如 "soft morning light", "dramatic shadows"
+	ColorPalette    string                    `json:"colorPalette"`              // 色彩 palette，如 "warm tones", "cool blues and grays"
+	Composition     string                    `json:"composition"`               // 构图细节，如 "wide angle", "close-up", "rule of thirds"
+	KeyElements     []string                  `json:"keyElements"`               // 关键视觉元素列表
+	Mood            string                    `json:"mood"`                      // 情绪氛围，如 "peaceful", "tense", "mysterious"
+	AdditionalNotes string                    `json:"additionalNotes,omitempty"` // 其他补充说明（微表情、大气特效等）
+	ComicTexts      []StoryboardComicText     `json:"comicTexts,omitempty"`
+	ComicPagePlan   *StoryboardComicPagePlan  `json:"comicPagePlan,omitempty"` // 唯一允许绘入的漫画文字；模型无法准确绘字时应连同空气泡一并省略
+}
+
+type StoryboardImageExecution struct {
+	OwnerID   string `json:"ownerId"`
+	Revision  string `json:"revision"`
+	Attempt   int64  `json:"attempt"`
+	Rejection string `json:"rejection,omitempty"`
+}
+
+// StoryboardImageAttemptAfter orders new fenced attempts even when several jobs
+// share the same second-resolution public createdAt timestamp.
+func StoryboardImageAttemptAfter(a, b *StoryboardImageGeneration) bool {
+	if b == nil {
+		return true
+	}
+	aOrder, bOrder := a.CreatedAt*1e9, b.CreatedAt*1e9
+	if a.PromptDetails != nil && a.PromptDetails.Execution != nil {
+		aOrder = a.PromptDetails.Execution.Attempt
+	}
+	if b.PromptDetails != nil && b.PromptDetails.Execution != nil {
+		bOrder = b.PromptDetails.Execution.Attempt
+	}
+	return aOrder > bOrder || (aOrder == bOrder && a.ID > b.ID)
 }
 
 const (

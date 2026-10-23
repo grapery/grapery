@@ -27,7 +27,13 @@ func migrateFragmentGenerationTaskTestTable(t *testing.T, db *gorm.DB) {
 			created_at INTEGER,
 			started_at INTEGER,
 			completed_at INTEGER,
-			updated_at INTEGER
+			updated_at INTEGER,
+			lease_owner TEXT NOT NULL DEFAULT '',
+			lease_fence INTEGER NOT NULL DEFAULT 0,
+			lease_expires_at INTEGER,
+			checkpoint_json TEXT
+			,execution_version INTEGER NOT NULL DEFAULT 0
+			,ready_at INTEGER
 		)
 	`).Error; err != nil {
 		t.Fatalf("create task table: %v", err)
@@ -41,6 +47,10 @@ func TestFragmentGenerationRepository_UpsertAndListImageSlots(t *testing.T) {
 	}
 	if err := db.AutoMigrate(&mysql.FragmentGenerationImageSlotDB{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
+	}
+	migrateFragmentGenerationTaskTestTable(t, db)
+	if err := db.Exec(`INSERT INTO fragment_generation_tasks(id,user_id,status,request_json) VALUES('task-1','user','pending','{}')`).Error; err != nil {
+		t.Fatal(err)
 	}
 
 	repo := NewFragmentGenerationRepository(db)

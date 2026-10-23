@@ -33,6 +33,9 @@ type StoryboardWorkflowStageResult struct {
 }
 
 type StoryboardWorkflowStageOptions struct {
+	// ProvidedFields distinguishes explicit empty/false JSON choices from omitted
+	// fields on a pinned stage continuation. Internal callers may leave it nil.
+	ProvidedFields      map[string]bool
 	CreativeControls    *domain.CreativeControls
 	GenerationRunID     string
 	ClientRequestID     string
@@ -228,18 +231,41 @@ func (s *Service) ensureStoryboardWorkflowRun(ctx context.Context, storyboard *d
 			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("load pinned storyboard generation run: %w", err)
 		}
 		if existing.StoryboardID != storyboard.ID || existing.UserID != storyboard.UserID {
-			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("generation run does not belong to storyboard")
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("%w: generation run does not belong to storyboard", domain.ErrForbidden)
 		}
-		if opts.CreativeControls != nil && !sameCreativeControls(opts.CreativeControls, storyboardWorkflowRunRequestFromRun(existing).CreativeControls) {
-			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("creativeControls cannot change within a generation run")
+		if err := validateStoryboardWorkflowRunIntent(existing, storyboard, opts, opts.RegenerateStructure); err != nil {
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, err
 		}
 		return restoreStoryboardWorkflowRun(existing, sceneCount)
 	}
-	if existing, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboard.ID); err == nil && existing != nil && storyboardWorkflowRunMatchesRequest(existing, opts) {
-		if opts.CreativeControls != nil && !sameCreativeControls(opts.CreativeControls, storyboardWorkflowRunRequestFromRun(existing).CreativeControls) {
-			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("creativeControls cannot change within a generation run")
+	if key := strings.TrimSpace(opts.ClientRequestID); key != "" {
+		finder, ok := s.repo.(storyboardWorkflowRequestFinder)
+		if !ok {
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("storyboard request history lookup is not configured")
 		}
-		return restoreStoryboardWorkflowRun(existing, sceneCount)
+		historical, err := finder.FindStoryboardGenerationRunsByClientRequest(ctx, storyboard.ID, storyboard.UserID, key)
+		if err != nil {
+			return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("load storyboard request history: %w", err)
+		}
+		for _, existing := range historical {
+			if err := validateStoryboardWorkflowRunIntent(existing, storyboard, opts, true); err != nil {
+				return nil, storyboardGenerationContextSnapshot{}, "", 0, err
+			}
+		}
+		if len(historical) > 0 {
+			return restoreStoryboardWorkflowRun(historical[0], sceneCount)
+		}
+	} else if existing, err := s.repo.LatestStoryboardGenerationRun(ctx, storyboard.ID); err == nil && existing != nil {
+		if !opts.RegenerateStructure {
+			if err := validateStoryboardWorkflowRunIntent(existing, storyboard, opts, false); err != nil {
+				return nil, storyboardGenerationContextSnapshot{}, "", 0, err
+			}
+			return restoreStoryboardWorkflowRun(existing, sceneCount)
+		}
+		// Unkeyed revisions may reuse only a fully fingerprinted identical request.
+		if existingRequest := storyboardWorkflowRunRequestFromRun(existing); existingRequest.RequestIntent != nil && existingRequest.ClientRequestID == "" && validateStoryboardWorkflowRunIntent(existing, storyboard, opts, true) == nil {
+			return restoreStoryboardWorkflowRun(existing, sceneCount)
+		}
 	} else if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return nil, storyboardGenerationContextSnapshot{}, "", 0, fmt.Errorf("load latest storyboard generation run: %w", err)
 	}
@@ -266,7 +292,8 @@ func (s *Service) ensureStoryboardWorkflowRun(ctx context.Context, storyboard *d
 		ID: uuid.NewString(), StoryboardID: storyboard.ID, StoryID: storyboard.StoryID, UserID: storyboard.UserID,
 		Status: domain.GenerationStatusProcessing, Progress: 5, CurrentStep: domain.StoryboardGenerationStepContext,
 		RequestJSON: mustJSON(map[string]any{
-			"rawInput": storyboard.RawInput, "sceneCount": sceneCount, "continuation": continuation,
+			"requestIntent": newStoryboardWorkflowIntent(storyboard, opts, controls),
+			"rawInput":      storyboard.RawInput, "sceneCount": sceneCount, "continuation": continuation,
 			"comicStyle": storyboard.ContinuationComicStyle, "clientRequestId": strings.TrimSpace(opts.ClientRequestID),
 			"regenerateStructure": opts.RegenerateStructure, "userDirective": strings.TrimSpace(opts.UserDirective),
 			"creativeControls": opts.CreativeControls,
@@ -406,13 +433,14 @@ func (s *Service) ensureStoryboardPersistContentStage(ctx context.Context, story
 }
 
 type storyboardWorkflowRunRequest struct {
-	CreativeControls    *domain.CreativeControls `json:"creativeControls,omitempty"`
-	ClientRequestID     string                   `json:"clientRequestId"`
-	RegenerateStructure bool                     `json:"regenerateStructure"`
-	UserDirective       string                   `json:"userDirective"`
-	Language            string                   `json:"language"`
-	SceneCount          int                      `json:"sceneCount"`
-	ComicStyle          string                   `json:"comicStyle"`
+	RequestIntent       *storyboardWorkflowIntent `json:"requestIntent,omitempty"`
+	CreativeControls    *domain.CreativeControls  `json:"creativeControls,omitempty"`
+	ClientRequestID     string                    `json:"clientRequestId"`
+	RegenerateStructure bool                      `json:"regenerateStructure"`
+	UserDirective       string                    `json:"userDirective"`
+	Language            string                    `json:"language"`
+	SceneCount          int                       `json:"sceneCount"`
+	ComicStyle          string                    `json:"comicStyle"`
 }
 
 func storyboardWorkflowOutputLanguage(run *domain.StoryboardGenerationRun) string {
@@ -432,17 +460,13 @@ func storyboardWorkflowRunRequestFromRun(run *domain.StoryboardGenerationRun) st
 }
 
 func storyboardWorkflowRunMatchesRequest(run *domain.StoryboardGenerationRun, opts StoryboardWorkflowStageOptions) bool {
-	if !opts.RegenerateStructure {
-		return true
-	}
 	request := storyboardWorkflowRunRequestFromRun(run)
-	if !request.RegenerateStructure {
+	if request.RequestIntent == nil {
 		return false
 	}
-	if id := strings.TrimSpace(opts.ClientRequestID); id != "" {
-		return strings.TrimSpace(request.ClientRequestID) == id
-	}
-	return strings.TrimSpace(request.UserDirective) == strings.TrimSpace(opts.UserDirective)
+	frozen := request.RequestIntent
+	board := &domain.Storyboard{StoryID: frozen.StoryID, ParentID: frozen.ParentID, IsStandalone: frozen.IsStandalone, UseComicPagePipeline: frozen.ComicPage, RawInput: frozen.RawInput}
+	return validateStoryboardWorkflowRunIntent(run, board, opts, true) == nil
 }
 
 func storyboardWorkflowRunIsRevision(run *domain.StoryboardGenerationRun) bool {

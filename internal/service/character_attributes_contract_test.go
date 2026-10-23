@@ -93,7 +93,7 @@ func TestCharacterVisualReferenceInheritance(t *testing.T) {
 	}
 }
 func TestCharacterMissingVisualAssetsBecomePartialAndKeepCompletedAttributes(t *testing.T) {
-	repo := &characterPromptTestRepo{character: &domain.Character{BaseModel: common.BaseModel{ID: "character"}, Author: &domain.User{BaseModel: common.BaseModel{ID: "owner"}}}}
+	repo := &characterPromptTestRepo{character: &domain.Character{BaseModel: common.BaseModel{ID: "character"}, StoryID: "story", Author: &domain.User{BaseModel: common.BaseModel{ID: "owner"}}}}
 	s := &Service{repo: repo, logger: zap.NewNop()}
 	task := &domain.CharacterGenerationTask{ID: "task", StoryID: "story", UserID: "owner", CharacterID: "character", RequestJSON: `{"name":"雨","description":"已有设定"}`, AttributesJSON: validCharacterAttributeJSON(), Stages: map[string]domain.CharacterGenerationStage{"attributes": {Status: "completed", Attempts: 1}, "character": {Status: "completed", Attempts: 1}}}
 	if err := s.executeCharacterGenerationTask(context.Background(), task); err != nil {

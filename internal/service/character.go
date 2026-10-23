@@ -89,9 +89,10 @@ type GenerateCharacterAvatarResult struct {
 
 // GenerateCharacterPortraitRequest AI生成角色形象请求（完整形象图）
 type GenerateCharacterPortraitRequest struct {
-	CustomPrompt   string `json:"customPrompt"`   // 用户自定义提示词（可选）
-	ReferenceImage string `json:"referenceImage"` // 参考图URL（可选）
-	AspectRatio    string `json:"aspectRatio"`    // 建议 2:3 或 3:4（竖版人像）
+	ClientRequestID string `json:"clientRequestId,omitempty" binding:"omitempty,max=256"`
+	CustomPrompt    string `json:"customPrompt"`   // 用户自定义提示词（可选）
+	ReferenceImage  string `json:"referenceImage"` // 参考图URL（可选）
+	AspectRatio     string `json:"aspectRatio"`    // 建议 2:3 或 3:4（竖版人像）
 }
 
 // GenerateCharacterPortraitResult 生成角色形象结果
@@ -102,8 +103,9 @@ type GenerateCharacterPortraitResult struct {
 
 // GenerateCharacterThreeViewsRequest 生成单张三视图合一参考图（正·侧·背横向排列）
 type GenerateCharacterThreeViewsRequest struct {
-	RegenerateAll  bool   `json:"regenerateAll"`  // true：清空并重绘 sheet；false：若已有 sheet 则跳过
-	ReferenceImage string `json:"referenceImage"` // 可选；优先于角色已存 Portrait 作为参考图（碎片任务等）
+	ClientRequestID string `json:"clientRequestId,omitempty" binding:"omitempty,max=256"`
+	RegenerateAll   bool   `json:"regenerateAll"`  // true：清空并重绘 sheet；false：若已有 sheet 则跳过
+	ReferenceImage  string `json:"referenceImage"` // 可选；优先于角色已存 Portrait 作为参考图（碎片任务等）
 }
 
 // GenerateCharacterThreeViewsResult 三视图结果（views.sheet 为单图 URL）
@@ -112,6 +114,8 @@ type GenerateCharacterThreeViewsResult struct {
 }
 
 type CharacterGenerationTaskRequest struct {
+	ClientRequestID            string                              `json:"clientRequestId,omitempty"`
+	WorkflowRunID              string                              `json:"workflowRunId,omitempty"`
 	WorkflowReleaseID          string                              `json:"workflowReleaseId,omitempty"`
 	CreativeControls           *domain.CreativeControls            `json:"creativeControls,omitempty"`
 	StoryID                    string                              `json:"storyId" binding:"required"`
@@ -409,6 +413,12 @@ func validateCharacterGenerationTaskRequest(req CharacterGenerationTaskRequest) 
 }
 
 func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID string, req CharacterGenerationTaskRequest) (*domain.CharacterGenerationTask, error) {
+	req.ClientRequestID = strings.TrimSpace(req.ClientRequestID)
+	req.WorkflowRunID = strings.TrimSpace(req.WorkflowRunID)
+	req.WorkflowReleaseID = strings.TrimSpace(req.WorkflowReleaseID)
+	if err := s.validateCharacterWorkflowRequest(ctx, userID, req); err != nil {
+		return nil, err
+	}
 	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, req.WorkflowReleaseID, req.CreativeControls)
 	if controlErr != nil {
 		return nil, controlErr
@@ -456,8 +466,13 @@ func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID strin
 	if err := validateCharacterGenerationTaskRequest(req); err != nil {
 		return nil, err
 	}
+	requestKey, intentHash, err := characterTaskRequestIdentity(userID, req)
+	if err != nil {
+		return nil, err
+	}
 	requestBytes, _ := json.Marshal(req)
 	task := &domain.CharacterGenerationTask{
+		RequestKey: requestKey, IntentHash: intentHash,
 		UserID:                     userID,
 		StoryID:                    req.StoryID,
 		SourceType:                 sourceType,
@@ -468,7 +483,20 @@ func (s *Service) StartCharacterGenerationTask(ctx context.Context, userID strin
 		CurrentStep:                domain.CharacterGenerationStepQueued,
 		RequestJSON:                string(requestBytes),
 	}
-	if err := s.repo.CreateCharacterGenerationTask(ctx, task); err != nil {
+	if task.RequestKey != "" {
+		requests, ok := s.repo.(domain.CharacterTaskRequestRepository)
+		if !ok {
+			return nil, errors.New("durable character request identity unavailable")
+		}
+		stored, created, err := requests.CreateCharacterTaskIdempotent(ctx, task)
+		if err != nil {
+			return nil, err
+		}
+		if !created {
+			return stored, nil
+		}
+		task = stored
+	} else if err := s.repo.CreateCharacterGenerationTask(ctx, task); err != nil {
 		return nil, errors.New("failed to create character generation task: " + err.Error())
 	}
 	go s.runCharacterGenerationTask(context.Background(), task.ID)
@@ -491,9 +519,12 @@ func (s *Service) ListCharacterGenerationTasks(ctx context.Context, userID, stat
 }
 
 func (s *Service) RetryCharacterGenerationTask(ctx context.Context, userID, taskID string) (*domain.CharacterGenerationTask, error) {
-	_, err := s.GetCharacterGenerationTask(ctx, userID, taskID)
+	task, err := s.GetCharacterGenerationTask(ctx, userID, taskID)
 	if err != nil {
 		return nil, err
+	}
+	if stage := task.Stages["attributes"]; stage.OutcomeUnknown || stage.Status == "processing" && (task.Status == domain.CharacterGenerationStatusPartial || task.Status == domain.CharacterGenerationStatusFailed) {
+		return nil, domain.ErrCharacterStageOutcomeUnknown
 	}
 	runner, ok := s.repo.(domain.CharacterTaskExecutionRepository)
 	if !ok {
@@ -1074,7 +1105,7 @@ func (s *Service) UpdateCharacter(ctx context.Context, userID, characterID strin
 	character.LastEditedBy = userID
 	character.UpdatedAt = time.Now().Unix()
 
-	if err := s.updateCharacterWithExecutionLease(ctx, character); err != nil {
+	if err := s.patchCharacterUserFields(ctx, character, characterUpdateFields(req, userID)); err != nil {
 		s.logger.Error("failed to update character",
 			zap.String("characterID", characterID),
 			zap.Error(err))
@@ -1630,7 +1661,7 @@ func (s *Service) UpdateCharacterAvatar(ctx context.Context, userID, characterID
 	character.LastEditedBy = userID
 	character.UpdatedAt = time.Now().Unix()
 
-	if err := s.updateCharacterWithExecutionLease(ctx, character); err != nil {
+	if err := s.patchCharacterUserFields(ctx, character, map[string]any{"avatar": avatarURL, "last_edited_by": userID}); err != nil {
 		s.logger.Error("failed to update character avatar", zap.Error(err))
 		return nil, errors.New("failed to update character avatar")
 	}
@@ -1674,7 +1705,7 @@ func (s *Service) UsePortraitAsAvatar(ctx context.Context, userID, characterID, 
 	character.LastEditedBy = userID
 	character.UpdatedAt = time.Now().Unix()
 
-	if err := s.updateCharacterWithExecutionLease(ctx, character); err != nil {
+	if err := s.saveCharacterVisualFields(ctx, character, map[string]any{"avatar": portraitURL, "last_edited_by": userID}); err != nil {
 		s.logger.Error("failed to update character avatar", zap.Error(err))
 		return nil, errors.New("failed to update character avatar")
 	}
@@ -1804,12 +1835,7 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		aspectRatio = "2:3" // 默认2:3竖版人像
 	}
 
-	// 6. 更新角色状态为"生成中"
-	character.PortraitGenerationStatus = "generating"
-	if err := s.saveCharacterVisualFields(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus}); err != nil {
-		s.logger.Warn("failed to update portrait generation status", zap.Error(err))
-		return nil, err
-	}
+	expectedVisual := map[string]string{"portrait": character.Portrait, "views_sheet": characterViewSheet(character), "inputs": domain.CharacterVisualInputSignature(character)}
 
 	// 7. 调用AI图像生成服务
 	referenceImages := characterVisualReferences(character, req.ReferenceImage)
@@ -1847,21 +1873,32 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		imageReq.AspectRatio = aspectRatio
 	}
 
+	if err := s.prepareCharacterVisualOperation(ctx, character, "portrait", req.ClientRequestID, req, imageReq); err != nil {
+		return nil, err
+	}
+
+	// 6. 更新角色状态为"生成中"
+	character.PortraitGenerationStatus = "generating"
+	if err := s.saveCharacterVisualFieldsGuarded(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus}, expectedVisual); err != nil {
+		s.logger.Warn("failed to update portrait generation status", zap.Error(err))
+		return nil, err
+	}
+
 	result, err := s.aiGenService.GenerateImage(ctx, imageReq)
 	if err != nil {
 		s.logger.Error("failed to generate character portrait", zap.Error(err))
 
 		// 更新状态为失败
 		character.PortraitGenerationStatus = "failed"
-		_ = s.saveCharacterVisualFields(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus})
+		_ = s.saveCharacterVisualFieldsGuarded(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus}, expectedVisual)
 
-		return nil, errors.New("failed to generate portrait: " + err.Error())
+		return nil, fmt.Errorf("failed to generate portrait: %w", err)
 	}
 
 	if len(result.ImageURLs) == 0 {
 		// 更新状态为失败
 		character.PortraitGenerationStatus = "failed"
-		_ = s.saveCharacterVisualFields(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus})
+		_ = s.saveCharacterVisualFieldsGuarded(ctx, character, map[string]any{"portrait_generation_status": character.PortraitGenerationStatus}, expectedVisual)
 
 		return nil, errors.New("no image generated")
 	}
@@ -1879,9 +1916,9 @@ func (s *Service) GenerateCharacterPortrait(ctx context.Context, userID, charact
 		character.Poster = character.Portrait
 	}
 
-	if err := s.saveCharacterVisualFields(ctx, character, map[string]any{"portrait": character.Portrait, "portrait_generation_status": character.PortraitGenerationStatus, "avatar": character.Avatar, "poster": character.Poster, "last_edited_by": userID}); err != nil {
+	if err := s.saveCharacterVisualFieldsGuarded(ctx, character, map[string]any{"portrait": character.Portrait, "portrait_generation_status": character.PortraitGenerationStatus, "avatar": character.Avatar, "poster": character.Poster, "last_edited_by": userID}, expectedVisual); err != nil {
 		s.logger.Error("failed to update character portrait", zap.Error(err))
-		return nil, errors.New("failed to update character portrait")
+		return nil, fmt.Errorf("failed to update character portrait: %w", err)
 	}
 
 	// 清除缓存
@@ -1922,6 +1959,8 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 		return nil, errors.New("AI generation service not configured")
 	}
 
+	expectedVisual := map[string]string{"portrait": character.Portrait, "views_sheet": characterViewSheet(character), "inputs": domain.CharacterVisualInputSignature(character)}
+
 	var v domain.CharacterThreeViews
 	if character.Views != nil {
 		v = *character.Views
@@ -1930,18 +1969,12 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 	if req.RegenerateAll {
 		v = domain.CharacterThreeViews{}
 	} else {
-		if strings.TrimSpace(v.Sheet) != "" {
+		if strings.TrimSpace(v.Sheet) != "" && strings.TrimSpace(req.ClientRequestID) == "" {
 			return &GenerateCharacterThreeViewsResult{Views: v}, nil
 		}
 	}
 
-	bal, balErr := s.repo.GetTokenBalance(ctx, userID)
-	if balErr != nil {
-		return nil, errors.New("failed to get token balance")
-	}
-	if bal < common.AIImageBillingUnitTokens {
-		return nil, fmt.Errorf("insufficient token balance: need at least %d tokens for three-view sheet", common.AIImageBillingUnitTokens)
-	}
+	// GenerateImage first recovers a paid OperationID output, then checks balance only for new provider work.
 
 	provider := s.effectiveImageProvider()
 	aspectRatio := "16:9"
@@ -1995,6 +2028,14 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 		imageReq.AspectRatio = aspectRatio
 	}
 
+	if err := s.prepareCharacterVisualOperation(ctx, character, "threeViews", req.ClientRequestID, req, imageReq); err != nil {
+		return nil, err
+	}
+
+	if !req.RegenerateAll && strings.TrimSpace(v.Sheet) != "" && imageReq.Metadata["characterVisualReplay"] != true {
+		return &GenerateCharacterThreeViewsResult{Views: v}, nil
+	}
+
 	result, genErr := s.aiGenService.GenerateImage(ctx, imageReq)
 	if genErr != nil {
 		s.logger.Error("three-view sheet failed", zap.Error(genErr))
@@ -2014,9 +2055,9 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 	character.LastEditedBy = userID
 	character.UpdatedAt = time.Now().Unix()
 	rawViews, _ := json.Marshal(v)
-	if err := s.saveCharacterVisualFields(ctx, character, map[string]any{"views_json": string(rawViews), "last_edited_by": userID}); err != nil {
+	if err := s.saveCharacterVisualFieldsGuarded(ctx, character, map[string]any{"views_json": string(rawViews), "last_edited_by": userID}, expectedVisual); err != nil {
 		s.logger.Error("failed to persist three-view sheet", zap.Error(err))
-		return nil, errors.New("failed to save three-view sheet: " + err.Error())
+		return nil, fmt.Errorf("failed to save three-view sheet: %w", err)
 	}
 
 	if c := s.getCache(); c != nil {
@@ -2028,7 +2069,7 @@ func (s *Service) GenerateCharacterThreeViews(ctx context.Context, userID, chara
 }
 
 // CropAvatarFromPortrait 从Portrait裁剪生成Avatar（可选功能）
-func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string) (string, error) {
+func (s *Service) CropAvatarFromPortrait(ctx context.Context, userID, characterID string) (string, error) {
 	s.logger.Info("cropping avatar from portrait", zap.String("characterID", characterID))
 
 	// 获取角色
@@ -2038,6 +2079,10 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 			return "", errors.New("character not found")
 		}
 		return "", errors.New("failed to get character")
+	}
+
+	if character.Author == nil || character.Author.ID != userID {
+		return "", domain.ErrForbidden
 	}
 
 	// 检查是否有Portrait
@@ -2060,7 +2105,7 @@ func (s *Service) CropAvatarFromPortrait(ctx context.Context, characterID string
 	character.Avatar = avatarURL
 	character.UpdatedAt = time.Now().Unix()
 
-	if err := s.updateCharacterWithExecutionLease(ctx, character); err != nil {
+	if err := s.patchCharacterUserFields(ctx, character, map[string]any{"avatar": avatarURL, "last_edited_by": userID}); err != nil {
 		s.logger.Error("failed to update character avatar", zap.Error(err))
 		return "", errors.New("failed to update character avatar")
 	}

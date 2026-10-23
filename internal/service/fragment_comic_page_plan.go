@@ -35,27 +35,37 @@ func (s *FragmentGenerationService) planFragmentComicPages(
 		if err := ctx.Err(); err != nil {
 			return out, totalTokens, err
 		}
-		prompt := buildFragmentComicPagePlanPrompt(req, storyContent, bible, out, i)
-		generate := func(prompt, step string) (string, int, error) {
-			if s == nil || s.aiService == nil {
-				return "", 0, fmt.Errorf("fragment comic page planner unavailable")
+		planned, err := fragmentCheckpointStage(ctx, fmt.Sprintf("page_plan:%d", i), false, func() (fragmentCheckpointPagePlan, error) {
+			prompt := buildFragmentComicPagePlanPrompt(req, storyContent, bible, out, i)
+			generate := func(prompt, step string) (string, int, error) {
+				if s == nil || s.aiService == nil {
+					return "", 0, fmt.Errorf("fragment comic page planner unavailable")
+				}
+				payload, _ := json.Marshal(map[string]interface{}{"prompt": prompt, "step": step, "page": i})
+				aiReq := domain.AITask{ID: uuid.NewString(), UserID: userID, Type: domain.AITaskGenerateFragmentContent,
+					Status: domain.AITaskStatusProcessing, Input: string(payload), RelatedEntityID: taskID, RelatedEntityType: "fragment_generation"}
+				return s.aiService.GenerateFragmentStructuredTextJSON(ctx, &aiReq, fragmentComicPagePlanMaxTokens, 0.35, step)
 			}
-			payload, _ := json.Marshal(map[string]interface{}{"prompt": prompt, "step": step, "page": i})
-			aiReq := domain.AITask{ID: uuid.NewString(), UserID: userID, Type: domain.AITaskGenerateFragmentContent,
-				Status: domain.AITaskStatusProcessing, Input: string(payload), RelatedEntityID: taskID, RelatedEntityType: "fragment_generation"}
-			return s.aiService.GenerateFragmentStructuredTextJSON(ctx, &aiReq, fragmentComicPagePlanMaxTokens, 0.35, step)
-		}
-		plan, tokens, err := requestFragmentComicPagePlan(ctx, prompt, bible, generate)
-		totalTokens += tokens
+			plan, tokens, err := requestFragmentComicPagePlan(ctx, prompt, bible, generate)
+			if err != nil {
+				return fragmentCheckpointPagePlan{}, fmt.Errorf("comic page %d planning failed: %w", i+1, err)
+			}
+			normalized := normalizeFragmentComicPagePlan(*plan, out[i], len(plan.Panels), bible, req.Language)
+			layout := fragmentComicLayoutForPanelCount(len(plan.Panels), req.AspectRatio)
+			normalized.Layout = &layout
+			out[i].ComicPage = &normalized
+			out[i].ReferenceKeys = mergeFragmentPageReferenceKeys(out[i].ReferenceKeys, normalized.Panels)
+			out[i].EntityBindings = mergeFragmentPageEntityBindings(out[i].EntityBindings, normalized.Panels)
+			return fragmentCheckpointPagePlan{Plans: []domain.FragmentScenePlan{out[i]}, Tokens: tokens}, nil
+		})
 		if err != nil {
-			return out, totalTokens, fmt.Errorf("comic page %d planning failed: %w", i+1, err)
+			return out, totalTokens, err
 		}
-		normalized := normalizeFragmentComicPagePlan(*plan, out[i], len(plan.Panels), bible, req.Language)
-		layout := fragmentComicLayoutForPanelCount(len(plan.Panels), req.AspectRatio)
-		normalized.Layout = &layout
-		out[i].ComicPage = &normalized
-		out[i].ReferenceKeys = mergeFragmentPageReferenceKeys(out[i].ReferenceKeys, normalized.Panels)
-		out[i].EntityBindings = mergeFragmentPageEntityBindings(out[i].EntityBindings, normalized.Panels)
+		if len(planned.Plans) != 1 {
+			return out, totalTokens, fmt.Errorf("invalid cached page plan")
+		}
+		out[i] = planned.Plans[0]
+		totalTokens += planned.Tokens
 		for _, callback := range callbacks {
 			if callback != nil {
 				callback(i, append([]domain.FragmentScenePlan(nil), out...))

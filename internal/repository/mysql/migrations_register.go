@@ -386,6 +386,13 @@ func init() {
 	})
 
 	registry.RegisterCoreStep(migrations.MigrationStep{
+		Name: "character_task_request_identity_20261023", Description: "Add nullable unique character creation request identity and immutable intent hash",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return migrateCharacterTaskRequestIdentity(ctx, db)
+		}, Required: true,
+	})
+
+	registry.RegisterCoreStep(migrations.MigrationStep{
 		Name:        "fix_character_generation_tasks_empty_character_id",
 		Description: "Set character_id to NULL where empty so FK fk_character_generation_tasks_character allows pending tasks",
 		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
@@ -1145,6 +1152,15 @@ func registerSchemaFixSteps(registry *migrations.MigrationRegistry) {
 			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentDB{}, &FragmentGenerationTaskDB{}, &FragmentGenerationImageSlotDB{}, &FragmentGenerationAssetDB{})
 		},
 		Required: false,
+	})
+
+	registry.RegisterSchemaFixStep(migrations.MigrationStep{
+		Name:        "ensure_fragment_generation_execution_lease",
+		Description: "Add fragment task execution lease fencing and server-owned recovery checkpoints",
+		Func: func(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
+			return autoMigrateIgnoringDuplicatedStoriesSourceFragmentIndex(db, log, &FragmentGenerationTaskDB{})
+		},
+		Required: true,
 	})
 
 	// ========== Migration 009: Add user points and referral system (StoryCreationAppUI) ==========

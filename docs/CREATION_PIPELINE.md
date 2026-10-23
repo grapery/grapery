@@ -2,6 +2,12 @@
 
 本轮覆盖 Voyager iOS、Grapery API 与 Grapery Agent 的故事碎片、故事板和故事角色。代码完成、离线测试、真实模型效果、上线生效是四种不同证据。本文记录实现与验证边界，不把单元测试通过称为生成质量优秀。
 
+后续确认的默认提示词、工作流与运营边界见 [工程默认创作与局部运营配置](CREATIVE_CONTROLS.md)：三类创作默认可用，运营仅干预表达偏好；旧自由模板正文不再执行。
+
+碎片任务租约、阶段恢复及故事板完整意图幂等见 [2026-10-23 修复说明](CREATION-RECOVERY-2026-10-23.md)。
+
+角色创建页面与请求可靠性迭代见 [角色创建迭代](../../voyager/docs/CHARACTER-CREATION-2026-10-23.md)。角色任务新增用户域请求身份与完整意图 hash：同编号不同意图返回 409，手动创建的旧客户端无编号时按完整意图去重。存量 NULL 身份不猜测合并。部署前准备 [角色请求身份迁移](../scripts/character_task_request_identity_20261023.sql)。属性调用结果未知时保留请求并阻止同任务自动/手动重发；需要核对供应商与账本，不能把此窗口报告为已完成的自动恢复。已付费三视图先按稳定操作身份恢复，只有新生成才检查余额。
+
 ## 业务不变量
 
 1. **用户设定是权威输入。** 工作流自定义提示词不能移除故事背景、视觉设定、已接受正文和编辑范围。结构化输出通过校验后才能进入下一阶段；只有一次定向修复机会，失败保留草稿，不用通用套话继续付费绘图。
@@ -48,7 +54,7 @@ Agent 的 `RunEvalWithSeeds` 和 `CreationContractSeeds(ownedStoryID)` 增加三
 
 发布前仍须在隔离测试世界运行真实模型样本，人工检查：用户设定保留、人物身份跨页一致、因果推进、三场/格数约束、局部编辑范围、对白可读性、失败恢复后账单。至少保留原提示词、版本、产物、评分理由和费用，比较改动前后同一组样本。没有样本证据不能报告通过率提升。
 
-本轮未运行数据库迁移、重启现有服务或发布线上 prompt/workflow。角色任务新增持久化列需按既有 migration/AutoMigrate 流程在部署时创建；故事板需执行 [创建意图 hash 新列迁移](../scripts/storyboard_creation_request_hash_20261016.sql)。上线前先确认测试环境 schema 与实际生效的 workflow release/prompt snapshot，避免只改源码但仍运行旧模板。
+本轮未运行数据库迁移、重启现有服务或发布线上 prompt/workflow。角色任务新增持久化列需按既有 migration/AutoMigrate 流程在部署时创建；故事板需执行 [创建意图 hash 新列迁移](../scripts/storyboard_creation_request_hash_20261016.sql)。上线前先确认测试环境 schema、服务版本与实际生效的 workflow release/creativeControls 快照，避免只改源码但仍运行旧服务。
 
 ## 本轮验证记录
 

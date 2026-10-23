@@ -27,7 +27,7 @@ func (r *Repository) CreateFragmentGenerationAssets(ctx context.Context, assets 
 	if len(rows) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	write := func(tx *gorm.DB) error {
 		for _, scope := range scopes {
 			q := tx.WithContext(ctx).Where("fragment_id = ? AND source = ?", scope.FragmentID, scope.Source)
 			if scope.TaskID == "" {
@@ -42,7 +42,16 @@ func (r *Repository) CreateFragmentGenerationAssets(ctx context.Context, assets 
 		return tx.WithContext(ctx).
 			Clauses(clause.OnConflict{UpdateAll: true}).
 			Create(&rows).Error
-	})
+	}
+	if lease, ok := domain.FragmentTaskLeaseFromContext(ctx); ok {
+		for _, row := range rows {
+			if row.TaskID != lease.TaskID {
+				return domain.ErrFragmentTaskLeaseLost
+			}
+		}
+		return WithFragmentTaskLeaseTransaction(ctx, r.db, lease.TaskID, write)
+	}
+	return r.db.WithContext(ctx).Transaction(write)
 }
 
 func (r *Repository) ListFragmentGenerationAssets(ctx context.Context, fragmentID string) ([]*domain.FragmentGenerationAsset, error) {

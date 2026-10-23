@@ -26,6 +26,10 @@ type FragmentGenerationService struct {
 	logger          *zap.Logger
 	notify          *Service // optional: push + in-app when generation completes
 	draftLocks      sync.Map // map[draftID]*sync.Mutex, guards active task creation per draft in this process
+	workerInit      sync.Once
+	workerSlots     chan struct{}
+	workerMu        sync.RWMutex
+	workerContext   context.Context
 }
 
 func NewFragmentGenerationService(
@@ -355,6 +359,16 @@ func fragmentGenerationRequestWithContinuation(req domain.FragmentGenerationRequ
 
 // GenerateFragment 创建生成任务并立即落库占位草稿（与多格参考图流程对齐），返回 task 与 draftFragmentId。
 func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID string, req domain.FragmentGenerationRequest) (*domain.FragmentGenerationTask, string, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorForbidden, "authenticated owner is required", nil)
+	}
+	req.TargetDraftFragmentID = strings.TrimSpace(req.TargetDraftFragmentID)
+	if strings.TrimSpace(req.ClientMessageID) == "" && strings.TrimSpace(req.WorkflowRunID) != "" {
+		req.ClientMessageID = "workflow:" + strings.TrimSpace(req.WorkflowRunID)
+	}
+	if len(req.ClientMessageID) > 256 {
+		return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorInvalidRequest, "clientMessageId exceeds 256 bytes", nil)
+	}
 	req.BillingVersion = 1
 	controls, controlErr := resolvePinnedCreativeControls(ctx, s.repo, req.WorkflowReleaseID, req.CreativeControls)
 	if controlErr != nil {
@@ -374,6 +388,9 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 			return nil, "", fmt.Errorf("failed to check duplicate fragment generation request: %w", err)
 		}
 		if existing != nil {
+			if err := validateFragmentRequestReplay(existing, userID, req); err != nil {
+				return nil, "", err
+			}
 			draftID := strings.TrimSpace(existing.Request.TargetDraftFragmentID)
 			if draftID == "" {
 				if frag, err := s.fragmentRepo.GetBySource(ctx, string(domain.FragmentSourceAIGeneration), existing.ID); err == nil && frag != nil {
@@ -397,9 +414,9 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 			return nil, "", fmt.Errorf("failed to check active fragment generation task: %w", err)
 		}
 		if active != nil {
-			// A client can lose its polling connection while the durable task keeps running.
-			// Treat a follow-up request as a join of that task instead of creating a second
-			// writer for the same draft or surfacing a misleading 409 failure.
+			if err := validateFragmentRequestReplay(active, userID, req); err != nil {
+				return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorConflict, "the draft has an active generation task with a different request; resume it before editing", nil)
+			}
 			return active, draftID, nil
 		}
 	}
@@ -421,6 +438,9 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		}
 	}
 	taskID := uuid.New().String()
+	if req.ClientMessageID != "" {
+		taskID = repository.FragmentGenerationRequestTaskID(userID, req.ClientMessageID)
+	}
 	plannedSlots := buildFragmentGenerationImageSlots(req.ImageCount, nil, nil, nil)
 	task := &domain.FragmentGenerationTask{
 		ID:      taskID,
@@ -439,6 +459,16 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	}
 
 	if err := s.fragmentGenRepo.Create(ctx, task); err != nil {
+		if existing, lookupErr := s.fragmentGenRepo.GetByID(ctx, taskID); lookupErr == nil {
+			if err := validateFragmentRequestReplay(existing, userID, req); err != nil {
+				return nil, "", err
+			}
+			draftID := existing.Request.TargetDraftFragmentID
+			if existing.Result != nil && existing.Result.DraftFragmentID != "" {
+				draftID = existing.Result.DraftFragmentID
+			}
+			return existing, draftID, nil
+		}
 		return nil, "", fmt.Errorf("failed to create generation task: %w", err)
 	}
 
@@ -449,30 +479,9 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 	}
 	draftID := strings.TrimSpace(req.TargetDraftFragmentID)
 	if draftID != "" {
-		draft, err := s.fragmentRepo.GetByID(ctx, draftID)
-		if err != nil {
+		if err := s.fragmentGenRepo.AttachDraftForTask(ctx, taskID, draftID, userID, ar, req.ReplaceImageIndex); err != nil {
 			_ = s.fragmentGenRepo.Delete(ctx, taskID)
-			return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorNotFound, "target draft not found", err)
-		}
-		if draft.UserID != userID || !draft.IsDraft {
-			_ = s.fragmentGenRepo.Delete(ctx, taskID)
-			return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorForbidden, "target draft is not writable", nil)
-		}
-		if req.ReplaceImageIndex > 0 {
-			if req.ReplaceImageIndex > len(draft.MediaURLs) || strings.TrimSpace(draft.MediaURLs[req.ReplaceImageIndex-1]) == "" {
-				_ = s.fragmentGenRepo.Delete(ctx, taskID)
-				return nil, "", domain.NewFragmentGenerationError(domain.FragmentGenerationErrorInvalidRequest, fmt.Sprintf("replace image index %d is out of range", req.ReplaceImageIndex), nil)
-			}
-		}
-		if strings.TrimSpace(draft.SourceType) == "" {
-			draft.SourceType = string(domain.FragmentSourceAIGeneration)
-		}
-		draft.GenerationTaskID = taskID
-		draft.AspectRatio = ar
-		draft.UpdatedAt = nowMs
-		if err := s.fragmentRepo.Update(ctx, draft); err != nil {
-			_ = s.fragmentGenRepo.Delete(ctx, taskID)
-			return nil, "", fmt.Errorf("failed to attach generation task to draft: %w", err)
+			return nil, "", err
 		}
 	} else {
 		draft := &domain.Fragment{
@@ -491,6 +500,7 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 			IsDraft:            true,
 			SourceType:         string(domain.FragmentSourceAIGeneration),
 			SourceID:           taskID,
+			GenerationTaskID:   taskID,
 			AspectRatio:        ar,
 			EngagementStats:    common.EngagementStats{},
 		}
@@ -511,6 +521,7 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		zap.Int("image_count", req.ImageCount))
 
 	if task.Result != nil {
+		task.Result.DraftFragmentID = draftID
 		task.Result.ImageSlots = decorateFragmentGenerationSlots(taskID, draftID, task.Result.ImageSlots)
 		task.Result.ImageProgress = fragmentGenerationProgressFromSlots(task.Result.ImageSlots)
 		if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, task.Result); err != nil {
@@ -519,9 +530,12 @@ func (s *FragmentGenerationService) GenerateFragment(ctx context.Context, userID
 		s.persistFragmentGenerationSlots(ctx, taskID, draftID, task.Result)
 	}
 
+	if err := s.fragmentGenRepo.MarkReady(ctx, taskID); err != nil {
+		return nil, "", fmt.Errorf("failed to enqueue prepared fragment task: %w", err)
+	}
 	s.recordFragmentGenerationUserInput(ctx, draftID, userID, taskID, req.UserInput, req.ClientMessageID)
 
-	go s.processFragmentGeneration(context.Background(), taskID)
+	s.scheduleFragmentTask(taskID)
 
 	return task, draftID, nil
 }
@@ -584,7 +598,10 @@ func (s *FragmentGenerationService) persistFragmentGenerationSlots(ctx context.C
 }
 
 func (s *FragmentGenerationService) fragmentGenerationTaskCanContinue(ctx context.Context, taskID string) bool {
-	if s == nil || s.fragmentGenRepo == nil || strings.TrimSpace(taskID) == "" {
+	if s == nil || s.fragmentGenRepo == nil || strings.TrimSpace(taskID) == "" || ctx.Err() != nil {
+		return false
+	}
+	if err := s.fragmentGenRepo.CheckLease(ctx, taskID); err != nil {
 		return false
 	}
 	task, err := s.fragmentGenRepo.GetByID(ctx, taskID)
@@ -1107,10 +1124,6 @@ func formatFragmentReferenceSlotsForPrompt(slots []domain.FragmentReferenceSlot)
 // Step 4: 逐场景出图（多参考图）
 // Step 5: 一致性检查（仅记录）
 func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Context, taskID string) {
-	if !s.updateFragmentGenerationStep(ctx, taskID, 5, "starting") {
-		return
-	}
-
 	task, err := s.fragmentGenRepo.GetByID(ctx, taskID)
 	if err != nil {
 		s.logger.Error("Failed to get task", zap.Error(err))
@@ -1120,24 +1133,60 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		return
 	}
 
+	if fragmentCheckpointMissingForExecutedTask(task) {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", "recovery_checkpoint_missing: previous provider outcome is unknown; outputs preserved")
+		return
+	}
+	if !s.updateFragmentGenerationStep(ctx, taskID, 5, "starting") {
+		return
+	}
+	cp, checkpointErr := newFragmentTaskCheckpoint(task.CheckpointJSON, func(raw string) error { return s.fragmentGenRepo.SaveCheckpoint(ctx, taskID, raw) })
+	if checkpointErr != nil {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", checkpointErr.Error())
+		return
+	}
+	ctx = context.WithValue(ctx, fragmentTaskCheckpointKey{}, cp)
+	if stage, exists := cp.Stages["prepared_commit"]; exists && stage.State == "completed" {
+		var prepared fragmentCheckpointCommit
+		if err := json.Unmarshal(stage.Payload, &prepared); err != nil {
+			_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+			return
+		}
+		if err := s.commitFragmentCheckpoint(ctx, task, &prepared); err != nil {
+			_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+		}
+		return
+	}
 	// ── Step 1: 元素提取 + 文案 + VisualBible ──
 	if !s.updateFragmentGenerationStep(ctx, taskID, 10, "extracting_elements") {
 		return
 	}
 
-	continuation := s.loadFragmentDraftContinuationContext(ctx, task.UserID, task.Request)
-	effectiveRequest := fragmentGenerationRequestWithContinuation(task.Request, continuation)
-	editContext, err := s.loadFragmentDraftEditContext(ctx, task.UserID, task.Request)
+	baseline, err := fragmentCheckpointStage(ctx, "baseline", true, func() (*fragmentCheckpointBaseline, error) {
+		edit, err := s.loadFragmentDraftEditContext(ctx, task.UserID, task.Request)
+		if err != nil {
+			return nil, err
+		}
+		draft, err := s.targetDraftForGenerationResult(ctx, task)
+		if err != nil {
+			return nil, err
+		}
+		return &fragmentCheckpointBaseline{Continuation: s.loadFragmentDraftContinuationContext(ctx, task.UserID, task.Request), Edit: edit, Draft: draft}, nil
+	})
 	if err != nil {
-		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
 		return
 	}
+	continuation, editContext := baseline.Continuation, baseline.Edit
+	effectiveRequest := fragmentGenerationRequestWithContinuation(task.Request, continuation)
 	var elemResult *fragmentElementExtractionResult
 	if editContext != nil {
 		effectiveRequest = fragmentRequestWithEditContext(effectiveRequest, editContext)
 		elemResult = fragmentElementsForEdit(effectiveRequest, editContext)
 	} else {
-		elemResult, err = s.extractElementsAndGenerateContent(ctx, task.UserID, taskID, effectiveRequest, continuation)
+		elemResult, err = fragmentCheckpointStage(ctx, "elements", false, func() (*fragmentElementExtractionResult, error) {
+			return s.extractElementsAndGenerateContent(ctx, task.UserID, taskID, effectiveRequest, continuation)
+		})
 	}
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
@@ -1177,7 +1226,9 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	if reusesPagePlan {
 		scenesResult = &fragmentSceneExpansionResult{}
 	} else {
-		scenesResult, err = s.expandScenes(ctx, task.UserID, taskID, effectiveRequest, elemResult, sceneCount, resolvedAR, continuation)
+		scenesResult, err = fragmentCheckpointStage(ctx, "scenes", false, func() (*fragmentSceneExpansionResult, error) {
+			return s.expandScenes(ctx, task.UserID, taskID, effectiveRequest, elemResult, sceneCount, resolvedAR, continuation)
+		})
 	}
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
@@ -1322,7 +1373,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		s.logger.Warn("failed to persist fragment generation trace after planning", zap.Error(err))
 	}
 
-	if err := s.ensureFragmentRenderBalance(ctx, task.UserID, scenePlans, nil); err != nil {
+	if err := s.ensureFragmentInitialRenderBalance(ctx, task.UserID, scenePlans, nil, "references"); err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, "余额不足以完成当前分镜，尚未开始绘制")
 		return
@@ -1337,7 +1388,15 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	if continuation != nil && continuation.PreviousTrace != nil {
 		previousReferenceAssets = continuation.PreviousTrace.ReferenceAssets
 	}
-	generatedReferenceAssets, refTok := s.generateReferenceAssets(ctx, task.UserID, taskID, effectiveRequest, elemResult.VisualBible, elemResult.VisualEvidence, resolvedAR, scenePlans, policy, previousReferenceAssets)
+	referenceSnapshot, err := fragmentCheckpointStage(ctx, "references", true, func() (fragmentCheckpointReferences, error) {
+		assets, tokens := s.generateReferenceAssets(ctx, task.UserID, taskID, effectiveRequest, elemResult.VisualBible, elemResult.VisualEvidence, resolvedAR, scenePlans, policy, previousReferenceAssets)
+		return fragmentCheckpointReferences{Assets: assets, Tokens: tokens}, nil
+	})
+	if err != nil {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+		return
+	}
+	generatedReferenceAssets, refTok := referenceSnapshot.Assets, referenceSnapshot.Tokens
 	referenceAssets := mergeFragmentReferenceAssets(previousReferenceAssets, generatedReferenceAssets)
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
@@ -1355,7 +1414,7 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		s.logger.Warn("failed to persist fragment generation trace after reference assets", zap.Error(err))
 	}
 
-	if err := s.ensureFragmentRenderBalance(ctx, task.UserID, scenePlans, referenceAssets); err != nil {
+	if err := s.ensureFragmentInitialRenderBalance(ctx, task.UserID, scenePlans, referenceAssets, "images"); err != nil {
 		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
 		s.notifyFragmentGenFailed(context.Background(), task, taskID, "参考资产已保留；余额不足以完成当前分镜")
 		return
@@ -1368,7 +1427,14 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	userRefs := fragmentPrefillHTTPImageURLs(fragmentGenerationReferenceImageURLs(effectiveRequest), fragmentMaxSceneReferenceImages)
 	imageStart := time.Now()
 	imageTokenBase := totalTokens
-	imageResult, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, task.Request.Language, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy, partial, imageTokenBase)
+	imageSnapshot, err := fragmentCheckpointStage(ctx, "images", true, func() (fragmentCheckpointImages, error) {
+		result, err := s.generateImagesFromScenes(ctx, task.UserID, taskID, resolvedAR, task.Request.Language, elemResult.VisualBible, scenePlans, referenceAssets, userRefs, policy, partial, imageTokenBase)
+		return fragmentCheckpointImages{Result: result, Scenes: scenePlans}, err
+	})
+	imageResult := imageSnapshot.Result
+	if err == nil {
+		scenePlans = imageSnapshot.Scenes
+	}
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
@@ -1387,7 +1453,15 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	}
 	checkStart := time.Now()
 	baselineURLs := fragmentContinuationReferenceImageURLs(continuation, 1)
-	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy)
+	audit, err := fragmentCheckpointStage(ctx, "audit", false, func() (fragmentCheckpointAudit, error) {
+		issues, tokens, provider, count, skipped := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy)
+		return fragmentCheckpointAudit{Issues: issues, Tokens: tokens, Provider: provider, Count: count, Skipped: skipped}, nil
+	})
+	if err != nil {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+		return
+	}
+	issues, checkTok, auditProvider, auditedCount, skippedAuditReason := audit.Issues, audit.Tokens, audit.Provider, audit.Count, audit.Skipped
 	if !s.fragmentGenerationTaskCanContinue(ctx, taskID) {
 		return
 	}
@@ -1396,23 +1470,31 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		if !s.updateFragmentGenerationStep(ctx, taskID, 88, "repairing_consistency") {
 			return
 		}
-		var repairTokens, repairedCount int
-		scenePlans, imageResult.ImageUrls, repairTokens, repairedCount = s.repairHighSeverityFragmentComicPages(
-			ctx,
-			task.UserID,
-			taskID,
-			resolvedAR,
-			task.Request.Language,
-			elemResult.VisualBible,
-			scenePlans,
-			referenceAssets,
-			userRefs,
-			policy,
-			issues,
-			imageResult.ImageUrls,
-			partial,
-			totalTokens,
-		)
+		repair, err := fragmentCheckpointStage(ctx, "repair", true, func() (fragmentCheckpointRepair, error) {
+			plans, urls, tokens, count := s.repairHighSeverityFragmentComicPages(
+				ctx,
+				task.UserID,
+				taskID,
+				resolvedAR,
+				task.Request.Language,
+				elemResult.VisualBible,
+				scenePlans,
+				referenceAssets,
+				userRefs,
+				policy,
+				issues,
+				imageResult.ImageUrls,
+				partial,
+				totalTokens,
+			)
+			return fragmentCheckpointRepair{Scenes: plans, URLs: urls, Tokens: tokens, Count: count}, nil
+		})
+		if err != nil {
+			_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+			return
+		}
+		scenePlans, imageResult.ImageUrls = repair.Scenes, repair.URLs
+		repairTokens, repairedCount := repair.Tokens, repair.Count
 		if repairTokens > 0 {
 			imageResult.TokensUsed += repairTokens
 			totalTokens += repairTokens
@@ -1421,9 +1503,15 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 			if !s.updateFragmentGenerationStep(ctx, taskID, 93, "checking_consistency") {
 				return
 			}
-			rechecked, retryCheckTokens, retryProvider, retryAuditedCount, retrySkipped := s.checkFragmentConsistency(
-				ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy,
-			)
+			recheck, err := fragmentCheckpointStage(ctx, "recheck", false, func() (fragmentCheckpointAudit, error) {
+				issues, tokens, provider, count, skipped := s.checkFragmentConsistency(ctx, taskID, elemResult.VisualBible, elemResult.VisualEvidence, scenePlans, referenceAssets, baselineURLs, imageResult.ImageUrls, policy)
+				return fragmentCheckpointAudit{Issues: issues, Tokens: tokens, Provider: provider, Count: count, Skipped: skipped}, nil
+			})
+			if err != nil {
+				_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
+				return
+			}
+			rechecked, retryCheckTokens, retryProvider, retryAuditedCount, retrySkipped := recheck.Issues, recheck.Tokens, recheck.Provider, recheck.Count, recheck.Skipped
 			totalTokens += retryCheckTokens
 			checkTok += retryCheckTokens
 			if retrySkipped == "" || len(rechecked) > 0 {
@@ -1518,12 +1606,9 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 	style := effectiveRequest.Style
 	caption := captionFromGenerationContent(result.Content)
 
-	existing, gerr := s.targetDraftForGenerationResult(ctx, task)
-	if gerr != nil {
-		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", fmt.Sprintf("Target draft update failed: %v", gerr))
-		s.notifyFragmentGenFailed(context.Background(), task, taskID, "目标草稿不可用，请重新打开后再试")
-		return
-	}
+	existing := baseline.Draft
+	var proposed *domain.Fragment
+	createDraft := existing == nil
 	if existing != nil {
 		existingTrace := parseFragmentGenerationTraceMetadata(existing.GenerationMetadata)
 		existingDocument := fragmentComicDocumentFromExistingDraft(
@@ -1603,16 +1688,10 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		if finalCaption != "" {
 			existing.Caption = finalCaption
 		}
-		if err := s.fragmentRepo.Update(ctx, existing); err != nil {
-			s.logger.Error("Failed to update draft fragment from generation",
-				zap.String("task_id", taskID),
-				zap.String("draft_id", existing.ID),
-				zap.Error(err))
-		} else {
-			result.DraftFragmentID = existing.ID
-		}
+		proposed = existing
+		result.DraftFragmentID = existing.ID
 	} else {
-		fragmentID := uuid.New().String()
+		fragmentID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(taskID+":draft")).String()
 		if result.ComicDocument != nil {
 			result.ComicDocument.FragmentID = fragmentID
 		}
@@ -1641,28 +1720,18 @@ func (s *FragmentGenerationService) processFragmentGeneration(ctx context.Contex
 		if caption != "" {
 			fragment.Caption = caption
 		}
-		if err := s.fragmentRepo.Create(ctx, fragment); err != nil {
-			s.logger.Error("Failed to create draft fragment from generation",
-				zap.String("task_id", taskID),
-				zap.Error(err))
-		} else {
-			result.DraftFragmentID = fragment.ID
-		}
+		proposed = fragment
+		result.DraftFragmentID = fragment.ID
 	}
-	if result.DraftFragmentID != "" {
-		s.persistFragmentGenerationAssets(ctx, result.DraftFragmentID, taskID, task.Request, result)
-		s.recordFragmentGenerationOutputs(ctx, result.DraftFragmentID, task.UserID, taskID, result)
-	}
-
-	// Save the exact pending debit before trying settlement. A crash or ledger
-	// failure can recover this task without calling text/image models again.
-	if err := s.fragmentGenRepo.UpdateResult(ctx, taskID, result); err != nil {
-		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", "billing_unsettled: failed to save settlement source")
+	prepared, err := fragmentCheckpointStage(ctx, "prepared_commit", true, func() (*fragmentCheckpointCommit, error) {
+		return &fragmentCheckpointCommit{Draft: proposed, Result: result, Create: createDraft}, nil
+	})
+	if err != nil {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
 		return
 	}
-	if err := s.finalizeFragmentTextSettlement(ctx, task, result); err != nil {
-		s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", "billing_unsettled: "+err.Error())
-		s.notifyFragmentGenFailed(context.Background(), task, taskID, "作品已保存，费用暂未结算，请恢复此任务后再发布")
+	if err := s.commitFragmentCheckpoint(ctx, task, prepared); err != nil {
+		_ = s.fragmentGenRepo.UpdateError(ctx, taskID, "failed", err.Error())
 		return
 	}
 
@@ -3013,7 +3082,7 @@ func (s *FragmentGenerationService) generateOneFragmentImageWithOptions(ctx cont
 		return "", 0, err
 	}
 	aiReq := domain.AITask{
-		ID:                uuid.New().String(),
+		ID:                fragmentImageOperationID(genTaskID, "reference", string(imgInput)),
 		UserID:            userID,
 		Type:              domain.AITaskGenerateFragmentImages,
 		Status:            domain.AITaskStatusProcessing,
@@ -3022,7 +3091,9 @@ func (s *FragmentGenerationService) generateOneFragmentImageWithOptions(ctx cont
 		RelatedEntityID:   genTaskID,
 		RelatedEntityType: "fragment_generation",
 	}
-	return s.aiService.GenerateImageForFragment(ctx, &aiReq)
+	return s.checkpointFragmentImage(ctx, &aiReq, "reference", func(request *domain.AITask) (string, int, error) {
+		return s.aiService.GenerateImageForFragment(ctx, request)
+	})
 }
 
 func (s *FragmentGenerationService) checkFragmentConsistency(ctx context.Context, taskID string, bible *domain.FragmentVisualBible, evidence []domain.FragmentVisualEvidence, scenes []domain.FragmentScenePlan, referenceAssets []domain.FragmentReferenceAsset, baselineURLs, imageURLs []string, policy *domain.FragmentConsistencyPolicy) ([]domain.FragmentConsistencyIssue, int, string, int, string) {
@@ -3574,7 +3645,7 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 	}
 
 	imgProv := s.aiService.ResolveFragmentImageProvider(ctx, userID, "")
-	if strings.EqualFold(imgProv, "huoshan") && !fragmentPlansContainComicPages(scenes) {
+	if fragmentCheckpointFromContext(ctx) == nil && strings.EqualFold(imgProv, "huoshan") && !fragmentPlansContainComicPages(scenes) {
 		n := len(scenes)
 		batchPrompt := buildFragmentScenesBatchHuoshanPrompt(bible, scenes, n, language)
 		refBatch := mergeFragmentScenesBatchReferenceImages(userRefURLs, scenes, referenceAssets, fragmentMaxSceneReferenceImages)
@@ -3640,9 +3711,23 @@ func (s *FragmentGenerationService) generateImagesFromScenes(ctx context.Context
 			s.persistFragmentImagePartial(ctx, genTaskID, partial, scenes, compactNonEmptyStrings(indexedImageURLs), tokenBase, totalTokens)
 		}
 		if scene.ComicPage != nil {
-			pageURL, panelURLs, panelTokens, panelErr := s.generateFragmentComicPageFromPanels(
-				ctx, userID, genTaskID, language, bible, scene, referenceAssets, userRefURLs, policy,
-			)
+			page, pageErr := fragmentCheckpointStage(ctx, fmt.Sprintf("page_render:%d", i), true, func() (fragmentCheckpointImages, error) {
+				pageURL, panelURLs, tokens, err := s.generateFragmentComicPageFromPanels(ctx, userID, genTaskID, language, bible, scene, referenceAssets, userRefURLs, policy)
+				scene.PanelImageURLs = append([]string(nil), panelURLs...)
+				scene.GeneratedImageURL = pageURL
+				return fragmentCheckpointImages{Result: &domain.FragmentImageGenerationResult{ImageUrls: []string{pageURL}, TokensUsed: tokens}, Scenes: []domain.FragmentScenePlan{*scene}}, err
+			})
+			pageURL, panelURLs, panelTokens, panelErr := "", []string(nil), 0, pageErr
+			if page.Result != nil {
+				panelTokens = page.Result.TokensUsed
+				if len(page.Result.ImageUrls) > 0 {
+					pageURL = page.Result.ImageUrls[0]
+				}
+			}
+			if len(page.Scenes) == 1 {
+				*scene = page.Scenes[0]
+				panelURLs = scene.PanelImageURLs
+			}
 			totalTokens += panelTokens
 			if panelErr == nil && strings.TrimSpace(pageURL) != "" {
 				scene.GeneratedImageURL = pageURL
@@ -3761,6 +3846,11 @@ func compactNonEmptyStrings(values []string) []string {
 }
 
 func (s *FragmentGenerationService) generateFragmentSceneImageWithRetry(ctx context.Context, aiReq *domain.AITask, sceneIndex int) (string, int, error) {
+	return s.checkpointFragmentImage(ctx, aiReq, fmt.Sprintf("%s:%d", aiReq.RelatedEntityType, sceneIndex), func(request *domain.AITask) (string, int, error) {
+		return s.generateFragmentSceneImageAttempts(ctx, request, sceneIndex)
+	})
+}
+func (s *FragmentGenerationService) generateFragmentSceneImageAttempts(ctx context.Context, aiReq *domain.AITask, sceneIndex int) (string, int, error) {
 	const maxAttempts = 3
 	var totalTokens int
 	var lastErr error

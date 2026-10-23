@@ -162,12 +162,40 @@ func (s *Service) executeCharacterGenerationTask(ctx context.Context, task *doma
 	if task.Stages == nil {
 		task.Stages = map[string]domain.CharacterGenerationStage{}
 	}
+	if err := characterAttributesRecoveryError(task); err != nil {
+		return err
+	}
+	if task.CharacterID != "" {
+		current, err := s.repo.CharacterByID(ctx, task.CharacterID)
+		if err != nil {
+			return err
+		}
+		owner := current.UserID
+		if owner == "" && current.Author != nil {
+			owner = current.Author.ID
+		}
+		if owner != task.UserID || current.StoryID != task.StoryID {
+			return domain.ErrForbidden
+		}
+		// The current owner's edits, including a rename, lead any new fill.
+		latest := characterDomainAttributes(current)
+		mergeGeneratedCharacterAttributes(&latest, &attrs)
+		attrs = latest
+		if strings.TrimSpace(current.Name) != "" {
+			name = current.Name
+		}
+	}
 	if task.Stages["attributes"].Status == "completed" {
 		var saved GeneratedCharacterAttributes
 		if json.Unmarshal([]byte(task.AttributesJSON), &saved) == nil {
 			mergeGeneratedCharacterAttributes(&attrs, &saved)
 		} else {
 			return errors.New("saved character attributes are invalid")
+		}
+	} else if raw, complete := completeConfirmedCharacterAttributes(attrs); complete {
+		task.AttributesJSON = raw
+		if err := s.characterTaskStage(ctx, task, "attributes", "completed", nil, 30); err != nil {
+			return err
 		}
 	} else {
 		if err := s.characterTaskStage(ctx, task, "attributes", "processing", nil, 12); err != nil {
@@ -210,12 +238,18 @@ func (s *Service) executeCharacterGenerationTask(ctx context.Context, task *doma
 	// A retry may successfully fill attributes that failed before record creation.
 	// Backfill only empty persisted fields: edits made while the task was partial remain authoritative.
 	if task.Stages["attributes"].Status == "completed" {
-		existing := GeneratedCharacterAttributes{Description: ch.Description, Personality: ch.Personality, Background: ch.Background, Appearance: ch.Appearance, ShortTermGoal: ch.ShortTermGoal, LongTermGoal: ch.LongTermGoal, HandlingStyle: ch.HandlingStyle, CognitionRange: ch.CognitionRange, AbilityFeatures: ch.AbilityFeatures, DressPreference: ch.DressPreference}
-		before := existing
-		mergeGeneratedCharacterAttributes(&existing, &attrs)
-		if before != existing {
-			ch.Description, ch.Personality, ch.Background, ch.Appearance = existing.Description, existing.Personality, existing.Background, existing.Appearance
-			ch.ShortTermGoal, ch.LongTermGoal, ch.HandlingStyle, ch.CognitionRange, ch.AbilityFeatures, ch.DressPreference = existing.ShortTermGoal, existing.LongTermGoal, existing.HandlingStyle, existing.CognitionRange, existing.AbilityFeatures, existing.DressPreference
+		fields := characterAttributeFields(attrs)
+		if repo, ok := s.repo.(domain.CharacterMutationRepository); ok {
+			lease, _ := ctx.Value(characterTaskContextKey{}).(*domain.CharacterGenerationTask)
+			if err := repo.PatchCharacterFields(ctx, lease, ch, fields, true); err != nil {
+				return err
+			}
+		} else {
+			// Lightweight adapters retain the same fill-only behavior; production
+			// implements the locked repository patch above.
+			existing := characterDomainAttributes(ch)
+			mergeGeneratedCharacterAttributes(&existing, &attrs)
+			applyCharacterAttributes(ch, existing)
 			if err := s.updateCharacterWithExecutionLease(ctx, ch); err != nil {
 				return err
 			}
